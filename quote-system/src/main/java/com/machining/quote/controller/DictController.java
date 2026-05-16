@@ -1,0 +1,248 @@
+package com.machining.quote.controller;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.RequireRole;
+import com.machining.quote.entity.DictExtraFeeItem;
+import com.machining.quote.entity.DictMarkupFee;
+import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictProcess;
+import com.machining.quote.mapper.DictExtraFeeItemMapper;
+import com.machining.quote.mapper.DictMarkupFeeMapper;
+import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictProcessMapper;
+import com.machining.quote.service.AuditService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequireRole({"ENGINEER", "ADMIN"})
+@RequestMapping("/api/dict")
+public class DictController {
+    @Autowired
+    private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictProcessMapper processMapper;
+    @Autowired
+    private DictMarkupFeeMapper markupFeeMapper;
+    @Autowired
+    private DictExtraFeeItemMapper extraFeeItemMapper;
+    @Autowired
+    private AuditService auditService;
+
+    @GetMapping("/materials")
+    public List<DictMaterial> listMaterials() {
+        QueryWrapper<DictMaterial> qw = new QueryWrapper<>();
+        qw.orderByAsc("material_name");
+        return materialMapper.selectList(qw);
+    }
+
+    @PostMapping("/materials")
+    public Map<String, Object> createMaterial(@RequestBody DictMaterial material) {
+        normalizeMaterial(material);
+        materialMapper.insert(material);
+        auditService.record("DICT_MATERIAL_CREATE", "dict_material", material.getId(), null, material);
+        return Map.of("success", true, "message", "材料已新增", "data", material);
+    }
+
+    @PutMapping("/materials/{id}")
+    public Map<String, Object> updateMaterial(@PathVariable Integer id, @RequestBody DictMaterial material) {
+        DictMaterial before = materialMapper.selectById(id);
+        material.setId(id);
+        normalizeMaterial(material);
+        materialMapper.updateById(material);
+        auditService.record("DICT_MATERIAL_UPDATE", "dict_material", id, before, material);
+        return Map.of("success", true, "message", "材料已更新", "data", material);
+    }
+
+    @DeleteMapping("/materials/{id}")
+    public Map<String, Object> deleteMaterial(@PathVariable Integer id) {
+        DictMaterial before = materialMapper.selectById(id);
+        materialMapper.deleteById(id);
+        auditService.record("DICT_MATERIAL_DELETE", "dict_material", id, before, null);
+        return Map.of("success", true, "message", "材料已删除");
+    }
+
+    @GetMapping("/processes")
+    public List<DictProcess> listProcesses() {
+        QueryWrapper<DictProcess> qw = new QueryWrapper<>();
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        return processMapper.selectList(qw);
+    }
+
+    @PostMapping("/processes")
+    public Map<String, Object> createProcess(@RequestBody DictProcess process) {
+        normalizeProcess(process);
+        processMapper.insert(process);
+        auditService.record("DICT_PROCESS_CREATE", "dict_process", process.getId(), null, process);
+        return Map.of("success", true, "message", "工艺已新增", "data", process);
+    }
+
+    @PutMapping("/processes/{id}")
+    public Map<String, Object> updateProcess(@PathVariable Integer id, @RequestBody DictProcess process) {
+        DictProcess before = processMapper.selectById(id);
+        process.setId(id);
+        normalizeProcess(process);
+        processMapper.updateById(process);
+        auditService.record("DICT_PROCESS_UPDATE", "dict_process", id, before, process);
+        return Map.of("success", true, "message", "工艺已更新", "data", process);
+    }
+
+    @DeleteMapping("/processes/{id}")
+    public Map<String, Object> deleteProcess(@PathVariable Integer id) {
+        DictProcess before = processMapper.selectById(id);
+        processMapper.deleteById(id);
+        auditService.record("DICT_PROCESS_DELETE", "dict_process", id, before, null);
+        return Map.of("success", true, "message", "工艺已删除");
+    }
+
+    @GetMapping("/markup-fees")
+    public List<DictMarkupFee> listMarkupFees() {
+        QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        return markupFeeMapper.selectList(qw);
+    }
+
+    @PostMapping("/markup-fees")
+    public Map<String, Object> createMarkupFee(@RequestBody DictMarkupFee fee) {
+        normalizeMarkupFee(fee);
+        markupFeeMapper.insert(fee);
+        auditService.record("DICT_MARKUP_FEE_CREATE", "dict_markup_fee", fee.getId(), null, fee);
+        return Map.of("success", true, "message", "费用类已新增", "data", fee);
+    }
+
+    @PutMapping("/markup-fees/{id}")
+    public Map<String, Object> updateMarkupFee(@PathVariable Integer id, @RequestBody DictMarkupFee fee) {
+        DictMarkupFee before = markupFeeMapper.selectById(id);
+        fee.setId(id);
+        normalizeMarkupFee(fee);
+        markupFeeMapper.updateById(fee);
+        auditService.record("DICT_MARKUP_FEE_UPDATE", "dict_markup_fee", id, before, fee);
+        return Map.of("success", true, "message", "费用类已更新", "data", fee);
+    }
+
+    @DeleteMapping("/markup-fees/{id}")
+    public Map<String, Object> deleteMarkupFee(@PathVariable Integer id) {
+        DictMarkupFee before = markupFeeMapper.selectById(id);
+        markupFeeMapper.deleteById(id);
+        auditService.record("DICT_MARKUP_FEE_DELETE", "dict_markup_fee", id, before, null);
+        return Map.of("success", true, "message", "费用类已删除");
+    }
+
+    @GetMapping("/extra-fee-items")
+    public List<DictExtraFeeItem> listExtraFeeItems() {
+        QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
+        qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
+        return extraFeeItemMapper.selectList(qw);
+    }
+
+    @GetMapping("/extra-fee-items/all")
+    public List<DictExtraFeeItem> listAllExtraFeeItems() {
+        QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        return extraFeeItemMapper.selectList(qw);
+    }
+
+    @PostMapping("/extra-fee-items")
+    public Map<String, Object> createExtraFeeItem(@RequestBody DictExtraFeeItem item) {
+        normalizeExtraFeeItem(item);
+        extraFeeItemMapper.insert(item);
+        auditService.record("DICT_EXTRA_FEE_CREATE", "dict_extra_fee_item", item.getId(), null, item);
+        return Map.of("success", true, "message", "非工时费用工艺已新增", "data", item);
+    }
+
+    @PutMapping("/extra-fee-items/{id}")
+    public Map<String, Object> updateExtraFeeItem(@PathVariable Integer id, @RequestBody DictExtraFeeItem item) {
+        DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
+        item.setId(id);
+        normalizeExtraFeeItem(item);
+        extraFeeItemMapper.updateById(item);
+        auditService.record("DICT_EXTRA_FEE_UPDATE", "dict_extra_fee_item", id, before, item);
+        return Map.of("success", true, "message", "非工时费用工艺已更新", "data", item);
+    }
+
+    @DeleteMapping("/extra-fee-items/{id}")
+    public Map<String, Object> deleteExtraFeeItem(@PathVariable Integer id) {
+        DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
+        extraFeeItemMapper.deleteById(id);
+        auditService.record("DICT_EXTRA_FEE_DELETE", "dict_extra_fee_item", id, before, null);
+        return Map.of("success", true, "message", "非工时费用工艺已删除");
+    }
+
+    private void normalizeMaterial(DictMaterial material) {
+        if (isBlank(material.getMaterialName())) {
+            throw new RuntimeException("材料名称不能为空");
+        }
+        material.setMaterialName(material.getMaterialName().trim());
+        if (material.getRemarks() == null) {
+            material.setRemarks("");
+        }
+        if (material.getPlateDensity() == null) {
+            material.setPlateDensity(material.getDensity());
+        }
+        if (material.getBarDensity() == null) {
+            material.setBarDensity(material.getDensity());
+        }
+        if (material.getTubeDensity() == null) {
+            material.setTubeDensity(material.getDensity());
+        }
+        if (material.getDensity() == null) {
+            material.setDensity(firstNonNull(material.getPlateDensity(), material.getBarDensity(), material.getTubeDensity()));
+        }
+    }
+
+    private void normalizeProcess(DictProcess process) {
+        if (isBlank(process.getProcessName())) {
+            throw new RuntimeException("工序名称不能为空");
+        }
+        process.setProcessName(process.getProcessName().trim());
+        process.setCalcType("工时");
+    }
+
+    private void normalizeMarkupFee(DictMarkupFee fee) {
+        if (isBlank(fee.getFeeName())) {
+            throw new RuntimeException("费用名称不能为空");
+        }
+        fee.setFeeName(fee.getFeeName().trim());
+        if (fee.getRatePercent() == null) {
+            fee.setRatePercent(0.0);
+        }
+        if (fee.getSortNo() == null) {
+            fee.setSortNo(0);
+        }
+        if (fee.getEnabled() == null) {
+            fee.setEnabled(true);
+        }
+    }
+
+    private void normalizeExtraFeeItem(DictExtraFeeItem item) {
+        if (isBlank(item.getFeeName())) {
+            throw new RuntimeException("工艺名称不能为空");
+        }
+        item.setFeeName(item.getFeeName().trim());
+        if (item.getSortNo() == null) {
+            item.setSortNo(0);
+        }
+        if (item.getEnabled() == null) {
+            item.setEnabled(true);
+        }
+        if (item.getRemarks() == null) {
+            item.setRemarks("");
+        }
+    }
+
+    private Double firstNonNull(Double... values) {
+        for (Double value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+}

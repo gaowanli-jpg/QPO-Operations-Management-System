@@ -1,0 +1,77 @@
+package com.machining.quote.controller;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.RequireRole;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.service.EngineerService;
+import com.machining.quote.dto.QuoteSubmitReq;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequireRole({"ENGINEER", "ADMIN"})
+@RequestMapping("/api/engineer") // 工程部的统一网址前缀
+public class EngineerController {
+
+    // --- 统一在这里召唤需要的依赖（管家和查询器） ---
+    @Autowired
+    private ItemQuoteVersionMapper itemQuoteVersionMapper;
+
+    @Autowired
+    private EngineerService engineerService;
+
+    // ---------------------------------------------
+
+    /**
+     * 获取待评估的零件任务列表
+     * 网址: http://localhost:8080/api/engineer/pending-items
+     */
+    @GetMapping("/pending-items")
+    public List<ItemQuoteVersion> getPendingItems() {
+        // 创建一个查询条件构造器
+        QueryWrapper<ItemQuoteVersion> queryWrapper = new QueryWrapper<>();
+        // 按照 ID 倒序排列，让最新导入的零件排在最前面
+        queryWrapper.orderByDesc("id");
+
+        // 去数据库里把符合条件的零件全部查出来并返回
+        return itemQuoteVersionMapper.selectList(queryWrapper);
+    }
+
+    /**
+     * 工程师提交工艺矩阵与报价
+     * 网址: http://localhost:8080/api/engineer/submit-quote
+     */
+    @PostMapping("/submit-quote")
+    public Map<String, Object> submitQuote(@RequestBody QuoteSubmitReq req) {
+        engineerService.calculateAndSaveQuote(req);
+        return Map.of("success", true, "message", "核价成功，矩阵数据已入库。");
+    }
+
+    @PostMapping("/complete-order/{rfqId}")
+    public Map<String, Object> completeOrderQuote(@PathVariable Integer rfqId) {
+        engineerService.completeOrderQuote(rfqId);
+        return Map.of("success", true, "message", "订单报价已完成，状态已更新为已报价");
+    }
+
+    @GetMapping("/repeat-analysis/{rfqId}")
+    public Map<String, Object> analyzeRepeatOrder(@PathVariable Integer rfqId) {
+        return engineerService.analyzeRepeatOrder(rfqId);
+    }
+
+    @PostMapping("/apply-repeat-quotes/{rfqId}")
+    public Map<String, Object> applyRepeatQuotes(@PathVariable Integer rfqId) {
+        return engineerService.applyRepeatQuotes(rfqId);
+    }
+
+    @PostMapping("/order-config/{rfqId}")
+    public Map<String, Object> saveOrderEngineerConfig(
+            @PathVariable Integer rfqId,
+            @RequestBody Map<String, Object> config) {
+        engineerService.saveOrderEngineerConfig(rfqId, config);
+        return Map.of("success", true, "message", "订单全局默认设定已保存");
+    }
+}

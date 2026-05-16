@@ -1,0 +1,19 @@
+# Workspace-local data and generated files
+/图纸/
+/材料与工艺费用表/
+/用例表格资料/
+/项目资料/
+/ERP_Files/
+/uploads/
+/backup/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+logs/
+*.log
+.DS_Store
+Thumbs.db
