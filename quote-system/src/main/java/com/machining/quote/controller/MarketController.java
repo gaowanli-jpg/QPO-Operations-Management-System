@@ -14,6 +14,7 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.OrderFilePathService;
+import com.machining.quote.util.DrawingPartNoResolver;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
@@ -151,6 +152,13 @@ public class MarketController {
                     .head(RfqExcelDTO.class)
                     .sheet()
                     .doReadSync();
+            Set<String> excelPartNos = new HashSet<>();
+            for (RfqExcelDTO item : excelDataList) {
+                String safePartNo = normalizePartNo(item.getPartNo());
+                if (!safePartNo.isEmpty()) {
+                    excelPartNos.add(safePartNo);
+                }
+            }
             System.out.println("✅ 成功解析 Excel，共找到 " + excelDataList.size() + " 个零件明细！");
 
             Map<String, DrawingFileInfo> drawingMap = new LinkedHashMap<>();
@@ -169,7 +177,7 @@ public class MarketController {
 
                         String cleanFileName = originalFilename.replaceAll(".*[\\\\/]", "");
 
-                        String partNoFromFileName = normalizePartNo(cleanFileName.substring(0, cleanFileName.lastIndexOf(".")));
+                        String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos);
 
                         System.out.println("📡 硬盘图纸脱水成功，拿到纯图号 -> [" + partNoFromFileName + "]");
 
@@ -201,7 +209,6 @@ public class MarketController {
             Integer generatedRfqId = newOrder.getId();
             System.out.println("📄 已生成主单，单号 ID: " + generatedRfqId);
 
-            Set<String> excelPartNos = new HashSet<>();
             Set<String> matchedDrawingPartNos = new HashSet<>();
             List<Map<String, Object>> missingDrawingItems = new ArrayList<>();
             int matchedItemCount = 0;
@@ -274,7 +281,7 @@ public class MarketController {
     }
 
     private String normalizePartNo(String partNo) {
-        return partNo == null ? "" : partNo.trim().toUpperCase();
+        return DrawingPartNoResolver.normalizePartNo(partNo);
     }
 
     private Map<String, Object> buildMissingDrawingItem(RfqExcelDTO item, String normalizedPartNo) {

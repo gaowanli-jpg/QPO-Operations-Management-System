@@ -49,7 +49,7 @@
       <div class="section-title">步骤 3：上传关联图纸（PDF）</div>
       <div class="upload-box">
         <el-alert 
-          title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取 PDF 文件。" 
+          title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。" 
           type="success" 
           show-icon 
           class="upload-alert"

@@ -9,6 +9,7 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.DrawingPartNoResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -131,7 +132,7 @@ public class OrderManagementService {
                 continue;
             }
 
-            String partNoFromFileName = normalizePartNo(cleanFileName.substring(0, cleanFileName.lastIndexOf(".")));
+            String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMap.keySet());
             ItemQuoteVersion item = itemMap.get(partNoFromFileName);
             if (item == null) {
                 unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
@@ -377,7 +378,7 @@ public class OrderManagementService {
     }
 
     private String normalizePartNo(String partNo) {
-        return partNo == null ? "" : partNo.trim().toUpperCase();
+        return DrawingPartNoResolver.normalizePartNo(partNo);
     }
 
     private Map<String, Object> buildItemResult(ItemQuoteVersion item, String fileName, String reason) {

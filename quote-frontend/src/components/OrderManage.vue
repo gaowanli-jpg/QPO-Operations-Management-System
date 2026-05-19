@@ -184,7 +184,7 @@
             <el-icon class="el-icon--upload"><upload-filled /></el-icon>
             <div class="el-upload__text">拖拽后补 PDF 图纸到这里，或点击选择</div>
             <template #tip>
-              <div class="el-upload__tip">PDF 文件名需要与零件物品编号一致，例如 L20100000733.pdf。</div>
+              <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
             </template>
           </el-upload>
         </div>
