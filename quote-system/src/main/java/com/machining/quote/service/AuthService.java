@@ -11,15 +11,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
-    private final Map<String, AuthContext.SessionUser> sessions = new ConcurrentHashMap<>();
-
     @Autowired
     private ErpUserMapper userMapper;
+
+    @Autowired
+    private JwtService jwtService;
 
     public Map<String, Object> login(String username, String password) {
         String safeUsername = username == null ? "" : username.trim();
@@ -31,18 +30,17 @@ public class AuthService {
         qw.eq("username", safeUsername).last("LIMIT 1");
         ErpUser user = userMapper.selectOne(qw);
         if (user == null || Boolean.FALSE.equals(user.getEnabled())
-                || !sha256(password).equalsIgnoreCase(user.getPasswordHash())) {
+                || !hashPassword(password).equalsIgnoreCase(user.getPasswordHash())) {
             throw new RuntimeException("用户名或密码错误");
         }
 
-        String token = UUID.randomUUID().toString().replace("-", "");
         AuthContext.SessionUser sessionUser = new AuthContext.SessionUser(
                 user.getId(),
                 user.getUsername(),
                 user.getDisplayName(),
                 user.getRole()
         );
-        sessions.put(token, sessionUser);
+        String token = jwtService.createToken(sessionUser);
         return Map.of(
                 "success", true,
                 "message", "登录成功",
@@ -56,19 +54,14 @@ public class AuthService {
     }
 
     public AuthContext.SessionUser findByToken(String token) {
-        if (token == null || token.isBlank()) {
-            return null;
-        }
-        return sessions.get(token.trim());
+        return jwtService.parseToken(token);
     }
 
     public void logout(String token) {
-        if (token != null) {
-            sessions.remove(token.trim());
-        }
+        // JWT 无状态，不需要服务端注销
     }
 
-    private String sha256(String value) {
+    public String hashPassword(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));

@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: quote-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups/postgres:/backups
+
+  backend:
+    build:
+      context: ./quote-system
+    container_name: quote-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-postgres}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      ERP_UPLOAD_DIR: /data/uploads/
+      ERP_BACKUP_DIR: /data/backups/
+      ERP_CORS_ALLOWED_ORIGINS: http://localhost:8088
+      ERP_AUTH_ENABLED: true
+      ERP_JWT_SECRET: ${ERP_JWT_SECRET:-change-this-secret-before-production}
+      ERP_JWT_TTL_MINUTES: ${ERP_JWT_TTL_MINUTES:-720}
+      FLYWAY_ENABLED: true
+      SQL_INIT_MODE: never
+      MYBATIS_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+    volumes:
+      - uploads_data:/data/uploads
+      - backups_data:/data/backups
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./quote-frontend
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: quote-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8088:80"
+    volumes:
+      - uploads_data:/data/uploads:ro
+
+volumes:
+  postgres_data:
+  uploads_data:
+  backups_data:

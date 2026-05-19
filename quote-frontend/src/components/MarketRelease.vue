@@ -37,11 +37,11 @@
                   v-model="releaseForm.startDate"
                   type="date"
                   value-format="YYYY-MM-DD"
-                  style="width: 100%;"
+                  class="full-width"
                 />
               </el-form-item>
               <el-form-item label="安排类型">
-                <el-select v-model="releaseForm.arrangeType" style="width: 100%;">
+                <el-select v-model="releaseForm.arrangeType" class="full-width">
                   <el-option label="计划" value="计划" />
                   <el-option label="加急" value="加急" />
                   <el-option label="备货" value="备货" />
@@ -96,7 +96,7 @@
                     :max="scope.row.qty"
                     :disabled="!canSelectItem(scope.row)"
                     controls-position="right"
-                    style="width: 105px;"
+                    class="qty-input"
                   />
                 </template>
               </el-table-column>
@@ -401,20 +401,144 @@ onMounted(loadOrders)
 </script>
 
 <style scoped>
-.release-container { padding: 20px; }
-.release-card { border-radius: 8px; }
-.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.card-header h2 { margin: 0; color: #303133; font-size: 22px; }
-.card-header p { margin: 8px 0 0; color: #606266; font-size: 14px; }
-.panel { background: #fff; border: 1px solid #ebeef5; border-radius: 8px; padding: 16px; }
-.panel-title { font-weight: 700; color: #303133; margin-bottom: 14px; }
-.order-picker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
-.selected-order-text { min-height: 32px; display: flex; align-items: center; color: #303133; border: 1px solid #dcdfe6; border-radius: 4px; padding: 0 10px; background: #f8f9fa; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.panel-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.panel-title-row .panel-title { margin-bottom: 0; }
-.order-desc { margin-top: 16px; }
-.ticket-form { margin-top: 18px; }
-.main-actions { display: grid; gap: 10px; }
-.main-actions :deep(.el-button) { width: 100%; margin-left: 0; }
-.ticket-panel { margin-top: 16px; }
+.release-container {
+  padding: 0;
+}
+
+.release-card {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.card-header p {
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.panel {
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.panel-title {
+  margin-bottom: 12px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.order-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.selected-order-text {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--erp-text);
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--erp-surface-soft);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-title-row .panel-title {
+  margin-bottom: 0;
+}
+
+.order-desc {
+  margin-top: 14px;
+}
+
+.ticket-form {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+
+.full-width {
+  width: 100%;
+}
+
+.qty-input {
+  width: 105px;
+}
+
+.main-actions {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+
+.main-actions :deep(.el-button) {
+  width: 100%;
+  margin-left: 0;
+}
+
+.ticket-panel {
+  margin-top: 14px;
+}
+
+:deep(.el-descriptions__label) {
+  width: 78px;
+  color: var(--erp-text-secondary);
+  background: #f5f7fb;
+}
+
+@media (max-width: 1180px) {
+  .release-container :deep(.el-row) {
+    display: block;
+  }
+
+  .release-container :deep(.el-col) {
+    max-width: 100%;
+    width: 100%;
+    margin-bottom: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .card-header,
+  .panel-title-row,
+  .order-picker-row {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 </style>

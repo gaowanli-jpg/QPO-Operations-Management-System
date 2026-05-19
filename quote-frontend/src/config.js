@@ -1,4 +1,5 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL
+export const API_BASE_URL = rawApiBaseUrl === undefined ? 'http://localhost:8080' : rawApiBaseUrl
 
 export const apiUrl = (path) => {
   if (!path) return ''

@@ -13,7 +13,7 @@
               filterable
               clearable
               placeholder="先选择客户"
-              style="width: 220px;"
+              class="customer-select"
               @change="handleCustomerChange"
               @clear="handleCustomerClear"
             >
@@ -29,7 +29,7 @@
               clearable
               :disabled="!selectedCustomer"
               placeholder="搜索订单号 / 项目 / 状态"
-              style="width: 260px;"
+              class="search-input"
             />
             <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
           </div>
@@ -79,7 +79,7 @@
 
     <el-drawer v-model="detailVisible" title="订单详情" size="72%">
       <div v-if="orderDetail" v-loading="detailLoading" class="detail-wrap">
-        <el-descriptions :column="2" border>
+        <el-descriptions :column="2" border class="detail-descriptions">
           <el-descriptions-item label="订单号">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderDetail.orderInfo?.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ orderDetail.orderInfo?.customerName || '-' }}</el-descriptions-item>
@@ -154,7 +154,7 @@
       :close-on-click-modal="false"
     >
       <div v-if="orderDetail" class="supplement-dialog">
-        <el-descriptions :column="1" border size="small">
+        <el-descriptions :column="1" border size="small" class="supplement-descriptions">
           <el-descriptions-item label="订单">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户/项目">
             {{ orderDetail.orderInfo?.customerName || '-' }} / {{ orderDetail.orderInfo?.projectName || '-' }}
@@ -439,29 +439,157 @@ onMounted(loadCustomers)
 </script>
 
 <style scoped>
-.order-manage-container { padding: 20px; }
-.manage-card { border-radius: 8px; }
-.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.card-header h2 { margin: 0; color: #303133; font-size: 22px; }
-.card-header p { margin: 8px 0 0; color: #606266; font-size: 14px; }
-.header-actions { display: flex; align-items: center; gap: 10px; }
-.detail-wrap { padding-right: 12px; }
-.detail-tabs { margin-top: 18px; }
+.order-manage-container {
+  padding: 0;
+}
+
+.manage-card {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.card-header p {
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.customer-select {
+  width: 220px;
+}
+
+.search-input {
+  width: 260px;
+}
+
+.detail-wrap {
+  padding-right: 4px;
+}
+
+.detail-descriptions :deep(.el-descriptions__label),
+.supplement-descriptions :deep(.el-descriptions__label) {
+  color: var(--erp-text-secondary);
+  background: #f5f7fb;
+}
+
 .detail-actions {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-top: 14px;
+  flex-wrap: wrap;
 }
-.detail-actions :deep(.el-alert) { flex: 1; }
-.supplement-dialog { display: flex; flex-direction: column; gap: 16px; }
-.section-subtitle { font-weight: 700; color: #303133; margin-bottom: 8px; }
-.upload-area :deep(.el-upload) { width: 100%; }
-.upload-area :deep(.el-upload-dragger) { width: 100%; }
-.supplement-result { display: flex; flex-direction: column; gap: 10px; }
-.result-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow: auto; }
-.result-list li { padding: 6px 0; border-bottom: 1px dashed #ebeef5; color: #303133; }
-.result-main { font-weight: 700; }
-.result-sub { color: #606266; }
-.result-reason { color: #909399; }
+
+.detail-actions :deep(.el-alert) {
+  flex: 1;
+  min-width: 240px;
+}
+
+.detail-tabs {
+  margin-top: 16px;
+}
+
+.supplement-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-subtitle {
+  margin-bottom: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.upload-area :deep(.el-upload) {
+  width: 100%;
+}
+
+.upload-area :deep(.el-upload-dragger) {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.supplement-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.result-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px;
+  overflow: auto;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-soft);
+}
+
+.result-list li {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  color: var(--erp-text);
+}
+
+.result-list li:last-child {
+  border-bottom: none;
+}
+
+.result-main {
+  font-weight: 700;
+}
+
+.result-sub {
+  color: var(--erp-text-secondary);
+}
+
+.result-reason {
+  color: var(--erp-warning);
+}
+
+@media (max-width: 1200px) {
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .customer-select,
+  .search-input {
+    width: 100%;
+  }
+}
 </style>

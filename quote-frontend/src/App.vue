@@ -11,9 +11,9 @@
         <el-menu
           :default-active="activeMenu"
           class="el-menu-vertical"
-          background-color="#304156"
+          background-color="#25364a"
           text-color="#bfcbd9"
-          active-text-color="#409EFF"
+          active-text-color="#8ec5ff"
           router
         >
           <div class="menu-title">核心业务流</div>
@@ -52,6 +52,11 @@
             <el-icon><Box /></el-icon>
             <span>仓库部：库存管理</span>
           </el-menu-item>
+
+          <el-menu-item v-if="canSee(['ADMIN'])" index="/users">
+            <el-icon><User /></el-icon>
+            <span>系统管理：用户权限</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
 
@@ -84,7 +89,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { DataBoard, Setting, Fold, Tickets, Box, Tools, Document, Files } from '@element-plus/icons-vue'
+import { Box, DataBoard, Document, Files, Fold, Setting, Tickets, Tools, User } from '@element-plus/icons-vue'
 import { authState, clearAuth, hasRole } from './auth'
 import { API_BASE_URL } from './config'
 
@@ -128,26 +133,28 @@ html, body, #app {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  background: var(--erp-bg);
 }
 
 .sidebar {
-  background-color: #304156;
+  background-color: #25364a;
   transition: width 0.3s;
-  box-shadow: 2px 0 6px rgba(0, 21, 41, .35);
+  box-shadow: none;
   z-index: 1000;
   display: flex;
   flex-direction: column;
 }
 
 .logo-box {
-  height: 60px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #2b3649;
+  background-color: #1f2d3d;
   color: #fff;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo-icon {
@@ -158,30 +165,31 @@ html, body, #app {
   padding: 2px 5px;
 }
 
-.logo-text {
-  color: #fff;
-}
-
 .el-menu-vertical {
   border-right: none !important;
   flex: 1;
 }
 
 .menu-title {
-  color: #6e7a8b;
+  color: #8090a5;
   font-size: 12px;
-  padding: 15px 20px 5px;
-  text-transform: uppercase;
+  padding: 16px 20px 6px;
+}
+
+.main-container {
+  min-width: 0;
+  flex: 1;
 }
 
 .header {
-  height: 60px;
-  background-color: #fff;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, .08);
+  height: 56px;
+  background-color: var(--erp-surface);
+  border-bottom: 1px solid var(--erp-border-soft);
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 18px;
   z-index: 999;
 }
 
@@ -199,20 +207,20 @@ html, body, #app {
 
 .breadcrumb {
   font-size: 14px;
-  color: #909399;
+  color: var(--erp-text-secondary);
 }
 
 .username {
   margin-left: 10px;
   margin-right: 10px;
   font-size: 14px;
-  color: #606266;
+  color: var(--erp-text);
   font-weight: 500;
 }
 
 .app-main {
-  background-color: #f0f2f5;
-  padding: 20px;
+  background-color: var(--erp-bg);
+  padding: 16px;
   overflow-y: auto;
 }
 

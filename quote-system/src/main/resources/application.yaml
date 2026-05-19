@@ -37,3 +37,5 @@ erp:
     allowed-origins: ${ERP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:4173}
   auth:
     enabled: ${ERP_AUTH_ENABLED:true}
+    jwt-secret: ${ERP_JWT_SECRET:change-this-secret-before-production}
+    jwt-ttl-minutes: ${ERP_JWT_TTL_MINUTES:720}

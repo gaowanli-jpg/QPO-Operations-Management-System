@@ -13,7 +13,7 @@
               filterable
               clearable
               placeholder="先选择客户"
-              style="width: 220px;"
+              class="customer-select"
               @change="handleCustomerChange"
               @clear="handleCustomerClear"
             >
@@ -29,7 +29,7 @@
               clearable
               :disabled="!selectedCustomer"
               placeholder="搜索订单号 / 项目 / 状态"
-              style="width: 260px;"
+              class="search-input"
             />
             <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
           </div>
@@ -77,7 +77,7 @@
 
     <el-drawer v-model="detailVisible" title="历史订单详情" size="72%">
       <div v-if="orderDetail" v-loading="detailLoading" class="detail-wrap">
-        <el-descriptions :column="2" border>
+        <el-descriptions :column="2" border class="detail-descriptions">
           <el-descriptions-item label="订单号">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderDetail.orderInfo?.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ orderDetail.orderInfo?.customerName || '-' }}</el-descriptions-item>
@@ -276,13 +276,83 @@ onMounted(loadCustomers)
 </script>
 
 <style scoped>
-.history-container { padding: 20px; }
-.history-card { border-radius: 8px; }
-.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.card-header h2 { margin: 0; color: #303133; font-size: 22px; }
-.card-header p { margin: 8px 0 0; color: #606266; font-size: 14px; }
-.header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-.detail-wrap { padding-right: 12px; }
-.detail-tabs { margin-top: 18px; }
-.delete-alert { margin: 16px 0; }
+.history-container {
+  padding: 0;
+}
+
+.history-card {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.card-header p {
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.customer-select {
+  width: 220px;
+}
+
+.search-input {
+  width: 260px;
+}
+
+.detail-wrap {
+  padding-right: 4px;
+}
+
+.detail-descriptions :deep(.el-descriptions__label) {
+  color: var(--erp-text-secondary);
+  background: #f5f7fb;
+}
+
+.detail-tabs {
+  margin-top: 16px;
+}
+
+.delete-alert {
+  margin: 14px 0;
+}
+
+@media (max-width: 1200px) {
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .customer-select,
+  .search-input {
+    width: 100%;
+  }
+}
 </style>

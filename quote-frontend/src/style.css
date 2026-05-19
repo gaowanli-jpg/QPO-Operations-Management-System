@@ -1,0 +1,135 @@
+:root {
+  --erp-bg: #f4f6f9;
+  --erp-surface: #ffffff;
+  --erp-surface-soft: #f8fafc;
+  --erp-border: #d8dee8;
+  --erp-border-soft: #e7ebf2;
+  --erp-text: #1f2937;
+  --erp-text-secondary: #667085;
+  --erp-primary: #1f5f8b;
+  --erp-primary-dark: #164b70;
+  --erp-success: #2f7d32;
+  --erp-warning: #b7791f;
+  --erp-danger: #b42318;
+  --erp-shadow: 0 8px 22px rgba(31, 41, 55, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--erp-text);
+  background: var(--erp-bg);
+}
+
+.el-card {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.el-card__header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: #fbfcfe;
+}
+
+.el-card__body {
+  padding: 18px;
+}
+
+.el-table {
+  --el-table-header-bg-color: #f3f6fa;
+  --el-table-header-text-color: #344054;
+  --el-table-row-hover-bg-color: #f6f9fc;
+  color: var(--erp-text);
+  font-size: 13px;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 700;
+}
+
+.el-table .cell {
+  line-height: 1.45;
+}
+
+.el-button {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--erp-primary);
+  --el-button-border-color: var(--erp-primary);
+  --el-button-hover-bg-color: #2a72a6;
+  --el-button-hover-border-color: #2a72a6;
+  --el-button-active-bg-color: var(--erp-primary-dark);
+  --el-button-active-border-color: var(--erp-primary-dark);
+}
+
+.el-button--success {
+  --el-button-bg-color: var(--erp-success);
+  --el-button-border-color: var(--erp-success);
+  --el-button-hover-bg-color: #388e3c;
+  --el-button-hover-border-color: #388e3c;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-input-number .el-input__wrapper {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--erp-border) inset;
+}
+
+.el-form-item {
+  margin-bottom: 14px;
+}
+
+.el-dialog {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-dialog__header {
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: #fbfcfe;
+}
+
+.el-dialog__body {
+  padding: 18px 20px;
+}
+
+.el-dialog__footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--erp-border-soft);
+  background: #fbfcfe;
+}
+
+.el-tabs__header {
+  margin-bottom: 12px;
+}
+
+.el-tag {
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c7d0dd;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

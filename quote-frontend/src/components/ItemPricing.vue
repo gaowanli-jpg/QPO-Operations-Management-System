@@ -3,7 +3,7 @@
     <el-card shadow="never" class="main-card">
       <template #header>
         <div class="card-header">
-          <h2>💰 工程部：逐件工艺路线与核价中心</h2>
+          <h2>工程部：逐件工艺路线与核价中心</h2>
           <div class="header-tags">
             <el-tag type="success" size="large" v-if="rfqId">正在处理询价单 ID: {{ rfqId }}</el-tag>
             <el-tag size="large" v-if="quoteData?.orderInfo?.status">订单状态：{{ quoteData.orderInfo.status }}</el-tag>
@@ -12,9 +12,9 @@
       </template>
 
       <!-- 头部操作区 -->
-      <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-        <div style="display: flex; gap: 10px;">
-          <el-button @click="$router.back()">⬅️ 返回修改全局设定</el-button>
+      <div class="toolbar-row">
+        <div class="toolbar-actions">
+          <el-button @click="$router.back()">返回修改全局设定</el-button>
           <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
             生成报价单
           </el-button>
@@ -25,19 +25,19 @@
         <el-button type="primary" @click="fetchQuoteData" :loading="loading">一键同步订单数据</el-button>
       </div>
 
-      <div v-if="!quoteData" style="padding: 50px 0; text-align: center;" v-loading="loading">
+      <div v-if="!quoteData" class="empty-state" v-loading="loading">
         <el-empty description="正在拉取市场部数据..." />
       </div>
 
       <!-- 数据大表格 -->
-      <div v-else>
+      <div v-else class="table-shell">
         <el-table
           ref="pricingTableRef"
           :data="quoteData.itemList"
           row-key="id"
           border
           stripe
-          style="width: 100%"
+          class="pricing-table"
           height="450"
         >
           <el-table-column prop="partNo" label="图号/零件号" width="140" fixed />
@@ -50,28 +50,27 @@
             </template>
           </el-table-column>
           
-          <!-- 🌟 新增：表格处的图纸查看按钮 🌟 -->
           <el-table-column label="图纸" width="90" align="center">
             <template #default="scope">
               <el-button 
                 v-if="scope.row.drawingUrl" 
                 type="success" size="small" plain 
                 @click="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"
-              >🔍 图纸</el-button>
+              >图纸</el-button>
               <el-tag v-else type="info" size="small">无图</el-tag>
             </template>
           </el-table-column>
 
           <el-table-column label="核算总成本" width="110" align="right">
             <template #default="scope">
-              <span v-if="scope.row.baseCost">¥ {{ scope.row.baseCost.toFixed(2) }}</span><span v-else style="color:#909399">待核算</span>
+              <span v-if="scope.row.baseCost">¥ {{ scope.row.baseCost.toFixed(2) }}</span><span v-else class="muted-price">待核算</span>
             </template>
           </el-table-column>
           <el-table-column label="含税单价" width="110" align="right">
-            <template #default="scope"><span v-if="scope.row.finalUnitPrice != null" style="color: #67C23A; font-weight: bold;">¥ {{ scope.row.finalUnitPrice.toFixed(2) }}</span></template>
+            <template #default="scope"><span v-if="scope.row.finalUnitPrice != null" class="success-price">¥ {{ scope.row.finalUnitPrice.toFixed(2) }}</span></template>
           </el-table-column>
           <el-table-column label="单项合计" width="110" align="right">
-            <template #default="scope"><span v-if="scope.row.finalTotalPrice != null" style="color: #F56C6C; font-weight: bold;">¥ {{ scope.row.finalTotalPrice.toFixed(2) }}</span></template>
+            <template #default="scope"><span v-if="scope.row.finalTotalPrice != null" class="danger-price">¥ {{ scope.row.finalTotalPrice.toFixed(2) }}</span></template>
           </el-table-column>
           <el-table-column prop="status" label="状态" width="100" align="center" />
           <el-table-column label="操作" width="120" align="center" fixed="right">
@@ -89,10 +88,10 @@
       </div>
     </el-card>
 
-    <!-- ==================== 🛠️ 工程师核价控制台 (弹窗) ==================== -->
+    <!-- 工程师核价控制台 -->
     <el-dialog
       v-model="dialogVisible"
-      title="⚙️ 工程师精准核价控制台"
+      title="工程师精准核价控制台"
       width="95vw"
       top="3vh"
       class="pricing-workbench-dialog"
@@ -120,12 +119,12 @@
           </div>
 
           <!-- 模块A：材料 -->
-          <div style="font-weight: bold; color: #409EFF; margin-bottom: 10px;">📊 模块 A：智能材料成本核算 (已继承全局设定)</div>
-          <el-form label-width="100px" style="background-color: #f5f7fa; padding: 15px; border-radius: 8px;">
+          <div class="form-section-title">模块 A：材料成本核算（已继承全局设定）</div>
+          <el-form label-width="100px" class="pricing-section-form">
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-form-item label="材质选择">
-                  <el-select v-model="matForm.materialName" style="width: 100%;">
+                  <el-select v-model="matForm.materialName" class="full-width">
                     <el-option
                       v-for="material in materialOptions"
                       :key="material.id"
@@ -145,25 +144,25 @@
             </el-row>
             
             <!-- 尺寸填写 -->
-            <el-row :gutter="20" style="background: #fff; padding: 10px; border-radius: 4px;">
-              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="长(mm)"><el-input-number v-model="matForm.L" :min="0" controls-position="right" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="宽(mm)"><el-input-number v-model="matForm.W" :min="0" controls-position="right" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="厚(mm)"><el-input-number v-model="matForm.T" :min="0" controls-position="right" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape !== '板材'"><el-form-item label="长度(mm)"><el-input-number v-model="matForm.L" :min="0" controls-position="right" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape !== '板材'"><el-form-item label="外径(mm)"><el-input-number v-model="matForm.outR" :min="0" controls-position="right" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape === '管材'"><el-form-item label="内径(mm)"><el-input-number v-model="matForm.inR" :min="0" controls-position="right" style="width:100%" /></el-form-item></el-col>
+            <el-row :gutter="20" class="dimension-row">
+              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="长(mm)"><el-input-number v-model="matForm.L" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="宽(mm)"><el-input-number v-model="matForm.W" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="厚(mm)"><el-input-number v-model="matForm.T" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="8" v-if="matForm.shape !== '板材'"><el-form-item label="长度(mm)"><el-input-number v-model="matForm.L" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="8" v-if="matForm.shape !== '板材'"><el-form-item label="外径(mm)"><el-input-number v-model="matForm.outR" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="8" v-if="matForm.shape === '管材'"><el-form-item label="内径(mm)"><el-input-number v-model="matForm.inR" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
             </el-row>
-            <p style="color:#F56C6C; margin-top:10px; font-weight: bold; text-align: right;">
+            <p class="material-summary">
               毛坯重量：{{ calculatedWeight.toFixed(3) }} KG，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
             </p>
           </el-form>
 
           <!-- 模块B：工艺 -->
-          <div style="font-weight: bold; color: #409EFF; margin-top: 20px; margin-bottom: 10px;">🛠️ 模块 B：工艺路线排程 (已继承全局设定)</div>
-          <div style="background-color: #fafafa; padding: 15px; border-radius: 8px; border: 1px dashed #dcdfe6;">
-            <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="index" style="margin-bottom: 10px; align-items: center;">
+          <div class="form-section-title process-title">模块 B：工艺路线排程（已继承全局设定）</div>
+          <div class="process-box">
+            <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="index" class="process-row">
               <el-col :span="8">
-                <el-select v-model="proc.optionKey" style="width: 100%;" @change="syncProcessMeta(proc)">
+                <el-select v-model="proc.optionKey" class="full-width" @change="syncProcessMeta(proc)">
                   <el-option
                     v-for="process in combinedProcessOptions"
                     :key="process.optionKey"
@@ -181,7 +180,7 @@
                   :min="0"
                   :step="proc.calcType === '非工时费用' ? 10 : 0.5"
                   :placeholder="proc.calcType === '非工时费用' ? '填入费用金额' : '填入工时'"
-                  style="width: 100%;"
+                  class="full-width"
                 />
               </el-col>
             </el-row>
@@ -222,7 +221,7 @@
       </template>
     </el-dialog>
 
-    <!-- ==================== 🌟 终极图纸渲染器 (内嵌 iframe) ==================== -->
+    <!-- 图纸预览 -->
     <el-dialog
       v-model="pdfVisible"
       :title="`图纸预览：${pdfTitle}`"
@@ -230,7 +229,7 @@
       top="5vh"
       destroy-on-close
     >
-      <div v-loading="!pdfLoaded" style="height: 70vh; width: 100%;">
+      <div v-loading="!pdfLoaded" class="pdf-frame-shell">
         <iframe 
           :src="currentPdfSrc" 
           width="100%" 
@@ -380,7 +379,7 @@ const fetchQuoteData = async (options = {}) => {
   const scrollTop = options.keepScroll ? getPricingTableScrollTop() : 0
   loading.value = true
   try {
-    // 🌟 动态拼接真实的 rfqId
+    // 动态拼接真实的 rfqId
     const response = await axios.get(`${API_BASE_URL}/api/market/summary/${rfqId.value}`)
     quoteData.value = response.data
     if (quoteData.value?.orderInfo?.engineerConfig) {
@@ -431,7 +430,7 @@ const completeOrderQuote = async () => {
   }
 }
 
-// ==================== 🛠️ 图纸预览核心逻辑 ====================
+// 图纸预览核心逻辑
 const pdfVisible = ref(false)
 const currentPdfUrl = ref('')
 const pdfTitle = ref('')
@@ -458,7 +457,7 @@ const openDrawingInNewWindow = (url) => {
   }
 }
 
-// ==================== 🛠️ 核价弹窗核心逻辑 ====================
+// 核价弹窗核心逻辑
 const dialogVisible = ref(false)
 const currentRow = ref(null)
 const submitLoading = ref(false)
@@ -528,7 +527,7 @@ const mergeRoutesWithGlobalDefaults = (savedRoutes, defaultRoutes) => {
   return result
 }
 
-// 🌟 打开弹窗，继承全局配置
+// 打开弹窗，继承全局配置
 const openQuoteDialog = (row) => {
   currentRow.value = row
   dialogVisible.value = true
@@ -627,11 +626,128 @@ const submitCurrentQuote = async () => {
 </script>
 
 <style scoped>
-.pricing-container { padding: 20px; }
-.main-card { border-radius: 8px; }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
-.card-header h2 { margin: 0; color: #303133; }
-.header-tags { display: flex; align-items: center; gap: 10px; }
+.pricing-container {
+  padding: 0;
+}
+
+.main-card {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.header-tags {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 0 0;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.empty-state {
+  padding: 48px 0;
+  text-align: center;
+}
+
+.table-shell {
+  border-top: 1px solid var(--erp-border-soft);
+  padding-top: 14px;
+}
+
+.pricing-table,
+.full-width {
+  width: 100%;
+}
+
+.muted-price {
+  color: var(--erp-text-secondary);
+}
+
+.success-price {
+  color: var(--erp-success);
+  font-weight: 700;
+}
+
+.danger-price {
+  color: var(--erp-danger);
+  font-weight: 700;
+}
+
+.form-section-title {
+  margin: 18px 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pricing-section-form {
+  padding: 14px 16px 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.dimension-row {
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--erp-surface);
+}
+
+.material-summary {
+  margin-top: 10px;
+  color: var(--erp-danger);
+  font-weight: 700;
+  text-align: right;
+}
+
+.process-title {
+  margin-top: 18px;
+}
+
+.process-box {
+  padding: 14px;
+  border: 1px dashed var(--erp-border);
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.process-row {
+  margin-bottom: 10px;
+  align-items: center;
+}
 
 :deep(.pricing-workbench-dialog .el-dialog__body) {
   max-height: 82vh;
@@ -661,9 +777,9 @@ const submitCurrentQuote = async () => {
 .drawing-pane {
   display: flex;
   flex-direction: column;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--erp-border-soft);
   border-radius: 8px;
-  background: #fff;
+  background: var(--erp-surface);
   overflow: hidden;
 }
 
@@ -673,18 +789,18 @@ const submitCurrentQuote = async () => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border-bottom: 1px solid #ebeef5;
-  background: #f5f7fa;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface-soft);
 }
 
 .drawing-pane-title {
-  color: #303133;
+  color: var(--erp-text);
   font-weight: 700;
   line-height: 1.3;
 }
 
 .drawing-pane-subtitle {
-  color: #909399;
+  color: var(--erp-text-secondary);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -692,7 +808,7 @@ const submitCurrentQuote = async () => {
 .drawing-frame {
   flex: 1;
   min-height: 0;
-  background: #f5f7fa;
+  background: var(--erp-surface-soft);
 }
 
 .drawing-frame-iframe {
@@ -707,15 +823,14 @@ const submitCurrentQuote = async () => {
   justify-content: center;
 }
 
-/* 弹窗顶部栏样式 */
 .dialog-header-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px dashed #dcdfe6;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--erp-border-soft);
 }
 
 .current-item-alert {
@@ -726,6 +841,11 @@ const submitCurrentQuote = async () => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.pdf-frame-shell {
+  width: 100%;
+  height: 70vh;
 }
 
 @media (max-width: 1180px) {

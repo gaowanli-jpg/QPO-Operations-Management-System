@@ -3,12 +3,12 @@
     <el-card class="main-card">
       <template #header>
         <div class="card-header">
-          <h2>💼 市场部：新询价单导入与智能分流中心</h2>
+          <h2>市场部：新询价单导入中心</h2>
         </div>
       </template>
 
       <!-- 第一步：客户与主单信息 -->
-      <div class="section-title">📌 Step 1: 客户基础信息</div>
+      <div class="section-title">步骤 1：客户基础信息</div>
       <el-form :model="rfqForm" label-width="120px" class="form-box">
         <el-row :gutter="20">
           <el-col :span="12">
@@ -25,7 +25,7 @@
       </el-form>
 
       <!-- 第二步：上传 Excel BOM 表 -->
-      <div class="section-title">📊 Step 2: 上传客户询价表 (Excel)</div>
+      <div class="section-title">步骤 2：上传客户询价表（Excel）</div>
       <div class="upload-box">
         <el-upload
           ref="excelUploadRef"
@@ -46,13 +46,13 @@
       </div>
 
       <!-- 第三步：文件夹图纸拖拽区 -->
-      <div class="section-title">📁 Step 3: 上传关联图纸 (PDF)</div>
+      <div class="section-title">步骤 3：上传关联图纸（PDF）</div>
       <div class="upload-box">
         <el-alert 
           title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取 PDF 文件。" 
           type="success" 
           show-icon 
-          style="margin-bottom: 15px;" 
+          class="upload-alert"
         />
         
         <!-- 覆盖原生拖拽事件，接管控制权 -->
@@ -61,25 +61,25 @@
           @dragover.prevent 
           @drop.prevent="handleFolderDrop"
         >
-          <el-icon class="el-icon--upload" style="font-size: 48px; color: #8c939d; margin-bottom: 15px;"><upload-filled /></el-icon>
-          <div class="el-upload__text" style="font-size: 16px; color: #606266;">
+          <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
+          <div class="el-upload__text dropzone-text">
             将 <em>图纸文件夹</em> 或多个图纸直接拖拽至此处
           </div>
           
           <!-- 备用的点击选文件夹按钮 -->
-          <div style="margin-top: 15px;">
+          <div class="folder-select-row">
              或点击 <el-button size="small" @click="triggerFolderSelect">选择文件夹</el-button>
-             <input type="file" ref="folderInput" webkitdirectory directory multiple style="display: none;" @change="handleFolderSelect" />
+             <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
           </div>
         </div>
 
         <!-- 展示挖出来的 PDF 文件列表 -->
         <div v-if="drawingFiles.length > 0" class="file-stats">
-          <h4>✅ 已成功提取待提交图纸 ({{ drawingFiles.length }} 份)：</h4>
+          <h4>已成功提取待提交图纸（{{ drawingFiles.length }} 份）</h4>
           <ul class="pdf-list">
             <li v-for="(file, index) in drawingFiles" :key="index">
-              📄 {{ file.name }}
-              <el-button link type="danger" size="small" @click="removeDrawing(index)" style="float: right;">移除</el-button>
+              <span>{{ file.name }}</span>
+              <el-button link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
             </li>
           </ul>
         </div>
@@ -88,7 +88,7 @@
       <!-- 底部提交按钮 -->
       <div class="submit-footer">
         <el-button type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn">
-          🚀 确认无误，打包提交工程部评估
+          确认无误，提交工程部评估
         </el-button>
       </div>
     </el-card>
@@ -311,31 +311,142 @@ const submitRfqPackage = async () => {
 </script>
 
 <style scoped>
-.market-container { padding: 40px; background-color: #f0f2f5; min-height: 100vh; }
-.main-card { max-width: 1000px; margin: 0 auto; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
-.section-title { font-size: 16px; font-weight: bold; color: #409EFF; border-bottom: 1px solid #ebeef5; padding-bottom: 8px; margin-bottom: 20px; margin-top: 20px; }
-.form-box { background-color: #fafafa; padding: 20px 20px 0 20px; border-radius: 8px; border: 1px solid #ebeef5; }
-.upload-box { background-color: #fff; padding: 20px; border-radius: 8px; border: 1px dashed #dcdfe6; }
+.market-container {
+  padding: 0;
+  min-height: auto;
+}
+
+.main-card {
+  max-width: none;
+  margin: 0;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.card-header p {
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.section-title {
+  margin: 20px 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.form-box,
+.upload-box {
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface);
+}
+
+.form-box {
+  padding: 16px 18px 2px;
+}
+
+.upload-box {
+  padding: 16px 18px;
+}
+
+.upload-alert {
+  margin-bottom: 14px;
+}
+
+.upload-box :deep(.el-upload) {
+  width: 100%;
+}
+
+.upload-box :deep(.el-upload-dragger) {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
 
 /* 自定义拖拽框样式 */
 .custom-dropzone {
-  border: 2px dashed #dcdfe6;
-  border-radius: 6px;
-  background-color: #fafafa;
+  border: 1px dashed #aab6c8;
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
   text-align: center;
-  padding: 40px 0;
+  padding: 34px 16px;
   cursor: pointer;
-  transition: border-color 0.3s;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 .custom-dropzone:hover {
-  border-color: #409eff;
+  border-color: var(--erp-primary);
+  background: #f3f8fc;
 }
 
-.file-stats { margin-top: 20px; background: #f0f9eb; padding: 15px; border-radius: 6px; border: 1px solid #e1f3d8;}
-.pdf-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
-.pdf-list li { padding: 8px; border-bottom: 1px dashed #e1f3d8; color: #67C23A; }
+.dropzone-icon {
+  margin-bottom: 14px;
+  color: #8c98aa;
+  font-size: 44px;
+}
+
+.dropzone-text {
+  color: var(--erp-text-secondary);
+  font-size: 15px;
+}
+
+.folder-select-row {
+  margin-top: 14px;
+  color: var(--erp-text-secondary);
+}
+
+.hidden-input {
+  display: none;
+}
+
+.file-stats {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #cfe8d2;
+  border-radius: 8px;
+  background: #f4fbf5;
+  color: var(--erp-success);
+}
+.pdf-list { list-style: none; padding: 0; margin: 8px 0 0; max-height: 190px; overflow-y: auto; }
+.pdf-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #dcefe0; color: #256b2b; }
 .pdf-list li:last-child { border-bottom: none; }
 
-.submit-footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ebeef5; }
-.submit-btn { width: 300px; font-size: 16px; font-weight: bold; }
+.submit-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+.submit-btn { width: auto; min-width: 260px; font-size: 14px; font-weight: 700; }
+
+@media (max-width: 900px) {
+  .card-header,
+  .submit-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .submit-btn {
+    width: 100%;
+  }
+}
 </style>

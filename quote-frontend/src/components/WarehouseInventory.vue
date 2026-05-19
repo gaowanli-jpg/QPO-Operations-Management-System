@@ -13,7 +13,7 @@
               filterable
               clearable
               placeholder="选择客户名称"
-              style="width: 220px;"
+              class="customer-select"
               @change="handleCustomerChange"
               @clear="handleCustomerChange"
             >
@@ -29,7 +29,7 @@
               placeholder="按物品编号搜索"
               clearable
               :disabled="!selectedCustomer"
-              style="width: 200px;"
+              class="search-input"
               @keyup.enter="loadInventory"
               @clear="loadInventory"
             />
@@ -98,7 +98,7 @@
         <el-tab-pane label="直接入库" name="direct">
           <el-form :model="directForm" label-width="120px">
             <el-form-item label="入库数量" required>
-              <el-input-number v-model="directForm.qty" :min="1" :precision="0" controls-position="right" />
+              <el-input-number v-model="directForm.qty" :min="1" :precision="0" controls-position="right" class="qty-input" />
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -108,7 +108,7 @@
               <el-input v-model="pendingForm.pendingRefNo" placeholder="输入待产单号" />
             </el-form-item>
             <el-form-item label="待产数量" required>
-              <el-input-number v-model="pendingForm.qty" :min="1" :precision="0" controls-position="right" />
+              <el-input-number v-model="pendingForm.qty" :min="1" :precision="0" controls-position="right" class="qty-input" />
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -117,11 +117,11 @@
             title="选择待产单号后，转入数量必须小于等于该单号剩余待产库存。"
             type="info"
             :closable="false"
-            style="margin-bottom: 16px;"
+            class="notice-alert"
           />
           <el-form :model="transferForm" label-width="120px">
             <el-form-item label="待产单号" required>
-              <el-select v-model="transferForm.pendingRefNo" placeholder="选择待产单号" style="width: 100%;">
+              <el-select v-model="transferForm.pendingRefNo" placeholder="选择待产单号" class="full-width">
                 <el-option
                   v-for="pending in pendingRows"
                   :key="pending.id || pending.pendingRefNo"
@@ -137,6 +137,7 @@
                 :max="selectedPendingQty"
                 :precision="0"
                 controls-position="right"
+                class="qty-input"
               />
             </el-form-item>
           </el-form>
@@ -152,15 +153,17 @@
       <div class="dialog-part-title">{{ activeRow?.partNo }}</div>
       <el-form :model="modifyForm" label-width="120px">
         <el-form-item label="已入库库存">
-          <el-input-number v-model="modifyForm.inStockQty" :min="0" :precision="0" controls-position="right" />
-          <el-button type="primary" plain :loading="saving" @click="submitModifyInStock">保存已入库库存</el-button>
+          <div class="inline-control-row">
+            <el-input-number v-model="modifyForm.inStockQty" :min="0" :precision="0" controls-position="right" class="qty-input" />
+            <el-button type="primary" plain :loading="saving" @click="submitModifyInStock">保存已入库库存</el-button>
+          </div>
         </el-form-item>
         <el-divider />
         <el-form-item label="待产单号">
           <el-select
             v-model="modifyForm.pendingRefNo"
             placeholder="选择待产单号"
-            style="width: 260px;"
+            class="pending-select"
             @change="syncPendingQty"
           >
             <el-option
@@ -172,22 +175,25 @@
           </el-select>
         </el-form-item>
         <el-form-item label="待产库存">
-          <el-input-number
-            v-model="modifyForm.pendingQty"
-            :min="0"
-            :precision="0"
-            controls-position="right"
-            :disabled="!modifyForm.pendingRefNo"
-          />
-          <el-button
-            type="warning"
-            plain
-            :disabled="!modifyForm.pendingRefNo"
-            :loading="saving"
-            @click="submitModifyPending"
-          >
-            保存待产库存
-          </el-button>
+          <div class="inline-control-row">
+            <el-input-number
+              v-model="modifyForm.pendingQty"
+              :min="0"
+              :precision="0"
+              controls-position="right"
+              :disabled="!modifyForm.pendingRefNo"
+              class="qty-input"
+            />
+            <el-button
+              type="warning"
+              plain
+              :disabled="!modifyForm.pendingRefNo"
+              :loading="saving"
+              @click="submitModifyPending"
+            >
+              保存待产库存
+            </el-button>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -456,10 +462,11 @@ onMounted(async () => {
 
 <style scoped>
 .warehouse-container {
-  padding: 20px;
+  padding: 0;
 }
 
 .warehouse-card {
+  border: 1px solid var(--erp-border-soft);
   border-radius: 8px;
 }
 
@@ -472,14 +479,15 @@ onMounted(async () => {
 
 .card-header h2 {
   margin: 0;
-  color: #303133;
-  font-size: 22px;
+  color: var(--erp-text);
+  font-size: 20px;
+  line-height: 1.3;
 }
 
 .card-header p {
-  margin: 8px 0 0;
-  color: #606266;
-  font-size: 14px;
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
 }
 
 .header-actions {
@@ -490,13 +498,70 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
+.customer-select {
+  width: 220px;
+}
+
+.search-input {
+  width: 200px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.qty-input {
+  width: 180px;
+}
+
+.notice-alert {
+  margin-bottom: 14px;
+}
+
 .muted {
-  color: #909399;
+  color: var(--erp-text-secondary);
 }
 
 .dialog-part-title {
   margin-bottom: 12px;
-  font-weight: 600;
-  color: #303133;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  font-weight: 700;
+  color: var(--erp-text);
+}
+
+.inline-control-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pending-select {
+  width: 260px;
+}
+
+.warehouse-card :deep(.el-table) {
+  margin-top: 6px;
+}
+
+@media (max-width: 1200px) {
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .customer-select,
+  .search-input,
+  .pending-select,
+  .qty-input {
+    width: 100%;
+  }
 }
 </style>

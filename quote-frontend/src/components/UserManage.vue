@@ -1,0 +1,239 @@
+<template>
+  <div class="page">
+    <el-card shadow="never">
+      <template #header>
+        <div class="toolbar">
+          <div>
+            <h2>用户管理</h2>
+            <p>维护登录账号、部门角色和启用状态</p>
+          </div>
+          <el-button type="primary" @click="openCreate">新增用户</el-button>
+        </div>
+      </template>
+
+      <el-table :data="users" border v-loading="loading">
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="username" label="账号" min-width="130" />
+        <el-table-column prop="displayName" label="显示名称" min-width="150" />
+        <el-table-column label="角色" width="130">
+          <template #default="{ row }">{{ roleLabel(row.role) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="创建时间" min-width="180" />
+        <el-table-column label="操作" width="260" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" @click="openPassword(row)">重置密码</el-button>
+            <el-button
+              size="small"
+              :type="row.enabled ? 'warning' : 'success'"
+              @click="toggleEnabled(row)"
+            >
+              {{ row.enabled ? '禁用' : '启用' }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑用户' : '新增用户'" width="460px">
+      <el-form :model="form" label-width="90px">
+        <el-form-item label="账号">
+          <el-input v-model.trim="form.username" :disabled="!!editingId" />
+        </el-form-item>
+        <el-form-item label="显示名称">
+          <el-input v-model.trim="form.displayName" />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="form.role" style="width: 100%">
+            <el-option label="管理员" value="ADMIN" />
+            <el-option label="市场部" value="MARKET" />
+            <el-option label="工程部" value="ENGINEER" />
+            <el-option label="仓库部" value="WAREHOUSE" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="form.enabled" active-text="启用" inactive-text="禁用" />
+        </el-form-item>
+        <el-form-item v-if="!editingId" label="初始密码">
+          <el-input v-model="form.password" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="passwordVisible" title="重置密码" width="420px">
+      <el-form label-width="90px">
+        <el-form-item label="账号">
+          <el-input :model-value="passwordTarget?.username" disabled />
+        </el-form-item>
+        <el-form-item label="新密码">
+          <el-input v-model="newPassword" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="passwordVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="resetPassword">确定</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, reactive, ref } from 'vue'
+import axios from 'axios'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { API_BASE_URL } from '../config'
+
+const users = ref([])
+const loading = ref(false)
+const saving = ref(false)
+const dialogVisible = ref(false)
+const passwordVisible = ref(false)
+const editingId = ref(null)
+const passwordTarget = ref(null)
+const newPassword = ref('')
+
+const form = reactive({
+  username: '',
+  password: '',
+  displayName: '',
+  role: 'MARKET',
+  enabled: true
+})
+
+const roleLabel = (role) => ({
+  ADMIN: '管理员',
+  MARKET: '市场部',
+  ENGINEER: '工程部',
+  WAREHOUSE: '仓库部'
+}[role] || role)
+
+const loadUsers = async () => {
+  loading.value = true
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/users`)
+    users.value = response.data || []
+  } finally {
+    loading.value = false
+  }
+}
+
+const resetForm = () => {
+  editingId.value = null
+  form.username = ''
+  form.password = ''
+  form.displayName = ''
+  form.role = 'MARKET'
+  form.enabled = true
+}
+
+const openCreate = () => {
+  resetForm()
+  dialogVisible.value = true
+}
+
+const openEdit = (row) => {
+  editingId.value = row.id
+  form.username = row.username
+  form.password = ''
+  form.displayName = row.displayName
+  form.role = row.role
+  form.enabled = row.enabled
+  dialogVisible.value = true
+}
+
+const saveUser = async () => {
+  if (!form.username) {
+    ElMessage.warning('请输入账号')
+    return
+  }
+  if (!editingId.value && !form.password) {
+    ElMessage.warning('请输入初始密码')
+    return
+  }
+  saving.value = true
+  try {
+    const payload = {
+      username: form.username,
+      displayName: form.displayName,
+      role: form.role,
+      enabled: form.enabled
+    }
+    if (form.password) payload.password = form.password
+    const response = editingId.value
+      ? await axios.put(`${API_BASE_URL}/api/admin/users/${editingId.value}`, payload)
+      : await axios.post(`${API_BASE_URL}/api/admin/users`, payload)
+    ElMessage.success(response.data?.message || '保存成功')
+    dialogVisible.value = false
+    await loadUsers()
+  } finally {
+    saving.value = false
+  }
+}
+
+const openPassword = (row) => {
+  passwordTarget.value = row
+  newPassword.value = ''
+  passwordVisible.value = true
+}
+
+const resetPassword = async () => {
+  if (!newPassword.value || newPassword.value.length < 6) {
+    ElMessage.warning('新密码至少 6 位')
+    return
+  }
+  saving.value = true
+  try {
+    await axios.put(`${API_BASE_URL}/api/admin/users/${passwordTarget.value.id}`, {
+      password: newPassword.value
+    })
+    ElMessage.success('密码已重置')
+    passwordVisible.value = false
+  } finally {
+    saving.value = false
+  }
+}
+
+const toggleEnabled = async (row) => {
+  await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}账号 ${row.username}？`, '确认操作')
+  await axios.put(`${API_BASE_URL}/api/admin/users/${row.id}`, {
+    enabled: !row.enabled
+  })
+  ElMessage.success('状态已更新')
+  await loadUsers()
+}
+
+onMounted(loadUsers)
+</script>
+
+<style scoped>
+.page {
+  min-height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+p {
+  margin: 0;
+  color: #7a869a;
+  font-size: 13px;
+}
+</style>
