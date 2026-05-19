@@ -20,10 +20,6 @@
           登录
         </el-button>
       </el-form>
-
-      <div class="hint">
-        默认开发账号：admin/admin123，market/market123，engineer/engineer123，warehouse/warehouse123
-      </div>
     </section>
   </div>
 </template>
@@ -131,10 +127,4 @@ p {
   margin-top: 8px;
 }
 
-.hint {
-  margin-top: 18px;
-  color: #8492a6;
-  font-size: 12px;
-  line-height: 1.6;
-}
 </style>
