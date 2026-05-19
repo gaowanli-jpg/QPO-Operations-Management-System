@@ -1,10 +1,9 @@
 <template>
   <div class="setup-container">
-    <!-- 🌟 顶部的“拉取数据”小工具 -->
     <div class="test-header">
       <div class="selected-order">
         <span class="selected-order-label">当前订单</span>
-        <span>{{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'} / ${orderInfo.projectName || '-'}` : '未选择' }}</span>
+        <span class="selected-order-value">{{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'} / ${orderInfo.projectName || '-'}` : '未选择' }}</span>
       </div>
       <el-button type="primary" @click="openOrderPicker" :loading="isLoading">
         选择订单
@@ -14,14 +13,13 @@
       </el-button>
     </div>
 
-    <el-row :gutter="40">
-      <!-- 🌟 左侧：订单图纸与零件总览区 🌟 -->
+    <el-row :gutter="16" class="setup-grid">
       <el-col :span="12">
         <div class="overview-section">
-          <h3 style="margin-top: 0; color: #303133;">
-            📋 订单概览 <span v-if="orderInfo.rfqNo" style="color:#409EFF; font-size: 14px;">({{ orderInfo.rfqNo }})</span>
+          <h3 class="panel-heading">
+            订单概览 <span v-if="orderInfo.rfqNo" class="order-no">({{ orderInfo.rfqNo }})</span>
           </h3>
-          <p style="color: #909399; font-size: 13px; margin-bottom: 15px;">
+          <p class="panel-desc">
             系统已自动同步市场部传入的 Excel 明细与图纸，请工程师在此核对并预览。
           </p>
 
@@ -31,7 +29,7 @@
             :type="repeatAnalysis.repeatCount > 0 ? 'success' : 'info'"
             :closable="false"
             show-icon
-            style="margin-bottom: 12px;"
+            class="repeat-alert"
           />
 
           <el-table :data="itemList" border stripe height="450" v-loading="isLoading">
@@ -72,10 +70,9 @@
         </div>
       </el-col>
 
-      <!-- 🌟 右侧：全局配置表单 🌟 -->
       <el-col :span="12">
         <div class="config-section">
-          <h2 style="margin-top: 0;">⚙️ 订单全局默认设定</h2>
+          <h2 class="panel-heading">订单全局默认设定</h2>
           <p class="desc">工程师请先总览左侧图纸，设定适用于本批次大部分零件的【基础材质】与【工序路线】。</p>
 
           <el-alert
@@ -84,15 +81,15 @@
             type="success"
             :closable="false"
             show-icon
-            style="margin-bottom: 16px;"
+            class="repeat-alert"
           />
 
           <el-form label-width="100px" class="setup-form">
-            <div class="section-title">📦 默认材料设定</div>
+            <div class="section-title">默认材料设定</div>
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-form-item label="默认材质">
-                  <el-select v-model="config.materialName" style="width: 100%;">
+                  <el-select v-model="config.materialName" class="full-width">
                     <el-option
                       v-for="material in materialOptions"
                       :key="material.id"
@@ -104,7 +101,7 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="默认形态">
-                  <el-select v-model="config.shape" style="width: 100%;">
+                  <el-select v-model="config.shape" class="full-width">
                     <el-option label="板材/方块" value="板材" />
                     <el-option label="圆棒材" value="棒材" />
                     <el-option label="管材" value="管材" />
@@ -113,12 +110,12 @@
               </el-col>
             </el-row>
 
-            <div class="section-title" style="margin-top: 20px;">🛠️ 通用工艺路线排程</div>
+            <div class="section-title process-title">通用工艺路线排程</div>
             <div class="process-box">
-              <el-row :gutter="10" v-for="(proc, index) in config.processRoute" :key="index" style="margin-bottom: 10px;">
+              <el-row :gutter="10" v-for="(proc, index) in config.processRoute" :key="index" class="process-row">
                 <el-col :span="4"><el-tag type="info">第{{ index + 1 }}道</el-tag></el-col>
                 <el-col :span="14">
-                  <el-select v-model="proc.optionKey" placeholder="选择全局默认工序" style="width: 100%;" @change="syncProcessMeta(proc)">
+                  <el-select v-model="proc.optionKey" placeholder="选择全局默认工序" class="full-width" @change="syncProcessMeta(proc)">
                     <el-option
                       v-for="process in combinedProcessOptions"
                       :key="process.optionKey"
@@ -131,15 +128,14 @@
                   <el-button type="danger" plain size="small" @click="removeProcess(index)">删除</el-button>
                 </el-col>
               </el-row>
-              <el-button type="dashed" style="width: 100%; margin-top: 10px;" @click="addProcess">
+              <el-button type="primary" plain class="add-process-btn" @click="addProcess">
                 + 添加通用工序
               </el-button>
             </div>
 
-            <div style="text-align: right; margin-top: 30px;">
-              <!-- 核心按钮！ -->
-              <el-button type="primary" size="large" @click="handleNext" style="width: 100%;">
-                保存设定，进入逐件核价 ➡️
+            <div class="form-actions">
+              <el-button type="primary" size="large" @click="handleNext" class="submit-btn">
+                保存设定，进入逐件核价
               </el-button>
             </div>
           </el-form>
@@ -147,7 +143,6 @@
       </el-col>
     </el-row>
 
-    <!-- 🌟 PDF 预览弹窗 🌟 -->
     <el-dialog
       v-model="previewVisible"
       :title="`图纸预览：${previewTitle}`"
@@ -160,7 +155,7 @@
           新窗口打开图纸
         </el-button>
       </div>
-      <div v-loading="!iframeLoaded" style="height: 70vh; width: 100%;">
+      <div v-loading="!iframeLoaded" class="pdf-frame-shell">
         <iframe 
           :src="previewSrc" 
           width="100%" 
@@ -185,11 +180,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router' // 🌟 1. 引入路由工具！
+import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { API_BASE_URL, apiUrl } from '../config'
 
-const router = useRouter() // 🌟 2. 实例化路由导航员
+const router = useRouter()
 
 const testRfqId = ref(null)
 
@@ -317,7 +312,6 @@ const fetchDicts = async () => {
   }
 }
 
-// 🌟 3. 核心大改造：从 emit 升级为 router.push
 const handleNext = async () => {
   if (!orderInfo.value.id) {
     return ElMessage.warning('请先选择订单并加载数据。')
@@ -476,16 +470,173 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.setup-container { background: #fff; padding: 20px; border-radius: 8px; }
-.test-header { background: #f0f9eb; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1f3d8; display: flex; align-items: center; gap: 10px; }
-.selected-order { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; color: #303133; }
-.selected-order-label { flex: none; color: #67c23a; font-weight: 700; }
-.overview-section { background: #f8f9fa; border: 1px solid #ebeef5; padding: 20px; border-radius: 8px; min-height: 550px; }
-.config-section { background: #fff; padding: 10px 20px; border-left: 1px dashed #dcdfe6; min-height: 550px; }
-.section-title { font-weight: bold; color: #409eff; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
-.desc { color: #606266; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
-.process-box { background: #fafafa; padding: 20px; border-radius: 8px; border: 1px solid #ebeef5; }
-.drawing-actions { display: flex; justify-content: center; gap: 6px; }
-.drawing-actions :deep(.el-button + .el-button) { margin-left: 0; }
-.preview-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.setup-container {
+  padding: 0;
+}
+
+.test-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface);
+}
+
+.selected-order {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--erp-text);
+}
+
+.selected-order-label {
+  flex: none;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.selected-order-value {
+  overflow: hidden;
+  color: var(--erp-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.overview-section,
+.config-section {
+  min-height: 560px;
+  padding: 16px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface);
+}
+
+.panel-heading {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.order-no {
+  color: var(--erp-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-desc,
+.desc {
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.panel-desc {
+  margin: 6px 0 12px;
+}
+
+.desc {
+  margin: 6px 0 14px;
+}
+
+.repeat-alert {
+  margin-bottom: 12px;
+}
+
+.setup-form {
+  padding-top: 2px;
+}
+
+.section-title {
+  margin: 18px 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.process-title {
+  margin-top: 16px;
+}
+
+.process-box {
+  padding: 14px;
+  border: 1px dashed var(--erp-border);
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.process-row {
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.add-process-btn,
+.submit-btn,
+.full-width {
+  width: 100%;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+
+.drawing-actions {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.drawing-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.preview-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.pdf-frame-shell {
+  width: 100%;
+  height: 70vh;
+}
+
+@media (max-width: 1180px) {
+  .setup-grid :deep(.el-row) {
+    display: block;
+  }
+
+  .setup-grid :deep(.el-col) {
+    max-width: 100%;
+    width: 100%;
+    margin-bottom: 14px;
+  }
+
+  .overview-section,
+  .config-section {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .test-header,
+  .selected-order {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 </style>
