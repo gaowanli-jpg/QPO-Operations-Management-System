@@ -35,6 +35,14 @@ export const clearAuth = () => {
   setAuth('', null)
 }
 
+export const updateAuthUser = (patch) => {
+  authState.user = {
+    ...(authState.user || {}),
+    ...(patch || {})
+  }
+  localStorage.setItem(USER_KEY, JSON.stringify(authState.user))
+}
+
 export const hasRole = (roles) => {
   const role = authState.user?.role
   if (!role) return false

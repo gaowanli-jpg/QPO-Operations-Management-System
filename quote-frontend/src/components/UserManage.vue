@@ -23,8 +23,16 @@
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="安全状态" width="160">
+          <template #default="{ row }">
+            <el-tag v-if="isLocked(row)" type="danger" size="small">已锁定</el-tag>
+            <el-tag v-else-if="row.forcePasswordChange" type="warning" size="small">需改密</el-tag>
+            <el-tag v-else type="success" size="small">正常</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="lastLoginAt" label="最近登录" min-width="180" />
         <el-table-column prop="createdAt" label="创建时间" min-width="180" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="330" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
             <el-button size="small" @click="openPassword(row)">重置密码</el-button>
@@ -34,6 +42,15 @@
               @click="toggleEnabled(row)"
             >
               {{ row.enabled ? '禁用' : '启用' }}
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :disabled="isProtectedUser(row)"
+              @click="deleteUser(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -116,6 +133,10 @@ const roleLabel = (role) => ({
   WAREHOUSE: '仓库部'
 }[role] || role)
 
+const protectedUsernames = new Set(['admin', 'market', 'engineer', 'warehouse'])
+
+const isProtectedUser = (row) => protectedUsernames.has(String(row.username || '').trim().toLowerCase())
+
 const loadUsers = async () => {
   loading.value = true
   try {
@@ -155,8 +176,8 @@ const saveUser = async () => {
     ElMessage.warning('请输入账号')
     return
   }
-  if (!editingId.value && !form.password) {
-    ElMessage.warning('请输入初始密码')
+  if (!editingId.value && (!form.password || form.password.length < 8)) {
+    ElMessage.warning('初始密码至少 8 位')
     return
   }
   saving.value = true
@@ -186,8 +207,8 @@ const openPassword = (row) => {
 }
 
 const resetPassword = async () => {
-  if (!newPassword.value || newPassword.value.length < 6) {
-    ElMessage.warning('新密码至少 6 位')
+  if (!newPassword.value || newPassword.value.length < 8) {
+    ElMessage.warning('新密码至少 8 位')
     return
   }
   saving.value = true
@@ -195,8 +216,9 @@ const resetPassword = async () => {
     await axios.put(`${API_BASE_URL}/api/admin/users/${passwordTarget.value.id}`, {
       password: newPassword.value
     })
-    ElMessage.success('密码已重置')
+    ElMessage.success('密码已重置，用户下次登录必须修改密码')
     passwordVisible.value = false
+    await loadUsers()
   } finally {
     saving.value = false
   }
@@ -210,6 +232,27 @@ const toggleEnabled = async (row) => {
   ElMessage.success('状态已更新')
   await loadUsers()
 }
+
+const deleteUser = async (row) => {
+  if (isProtectedUser(row)) {
+    ElMessage.warning('初始账号不可删除')
+    return
+  }
+  await ElMessageBox.confirm(
+    `确认彻底删除账号 ${row.username}？删除后无法恢复。`,
+    '删除用户确认',
+    {
+      type: 'warning',
+      confirmButtonText: '彻底删除',
+      cancelButtonText: '取消'
+    }
+  )
+  await axios.delete(`${API_BASE_URL}/api/admin/users/${row.id}`)
+  ElMessage.success('用户已删除')
+  await loadUsers()
+}
+
+const isLocked = (row) => row.lockedUntil && new Date(row.lockedUntil).getTime() > Date.now()
 
 onMounted(loadUsers)
 </script>

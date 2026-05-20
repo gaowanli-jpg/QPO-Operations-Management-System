@@ -13,10 +13,17 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Set<String> PASSWORD_CHANGE_ALLOWED_PATHS = Set.of(
+            "/api/admin/users/me/password",
+            "/api/auth/change-password",
+            "/api/auth/logout",
+            "/api/auth/me"
+    );
 
     @Value("${erp.auth.enabled:true}")
     private boolean authEnabled;
@@ -39,6 +46,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         AuthContext.set(user);
 
+        if (authService.mustChangePassword(user.id()) && !isPasswordChangeAllowedPath(request.getRequestURI())) {
+            writeError(response, 428, "请先修改初始密码");
+            return false;
+        }
+
         RequireRole requireRole = resolveRequireRole(handler);
         if (requireRole != null && !hasRole(user, requireRole.value())) {
             AuthContext.clear();
@@ -58,6 +70,10 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || uri.startsWith("/api/health")
                 || uri.startsWith("/uploads/")
                 || uri.equals("/error");
+    }
+
+    private boolean isPasswordChangeAllowedPath(String uri) {
+        return PASSWORD_CHANGE_ALLOWED_PATHS.contains(uri);
     }
 
     private String resolveToken(HttpServletRequest request) {

@@ -75,6 +75,9 @@ class OperationalWorkflowIntegrationTests {
 
     @Test
     void canHashPasswordForDefaultUsers() {
-        assertThat(authService.hashPassword("admin123")).isEqualTo("240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9");
+        String encoded = authService.hashPassword("admin123");
+        assertThat(encoded).startsWith("$2");
+        assertThat(authService.matchesPassword("admin123", encoded)).isTrue();
+        assertThat(authService.matchesPassword("admin123", "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9")).isTrue();
     }
 }

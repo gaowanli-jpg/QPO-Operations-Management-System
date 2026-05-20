@@ -18,5 +18,10 @@ public class ErpUser {
     private String displayName;
     private String role;
     private Boolean enabled;
+    private Boolean forcePasswordChange;
+    private Integer failedLoginAttempts;
+    private LocalDateTime lockedUntil;
+    private LocalDateTime lastLoginAt;
+    private LocalDateTime passwordChangedAt;
     private LocalDateTime createdAt;
 }

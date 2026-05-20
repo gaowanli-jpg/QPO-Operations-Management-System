@@ -249,6 +249,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { API_BASE_URL, apiUrl } from '../config'
+import { downloadByAxios } from '../download'
 
 const route = useRoute()
 const rfqId = ref('')
@@ -408,9 +409,15 @@ const loadRepeatAnalysis = async () => {
   }
 }
 
-const exportQuoteSheet = () => {
+const exportQuoteSheet = async () => {
   if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
-  window.open(`${API_BASE_URL}/api/market/export/quote/${rfqId.value}`, '_blank')
+  const result = await downloadByAxios(
+    `${API_BASE_URL}/api/market/export/quote/${rfqId.value}`,
+    `quote-${rfqId.value}.xlsx`
+  )
+  if (!result.success) {
+    ElMessage.error(result.message || '报价单导出失败。')
+  }
 }
 
 const completeOrderQuote = async () => {

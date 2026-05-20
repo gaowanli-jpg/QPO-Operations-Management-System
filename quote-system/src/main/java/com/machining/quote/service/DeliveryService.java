@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,6 +27,8 @@ import java.util.regex.Pattern;
 @Service
 public class DeliveryService {
     private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
+    private static final Pattern DELIVERY_DATE = Pattern.compile("(\\d{4})\\s*[.\\-/年]\\s*(\\d{1,2})\\s*[.\\-/月]\\s*(\\d{1,2})\\s*日?");
+    private static final Pattern EXCEL_SERIAL_DATE = Pattern.compile("\\d{5}(?:\\.0+)?");
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -80,17 +83,17 @@ public class DeliveryService {
             int remaining = acceptedQty;
             InventoryMaster inventory = inventoryService.findByCustomerAndPartNo(order.getCustomerName(), item.getPartNo());
             if (inventory != null) {
-                for (InventoryService.PendingConsumption consumption : inventoryService.consumePending(inventory.getId(), remaining)) {
-                    createdTickets.add(insertTicket(order, item, projectNo, startDate, consumption.qty(),
-                            remarkOrDefault(consumption.pendingRefNo(), "冲销待产"), "待产冲销"));
-                    remaining -= consumption.qty();
-                }
-
                 int stockUsed = inventoryService.consumeInStock(inventory.getId(), remaining);
                 if (stockUsed > 0) {
                     createdTickets.add(insertTicket(order, item, projectNo, startDate, stockUsed,
                             "已入库库存", "库存冲销"));
                     remaining -= stockUsed;
+                }
+
+                for (InventoryService.PendingConsumption consumption : inventoryService.consumePending(inventory.getId(), remaining)) {
+                    createdTickets.add(insertTicket(order, item, projectNo, startDate, consumption.qty(),
+                            remarkOrDefault(consumption.pendingRefNo(), "冲销待产"), "待产冲销"));
+                    remaining -= consumption.qty();
                 }
             }
 
@@ -336,11 +339,48 @@ public class DeliveryService {
         if (isBlank(leadTime)) {
             return startDate;
         }
+        LocalDate exactDate = parseDeliveryDate(leadTime);
+        if (exactDate != null) {
+            return exactDate;
+        }
+        LocalDate excelSerialDate = parseExcelSerialDate(leadTime);
+        if (excelSerialDate != null) {
+            return excelSerialDate;
+        }
         Matcher matcher = FIRST_NUMBER.matcher(leadTime);
         if (!matcher.find()) {
             return startDate;
         }
         return startDate.plusDays(Long.parseLong(matcher.group(1)));
+    }
+
+    private LocalDate parseDeliveryDate(String leadTime) {
+        Matcher matcher = DELIVERY_DATE.matcher(leadTime.trim());
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            int year = Integer.parseInt(matcher.group(1));
+            int month = Integer.parseInt(matcher.group(2));
+            int day = Integer.parseInt(matcher.group(3));
+            return LocalDate.of(year, month, day);
+        } catch (DateTimeException | NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private LocalDate parseExcelSerialDate(String leadTime) {
+        String normalized = leadTime.trim();
+        if (!EXCEL_SERIAL_DATE.matcher(normalized).matches()) {
+            return null;
+        }
+        long serial = (long) Double.parseDouble(normalized);
+        return excelSerialToDate(serial);
+    }
+
+    private LocalDate excelSerialToDate(long serial) {
+        LocalDate date = LocalDate.of(1899, 12, 31).plusDays(serial);
+        return serial >= 60 ? date.minusDays(1) : date;
     }
 
     private String remarkOrDefault(String value, String defaultValue) {

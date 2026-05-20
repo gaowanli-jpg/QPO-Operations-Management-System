@@ -69,7 +69,7 @@
         <el-table-column label="操作" width="210" align="center" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openDetail(row)">查看订单</el-button>
-            <el-button size="small" type="danger" plain @click="deleteHistoryOrder(row)">彻底删除</el-button>
+            <el-button v-if="canDeleteHistoryOrders" size="small" type="danger" plain @click="deleteHistoryOrder(row)">彻底删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -147,6 +147,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { hasRole } from '../auth'
 import { API_BASE_URL } from '../config'
 
 const customers = ref([])
@@ -157,6 +158,7 @@ const orderDetail = ref(null)
 const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
+const canDeleteHistoryOrders = computed(() => hasRole(['MARKET', 'ADMIN']))
 
 const filteredOrders = computed(() => {
   const text = keyword.value.trim().toLowerCase()

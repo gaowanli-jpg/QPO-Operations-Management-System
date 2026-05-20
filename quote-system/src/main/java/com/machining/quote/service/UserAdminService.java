@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.Set;
 @Service
 public class UserAdminService {
     private static final Set<String> ROLES = Set.of("ADMIN", "MARKET", "ENGINEER", "WAREHOUSE");
+    private static final Set<String> PROTECTED_USERNAMES = Set.of("admin", "market", "engineer", "warehouse");
 
     @Autowired
     private ErpUserMapper userMapper;
@@ -41,6 +43,7 @@ public class UserAdminService {
         if (isBlank(req.getPassword())) {
             throw new RuntimeException("新增用户必须设置初始密码");
         }
+        assertPasswordLength(req.getPassword());
         assertRole(req.getRole());
 
         QueryWrapper<ErpUser> qw = new QueryWrapper<>();
@@ -55,6 +58,8 @@ public class UserAdminService {
         user.setDisplayName(isBlank(req.getDisplayName()) ? username : req.getDisplayName().trim());
         user.setRole(req.getRole().trim().toUpperCase());
         user.setEnabled(req.getEnabled() == null || req.getEnabled());
+        user.setForcePasswordChange(true);
+        user.setFailedLoginAttempts(0);
         userMapper.insert(user);
         auditService.record("USER_CREATE", "erp_user", user.getId(), null, publicUser(user));
         return publicUser(user);
@@ -75,7 +80,11 @@ public class UserAdminService {
             user.setEnabled(req.getEnabled());
         }
         if (!isBlank(req.getPassword())) {
+            assertPasswordLength(req.getPassword());
             user.setPasswordHash(authService.hashPassword(req.getPassword()));
+            user.setForcePasswordChange(true);
+            user.setFailedLoginAttempts(0);
+            user.setLockedUntil(null);
         }
         userMapper.updateById(user);
         Map<String, Object> after = publicUser(user);
@@ -90,15 +99,31 @@ public class UserAdminService {
             throw new RuntimeException("请先登录");
         }
         ErpUser user = requireUser(current.id());
-        if (!authService.hashPassword(req.getOldPassword()).equalsIgnoreCase(user.getPasswordHash())) {
+        if (!authService.matchesPassword(req.getOldPassword(), user.getPasswordHash())) {
             throw new RuntimeException("原密码不正确");
         }
-        if (isBlank(req.getNewPassword()) || req.getNewPassword().length() < 6) {
-            throw new RuntimeException("新密码至少 6 位");
+        assertPasswordLength(req.getNewPassword());
+        if (!isBlank(req.getConfirmPassword()) && !req.getNewPassword().equals(req.getConfirmPassword())) {
+            throw new RuntimeException("两次输入的新密码不一致");
         }
         user.setPasswordHash(authService.hashPassword(req.getNewPassword()));
+        user.setForcePasswordChange(false);
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setPasswordChangedAt(LocalDateTime.now());
         userMapper.updateById(user);
         auditService.record("USER_CHANGE_PASSWORD", "erp_user", user.getId(), null, publicUser(user));
+    }
+
+    @Transactional
+    public void deleteUser(Integer id) {
+        ErpUser user = requireUser(id);
+        if (isProtectedUser(user)) {
+            throw new RuntimeException("初始账号不可删除");
+        }
+        Map<String, Object> before = publicUser(user);
+        userMapper.deleteById(id);
+        auditService.record("USER_DELETE", "erp_user", id, before, null);
     }
 
     private ErpUser requireUser(Integer id) {
@@ -119,14 +144,29 @@ public class UserAdminService {
         row.put("displayName", user.getDisplayName());
         row.put("role", user.getRole());
         row.put("enabled", user.getEnabled());
+        row.put("forcePasswordChange", user.getForcePasswordChange());
+        row.put("failedLoginAttempts", user.getFailedLoginAttempts());
+        row.put("lockedUntil", user.getLockedUntil());
+        row.put("lastLoginAt", user.getLastLoginAt());
+        row.put("passwordChangedAt", user.getPasswordChangedAt());
         row.put("createdAt", user.getCreatedAt());
         return row;
+    }
+
+    private boolean isProtectedUser(ErpUser user) {
+        return user != null && PROTECTED_USERNAMES.contains(normalizeUsername(user.getUsername()).toLowerCase());
     }
 
     private void assertRole(String role) {
         String safeRole = role == null ? "" : role.trim().toUpperCase();
         if (!ROLES.contains(safeRole)) {
             throw new RuntimeException("角色不正确");
+        }
+    }
+
+    private void assertPasswordLength(String password) {
+        if (isBlank(password) || password.length() < 8) {
+            throw new RuntimeException("密码至少 8 位");
         }
     }
 

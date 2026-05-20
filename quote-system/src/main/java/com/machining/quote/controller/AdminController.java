@@ -40,16 +40,15 @@ public class AdminController {
     }
 
     @PutMapping("/users/me/password")
+    @RequireRole({"ADMIN", "MARKET", "ENGINEER", "WAREHOUSE"})
     public Map<String, Object> changeMyPassword(@RequestBody PasswordChangeReq req) {
         userAdminService.changeMyPassword(req);
         return Map.of("success", true, "message", "密码已修改");
     }
 
     @DeleteMapping("/users/{id}")
-    public Map<String, Object> disableUser(@PathVariable Integer id) {
-        UserSaveReq req = new UserSaveReq();
-        req.setEnabled(false);
-        userAdminService.updateUser(id, req);
-        return Map.of("success", true, "message", "用户已禁用");
+    public Map<String, Object> deleteUser(@PathVariable Integer id) {
+        userAdminService.deleteUser(id);
+        return Map.of("success", true, "message", "用户已删除");
     }
 }

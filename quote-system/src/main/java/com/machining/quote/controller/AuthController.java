@@ -1,7 +1,9 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.dto.LoginReq;
+import com.machining.quote.dto.PasswordChangeReq;
 import com.machining.quote.service.AuthService;
+import com.machining.quote.service.UserAdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +19,8 @@ import java.util.Map;
 public class AuthController {
     @Autowired
     private AuthService authService;
+    @Autowired
+    private UserAdminService userAdminService;
 
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody LoginReq req) {
@@ -44,7 +48,14 @@ public class AuthController {
         return Map.of("success", true, "data", Map.of(
                 "username", user.username(),
                 "displayName", user.displayName(),
-                "role", user.role()
+                "role", user.role(),
+                "forcePasswordChange", authService.mustChangePassword(user.id())
         ));
+    }
+
+    @PostMapping("/change-password")
+    public Map<String, Object> changePassword(@RequestBody PasswordChangeReq req) {
+        userAdminService.changeMyPassword(req);
+        return Map.of("success", true, "message", "密码已修改");
     }
 }

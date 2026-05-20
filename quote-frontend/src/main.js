@@ -6,7 +6,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import axios from 'axios'
 import App from './App.vue'
 import router from './router'
-import { authState, clearAuth } from './auth'
+import { authState, clearAuth, updateAuthUser } from './auth'
 
 axios.interceptors.request.use((config) => {
   if (authState.token) {
@@ -23,6 +23,8 @@ axios.interceptors.response.use(
       if (router.currentRoute.value.path !== '/login') {
         router.replace({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
       }
+    } else if (error.response?.status === 428) {
+      updateAuthUser({ forcePasswordChange: true })
     }
     return Promise.reject(error)
   }

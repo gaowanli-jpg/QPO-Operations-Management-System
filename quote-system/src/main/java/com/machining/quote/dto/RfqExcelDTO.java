@@ -28,7 +28,7 @@ public class RfqExcelDTO {
     @ExcelProperty("单位")
     private String unit;
 
-    @ExcelProperty("交货周期(L/T)")
+    @ExcelProperty(index = 7)
     private String leadTime;
 
     @ExcelProperty("备注")

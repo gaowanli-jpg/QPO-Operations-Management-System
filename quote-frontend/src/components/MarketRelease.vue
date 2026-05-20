@@ -181,6 +181,7 @@ import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { API_BASE_URL } from '../config'
+import { downloadByAxios } from '../download'
 
 const orders = ref([])
 const selectedRfqId = ref(null)
@@ -386,7 +387,7 @@ const formatRoute = (route) => {
     .join(' / ')
 }
 
-const exportExcel = (type) => {
+const exportExcel = async (type) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   const pathMap = {
     tickets: 'tickets',
@@ -394,7 +395,13 @@ const exportExcel = (type) => {
     quote: 'quote'
   }
   const path = pathMap[type] || 'process-sheets'
-  window.open(`${API_BASE_URL}/api/market/export/${path}/${selectedRfqId.value}`, '_blank')
+  const result = await downloadByAxios(
+    `${API_BASE_URL}/api/market/export/${path}/${selectedRfqId.value}`,
+    `${path}-${selectedRfqId.value}.xlsx`
+  )
+  if (!result.success) {
+    ElMessage.error(result.message || 'Excel 导出失败。')
+  }
 }
 
 onMounted(loadOrders)

@@ -21,7 +21,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = "erp.auth.enabled=false")
+@SpringBootTest(properties = {
+        "erp.auth.enabled=false",
+        "erp.upload-dir=${java.io.tmpdir}/quote-test/uploads/",
+        "erp.backup-dir=${java.io.tmpdir}/quote-test/backups/"
+})
 @Transactional
 class CoreWorkflowIntegrationTests {
     @Autowired
@@ -34,7 +38,7 @@ class CoreWorkflowIntegrationTests {
     private DeliveryService deliveryService;
 
     @Test
-    void deliveryGenerationConsumesPendingAndInStockInventory() {
+    void deliveryGenerationConsumesInStockBeforePendingInventory() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("TEST-" + System.nanoTime());
         order.setCustomerName("TEST客户");
@@ -80,7 +84,9 @@ class CoreWorkflowIntegrationTests {
 
         assertThat(tickets).hasSize(3);
         assertThat(tickets).extracting(OrderDeliveryTicket::getArrangeType)
-                .contains("待产冲销", "库存冲销");
+                .containsExactly("库存冲销", "待产冲销", "计划");
+        assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
+                .containsExactly(1, 2, 2);
 
         InventoryMaster after = inventoryService.findByCustomerAndPartNo("TEST客户", "P-100");
         assertThat(after.getInStockQty()).isZero();

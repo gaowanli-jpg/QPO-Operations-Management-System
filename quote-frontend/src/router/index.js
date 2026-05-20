@@ -19,7 +19,7 @@ const routes = [
   { path: '/engineering', component: GlobalSetup, meta: { roles: ['ENGINEER', 'ADMIN'] } },
   { path: '/material-process', component: MaterialProcessManage, meta: { roles: ['ENGINEER', 'ADMIN'] } },
   { path: '/orders', component: OrderManage, meta: { roles: ['MARKET', 'ENGINEER', 'WAREHOUSE', 'ADMIN'] } },
-  { path: '/history-orders', component: HistoryOrderManage, meta: { roles: ['ADMIN'] } },
+  { path: '/history-orders', component: HistoryOrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/users', component: UserManage, meta: { roles: ['ADMIN'] } },
   { path: '/pricing', component: ItemPricing, meta: { roles: ['ENGINEER', 'ADMIN'] } },
   { path: '/warehouse', component: WarehouseInventory, meta: { roles: ['WAREHOUSE', 'ADMIN'] } }

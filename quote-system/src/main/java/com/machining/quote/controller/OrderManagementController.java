@@ -47,7 +47,7 @@ public class OrderManagementController {
     }
 
     @DeleteMapping("/orders/{rfqId}")
-    @RequireRole({"ADMIN"})
+    @RequireRole({"MARKET", "ADMIN"})
     public Map<String, Object> deleteOrder(
             @PathVariable Integer rfqId,
             @RequestParam(value = "deleteFiles", defaultValue = "true") boolean deleteFiles) {
