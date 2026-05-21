@@ -38,7 +38,7 @@
             <span>工程部：材料与工艺管理</span>
           </el-menu-item>
 
-          <el-menu-item v-if="canSee(['MARKET', 'ENGINEER', 'WAREHOUSE', 'ADMIN'])" index="/orders">
+          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/orders">
             <el-icon><Document /></el-icon>
             <span>订单管理</span>
           </el-menu-item>

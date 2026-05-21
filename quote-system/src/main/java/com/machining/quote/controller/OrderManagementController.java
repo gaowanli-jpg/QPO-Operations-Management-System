@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequireRole({"MARKET", "ENGINEER", "WAREHOUSE", "ADMIN"})
+@RequireRole({"MARKET", "ADMIN"})
 @RequestMapping("/api/order-management")
 public class OrderManagementController {
     @Autowired
