@@ -381,6 +381,7 @@ public class EngineerService {
         if (bestRouteKey != null) {
             for (Map<String, Object> route : routeSamples.getOrDefault(bestRouteKey, List.of())) {
                 Map<String, Object> row = new LinkedHashMap<>();
+                row.put("sortNo", route.get("sortNo"));
                 row.put("processName", route.get("processName"));
                 row.put("calcType", route.get("calcType"));
                 row.put("sourceType", "非工时费用".equals(route.get("calcType")) ? "extra" : "process");
@@ -482,15 +483,42 @@ public class EngineerService {
                     result.add(normalized);
                 }
             }
+            sortProcessRoute(result);
             return result;
         }
         return List.of();
+    }
+
+    private void sortProcessRoute(List<Map<String, Object>> routes) {
+        boolean hasSortNo = routes.stream().anyMatch(route -> intValue(route.get("sortNo")) != null);
+        if (!hasSortNo) {
+            return;
+        }
+        for (int i = 0; i < routes.size(); i++) {
+            routes.get(i).putIfAbsent("__index", i);
+        }
+        routes.sort((left, right) -> {
+            Integer leftSort = intValue(left.get("sortNo"));
+            Integer rightSort = intValue(right.get("sortNo"));
+            if (leftSort != null && rightSort != null && !leftSort.equals(rightSort)) {
+                return leftSort.compareTo(rightSort);
+            }
+            if (leftSort != null && rightSort == null) {
+                return -1;
+            }
+            if (leftSort == null && rightSort != null) {
+                return 1;
+            }
+            return intValue(left.get("__index")).compareTo(intValue(right.get("__index")));
+        });
+        routes.forEach(route -> route.remove("__index"));
     }
 
     private List<QuoteSubmitReq.ProcessSubmitDTO> toProcessSubmitRows(Object routeObject) {
         List<QuoteSubmitReq.ProcessSubmitDTO> result = new ArrayList<>();
         for (Map<String, Object> row : normalizeProcessRoute(routeObject)) {
             QuoteSubmitReq.ProcessSubmitDTO process = new QuoteSubmitReq.ProcessSubmitDTO();
+            process.setSortNo(intValue(row.get("sortNo")));
             process.setProcessName(stringValue(row.get("processName")));
             process.setCalcType(stringValue(row.get("calcType")));
             process.setInputVal(doubleValue(row.get("inputVal")));
@@ -698,6 +726,11 @@ public class EngineerService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private Integer intValue(Object value) {
+        Double number = doubleValue(value);
+        return number == null ? null : number.intValue();
     }
 
     private boolean isBlank(String value) {

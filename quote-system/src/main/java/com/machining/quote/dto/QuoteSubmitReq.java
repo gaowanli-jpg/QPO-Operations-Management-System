@@ -16,6 +16,7 @@ public class QuoteSubmitReq {
 
     @Data
     public static class ProcessSubmitDTO {
+        private Integer sortNo;    // 工艺顺序号，按小到大展示和导出
         private String processName; // 工序名称 (如: CNC1)
         private Double inputVal;    // 工程师填入的工时或非工时费用金额
         private String calcType;    // 工时 / 非工时费用

@@ -200,6 +200,31 @@ const extraFeeOptions = ref([])
 const repeatAnalysis = ref(null)
 
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
+const PROCESS_SORT_STEP = 10
+const numericSortNo = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+const sortRouteList = (routes) => {
+  const withIndex = (routes || []).map((route, index) => ({ route, index }))
+  const hasSortNo = withIndex.some(item => numericSortNo(item.route?.sortNo) != null)
+  if (!hasSortNo) return routes || []
+  return withIndex
+    .sort((a, b) => {
+      const aSort = numericSortNo(a.route?.sortNo)
+      const bSort = numericSortNo(b.route?.sortNo)
+      if (aSort != null && bSort != null && aSort !== bSort) return aSort - bSort
+      if (aSort != null && bSort == null) return -1
+      if (aSort == null && bSort != null) return 1
+      return a.index - b.index
+    })
+    .map(item => item.route)
+}
+const assignProcessSortNos = () => {
+  config.processRoute.forEach((proc, index) => {
+    proc.sortNo = (index + 1) * PROCESS_SORT_STEP
+  })
+}
 
 const repeatItemMap = computed(() => {
   const map = new Map()
@@ -214,8 +239,8 @@ const config = reactive({
   materialName: '45#',
   shape: '板材',
   processRoute: [
-    { processName: '铣', calcType: '工时', sourceType: 'process' },
-    { processName: 'CNC1', calcType: '工时', sourceType: 'process' }
+    { sortNo: 10, processName: '铣', calcType: '工时', sourceType: 'process' },
+    { sortNo: 20, processName: 'CNC1', calcType: '工时', sourceType: 'process' }
   ]
 })
 
@@ -226,13 +251,15 @@ const assignConfig = (source) => {
   config.processRoute.splice(
     0,
     config.processRoute.length,
-    ...(source.processRoute || []).map(item => ({
+    ...sortRouteList(source.processRoute || []).map((item, index) => ({
+      sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
       optionKey: item.optionKey || '',
       processName: item.processName || '',
       calcType: item.calcType || '工时',
       sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process')
     }))
   )
+  assignProcessSortNos()
   hydrateProcessRoute()
 }
 
@@ -253,8 +280,14 @@ const combinedProcessOptions = computed(() => [
   }))
 ])
 
-const addProcess = () => config.processRoute.push({ processName: '', calcType: '工时', sourceType: 'process', optionKey: '' })
-const removeProcess = (index) => config.processRoute.splice(index, 1)
+const addProcess = () => {
+  config.processRoute.push({ processName: '', calcType: '工时', sourceType: 'process', optionKey: '' })
+  assignProcessSortNos()
+}
+const removeProcess = (index) => {
+  config.processRoute.splice(index, 1)
+  assignProcessSortNos()
+}
 
 const syncProcessMeta = (proc) => {
   const selected = combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
@@ -298,7 +331,8 @@ const fetchDicts = async () => {
       config.processRoute.splice(
         0,
         config.processRoute.length,
-        ...combinedProcessOptions.value.slice(0, 2).map(item => ({
+        ...combinedProcessOptions.value.slice(0, 2).map((item, index) => ({
+          sortNo: (index + 1) * PROCESS_SORT_STEP,
           optionKey: item.optionKey,
           processName: item.processName,
           calcType: item.calcType,
@@ -318,6 +352,7 @@ const handleNext = async () => {
   }
 
   try {
+    assignProcessSortNos()
     await axios.post(`${API_BASE_URL}/api/engineer/order-config/${orderInfo.value.id}`, JSON.parse(JSON.stringify(config)))
   } catch (error) {
     console.error(error)
@@ -452,13 +487,15 @@ const applyRecommendedConfig = (recommendedConfig) => {
     config.processRoute.splice(
       0,
       config.processRoute.length,
-      ...recommendedConfig.processRoute.map(item => ({
+      ...sortRouteList(recommendedConfig.processRoute).map((item, index) => ({
+        sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
         optionKey: '',
         processName: item.processName || '',
         calcType: item.calcType || '工时',
         sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process')
       }))
     )
+    assignProcessSortNos()
     hydrateProcessRoute()
   }
 }

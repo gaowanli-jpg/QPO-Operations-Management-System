@@ -157,10 +157,18 @@
           </el-form>
 
           <!-- 模块B：工艺 -->
-          <div class="form-section-title process-title">模块 B：工艺路线排程（已继承全局设定）</div>
+          <div class="process-title-row">
+            <div class="form-section-title process-title">模块 B：工艺路线排程（已继承全局设定）</div>
+            <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">
+              新增工序
+            </el-button>
+          </div>
           <div class="process-box">
-            <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="index" class="process-row">
-              <el-col :span="8">
+            <el-empty v-if="processRoute.length === 0" description="暂无工艺路线" :image-size="60">
+              <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">新增工序</el-button>
+            </el-empty>
+            <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="proc.rowKey || index" class="process-row">
+              <el-col :span="7">
                 <el-select v-model="proc.optionKey" class="full-width" @change="syncProcessMeta(proc)">
                   <el-option
                     v-for="process in combinedProcessOptions"
@@ -170,10 +178,10 @@
                   />
                 </el-select>
               </el-col>
-              <el-col :span="4">
+              <el-col :span="3">
                 <el-tag :type="proc.calcType === '非工时费用' ? 'warning' : 'info'">{{ proc.calcType || '工时' }}</el-tag>
               </el-col>
-              <el-col :span="10">
+              <el-col :span="8">
                 <el-input-number
                   v-model="proc.inputVal"
                   :min="0"
@@ -181,6 +189,16 @@
                   :placeholder="proc.calcType === '非工时费用' ? '填入费用金额' : '填入工时'"
                   class="full-width"
                 />
+              </el-col>
+              <el-col :span="6">
+                <div class="process-row-actions">
+                  <el-tooltip content="在当前行前插入工序" placement="top">
+                    <el-button size="small" plain :icon="Plus" @click="insertProcess(index)">插入</el-button>
+                  </el-tooltip>
+                  <el-tooltip content="删除当前工序" placement="top">
+                    <el-button size="small" type="danger" plain :icon="Delete" @click="removeProcess(index)">删除</el-button>
+                  </el-tooltip>
+                </div>
               </el-col>
             </el-row>
           </div>
@@ -246,6 +264,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import { API_BASE_URL, apiUrl } from '../config'
 import { downloadByAxios } from '../download'
@@ -480,6 +499,45 @@ const submitLoading = ref(false)
 
 const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null })
 const processRoute = ref([])
+let processRouteSeq = 0
+const PROCESS_SORT_STEP = 10
+
+const numericSortNo = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+const createProcessRow = (source = {}) => ({
+  rowKey: `process-${Date.now()}-${processRouteSeq++}`,
+  processName: source.processName || '',
+  optionKey: source.optionKey || '',
+  calcType: source.calcType || '工时',
+  sourceType: source.sourceType || (source.calcType === '非工时费用' ? 'extra' : 'process'),
+  inputVal: source.inputVal ?? 0,
+  sortNo: numericSortNo(source.sortNo)
+})
+
+const assignProcessSortNos = (rows = processRoute.value) => {
+  rows.forEach((row, index) => {
+    row.sortNo = (index + 1) * PROCESS_SORT_STEP
+  })
+  return rows
+}
+
+const addProcess = () => {
+  processRoute.value.push(createProcessRow())
+  assignProcessSortNos()
+}
+
+const insertProcess = (index) => {
+  processRoute.value.splice(index, 0, createProcessRow())
+  assignProcessSortNos()
+}
+
+const removeProcess = (index) => {
+  processRoute.value.splice(index, 1)
+  assignProcessSortNos()
+}
 
 const syncProcessMeta = (proc) => {
   const selected = combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
@@ -506,41 +564,109 @@ const hydrateRouteItem = (proc) => {
 }
 
 const normalizeRouteList = (route) => {
-  if (!route) return []
-  if (Array.isArray(route)) return JSON.parse(JSON.stringify(route))
-  if (typeof route === 'string') {
+  let list = []
+  if (!route) return list
+  if (Array.isArray(route)) {
+    list = JSON.parse(JSON.stringify(route))
+  } else if (typeof route === 'string') {
     try {
-      return JSON.parse(route)
+      list = JSON.parse(route)
     } catch {
-      return []
+      return list
     }
+  } else {
+    return list
   }
-  return []
+  return sortRouteList(Array.isArray(list) ? list : [])
 }
 
-const mergeRoutesWithGlobalDefaults = (savedRoutes, defaultRoutes) => {
-  const result = normalizeRouteList(savedRoutes).map(route => ({
-    processName: route.processName,
-    optionKey: route.optionKey || '',
-    calcType: route.calcType || '工时',
-    sourceType: route.sourceType || (route.calcType === '非工时费用' ? 'extra' : 'process'),
-    inputVal: route.inputVal || 0
-  })).map(hydrateRouteItem)
+const sortRouteList = (routes) => {
+  const withIndex = routes.map((route, index) => ({ route, index }))
+  const hasSortNo = withIndex.some(item => numericSortNo(item.route?.sortNo) != null)
+  if (!hasSortNo) return routes
+  return withIndex
+    .sort((a, b) => {
+      const aSort = numericSortNo(a.route?.sortNo)
+      const bSort = numericSortNo(b.route?.sortNo)
+      if (aSort != null && bSort != null && aSort !== bSort) return aSort - bSort
+      if (aSort != null && bSort == null) return -1
+      if (aSort == null && bSort != null) return 1
+      return a.index - b.index
+    })
+    .map(item => item.route)
+}
 
-  normalizeRouteList(defaultRoutes).forEach(defaultRoute => {
-    const exists = result.some(route => route.processName === defaultRoute.processName)
-    if (!exists && defaultRoute.processName) {
-      result.push(hydrateRouteItem({
-        processName: defaultRoute.processName,
-        optionKey: defaultRoute.optionKey || '',
-        calcType: defaultRoute.calcType || '工时',
-        sourceType: defaultRoute.sourceType || (defaultRoute.calcType === '非工时费用' ? 'extra' : 'process'),
-        inputVal: 0
-      }))
-    }
+const processRouteKey = (route) => {
+  const sourceType = route.sourceType || (route.calcType === '非工时费用' ? 'extra' : 'process')
+  return `${sourceType}::${route.processName || ''}`
+}
+
+const mergeRoutesByGlobalOrder = (savedRoutes, defaultRoutes) => {
+  const savedRows = normalizeRouteList(savedRoutes).map(route => hydrateRouteItem(createProcessRow(route)))
+  const defaultRows = normalizeRouteList(defaultRoutes).map(route => hydrateRouteItem(createProcessRow(route)))
+  const savedBuckets = new Map()
+  savedRows.forEach(route => {
+    const key = processRouteKey(route)
+    if (!savedBuckets.has(key)) savedBuckets.set(key, [])
+    savedBuckets.get(key).push(route)
   })
 
-  return result
+  return assignProcessSortNos(defaultRows
+    .filter(defaultRoute => defaultRoute.processName)
+    .map(defaultRoute => {
+      const savedRoute = savedBuckets.get(processRouteKey(defaultRoute))?.shift()
+      return {
+        ...defaultRoute,
+        inputVal: savedRoute?.inputVal ?? defaultRoute.inputVal ?? 0
+      }
+    }))
+}
+
+const buildQuoteProcessRoute = () => processRoute.value
+  .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
+  .filter(p => p.processName && p.inputVal > 0)
+  .map(p => ({
+    sortNo: p.sortNo,
+    processName: p.processName,
+    inputVal: p.inputVal,
+    calcType: p.calcType || '工时'
+  }))
+
+const buildGlobalProcessRoute = () => processRoute.value
+  .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
+  .filter(p => p.processName)
+  .map(p => ({
+    sortNo: p.sortNo,
+    processName: p.processName,
+    optionKey: p.optionKey || '',
+    calcType: p.calcType || '工时',
+    sourceType: p.sourceType || (p.calcType === '非工时费用' ? 'extra' : 'process')
+  }))
+
+const comparableProcessRoute = (route) => normalizeRouteList(route)
+  .filter(p => p.processName)
+  .map((p, index) => ({
+    sortNo: (index + 1) * PROCESS_SORT_STEP,
+    processName: p.processName || '',
+    calcType: p.calcType || '工时',
+    sourceType: p.sourceType || (p.calcType === '非工时费用' ? 'extra' : 'process')
+  }))
+
+const syncCurrentRouteToGlobalConfig = async () => {
+  const nextProcessRoute = buildGlobalProcessRoute()
+  if (JSON.stringify(comparableProcessRoute(globalConfig.value.processRoute)) === JSON.stringify(comparableProcessRoute(nextProcessRoute))) {
+    return { updated: false }
+  }
+
+  const nextConfig = {
+    ...normalizeGlobalConfig(globalConfig.value),
+    processRoute: nextProcessRoute
+  }
+  globalConfig.value = nextConfig
+  localStorage.setItem(`erp_global_config_${rfqId.value}`, JSON.stringify(nextConfig))
+  localStorage.setItem('erp_global_config', JSON.stringify(nextConfig))
+  await axios.post(`${API_BASE_URL}/api/engineer/order-config/${rfqId.value}`, JSON.parse(JSON.stringify(nextConfig)))
+  return { updated: true }
 }
 
 // 打开弹窗，继承全局配置
@@ -560,18 +686,13 @@ const openQuoteDialog = (row) => {
   matForm.outR = toMetricDimension(savedDimensions.outR, savedDimensionUnit)
   matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
 
-  if (row.processRoute) {
-    processRoute.value = mergeRoutesWithGlobalDefaults(row.processRoute, globalConfig.value.processRoute)
-  } else if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
-    processRoute.value = normalizeRouteList(globalConfig.value.processRoute).map(p => ({
-      processName: p.processName,
-      optionKey: p.optionKey || '',
-      calcType: p.calcType || '工时',
-      sourceType: p.sourceType || 'process',
-      inputVal: 0 // 等待工程师输入工时/费用
-    })).map(hydrateRouteItem)
+  if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
+    processRoute.value = mergeRoutesByGlobalOrder(row.processRoute, globalConfig.value.processRoute)
+  } else if (row.processRoute) {
+    processRoute.value = assignProcessSortNos(normalizeRouteList(row.processRoute).map(route => hydrateRouteItem(createProcessRow(route))))
   } else {
-    processRoute.value = [] // 兜底空数组
+    processRoute.value = assignProcessSortNos(normalizeRouteList(globalConfig.value.processRoute)
+      .map(p => hydrateRouteItem(createProcessRow(p))))
   }
 }
 
@@ -619,7 +740,7 @@ const calculatedMaterialCost = computed(() => calculatedWeight.value * currentUn
 // 提交逻辑
 const submitCurrentQuote = async () => {
   submitLoading.value = true
-  const validProcess = processRoute.value.filter(p => p.processName && p.inputVal > 0)
+  const validProcess = buildQuoteProcessRoute()
   
   const payload = {
     itemId: currentRow.value.id,
@@ -649,7 +770,20 @@ const submitCurrentQuote = async () => {
   
   try {
     await axios.post(`${API_BASE_URL}/api/engineer/submit-quote`, payload)
-    ElMessage.success('核价成功！')
+    let globalSynced = true
+    let globalUpdated = false
+    try {
+      const syncResult = await syncCurrentRouteToGlobalConfig()
+      globalUpdated = !!syncResult.updated
+    } catch (syncError) {
+      console.error(syncError)
+      globalSynced = false
+    }
+    ElMessage[globalSynced ? 'success' : 'warning'](
+      globalSynced
+        ? (globalUpdated ? '核价成功，当前工艺路线已同步为订单全局设定。' : '核价成功，工艺路线未变化。')
+        : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
+    )
     dialogVisible.value = false
     await fetchQuoteData({ keepScroll: true }) // 刷新大表格，保留当前滚动位置
   } catch (error) {
@@ -773,6 +907,18 @@ const submitCurrentQuote = async () => {
   margin-top: 18px;
 }
 
+.process-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.process-title-row .process-title {
+  margin-top: 0;
+}
+
 .process-box {
   padding: 14px;
   border: 1px dashed var(--erp-border);
@@ -783,6 +929,12 @@ const submitCurrentQuote = async () => {
 .process-row {
   margin-bottom: 10px;
   align-items: center;
+}
+
+.process-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 :deep(.pricing-workbench-dialog .el-dialog__body) {

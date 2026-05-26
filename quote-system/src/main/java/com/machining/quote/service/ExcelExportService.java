@@ -326,16 +326,44 @@ public class ExcelExportService {
                     result.add(normalized);
                 }
             }
+            sortProcessRoute(result);
             return result;
         }
         if (routeObject instanceof String text && !text.trim().isEmpty()) {
             try {
-                return objectMapper.readValue(text, new TypeReference<List<Map<String, Object>>>() {});
+                List<Map<String, Object>> result = objectMapper.readValue(text, new TypeReference<List<Map<String, Object>>>() {});
+                sortProcessRoute(result);
+                return result;
             } catch (Exception ignored) {
                 return List.of();
             }
         }
         return List.of();
+    }
+
+    private void sortProcessRoute(List<Map<String, Object>> routes) {
+        boolean hasSortNo = routes.stream().anyMatch(route -> intValue(route.get("sortNo")) != null);
+        if (!hasSortNo) {
+            return;
+        }
+        for (int i = 0; i < routes.size(); i++) {
+            routes.get(i).putIfAbsent("__index", i);
+        }
+        routes.sort((left, right) -> {
+            Integer leftSort = intValue(left.get("sortNo"));
+            Integer rightSort = intValue(right.get("sortNo"));
+            if (leftSort != null && rightSort != null && !leftSort.equals(rightSort)) {
+                return leftSort.compareTo(rightSort);
+            }
+            if (leftSort != null && rightSort == null) {
+                return -1;
+            }
+            if (leftSort == null && rightSort != null) {
+                return 1;
+            }
+            return intValue(left.get("__index")).compareTo(intValue(right.get("__index")));
+        });
+        routes.forEach(route -> route.remove("__index"));
     }
 
     private Map<String, Object> normalizeMap(Object value) {
@@ -436,6 +464,11 @@ public class ExcelExportService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private Integer intValue(Object value) {
+        Double number = doubleValue(value);
+        return number == null ? null : number.intValue();
     }
 
     private boolean isBlank(String value) {
