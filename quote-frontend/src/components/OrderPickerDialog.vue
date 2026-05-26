@@ -123,7 +123,7 @@ const resetPicker = () => {
 }
 
 const formatOrderLabel = (order) => {
-  return `${order.rfqNo || order.id} / ${order.projectName || '-'} / ${order.status || '-'}`
+  return `${order.rfqNo || order.id} / ${order.status || '-'}`
 }
 </script>
 

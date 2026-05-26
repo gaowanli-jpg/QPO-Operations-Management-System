@@ -48,7 +48,7 @@ public class ExcelExportService {
         List<List<String>> head = List.of(
                 List.of("序号"),
                 List.of("订单类型"),
-                List.of("客户项目号"),
+                List.of("RFQ号"),
                 List.of("物品编号"),
                 List.of("数量"),
                 List.of("材料名称"),
@@ -308,7 +308,8 @@ public class ExcelExportService {
 
     private String buildFileName(Integer rfqId, String suffix) {
         OrderRfq order = orderRfqMapper.selectById(rfqId);
-        String prefix = order == null ? "RFQ-" + rfqId : safe(order.getRfqNo());
+        String rfqNo = order == null ? "" : safe(order.getRfqNo());
+        String prefix = rfqNo.isEmpty() ? "RFQ-" + rfqId : rfqNo;
         return prefix + "-" + suffix;
     }
 

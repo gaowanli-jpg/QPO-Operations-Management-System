@@ -16,11 +16,6 @@
               <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="项目名称">
-              <el-input v-model="rfqForm.projectName" placeholder="例如：2026年Q2底盘件批次" />
-            </el-form-item>
-          </el-col>
         </el-row>
       </el-form>
 
@@ -102,7 +97,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { API_BASE_URL } from '../config'
 
-const rfqForm = reactive({ customerName: '', projectName: '' })
+const rfqForm = reactive({ customerName: '' })
 const excelFile = ref(null)
 const drawingFiles = ref([])
 const isSubmitting = ref(false)
@@ -259,7 +254,6 @@ const submitRfqPackage = async () => {
   isSubmitting.value = true
   const formData = new FormData()
   formData.append('customerName', rfqForm.customerName)
-  formData.append('projectName', rfqForm.projectName)
   formData.append('excelFile', excelFile.value)
 
   drawingFiles.value.forEach(file => {
@@ -280,13 +274,12 @@ const submitRfqPackage = async () => {
         '订单导入成功',
         {
           dangerouslyUseHTMLString: true,
-          confirmButtonText: '开启下一单',
+        confirmButtonText: '开启下一单',
           type: 'success',
           center: true,
         }
       ).then(() => {
         rfqForm.customerName = ''
-        rfqForm.projectName = ''
         excelFile.value = null
         drawingFiles.value = [] // 清空拖拽出来的 PDF
         if (excelUploadRef.value) {

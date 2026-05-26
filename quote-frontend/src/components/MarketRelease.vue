@@ -17,20 +17,20 @@
             <div class="panel-title">询价单</div>
             <div class="order-picker-row">
               <div class="selected-order-text">
-                {{ orderInfo.id ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'} / ${orderInfo.projectName || '-'}` : '未选择订单' }}
+                {{ orderInfo.id ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
               </div>
               <el-button type="primary" @click="openOrderPicker" :loading="loading">选择订单</el-button>
             </div>
 
             <el-descriptions v-if="orderInfo.id" :column="1" border class="order-desc">
               <el-descriptions-item label="客户">{{ orderInfo.customerName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="项目">{{ orderInfo.projectName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="RFQ号">{{ orderInfo.rfqNo || '-' }}</el-descriptions-item>
               <el-descriptions-item label="状态">{{ orderInfo.status || '-' }}</el-descriptions-item>
             </el-descriptions>
 
             <el-form label-width="80px" class="ticket-form">
               <el-form-item label="项目号">
-                <el-input v-model="releaseForm.projectNo" placeholder="默认取项目名称" />
+                <el-input v-model="releaseForm.projectNo" placeholder="默认取 RFQ 号" />
               </el-form-item>
               <el-form-item label="开工日期">
                 <el-date-picker
@@ -239,7 +239,7 @@ const loadOrder = async (rfqId) => {
     const response = await axios.get(`${API_BASE_URL}/api/market/summary/${rfqId}`)
     orderInfo.value = response.data.orderInfo || {}
     itemList.value = response.data.itemList || []
-    releaseForm.projectNo = orderInfo.value.projectName || ''
+    releaseForm.projectNo = orderInfo.value.rfqNo || ''
     selectedRows.value = []
     itemList.value.forEach(item => {
       acceptedQtyMap[item.id] = item.qty || 1

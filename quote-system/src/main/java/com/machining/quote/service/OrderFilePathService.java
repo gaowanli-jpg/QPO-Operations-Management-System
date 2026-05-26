@@ -16,26 +16,39 @@ public class OrderFilePathService {
     }
 
     public Path orderDrawingDirectory(OrderRfq order) {
-        if (order == null || isBlank(order.getCustomerName()) || isBlank(order.getProjectName())) {
+        if (order == null || isBlank(order.getCustomerName())) {
             return uploadRoot().resolve("orders").resolve(String.valueOf(order == null ? "unknown" : order.getId())).normalize();
         }
         return uploadRoot()
                 .resolve(safePathSegment(order.getCustomerName()))
-                .resolve(safePathSegment(order.getProjectName()))
+                .resolve(safePathSegment(orderFolderName(order)))
                 .normalize();
     }
 
     public String drawingUrl(OrderRfq order, String filename) {
         String safeFilename = safePathSegment(filename);
-        if (order == null || isBlank(order.getCustomerName()) || isBlank(order.getProjectName())) {
+        if (order == null || isBlank(order.getCustomerName())) {
             return "/uploads/orders/" + (order == null ? "unknown" : order.getId()) + "/" + safeFilename;
         }
         return "/uploads/"
                 + safePathSegment(order.getCustomerName())
                 + "/"
-                + safePathSegment(order.getProjectName())
+                + safePathSegment(orderFolderName(order))
                 + "/"
                 + safeFilename;
+    }
+
+    private String orderFolderName(OrderRfq order) {
+        if (!isBlank(order.getRfqNo())) {
+            return order.getRfqNo();
+        }
+        if (order.getId() != null) {
+            return String.valueOf(order.getId());
+        }
+        if (!isBlank(order.getProjectName())) {
+            return order.getProjectName();
+        }
+        return "unknown";
     }
 
     public String safePathSegment(String value) {

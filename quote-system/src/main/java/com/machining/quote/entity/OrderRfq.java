@@ -16,7 +16,7 @@ public class OrderRfq {
 
     private String rfqNo;          // 询价单号 (我们会自动生成)
     private String customerName;   // 客户名称
-    private String projectName;    // 项目名称 (与控制器里的 projectName 对应)
+    private String projectName;    // 历史兼容字段，新单不再使用项目名称
 
     private String status;         // 单据状态 (与控制器里的 status 对应)
 

@@ -28,7 +28,7 @@
               v-model="keyword"
               clearable
               :disabled="!selectedCustomer"
-              placeholder="搜索订单号 / 项目 / 状态"
+              placeholder="搜索 RFQ 号 / 状态"
               class="search-input"
             />
             <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
@@ -40,7 +40,6 @@
 
       <el-table v-else :data="filteredOrders" border stripe height="640" v-loading="loading">
         <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
-        <el-table-column prop="projectName" label="项目" min-width="160" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="120" align="center">
           <template #default="scope">
             <el-tag type="success" size="small">
@@ -83,7 +82,6 @@
           <el-descriptions-item label="订单号">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderDetail.orderInfo?.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ orderDetail.orderInfo?.customerName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="项目">{{ orderDetail.orderInfo?.projectName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="图纸目录" :span="2">{{ orderDetail.fileRoot || '-' }}</el-descriptions-item>
         </el-descriptions>
 
@@ -156,8 +154,8 @@
       <div v-if="orderDetail" class="supplement-dialog">
         <el-descriptions :column="1" border size="small" class="supplement-descriptions">
           <el-descriptions-item label="订单">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户/项目">
-            {{ orderDetail.orderInfo?.customerName || '-' }} / {{ orderDetail.orderInfo?.projectName || '-' }}
+          <el-descriptions-item label="客户">
+            {{ orderDetail.orderInfo?.customerName || '-' }}
           </el-descriptions-item>
         </el-descriptions>
 
@@ -268,7 +266,6 @@ const filteredOrders = computed(() => {
   if (!text) return orders.value
   return orders.value.filter(order => [
     order.rfqNo,
-    order.projectName,
     order.status
   ].some(value => String(value || '').toLowerCase().includes(text)))
 })

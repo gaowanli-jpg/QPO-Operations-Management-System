@@ -58,7 +58,7 @@ public class DeliveryService {
         }
 
         LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
-        String projectNo = isBlank(req.getProjectNo()) ? order.getProjectName() : req.getProjectNo().trim();
+        String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
         List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
@@ -385,6 +385,13 @@ public class DeliveryService {
 
     private String remarkOrDefault(String value, String defaultValue) {
         return isBlank(value) ? defaultValue : value;
+    }
+
+    private String resolveProjectNo(OrderRfq order) {
+        if (!isBlank(order.getRfqNo())) {
+            return order.getRfqNo();
+        }
+        return isBlank(order.getProjectName()) ? "" : order.getProjectName();
     }
 
     private boolean isBlank(String value) {

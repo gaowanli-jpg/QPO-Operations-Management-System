@@ -28,7 +28,7 @@
               v-model="keyword"
               clearable
               :disabled="!selectedCustomer"
-              placeholder="搜索订单号 / 项目 / 状态"
+              placeholder="搜索 RFQ 号 / 状态"
               class="search-input"
             />
             <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
@@ -40,7 +40,6 @@
 
       <el-table v-else :data="filteredOrders" border stripe height="640" v-loading="loading">
         <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
-        <el-table-column prop="projectName" label="项目" min-width="170" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="120" align="center">
           <template #default="{ row }">
             <el-tag type="info" size="small">{{ row.status || '-' }}</el-tag>
@@ -81,7 +80,6 @@
           <el-descriptions-item label="订单号">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderDetail.orderInfo?.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ orderDetail.orderInfo?.customerName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="项目">{{ orderDetail.orderInfo?.projectName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="图纸目录" :span="2">{{ orderDetail.fileRoot || '-' }}</el-descriptions-item>
         </el-descriptions>
 
@@ -165,7 +163,6 @@ const filteredOrders = computed(() => {
   if (!text) return orders.value
   return orders.value.filter(order => [
     order.rfqNo,
-    order.projectName,
     order.status
   ].some(value => String(value || '').toLowerCase().includes(text)))
 })
@@ -234,7 +231,7 @@ const openDetail = async (row) => {
 
 const deleteHistoryOrder = async (row) => {
   await ElMessageBox.confirm(
-    `确认彻底删除历史订单「${row.rfqNo || row.id} / ${row.customerName || '-'} / ${row.projectName || '-'}」？库存不会恢复，订单数据和图纸文件将被删除。`,
+    `确认彻底删除历史订单「${row.rfqNo || row.id} / ${row.customerName || '-'}」？库存不会恢复，订单数据和图纸文件将被删除。`,
     '彻底删除历史订单',
     { type: 'error', confirmButtonText: '彻底删除', cancelButtonText: '取消' }
   )

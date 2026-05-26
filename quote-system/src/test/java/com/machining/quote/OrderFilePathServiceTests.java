@@ -9,16 +9,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class OrderFilePathServiceTests {
     @Test
-    void normalizesUnsafeCustomerAndProjectSegments() {
+    void normalizesUnsafeCustomerAndRfqSegments() {
         OrderFilePathService service = new OrderFilePathService();
         ReflectionTestUtils.setField(service, "uploadDir", "D:/ERP_Files/");
 
         OrderRfq order = new OrderRfq();
         order.setId(10);
         order.setCustomerName("客户/A..");
-        order.setProjectName("项目:*?B");
+        order.setRfqNo("RFQ:20260526/0001");
 
-        assertThat(service.orderDrawingDirectory(order).toString()).contains("客户_A_").contains("项目___B");
+        assertThat(service.orderDrawingDirectory(order).toString()).contains("客户_A_").contains("RFQ_20260526_0001");
         assertThat(service.drawingUrl(order, "../图纸.pdf")).doesNotContain("..").contains("/uploads/");
     }
 }

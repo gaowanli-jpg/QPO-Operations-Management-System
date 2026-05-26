@@ -8,6 +8,12 @@ CREATE TABLE IF NOT EXISTS order_rfq (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS rfq_no_sequence (
+    rfq_date DATE PRIMARY KEY,
+    last_seq INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS engineer_config JSONB;
 ALTER TABLE order_rfq
     ALTER COLUMN engineer_config TYPE JSONB USING NULLIF(engineer_config::TEXT, '')::JSONB;

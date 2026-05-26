@@ -3,7 +3,7 @@
     <div class="test-header">
       <div class="selected-order">
         <span class="selected-order-label">当前订单</span>
-        <span class="selected-order-value">{{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'} / ${orderInfo.projectName || '-'}` : '未选择' }}</span>
+        <span class="selected-order-value">{{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择' }}</span>
       </div>
       <el-button type="primary" @click="openOrderPicker" :loading="isLoading">
         选择订单

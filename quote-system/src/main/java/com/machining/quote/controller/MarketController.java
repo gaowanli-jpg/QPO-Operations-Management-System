@@ -14,6 +14,7 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.OrderFilePathService;
+import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.util.DrawingPartNoResolver;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,9 @@ public class MarketController {
 
     @Autowired
     private OrderFilePathService orderFilePathService;
+
+    @Autowired
+    private RfqNumberService rfqNumberService;
 
     @GetMapping("/orders")
     @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
@@ -127,7 +131,6 @@ public class MarketController {
     @Transactional
     public Map<String, Object> importRfq(
             @RequestParam("customerName") String customerName,
-            @RequestParam(value = "projectName", required = false) String projectName,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
 
@@ -136,17 +139,8 @@ public class MarketController {
         try {
             System.out.println("\n====== 🚀 市场部新单导入开始 ======");
 
-            String safeProjectName = (projectName != null && !projectName.trim().isEmpty()) ? projectName : "默认未命名项目";
-            System.out.println("客户名称: " + customerName + " | 项目: " + safeProjectName);
-
-            QueryWrapper<OrderRfq> dupCheck = new QueryWrapper<>();
-            dupCheck.eq("customer_name", customerName).eq("project_name", safeProjectName);
-            if (orderRfqMapper.selectCount(dupCheck) > 0) {
-                System.out.println("❌ 拦截：项目重复提交！");
-                result.put("success", false);
-                result.put("message", "拦截提示：客户【" + customerName + "】下已存在名为【" + safeProjectName + "】的项目，请勿重复导入！");
-                return result;
-            }
+            String autoRfqNo = rfqNumberService.nextRfqNo();
+            System.out.println("客户名称: " + customerName + " | RFQ: " + autoRfqNo);
 
             List<RfqExcelDTO> excelDataList = EasyExcel.read(excelFile.getInputStream())
                     .head(RfqExcelDTO.class)
@@ -167,7 +161,7 @@ public class MarketController {
             if (drawings != null && !drawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
                 pathOrder.setCustomerName(customerName);
-                pathOrder.setProjectName(safeProjectName);
+                pathOrder.setRfqNo(autoRfqNo);
                 projectDir = orderFilePathService.orderDrawingDirectory(pathOrder);
                 Files.createDirectories(projectDir);
 
@@ -200,10 +194,8 @@ public class MarketController {
             System.out.println("====== ⚙️ 开始智能匹配与数据落库 ======");
 
             OrderRfq newOrder = new OrderRfq();
-            String autoRfqNo = "RFQ-" + System.currentTimeMillis();
             newOrder.setRfqNo(autoRfqNo);
             newOrder.setCustomerName(customerName);
-            newOrder.setProjectName(safeProjectName);
             newOrder.setStatus("待工程部评估");
             orderRfqMapper.insert(newOrder);
             Integer generatedRfqId = newOrder.getId();
