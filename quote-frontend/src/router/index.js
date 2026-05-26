@@ -9,7 +9,7 @@ import OrderManage from '../components/OrderManage.vue'
 import HistoryOrderManage from '../components/HistoryOrderManage.vue'
 import LoginView from '../components/LoginView.vue'
 import UserManage from '../components/UserManage.vue'
-import { authState, hasRole } from '../auth'
+import { authState, hasRole, verifyAuth } from '../auth'
 
 const routes = [
   { path: '/login', component: LoginView },
@@ -37,11 +37,15 @@ const roleHome = {
   WAREHOUSE: '/warehouse'
 }
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (to.path === '/login') {
     return true
   }
   if (!authState.token) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  const valid = await verifyAuth()
+  if (!valid) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
   const roles = to.meta?.roles

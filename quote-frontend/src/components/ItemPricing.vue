@@ -22,7 +22,6 @@
             完成报价提交
           </el-button>
         </div>
-        <el-button type="primary" @click="fetchQuoteData" :loading="loading">一键同步订单数据</el-button>
       </div>
 
       <div v-if="!quoteData" class="empty-state" v-loading="loading">
