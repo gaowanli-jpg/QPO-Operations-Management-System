@@ -105,7 +105,7 @@ public class InventoryService {
             throw new RuntimeException("请先选择客户名称");
         }
         if (partNo.isEmpty()) {
-            throw new RuntimeException("物品编号不能为空");
+            throw new RuntimeException("图号不能为空");
         }
 
         InventoryMaster inventory = findByCustomerAndPartNoForUpdate(customerName, partNo);
@@ -356,7 +356,7 @@ public class InventoryService {
             customer = UNKNOWN_CUSTOMER;
         }
         if (normalizedPartNo.isEmpty()) {
-            throw new RuntimeException("物品编号不能为空");
+            throw new RuntimeException("图号不能为空");
         }
         InventoryMaster inventory = findByCustomerAndPartNoForUpdate(customer, normalizedPartNo);
         if (inventory != null) {
@@ -379,7 +379,7 @@ public class InventoryService {
         }
         InventoryMaster inventory = findByCustomerAndPartNoForUpdate(customerName, partNo);
         if (inventory == null) {
-            throw new RuntimeException("请先录入该客户的物品编号");
+            throw new RuntimeException("请先录入该客户的图号");
         }
         return inventory;
     }

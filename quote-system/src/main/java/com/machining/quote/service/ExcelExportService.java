@@ -49,7 +49,7 @@ public class ExcelExportService {
                 List.of("序号"),
                 List.of("订单类型"),
                 List.of("RFQ号"),
-                List.of("物品编号"),
+                List.of("图号"),
                 List.of("数量"),
                 List.of("材料名称"),
                 List.of("表面处理"),
@@ -88,7 +88,7 @@ public class ExcelExportService {
         List<OrderProcessSheet> sheets = processSheetMapper.selectList(qw);
 
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "物品编号", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
+        for (String title : List.of("序号", "图号", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(List.of(title));
         }
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
@@ -146,7 +146,7 @@ public class ExcelExportService {
 
     private List<List<String>> buildQuoteHead(int maxRouteSize, List<String> feeNames) {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "物品编号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位", "重量(KG)", "材料费")) {
+        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位", "重量(KG)", "材料费")) {
             head.add(List.of("基础信息", title));
         }
         for (int i = 0; i < maxRouteSize; i++) {

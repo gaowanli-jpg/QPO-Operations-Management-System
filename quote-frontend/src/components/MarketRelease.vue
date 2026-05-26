@@ -85,7 +85,7 @@
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" />
-              <el-table-column prop="partNo" label="物品编号" width="130" fixed />
+              <el-table-column prop="partNo" label="图号" width="130" fixed />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
               <el-table-column label="通过数量" width="130" align="center">
@@ -120,7 +120,7 @@
               </el-button>
             </div>
             <el-table :data="ticketList" border stripe height="280" v-loading="loadingTickets || deleting">
-              <el-table-column prop="partNo" label="物品编号" width="130" />
+              <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="materialName" label="材料" width="110" show-overflow-tooltip />
               <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
@@ -144,7 +144,7 @@
               </el-button>
             </div>
             <el-table :data="processSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
-              <el-table-column prop="partNo" label="物品编号" width="130" />
+              <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="materialName" label="材料" width="120" show-overflow-tooltip />

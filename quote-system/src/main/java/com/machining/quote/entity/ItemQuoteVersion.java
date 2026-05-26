@@ -14,7 +14,7 @@ public class ItemQuoteVersion {
     private Integer id;
 
     private Integer rfqId;
-    private String partNo;          // 物品编号
+    private String partNo;          // 图号
     private String description;     // 物料描述
     private Integer qty;            // 数量
     private String version;         // 版本 (保留你原有的)

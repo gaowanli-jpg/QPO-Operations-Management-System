@@ -39,7 +39,7 @@
           class="pricing-table"
           height="450"
         >
-          <el-table-column prop="partNo" label="图号/零件号" width="140" fixed />
+          <el-table-column prop="partNo" label="图号" width="140" fixed />
           <el-table-column prop="description" label="名称/描述" min-width="150" show-overflow-tooltip />
           <el-table-column prop="qty" label="数量" width="70" align="center" />
           <el-table-column label="重复" width="90" align="center">

@@ -7,7 +7,7 @@ import lombok.Data;
 public class RfqExcelDTO {
 
     // @ExcelProperty 会自动去匹配 Excel 里叫这个名字的表头
-    @ExcelProperty("物品编号")
+    @ExcelProperty("图号")
     private String partNo;
 
     @ExcelProperty("物料描述")

@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h2>仓库部：库存管理</h2>
-            <p>先选择客户，再维护该客户手工录入的物品编号、已入库库存和待产库存。</p>
+            <p>先选择客户，再维护该客户手工录入的图号、已入库库存和待产库存。</p>
           </div>
           <div class="header-actions">
             <el-select
@@ -26,7 +26,7 @@
             </el-select>
             <el-input
               v-model="keyword"
-              placeholder="按物品编号搜索"
+              placeholder="按图号搜索"
               clearable
               :disabled="!selectedCustomer"
               class="search-input"
@@ -34,7 +34,7 @@
               @clear="loadInventory"
             />
             <el-button type="primary" :disabled="!selectedCustomer" @click="loadInventory">查询</el-button>
-            <el-button type="success" :disabled="!selectedCustomer" @click="openCreateDialog">录入物品编号</el-button>
+            <el-button type="success" :disabled="!selectedCustomer" @click="openCreateDialog">录入图号</el-button>
           </div>
         </div>
       </template>
@@ -49,7 +49,7 @@
         v-loading="loading"
         row-key="id"
       >
-        <el-table-column prop="partNo" label="物品编号" min-width="160" fixed />
+        <el-table-column prop="partNo" label="图号" min-width="160" fixed />
         <el-table-column prop="inStockQty" label="已入库库存" width="120" align="center" />
         <el-table-column prop="pendingQty" label="待产库存" width="120" align="center" />
         <el-table-column label="待产单号" min-width="220">
@@ -77,12 +77,12 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="createDialogVisible" title="录入物品编号" width="460px">
+    <el-dialog v-model="createDialogVisible" title="录入图号" width="460px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item label="客户名称">
           <el-input v-model="selectedCustomer" disabled />
         </el-form-item>
-        <el-form-item label="物品编号" required>
+        <el-form-item label="图号" required>
           <el-input v-model="createForm.partNo" placeholder="例如 L20100000733" />
         </el-form-item>
       </el-form>
@@ -279,7 +279,7 @@ const openCreateDialog = () => {
 
 const createInventory = async () => {
   if (!selectedCustomer.value) return ElMessage.warning('请先选择客户名称。')
-  if (!createForm.partNo.trim()) return ElMessage.warning('请填写物品编号。')
+  if (!createForm.partNo.trim()) return ElMessage.warning('请填写图号。')
   saving.value = true
   try {
     const response = await axios.post(`${API_BASE_URL}/api/warehouse/inventory`, {

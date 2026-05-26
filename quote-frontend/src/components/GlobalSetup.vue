@@ -33,7 +33,7 @@
           />
 
           <el-table :data="itemList" border stripe height="450" v-loading="isLoading">
-            <el-table-column prop="partNo" label="物品编号(图号)" width="140" />
+            <el-table-column prop="partNo" label="图号" width="140" />
             <el-table-column prop="description" label="物料描述" min-width="120" show-overflow-tooltip />
             <el-table-column prop="qty" label="数量" width="70" align="center" />
             <el-table-column label="重复" width="90" align="center">
