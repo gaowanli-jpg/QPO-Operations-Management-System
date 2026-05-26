@@ -23,12 +23,24 @@
             <el-table-column prop="materialName" label="材料" width="120" fixed />
             <el-table-column prop="materialType" label="材质" width="110" />
             <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="plateDensity" label="板材密度" width="100" align="right" />
-            <el-table-column prop="platePrice" label="板材单价" width="100" align="right" />
-            <el-table-column prop="barDensity" label="棒材密度" width="100" align="right" />
-            <el-table-column prop="barPrice" label="棒材单价" width="100" align="right" />
-            <el-table-column prop="tubeDensity" label="管材密度" width="100" align="right" />
-            <el-table-column prop="tubePrice" label="管材单价" width="100" align="right" />
+            <el-table-column label="板材密度" width="150" align="right">
+              <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
+            </el-table-column>
+            <el-table-column label="板材单价" width="150" align="right">
+              <template #default="scope">{{ formatPrice(scope.row.platePrice) }}</template>
+            </el-table-column>
+            <el-table-column label="棒材密度" width="150" align="right">
+              <template #default="scope">{{ formatDensity(scope.row.barDensity) }}</template>
+            </el-table-column>
+            <el-table-column label="棒材单价" width="150" align="right">
+              <template #default="scope">{{ formatPrice(scope.row.barPrice) }}</template>
+            </el-table-column>
+            <el-table-column label="管材密度" width="150" align="right">
+              <template #default="scope">{{ formatDensity(scope.row.tubeDensity) }}</template>
+            </el-table-column>
+            <el-table-column label="管材单价" width="150" align="right">
+              <template #default="scope">{{ formatPrice(scope.row.tubePrice) }}</template>
+            </el-table-column>
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
                 <el-button type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
@@ -107,7 +119,7 @@
     </el-card>
 
     <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="760px">
-      <el-form :model="materialForm" label-width="110px">
+      <el-form :model="materialForm" label-width="140px">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="材料" required>
@@ -126,36 +138,54 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="板材密度">
-              <el-input-number v-model="materialForm.plateDensity" :precision="4" :min="0" controls-position="right" style="width: 100%;" />
+              <div class="unit-input">
+                <el-input-number v-model="materialForm.plateDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+                <span class="unit-label">kg/m³</span>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="板材单价">
-              <el-input-number v-model="materialForm.platePrice" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
+              <div class="unit-input">
+                <el-input-number v-model="materialForm.platePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+                <span class="unit-label">元/kg</span>
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="棒材密度">
-              <el-input-number v-model="materialForm.barDensity" :precision="4" :min="0" controls-position="right" style="width: 100%;" />
+              <div class="unit-input">
+                <el-input-number v-model="materialForm.barDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+                <span class="unit-label">kg/m³</span>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="棒材单价">
-              <el-input-number v-model="materialForm.barPrice" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
+              <div class="unit-input">
+                <el-input-number v-model="materialForm.barPrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+                <span class="unit-label">元/kg</span>
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="管材密度">
-              <el-input-number v-model="materialForm.tubeDensity" :precision="4" :min="0" controls-position="right" style="width: 100%;" />
+              <div class="unit-input">
+                <el-input-number v-model="materialForm.tubeDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+                <span class="unit-label">kg/m³</span>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="管材单价">
-              <el-input-number v-model="materialForm.tubePrice" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
+              <div class="unit-input">
+                <el-input-number v-model="materialForm.tubePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+                <span class="unit-label">元/kg</span>
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -277,6 +307,19 @@ const materialForm = reactive(createEmptyMaterial())
 const processForm = reactive(createEmptyProcess())
 const markupFeeForm = reactive(createEmptyMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
+
+const formatNumber = (value, precision) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(precision) : '-'
+}
+const formatDensity = (value) => {
+  const text = formatNumber(value, 4)
+  return text === '-' ? '-' : `${text} kg/m³`
+}
+const formatPrice = (value) => {
+  const text = formatNumber(value, 2)
+  return text === '-' ? '-' : `${text} 元/kg`
+}
 
 function createEmptyMaterial() {
   return {
@@ -488,4 +531,13 @@ onMounted(loadAll)
 .card-header h2 { margin: 0; color: #303133; font-size: 22px; }
 .card-header p { margin: 8px 0 0; color: #606266; font-size: 14px; }
 .header-actions { display: flex; align-items: center; gap: 10px; }
+.unit-input { display: flex; align-items: center; width: 100%; gap: 8px; }
+.unit-input-control { flex: 1; min-width: 0; }
+.unit-label {
+  flex: 0 0 52px;
+  color: #606266;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
 </style>

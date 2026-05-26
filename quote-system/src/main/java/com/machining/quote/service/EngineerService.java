@@ -575,9 +575,9 @@ public class EngineerService {
 
         String materialName = stringValue(materialData.get("name"));
         String shape = stringValue(materialData.get("shape"));
-        Double weight = doubleValue(materialData.get("weight"));
+        Double submittedWeight = doubleValue(materialData.get("weight"));
 
-        if (materialName != null && weight != null && weight > 0) {
+        if (materialName != null) {
             QueryWrapper<DictMaterial> qw = new QueryWrapper<>();
             qw.eq("material_name", materialName);
             List<DictMaterial> materials = materialMapper.selectList(qw);
@@ -585,15 +585,73 @@ public class EngineerService {
                 DictMaterial material = materials.get(0);
                 double unitPrice = resolveMaterialPrice(material, shape);
                 double density = resolveMaterialDensity(material, shape);
+                Double volume = calculateMetricVolume(materialData, shape);
+                Double weight = volume != null && density > 0
+                        ? volume * density
+                        : submittedWeight;
+
                 materialData.put("density", density);
+                materialData.put("densityUnit", "kg/m3");
                 materialData.put("unitPrice", unitPrice);
-                materialData.put("cost", weight * unitPrice);
-                return weight * unitPrice;
+                materialData.put("unitPriceUnit", "元/kg");
+                if (volume != null) {
+                    materialData.put("volume", volume);
+                    materialData.put("volumeUnit", "m3");
+                }
+                if (weight != null && weight > 0) {
+                    double cost = weight * unitPrice;
+                    materialData.put("weight", weight);
+                    materialData.put("weightUnit", "kg");
+                    materialData.put("cost", cost);
+                    return cost;
+                }
             }
         }
 
         Double submittedCost = doubleValue(materialData.get("cost"));
         return submittedCost == null ? 0.0 : submittedCost;
+    }
+
+    private Double calculateMetricVolume(Map<String, Object> materialData, String shape) {
+        if (!isMetricDimensionData(materialData)) {
+            return null;
+        }
+        Object dimensionsObject = materialData.get("dimensions");
+        if (!(dimensionsObject instanceof Map<?, ?> dimensions)) {
+            return null;
+        }
+
+        double length = zeroIfNull(doubleValue(dimensions.get("L")));
+        double width = zeroIfNull(doubleValue(dimensions.get("W")));
+        double thickness = zeroIfNull(doubleValue(dimensions.get("T")));
+        double outerDiameter = zeroIfNull(doubleValue(dimensions.get("outR")));
+        double innerDiameter = zeroIfNull(doubleValue(dimensions.get("inR")));
+
+        if ("棒材".equals(shape)) {
+            if (length <= 0 || outerDiameter <= 0) {
+                return null;
+            }
+            return Math.PI * Math.pow(outerDiameter / 2.0, 2) * length;
+        }
+        if ("管材".equals(shape)) {
+            if (length <= 0 || outerDiameter <= 0 || innerDiameter < 0 || innerDiameter >= outerDiameter) {
+                return null;
+            }
+            return Math.PI * (Math.pow(outerDiameter / 2.0, 2) - Math.pow(innerDiameter / 2.0, 2)) * length;
+        }
+        if (length <= 0 || width <= 0 || thickness <= 0) {
+            return null;
+        }
+        return length * width * thickness;
+    }
+
+    private boolean isMetricDimensionData(Map<String, Object> materialData) {
+        String unit = stringValue(materialData.get("dimensionUnit"));
+        return "m".equalsIgnoreCase(unit) || "meter".equalsIgnoreCase(unit) || "meters".equalsIgnoreCase(unit) || "米".equals(unit);
+    }
+
+    private double zeroIfNull(Double value) {
+        return value == null ? 0.0 : value;
     }
 
     private double resolveMaterialPrice(DictMaterial material, String shape) {

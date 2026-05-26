@@ -144,15 +144,15 @@
             
             <!-- 尺寸填写 -->
             <el-row :gutter="20" class="dimension-row">
-              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="长(mm)"><el-input-number v-model="matForm.L" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="宽(mm)"><el-input-number v-model="matForm.W" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape === '板材'"><el-form-item label="厚(mm)"><el-input-number v-model="matForm.T" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape !== '板材'"><el-form-item label="长度(mm)"><el-input-number v-model="matForm.L" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape !== '板材'"><el-form-item label="外径(mm)"><el-input-number v-model="matForm.outR" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="8" v-if="matForm.shape === '管材'"><el-form-item label="内径(mm)"><el-input-number v-model="matForm.inR" :min="0" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="长(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="宽(m)"><el-input-number v-model="matForm.W" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="厚(m)"><el-input-number v-model="matForm.T" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="长度(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="外径(m)"><el-input-number v-model="matForm.outR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              <el-col :span="12" v-if="matForm.shape === '管材'"><el-form-item label="内径(m)"><el-input-number v-model="matForm.inR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
             </el-row>
             <p class="material-summary">
-              毛坯重量：{{ calculatedWeight.toFixed(3) }} KG，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
+              毛坯体积：{{ calculatedVolume.toFixed(6) }} m³，毛坯重量：{{ calculatedWeight.toFixed(3) }} kg，材料单价：{{ currentUnitPrice.toFixed(2) }} 元/kg，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
             </p>
           </el-form>
 
@@ -292,6 +292,16 @@ const normalizeGlobalConfig = (config) => {
   }
 }
 
+const numberOrZero = (value) => {
+  const numericValue = Number(value || 0)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+const toMetricDimension = (value, unit = 'm') => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = numberOrZero(value)
+  return unit === 'm' ? numericValue : numericValue / 1000
+}
+
 const repeatItemMap = computed(() => {
   const map = new Map()
   ;(repeatAnalysis.value?.repeatItems || []).forEach(item => {
@@ -349,7 +359,7 @@ const fetchDicts = async () => {
   } catch (error) {
     console.error(error)
     materialOptions.value = [
-      { id: 'fallback-45', materialName: '45#', density: 7.85, plateDensity: 7.85, platePrice: 7.1, barDensity: 7.85, barPrice: 10, tubeDensity: 7.85, tubePrice: 10 }
+      { id: 'fallback-45', materialName: '45#', density: 7850, plateDensity: 7850, platePrice: 7.1, barDensity: 7850, barPrice: 10, tubeDensity: 7850, tubePrice: 10 }
     ]
     processOptions.value = [
       { id: 'fallback-mill', processName: '铣' },
@@ -468,7 +478,7 @@ const dialogVisible = ref(false)
 const currentRow = ref(null)
 const submitLoading = ref(false)
 
-const matForm = reactive({ materialName: '', shape: '', L: 0, W: 0, T: 0, outR: 0, inR: 0 })
+const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null })
 const processRoute = ref([])
 
 const syncProcessMeta = (proc) => {
@@ -543,11 +553,12 @@ const openQuoteDialog = (row) => {
   const savedDimensions = savedMaterialData.dimensions || {}
   matForm.materialName = savedMaterialData.name || globalConfig.value.materialName || '45#'
   matForm.shape = savedMaterialData.shape || globalConfig.value.shape || '板材'
-  matForm.L = savedDimensions.L || 0
-  matForm.W = savedDimensions.W || 0
-  matForm.T = savedDimensions.T || 0
-  matForm.outR = savedDimensions.outR || 0
-  matForm.inR = savedDimensions.inR || 0
+  const savedDimensionUnit = savedMaterialData.dimensionUnit || 'mm'
+  matForm.L = toMetricDimension(savedDimensions.L, savedDimensionUnit)
+  matForm.W = toMetricDimension(savedDimensions.W, savedDimensionUnit)
+  matForm.T = toMetricDimension(savedDimensions.T, savedDimensionUnit)
+  matForm.outR = toMetricDimension(savedDimensions.outR, savedDimensionUnit)
+  matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
 
   if (row.processRoute) {
     processRoute.value = mergeRoutesWithGlobalDefaults(row.processRoute, globalConfig.value.processRoute)
@@ -583,13 +594,26 @@ const currentDensity = computed(() => {
   if (matForm.shape === '管材') return currentMatInfo.value.tubeDensity || currentMatInfo.value.density || 0
   return currentMatInfo.value.plateDensity || currentMatInfo.value.density || 0
 })
-const calculatedWeight = computed(() => {
-  let v = 0;
-  if (matForm.shape === '板材') v = matForm.L * matForm.W * matForm.T;
-  else if (matForm.shape === '棒材') v = Math.PI * Math.pow(matForm.outR / 2, 2) * matForm.L;
-  else if (matForm.shape === '管材') v = Math.PI * (Math.pow(matForm.outR / 2, 2) - Math.pow(matForm.inR / 2, 2)) * matForm.L;
-  return (v * currentDensity.value) / 1000000;
+const calculatedVolume = computed(() => {
+  const length = numberOrZero(matForm.L)
+  const width = numberOrZero(matForm.W)
+  const thickness = numberOrZero(matForm.T)
+  const outerDiameter = numberOrZero(matForm.outR)
+  const innerDiameter = numberOrZero(matForm.inR)
+
+  if (matForm.shape === '板材') {
+    return length * width * thickness
+  }
+  if (matForm.shape === '棒材') {
+    return Math.PI * Math.pow(outerDiameter / 2, 2) * length
+  }
+  if (matForm.shape === '管材') {
+    const ringArea = Math.PI * (Math.pow(outerDiameter / 2, 2) - Math.pow(innerDiameter / 2, 2))
+    return Math.max(ringArea, 0) * length
+  }
+  return 0
 })
+const calculatedWeight = computed(() => calculatedVolume.value * currentDensity.value)
 const calculatedMaterialCost = computed(() => calculatedWeight.value * currentUnitPrice.value)
 
 // 提交逻辑
@@ -602,10 +626,16 @@ const submitCurrentQuote = async () => {
     materialData: {
       name: matForm.materialName,
       shape: matForm.shape,
+      volume: calculatedVolume.value,
       weight: calculatedWeight.value,
       density: currentDensity.value,
+      densityUnit: 'kg/m3',
       unitPrice: currentUnitPrice.value,
+      unitPriceUnit: '元/kg',
       cost: calculatedMaterialCost.value,
+      dimensionUnit: 'm',
+      volumeUnit: 'm3',
+      weightUnit: 'kg',
       dimensions: {
         L: matForm.L,
         W: matForm.W,
