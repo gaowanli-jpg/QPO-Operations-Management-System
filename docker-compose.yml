@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
     ports:
       - "${POSTGRES_BIND:-0.0.0.0}:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -34,6 +36,8 @@ services:
       FLYWAY_ENABLED: true
       SQL_INIT_MODE: never
       MYBATIS_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai
     volumes:
       - uploads_data:/data/uploads
       - backups_data:/data/backups

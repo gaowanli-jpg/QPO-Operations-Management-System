@@ -294,12 +294,8 @@ public class DeliveryService {
             return "待工程部评估";
         }
         boolean allQuoted = drawableItems.stream().allMatch(item -> item.getFinalUnitPrice() != null);
-        boolean anyQuoted = drawableItems.stream().anyMatch(item -> item.getFinalUnitPrice() != null);
         if (allQuoted) {
             return "已报价";
-        }
-        if (anyQuoted) {
-            return "部分已报价";
         }
         return "待工程部评估";
     }

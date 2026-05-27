@@ -9,6 +9,8 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:123456}
+    hikari:
+      connection-init-sql: SET TIME ZONE 'Asia/Shanghai'
   sql:
     init:
       mode: ${SQL_INIT_MODE:never}
@@ -19,6 +21,7 @@ spring:
     locations: classpath:db/migration
   jackson:
     default-property-inclusion: non_null
+    time-zone: Asia/Shanghai
 
   servlet:
     multipart:

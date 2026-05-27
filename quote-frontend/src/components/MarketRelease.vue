@@ -29,7 +29,7 @@
             </el-descriptions>
 
             <el-form label-width="80px" class="ticket-form">
-              <el-form-item label="项目号">
+              <el-form-item label="RFQ号">
                 <el-input v-model="releaseForm.projectNo" placeholder="默认取 RFQ 号" />
               </el-form-item>
               <el-form-item label="开工日期">
