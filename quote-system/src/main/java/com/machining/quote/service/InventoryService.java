@@ -131,7 +131,7 @@ public class InventoryService {
         if (req.getPendingQty() != null && req.getPendingQty() > 0) {
             String pendingRefNo = normalizePendingRef(req.getPendingRefNo());
             if (pendingRefNo.isEmpty()) {
-                throw new RuntimeException("新增待产库存时必须填写待产单号");
+                throw new RuntimeException("新增在产库存时必须填写在产单号");
             }
             addPending(inventory.getId(), pendingRefNo, req.getPendingQty());
         }
@@ -150,7 +150,7 @@ public class InventoryService {
         if ("PENDING".equals(stockType)) {
             String pendingRefNo = normalizePendingRef(req.getPendingRefNo());
             if (pendingRefNo.isEmpty()) {
-                throw new RuntimeException("待产库存必须填写待产单号");
+                throw new RuntimeException("在产库存必须填写在产单号");
             }
             addPending(inventory.getId(), pendingRefNo, qty);
             InventoryMaster saved = inventoryMapper.selectById(inventory.getId());
@@ -176,7 +176,7 @@ public class InventoryService {
         int qty = positive(req.getQty(), "转入数量必须大于 0");
         InventoryPendingStock pending = requirePending(inventory.getId(), pendingRefNo);
         if (qty > safeInt(pending.getPendingQty())) {
-            throw new RuntimeException("转入数量不能超过该待产单号的待产库存");
+            throw new RuntimeException("转入数量不能超过该在产单号的在产库存");
         }
 
         int nextPendingQty = safeInt(pending.getPendingQty()) - qty;
@@ -211,7 +211,7 @@ public class InventoryService {
         if (req.getPendingQty() != null || !isBlank(req.getPendingRefNo())) {
             String pendingRefNo = normalizePendingRef(req.getPendingRefNo());
             if (pendingRefNo.isEmpty()) {
-                throw new RuntimeException("修改待产库存时必须选择待产单号");
+                throw new RuntimeException("修改在产库存时必须选择在产单号");
             }
             int pendingQty = nonNegativeOrDefault(req.getPendingQty(), 0);
             InventoryPendingStock pending = findPendingForUpdate(inventory.getId(), pendingRefNo);
@@ -454,7 +454,7 @@ public class InventoryService {
     }
 
     private void addPending(Integer inventoryId, String pendingRefNo, int qty) {
-        int safeQty = positive(qty, "待产库存数量必须大于 0");
+        int safeQty = positive(qty, "在产库存数量必须大于 0");
         InventoryPendingStock pending = findPendingForUpdate(inventoryId, pendingRefNo);
         if (pending == null) {
             pending = new InventoryPendingStock();
@@ -492,11 +492,11 @@ public class InventoryService {
 
     private InventoryPendingStock requirePending(Integer inventoryId, String pendingRefNo) {
         if (isBlank(pendingRefNo)) {
-            throw new RuntimeException("请先选择待产单号");
+            throw new RuntimeException("请先选择在产单号");
         }
         InventoryPendingStock pending = findPendingForUpdate(inventoryId, pendingRefNo);
         if (pending == null || safeInt(pending.getPendingQty()) <= 0) {
-            throw new RuntimeException("该待产单号没有可转入库存");
+            throw new RuntimeException("该在产单号没有可转入库存");
         }
         return pending;
     }

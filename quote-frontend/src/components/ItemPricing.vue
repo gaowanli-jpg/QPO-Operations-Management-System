@@ -43,6 +43,12 @@
           <el-table-column prop="version" label="版本" width="80" align="center" />
           <el-table-column prop="description" label="名称/描述" min-width="150" show-overflow-tooltip />
           <el-table-column prop="qty" label="数量" width="70" align="center" />
+          <el-table-column label="材料毛重(kg)" width="120" align="right">
+            <template #default="scope">{{ formatWeight(scope.row.materialGrossWeight) }}</template>
+          </el-table-column>
+          <el-table-column label="零件净重(kg)" width="120" align="right">
+            <template #default="scope">{{ formatWeight(scope.row.partNetWeight) }}</template>
+          </el-table-column>
           <el-table-column label="重复" width="90" align="center">
             <template #default="scope">
               <el-tag v-if="repeatItemMap.has(itemIdentityKey(scope.row))" type="success" size="small">重复</el-tag>
@@ -151,6 +157,26 @@
               <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="长度(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
               <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="外径(m)"><el-input-number v-model="matForm.outR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
               <el-col :span="12" v-if="matForm.shape === '管材'"><el-form-item label="内径(m)"><el-input-number v-model="matForm.inR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="20" class="weight-row">
+              <el-col :span="12">
+                <el-form-item label="材料毛重(kg)">
+                  <el-input :model-value="calculatedWeight.toFixed(3)" disabled class="full-width" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="零件净重(kg)">
+                  <el-input-number
+                    v-model="matForm.netWeight"
+                    :min="0"
+                    :step="0.01"
+                    :precision="3"
+                    placeholder="图纸未标注可不填"
+                    controls-position="right"
+                    class="full-width"
+                  />
+                </el-form-item>
+              </el-col>
             </el-row>
             <p class="material-summary">
               毛坯体积：{{ calculatedVolume.toFixed(6) }} m³，毛坯重量：{{ calculatedWeight.toFixed(3) }} kg，材料单价：{{ currentUnitPrice.toFixed(2) }} 元/kg，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
@@ -320,6 +346,10 @@ const normalizeGlobalConfig = (config) => {
 const numberOrZero = (value) => {
   const numericValue = Number(value || 0)
   return Number.isFinite(numericValue) ? numericValue : 0
+}
+const formatWeight = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(3) : '-'
 }
 const toMetricDimension = (value, unit = 'm') => {
   if (value === null || value === undefined || value === '') return null
@@ -503,7 +533,7 @@ const dialogVisible = ref(false)
 const currentRow = ref(null)
 const submitLoading = ref(false)
 
-const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null })
+const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: 0 })
 const processRoute = ref([])
 let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
@@ -691,6 +721,7 @@ const openQuoteDialog = (row) => {
   matForm.T = toMetricDimension(savedDimensions.T, savedDimensionUnit)
   matForm.outR = toMetricDimension(savedDimensions.outR, savedDimensionUnit)
   matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
+  matForm.netWeight = numberOrZero(row.partNetWeight ?? savedMaterialData.netWeight ?? 0)
 
   if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
     processRoute.value = mergeRoutesByGlobalOrder(row.processRoute, globalConfig.value.processRoute)
@@ -750,11 +781,16 @@ const submitCurrentQuote = async () => {
   
   const payload = {
     itemId: currentRow.value.id,
+    partNetWeight: numberOrZero(matForm.netWeight),
     materialData: {
       name: matForm.materialName,
       shape: matForm.shape,
       volume: calculatedVolume.value,
       weight: calculatedWeight.value,
+      grossWeight: calculatedWeight.value,
+      grossWeightUnit: 'kg',
+      netWeight: numberOrZero(matForm.netWeight),
+      netWeightUnit: 'kg',
       density: currentDensity.value,
       densityUnit: 'kg/m3',
       unitPrice: currentUnitPrice.value,
@@ -895,11 +931,16 @@ const submitCurrentQuote = async () => {
   background: var(--erp-surface-soft);
 }
 
-.dimension-row {
+.dimension-row,
+.weight-row {
   margin-top: 4px;
   padding: 10px;
   border-radius: 6px;
   background: var(--erp-surface);
+}
+
+.weight-row {
+  margin-top: 10px;
 }
 
 .material-summary {

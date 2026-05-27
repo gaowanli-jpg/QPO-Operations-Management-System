@@ -11,6 +11,9 @@ public class QuoteSubmitReq {
     // 材料填报数据：包含名称、毛坯重量等
     private Map<String, Object> materialData;
 
+    // 图纸标注的零件净重，单位 kg；未填写时按 0 保存
+    private Double partNetWeight;
+
     // 工序矩阵：前端动态增加的每一列工艺，都作为一个对象放在这个列表里
     private List<ProcessSubmitDTO> processRoute;
 

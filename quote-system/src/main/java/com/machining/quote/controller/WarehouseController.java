@@ -61,7 +61,7 @@ public class WarehouseController {
     @PostMapping("/inventory/transfer-pending")
     public Map<String, Object> transferPendingToStock(@RequestBody InventoryTransferReq req) {
         InventoryMaster saved = inventoryService.transferPendingToStock(req);
-        return success("待产库存已转入已入库库存", saved);
+        return success("在产库存已转入已入库库存", saved);
     }
 
     @PostMapping("/inventory/modify")

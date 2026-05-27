@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h2>仓库部：库存管理</h2>
-            <p>先选择客户，再维护该客户手工录入的图号版本、已入库库存和待产库存。</p>
+            <p>先选择客户，再维护该客户手工录入的图号版本、已入库库存和在产库存。</p>
           </div>
           <div class="header-actions">
             <el-select
@@ -52,8 +52,8 @@
         <el-table-column prop="partNo" label="图号" min-width="160" fixed />
         <el-table-column prop="version" label="版本" width="90" align="center" />
         <el-table-column prop="inStockQty" label="已入库库存" width="120" align="center" />
-        <el-table-column prop="pendingQty" label="待产库存" width="120" align="center" />
-        <el-table-column label="待产单号" min-width="220">
+        <el-table-column prop="pendingQty" label="在产库存" width="120" align="center" />
+        <el-table-column label="在产单号" min-width="220">
           <template #default="{ row }">
             <el-space wrap v-if="row.pendingRows && row.pendingRows.length">
               <el-tag
@@ -62,7 +62,7 @@
                 size="small"
                 type="info"
               >
-                {{ pending.pendingRefNo }}：{{ pending.pendingQty }}
+                {{ displayPendingRefNo(pending.pendingRefNo) }}：{{ pending.pendingQty }}
               </el-tag>
             </el-space>
             <span v-else class="muted">无</span>
@@ -107,30 +107,30 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
-        <el-tab-pane label="新增待产" name="pending">
+        <el-tab-pane label="新增在产" name="pending">
           <el-form :model="pendingForm" label-width="120px">
-            <el-form-item label="待产单号" required>
-              <el-input v-model="pendingForm.pendingRefNo" placeholder="输入待产单号" />
+            <el-form-item label="在产单号" required>
+              <el-input v-model="pendingForm.pendingRefNo" placeholder="输入在产单号" />
             </el-form-item>
-            <el-form-item label="待产数量" required>
+            <el-form-item label="在产数量" required>
               <el-input-number v-model="pendingForm.qty" :min="1" :precision="0" controls-position="right" class="qty-input" />
             </el-form-item>
           </el-form>
         </el-tab-pane>
-        <el-tab-pane label="待产转入库" name="transfer">
+        <el-tab-pane label="在产转入库" name="transfer">
           <el-alert
-            title="选择待产单号后，转入数量必须小于等于该单号剩余待产库存。"
+            title="选择在产单号后，转入数量必须小于等于该单号剩余在产库存。"
             type="info"
             :closable="false"
             class="notice-alert"
           />
           <el-form :model="transferForm" label-width="120px">
-            <el-form-item label="待产单号" required>
-              <el-select v-model="transferForm.pendingRefNo" placeholder="选择待产单号" class="full-width">
+            <el-form-item label="在产单号" required>
+              <el-select v-model="transferForm.pendingRefNo" placeholder="选择在产单号" class="full-width">
                 <el-option
                   v-for="pending in pendingRows"
                   :key="pending.id || pending.pendingRefNo"
-                  :label="`${pending.pendingRefNo}（剩余 ${pending.pendingQty}）`"
+                  :label="`${displayPendingRefNo(pending.pendingRefNo)}（剩余 ${pending.pendingQty}）`"
                   :value="pending.pendingRefNo"
                 />
               </el-select>
@@ -164,22 +164,22 @@
           </div>
         </el-form-item>
         <el-divider />
-        <el-form-item label="待产单号">
+        <el-form-item label="在产单号">
           <el-select
             v-model="modifyForm.pendingRefNo"
-            placeholder="选择待产单号"
+            placeholder="选择在产单号"
             class="pending-select"
             @change="syncPendingQty"
           >
             <el-option
               v-for="pending in pendingRows"
               :key="pending.id || pending.pendingRefNo"
-              :label="`${pending.pendingRefNo}（当前 ${pending.pendingQty}）`"
+              :label="`${displayPendingRefNo(pending.pendingRefNo)}（当前 ${pending.pendingQty}）`"
               :value="pending.pendingRefNo"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="待产库存">
+        <el-form-item label="在产库存">
           <div class="inline-control-row">
             <el-input-number
               v-model="modifyForm.pendingQty"
@@ -196,7 +196,7 @@
               :loading="saving"
               @click="submitModifyPending"
             >
-              保存待产库存
+              保存在产库存
             </el-button>
           </div>
         </el-form-item>
@@ -238,6 +238,8 @@ const selectedPendingQty = computed(() => {
   const selected = pendingRows.value.find(row => row.pendingRefNo === transferForm.pendingRefNo)
   return selected ? selected.pendingQty : 1
 })
+
+const displayPendingRefNo = (value) => String(value || '').replaceAll('待产', '在产')
 
 const loadCustomers = async () => {
   try {
@@ -342,7 +344,7 @@ const loadPendingRows = async (inventoryId) => {
   } catch (error) {
     console.error(error)
     pendingRows.value = []
-    ElMessage.error('待产单号加载失败。')
+    ElMessage.error('在产单号加载失败。')
   }
 }
 
@@ -354,7 +356,7 @@ const submitAddStock = async () => {
     if (addMode.value === 'pending') {
       if (!pendingForm.pendingRefNo.trim()) {
         saving.value = false
-        return ElMessage.warning('请填写待产单号。')
+        return ElMessage.warning('请填写在产单号。')
       }
       response = await axios.post(`${API_BASE_URL}/api/warehouse/inventory/add-stock`, {
         inventoryId: activeRow.value.id,
@@ -365,11 +367,11 @@ const submitAddStock = async () => {
     } else if (addMode.value === 'transfer') {
       if (!transferForm.pendingRefNo) {
         saving.value = false
-        return ElMessage.warning('请选择待产单号。')
+        return ElMessage.warning('请选择在产单号。')
       }
       if (transferForm.qty > selectedPendingQty.value) {
         saving.value = false
-        return ElMessage.warning('转入数量不能超过该待产单号的待产库存。')
+        return ElMessage.warning('转入数量不能超过该在产单号的在产库存。')
       }
       response = await axios.post(`${API_BASE_URL}/api/warehouse/inventory/transfer-pending`, {
         inventoryId: activeRow.value.id,
@@ -428,7 +430,7 @@ const submitModifyInStock = async () => {
 
 const submitModifyPending = async () => {
   if (!activeRow.value) return
-  if (!modifyForm.pendingRefNo) return ElMessage.warning('请选择待产单号。')
+  if (!modifyForm.pendingRefNo) return ElMessage.warning('请选择在产单号。')
   saving.value = true
   try {
     const response = await axios.post(`${API_BASE_URL}/api/warehouse/inventory/modify`, {
@@ -455,7 +457,7 @@ const deleteInventory = async (row) => {
   const label = formatPartVersion(row)
   try {
     await ElMessageBox.confirm(
-      `确认彻底删除库存「${label}」？已入库库存 ${row.inStockQty || 0}、待产库存 ${row.pendingQty || 0} 都会被删除，且不可恢复。`,
+      `确认彻底删除库存「${label}」？已入库库存 ${row.inStockQty || 0}、在产库存 ${row.pendingQty || 0} 都会被删除，且不可恢复。`,
       '删除库存',
       {
         confirmButtonText: '彻底删除',

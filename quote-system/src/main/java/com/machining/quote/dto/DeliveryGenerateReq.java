@@ -9,6 +9,7 @@ import java.util.List;
 public class DeliveryGenerateReq {
     private Integer rfqId;
     private String projectNo;
+    private String internalProjectNo;
     private LocalDate startDate;
     private String arrangeType;
     private List<DeliveryItemReq> items;

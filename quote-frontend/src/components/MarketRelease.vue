@@ -30,7 +30,7 @@
 
             <el-form label-width="80px" class="ticket-form">
               <el-form-item label="RFQ号">
-                <el-input v-model="releaseForm.projectNo" placeholder="默认取 RFQ 号" />
+                <el-input v-model="releaseForm.projectNo" placeholder="默认取 RFQ 号" disabled />
               </el-form-item>
               <el-form-item label="开工日期">
                 <el-date-picker
@@ -53,7 +53,7 @@
               <div class="panel-title compact">内部目标交期调整</div>
               <el-input-number
                 v-model="internalShiftDays"
-                :min="1"
+                :min="0"
                 :max="365"
                 :precision="0"
                 controls-position="right"
@@ -81,12 +81,22 @@
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
+            <div class="internal-project-panel">
+              <div class="panel-title compact">内部项目号</div>
+              <el-input
+                v-model="releaseForm.internalProjectNo"
+                placeholder="请输入内部项目号"
+                maxlength="100"
+                clearable
+              />
+            </div>
+
             <div class="main-actions">
               <el-button
                 type="success"
                 size="large"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0"
+                :disabled="selectedRows.length === 0 || !releaseForm.internalProjectNo.trim()"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -156,6 +166,7 @@
               </el-button>
             </div>
             <el-table :data="ticketList" border stripe height="280" v-loading="loadingTickets || deleting">
+              <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -181,6 +192,7 @@
               </el-button>
             </div>
             <el-table :data="processSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
+              <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
@@ -231,7 +243,7 @@ const processSheetList = ref([])
 const selectedRows = ref([])
 const itemTableRef = ref(null)
 const acceptedQtyMap = reactive({})
-const internalShiftDays = ref(1)
+const internalShiftDays = ref(0)
 
 const loading = ref(false)
 const loadingTickets = ref(false)
@@ -243,6 +255,7 @@ const adjustingInternalLeadTime = ref(false)
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
   projectNo: '',
+  internalProjectNo: '',
   startDate: today,
   arrangeType: '计划'
 })
@@ -280,6 +293,7 @@ const loadOrder = async (rfqId) => {
     orderInfo.value = response.data.orderInfo || {}
     await loadInternalTargetItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''
+    releaseForm.internalProjectNo = ''
     selectedRows.value = []
     await loadTickets(rfqId)
     await loadProcessSheets(rfqId)
@@ -343,7 +357,7 @@ const adjustInternalLeadTime = async (direction) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
   const days = Math.abs(Number(internalShiftDays.value || 0)) * direction
-  if (!days) return ElMessage.warning('请输入调整天数。')
+  if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
 
   adjustingInternalLeadTime.value = true
   try {
@@ -372,6 +386,8 @@ const adjustInternalLeadTime = async (direction) => {
 const submitTicket = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
+  const internalProjectNo = releaseForm.internalProjectNo.trim()
+  if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')
 
   const unquoted = selectedRows.value.filter(row => row.finalUnitPrice == null)
   if (unquoted.length > 0) {
@@ -389,6 +405,7 @@ const submitTicket = async () => {
     const payload = {
       rfqId: selectedRfqId.value,
       projectNo: releaseForm.projectNo,
+      internalProjectNo,
       startDate: releaseForm.startDate,
       arrangeType: releaseForm.arrangeType,
       items: selectedRows.value.map(row => ({
@@ -405,7 +422,7 @@ const submitTicket = async () => {
     }
   } catch (error) {
     console.error(error)
-    ElMessage.error('提单生成请求失败。')
+    ElMessage.error(error.response?.data?.message || '提单生成请求失败。')
   } finally {
     submitting.value = false
   }
@@ -599,6 +616,12 @@ onMounted(loadOrders)
 
 .internal-lead-panel {
   margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+
+.internal-project-panel {
+  margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--erp-border-soft);
 }

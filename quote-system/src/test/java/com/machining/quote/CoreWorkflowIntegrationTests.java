@@ -4,12 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.InventorySaveReq;
 import com.machining.quote.dto.InventoryStockOpReq;
+import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -22,10 +25,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 @SpringBootTest(properties = {
         "erp.auth.enabled=false",
@@ -36,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CoreWorkflowIntegrationTests {
     @Autowired
     private OrderRfqMapper orderMapper;
+    @Autowired
+    private DictMaterialMapper materialMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
@@ -48,6 +55,50 @@ class CoreWorkflowIntegrationTests {
     private DeliveryService deliveryService;
     @Autowired
     private EngineerService engineerService;
+
+    @Test
+    void quoteSavePersistsGrossAndNetWeights() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("WEIGHT-" + System.nanoTime());
+        order.setCustomerName("重量客户");
+        order.setStatus("待工程部评估");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo("W-100");
+        item.setVersion("A");
+        item.setDescription("重量测试件");
+        item.setQty(2);
+        item.setDrawingUrl("/uploads/test/W-100.pdf");
+        item.setStatus("待核价");
+        itemMapper.insert(item);
+
+        String materialName = "TEST-MAT-" + System.nanoTime();
+        DictMaterial material = new DictMaterial();
+        material.setMaterialName(materialName);
+        material.setRemarks("");
+        material.setPlateDensity(7850.0);
+        material.setPlatePrice(7.1);
+        materialMapper.insert(material);
+
+        QuoteSubmitReq req = new QuoteSubmitReq();
+        req.setItemId(item.getId());
+        req.setPartNetWeight(1.23);
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("name", materialName);
+        materialData.put("shape", "板材");
+        materialData.put("dimensionUnit", "m");
+        materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
+        req.setMaterialData(materialData);
+        req.setProcessRoute(List.of());
+
+        engineerService.calculateAndSaveQuote(req);
+
+        ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+        assertThat(saved.getMaterialGrossWeight()).isCloseTo(1.57, within(0.000001));
+        assertThat(saved.getPartNetWeight()).isCloseTo(1.23, within(0.000001));
+    }
 
     @Test
     void deliveryGenerationConsumesInStockBeforePendingInventory() {
@@ -91,6 +142,7 @@ class CoreWorkflowIntegrationTests {
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
+        req.setInternalProjectNo("IP-001");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(5);
@@ -105,6 +157,8 @@ class CoreWorkflowIntegrationTests {
                 .containsExactly(1, 2, 2);
         assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
                 .containsOnly(LocalDate.of(2026, 3, 22));
+        assertThat(tickets).extracting(OrderDeliveryTicket::getInternalProjectNo)
+                .containsOnly("IP-001");
 
         InventoryMaster after = inventoryService.findByCustomerPartAndVersion("TEST客户", "P-100", "A");
         assertThat(after.getInStockQty()).isZero();
@@ -118,6 +172,8 @@ class CoreWorkflowIntegrationTests {
         sheetQw.eq("item_id", item.getId());
         assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getDeliveryDate)
                 .containsOnly(LocalDate.of(2026, 3, 22));
+        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getInternalProjectNo)
+                .containsOnly("IP-001");
     }
 
     @Test

@@ -32,7 +32,7 @@
               <div class="panel-title compact">交期调整</div>
               <el-input-number
                 v-model="shiftDays"
-                :min="1"
+                :min="0"
                 :max="365"
                 :precision="0"
                 controls-position="right"
@@ -140,14 +140,15 @@
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择已报价 RFQ 订单"
-      :orders="quotedOrders"
+      :orders="orders"
+      :allowed-statuses="['已报价']"
       @select="handleOrderSelected"
     />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Check, DocumentChecked, Download, Minus, Plus, Refresh } from '@element-plus/icons-vue'
@@ -161,14 +162,12 @@ const orderInfo = ref({})
 const itemList = ref([])
 const selectedRows = ref([])
 const orderPickerVisible = ref(false)
-const shiftDays = ref(1)
+const shiftDays = ref(0)
 const savingRowMap = reactive({})
 
 const loadingOrders = ref(false)
 const loadingItems = ref(false)
 const adjusting = ref(false)
-
-const quotedOrders = computed(() => orders.value.filter(order => order.status === '已报价'))
 
 const loadOrders = async () => {
   loadingOrders.value = true
@@ -223,7 +222,7 @@ const applyShift = async (direction) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
   const days = Math.abs(Number(shiftDays.value || 0)) * direction
-  if (!days) return ElMessage.warning('请输入调整天数。')
+  if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
 
   adjusting.value = true
   try {

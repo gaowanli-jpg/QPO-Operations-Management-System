@@ -17,6 +17,7 @@ public class OrderProcessSheet {
 
     private Integer rfqId;
     private Integer itemId;
+    private String internalProjectNo;
     private String partNo;
     private String version;
     private String description;

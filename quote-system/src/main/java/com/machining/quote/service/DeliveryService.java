@@ -54,6 +54,13 @@ public class DeliveryService {
 
         LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
         String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
+        String internalProjectNo = req.getInternalProjectNo() == null ? "" : req.getInternalProjectNo().trim();
+        if (internalProjectNo.isEmpty()) {
+            throw new RuntimeException("内部项目号不能为空");
+        }
+        if (internalProjectNo.length() > 100) {
+            throw new RuntimeException("内部项目号不能超过 100 个字符");
+        }
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
         List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
@@ -80,27 +87,27 @@ public class DeliveryService {
             if (inventory != null) {
                 int stockUsed = inventoryService.consumeInStock(inventory.getId(), remaining);
                 if (stockUsed > 0) {
-                    createdTickets.add(insertTicket(order, item, projectNo, startDate, stockUsed,
+                    createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, stockUsed,
                             "已入库库存", "库存冲销"));
                     remaining -= stockUsed;
                 }
 
                 for (InventoryService.PendingConsumption consumption : inventoryService.consumePending(inventory.getId(), remaining)) {
-                    createdTickets.add(insertTicket(order, item, projectNo, startDate, consumption.qty(),
+                    createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, consumption.qty(),
                             remarkOrDefault(consumption.pendingRefNo(), "冲销待产"), "待产冲销"));
                     remaining -= consumption.qty();
                 }
             }
 
             if (remaining > 0) {
-                createdTickets.add(insertTicket(order, item, projectNo, startDate, remaining,
+                createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, remaining,
                         item.getRemark(), arrangeType));
             }
 
             item.setStatus(acceptedQty < safeInt(item.getQty()) ? "已部分提单" : "已生成提单");
             itemMapper.updateById(item);
 
-            insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)));
+            insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)), internalProjectNo);
         }
 
         refreshOrderTicketStatus(order.getId());
@@ -154,12 +161,13 @@ public class DeliveryService {
         auditService.record("PROCESS_SHEET_DELETE", "order_process_sheet", sheetId, sheet, null);
     }
 
-    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String projectNo,
+    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String internalProjectNo, String projectNo,
                                              LocalDate startDate, int qty, String remark, String arrangeType) {
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(order.getId());
         ticket.setItemId(item.getId());
         ticket.setOrderType(isBlank(item.getOrderType()) ? "新订单" : item.getOrderType());
+        ticket.setInternalProjectNo(internalProjectNo);
         ticket.setProjectNo(projectNo);
         ticket.setPartNo(item.getPartNo());
         ticket.setQty(qty);
@@ -300,7 +308,7 @@ public class DeliveryService {
         return "待工程部评估";
     }
 
-    private void insertProcessSheet(ItemQuoteVersion item, int acceptedQty, LocalDate deliveryDate) {
+    private void insertProcessSheet(ItemQuoteVersion item, int acceptedQty, LocalDate deliveryDate, String internalProjectNo) {
         QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
         qw.eq("rfq_id", item.getRfqId()).eq("item_id", item.getId());
         if (processSheetMapper.selectCount(qw) > 0) {
@@ -310,6 +318,7 @@ public class DeliveryService {
         OrderProcessSheet sheet = new OrderProcessSheet();
         sheet.setRfqId(item.getRfqId());
         sheet.setItemId(item.getId());
+        sheet.setInternalProjectNo(internalProjectNo);
         sheet.setPartNo(item.getPartNo());
         sheet.setVersion(item.getVersion());
         sheet.setDescription(item.getDescription());

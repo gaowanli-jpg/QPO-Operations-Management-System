@@ -50,6 +50,7 @@ public class ExcelExportService {
         List<List<String>> head = List.of(
                 List.of("序号"),
                 List.of("订单类型"),
+                List.of("内部项目号"),
                 List.of("RFQ号"),
                 List.of("图号"),
                 List.of("数量"),
@@ -68,6 +69,7 @@ public class ExcelExportService {
             rows.add(List.of(
                     i + 1,
                     safe(ticket.getOrderType()),
+                    safe(ticket.getInternalProjectNo()),
                     safe(ticket.getProjectNo()),
                     safe(ticket.getPartNo()),
                     safeInt(ticket.getQty()),
@@ -88,9 +90,10 @@ public class ExcelExportService {
         QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<OrderProcessSheet> sheets = processSheetMapper.selectList(qw);
+        String rfqNo = resolveRfqNo(rfqId);
 
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
+        for (String title : List.of("序号", "内部项目号", "RFQ号", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(List.of(title));
         }
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
@@ -103,6 +106,8 @@ public class ExcelExportService {
             OrderProcessSheet sheet = sheets.get(i);
             List<Object> row = new ArrayList<>();
             row.add(i + 1);
+            row.add(safe(sheet.getInternalProjectNo()));
+            row.add(rfqNo);
             row.add(safe(sheet.getPartNo()));
             row.add(safe(sheet.getVersion()));
             row.add(safe(sheet.getDescription()));
@@ -119,7 +124,7 @@ public class ExcelExportService {
                 if (j < routes.size()) {
                     Map<String, Object> route = routes.get(j);
                     row.add(safe(route.get("processName")));
-                    row.add(safe(route.get("inputVal")));
+                    row.add(processSheetWorkHour(route));
                 } else {
                     row.add("");
                     row.add("");
@@ -328,6 +333,12 @@ public class ExcelExportService {
         return prefix + "-" + suffix;
     }
 
+    private String resolveRfqNo(Integer rfqId) {
+        OrderRfq order = orderRfqMapper.selectById(rfqId);
+        String rfqNo = order == null ? "" : safe(order.getRfqNo());
+        return rfqNo.isEmpty() ? "RFQ-" + rfqId : rfqNo;
+    }
+
     private List<Map<String, Object>> normalizeProcessRoute(Object routeObject) {
         if (routeObject == null) {
             return List.of();
@@ -416,6 +427,15 @@ public class ExcelExportService {
             return inputVal * unitRate;
         }
         return inputVal;
+    }
+
+    private String processSheetWorkHour(Map<String, Object> route) {
+        String calcType = safe(route.get("calcType")).trim();
+        String sourceType = safe(route.get("sourceType")).trim();
+        if ("非工时费用".equals(calcType) || "extra".equalsIgnoreCase(sourceType)) {
+            return "";
+        }
+        return safe(route.get("inputVal"));
     }
 
     private double sumCost(List<Map<String, Object>> rows) {

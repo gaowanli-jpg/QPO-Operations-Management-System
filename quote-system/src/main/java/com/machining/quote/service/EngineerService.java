@@ -52,14 +52,24 @@ public class EngineerService {
         ItemQuoteVersion item = itemMapper.selectById(req.getItemId());
         if (item == null) throw new RuntimeException("找不到该零件！");
         ItemQuoteVersion before = copyItem(item);
-        saveCalculatedQuote(item, req.getMaterialData(), req.getProcessRoute());
+        saveCalculatedQuote(item, req.getMaterialData(), req.getProcessRoute(), req.getPartNetWeight());
         auditService.record("ITEM_QUOTE_SAVE", "item_quote_version", item.getId(), before, itemMapper.selectById(item.getId()));
     }
 
-    private void saveCalculatedQuote(ItemQuoteVersion item, Map<String, Object> materialData, List<QuoteSubmitReq.ProcessSubmitDTO> processRoute) {
+    private void saveCalculatedQuote(ItemQuoteVersion item, Map<String, Object> materialData,
+                                     List<QuoteSubmitReq.ProcessSubmitDTO> processRoute, Double partNetWeight) {
         int qty = item.getQty() == null ? 0 : item.getQty();
+        if (materialData == null) {
+            materialData = new LinkedHashMap<>();
+        }
 
         double materialCost = calculateMaterialCost(materialData);
+        double materialGrossWeight = nonNegativeOrZero(doubleValue(materialData.get("weight")));
+        double normalizedPartNetWeight = nonNegativeOrZero(partNetWeight);
+        materialData.put("grossWeight", materialGrossWeight);
+        materialData.put("grossWeightUnit", "kg");
+        materialData.put("netWeight", normalizedPartNetWeight);
+        materialData.put("netWeightUnit", "kg");
 
         double totalProcessCost = 0.0;
         Set<String> extraFeeNames = loadEnabledExtraFeeNames();
@@ -103,6 +113,8 @@ public class EngineerService {
         item.setMaterialData(materialData);
         item.setProcessRoute(processRoute);
         item.setFeeData(feeBreakdown);
+        item.setMaterialGrossWeight(materialGrossWeight);
+        item.setPartNetWeight(normalizedPartNetWeight);
         item.setBaseCost(baseCost);
         item.setFinalUnitPrice(finalUnitPrice);
         item.setFinalTotalPrice(finalTotalPrice);
@@ -234,7 +246,7 @@ public class EngineerService {
 
             Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
             List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
-            saveCalculatedQuote(item, materialData, processRoute);
+            saveCalculatedQuote(item, materialData, processRoute, sourceItem.getPartNetWeight());
 
             Map<String, Object> applied = buildRepeatItemInfo(item, source);
             applied.put("finalUnitPrice", item.getFinalUnitPrice());
@@ -280,10 +292,14 @@ public class EngineerService {
         copy.setSurfaceTreatment(source.getSurfaceTreatment());
         copy.setUnit(source.getUnit());
         copy.setLeadTime(source.getLeadTime());
+        copy.setQuoteLeadTime(source.getQuoteLeadTime());
+        copy.setInternalTargetLeadTime(source.getInternalTargetLeadTime());
         copy.setRemark(source.getRemark());
         copy.setMaterialData(source.getMaterialData());
         copy.setProcessRoute(source.getProcessRoute());
         copy.setFeeData(source.getFeeData());
+        copy.setMaterialGrossWeight(source.getMaterialGrossWeight());
+        copy.setPartNetWeight(source.getPartNetWeight());
         copy.setBaseCost(source.getBaseCost());
         copy.setFinalUnitPrice(source.getFinalUnitPrice());
         copy.setFinalTotalPrice(source.getFinalTotalPrice());
@@ -741,6 +757,10 @@ public class EngineerService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private double nonNegativeOrZero(Double value) {
+        return value == null || value < 0 ? 0.0 : value;
     }
 
     private Integer intValue(Object value) {

@@ -28,6 +28,8 @@ public class ItemQuoteVersion {
     private String quoteLeadTime;     // 报价单使用的交货周期，为空时沿用客户询价交期
     private String internalTargetLeadTime; // 提单和工艺表使用的内部目标交期，为空时沿用报价交期
     private String remark;            // 备注
+    private Double materialGrossWeight; // 材料毛重，单位 kg
+    private Double partNetWeight;       // 零件净重，单位 kg
 
     // 指定用 Jackson 把前端传来的复杂矩阵对象，自动变成 JSONB 存进数据库
     @TableField(typeHandler = JsonbTypeHandler.class)

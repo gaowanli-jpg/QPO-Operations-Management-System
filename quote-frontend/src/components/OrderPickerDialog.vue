@@ -87,7 +87,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-const statusOptions = ['待工程部评估', '已报价', '部分已提单', '已生成提单']
+const DEFAULT_STATUS_OPTIONS = ['待工程部评估', '已报价', '部分已提单', '已生成提单']
 
 const props = defineProps({
   modelValue: {
@@ -99,6 +99,10 @@ const props = defineProps({
     default: '选择订单'
   },
   orders: {
+    type: Array,
+    default: () => []
+  },
+  allowedStatuses: {
     type: Array,
     default: () => []
   }
@@ -114,6 +118,11 @@ const visible = computed({
 const selectedCustomer = ref('')
 const selectedStatus = ref('')
 const selectedOrderId = ref(null)
+
+const statusOptions = computed(() => {
+  const allowed = props.allowedStatuses.filter(Boolean)
+  return allowed.length > 0 ? allowed : DEFAULT_STATUS_OPTIONS
+})
 
 const customerOptions = computed(() => {
   const names = props.orders

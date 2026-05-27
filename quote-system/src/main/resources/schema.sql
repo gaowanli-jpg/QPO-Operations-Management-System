@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     quote_lead_time VARCHAR(50),
     internal_target_lead_time VARCHAR(50),
     remark TEXT,
+    material_gross_weight NUMERIC(14, 4),
+    part_net_weight NUMERIC(14, 4) DEFAULT 0,
     material_data JSONB,
     process_route JSONB,
     fee_data JSONB,
@@ -47,6 +49,8 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS fee_data JSONB;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS quote_lead_time VARCHAR(50);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_target_lead_time VARCHAR(50);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4) DEFAULT 0;
 ALTER TABLE item_quote_version
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB,
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
@@ -165,6 +169,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     rfq_id INTEGER REFERENCES order_rfq(id),
     item_id INTEGER REFERENCES item_quote_version(id),
     order_type VARCHAR(20),
+    internal_project_no VARCHAR(100),
     project_no VARCHAR(100),
     part_no VARCHAR(100),
     qty INTEGER,
@@ -178,11 +183,13 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
 );
 
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES item_quote_version(id);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS order_process_sheet (
     id SERIAL PRIMARY KEY,
     rfq_id INTEGER REFERENCES order_rfq(id),
     item_id INTEGER REFERENCES item_quote_version(id),
+    internal_project_no VARCHAR(100),
     part_no VARCHAR(100),
     version VARCHAR(20),
     description TEXT,
@@ -198,6 +205,7 @@ CREATE TABLE IF NOT EXISTS order_process_sheet (
 
 ALTER TABLE order_process_sheet
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB;
+ALTER TABLE order_process_sheet ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(100);
 
 CREATE INDEX IF NOT EXISTS idx_order_process_sheet_rfq ON order_process_sheet(rfq_id);
 
