@@ -15,6 +15,7 @@ public class InventoryMaster {
 
     private String customerName;
     private String partNo;
+    private String version;
     private Integer inStockQty;
     private Integer pendingQty;
     private String pendingRefNo;

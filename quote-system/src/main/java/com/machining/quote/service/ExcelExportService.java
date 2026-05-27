@@ -88,7 +88,7 @@ public class ExcelExportService {
         List<OrderProcessSheet> sheets = processSheetMapper.selectList(qw);
 
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "图号", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
+        for (String title : List.of("序号", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(List.of(title));
         }
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
@@ -102,6 +102,7 @@ public class ExcelExportService {
             List<Object> row = new ArrayList<>();
             row.add(i + 1);
             row.add(safe(sheet.getPartNo()));
+            row.add(safe(sheet.getVersion()));
             row.add(safe(sheet.getDescription()));
             row.add(safeInt(sheet.getQty()));
             row.add(safe(sheet.getMaterialName()));

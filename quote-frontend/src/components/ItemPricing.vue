@@ -40,11 +40,12 @@
           height="450"
         >
           <el-table-column prop="partNo" label="图号" width="140" fixed />
+          <el-table-column prop="version" label="版本" width="80" align="center" />
           <el-table-column prop="description" label="名称/描述" min-width="150" show-overflow-tooltip />
           <el-table-column prop="qty" label="数量" width="70" align="center" />
           <el-table-column label="重复" width="90" align="center">
             <template #default="scope">
-              <el-tag v-if="repeatItemMap.has(normalizePartNo(scope.row.partNo))" type="success" size="small">重复</el-tag>
+              <el-tag v-if="repeatItemMap.has(itemIdentityKey(scope.row))" type="success" size="small">重复</el-tag>
               <el-tag v-else type="info" size="small">新件</el-tag>
             </template>
           </el-table-column>
@@ -101,7 +102,7 @@
           <!-- 弹窗顶部状态条：左边是信息，右边是图纸操作 -->
           <div class="dialog-header-bar">
             <el-alert
-              :title="`当前核价：${currentRow?.partNo} - ${currentRow?.description} (需生产: ${currentRow?.qty} 件)`"
+              :title="`当前核价：${currentRow?.partNo} / ${currentRow?.version || 'V1'} - ${currentRow?.description} (需生产: ${currentRow?.qty} 件)`"
               type="success"
               show-icon
               :closable="false"
@@ -208,7 +209,7 @@
           <div class="drawing-pane-header">
             <div>
               <div class="drawing-pane-title">当前零件图纸</div>
-              <div class="drawing-pane-subtitle">{{ currentRow?.partNo || '-' }}</div>
+              <div class="drawing-pane-subtitle">{{ currentRow ? `${currentRow.partNo || '-'} / ${currentRow.version || 'V1'}` : '-' }}</div>
             </div>
             <el-button
               v-if="currentRow?.drawingUrl"
@@ -301,6 +302,11 @@ const combinedProcessOptions = computed(() => [
 
 const defaultGlobalConfig = () => ({ materialName: '45#', shape: '板材', processRoute: [] })
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
+const normalizeVersion = (value) => {
+  const text = String(value || '').trim().toUpperCase()
+  return text || 'V1'
+}
+const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 
 const normalizeGlobalConfig = (config) => {
   if (!config || typeof config !== 'object') return defaultGlobalConfig()
@@ -324,7 +330,7 @@ const toMetricDimension = (value, unit = 'm') => {
 const repeatItemMap = computed(() => {
   const map = new Map()
   ;(repeatAnalysis.value?.repeatItems || []).forEach(item => {
-    map.set(normalizePartNo(item.partNo), item)
+    map.set(itemIdentityKey(item), item)
   })
   return map
 })

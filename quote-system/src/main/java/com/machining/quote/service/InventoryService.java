@@ -48,9 +48,10 @@ public class InventoryService {
         QueryWrapper<InventoryMaster> qw = new QueryWrapper<>();
         qw.eq("customer_name", customer);
         if (!isBlank(keyword)) {
-            qw.like("part_no", normalizePartNo(keyword));
+            String normalizedKeyword = normalizePartNo(keyword);
+            qw.and(wrapper -> wrapper.like("part_no", normalizedKeyword).or().like("version", normalizeVersion(keyword)));
         }
-        qw.orderByAsc("part_no").orderByAsc("id");
+        qw.orderByAsc("part_no").orderByAsc("version").orderByAsc("id");
 
         return inventoryMapper.selectList(qw).stream()
                 .map(this::buildInventoryRow)
@@ -101,6 +102,7 @@ public class InventoryService {
     public InventoryMaster saveOrUpdate(InventorySaveReq req) {
         String customerName = normalizeCustomerName(req.getCustomerName());
         String partNo = normalizePartNo(req.getPartNo());
+        String version = normalizeVersion(req.getVersion());
         if (customerName.isEmpty()) {
             throw new RuntimeException("请先选择客户名称");
         }
@@ -108,12 +110,13 @@ public class InventoryService {
             throw new RuntimeException("图号不能为空");
         }
 
-        InventoryMaster inventory = findByCustomerAndPartNoForUpdate(customerName, partNo);
+        InventoryMaster inventory = findByCustomerPartAndVersionForUpdate(customerName, partNo, version);
         Object before = inventory == null ? null : buildInventoryRow(inventory);
         if (inventory == null) {
             inventory = new InventoryMaster();
             inventory.setCustomerName(customerName);
             inventory.setPartNo(partNo);
+            inventory.setVersion(version);
             inventory.setInStockQty(nonNegativeOrDefault(req.getInStockQty(), 0));
             inventory.setPendingQty(0);
             inventory.setPendingRefNo(null);
@@ -139,7 +142,7 @@ public class InventoryService {
 
     @Transactional
     public InventoryMaster addStock(InventoryStockOpReq req) {
-        InventoryMaster inventory = requireInventory(req.getInventoryId(), req.getCustomerName(), req.getPartNo());
+        InventoryMaster inventory = requireInventory(req.getInventoryId(), req.getCustomerName(), req.getPartNo(), req.getVersion());
         Object before = buildInventoryRow(inventory);
         int qty = positive(req.getQty(), "新增数量必须大于 0");
         String stockType = req.getStockType() == null ? "" : req.getStockType().trim().toUpperCase();
@@ -244,25 +247,36 @@ public class InventoryService {
     }
 
     public InventoryMaster findByCustomerAndPartNo(String customerName, String partNo) {
+        return findByCustomerPartAndVersion(customerName, partNo, null);
+    }
+
+    public InventoryMaster findByCustomerPartAndVersion(String customerName, String partNo, String version) {
         String customer = normalizeCustomerName(customerName);
         String normalizedPartNo = normalizePartNo(partNo);
+        String normalizedVersion = normalizeVersion(version);
         if (customer.isEmpty() || normalizedPartNo.isEmpty()) {
             return null;
         }
         QueryWrapper<InventoryMaster> qw = new QueryWrapper<>();
         qw.eq("customer_name", customer);
         qw.eq("part_no", normalizedPartNo);
+        qw.eq("version", normalizedVersion);
         qw.last("LIMIT 1");
         return inventoryMapper.selectOne(qw);
     }
 
     public InventoryMaster findByCustomerAndPartNoForUpdate(String customerName, String partNo) {
+        return findByCustomerPartAndVersionForUpdate(customerName, partNo, null);
+    }
+
+    public InventoryMaster findByCustomerPartAndVersionForUpdate(String customerName, String partNo, String version) {
         String customer = normalizeCustomerName(customerName);
         String normalizedPartNo = normalizePartNo(partNo);
+        String normalizedVersion = normalizeVersion(version);
         if (customer.isEmpty() || normalizedPartNo.isEmpty()) {
             return null;
         }
-        return inventoryMapper.selectByCustomerAndPartNoForUpdate(customer, normalizedPartNo);
+        return inventoryMapper.selectByCustomerPartAndVersionForUpdate(customer, normalizedPartNo, normalizedVersion);
     }
 
     @Transactional
@@ -317,10 +331,15 @@ public class InventoryService {
 
     @Transactional
     public void restorePending(String customerName, String partNo, String pendingRefNo, int qty) {
+        restorePending(customerName, partNo, null, pendingRefNo, qty);
+    }
+
+    @Transactional
+    public void restorePending(String customerName, String partNo, String version, String pendingRefNo, int qty) {
         if (qty <= 0) {
             return;
         }
-        InventoryMaster inventory = findOrCreate(customerName, partNo);
+        InventoryMaster inventory = findOrCreate(customerName, partNo, version);
         Object before = buildInventoryRow(inventory);
         String safeRefNo = normalizePendingRef(pendingRefNo);
         addPending(inventory.getId(), safeRefNo.isEmpty() ? "冲销待产" : safeRefNo, qty);
@@ -330,10 +349,15 @@ public class InventoryService {
 
     @Transactional
     public void restoreInStock(String customerName, String partNo, int qty) {
+        restoreInStock(customerName, partNo, null, qty);
+    }
+
+    @Transactional
+    public void restoreInStock(String customerName, String partNo, String version, int qty) {
         if (qty <= 0) {
             return;
         }
-        InventoryMaster inventory = findOrCreate(customerName, partNo);
+        InventoryMaster inventory = findOrCreate(customerName, partNo, version);
         Object before = buildInventoryRow(inventory);
         inventory.setInStockQty(safeInt(inventory.getInStockQty()) + qty);
         inventory.setUpdatedAt(LocalDateTime.now());
@@ -345,26 +369,33 @@ public class InventoryService {
         return partNo == null ? "" : partNo.trim().toUpperCase();
     }
 
+    public String normalizeVersion(String version) {
+        String normalized = version == null ? "" : version.trim().toUpperCase();
+        return normalized.isEmpty() ? "V1" : normalized;
+    }
+
     public String normalizeCustomerName(String customerName) {
         return customerName == null ? "" : customerName.trim();
     }
 
-    private InventoryMaster findOrCreate(String customerName, String partNo) {
+    private InventoryMaster findOrCreate(String customerName, String partNo, String version) {
         String customer = normalizeCustomerName(customerName);
         String normalizedPartNo = normalizePartNo(partNo);
+        String normalizedVersion = normalizeVersion(version);
         if (customer.isEmpty()) {
             customer = UNKNOWN_CUSTOMER;
         }
         if (normalizedPartNo.isEmpty()) {
             throw new RuntimeException("图号不能为空");
         }
-        InventoryMaster inventory = findByCustomerAndPartNoForUpdate(customer, normalizedPartNo);
+        InventoryMaster inventory = findByCustomerPartAndVersionForUpdate(customer, normalizedPartNo, normalizedVersion);
         if (inventory != null) {
             return inventory;
         }
         inventory = new InventoryMaster();
         inventory.setCustomerName(customer);
         inventory.setPartNo(normalizedPartNo);
+        inventory.setVersion(normalizedVersion);
         inventory.setInStockQty(0);
         inventory.setPendingQty(0);
         inventory.setPendingRefNo(null);
@@ -373,13 +404,13 @@ public class InventoryService {
         return inventory;
     }
 
-    private InventoryMaster requireInventory(Integer inventoryId, String customerName, String partNo) {
+    private InventoryMaster requireInventory(Integer inventoryId, String customerName, String partNo, String version) {
         if (inventoryId != null) {
             return requireInventoryById(inventoryId);
         }
-        InventoryMaster inventory = findByCustomerAndPartNoForUpdate(customerName, partNo);
+        InventoryMaster inventory = findByCustomerPartAndVersionForUpdate(customerName, partNo, version);
         if (inventory == null) {
-            throw new RuntimeException("请先录入该客户的图号");
+            throw new RuntimeException("请先录入该客户的图号和版本");
         }
         return inventory;
     }
@@ -400,6 +431,7 @@ public class InventoryService {
         row.put("id", inventory.getId());
         row.put("customerName", inventory.getCustomerName());
         row.put("partNo", inventory.getPartNo());
+        row.put("version", inventory.getVersion());
         row.put("inStockQty", safeInt(inventory.getInStockQty()));
         row.put("pendingQty", safeInt(inventory.getPendingQty()));
         row.put("pendingRefNo", inventory.getPendingRefNo());

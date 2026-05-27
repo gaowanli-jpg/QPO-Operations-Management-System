@@ -95,6 +95,7 @@
           <el-tab-pane label="零件明细">
             <el-table :data="orderDetail.itemList || []" border stripe height="360">
               <el-table-column prop="partNo" label="图号" min-width="140" fixed />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="status" label="状态" width="110" />
@@ -116,6 +117,7 @@
           <el-tab-pane label="提单行">
             <el-table :data="orderDetail.ticketList || []" border stripe height="320">
               <el-table-column prop="partNo" label="图号" min-width="140" />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="arrangeType" label="安排类型" width="110" />
               <el-table-column prop="startDate" label="开工日期" width="120" />
@@ -127,6 +129,7 @@
           <el-tab-pane label="工艺表行">
             <el-table :data="orderDetail.processSheetList || []" border stripe height="320">
               <el-table-column prop="partNo" label="图号" min-width="140" />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="deliveryDate" label="交期" width="120" />

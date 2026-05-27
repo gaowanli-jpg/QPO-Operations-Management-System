@@ -222,7 +222,7 @@ public class MarketController {
                 dbItem.setQty(item.getQty());
                 dbItem.setMaterialName(item.getMaterialName());
                 dbItem.setSurfaceTreatment(item.getSurfaceTreatment());
-                dbItem.setVersion(item.getVersion());
+                dbItem.setVersion(normalizeVersion(item.getVersion()));
                 dbItem.setUnit(item.getUnit());
                 dbItem.setLeadTime(item.getLeadTime());
                 dbItem.setRemark(item.getRemark());
@@ -280,11 +280,17 @@ public class MarketController {
         Map<String, Object> missingItem = new LinkedHashMap<>();
         String partNo = item.getPartNo();
         missingItem.put("partNo", partNo == null || partNo.isBlank() ? normalizedPartNo : partNo.trim());
+        missingItem.put("version", normalizeVersion(item.getVersion()));
         missingItem.put("description", item.getDescription());
         missingItem.put("qty", item.getQty());
         return missingItem;
     }
 
     private record DrawingFileInfo(String partNo, String originalFilename, String url) {
+    }
+
+    private String normalizeVersion(String version) {
+        String normalized = version == null ? "" : version.trim().toUpperCase();
+        return normalized.isEmpty() ? "V1" : normalized;
     }
 }

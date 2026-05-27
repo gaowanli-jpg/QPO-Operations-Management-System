@@ -47,10 +47,20 @@ class OperationalWorkflowIntegrationTests {
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setRfqId(order.getId());
         item.setPartNo("T-001");
+        item.setVersion("A");
         item.setDescription("测试补图零件");
         item.setQty(10);
         item.setStatus("待核价");
         itemMapper.insert(item);
+
+        ItemQuoteVersion itemVersionB = new ItemQuoteVersion();
+        itemVersionB.setRfqId(order.getId());
+        itemVersionB.setPartNo("T-001");
+        itemVersionB.setVersion("B");
+        itemVersionB.setDescription("测试补图零件B版");
+        itemVersionB.setQty(10);
+        itemVersionB.setStatus("待核价");
+        itemMapper.insert(itemVersionB);
 
         MockMultipartFile drawing = new MockMultipartFile(
                 "drawings",
@@ -64,6 +74,8 @@ class OperationalWorkflowIntegrationTests {
 
         ItemQuoteVersion updated = itemMapper.selectById(item.getId());
         assertThat(updated.getDrawingUrl()).contains("/uploads/");
+        ItemQuoteVersion updatedVersionB = itemMapper.selectById(itemVersionB.getId());
+        assertThat(updatedVersionB.getDrawingUrl()).contains("/uploads/");
 
         Path uploaded = Path.of(System.getProperty("java.io.tmpdir"), "quote-test", "uploads");
         Files.createDirectories(uploaded);

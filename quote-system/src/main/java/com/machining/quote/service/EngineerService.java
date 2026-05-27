@@ -129,13 +129,13 @@ public class EngineerService {
             throw new RuntimeException("该订单没有零件明细，不能完成报价");
         }
 
-        List<String> unquotedPartNos = items.stream()
+        List<String> unquotedItems = items.stream()
                 .filter(this::hasDrawing)
                 .filter(item -> item.getFinalUnitPrice() == null)
-                .map(ItemQuoteVersion::getPartNo)
+                .map(this::itemLabel)
                 .toList();
-        if (!unquotedPartNos.isEmpty()) {
-            throw new RuntimeException("仍有未报价的有图零件：" + String.join("、", unquotedPartNos));
+        if (!unquotedItems.isEmpty()) {
+            throw new RuntimeException("仍有未报价的有图零件：" + String.join("、", unquotedItems));
         }
 
         for (ItemQuoteVersion item : items) {
@@ -167,8 +167,7 @@ public class EngineerService {
         Map<String, String> materialShapeMap = new LinkedHashMap<>();
 
         for (ItemQuoteVersion item : currentItems) {
-            String normalizedPartNo = normalizePartNo(item.getPartNo());
-            RepeatSource source = repeatSources.get(normalizedPartNo);
+            RepeatSource source = repeatSources.get(itemKey(item));
             if (source == null) {
                 newItems.add(buildBasicItemInfo(item));
                 continue;
@@ -215,7 +214,7 @@ public class EngineerService {
         List<Map<String, Object>> skippedItems = new ArrayList<>();
 
         for (ItemQuoteVersion item : currentItems) {
-            RepeatSource source = repeatSources.get(normalizePartNo(item.getPartNo()));
+            RepeatSource source = repeatSources.get(itemKey(item));
             if (source == null) {
                 skippedItems.add(buildSkipInfo(item, "未找到同客户已提单历史重复件"));
                 continue;
@@ -312,14 +311,14 @@ public class EngineerService {
 
     private Map<String, RepeatSource> findRepeatSources(OrderRfq order, List<ItemQuoteVersion> currentItems) {
         Map<String, RepeatSource> result = new LinkedHashMap<>();
-        Set<String> currentPartNos = new HashSet<>();
+        Set<String> currentItemKeys = new HashSet<>();
         for (ItemQuoteVersion item : currentItems) {
-            String partNo = normalizePartNo(item.getPartNo());
-            if (!partNo.isEmpty()) {
-                currentPartNos.add(partNo);
+            String itemKey = itemKey(item);
+            if (!itemKey.startsWith("||")) {
+                currentItemKeys.add(itemKey);
             }
         }
-        if (currentPartNos.isEmpty() || isBlank(order.getCustomerName())) {
+        if (currentItemKeys.isEmpty() || isBlank(order.getCustomerName())) {
             return result;
         }
 
@@ -333,14 +332,14 @@ public class EngineerService {
             QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
             ticketQw.eq("rfq_id", historicalOrder.getId());
             List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQw);
-            Set<String> ticketPartNos = new HashSet<>();
+            Set<String> ticketItemKeys = new HashSet<>();
             for (OrderDeliveryTicket ticket : tickets) {
-                String partNo = normalizePartNo(ticket.getPartNo());
-                if (currentPartNos.contains(partNo)) {
-                    ticketPartNos.add(partNo);
+                String itemKey = itemKey(ticket.getPartNo(), ticket.getVersion());
+                if (currentItemKeys.contains(itemKey)) {
+                    ticketItemKeys.add(itemKey);
                 }
             }
-            if (ticketPartNos.isEmpty()) {
+            if (ticketItemKeys.isEmpty()) {
                 continue;
             }
 
@@ -348,13 +347,13 @@ public class EngineerService {
             itemQw.eq("rfq_id", historicalOrder.getId());
             List<ItemQuoteVersion> historicalItems = itemMapper.selectList(itemQw);
             for (ItemQuoteVersion historicalItem : historicalItems) {
-                String partNo = normalizePartNo(historicalItem.getPartNo());
-                if (!ticketPartNos.contains(partNo) || result.containsKey(partNo) || !hasReusableQuote(historicalItem)) {
+                String itemKey = itemKey(historicalItem);
+                if (!ticketItemKeys.contains(itemKey) || result.containsKey(itemKey) || !hasReusableQuote(historicalItem)) {
                     continue;
                 }
-                result.put(partNo, new RepeatSource(historicalOrder, historicalItem));
+                result.put(itemKey, new RepeatSource(historicalOrder, historicalItem));
             }
-            if (result.size() == currentPartNos.size()) {
+            if (result.size() == currentItemKeys.size()) {
                 break;
             }
         }
@@ -432,6 +431,8 @@ public class EngineerService {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("itemId", item.getId());
         row.put("partNo", item.getPartNo());
+        row.put("version", normalizeVersion(item.getVersion()));
+        row.put("identityKey", itemKey(item));
         row.put("description", item.getDescription());
         row.put("qty", item.getQty());
         row.put("status", item.getStatus());
@@ -445,6 +446,7 @@ public class EngineerService {
         row.put("sourceRfqNo", source.order().getRfqNo());
         row.put("sourceProjectName", source.order().getProjectName());
         row.put("sourceItemId", source.item().getId());
+        row.put("sourceVersion", normalizeVersion(source.item().getVersion()));
         row.put("sourceFinalUnitPrice", source.item().getFinalUnitPrice());
         row.put("sourceProcessRoute", source.item().getProcessRoute());
         return row;
@@ -534,6 +536,23 @@ public class EngineerService {
 
     private String normalizePartNo(String value) {
         return value == null ? "" : value.trim().toUpperCase();
+    }
+
+    private String normalizeVersion(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase();
+        return normalized.isEmpty() ? "V1" : normalized;
+    }
+
+    private String itemKey(ItemQuoteVersion item) {
+        return itemKey(item.getPartNo(), item.getVersion());
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
+    private String itemLabel(ItemQuoteVersion item) {
+        return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
     }
 
     private DictProcess findProcess(String processName) {

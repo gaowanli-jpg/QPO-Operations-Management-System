@@ -106,11 +106,11 @@ public class OrderManagementService {
         }
 
         List<ItemQuoteVersion> items = listItems(rfqId);
-        Map<String, ItemQuoteVersion> itemMap = new HashMap<>();
+        Map<String, List<ItemQuoteVersion>> itemMap = new HashMap<>();
         for (ItemQuoteVersion item : items) {
             String normalizedPartNo = normalizePartNo(item.getPartNo());
             if (!normalizedPartNo.isEmpty()) {
-                itemMap.put(normalizedPartNo, item);
+                itemMap.computeIfAbsent(normalizedPartNo, key -> new ArrayList<>()).add(item);
             }
         }
 
@@ -133,13 +133,15 @@ public class OrderManagementService {
             }
 
             String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMap.keySet());
-            ItemQuoteVersion item = itemMap.get(partNoFromFileName);
-            if (item == null) {
+            List<ItemQuoteVersion> matchedItems = itemMap.get(partNoFromFileName);
+            if (matchedItems == null || matchedItems.isEmpty()) {
                 unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
                 continue;
             }
-            if (!isBlank(item.getDrawingUrl())) {
-                alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+            if (matchedItems.stream().allMatch(item -> !isBlank(item.getDrawingUrl()))) {
+                for (ItemQuoteVersion item : matchedItems) {
+                    alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+                }
                 continue;
             }
 
@@ -152,10 +154,16 @@ public class OrderManagementService {
             }
 
             String fileUrl = orderFilePathService.drawingUrl(order, newFilename);
-            item.setDrawingUrl(fileUrl);
-            item.setStatus("待核价");
-            itemMapper.updateById(item);
-            boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
+            for (ItemQuoteVersion item : matchedItems) {
+                if (!isBlank(item.getDrawingUrl())) {
+                    alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+                    continue;
+                }
+                item.setDrawingUrl(fileUrl);
+                item.setStatus("待核价");
+                itemMapper.updateById(item);
+                boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
+            }
         }
 
         if (!boundItems.isEmpty()) {
@@ -307,6 +315,7 @@ public class OrderManagementService {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("itemId", item.getId());
                     row.put("partNo", item.getPartNo());
+                    row.put("version", item.getVersion());
                     row.put("drawingUrl", item.getDrawingUrl());
                     row.put("expectedPath", file.toString());
                     missingFiles.add(row);
@@ -315,6 +324,7 @@ public class OrderManagementService {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("itemId", item.getId());
                 row.put("partNo", item.getPartNo());
+                row.put("version", item.getVersion());
                 row.put("drawingUrl", item.getDrawingUrl());
                 row.put("expectedPath", "");
                 missingFiles.add(row);
@@ -380,6 +390,7 @@ public class OrderManagementService {
     private Map<String, Object> buildItemResult(ItemQuoteVersion item, String fileName, String reason) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("partNo", item.getPartNo());
+        result.put("version", item.getVersion());
         result.put("description", item.getDescription());
         result.put("fileName", fileName);
         result.put("reason", reason);

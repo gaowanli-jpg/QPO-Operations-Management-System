@@ -68,20 +68,20 @@ public class DeliveryService {
                 throw new RuntimeException("零件不存在，ID=" + line.getItemId());
             }
             if (!req.getRfqId().equals(item.getRfqId())) {
-                throw new RuntimeException("零件 " + item.getPartNo() + " 不属于当前询价单");
+                throw new RuntimeException("零件 " + itemLabel(item) + " 不属于当前询价单");
             }
 
             int acceptedQty = line.getAcceptedQty() == null ? safeInt(item.getQty()) : line.getAcceptedQty();
             if (acceptedQty <= 0) {
-                throw new RuntimeException("零件 " + item.getPartNo() + " 的通过数量必须大于 0");
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
             }
             if (acceptedQty > safeInt(item.getQty())) {
-                throw new RuntimeException("零件 " + item.getPartNo() + " 的通过数量不能超过询价数量");
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量不能超过询价数量");
             }
-            assertNoDuplicateTicket(req.getRfqId(), item.getPartNo());
+            assertNoDuplicateTicket(item);
 
             int remaining = acceptedQty;
-            InventoryMaster inventory = inventoryService.findByCustomerAndPartNo(order.getCustomerName(), item.getPartNo());
+            InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), item.getPartNo(), item.getVersion());
             if (inventory != null) {
                 int stockUsed = inventoryService.consumeInStock(inventory.getId(), remaining);
                 if (stockUsed > 0) {
@@ -187,7 +187,11 @@ public class DeliveryService {
             }
         }
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", ticket.getRfqId()).eq("part_no", ticket.getPartNo()).last("LIMIT 1");
+        qw.eq("rfq_id", ticket.getRfqId()).eq("part_no", ticket.getPartNo());
+        if (!isBlank(ticket.getVersion())) {
+            qw.eq("version", normalizeVersion(ticket.getVersion()));
+        }
+        qw.last("LIMIT 1");
         return itemMapper.selectOne(qw);
     }
 
@@ -203,9 +207,9 @@ public class DeliveryService {
         OrderRfq order = ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
         String customerName = order == null ? "" : order.getCustomerName();
         if (arrangeType.contains("待产冲销")) {
-            inventoryService.restorePending(customerName, ticket.getPartNo(), ticket.getRemark(), ticket.getQty());
+            inventoryService.restorePending(customerName, ticket.getPartNo(), ticket.getVersion(), ticket.getRemark(), ticket.getQty());
         } else if (arrangeType.contains("库存冲销")) {
-            inventoryService.restoreInStock(customerName, ticket.getPartNo(), ticket.getQty());
+            inventoryService.restoreInStock(customerName, ticket.getPartNo(), ticket.getVersion(), ticket.getQty());
         }
     }
 
@@ -213,9 +217,10 @@ public class DeliveryService {
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
         qw.eq("rfq_id", item.getRfqId());
         if (item.getId() != null) {
-            qw.and(wrapper -> wrapper.eq("item_id", item.getId()).or().eq("part_no", item.getPartNo()));
+            qw.eq("item_id", item.getId());
         } else {
             qw.eq("part_no", item.getPartNo());
+            qw.eq("version", normalizeVersion(item.getVersion()));
         }
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(qw);
         int generatedQty = tickets.stream().mapToInt(ticket -> safeInt(ticket.getQty())).sum();
@@ -258,13 +263,13 @@ public class DeliveryService {
         }
 
         Map<Integer, Integer> qtyByItemId = new HashMap<>();
-        Map<String, Integer> legacyQtyByPartNo = new HashMap<>();
+        Map<String, Integer> legacyQtyByPartVersion = new HashMap<>();
         for (OrderDeliveryTicket ticket : tickets) {
             int qty = safeInt(ticket.getQty());
             if (ticket.getItemId() != null) {
                 qtyByItemId.merge(ticket.getItemId(), qty, Integer::sum);
             } else if (!isBlank(ticket.getPartNo())) {
-                legacyQtyByPartNo.merge(ticket.getPartNo(), qty, Integer::sum);
+                legacyQtyByPartVersion.merge(itemKey(ticket.getPartNo(), ticket.getVersion()), qty, Integer::sum);
             }
         }
 
@@ -279,7 +284,7 @@ public class DeliveryService {
 
         boolean allQuotedItemsTicketed = quotedItems.stream().allMatch(item -> {
             int generatedQty = qtyByItemId.getOrDefault(item.getId(), 0)
-                    + legacyQtyByPartNo.getOrDefault(item.getPartNo(), 0);
+                    + legacyQtyByPartVersion.getOrDefault(itemKey(item.getPartNo(), item.getVersion()), 0);
             return generatedQty >= safeInt(item.getQty());
         });
         order.setStatus(allQuotedItemsTicketed ? "已生成提单" : "部分已提单");
@@ -311,6 +316,7 @@ public class DeliveryService {
         sheet.setRfqId(item.getRfqId());
         sheet.setItemId(item.getId());
         sheet.setPartNo(item.getPartNo());
+        sheet.setVersion(item.getVersion());
         sheet.setDescription(item.getDescription());
         sheet.setQty(acceptedQty);
         sheet.setMaterialName(item.getMaterialName());
@@ -323,12 +329,29 @@ public class DeliveryService {
         processSheetMapper.insert(sheet);
     }
 
-    private void assertNoDuplicateTicket(Integer rfqId, String partNo) {
+    private void assertNoDuplicateTicket(ItemQuoteVersion item) {
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).eq("part_no", partNo);
+        qw.eq("rfq_id", item.getRfqId()).eq("item_id", item.getId());
         if (ticketMapper.selectCount(qw) > 0) {
-            throw new RuntimeException("零件 " + partNo + " 已生成过提单，请勿重复扣减库存");
+            throw new RuntimeException("零件 " + itemLabel(item) + " 已生成过提单，请勿重复扣减库存");
         }
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
+    private String itemLabel(ItemQuoteVersion item) {
+        return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
+    }
+
+    private String normalizePartNo(String partNo) {
+        return partNo == null ? "" : partNo.trim().toUpperCase();
+    }
+
+    private String normalizeVersion(String version) {
+        String normalized = version == null ? "" : version.trim().toUpperCase();
+        return normalized.isEmpty() ? "V1" : normalized;
     }
 
     private LocalDate resolveDeliveryDate(LocalDate startDate, String leadTime) {

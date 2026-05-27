@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS inventory_master (
     id SERIAL PRIMARY KEY,
     customer_name VARCHAR(200) NOT NULL,
     part_no VARCHAR(100) NOT NULL,
+    version VARCHAR(20) NOT NULL DEFAULT 'V1',
     in_stock_qty INTEGER DEFAULT 0,
     pending_qty INTEGER DEFAULT 0,
     pending_ref_no VARCHAR(100),
@@ -116,13 +117,18 @@ CREATE TABLE IF NOT EXISTS inventory_master (
 );
 
 ALTER TABLE inventory_master ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200);
+ALTER TABLE inventory_master ADD COLUMN IF NOT EXISTS version VARCHAR(20);
 UPDATE inventory_master SET customer_name = '未指定客户' WHERE customer_name IS NULL OR customer_name = '';
+UPDATE inventory_master SET version = 'V1' WHERE version IS NULL OR TRIM(version) = '';
 ALTER TABLE inventory_master ALTER COLUMN customer_name SET NOT NULL;
+ALTER TABLE inventory_master ALTER COLUMN version SET DEFAULT 'V1';
+ALTER TABLE inventory_master ALTER COLUMN version SET NOT NULL;
 ALTER TABLE inventory_master ALTER COLUMN in_stock_qty SET DEFAULT 0;
 ALTER TABLE inventory_master ALTER COLUMN pending_qty SET DEFAULT 0;
 ALTER TABLE inventory_master DROP CONSTRAINT IF EXISTS inventory_master_part_no_key;
 DROP INDEX IF EXISTS inventory_master_part_no_key;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_customer_part ON inventory_master(customer_name, part_no);
+DROP INDEX IF EXISTS idx_inventory_customer_part;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_customer_part_version ON inventory_master(customer_name, part_no, version);
 CREATE INDEX IF NOT EXISTS idx_inventory_customer_name ON inventory_master(customer_name);
 
 CREATE TABLE IF NOT EXISTS inventory_pending_stock (
@@ -174,6 +180,7 @@ CREATE TABLE IF NOT EXISTS order_process_sheet (
     rfq_id INTEGER REFERENCES order_rfq(id),
     item_id INTEGER REFERENCES item_quote_version(id),
     part_no VARCHAR(100),
+    version VARCHAR(20),
     description TEXT,
     qty INTEGER,
     material_name VARCHAR(100),

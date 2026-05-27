@@ -86,6 +86,7 @@
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" />
               <el-table-column prop="partNo" label="图号" width="130" fixed />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
               <el-table-column label="通过数量" width="130" align="center">
@@ -121,6 +122,7 @@
             </div>
             <el-table :data="ticketList" border stripe height="280" v-loading="loadingTickets || deleting">
               <el-table-column prop="partNo" label="图号" width="130" />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="materialName" label="材料" width="110" show-overflow-tooltip />
               <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
@@ -145,6 +147,7 @@
             </div>
             <el-table :data="processSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
               <el-table-column prop="partNo" label="图号" width="130" />
+              <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="materialName" label="材料" width="120" show-overflow-tooltip />
@@ -332,7 +335,7 @@ const submitTicket = async () => {
 
 const deleteTicket = async (row) => {
   await ElMessageBox.confirm(
-    `确认删除提单行「${row.partNo}」数量 ${row.qty}？如果该行曾冲销库存，系统会恢复对应库存数量。`,
+    `确认删除提单行「${row.partNo} / ${row.version || 'V1'}」数量 ${row.qty}？如果该行曾冲销库存，系统会恢复对应库存数量。`,
     '删除提单行',
     { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
   )
@@ -352,7 +355,7 @@ const deleteTicket = async (row) => {
 
 const deleteProcessSheet = async (row) => {
   await ElMessageBox.confirm(
-    `确认删除工艺表行「${row.partNo}」？删除后可基于新的核价重新生成。`,
+    `确认删除工艺表行「${row.partNo} / ${row.version || 'V1'}」？删除后可基于新的核价重新生成。`,
     '删除工艺表行',
     { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
   )

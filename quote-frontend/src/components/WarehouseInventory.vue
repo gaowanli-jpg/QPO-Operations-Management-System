@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h2>仓库部：库存管理</h2>
-            <p>先选择客户，再维护该客户手工录入的图号、已入库库存和待产库存。</p>
+            <p>先选择客户，再维护该客户手工录入的图号版本、已入库库存和待产库存。</p>
           </div>
           <div class="header-actions">
             <el-select
@@ -26,7 +26,7 @@
             </el-select>
             <el-input
               v-model="keyword"
-              placeholder="按图号搜索"
+              placeholder="按图号或版本搜索"
               clearable
               :disabled="!selectedCustomer"
               class="search-input"
@@ -34,7 +34,7 @@
               @clear="loadInventory"
             />
             <el-button type="primary" :disabled="!selectedCustomer" @click="loadInventory">查询</el-button>
-            <el-button type="success" :disabled="!selectedCustomer" @click="openCreateDialog">录入图号</el-button>
+            <el-button type="success" :disabled="!selectedCustomer" @click="openCreateDialog">录入图号版本</el-button>
           </div>
         </div>
       </template>
@@ -50,6 +50,7 @@
         row-key="id"
       >
         <el-table-column prop="partNo" label="图号" min-width="160" fixed />
+        <el-table-column prop="version" label="版本" width="90" align="center" />
         <el-table-column prop="inStockQty" label="已入库库存" width="120" align="center" />
         <el-table-column prop="pendingQty" label="待产库存" width="120" align="center" />
         <el-table-column label="待产单号" min-width="220">
@@ -77,13 +78,16 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="createDialogVisible" title="录入图号" width="460px">
+    <el-dialog v-model="createDialogVisible" title="录入图号版本" width="460px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item label="客户名称">
           <el-input v-model="selectedCustomer" disabled />
         </el-form-item>
         <el-form-item label="图号" required>
           <el-input v-model="createForm.partNo" placeholder="例如 L20100000733" />
+        </el-form-item>
+        <el-form-item label="版本" required>
+          <el-input v-model="createForm.version" placeholder="例如 A / V1" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -93,7 +97,7 @@
     </el-dialog>
 
     <el-dialog v-model="addDialogVisible" title="新增库存" width="620px">
-      <div class="dialog-part-title">{{ activeRow?.partNo }}</div>
+      <div class="dialog-part-title">{{ formatPartVersion(activeRow) }}</div>
       <el-tabs v-model="addMode">
         <el-tab-pane label="直接入库" name="direct">
           <el-form :model="directForm" label-width="120px">
@@ -150,7 +154,7 @@
     </el-dialog>
 
     <el-dialog v-model="modifyDialogVisible" title="修改库存" width="620px">
-      <div class="dialog-part-title">{{ activeRow?.partNo }}</div>
+      <div class="dialog-part-title">{{ formatPartVersion(activeRow) }}</div>
       <el-form :model="modifyForm" label-width="120px">
         <el-form-item label="已入库库存">
           <div class="inline-control-row">
@@ -223,7 +227,7 @@ const activeRow = ref(null)
 const pendingRows = ref([])
 const addMode = ref('direct')
 
-const createForm = reactive({ partNo: '' })
+const createForm = reactive({ partNo: '', version: 'V1' })
 const directForm = reactive({ qty: 1 })
 const pendingForm = reactive({ pendingRefNo: '', qty: 1 })
 const transferForm = reactive({ pendingRefNo: '', qty: 1 })
@@ -274,17 +278,20 @@ const handleCustomerChange = async () => {
 
 const openCreateDialog = () => {
   createForm.partNo = ''
+  createForm.version = 'V1'
   createDialogVisible.value = true
 }
 
 const createInventory = async () => {
   if (!selectedCustomer.value) return ElMessage.warning('请先选择客户名称。')
   if (!createForm.partNo.trim()) return ElMessage.warning('请填写图号。')
+  if (!createForm.version.trim()) return ElMessage.warning('请填写版本。')
   saving.value = true
   try {
     const response = await axios.post(`${API_BASE_URL}/api/warehouse/inventory`, {
       customerName: selectedCustomer.value,
-      partNo: createForm.partNo
+      partNo: createForm.partNo,
+      version: createForm.version
     })
     if (response.data.success) {
       ElMessage.success(response.data.message)
@@ -453,6 +460,11 @@ const refreshActiveAfterModify = async () => {
       syncPendingQty()
     }
   }
+}
+
+const formatPartVersion = (row) => {
+  if (!row) return '-'
+  return `${row.partNo || '-'} / ${row.version || 'V1'}`
 }
 
 onMounted(async () => {

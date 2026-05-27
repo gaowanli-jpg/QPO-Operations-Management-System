@@ -34,11 +34,12 @@
 
           <el-table :data="itemList" border stripe height="450" v-loading="isLoading">
             <el-table-column prop="partNo" label="图号" width="140" />
+            <el-table-column prop="version" label="版本" width="80" align="center" />
             <el-table-column prop="description" label="物料描述" min-width="120" show-overflow-tooltip />
             <el-table-column prop="qty" label="数量" width="70" align="center" />
             <el-table-column label="重复" width="90" align="center">
               <template #default="scope">
-                <el-tag v-if="repeatItemMap.has(normalizePartNo(scope.row.partNo))" type="success" size="small">重复</el-tag>
+                <el-tag v-if="repeatItemMap.has(itemIdentityKey(scope.row))" type="success" size="small">重复</el-tag>
                 <el-tag v-else type="info" size="small">新件</el-tag>
               </template>
             </el-table-column>
@@ -200,6 +201,11 @@ const extraFeeOptions = ref([])
 const repeatAnalysis = ref(null)
 
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
+const normalizeVersion = (value) => {
+  const text = String(value || '').trim().toUpperCase()
+  return text || 'V1'
+}
+const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 const PROCESS_SORT_STEP = 10
 const numericSortNo = (value) => {
   const numericValue = Number(value)
@@ -229,7 +235,7 @@ const assignProcessSortNos = () => {
 const repeatItemMap = computed(() => {
   const map = new Map()
   ;(repeatAnalysis.value?.repeatItems || []).forEach(item => {
-    map.set(normalizePartNo(item.partNo), item)
+    map.set(itemIdentityKey(item), item)
   })
   return map
 })

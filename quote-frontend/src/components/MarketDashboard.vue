@@ -209,6 +209,7 @@ const buildDrawingReportHtml = (report) => {
           ${missingItems.map(item => `
             <div style="line-height: 1.7;">
               ${escapeHtml(item.partNo || '-')}
+              ${item.version ? `｜版本 ${escapeHtml(item.version)}` : ''}
               ${item.description ? `｜${escapeHtml(item.description)}` : ''}
               ${item.qty != null ? `｜数量 ${escapeHtml(item.qty)}` : ''}
             </div>
