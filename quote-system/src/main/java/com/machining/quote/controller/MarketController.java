@@ -103,6 +103,12 @@ public class MarketController {
         excelExportService.exportQuoteSheet(rfqId, response);
     }
 
+    @GetMapping("/export/quote/customer-lead-time/{rfqId}")
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    public void exportCustomerLeadTimeQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportCustomerLeadTimeQuoteSheet(rfqId, response);
+    }
+
     @PostMapping("/generate-ticket")
     public Map<String, Object> generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {
         Map<String, Object> result = new HashMap<>();

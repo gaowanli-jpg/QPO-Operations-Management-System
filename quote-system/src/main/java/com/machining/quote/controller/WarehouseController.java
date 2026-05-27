@@ -9,6 +9,7 @@ import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.InventoryPendingStock;
 import com.machining.quote.service.InventoryService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -67,6 +68,12 @@ public class WarehouseController {
     public Map<String, Object> modifyInventory(@RequestBody InventoryModifyReq req) {
         InventoryMaster saved = inventoryService.modify(req);
         return success("库存已修改", saved);
+    }
+
+    @DeleteMapping("/inventory/{inventoryId}")
+    public Map<String, Object> deleteInventory(@PathVariable Integer inventoryId) {
+        inventoryService.deleteInventory(inventoryId);
+        return success("库存记录已彻底删除", null);
     }
 
     private Map<String, Object> success(String message, Object data) {

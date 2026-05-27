@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import MarketDashboard from '../components/MarketDashboard.vue'
 import MarketRelease from '../components/MarketRelease.vue'
+import QuoteProcess from '../components/QuoteProcess.vue'
 import GlobalSetup from '../components/GlobalSetup.vue'
 import ItemPricing from '../components/ItemPricing.vue'
 import WarehouseInventory from '../components/WarehouseInventory.vue'
@@ -15,6 +16,7 @@ const routes = [
   { path: '/login', component: LoginView },
   { path: '/', redirect: '/market' },
   { path: '/market', component: MarketDashboard, meta: { roles: ['MARKET', 'ADMIN'] } },
+  { path: '/quote-process', component: QuoteProcess, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/release', component: MarketRelease, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/engineering', component: GlobalSetup, meta: { roles: ['ENGINEER', 'ADMIN'] } },
   { path: '/material-process', component: MaterialProcessManage, meta: { roles: ['ENGINEER', 'ADMIN'] } },

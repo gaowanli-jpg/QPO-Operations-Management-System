@@ -69,10 +69,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="updatedAt" label="更新时间" width="180" />
-        <el-table-column label="操作" width="210" align="center" fixed="right">
+        <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openAddDialog(row)">新增库存</el-button>
             <el-button type="warning" size="small" plain @click="openModifyDialog(row)">修改库存</el-button>
+            <el-button type="danger" size="small" plain @click="deleteInventory(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -210,7 +211,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { API_BASE_URL } from '../config'
 
 const customerOptions = ref([])
@@ -444,6 +445,47 @@ const submitModifyPending = async () => {
   } catch (error) {
     console.error(error)
     ElMessage.error(error.response?.data?.message || '修改请求失败。')
+  } finally {
+    saving.value = false
+  }
+}
+
+const deleteInventory = async (row) => {
+  if (!row?.id) return
+  const label = formatPartVersion(row)
+  try {
+    await ElMessageBox.confirm(
+      `确认彻底删除库存「${label}」？已入库库存 ${row.inStockQty || 0}、待产库存 ${row.pendingQty || 0} 都会被删除，且不可恢复。`,
+      '删除库存',
+      {
+        confirmButtonText: '彻底删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+  } catch {
+    return
+  }
+
+  saving.value = true
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/api/warehouse/inventory/${row.id}`)
+    if (response.data.success) {
+      ElMessage.success(response.data.message)
+      if (activeRow.value?.id === row.id) {
+        activeRow.value = null
+        addDialogVisible.value = false
+        modifyDialogVisible.value = false
+      }
+      await loadInventory()
+      await loadCustomers()
+    } else {
+      ElMessage.error(response.data.message || '删除库存失败。')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '删除库存请求失败。')
   } finally {
     saving.value = false
   }

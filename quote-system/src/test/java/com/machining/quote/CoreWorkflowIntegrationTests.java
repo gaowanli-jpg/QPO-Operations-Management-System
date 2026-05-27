@@ -7,9 +7,11 @@ import com.machining.quote.dto.InventoryStockOpReq;
 import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
@@ -19,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +40,8 @@ class CoreWorkflowIntegrationTests {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
+    private OrderProcessSheetMapper processSheetMapper;
     @Autowired
     private InventoryService inventoryService;
     @Autowired
@@ -60,6 +65,9 @@ class CoreWorkflowIntegrationTests {
         item.setQty(5);
         item.setMaterialName("45#钢");
         item.setVersion("A");
+        item.setLeadTime("2026-03-20");
+        item.setQuoteLeadTime("2026-03-25");
+        item.setInternalTargetLeadTime("2026-03-22");
         item.setDrawingUrl("/uploads/test/P-100.pdf");
         item.setFinalUnitPrice(10.0);
         item.setFinalTotalPrice(50.0);
@@ -95,6 +103,8 @@ class CoreWorkflowIntegrationTests {
                 .containsExactly("库存冲销", "待产冲销", "计划");
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(1, 2, 2);
+        assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
+                .containsOnly(LocalDate.of(2026, 3, 22));
 
         InventoryMaster after = inventoryService.findByCustomerPartAndVersion("TEST客户", "P-100", "A");
         assertThat(after.getInStockQty()).isZero();
@@ -103,6 +113,36 @@ class CoreWorkflowIntegrationTests {
         QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
         itemQw.eq("id", item.getId());
         assertThat(itemMapper.selectOne(itemQw).getStatus()).isEqualTo("已生成提单");
+
+        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
+        sheetQw.eq("item_id", item.getId());
+        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getDeliveryDate)
+                .containsOnly(LocalDate.of(2026, 3, 22));
+    }
+
+    @Test
+    void deleteInventoryRemovesMasterAndPendingRows() {
+        InventorySaveReq saveReq = new InventorySaveReq();
+        saveReq.setCustomerName("删除库存客户");
+        saveReq.setPartNo("DEL-100");
+        saveReq.setVersion("A");
+        saveReq.setInStockQty(3);
+        inventoryService.saveOrUpdate(saveReq);
+
+        InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion("删除库存客户", "DEL-100", "A");
+        InventoryStockOpReq pendingReq = new InventoryStockOpReq();
+        pendingReq.setInventoryId(inventory.getId());
+        pendingReq.setStockType("PENDING");
+        pendingReq.setPendingRefNo("WO-DEL");
+        pendingReq.setQty(2);
+        inventoryService.addStock(pendingReq);
+
+        assertThat(inventoryService.listPending(inventory.getId())).hasSize(1);
+
+        inventoryService.deleteInventory(inventory.getId());
+
+        assertThat(inventoryService.findByCustomerPartAndVersion("删除库存客户", "DEL-100", "A")).isNull();
+        assertThat(inventoryService.listPending(inventory.getId())).isEmpty();
     }
 
     @Test

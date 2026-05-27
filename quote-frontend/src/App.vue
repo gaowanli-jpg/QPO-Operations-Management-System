@@ -23,6 +23,11 @@
             <span>市场部：新单导入中心</span>
           </el-menu-item>
 
+          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/quote-process">
+            <el-icon><Document /></el-icon>
+            <span>市场部：报价单处理生成</span>
+          </el-menu-item>
+
           <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/release">
             <el-icon><Tickets /></el-icon>
             <span>市场部：议价与提单</span>

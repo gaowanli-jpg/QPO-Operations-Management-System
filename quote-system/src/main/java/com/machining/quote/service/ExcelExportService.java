@@ -37,6 +37,8 @@ public class ExcelExportService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderProcessSheetMapper processSheetMapper;
+    @Autowired
+    private LeadTimeService leadTimeService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -130,6 +132,14 @@ public class ExcelExportService {
     }
 
     public void exportQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        exportQuoteSheet(rfqId, response, true);
+    }
+
+    public void exportCustomerLeadTimeQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        exportQuoteSheet(rfqId, response, false);
+    }
+
+    private void exportQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime) throws IOException {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
@@ -140,7 +150,7 @@ public class ExcelExportService {
         List<List<Object>> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             ItemQuoteVersion item = items.get(i);
-            rows.add(buildQuoteRow(item, i + 1, maxRouteSize, feeNames));
+            rows.add(buildQuoteRow(item, i + 1, maxRouteSize, feeNames, useQuoteLeadTime));
         }
         write(response, buildFileName(rfqId, "报价单"), "报价单", head, rows);
     }
@@ -168,9 +178,9 @@ public class ExcelExportService {
         return head;
     }
 
-    private List<Object> buildQuoteRow(ItemQuoteVersion item, int index, int maxRouteSize, List<String> feeNames) {
+    private List<Object> buildQuoteRow(ItemQuoteVersion item, int index, int maxRouteSize, List<String> feeNames, boolean useQuoteLeadTime) {
         if (isMissingDrawing(item)) {
-            return buildMissingDrawingQuoteRow(item, index, maxRouteSize, feeNames);
+            return buildMissingDrawingQuoteRow(item, index, maxRouteSize, feeNames, useQuoteLeadTime);
         }
 
         Map<String, Object> materialData = normalizeMap(item.getMaterialData());
@@ -225,12 +235,12 @@ public class ExcelExportService {
         row.add(markupCost);
         row.add(unitPrice);
         row.add(totalPrice);
-        row.add(safe(item.getLeadTime()));
+        row.add(safe(resolveQuoteExportLeadTime(item, useQuoteLeadTime)));
         row.add(safe(item.getRemark()));
         return row;
     }
 
-    private List<Object> buildMissingDrawingQuoteRow(ItemQuoteVersion item, int index, int maxRouteSize, List<String> feeNames) {
+    private List<Object> buildMissingDrawingQuoteRow(ItemQuoteVersion item, int index, int maxRouteSize, List<String> feeNames, boolean useQuoteLeadTime) {
         List<Object> row = new ArrayList<>();
         row.add(index);
         row.add(safe(item.getPartNo()));
@@ -261,9 +271,13 @@ public class ExcelExportService {
         row.add("");
         row.add("");
         row.add("");
-        row.add(safe(item.getLeadTime()));
+        row.add(safe(resolveQuoteExportLeadTime(item, useQuoteLeadTime)));
         row.add(appendRemark(item.getRemark(), "无图，未核价"));
         return row;
+    }
+
+    private String resolveQuoteExportLeadTime(ItemQuoteVersion item, boolean useQuoteLeadTime) {
+        return useQuoteLeadTime ? leadTimeService.effectiveLeadTime(item) : item.getLeadTime();
     }
 
     private int resolveMaxRouteSize(List<ItemQuoteVersion> items) {

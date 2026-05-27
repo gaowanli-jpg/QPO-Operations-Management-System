@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     surface_treatment VARCHAR(255),
     unit VARCHAR(50),
     lead_time VARCHAR(100),
+    quote_lead_time VARCHAR(50),
+    internal_target_lead_time VARCHAR(50),
     remark TEXT,
     material_data JSONB,
     process_route JSONB,
@@ -43,6 +45,8 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
 );
 
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS fee_data JSONB;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS quote_lead_time VARCHAR(50);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_target_lead_time VARCHAR(50);
 ALTER TABLE item_quote_version
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB,
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,

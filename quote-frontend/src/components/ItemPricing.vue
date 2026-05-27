@@ -446,7 +446,7 @@ const loadRepeatAnalysis = async () => {
 const exportQuoteSheet = async () => {
   if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
   const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/quote/${rfqId.value}`,
+    `${API_BASE_URL}/api/market/export/quote/customer-lead-time/${rfqId.value}`,
     `quote-${rfqId.value}.xlsx`
   )
   if (!result.success) {

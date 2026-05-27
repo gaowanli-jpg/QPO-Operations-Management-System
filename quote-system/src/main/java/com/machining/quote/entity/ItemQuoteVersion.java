@@ -25,6 +25,8 @@ public class ItemQuoteVersion {
     private String surfaceTreatment;  // 表面处理
     private String unit;              // 单位
     private String leadTime;          // 交货周期(L/T)
+    private String quoteLeadTime;     // 报价单使用的交货周期，为空时沿用客户询价交期
+    private String internalTargetLeadTime; // 提单和工艺表使用的内部目标交期，为空时沿用报价交期
     private String remark;            // 备注
 
     // 指定用 Jackson 把前端传来的复杂矩阵对象，自动变成 JSONB 存进数据库

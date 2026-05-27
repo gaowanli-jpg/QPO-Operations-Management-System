@@ -1,15 +1,14 @@
 package com.machining.quote;
 
-import com.machining.quote.service.DeliveryService;
+import com.machining.quote.service.LeadTimeService;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DeliveryServiceDateParsingTests {
-    private final DeliveryService deliveryService = new DeliveryService();
+    private final LeadTimeService leadTimeService = new LeadTimeService();
 
     @Test
     void dotSeparatedLeadTimeIsTreatedAsExactDeliveryDate() {
@@ -39,12 +38,18 @@ class DeliveryServiceDateParsingTests {
         assertThat(deliveryDate).isEqualTo(LocalDate.of(2026, 3, 8));
     }
 
+    @Test
+    void shiftExactDateNormalizesQuoteLeadTime() {
+        assertThat(leadTimeService.shiftLeadTime("2026.03.20", 3)).isEqualTo("2026-03-23");
+        assertThat(leadTimeService.shiftLeadTime("2026-3-20", -2)).isEqualTo("2026-03-18");
+    }
+
+    @Test
+    void shiftDurationLeadTimeAdjustsDays() {
+        assertThat(leadTimeService.shiftLeadTime("7天", 3)).isEqualTo("10天");
+    }
+
     private LocalDate resolveDeliveryDate(String leadTime) {
-        return ReflectionTestUtils.invokeMethod(
-                deliveryService,
-                "resolveDeliveryDate",
-                LocalDate.of(2026, 5, 10),
-                leadTime
-        );
+        return leadTimeService.resolveDeliveryDate(LocalDate.of(2026, 5, 10), leadTime);
     }
 }

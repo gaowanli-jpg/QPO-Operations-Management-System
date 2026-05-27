@@ -15,21 +15,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class DeliveryService {
-    private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
-    private static final Pattern DELIVERY_DATE = Pattern.compile("(\\d{4})\\s*[.\\-/年]\\s*(\\d{1,2})\\s*[.\\-/月]\\s*(\\d{1,2})\\s*日?");
-    private static final Pattern EXCEL_SERIAL_DATE = Pattern.compile("\\d{5}(?:\\.0+)?");
-
     @Autowired
     private OrderRfqMapper orderRfqMapper;
     @Autowired
@@ -42,6 +35,8 @@ public class DeliveryService {
     private InventoryService inventoryService;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private LeadTimeService leadTimeService;
 
     @Transactional
     public List<OrderDeliveryTicket> generateTickets(DeliveryGenerateReq req) {
@@ -105,7 +100,7 @@ public class DeliveryService {
             item.setStatus(acceptedQty < safeInt(item.getQty()) ? "已部分提单" : "已生成提单");
             itemMapper.updateById(item);
 
-            insertProcessSheet(item, acceptedQty, resolveDeliveryDate(startDate, item.getLeadTime()));
+            insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)));
         }
 
         refreshOrderTicketStatus(order.getId());
@@ -172,7 +167,7 @@ public class DeliveryService {
         ticket.setSurfaceTreatment(item.getSurfaceTreatment());
         ticket.setVersion(item.getVersion());
         ticket.setStartDate(startDate);
-        ticket.setDeliveryDate(resolveDeliveryDate(startDate, item.getLeadTime()));
+        ticket.setDeliveryDate(leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)));
         ticket.setRemark(remark);
         ticket.setArrangeType(arrangeType);
         ticketMapper.insert(ticket);
@@ -352,54 +347,6 @@ public class DeliveryService {
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
         return normalized.isEmpty() ? "V1" : normalized;
-    }
-
-    private LocalDate resolveDeliveryDate(LocalDate startDate, String leadTime) {
-        if (isBlank(leadTime)) {
-            return startDate;
-        }
-        LocalDate exactDate = parseDeliveryDate(leadTime);
-        if (exactDate != null) {
-            return exactDate;
-        }
-        LocalDate excelSerialDate = parseExcelSerialDate(leadTime);
-        if (excelSerialDate != null) {
-            return excelSerialDate;
-        }
-        Matcher matcher = FIRST_NUMBER.matcher(leadTime);
-        if (!matcher.find()) {
-            return startDate;
-        }
-        return startDate.plusDays(Long.parseLong(matcher.group(1)));
-    }
-
-    private LocalDate parseDeliveryDate(String leadTime) {
-        Matcher matcher = DELIVERY_DATE.matcher(leadTime.trim());
-        if (!matcher.find()) {
-            return null;
-        }
-        try {
-            int year = Integer.parseInt(matcher.group(1));
-            int month = Integer.parseInt(matcher.group(2));
-            int day = Integer.parseInt(matcher.group(3));
-            return LocalDate.of(year, month, day);
-        } catch (DateTimeException | NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private LocalDate parseExcelSerialDate(String leadTime) {
-        String normalized = leadTime.trim();
-        if (!EXCEL_SERIAL_DATE.matcher(normalized).matches()) {
-            return null;
-        }
-        long serial = (long) Double.parseDouble(normalized);
-        return excelSerialToDate(serial);
-    }
-
-    private LocalDate excelSerialToDate(long serial) {
-        LocalDate date = LocalDate.of(1899, 12, 31).plusDays(serial);
-        return serial >= 60 ? date.minusDays(1) : date;
     }
 
     private String remarkOrDefault(String value, String defaultValue) {

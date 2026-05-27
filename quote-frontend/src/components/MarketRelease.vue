@@ -49,6 +49,38 @@
               </el-form-item>
             </el-form>
 
+            <div class="internal-lead-panel">
+              <div class="panel-title compact">内部目标交期调整</div>
+              <el-input-number
+                v-model="internalShiftDays"
+                :min="1"
+                :max="365"
+                :precision="0"
+                controls-position="right"
+                class="full-width"
+              />
+              <div class="lead-actions">
+                <el-button
+                  type="success"
+                  :disabled="selectedRows.length === 0"
+                  :loading="adjustingInternalLeadTime"
+                  @click="adjustInternalLeadTime(1)"
+                >
+                  增加
+                </el-button>
+                <el-button
+                  type="warning"
+                  plain
+                  :disabled="selectedRows.length === 0"
+                  :loading="adjustingInternalLeadTime"
+                  @click="adjustInternalLeadTime(-1)"
+                >
+                  减少
+                </el-button>
+              </div>
+              <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
+            </div>
+
             <div class="main-actions">
               <el-button
                 type="success"
@@ -58,15 +90,6 @@
                 @click="submitTicket"
               >
                 生成正式提单
-              </el-button>
-              <el-button
-                type="primary"
-                plain
-                size="large"
-                :disabled="!selectedRfqId"
-                @click="exportExcel('quote')"
-              >
-                导出报价单 Excel
               </el-button>
             </div>
           </div>
@@ -89,6 +112,18 @@
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
+              <el-table-column prop="leadTime" label="客户询价交期" width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.leadTime || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="quoteLeadTime" label="报价承诺交期" width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.quoteLeadTime || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="internalTargetLeadTime" label="内部目标交期" width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.internalTargetLeadTime || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="提单交期" width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ resolveDeliveryLeadTime(row) }}</template>
+              </el-table-column>
               <el-table-column label="通过数量" width="130" align="center">
                 <template #default="scope">
                   <el-input-number
@@ -196,12 +231,14 @@ const processSheetList = ref([])
 const selectedRows = ref([])
 const itemTableRef = ref(null)
 const acceptedQtyMap = reactive({})
+const internalShiftDays = ref(1)
 
 const loading = ref(false)
 const loadingTickets = ref(false)
 const loadingProcessSheets = ref(false)
 const submitting = ref(false)
 const deleting = ref(false)
+const adjustingInternalLeadTime = ref(false)
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
@@ -241,12 +278,9 @@ const loadOrder = async (rfqId) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/api/market/summary/${rfqId}`)
     orderInfo.value = response.data.orderInfo || {}
-    itemList.value = response.data.itemList || []
+    await loadInternalTargetItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''
     selectedRows.value = []
-    itemList.value.forEach(item => {
-      acceptedQtyMap[item.id] = item.qty || 1
-    })
     await loadTickets(rfqId)
     await loadProcessSheets(rfqId)
   } catch (error) {
@@ -255,6 +289,20 @@ const loadOrder = async (rfqId) => {
   } finally {
     loading.value = false
   }
+}
+
+const loadInternalTargetItems = async (rfqId) => {
+  const response = await axios.get(`${API_BASE_URL}/api/market/internal-target-lead-time/${rfqId}/items`)
+  setItemList(response.data || [])
+}
+
+const setItemList = (rows) => {
+  itemList.value = rows || []
+  itemList.value.forEach(item => {
+    if (!acceptedQtyMap[item.id]) {
+      acceptedQtyMap[item.id] = item.qty || 1
+    }
+  })
 }
 
 const loadTickets = async (rfqId) => {
@@ -289,6 +337,36 @@ const canSelectItem = (row) => {
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows
+}
+
+const adjustInternalLeadTime = async (direction) => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
+  if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  const days = Math.abs(Number(internalShiftDays.value || 0)) * direction
+  if (!days) return ElMessage.warning('请输入调整天数。')
+
+  adjustingInternalLeadTime.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/market/internal-target-lead-time/shift`, {
+      rfqId: selectedRfqId.value,
+      itemIds: selectedRows.value.map(row => row.id),
+      days
+    })
+    setItemList(response.data.itemList || [])
+    selectedRows.value = []
+    const adjusted = response.data.adjustedCount || 0
+    const skipped = response.data.skippedCount || 0
+    if (skipped > 0) {
+      ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
+    } else {
+      ElMessage.success(`已调整 ${adjusted} 项。`)
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '内部目标交期调整失败。')
+  } finally {
+    adjustingInternalLeadTime.value = false
+  }
 }
 
 const submitTicket = async () => {
@@ -331,6 +409,14 @@ const submitTicket = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const resolveDeliveryLeadTime = (row) => {
+  return row.effectiveDeliveryLeadTime
+    || row.internalTargetLeadTime
+    || row.quoteLeadTime
+    || row.leadTime
+    || '-'
 }
 
 const deleteTicket = async (row) => {
@@ -394,8 +480,7 @@ const exportExcel = async (type) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   const pathMap = {
     tickets: 'tickets',
-    process: 'process-sheets',
-    quote: 'quote'
+    process: 'process-sheets'
   }
   const path = pathMap[type] || 'process-sheets'
   const result = await downloadByAxios(
@@ -457,6 +542,10 @@ onMounted(loadOrders)
   line-height: 1.2;
 }
 
+.panel-title.compact {
+  margin-bottom: 10px;
+}
+
 .order-picker-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -506,6 +595,29 @@ onMounted(loadOrders)
 
 .qty-input {
   width: 105px;
+}
+
+.internal-lead-panel {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+
+.lead-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lead-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.selection-count {
+  margin-top: 10px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
 }
 
 .main-actions {

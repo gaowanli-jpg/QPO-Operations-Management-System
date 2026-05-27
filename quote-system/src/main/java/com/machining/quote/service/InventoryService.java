@@ -246,6 +246,19 @@ public class InventoryService {
         return saved;
     }
 
+    @Transactional
+    public void deleteInventory(Integer inventoryId) {
+        InventoryMaster inventory = requireInventoryById(inventoryId);
+        Object before = buildInventoryRow(inventory);
+
+        QueryWrapper<InventoryPendingStock> pendingQw = new QueryWrapper<>();
+        pendingQw.eq("inventory_id", inventory.getId());
+        pendingMapper.delete(pendingQw);
+        inventoryMapper.deleteById(inventory.getId());
+
+        auditService.record("INVENTORY_DELETE", "inventory_master", inventory.getId(), before, null);
+    }
+
     public InventoryMaster findByCustomerAndPartNo(String customerName, String partNo) {
         return findByCustomerPartAndVersion(customerName, partNo, null);
     }
