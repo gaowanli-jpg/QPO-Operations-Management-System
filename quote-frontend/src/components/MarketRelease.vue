@@ -107,7 +107,29 @@
 
         <el-col :span="17">
           <div class="panel">
-            <div class="panel-title">通过零件选择</div>
+            <div class="panel-title-row">
+              <div class="panel-title">通过零件选择</div>
+              <el-upload
+                ref="selectionUploadRef"
+                action="#"
+                :auto-upload="false"
+                :show-file-list="false"
+                accept=".xlsx, .xls"
+                :on-change="handleSelectionExcelChange"
+              >
+                <template #trigger>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    :disabled="!selectedRfqId || itemList.length === 0"
+                    :loading="importSelecting"
+                  >
+                    导入表格选定
+                  </el-button>
+                </template>
+              </el-upload>
+            </div>
             <el-table
               ref="itemTableRef"
               :data="itemList"
@@ -242,6 +264,7 @@ const ticketList = ref([])
 const processSheetList = ref([])
 const selectedRows = ref([])
 const itemTableRef = ref(null)
+const selectionUploadRef = ref(null)
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 
@@ -251,6 +274,7 @@ const loadingProcessSheets = ref(false)
 const submitting = ref(false)
 const deleting = ref(false)
 const adjustingInternalLeadTime = ref(false)
+const importSelecting = ref(false)
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
@@ -353,6 +377,71 @@ const handleSelectionChange = (rows) => {
   selectedRows.value = rows
 }
 
+const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
+const normalizeVersion = (value) => {
+  const normalized = String(value || '').trim().toUpperCase()
+  return normalized
+}
+const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
+
+const handleSelectionExcelChange = async (uploadFile) => {
+  const file = uploadFile?.raw
+  selectionUploadRef.value?.clearFiles()
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
+  if (!file) return
+
+  const fileName = String(file.name || '').toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    return ElMessage.warning('请上传 xlsx 或 xls 表格。')
+  }
+
+  const formData = new FormData()
+  formData.append('excelFile', file)
+  importSelecting.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/market/parse-part-selection`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const importedItems = response.data?.data || []
+    const importedKeys = new Set(
+      importedItems
+        .map(item => `${normalizePartNo(item.normalizedPartNo || item.partNo)}||${normalizeVersion(item.normalizedVersion ?? item.version)}`)
+        .filter(key => !key.startsWith('||'))
+    )
+
+    itemTableRef.value?.clearSelection()
+    let matchedCount = 0
+    let selectedCount = 0
+    let skippedCount = 0
+    itemList.value.forEach(row => {
+      if (!importedKeys.has(itemIdentityKey(row))) {
+        return
+      }
+      matchedCount++
+      if (canSelectItem(row)) {
+        itemTableRef.value?.toggleRowSelection(row, true)
+        selectedCount++
+      } else {
+        skippedCount++
+      }
+    })
+
+    if (importedKeys.size === 0) {
+      ElMessage.warning('表格中未读取到有效的图号+版本。')
+    } else if (selectedCount === 0) {
+      ElMessage.warning(`已读取 ${importedKeys.size} 个图号+版本，但没有匹配到当前订单中可选的零件。`)
+    } else {
+      const skippedText = skippedCount > 0 ? `，${skippedCount} 项因已提单未勾选` : ''
+      ElMessage.success(`已读取 ${importedKeys.size} 个图号+版本，匹配 ${matchedCount} 项，已勾选 ${selectedCount} 项${skippedText}。`)
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
+  } finally {
+    importSelecting.value = false
+  }
+}
+
 const adjustInternalLeadTime = async (direction) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
@@ -438,7 +527,7 @@ const resolveDeliveryLeadTime = (row) => {
 
 const deleteTicket = async (row) => {
   await ElMessageBox.confirm(
-    `确认删除提单行「${row.partNo} / ${row.version || 'V1'}」数量 ${row.qty}？如果该行曾冲销库存，系统会恢复对应库存数量。`,
+    `确认删除提单行「${row.partNo} / ${row.version || '-'}」数量 ${row.qty}？如果该行曾冲销库存，系统会恢复对应库存数量。`,
     '删除提单行',
     { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
   )
@@ -458,7 +547,7 @@ const deleteTicket = async (row) => {
 
 const deleteProcessSheet = async (row) => {
   await ElMessageBox.confirm(
-    `确认删除工艺表行「${row.partNo} / ${row.version || 'V1'}」？删除后可基于新的核价重新生成。`,
+    `确认删除工艺表行「${row.partNo} / ${row.version || '-'}」？删除后可基于新的核价重新生成。`,
     '删除工艺表行',
     { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
   )

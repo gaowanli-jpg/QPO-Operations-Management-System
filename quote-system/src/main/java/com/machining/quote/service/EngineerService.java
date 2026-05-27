@@ -556,7 +556,7 @@ public class EngineerService {
 
     private String normalizeVersion(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase();
-        return normalized.isEmpty() ? "V1" : normalized;
+        return normalized;
     }
 
     private String itemKey(ItemQuoteVersion item) {

@@ -133,6 +133,78 @@ public class MarketController {
         return result;
     }
 
+    @PostMapping("/parse-part-selection")
+    public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
+        try {
+            List<Map<Integer, String>> rows = EasyExcel.read(excelFile.getInputStream())
+                    .headRowNumber(0)
+                    .sheet()
+                    .doReadSync();
+
+            int partNoColumn = -1;
+            int versionColumn = -1;
+            int headerRowIndex = -1;
+            int maxScanRows = Math.min(rows.size(), 20);
+            for (int rowIndex = 0; rowIndex < maxScanRows; rowIndex++) {
+                Map<Integer, String> row = rows.get(rowIndex);
+                int currentPartNoColumn = -1;
+                int currentVersionColumn = -1;
+                for (Map.Entry<Integer, String> cell : row.entrySet()) {
+                    String header = normalizeHeader(cell.getValue());
+                    if ("图号".equals(header)) {
+                        currentPartNoColumn = cell.getKey();
+                    } else if ("版本".equals(header)) {
+                        currentVersionColumn = cell.getKey();
+                    }
+                }
+                if (currentPartNoColumn >= 0 && currentVersionColumn >= 0) {
+                    partNoColumn = currentPartNoColumn;
+                    versionColumn = currentVersionColumn;
+                    headerRowIndex = rowIndex;
+                    break;
+                }
+            }
+
+            if (partNoColumn < 0 || versionColumn < 0) {
+                throw new IllegalArgumentException("导入表格必须包含表头：图号、版本");
+            }
+
+            List<Map<String, String>> items = new ArrayList<>();
+            Set<String> seenKeys = new HashSet<>();
+            for (int rowIndex = headerRowIndex + 1; rowIndex < rows.size(); rowIndex++) {
+                Map<Integer, String> row = rows.get(rowIndex);
+                String partNo = cellText(row.get(partNoColumn));
+                String normalizedPartNo = normalizePartNo(partNo);
+                if (normalizedPartNo.isEmpty()) {
+                    continue;
+                }
+
+                String normalizedVersion = normalizeVersion(row.get(versionColumn));
+                String key = normalizedPartNo + "||" + normalizedVersion;
+                if (!seenKeys.add(key)) {
+                    continue;
+                }
+
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("partNo", partNo);
+                item.put("version", normalizedVersion);
+                item.put("normalizedPartNo", normalizedPartNo);
+                item.put("normalizedVersion", normalizedVersion);
+                items.add(item);
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("count", items.size());
+            result.put("data", items);
+            return result;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("导入表格选定解析失败：" + e.getMessage(), e);
+        }
+    }
+
     @PostMapping("/import-rfq")
     @Transactional
     public Map<String, Object> importRfq(
@@ -282,6 +354,14 @@ public class MarketController {
         return DrawingPartNoResolver.normalizePartNo(partNo);
     }
 
+    private String normalizeHeader(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").trim();
+    }
+
+    private String cellText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private Map<String, Object> buildMissingDrawingItem(RfqExcelDTO item, String normalizedPartNo) {
         Map<String, Object> missingItem = new LinkedHashMap<>();
         String partNo = item.getPartNo();
@@ -297,6 +377,6 @@ public class MarketController {
 
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
-        return normalized.isEmpty() ? "V1" : normalized;
+        return normalized;
     }
 }

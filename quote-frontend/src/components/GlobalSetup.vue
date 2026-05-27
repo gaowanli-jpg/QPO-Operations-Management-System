@@ -203,7 +203,7 @@ const repeatAnalysis = ref(null)
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
 const normalizeVersion = (value) => {
   const text = String(value || '').trim().toUpperCase()
-  return text || 'V1'
+  return text
 }
 const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 const PROCESS_SORT_STEP = 10

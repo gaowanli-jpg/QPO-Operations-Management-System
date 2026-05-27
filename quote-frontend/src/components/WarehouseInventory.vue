@@ -88,7 +88,7 @@
           <el-input v-model="createForm.partNo" placeholder="例如 L20100000733" />
         </el-form-item>
         <el-form-item label="版本" required>
-          <el-input v-model="createForm.version" placeholder="例如 A / V1" />
+          <el-input v-model="createForm.version" placeholder="例如 A / B，可留空" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -228,7 +228,7 @@ const activeRow = ref(null)
 const pendingRows = ref([])
 const addMode = ref('direct')
 
-const createForm = reactive({ partNo: '', version: 'V1' })
+const createForm = reactive({ partNo: '', version: '' })
 const directForm = reactive({ qty: 1 })
 const pendingForm = reactive({ pendingRefNo: '', qty: 1 })
 const transferForm = reactive({ pendingRefNo: '', qty: 1 })
@@ -281,7 +281,7 @@ const handleCustomerChange = async () => {
 
 const openCreateDialog = () => {
   createForm.partNo = ''
-  createForm.version = 'V1'
+  createForm.version = ''
   createDialogVisible.value = true
 }
 
@@ -508,7 +508,7 @@ const refreshActiveAfterModify = async () => {
 
 const formatPartVersion = (row) => {
   if (!row) return '-'
-  return `${row.partNo || '-'} / ${row.version || 'V1'}`
+  return `${row.partNo || '-'} / ${row.version || '-'}`
 }
 
 onMounted(async () => {

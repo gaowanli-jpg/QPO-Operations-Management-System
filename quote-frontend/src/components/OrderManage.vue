@@ -258,7 +258,7 @@ const ResultList = defineComponent({
   setup(props) {
     return () => props.items.length
       ? h('ul', { class: 'result-list' }, props.items.map((item, index) => h('li', { key: index }, [
-          h('span', { class: 'result-main' }, item.partNo ? `${item.partNo} / ${item.version || 'V1'}` : (item.fileName || '-')),
+          h('span', { class: 'result-main' }, item.partNo ? `${item.partNo} / ${item.version || '-'}` : (item.fileName || '-')),
           item.description ? h('span', { class: 'result-sub' }, ` ｜ ${item.description}`) : null,
           item.fileName && item.partNo ? h('span', { class: 'result-sub' }, ` ｜ ${item.fileName}`) : null,
           item.reason ? h('span', { class: 'result-reason' }, ` ｜ ${item.reason}`) : null

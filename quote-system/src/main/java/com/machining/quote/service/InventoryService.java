@@ -384,7 +384,7 @@ public class InventoryService {
 
     public String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
-        return normalized.isEmpty() ? "V1" : normalized;
+        return normalized;
     }
 
     public String normalizeCustomerName(String customerName) {

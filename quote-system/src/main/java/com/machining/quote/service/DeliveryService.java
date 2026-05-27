@@ -355,7 +355,7 @@ public class DeliveryService {
 
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
-        return normalized.isEmpty() ? "V1" : normalized;
+        return normalized;
     }
 
     private String remarkOrDefault(String value, String defaultValue) {

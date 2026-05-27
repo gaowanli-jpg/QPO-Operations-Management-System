@@ -108,7 +108,7 @@
           <!-- 弹窗顶部状态条：左边是信息，右边是图纸操作 -->
           <div class="dialog-header-bar">
             <el-alert
-              :title="`当前核价：${currentRow?.partNo} / ${currentRow?.version || 'V1'} - ${currentRow?.description} (需生产: ${currentRow?.qty} 件)`"
+              :title="`当前核价：${currentRow?.partNo} / ${currentRow?.version || '-'} - ${currentRow?.description} (需生产: ${currentRow?.qty} 件)`"
               type="success"
               show-icon
               :closable="false"
@@ -235,7 +235,7 @@
           <div class="drawing-pane-header">
             <div>
               <div class="drawing-pane-title">当前零件图纸</div>
-              <div class="drawing-pane-subtitle">{{ currentRow ? `${currentRow.partNo || '-'} / ${currentRow.version || 'V1'}` : '-' }}</div>
+              <div class="drawing-pane-subtitle">{{ currentRow ? `${currentRow.partNo || '-'} / ${currentRow.version || '-'}` : '-' }}</div>
             </div>
             <el-button
               v-if="currentRow?.drawingUrl"
@@ -330,7 +330,7 @@ const defaultGlobalConfig = () => ({ materialName: '45#', shape: '板材', proce
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
 const normalizeVersion = (value) => {
   const text = String(value || '').trim().toUpperCase()
-  return text || 'V1'
+  return text
 }
 const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 
