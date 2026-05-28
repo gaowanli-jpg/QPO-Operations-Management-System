@@ -62,6 +62,11 @@
             <el-icon><User /></el-icon>
             <span>系统管理：用户权限</span>
           </el-menu-item>
+
+          <el-menu-item v-if="canSee(['ADMIN'])" index="/quote-template">
+            <el-icon><Files /></el-icon>
+            <span>系统管理：报价单模板</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
 

@@ -14,6 +14,7 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.OrderFilePathService;
+import com.machining.quote.service.QuoteTemplateExportService;
 import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.util.DrawingPartNoResolver;
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,6 +45,9 @@ public class MarketController {
 
     @Autowired
     private ExcelExportService excelExportService;
+
+    @Autowired
+    private QuoteTemplateExportService quoteTemplateExportService;
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -101,6 +105,24 @@ public class MarketController {
     @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
     public void exportQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         excelExportService.exportQuoteSheet(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/simple/{rfqId}")
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    public void exportSimpleQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportSimpleQuoteSheet(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/template/detail/{rfqId}")
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    public void exportTemplateQuoteDetail(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteTemplateExportService.exportTemplateQuoteDetail(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/template/simple/{rfqId}")
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    public void exportTemplateQuoteSimple(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteTemplateExportService.exportTemplateQuoteSimple(rfqId, response);
     }
 
     @GetMapping("/export/quote/customer-lead-time/{rfqId}")

@@ -57,7 +57,39 @@
               :disabled="!selectedRfqId"
               @click="exportQuote"
             >
-              生成报价单
+              生成详细报价单
+            </el-button>
+            <el-button
+              :icon="Download"
+              type="success"
+              size="large"
+              class="download-btn secondary"
+              :disabled="!selectedRfqId"
+              @click="exportSimpleQuote"
+            >
+              生成简化报价单
+            </el-button>
+            <el-button
+              :icon="Download"
+              type="primary"
+              plain
+              size="large"
+              class="download-btn secondary"
+              :disabled="!selectedRfqId"
+              @click="exportTemplateQuote"
+            >
+              生成客户模板详细报价单
+            </el-button>
+            <el-button
+              :icon="Download"
+              type="success"
+              plain
+              size="large"
+              class="download-btn secondary"
+              :disabled="!selectedRfqId"
+              @click="exportTemplateSimpleQuote"
+            >
+              生成客户模板简化报价单
             </el-button>
           </div>
         </el-col>
@@ -282,13 +314,49 @@ const saveLeadTime = async (row) => {
 
 const exportQuote = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-报价单.xlsx`
+  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-详细报价单.xlsx`
   const result = await downloadByAxios(
     `${API_BASE_URL}/api/market/export/quote/${selectedRfqId.value}`,
     fallbackName
   )
   if (!result.success) {
     ElMessage.error(result.message || '报价单导出失败。')
+  }
+}
+
+const exportSimpleQuote = async () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-简化报价单.xlsx`
+  const result = await downloadByAxios(
+    `${API_BASE_URL}/api/market/export/quote/simple/${selectedRfqId.value}`,
+    fallbackName
+  )
+  if (!result.success) {
+    ElMessage.error(result.message || '简化报价单导出失败。')
+  }
+}
+
+const exportTemplateQuote = async () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板详细报价单.xlsx`
+  const result = await downloadByAxios(
+    `${API_BASE_URL}/api/market/export/quote/template/detail/${selectedRfqId.value}`,
+    fallbackName
+  )
+  if (!result.success) {
+    ElMessage.error(result.message || '客户模板详细报价单导出失败。')
+  }
+}
+
+const exportTemplateSimpleQuote = async () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板简化报价单.xlsx`
+  const result = await downloadByAxios(
+    `${API_BASE_URL}/api/market/export/quote/template/simple/${selectedRfqId.value}`,
+    fallbackName
+  )
+  if (!result.success) {
+    ElMessage.error(result.message || '客户模板简化报价单导出失败。')
   }
 }
 
@@ -407,6 +475,12 @@ onMounted(loadOrders)
 .download-btn {
   width: 100%;
   margin-top: 16px;
+  margin-left: 0;
+}
+
+.download-btn.secondary {
+  margin-top: 10px;
+  margin-left: 0;
 }
 
 :deep(.el-descriptions__label) {

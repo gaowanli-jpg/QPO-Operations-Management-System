@@ -10,6 +10,7 @@ import OrderManage from '../components/OrderManage.vue'
 import HistoryOrderManage from '../components/HistoryOrderManage.vue'
 import LoginView from '../components/LoginView.vue'
 import UserManage from '../components/UserManage.vue'
+import QuoteTemplateManage from '../components/QuoteTemplateManage.vue'
 import { authState, hasRole, verifyAuth } from '../auth'
 
 const routes = [
@@ -23,6 +24,7 @@ const routes = [
   { path: '/orders', component: OrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/history-orders', component: HistoryOrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/users', component: UserManage, meta: { roles: ['ADMIN'] } },
+  { path: '/quote-template', component: QuoteTemplateManage, meta: { roles: ['ADMIN'] } },
   { path: '/pricing', component: ItemPricing, meta: { roles: ['ENGINEER', 'ADMIN'] } },
   { path: '/warehouse', component: WarehouseInventory, meta: { roles: ['WAREHOUSE', 'ADMIN'] } }
 ]

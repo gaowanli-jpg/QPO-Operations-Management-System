@@ -147,6 +147,19 @@ public class ExcelExportService {
         exportQuoteSheet(rfqId, response, false);
     }
 
+    public void exportSimpleQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        List<ItemQuoteVersion> items = itemMapper.selectList(qw);
+
+        List<List<String>> head = buildSimpleQuoteHead();
+        List<List<Object>> rows = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            rows.add(buildSimpleQuoteRow(items.get(i), i + 1));
+        }
+        write(response, buildFileName(rfqId, "简化报价单"), "简化报价单", head, rows);
+    }
+
     private void exportQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime) throws IOException {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
@@ -161,6 +174,46 @@ public class ExcelExportService {
             rows.add(buildQuoteRow(item, i + 1, maxRouteSize, feeNames, useQuoteLeadTime));
         }
         write(response, buildFileName(rfqId, "报价单"), "报价单", head, rows);
+    }
+
+    private List<List<String>> buildSimpleQuoteHead() {
+        List<List<String>> head = new ArrayList<>();
+        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位")) {
+            head.add(List.of("基础信息", title));
+        }
+        for (String title : List.of("含税单价", "含税总价", "交货周期", "备注")) {
+            head.add(List.of("合计", title));
+        }
+        return head;
+    }
+
+    private List<Object> buildSimpleQuoteRow(ItemQuoteVersion item, int index) {
+        List<Object> row = new ArrayList<>();
+        row.add(index);
+        row.add(safe(item.getPartNo()));
+        row.add(safe(item.getDescription()));
+        row.add(resolveDrawingStatus(item));
+        row.add(safe(item.getMaterialName()));
+        row.add(safe(item.getSurfaceTreatment()));
+        row.add(safe(item.getVersion()));
+        row.add(safeInt(item.getQty()));
+        row.add(safe(item.getUnit()));
+
+        if (isMissingDrawing(item)) {
+            row.add("");
+            row.add("");
+            row.add(safe(resolveQuoteExportLeadTime(item, true)));
+            row.add(appendRemark(item.getRemark(), "无图，未核价"));
+            return row;
+        }
+
+        double unitPrice = item.getFinalUnitPrice() == null ? 0.0 : item.getFinalUnitPrice();
+        double totalPrice = item.getFinalTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getFinalTotalPrice();
+        row.add(unitPrice);
+        row.add(totalPrice);
+        row.add(safe(resolveQuoteExportLeadTime(item, true)));
+        row.add(safe(item.getRemark()));
+        return row;
     }
 
     private List<List<String>> buildQuoteHead(int maxRouteSize, List<String> feeNames) {
