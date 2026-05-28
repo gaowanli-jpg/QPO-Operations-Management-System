@@ -369,7 +369,7 @@ const handleNext = async () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/engineer/apply-repeat-quotes/${orderInfo.value.id}`)
       if (response.data.appliedCount > 0) {
-        ElMessage.success(`已自动套用 ${response.data.appliedCount} 个重复零件的历史核价。`)
+        ElMessage.success(`已自动套用 ${response.data.appliedCount} 个重复零件的历史核价，请进入逐件核价页审核后手动完成报价提交。`)
       }
     } catch (error) {
       console.error(error)

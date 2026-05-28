@@ -516,14 +516,12 @@ public class EngineerService {
         }
 
         if (!appliedItems.isEmpty()) {
-            order.setStatus(resolveOrderStatus(rfqId));
-            orderMapper.updateById(order);
             auditService.record("REPEAT_QUOTE_APPLY", "order_rfq", rfqId, null, appliedItems);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "重复订单自动核价完成，已套用 " + appliedItems.size() + " 个零件。");
+        result.put("message", "重复订单自动核价完成，已套用 " + appliedItems.size() + " 个零件，请工程师审核后手动完成报价提交。");
         result.put("appliedCount", appliedItems.size());
         result.put("skippedCount", skippedItems.size());
         result.put("appliedItems", appliedItems);
@@ -735,19 +733,6 @@ public class EngineerService {
         Map<String, Object> row = buildBasicItemInfo(item);
         row.put("reason", reason);
         return row;
-    }
-
-    private String resolveOrderStatus(Integer rfqId) {
-        List<ItemQuoteVersion> items = listItems(rfqId);
-        List<ItemQuoteVersion> drawableItems = items.stream().filter(this::hasDrawing).toList();
-        if (drawableItems.isEmpty()) {
-            return "待工程部评估";
-        }
-        boolean allQuoted = drawableItems.stream().allMatch(item -> item.getFinalUnitPrice() != null);
-        if (allQuoted) {
-            return "已报价";
-        }
-        return "待工程部评估";
     }
 
     private List<Map<String, Object>> normalizeProcessRoute(Object routeObject) {

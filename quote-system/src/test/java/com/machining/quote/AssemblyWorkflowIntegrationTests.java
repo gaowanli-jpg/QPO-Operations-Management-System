@@ -154,7 +154,7 @@ class AssemblyWorkflowIntegrationTests {
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
 
         assertThat(tickets).extracting(OrderDeliveryTicket::getArrangeType)
-                .containsExactly("计划", "库存冲销", "待产冲销");
+                .containsExactly("计划", "库存冲销", "在产冲销");
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(1, 1, 1);
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)

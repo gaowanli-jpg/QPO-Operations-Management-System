@@ -152,7 +152,7 @@ class CoreWorkflowIntegrationTests {
 
         assertThat(tickets).hasSize(3);
         assertThat(tickets).extracting(OrderDeliveryTicket::getArrangeType)
-                .containsExactly("库存冲销", "待产冲销", "计划");
+                .containsExactly("库存冲销", "在产冲销", "计划");
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(1, 2, 2);
         assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
@@ -268,5 +268,68 @@ class CoreWorkflowIntegrationTests {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> repeatItems = (List<Map<String, Object>>) result.get("repeatItems");
         assertThat(repeatItems).extracting(item -> item.get("version")).containsExactly("A");
+    }
+
+    @Test
+    void repeatQuoteApplicationDoesNotCompleteOrderAutomatically() {
+        String customerName = "重复审核客户-" + System.nanoTime();
+
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-AUTO-" + System.nanoTime());
+        historicalOrder.setCustomerName(customerName);
+        historicalOrder.setStatus("已生成提单");
+        orderMapper.insert(historicalOrder);
+
+        ItemQuoteVersion historicalItem = new ItemQuoteVersion();
+        historicalItem.setRfqId(historicalOrder.getId());
+        historicalItem.setPartNo("AUTO-100");
+        historicalItem.setVersion("A");
+        historicalItem.setDescription("历史重复件");
+        historicalItem.setQty(1);
+        historicalItem.setDrawingUrl("/uploads/test/AUTO-100.pdf");
+        historicalItem.setMaterialName("45#钢");
+        historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
+        historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
+        historicalItem.setFinalUnitPrice(20.0);
+        historicalItem.setFinalTotalPrice(20.0);
+        historicalItem.setStatus("已生成提单");
+        itemMapper.insert(historicalItem);
+
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setRfqId(historicalOrder.getId());
+        ticket.setItemId(historicalItem.getId());
+        ticket.setPartNo(historicalItem.getPartNo());
+        ticket.setVersion(historicalItem.getVersion());
+        ticket.setQty(1);
+        ticket.setArrangeType("计划");
+        ticketMapper.insert(ticket);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-AUTO-" + System.nanoTime());
+        currentOrder.setCustomerName(customerName);
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+
+        ItemQuoteVersion currentItem = new ItemQuoteVersion();
+        currentItem.setRfqId(currentOrder.getId());
+        currentItem.setPartNo("AUTO-100");
+        currentItem.setVersion("A");
+        currentItem.setDescription("当前重复件");
+        currentItem.setQty(1);
+        currentItem.setDrawingUrl("/uploads/test/AUTO-100.pdf");
+        currentItem.setStatus("待核价");
+        itemMapper.insert(currentItem);
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion savedItem = itemMapper.selectById(currentItem.getId());
+        OrderRfq savedOrder = orderMapper.selectById(currentOrder.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(savedItem.getFinalUnitPrice()).isNotNull();
+        assertThat(savedItem.getStatus()).isEqualTo("已报价");
+        assertThat(savedOrder.getStatus()).isEqualTo("待工程部评估");
+
+        engineerService.completeOrderQuote(currentOrder.getId());
+        assertThat(orderMapper.selectById(currentOrder.getId()).getStatus()).isEqualTo("已报价");
     }
 }

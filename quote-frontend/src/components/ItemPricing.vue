@@ -188,7 +188,7 @@
                     :min="0"
                     :step="0.01"
                     :precision="3"
-                    placeholder="图纸未标注可不填"
+                    placeholder="请输入"
                     controls-position="right"
                     class="full-width"
                   />
@@ -230,7 +230,7 @@
                   v-model="proc.inputVal"
                   :min="0"
                   :step="proc.calcType === '非工时费用' ? 10 : 0.5"
-                  :placeholder="proc.calcType === '非工时费用' ? '填入费用金额' : '填入工时'"
+                  placeholder="请输入"
                   class="full-width"
                 />
               </el-col>
@@ -310,6 +310,7 @@
                   :min="0"
                   :step="10"
                   :precision="2"
+                  placeholder="请输入"
                   controls-position="right"
                   class="full-width"
                 />
@@ -438,6 +439,12 @@ const normalizeGlobalConfig = (config) => {
 const numberOrZero = (value) => {
   const numericValue = Number(value || 0)
   return Number.isFinite(numericValue) ? numericValue : 0
+}
+const numberOrNullForInput = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue === 0) return null
+  return numericValue
 }
 const formatWeight = (value) => {
   const numericValue = Number(value)
@@ -625,11 +632,11 @@ const dialogVisible = ref(false)
 const currentRow = ref(null)
 const submitLoading = ref(false)
 const quoteMode = ref('NORMAL')
-const assemblyFee = ref(0)
+const assemblyFee = ref(null)
 const assemblyChildren = ref([])
 let assemblyChildSeq = 0
 
-const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: 0 })
+const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: null })
 const processRoute = ref([])
 let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
@@ -666,7 +673,7 @@ const createProcessRow = (source = {}) => ({
   optionKey: source.optionKey || '',
   calcType: source.calcType || '工时',
   sourceType: source.sourceType || (source.calcType === '非工时费用' ? 'extra' : 'process'),
-  inputVal: source.inputVal ?? 0,
+  inputVal: numberOrNullForInput(source.inputVal),
   sortNo: numericSortNo(source.sortNo)
 })
 
@@ -804,7 +811,7 @@ const mergeRoutesByGlobalOrder = (savedRoutes, defaultRoutes) => {
       const savedRoute = savedBuckets.get(processRouteKey(defaultRoute))?.shift()
       return {
         ...defaultRoute,
-        inputVal: savedRoute?.inputVal ?? defaultRoute.inputVal ?? 0
+        inputVal: savedRoute ? savedRoute.inputVal : defaultRoute.inputVal
       }
     }))
 }
@@ -873,7 +880,7 @@ const openQuoteDialog = async (row) => {
   currentRow.value = row
   dialogVisible.value = true
   quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
-  assemblyFee.value = numberOrZero(row.assemblyFee)
+  assemblyFee.value = numberOrNullForInput(row.assemblyFee)
   assemblyChildren.value = []
   
   // 继承阶段 1 的材料设置
@@ -887,7 +894,7 @@ const openQuoteDialog = async (row) => {
   matForm.T = toMetricDimension(savedDimensions.T, savedDimensionUnit)
   matForm.outR = toMetricDimension(savedDimensions.outR, savedDimensionUnit)
   matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
-  matForm.netWeight = numberOrZero(row.partNetWeight ?? savedMaterialData.netWeight ?? 0)
+  matForm.netWeight = numberOrNullForInput(row.partNetWeight ?? savedMaterialData.netWeight)
 
   if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
     processRoute.value = mergeRoutesByGlobalOrder(row.processRoute, globalConfig.value.processRoute)

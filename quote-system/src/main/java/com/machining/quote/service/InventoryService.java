@@ -355,7 +355,7 @@ public class InventoryService {
         InventoryMaster inventory = findOrCreate(customerName, partNo, version);
         Object before = buildInventoryRow(inventory);
         String safeRefNo = normalizePendingRef(pendingRefNo);
-        addPending(inventory.getId(), safeRefNo.isEmpty() ? "冲销待产" : safeRefNo, qty);
+        addPending(inventory.getId(), safeRefNo.isEmpty() ? "冲销在产" : safeRefNo, qty);
         InventoryMaster saved = inventoryMapper.selectById(inventory.getId());
         auditService.record("INVENTORY_RESTORE_PENDING", "inventory_master", saved.getId(), before, buildInventoryRow(saved));
     }
@@ -484,7 +484,7 @@ public class InventoryService {
         } else if (rows.size() == 1) {
             inventory.setPendingRefNo(rows.get(0).getPendingRefNo());
         } else {
-            inventory.setPendingRefNo(rows.size() + "个待产单");
+            inventory.setPendingRefNo(rows.size() + "个在产单");
         }
         inventory.setUpdatedAt(LocalDateTime.now());
         inventoryMapper.updateById(inventory);

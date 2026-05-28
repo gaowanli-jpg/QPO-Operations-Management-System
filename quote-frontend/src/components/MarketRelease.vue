@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h2>市场部：议价确认与提单生成</h2>
-            <p>选择客户最终通过的零件，系统会按待产库存、已入库库存、净生产需求自动拆分提单行。</p>
+            <p>选择客户最终通过的零件，系统会按在产库存、已入库库存、净生产需求自动拆分提单行。</p>
           </div>
           <el-button type="primary" :loading="loading" @click="loadOrders">刷新订单</el-button>
         </div>
@@ -204,8 +204,12 @@
               <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
               <el-table-column prop="startDate" label="开工日期" width="110" />
               <el-table-column prop="deliveryDate" label="交货日期" width="110" />
-              <el-table-column prop="arrangeType" label="安排类型" width="100" />
-              <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
+              <el-table-column label="安排类型" width="100">
+                <template #default="{ row }">{{ displayInventoryText(row.arrangeType) }}</template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayInventoryText(row.remark) }}</template>
+              </el-table-column>
               <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
                   <el-button type="danger" size="small" plain @click="deleteTicket(scope.row)">删除</el-button>
@@ -591,6 +595,10 @@ const formatRoute = (route) => {
     .map(item => `${item.processName || ''}${item.inputVal ? `(${item.inputVal})` : ''}`)
     .filter(Boolean)
     .join(' / ')
+}
+
+const displayInventoryText = (value) => {
+  return String(value || '').replaceAll('待产', '在产')
 }
 
 const exportExcel = async (type) => {

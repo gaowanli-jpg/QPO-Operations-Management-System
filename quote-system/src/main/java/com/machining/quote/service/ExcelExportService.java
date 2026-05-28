@@ -80,8 +80,8 @@ public class ExcelExportService {
                     safe(ticket.getVersion()),
                     formatDate(ticket.getStartDate()),
                     formatDate(ticket.getDeliveryDate()),
-                    safe(ticket.getRemark()),
-                    safe(ticket.getArrangeType())
+                    displayInventoryText(ticket.getRemark()),
+                    displayInventoryText(ticket.getArrangeType())
             ));
         }
 
@@ -464,6 +464,10 @@ public class ExcelExportService {
 
     private String safe(Object value) {
         return value == null ? "" : value.toString();
+    }
+
+    private String displayInventoryText(Object value) {
+        return safe(value).replace("待产", "在产");
     }
 
     private Integer safeInt(Integer value) {

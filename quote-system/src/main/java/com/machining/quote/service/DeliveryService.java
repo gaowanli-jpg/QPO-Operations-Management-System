@@ -112,7 +112,7 @@ public class DeliveryService {
 
                 for (InventoryService.PendingConsumption consumption : inventoryService.consumePending(inventory.getId(), remaining)) {
                     createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, consumption.qty(),
-                            remarkOrDefault(consumption.pendingRefNo(), "冲销待产"), "待产冲销"));
+                            remarkOrDefault(consumption.pendingRefNo(), "冲销在产"), "在产冲销"));
                     remaining -= consumption.qty();
                 }
             }
@@ -230,17 +230,21 @@ public class DeliveryService {
             return;
         }
         String arrangeType = ticket.getArrangeType();
-        if (isBlank(arrangeType) || (!arrangeType.contains("待产冲销") && !arrangeType.contains("库存冲销"))) {
+        if (isBlank(arrangeType) || (!isPendingOffset(arrangeType) && !arrangeType.contains("库存冲销"))) {
             return;
         }
 
         OrderRfq order = ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
         String customerName = order == null ? "" : order.getCustomerName();
-        if (arrangeType.contains("待产冲销")) {
+        if (isPendingOffset(arrangeType)) {
             inventoryService.restorePending(customerName, ticket.getPartNo(), ticket.getVersion(), ticket.getRemark(), ticket.getQty());
         } else if (arrangeType.contains("库存冲销")) {
             inventoryService.restoreInStock(customerName, ticket.getPartNo(), ticket.getVersion(), ticket.getQty());
         }
+    }
+
+    private boolean isPendingOffset(String arrangeType) {
+        return arrangeType != null && (arrangeType.contains("在产冲销") || arrangeType.contains("待产冲销"));
     }
 
     private void refreshItemTicketStatus(ItemQuoteVersion item) {
