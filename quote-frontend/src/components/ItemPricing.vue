@@ -257,10 +257,10 @@
               class="assembly-tip"
             />
             <div class="assembly-actions">
-              <el-button type="primary" plain size="small" :icon="Plus" @click="addAssemblyChild">新增子件</el-button>
+              <el-button type="primary" plain size="small" :icon="Plus" @click="openAssemblyChildPicker">选择子件</el-button>
             </div>
             <el-empty v-if="assemblyChildren.length === 0" description="暂无子件关系" :image-size="60">
-              <el-button type="primary" plain size="small" :icon="Plus" @click="addAssemblyChild">新增子件</el-button>
+              <el-button type="primary" plain size="small" :icon="Plus" @click="openAssemblyChildPicker">选择子件</el-button>
             </el-empty>
             <el-row
               v-for="(child, index) in assemblyChildren"
@@ -269,20 +269,10 @@
               class="assembly-row"
             >
               <el-col :span="10">
-                <el-select v-model="child.childItemId" placeholder="选择当前 RFQ 子件" class="full-width" filterable @change="hydrateAssemblyChild(child)">
-                  <el-option
-                    v-for="option in assemblyChildOptions"
-                    :key="option.id"
-                    :label="`${option.partNo || '-'} / ${option.version || '-'} - ${option.description || ''}`"
-                    :value="option.id"
-                    :disabled="selectedAssemblyChildIds.has(option.id) && option.id !== child.childItemId"
-                  >
-                    <span>{{ option.partNo || '-' }} / {{ option.version || '-' }}</span>
-                    <span class="assembly-option-meta">
-                      {{ option.description || '' }}，{{ option.finalUnitPrice != null ? `¥ ${Number(option.finalUnitPrice).toFixed(2)}` : '未核价' }}
-                    </span>
-                  </el-option>
-                </el-select>
+                <div class="assembly-child-info">
+                  <div class="assembly-child-title">{{ child.partNo || '-' }} / {{ child.version || '-' }}</div>
+                  <div class="assembly-child-desc">{{ child.description || '-' }}</div>
+                </div>
               </el-col>
               <el-col :span="4">
                 <el-input-number
@@ -358,6 +348,73 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="assemblyPickerVisible"
+      title="选择组合件子件"
+      width="86vw"
+      top="6vh"
+      class="assembly-picker-dialog"
+      destroy-on-close
+    >
+      <div class="assembly-picker-toolbar">
+        <div>
+          <div class="assembly-picker-title">当前 RFQ 零件表</div>
+          <div class="assembly-picker-subtitle">可一次选择多个子件，已加入的子件不可重复选择。</div>
+        </div>
+        <el-tag type="info">已选 {{ assemblyPickerSelection.length }} 项</el-tag>
+      </div>
+      <el-table
+        ref="assemblyPickerTableRef"
+        :data="assemblyChildOptions"
+        row-key="id"
+        border
+        stripe
+        height="560"
+        @selection-change="handleAssemblyPickerSelection"
+      >
+        <el-table-column type="selection" width="48" :selectable="isAssemblyPickerRowSelectable" />
+        <el-table-column prop="partNo" label="图号" width="150" fixed show-overflow-tooltip />
+        <el-table-column prop="version" label="版本" width="80" align="center" />
+        <el-table-column prop="description" label="名称/描述" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="qty" label="数量" width="80" align="center" />
+        <el-table-column label="类型" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="isAssemblyItem(row) ? 'warning' : 'info'" size="small">
+              {{ isAssemblyItem(row) ? '组合件' : '普通件' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">{{ row.status || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="含税单价" width="110" align="right">
+          <template #default="{ row }">
+            <span v-if="row.finalUnitPrice != null">¥ {{ Number(row.finalUnitPrice).toFixed(2) }}</span>
+            <el-tag v-else type="warning" size="small">未核价</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="图纸" width="190" align="center" fixed="right">
+          <template #default="{ row }">
+            <div v-if="row.drawingUrl" class="picker-drawing-actions">
+              <el-button type="warning" plain size="small" @click.stop="openPdfPreview(row.drawingUrl, row.partNo)">
+                弹窗预览
+              </el-button>
+              <el-button type="primary" plain size="small" @click.stop="openDrawingInNewWindow(row.drawingUrl)">
+                新窗口
+              </el-button>
+            </div>
+            <el-tag v-else type="info" size="small">无图</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="assemblyPickerVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="assemblyPickerSelection.length === 0" @click="confirmAssemblyChildPicker">
+          加入子件
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 图纸预览 -->
     <el-dialog
       v-model="pdfVisible"
@@ -381,7 +438,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
@@ -634,6 +691,9 @@ const submitLoading = ref(false)
 const quoteMode = ref('NORMAL')
 const assemblyFee = ref(null)
 const assemblyChildren = ref([])
+const assemblyPickerVisible = ref(false)
+const assemblyPickerSelection = ref([])
+const assemblyPickerTableRef = ref(null)
 let assemblyChildSeq = 0
 
 const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: null })
@@ -693,22 +753,42 @@ const createAssemblyChildRow = (source = {}) => {
   }
 }
 
-const hydrateAssemblyChild = (child) => {
-  const option = assemblyChildOptions.value.find(item => item.id === child.childItemId)
-  if (!option) return
-  child.partNo = option.partNo
-  child.version = option.version
-  child.description = option.description
-  child.finalUnitPrice = option.finalUnitPrice
-  child.status = option.status
-}
-
-const addAssemblyChild = () => {
-  assemblyChildren.value.push(createAssemblyChildRow())
-}
-
 const removeAssemblyChild = (index) => {
   assemblyChildren.value.splice(index, 1)
+}
+
+const openAssemblyChildPicker = async () => {
+  assemblyPickerSelection.value = []
+  assemblyPickerVisible.value = true
+  await nextTick()
+  assemblyPickerTableRef.value?.clearSelection()
+}
+
+const handleAssemblyPickerSelection = (rows) => {
+  assemblyPickerSelection.value = rows
+}
+
+const isAssemblyPickerRowSelectable = (row) => !selectedAssemblyChildIds.value.has(row.id)
+
+const confirmAssemblyChildPicker = () => {
+  const existingIds = selectedAssemblyChildIds.value
+  const rowsToAdd = assemblyPickerSelection.value.filter(row => !existingIds.has(row.id))
+  rowsToAdd.forEach(row => {
+    assemblyChildren.value.push(createAssemblyChildRow({
+      childItemId: row.id,
+      qtyPerParent: 1,
+      partNo: row.partNo,
+      version: row.version,
+      description: row.description,
+      finalUnitPrice: row.finalUnitPrice,
+      status: row.status
+    }))
+  })
+  assemblyPickerVisible.value = false
+  assemblyPickerSelection.value = []
+  if (rowsToAdd.length > 0) {
+    ElMessage.success(`已加入 ${rowsToAdd.length} 个子件。`)
+  }
 }
 
 const assignProcessSortNos = (rows = processRoute.value) => {
@@ -1222,10 +1302,27 @@ const submitCurrentQuote = async () => {
   background: var(--erp-surface-soft);
 }
 
-.assembly-option-meta {
-  float: right;
+.assembly-child-info {
+  min-width: 0;
+}
+
+.assembly-child-title {
+  color: var(--erp-text);
+  font-weight: 700;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assembly-child-desc {
+  margin-top: 2px;
   color: var(--erp-text-secondary);
   font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .assembly-line-price {
@@ -1249,6 +1346,38 @@ const submitCurrentQuote = async () => {
   color: var(--erp-danger);
   font-weight: 700;
   text-align: right;
+}
+
+.assembly-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.assembly-picker-title {
+  color: var(--erp-text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.assembly-picker-subtitle {
+  margin-top: 4px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.picker-drawing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.picker-drawing-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 :deep(.pricing-workbench-dialog .el-dialog__body) {
