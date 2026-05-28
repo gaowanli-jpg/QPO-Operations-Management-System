@@ -159,6 +159,8 @@ class CoreWorkflowIntegrationTests {
                 .containsOnly(LocalDate.of(2026, 3, 22));
         assertThat(tickets).extracting(OrderDeliveryTicket::getInternalProjectNo)
                 .containsOnly("IP-001");
+        assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
+                .containsOnly("普通件");
 
         InventoryMaster after = inventoryService.findByCustomerPartAndVersion("TEST客户", "P-100", "A");
         assertThat(after.getInStockQty()).isZero();
@@ -174,6 +176,8 @@ class CoreWorkflowIntegrationTests {
                 .containsOnly(LocalDate.of(2026, 3, 22));
         assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getInternalProjectNo)
                 .containsOnly("IP-001");
+        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getItemType)
+                .containsOnly("普通件");
     }
 
     @Test

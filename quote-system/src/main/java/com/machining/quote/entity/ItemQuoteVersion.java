@@ -30,6 +30,8 @@ public class ItemQuoteVersion {
     private String remark;            // 备注
     private Double materialGrossWeight; // 材料毛重，单位 kg
     private Double partNetWeight;       // 零件净重，单位 kg
+    private String quoteMode;           // NORMAL / ASSEMBLY
+    private Double assemblyFee;         // 组合件每套组装费
 
     // 指定用 Jackson 把前端传来的复杂矩阵对象，自动变成 JSONB 存进数据库
     @TableField(typeHandler = JsonbTypeHandler.class)

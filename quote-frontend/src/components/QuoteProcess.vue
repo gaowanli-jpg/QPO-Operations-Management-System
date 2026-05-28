@@ -83,6 +83,13 @@
               <el-table-column prop="version" label="版本" width="72" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
+              <el-table-column label="类型" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="isAssemblyItem(row) ? 'warning' : 'info'" size="small">
+                    {{ isAssemblyItem(row) ? '组合件' : '普通件' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="含税单价" width="110" align="right">
                 <template #default="{ row }">
                   <span v-if="row.finalUnitPrice != null">¥ {{ Number(row.finalUnitPrice).toFixed(2) }}</span>
@@ -213,6 +220,8 @@ const normalizeRows = (rows) => rows.map(row => ({
   ...row,
   quoteLeadTimeDraft: row.quoteLeadTime || ''
 }))
+
+const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows

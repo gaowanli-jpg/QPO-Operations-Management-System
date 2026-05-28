@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -63,7 +64,7 @@ public class DeliveryService {
         }
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
-        List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
+        Map<Integer, DemandLine> demandByItemId = new LinkedHashMap<>();
         for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
             ItemQuoteVersion item = itemMapper.selectById(line.getItemId());
             if (item == null) {
@@ -80,7 +81,24 @@ public class DeliveryService {
             if (acceptedQty > safeInt(item.getQty())) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量不能超过询价数量");
             }
+            addDeliveryDemand(item, acceptedQty, demandByItemId);
+        }
+
+        for (DemandLine demand : demandByItemId.values()) {
+            ItemQuoteVersion item = demand.item();
+            if (item.getFinalUnitPrice() == null) {
+                throw new RuntimeException("零件 " + itemLabel(item) + " 尚未核价，不能生成提单");
+            }
+            if (demand.qty() > safeInt(item.getQty())) {
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty() + " 超过询价数量 " + safeInt(item.getQty()));
+            }
             assertNoDuplicateTicket(item);
+        }
+
+        List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
+        for (DemandLine demand : demandByItemId.values()) {
+            ItemQuoteVersion item = demand.item();
+            int acceptedQty = demand.qty();
 
             int remaining = acceptedQty;
             InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), item.getPartNo(), item.getVersion());
@@ -104,12 +122,12 @@ public class DeliveryService {
                         item.getRemark(), arrangeType));
             }
 
-            item.setStatus(acceptedQty < safeInt(item.getQty()) ? "已部分提单" : "已生成提单");
-            itemMapper.updateById(item);
-
             insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)), internalProjectNo);
         }
 
+        for (DemandLine demand : demandByItemId.values()) {
+            refreshItemTicketStatus(demand.item());
+        }
         refreshOrderTicketStatus(order.getId());
         auditService.record("DELIVERY_TICKET_GENERATE", "order_rfq", order.getId(), null, createdTickets);
         return createdTickets;
@@ -169,6 +187,7 @@ public class DeliveryService {
         ticket.setOrderType(isBlank(item.getOrderType()) ? "新订单" : item.getOrderType());
         ticket.setInternalProjectNo(internalProjectNo);
         ticket.setProjectNo(projectNo);
+        ticket.setItemType(resolveItemType(item));
         ticket.setPartNo(item.getPartNo());
         ticket.setQty(qty);
         ticket.setMaterialName(item.getMaterialName());
@@ -180,6 +199,14 @@ public class DeliveryService {
         ticket.setArrangeType(arrangeType);
         ticketMapper.insert(ticket);
         return ticket;
+    }
+
+    private void addDeliveryDemand(ItemQuoteVersion item, int qty, Map<Integer, DemandLine> demandByItemId) {
+        if (item == null || qty <= 0) {
+            return;
+        }
+        demandByItemId.merge(item.getId(), new DemandLine(item, qty),
+                (left, right) -> new DemandLine(left.item(), left.qty() + right.qty()));
     }
 
     private ItemQuoteVersion findItemByTicket(OrderDeliveryTicket ticket) {
@@ -319,6 +346,7 @@ public class DeliveryService {
         sheet.setRfqId(item.getRfqId());
         sheet.setItemId(item.getId());
         sheet.setInternalProjectNo(internalProjectNo);
+        sheet.setItemType(resolveItemType(item));
         sheet.setPartNo(item.getPartNo());
         sheet.setVersion(item.getVersion());
         sheet.setDescription(item.getDescription());
@@ -349,6 +377,10 @@ public class DeliveryService {
         return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
     }
 
+    private String resolveItemType(ItemQuoteVersion item) {
+        return "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode()) ? "组合件" : "普通件";
+    }
+
     private String normalizePartNo(String partNo) {
         return partNo == null ? "" : partNo.trim().toUpperCase();
     }
@@ -375,5 +407,8 @@ public class DeliveryService {
 
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private record DemandLine(ItemQuoteVersion item, int qty) {
     }
 }

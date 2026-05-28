@@ -43,6 +43,13 @@
           <el-table-column prop="version" label="版本" width="80" align="center" />
           <el-table-column prop="description" label="名称/描述" min-width="150" show-overflow-tooltip />
           <el-table-column prop="qty" label="数量" width="70" align="center" />
+          <el-table-column label="类型" width="90" align="center">
+            <template #default="scope">
+              <el-tag :type="isAssemblyItem(scope.row) ? 'warning' : 'info'" size="small">
+                {{ isAssemblyItem(scope.row) ? '组合件' : '普通件' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="材料毛重(kg)" width="120" align="right">
             <template #default="scope">{{ formatWeight(scope.row.materialGrossWeight) }}</template>
           </el-table-column>
@@ -124,6 +131,16 @@
             </div>
           </div>
 
+          <el-form label-width="100px" class="pricing-section-form quote-mode-form">
+            <el-form-item label="核价类型">
+              <el-radio-group v-model="quoteMode">
+                <el-radio-button label="NORMAL">普通零件</el-radio-button>
+                <el-radio-button label="ASSEMBLY">组合件</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-form>
+
+          <template v-if="quoteMode === 'NORMAL'">
           <!-- 模块A：材料 -->
           <div class="form-section-title">模块 A：材料成本核算（已继承全局设定）</div>
           <el-form label-width="100px" class="pricing-section-form">
@@ -228,6 +245,81 @@
                 </div>
               </el-col>
             </el-row>
+          </div>
+          </template>
+
+          <div v-else class="assembly-box">
+            <div class="form-section-title">模块 A：组合件子件汇总</div>
+            <el-alert
+              type="info"
+              :closable="false"
+              title="组合件父件价格 = 子件含税单价汇总 + 组装费；不会再次计算管理费、利润、税费。"
+              class="assembly-tip"
+            />
+            <div class="assembly-actions">
+              <el-button type="primary" plain size="small" :icon="Plus" @click="addAssemblyChild">新增子件</el-button>
+            </div>
+            <el-empty v-if="assemblyChildren.length === 0" description="暂无子件关系" :image-size="60">
+              <el-button type="primary" plain size="small" :icon="Plus" @click="addAssemblyChild">新增子件</el-button>
+            </el-empty>
+            <el-row
+              v-for="(child, index) in assemblyChildren"
+              :key="child.rowKey || index"
+              :gutter="10"
+              class="assembly-row"
+            >
+              <el-col :span="10">
+                <el-select v-model="child.childItemId" placeholder="选择当前 RFQ 子件" class="full-width" filterable @change="hydrateAssemblyChild(child)">
+                  <el-option
+                    v-for="option in assemblyChildOptions"
+                    :key="option.id"
+                    :label="`${option.partNo || '-'} / ${option.version || '-'} - ${option.description || ''}`"
+                    :value="option.id"
+                    :disabled="selectedAssemblyChildIds.has(option.id) && option.id !== child.childItemId"
+                  >
+                    <span>{{ option.partNo || '-' }} / {{ option.version || '-' }}</span>
+                    <span class="assembly-option-meta">
+                      {{ option.description || '' }}，{{ option.finalUnitPrice != null ? `¥ ${Number(option.finalUnitPrice).toFixed(2)}` : '未核价' }}
+                    </span>
+                  </el-option>
+                </el-select>
+              </el-col>
+              <el-col :span="4">
+                <el-input-number
+                  v-model="child.qtyPerParent"
+                  :min="0.0001"
+                  :step="1"
+                  :precision="4"
+                  controls-position="right"
+                  class="full-width"
+                />
+              </el-col>
+              <el-col :span="6">
+                <div class="assembly-line-price">
+                  {{ child.finalUnitPrice != null ? `¥ ${(Number(child.finalUnitPrice) * Number(child.qtyPerParent || 0)).toFixed(2)}` : '子件未核价' }}
+                </div>
+              </el-col>
+              <el-col :span="4">
+                <el-button size="small" type="danger" plain :icon="Delete" @click="removeAssemblyChild(index)">删除</el-button>
+              </el-col>
+            </el-row>
+            <el-form label-width="100px" class="pricing-section-form assembly-fee-form">
+              <el-form-item label="组装费">
+                <el-input-number
+                  v-model="assemblyFee"
+                  :min="0"
+                  :step="10"
+                  :precision="2"
+                  controls-position="right"
+                  class="full-width"
+                />
+              </el-form-item>
+            </el-form>
+            <div class="assembly-summary">
+              子件含税汇总：¥ {{ assemblyChildrenTotal.toFixed(2) }}，
+              组装费：¥ {{ Number(assemblyFee || 0).toFixed(2) }}，
+              父件含税单价：¥ {{ assemblyFinalUnitPrice.toFixed(2) }}
+            </div>
           </div>
         </div>
 
@@ -532,11 +624,36 @@ const openDrawingInNewWindow = (url) => {
 const dialogVisible = ref(false)
 const currentRow = ref(null)
 const submitLoading = ref(false)
+const quoteMode = ref('NORMAL')
+const assemblyFee = ref(0)
+const assemblyChildren = ref([])
+let assemblyChildSeq = 0
 
 const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: 0 })
 const processRoute = ref([])
 let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
+
+const isAssemblyItem = (item) => String(item?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
+
+const assemblyChildOptions = computed(() => {
+  const currentId = currentRow.value?.id
+  return (quoteData.value?.itemList || []).filter(item => item.id !== currentId)
+})
+
+const selectedAssemblyChildIds = computed(() => new Set(
+  assemblyChildren.value
+    .map(child => child.childItemId)
+    .filter(Boolean)
+))
+
+const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum, child) => {
+  const unitPrice = Number(child.finalUnitPrice)
+  const qty = Number(child.qtyPerParent || 0)
+  return Number.isFinite(unitPrice) ? sum + unitPrice * qty : sum
+}, 0))
+
+const assemblyFinalUnitPrice = computed(() => assemblyChildrenTotal.value + numberOrZero(assemblyFee.value))
 
 const numericSortNo = (value) => {
   const numericValue = Number(value)
@@ -552,6 +669,40 @@ const createProcessRow = (source = {}) => ({
   inputVal: source.inputVal ?? 0,
   sortNo: numericSortNo(source.sortNo)
 })
+
+const createAssemblyChildRow = (source = {}) => {
+  const childId = source.childItemId ?? source.id ?? null
+  const option = assemblyChildOptions.value.find(item => item.id === childId)
+  return {
+    rowKey: `assembly-child-${Date.now()}-${assemblyChildSeq++}`,
+    childItemId: childId,
+    qtyPerParent: Number(source.qtyPerParent ?? source.childQtyPerParent ?? 1),
+    sortNo: numericSortNo(source.sortNo),
+    partNo: source.partNo || option?.partNo || '',
+    version: source.version || option?.version || '',
+    description: source.description || option?.description || '',
+    finalUnitPrice: source.finalUnitPrice ?? option?.finalUnitPrice ?? null,
+    status: source.status || option?.status || ''
+  }
+}
+
+const hydrateAssemblyChild = (child) => {
+  const option = assemblyChildOptions.value.find(item => item.id === child.childItemId)
+  if (!option) return
+  child.partNo = option.partNo
+  child.version = option.version
+  child.description = option.description
+  child.finalUnitPrice = option.finalUnitPrice
+  child.status = option.status
+}
+
+const addAssemblyChild = () => {
+  assemblyChildren.value.push(createAssemblyChildRow())
+}
+
+const removeAssemblyChild = (index) => {
+  assemblyChildren.value.splice(index, 1)
+}
 
 const assignProcessSortNos = (rows = processRoute.value) => {
   rows.forEach((row, index) => {
@@ -705,10 +856,25 @@ const syncCurrentRouteToGlobalConfig = async () => {
   return { updated: true }
 }
 
+const loadAssemblyRelations = async (row) => {
+  assemblyChildren.value = []
+  if (!row?.id) return
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/engineer/assembly-relations/${row.id}`)
+    assemblyChildren.value = (response.data || []).map(item => createAssemblyChildRow(item))
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('组合件子件关系加载失败。')
+  }
+}
+
 // 打开弹窗，继承全局配置
-const openQuoteDialog = (row) => {
+const openQuoteDialog = async (row) => {
   currentRow.value = row
   dialogVisible.value = true
+  quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
+  assemblyFee.value = numberOrZero(row.assemblyFee)
+  assemblyChildren.value = []
   
   // 继承阶段 1 的材料设置
   const savedMaterialData = row.materialData || {}
@@ -730,6 +896,10 @@ const openQuoteDialog = (row) => {
   } else {
     processRoute.value = assignProcessSortNos(normalizeRouteList(globalConfig.value.processRoute)
       .map(p => hydrateRouteItem(createProcessRow(p))))
+  }
+
+  if (quoteMode.value === 'ASSEMBLY') {
+    await loadAssemblyRelations(row)
   }
 }
 
@@ -777,52 +947,86 @@ const calculatedMaterialCost = computed(() => calculatedWeight.value * currentUn
 // 提交逻辑
 const submitCurrentQuote = async () => {
   submitLoading.value = true
-  const validProcess = buildQuoteProcessRoute()
-  
-  const payload = {
-    itemId: currentRow.value.id,
-    partNetWeight: numberOrZero(matForm.netWeight),
-    materialData: {
-      name: matForm.materialName,
-      shape: matForm.shape,
-      volume: calculatedVolume.value,
-      weight: calculatedWeight.value,
-      grossWeight: calculatedWeight.value,
-      grossWeightUnit: 'kg',
-      netWeight: numberOrZero(matForm.netWeight),
-      netWeightUnit: 'kg',
-      density: currentDensity.value,
-      densityUnit: 'kg/m3',
-      unitPrice: currentUnitPrice.value,
-      unitPriceUnit: '元/kg',
-      cost: calculatedMaterialCost.value,
-      dimensionUnit: 'm',
-      volumeUnit: 'm3',
-      weightUnit: 'kg',
-      dimensions: {
-        L: matForm.L,
-        W: matForm.W,
-        T: matForm.T,
-        outR: matForm.outR,
-        inR: matForm.inR
-      }
-    },
-    processRoute: validProcess
+  let payload
+
+  if (quoteMode.value === 'ASSEMBLY') {
+    const validChildren = assemblyChildren.value
+      .filter(child => child.childItemId && Number(child.qtyPerParent) > 0)
+      .map((child, index) => ({
+        childItemId: child.childItemId,
+        qtyPerParent: Number(child.qtyPerParent),
+        sortNo: (index + 1) * PROCESS_SORT_STEP
+      }))
+    if (validChildren.length === 0) {
+      submitLoading.value = false
+      return ElMessage.warning('组合件至少需要选择一个子件。')
+    }
+    const unquotedChildren = assemblyChildren.value.filter(child => child.childItemId && child.finalUnitPrice == null)
+    if (unquotedChildren.length > 0) {
+      submitLoading.value = false
+      return ElMessage.warning('组合件存在未核价子件，请先完成子件核价。')
+    }
+    payload = {
+      itemId: currentRow.value.id,
+      quoteMode: 'ASSEMBLY',
+      assemblyFee: numberOrZero(assemblyFee.value),
+      assemblyChildren: validChildren,
+      materialData: {},
+      partNetWeight: 0,
+      processRoute: []
+    }
+  } else {
+    const validProcess = buildQuoteProcessRoute()
+    payload = {
+      itemId: currentRow.value.id,
+      quoteMode: 'NORMAL',
+      partNetWeight: numberOrZero(matForm.netWeight),
+      materialData: {
+        name: matForm.materialName,
+        shape: matForm.shape,
+        volume: calculatedVolume.value,
+        weight: calculatedWeight.value,
+        grossWeight: calculatedWeight.value,
+        grossWeightUnit: 'kg',
+        netWeight: numberOrZero(matForm.netWeight),
+        netWeightUnit: 'kg',
+        density: currentDensity.value,
+        densityUnit: 'kg/m3',
+        unitPrice: currentUnitPrice.value,
+        unitPriceUnit: '元/kg',
+        cost: calculatedMaterialCost.value,
+        dimensionUnit: 'm',
+        volumeUnit: 'm3',
+        weightUnit: 'kg',
+        dimensions: {
+          L: matForm.L,
+          W: matForm.W,
+          T: matForm.T,
+          outR: matForm.outR,
+          inR: matForm.inR
+        }
+      },
+      processRoute: validProcess
+    }
   }
-  
+
   try {
     await axios.post(`${API_BASE_URL}/api/engineer/submit-quote`, payload)
     let globalSynced = true
     let globalUpdated = false
-    try {
-      const syncResult = await syncCurrentRouteToGlobalConfig()
-      globalUpdated = !!syncResult.updated
-    } catch (syncError) {
-      console.error(syncError)
-      globalSynced = false
+    if (quoteMode.value === 'NORMAL') {
+      try {
+        const syncResult = await syncCurrentRouteToGlobalConfig()
+        globalUpdated = !!syncResult.updated
+      } catch (syncError) {
+        console.error(syncError)
+        globalSynced = false
+      }
     }
     ElMessage[globalSynced ? 'success' : 'warning'](
-      globalSynced
+      quoteMode.value === 'ASSEMBLY'
+        ? '组合件核价成功。'
+        : globalSynced
         ? (globalUpdated ? '核价成功，当前工艺路线已同步为订单全局设定。' : '核价成功，工艺路线未变化。')
         : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
     )
@@ -982,6 +1186,62 @@ const submitCurrentQuote = async () => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.quote-mode-form {
+  margin-top: 12px;
+}
+
+.assembly-box {
+  margin-top: 14px;
+}
+
+.assembly-tip {
+  margin-bottom: 12px;
+}
+
+.assembly-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.assembly-row {
+  margin-bottom: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.assembly-option-meta {
+  float: right;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.assembly-line-price {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.assembly-fee-form {
+  margin-top: 12px;
+}
+
+.assembly-summary {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f5f7fb;
+  color: var(--erp-danger);
+  font-weight: 700;
+  text-align: right;
 }
 
 :deep(.pricing-workbench-dialog .el-dialog__body) {

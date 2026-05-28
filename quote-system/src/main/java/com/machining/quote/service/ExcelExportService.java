@@ -52,6 +52,7 @@ public class ExcelExportService {
                 List.of("订单类型"),
                 List.of("内部项目号"),
                 List.of("RFQ号"),
+                List.of("类型"),
                 List.of("图号"),
                 List.of("数量"),
                 List.of("材料名称"),
@@ -71,6 +72,7 @@ public class ExcelExportService {
                     safe(ticket.getOrderType()),
                     safe(ticket.getInternalProjectNo()),
                     safe(ticket.getProjectNo()),
+                    safe(ticket.getItemType()),
                     safe(ticket.getPartNo()),
                     safeInt(ticket.getQty()),
                     safe(ticket.getMaterialName()),
@@ -93,7 +95,7 @@ public class ExcelExportService {
         String rfqNo = resolveRfqNo(rfqId);
 
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "内部项目号", "RFQ号", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
+        for (String title : List.of("序号", "内部项目号", "RFQ号", "类型", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(List.of(title));
         }
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
@@ -108,6 +110,7 @@ public class ExcelExportService {
             row.add(i + 1);
             row.add(safe(sheet.getInternalProjectNo()));
             row.add(rfqNo);
+            row.add(safe(sheet.getItemType()));
             row.add(safe(sheet.getPartNo()));
             row.add(safe(sheet.getVersion()));
             row.add(safe(sheet.getDescription()));

@@ -62,6 +62,11 @@ public class EngineerController {
         return engineerService.analyzeRepeatOrder(rfqId);
     }
 
+    @GetMapping("/assembly-relations/{parentItemId}")
+    public List<Map<String, Object>> listAssemblyRelations(@PathVariable Integer parentItemId) {
+        return engineerService.listAssemblyRelations(parentItemId);
+    }
+
     @PostMapping("/apply-repeat-quotes/{rfqId}")
     public Map<String, Object> applyRepeatQuotes(@PathVariable Integer rfqId) {
         return engineerService.applyRepeatQuotes(rfqId);

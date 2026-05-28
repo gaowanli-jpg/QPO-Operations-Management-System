@@ -144,6 +144,13 @@
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
+              <el-table-column label="类型" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="isAssemblyItem(row) ? 'warning' : 'info'" size="small">
+                    {{ isAssemblyItem(row) ? '组合件' : '普通件' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="leadTime" label="客户询价交期" width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.leadTime || '-' }}</template>
               </el-table-column>
@@ -189,6 +196,7 @@
             </div>
             <el-table :data="ticketList" border stripe height="280" v-loading="loadingTickets || deleting">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
+              <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -215,6 +223,7 @@
             </div>
             <el-table :data="processSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
+              <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
@@ -372,6 +381,8 @@ const loadProcessSheets = async (rfqId) => {
 const canSelectItem = (row) => {
   return row.status !== '已生成提单' && row.status !== '已部分提单'
 }
+
+const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows

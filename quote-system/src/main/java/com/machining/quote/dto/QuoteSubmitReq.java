@@ -7,6 +7,8 @@ import java.util.Map;
 @Data
 public class QuoteSubmitReq {
     private Integer itemId; // 零件明细表的 ID
+    private String quoteMode; // NORMAL / ASSEMBLY
+    private Double assemblyFee; // 组合件每套组装费
 
     // 材料填报数据：包含名称、毛坯重量等
     private Map<String, Object> materialData;
@@ -16,6 +18,7 @@ public class QuoteSubmitReq {
 
     // 工序矩阵：前端动态增加的每一列工艺，都作为一个对象放在这个列表里
     private List<ProcessSubmitDTO> processRoute;
+    private List<AssemblyChildDTO> assemblyChildren;
 
     @Data
     public static class ProcessSubmitDTO {
@@ -25,5 +28,12 @@ public class QuoteSubmitReq {
         private String calcType;    // 工时 / 非工时费用
         private Double unitRate;    // 核价时匹配到的单价，便于导出报价单复用
         private Double lineCost;    // 该工序最终计入的费用
+    }
+
+    @Data
+    public static class AssemblyChildDTO {
+        private Integer childItemId;
+        private Double qtyPerParent;
+        private Integer sortNo;
     }
 }

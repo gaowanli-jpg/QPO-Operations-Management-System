@@ -136,6 +136,8 @@ public class InternalTargetLeadTimeService {
         row.put("finalTotalPrice", item.getFinalTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
+        row.put("quoteMode", item.getQuoteMode());
+        row.put("assemblyFee", item.getAssemblyFee());
         return row;
     }
 

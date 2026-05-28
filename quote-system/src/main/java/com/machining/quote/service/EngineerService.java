@@ -1,11 +1,13 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictProcess;
+import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -13,6 +15,7 @@ import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictProcessMapper;
+import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -29,9 +32,13 @@ import java.util.Set;
 
 @Service
 public class EngineerService {
+    private static final String QUOTE_MODE_NORMAL = "NORMAL";
+    private static final String QUOTE_MODE_ASSEMBLY = "ASSEMBLY";
 
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
+    @Autowired
+    private ItemAssemblyRelationMapper assemblyRelationMapper;
     @Autowired
     private DictProcessMapper processMapper;
     @Autowired
@@ -52,7 +59,13 @@ public class EngineerService {
         ItemQuoteVersion item = itemMapper.selectById(req.getItemId());
         if (item == null) throw new RuntimeException("找不到该零件！");
         ItemQuoteVersion before = copyItem(item);
-        saveCalculatedQuote(item, req.getMaterialData(), req.getProcessRoute(), req.getPartNetWeight());
+        String quoteMode = normalizeQuoteMode(req.getQuoteMode());
+        if (QUOTE_MODE_ASSEMBLY.equals(quoteMode)) {
+            saveAssemblyQuote(item, req.getAssemblyFee(), req.getAssemblyChildren());
+        } else {
+            saveCalculatedQuote(item, req.getMaterialData(), req.getProcessRoute(), req.getPartNetWeight());
+        }
+        markAncestorAssembliesPending(item.getId(), new HashSet<>());
         auditService.record("ITEM_QUOTE_SAVE", "item_quote_version", item.getId(), before, itemMapper.selectById(item.getId()));
     }
 
@@ -61,6 +74,8 @@ public class EngineerService {
         int qty = item.getQty() == null ? 0 : item.getQty();
         if (materialData == null) {
             materialData = new LinkedHashMap<>();
+        } else {
+            materialData = new LinkedHashMap<>(materialData);
         }
 
         double materialCost = calculateMaterialCost(materialData);
@@ -115,13 +130,255 @@ public class EngineerService {
         item.setFeeData(feeBreakdown);
         item.setMaterialGrossWeight(materialGrossWeight);
         item.setPartNetWeight(normalizedPartNetWeight);
+        item.setQuoteMode(QUOTE_MODE_NORMAL);
+        item.setAssemblyFee(0.0);
         item.setBaseCost(baseCost);
         item.setFinalUnitPrice(finalUnitPrice);
         item.setFinalTotalPrice(finalTotalPrice);
         item.setStatus("已报价");
 
+        deleteAssemblyRelations(item.getId());
         itemMapper.updateById(item);
         System.out.println("===> 零件 ID " + item.getId() + " 核价完毕！总成本(不含税): " + baseCost + ", 最终单价(含税): " + finalUnitPrice);
+    }
+
+    private void saveAssemblyQuote(ItemQuoteVersion parent, Double assemblyFee,
+                                   List<QuoteSubmitReq.AssemblyChildDTO> assemblyChildren) {
+        if (assemblyChildren == null || assemblyChildren.isEmpty()) {
+            throw new RuntimeException("组合件必须至少选择一个子件");
+        }
+
+        List<QuoteSubmitReq.AssemblyChildDTO> normalizedChildren = normalizeAssemblyChildren(parent, assemblyChildren);
+        validateAssemblyGraph(parent, normalizedChildren);
+
+        double childrenTotal = 0.0;
+        List<Map<String, Object>> childSummary = new ArrayList<>();
+        for (QuoteSubmitReq.AssemblyChildDTO childLine : normalizedChildren) {
+            ItemQuoteVersion child = itemMapper.selectById(childLine.getChildItemId());
+            if (child.getFinalUnitPrice() == null) {
+                throw new RuntimeException("子件 " + itemLabel(child) + " 尚未核价，不能作为组合件子件");
+            }
+            double qtyPerParent = nonNegativeOrZero(childLine.getQtyPerParent());
+            double childAmount = child.getFinalUnitPrice() * qtyPerParent;
+            childrenTotal += childAmount;
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("childItemId", child.getId());
+            row.put("partNo", child.getPartNo());
+            row.put("version", child.getVersion());
+            row.put("description", child.getDescription());
+            row.put("qtyPerParent", qtyPerParent);
+            row.put("finalUnitPrice", child.getFinalUnitPrice());
+            row.put("lineAmount", childAmount);
+            childSummary.add(row);
+        }
+
+        double safeAssemblyFee = nonNegativeOrZero(assemblyFee);
+        double finalUnitPrice = childrenTotal + safeAssemblyFee;
+        int parentQty = parent.getQty() == null ? 0 : parent.getQty();
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("quoteMode", QUOTE_MODE_ASSEMBLY);
+        materialData.put("childrenTotal", childrenTotal);
+        materialData.put("assemblyFee", safeAssemblyFee);
+        materialData.put("cost", 0.0);
+        materialData.put("weight", 0.0);
+        materialData.put("grossWeight", 0.0);
+        materialData.put("grossWeightUnit", "kg");
+        materialData.put("netWeight", 0.0);
+        materialData.put("netWeightUnit", "kg");
+        materialData.put("children", childSummary);
+
+        List<Map<String, Object>> processRoute = new ArrayList<>();
+        if (safeAssemblyFee > 0) {
+            Map<String, Object> assemblyRoute = new LinkedHashMap<>();
+            assemblyRoute.put("sortNo", 10);
+            assemblyRoute.put("processName", "组装费");
+            assemblyRoute.put("calcType", "非工时费用");
+            assemblyRoute.put("sourceType", "extra");
+            assemblyRoute.put("inputVal", safeAssemblyFee);
+            assemblyRoute.put("unitRate", null);
+            assemblyRoute.put("lineCost", safeAssemblyFee);
+            processRoute.add(assemblyRoute);
+        }
+
+        replaceAssemblyRelations(parent, normalizedChildren);
+
+        parent.setQuoteMode(QUOTE_MODE_ASSEMBLY);
+        parent.setAssemblyFee(safeAssemblyFee);
+        parent.setMaterialData(materialData);
+        parent.setProcessRoute(processRoute);
+        parent.setFeeData(List.of());
+        parent.setMaterialGrossWeight(0.0);
+        parent.setPartNetWeight(0.0);
+        parent.setBaseCost(finalUnitPrice);
+        parent.setFinalUnitPrice(finalUnitPrice);
+        parent.setFinalTotalPrice(finalUnitPrice * parentQty);
+        parent.setStatus("已报价");
+        itemMapper.updateById(parent);
+        System.out.println("===> 组合件 ID " + parent.getId() + " 核价完毕！子件汇总: " + childrenTotal + ", 组装费: " + safeAssemblyFee + ", 最终单价: " + finalUnitPrice);
+    }
+
+    public List<Map<String, Object>> listAssemblyRelations(Integer parentItemId) {
+        ItemQuoteVersion parent = itemMapper.selectById(parentItemId);
+        if (parent == null) {
+            throw new RuntimeException("父件不存在");
+        }
+        return listRelationsByParent(parentItemId).stream()
+                .map(relation -> {
+                    ItemQuoteVersion child = itemMapper.selectById(relation.getChildItemId());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", relation.getId());
+                    row.put("rfqId", relation.getRfqId());
+                    row.put("parentItemId", relation.getParentItemId());
+                    row.put("childItemId", relation.getChildItemId());
+                    row.put("qtyPerParent", relation.getChildQtyPerParent());
+                    row.put("sortNo", relation.getSortNo());
+                    if (child != null) {
+                        row.put("partNo", child.getPartNo());
+                        row.put("version", child.getVersion());
+                        row.put("description", child.getDescription());
+                        row.put("qty", child.getQty());
+                        row.put("quoteMode", normalizeQuoteMode(child.getQuoteMode()));
+                        row.put("finalUnitPrice", child.getFinalUnitPrice());
+                        row.put("status", child.getStatus());
+                    }
+                    return row;
+                })
+                .toList();
+    }
+
+    private List<QuoteSubmitReq.AssemblyChildDTO> normalizeAssemblyChildren(ItemQuoteVersion parent,
+                                                                            List<QuoteSubmitReq.AssemblyChildDTO> children) {
+        Set<Integer> childIds = new HashSet<>();
+        List<QuoteSubmitReq.AssemblyChildDTO> result = new ArrayList<>();
+        int index = 0;
+        for (QuoteSubmitReq.AssemblyChildDTO childLine : children) {
+            if (childLine == null || childLine.getChildItemId() == null) {
+                continue;
+            }
+            if (parent.getId().equals(childLine.getChildItemId())) {
+                throw new RuntimeException("组合件不能选择自己作为子件");
+            }
+            if (!childIds.add(childLine.getChildItemId())) {
+                throw new RuntimeException("同一个组合件不能重复选择同一个子件");
+            }
+            double qtyPerParent = nonNegativeOrZero(childLine.getQtyPerParent());
+            if (qtyPerParent <= 0) {
+                throw new RuntimeException("子件每套用量必须大于 0");
+            }
+
+            ItemQuoteVersion child = itemMapper.selectById(childLine.getChildItemId());
+            if (child == null) {
+                throw new RuntimeException("子件不存在，ID=" + childLine.getChildItemId());
+            }
+            if (!parent.getRfqId().equals(child.getRfqId())) {
+                throw new RuntimeException("子件 " + itemLabel(child) + " 不属于当前 RFQ");
+            }
+
+            QuoteSubmitReq.AssemblyChildDTO normalized = new QuoteSubmitReq.AssemblyChildDTO();
+            normalized.setChildItemId(childLine.getChildItemId());
+            normalized.setQtyPerParent(qtyPerParent);
+            normalized.setSortNo(childLine.getSortNo() == null ? (index + 1) * 10 : childLine.getSortNo());
+            result.add(normalized);
+            index++;
+        }
+        if (result.isEmpty()) {
+            throw new RuntimeException("组合件必须至少选择一个有效子件");
+        }
+        return result;
+    }
+
+    private void validateAssemblyGraph(ItemQuoteVersion parent, List<QuoteSubmitReq.AssemblyChildDTO> children) {
+        Map<Integer, List<Integer>> graph = loadAssemblyGraph(parent.getRfqId(), parent.getId());
+        graph.put(parent.getId(), children.stream().map(QuoteSubmitReq.AssemblyChildDTO::getChildItemId).toList());
+        for (QuoteSubmitReq.AssemblyChildDTO child : children) {
+            if (hasPath(child.getChildItemId(), parent.getId(), graph, new HashSet<>())) {
+                throw new RuntimeException("组合件关系不能形成循环引用");
+            }
+        }
+    }
+
+    private Map<Integer, List<Integer>> loadAssemblyGraph(Integer rfqId, Integer excludedParentItemId) {
+        QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId);
+        if (excludedParentItemId != null) {
+            qw.ne("parent_item_id", excludedParentItemId);
+        }
+        List<ItemAssemblyRelation> relations = assemblyRelationMapper.selectList(qw);
+        Map<Integer, List<Integer>> graph = new LinkedHashMap<>();
+        for (ItemAssemblyRelation relation : relations) {
+            graph.computeIfAbsent(relation.getParentItemId(), key -> new ArrayList<>())
+                    .add(relation.getChildItemId());
+        }
+        return graph;
+    }
+
+    private boolean hasPath(Integer currentId, Integer targetId, Map<Integer, List<Integer>> graph, Set<Integer> visited) {
+        if (currentId == null) {
+            return false;
+        }
+        if (currentId.equals(targetId)) {
+            return true;
+        }
+        if (!visited.add(currentId)) {
+            return false;
+        }
+        for (Integer nextId : graph.getOrDefault(currentId, List.of())) {
+            if (hasPath(nextId, targetId, graph, visited)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void replaceAssemblyRelations(ItemQuoteVersion parent, List<QuoteSubmitReq.AssemblyChildDTO> children) {
+        deleteAssemblyRelations(parent.getId());
+        for (QuoteSubmitReq.AssemblyChildDTO childLine : children) {
+            ItemAssemblyRelation relation = new ItemAssemblyRelation();
+            relation.setRfqId(parent.getRfqId());
+            relation.setParentItemId(parent.getId());
+            relation.setChildItemId(childLine.getChildItemId());
+            relation.setChildQtyPerParent(childLine.getQtyPerParent());
+            relation.setSortNo(childLine.getSortNo());
+            assemblyRelationMapper.insert(relation);
+        }
+    }
+
+    private void deleteAssemblyRelations(Integer parentItemId) {
+        QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
+        qw.eq("parent_item_id", parentItemId);
+        assemblyRelationMapper.delete(qw);
+    }
+
+    private List<ItemAssemblyRelation> listRelationsByParent(Integer parentItemId) {
+        QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
+        qw.eq("parent_item_id", parentItemId).orderByAsc("sort_no").orderByAsc("id");
+        return assemblyRelationMapper.selectList(qw);
+    }
+
+    private void markAncestorAssembliesPending(Integer childItemId, Set<Integer> visited) {
+        if (childItemId == null || !visited.add(childItemId)) {
+            return;
+        }
+        QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
+        qw.eq("child_item_id", childItemId);
+        List<ItemAssemblyRelation> parentRelations = assemblyRelationMapper.selectList(qw);
+        for (ItemAssemblyRelation relation : parentRelations) {
+            ItemQuoteVersion parent = itemMapper.selectById(relation.getParentItemId());
+            if (parent == null || parent.getFinalUnitPrice() == null) {
+                continue;
+            }
+            UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+            update.eq("id", parent.getId())
+                    .set("status", "待核价")
+                    .set("base_cost", null)
+                    .set("final_unit_price", null)
+                    .set("final_total_price", null)
+                    .set("fee_data", null);
+            itemMapper.update(null, update);
+            markAncestorAssembliesPending(parent.getId(), visited);
+        }
     }
 
     @Transactional
@@ -241,6 +498,10 @@ public class EngineerService {
             }
 
             ItemQuoteVersion sourceItem = source.item();
+            if (QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(sourceItem.getQuoteMode()))) {
+                skippedItems.add(buildSkipInfo(item, "历史重复件为组合件，请手动建立子件关系后核价"));
+                continue;
+            }
             item.setMaterialName(isBlank(item.getMaterialName()) ? sourceItem.getMaterialName() : item.getMaterialName());
             item.setSurfaceTreatment(isBlank(item.getSurfaceTreatment()) ? sourceItem.getSurfaceTreatment() : item.getSurfaceTreatment());
 
@@ -295,6 +556,8 @@ public class EngineerService {
         copy.setQuoteLeadTime(source.getQuoteLeadTime());
         copy.setInternalTargetLeadTime(source.getInternalTargetLeadTime());
         copy.setRemark(source.getRemark());
+        copy.setQuoteMode(source.getQuoteMode());
+        copy.setAssemblyFee(source.getAssemblyFee());
         copy.setMaterialData(source.getMaterialData());
         copy.setProcessRoute(source.getProcessRoute());
         copy.setFeeData(source.getFeeData());
@@ -557,6 +820,11 @@ public class EngineerService {
     private String normalizeVersion(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase();
         return normalized;
+    }
+
+    private String normalizeQuoteMode(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase();
+        return QUOTE_MODE_ASSEMBLY.equals(normalized) ? QUOTE_MODE_ASSEMBLY : QUOTE_MODE_NORMAL;
     }
 
     private String itemKey(ItemQuoteVersion item) {
