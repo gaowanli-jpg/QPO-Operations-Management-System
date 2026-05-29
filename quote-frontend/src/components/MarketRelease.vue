@@ -78,6 +78,25 @@
                   减少
                 </el-button>
               </div>
+              <el-date-picker
+                v-model="manualInternalTargetDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                format="YYYY-MM-DD"
+                placeholder="手动指定内部目标交期"
+                clearable
+                class="full-width manual-date-picker"
+              />
+              <el-button
+                type="primary"
+                plain
+                class="set-date-btn"
+                :disabled="selectedRows.length === 0 || !manualInternalTargetDate"
+                :loading="settingInternalTargetLeadTime"
+                @click="setInternalTargetLeadTime"
+              >
+                指定内部目标交期
+              </el-button>
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
@@ -157,8 +176,31 @@
               <el-table-column prop="quoteLeadTime" label="报价承诺交期" width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.quoteLeadTime || '-' }}</template>
               </el-table-column>
-              <el-table-column prop="internalTargetLeadTime" label="内部目标交期" width="120" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.internalTargetLeadTime || '-' }}</template>
+              <el-table-column label="内部目标交期" width="210">
+                <template #default="{ row }">
+                  <div class="row-date-editor">
+                    <el-date-picker
+                      v-model="row.internalTargetLeadTimeDraft"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      format="YYYY-MM-DD"
+                      placeholder="默认沿用报价交期"
+                      clearable
+                      :disabled="!canSelectItem(row)"
+                      class="row-date-picker"
+                    />
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canSelectItem(row)"
+                      :loading="!!savingInternalRowMap[row.id]"
+                      @click.stop="saveInternalTargetLeadTime(row)"
+                    >
+                      保存
+                    </el-button>
+                  </div>
+                </template>
               </el-table-column>
               <el-table-column label="提单交期" width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ resolveDeliveryLeadTime(row) }}</template>
@@ -280,6 +322,8 @@ const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
+const manualInternalTargetDate = ref('')
+const savingInternalRowMap = reactive({})
 
 const loading = ref(false)
 const loadingTickets = ref(false)
@@ -287,6 +331,7 @@ const loadingProcessSheets = ref(false)
 const submitting = ref(false)
 const deleting = ref(false)
 const adjustingInternalLeadTime = ref(false)
+const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
 
 const today = new Date().toISOString().slice(0, 10)
@@ -348,7 +393,10 @@ const loadInternalTargetItems = async (rfqId) => {
 }
 
 const setItemList = (rows) => {
-  itemList.value = rows || []
+  itemList.value = (rows || []).map(row => ({
+    ...row,
+    internalTargetLeadTimeDraft: row.internalTargetLeadTime || ''
+  }))
   itemList.value.forEach(item => {
     if (!acceptedQtyMap[item.id]) {
       acceptedQtyMap[item.id] = item.qty || 1
@@ -484,6 +532,61 @@ const adjustInternalLeadTime = async (direction) => {
     ElMessage.error(error.response?.data?.message || '内部目标交期调整失败。')
   } finally {
     adjustingInternalLeadTime.value = false
+  }
+}
+
+const setInternalTargetLeadTime = async () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
+  if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  if (!manualInternalTargetDate.value) return ElMessage.warning('请先选择内部目标交期。')
+
+  settingInternalTargetLeadTime.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/market/internal-target-lead-time/set`, {
+      rfqId: selectedRfqId.value,
+      itemIds: selectedRows.value.map(row => row.id),
+      internalTargetLeadTime: manualInternalTargetDate.value
+    })
+    setItemList(response.data.itemList || [])
+    selectedRows.value = []
+    const adjusted = response.data.adjustedCount || 0
+    const skipped = response.data.skippedCount || 0
+    if (skipped > 0) {
+      ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
+    } else {
+      ElMessage.success(`已指定 ${adjusted} 项内部目标交期。`)
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '指定内部目标交期失败。')
+  } finally {
+    settingInternalTargetLeadTime.value = false
+  }
+}
+
+const saveInternalTargetLeadTime = async (row) => {
+  if (!selectedRfqId.value || !row?.id) return
+  savingInternalRowMap[row.id] = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/market/internal-target-lead-time/update`, {
+      rfqId: selectedRfqId.value,
+      itemId: row.id,
+      internalTargetLeadTime: row.internalTargetLeadTimeDraft
+    })
+    const saved = {
+      ...(response.data.data || {}),
+      internalTargetLeadTimeDraft: response.data.data?.internalTargetLeadTime || ''
+    }
+    const index = itemList.value.findIndex(item => item.id === row.id)
+    if (index >= 0) {
+      itemList.value.splice(index, 1, saved)
+    }
+    ElMessage.success('内部目标交期已保存。')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '内部目标交期保存失败。')
+  } finally {
+    savingInternalRowMap[row.id] = false
   }
 }
 
@@ -743,6 +846,26 @@ onMounted(loadOrders)
 
 .lead-actions :deep(.el-button) {
   margin-left: 0;
+}
+
+.manual-date-picker,
+.set-date-btn {
+  margin-top: 10px;
+}
+
+.set-date-btn {
+  width: 100%;
+  margin-left: 0;
+}
+
+.row-date-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-date-picker {
+  width: 128px;
 }
 
 .selection-count {

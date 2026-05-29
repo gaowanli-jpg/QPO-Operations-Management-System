@@ -1,6 +1,8 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -81,6 +83,39 @@ public class QuoteProcessService {
     }
 
     @Transactional
+    public Map<String, Object> setLeadTimes(QuoteLeadTimeSetReq req) {
+        requireQuotedOrder(req.getRfqId());
+        if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
+            throw new RuntimeException("请至少选择一个零件");
+        }
+        String normalizedDate = leadTimeService.normalizeRequiredDate(req.getQuoteLeadTime());
+
+        List<Map<String, Object>> skipped = new ArrayList<>();
+        int adjustedCount = 0;
+        for (Integer itemId : req.getItemIds()) {
+            ItemQuoteVersion item = itemMapper.selectById(itemId);
+            if (item == null || !req.getRfqId().equals(item.getRfqId())) {
+                skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
+                continue;
+            }
+
+            Object before = buildItemRow(item);
+            item.setQuoteLeadTime(normalizedDate);
+            itemMapper.updateById(item);
+            auditService.record("QUOTE_LEAD_TIME_SET", "item_quote_version", item.getId(), before, buildItemRow(itemMapper.selectById(item.getId())));
+            adjustedCount++;
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("adjustedCount", adjustedCount);
+        result.put("skippedCount", skipped.size());
+        result.put("skippedItems", skipped);
+        result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        return result;
+    }
+
+    @Transactional
     public Map<String, Object> updateLeadTime(QuoteLeadTimeUpdateReq req) {
         requireQuotedOrder(req.getRfqId());
         if (req.getItemId() == null) {
@@ -93,8 +128,10 @@ public class QuoteProcessService {
         }
 
         Object before = buildItemRow(item);
-        item.setQuoteLeadTime(leadTimeService.normalizeForQuote(req.getQuoteLeadTime()));
-        itemMapper.updateById(item);
+        String normalizedLeadTime = leadTimeService.normalizeForQuote(req.getQuoteLeadTime());
+        UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+        update.eq("id", item.getId()).set("quote_lead_time", normalizedLeadTime);
+        itemMapper.update(null, update);
         ItemQuoteVersion saved = itemMapper.selectById(item.getId());
         Map<String, Object> savedRow = buildItemRow(saved);
         auditService.record("QUOTE_LEAD_TIME_UPDATE", "item_quote_version", item.getId(), before, savedRow);

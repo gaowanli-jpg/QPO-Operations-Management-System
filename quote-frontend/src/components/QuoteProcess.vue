@@ -46,6 +46,25 @@
                   减少
                 </el-button>
               </div>
+              <el-date-picker
+                v-model="manualQuoteDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                format="YYYY-MM-DD"
+                placeholder="手动指定报价交期"
+                clearable
+                class="date-input batch-date-input"
+              />
+              <el-button
+                type="primary"
+                plain
+                class="set-date-btn"
+                :disabled="selectedRows.length === 0 || !manualQuoteDate"
+                :loading="settingQuoteDate"
+                @click="setQuoteLeadTime"
+              >
+                指定报价交期
+              </el-button>
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
@@ -133,11 +152,14 @@
               </el-table-column>
               <el-table-column label="报价交期" width="180">
                 <template #default="{ row }">
-                  <el-input
+                  <el-date-picker
                     v-model="row.quoteLeadTimeDraft"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    format="YYYY-MM-DD"
                     placeholder="默认沿用客户交期"
+                    class="date-input"
                     clearable
-                    @keyup.enter="saveLeadTime(row)"
                   />
                 </template>
               </el-table-column>
@@ -202,11 +224,13 @@ const itemList = ref([])
 const selectedRows = ref([])
 const orderPickerVisible = ref(false)
 const shiftDays = ref(0)
+const manualQuoteDate = ref('')
 const savingRowMap = reactive({})
 
 const loadingOrders = ref(false)
 const loadingItems = ref(false)
 const adjusting = ref(false)
+const settingQuoteDate = ref(false)
 
 const loadOrders = async () => {
   loadingOrders.value = true
@@ -286,6 +310,35 @@ const applyShift = async (direction) => {
     ElMessage.error(error.response?.data?.message || '交期调整失败。')
   } finally {
     adjusting.value = false
+  }
+}
+
+const setQuoteLeadTime = async () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  if (!manualQuoteDate.value) return ElMessage.warning('请先选择报价交期。')
+
+  settingQuoteDate.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/market/quote-process/lead-time/set`, {
+      rfqId: selectedRfqId.value,
+      itemIds: selectedRows.value.map(row => row.id),
+      quoteLeadTime: manualQuoteDate.value
+    })
+    itemList.value = normalizeRows(response.data.itemList || [])
+    selectedRows.value = []
+    const adjusted = response.data.adjustedCount || 0
+    const skipped = response.data.skippedCount || 0
+    if (skipped > 0) {
+      ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
+    } else {
+      ElMessage.success(`已指定 ${adjusted} 项报价交期。`)
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '指定报价交期失败。')
+  } finally {
+    settingQuoteDate.value = false
   }
 }
 
@@ -455,6 +508,14 @@ onMounted(loadOrders)
   width: 100%;
 }
 
+.date-input {
+  width: 100%;
+}
+
+.batch-date-input {
+  margin-top: 10px;
+}
+
 .batch-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -470,6 +531,12 @@ onMounted(loadOrders)
   margin-top: 10px;
   color: var(--erp-text-secondary);
   font-size: 13px;
+}
+
+.set-date-btn {
+  width: 100%;
+  margin-top: 10px;
+  margin-left: 0;
 }
 
 .download-btn {

@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequireRole;
+import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeShiftReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
 import com.machining.quote.service.InternalTargetLeadTimeService;
@@ -30,6 +31,11 @@ public class InternalTargetLeadTimeController {
     @PostMapping("/shift")
     public Map<String, Object> shiftLeadTimes(@RequestBody InternalTargetLeadTimeShiftReq req) {
         return internalTargetLeadTimeService.shiftLeadTimes(req);
+    }
+
+    @PostMapping("/set")
+    public Map<String, Object> setLeadTimes(@RequestBody InternalTargetLeadTimeSetReq req) {
+        return internalTargetLeadTimeService.setLeadTimes(req);
     }
 
     @PostMapping("/update")

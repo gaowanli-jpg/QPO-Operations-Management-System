@@ -46,6 +46,20 @@ public class LeadTimeService {
         return date == null ? leadTime.trim() : DATE_FORMAT.format(date);
     }
 
+    public String normalizeRequiredDate(String leadTime) {
+        if (isBlank(leadTime)) {
+            throw new RuntimeException("请先选择日期");
+        }
+        LocalDate date = parseDeliveryDate(leadTime);
+        if (date == null) {
+            date = parseExcelSerialDate(leadTime);
+        }
+        if (date == null) {
+            throw new RuntimeException("日期格式不正确，请输入类似 2026-03-20 的日期");
+        }
+        return DATE_FORMAT.format(date);
+    }
+
     public String shiftLeadTime(String leadTime, int days) {
         if (isBlank(leadTime)) {
             throw new RuntimeException("交货周期为空，无法自动加减");

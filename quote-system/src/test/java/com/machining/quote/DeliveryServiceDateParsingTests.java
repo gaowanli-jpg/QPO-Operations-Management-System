@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DeliveryServiceDateParsingTests {
     private final LeadTimeService leadTimeService = new LeadTimeService();
@@ -47,6 +48,18 @@ class DeliveryServiceDateParsingTests {
     @Test
     void shiftDurationLeadTimeAdjustsDays() {
         assertThat(leadTimeService.shiftLeadTime("7天", 3)).isEqualTo("10天");
+    }
+
+    @Test
+    void manualDateNormalizesToIsoDate() {
+        assertThat(leadTimeService.normalizeRequiredDate("2026.03.20")).isEqualTo("2026-03-20");
+        assertThat(leadTimeService.normalizeRequiredDate("2026-3-8")).isEqualTo("2026-03-08");
+    }
+
+    @Test
+    void manualDateRejectsDurationText() {
+        assertThatThrownBy(() -> leadTimeService.normalizeRequiredDate("7天"))
+                .hasMessageContaining("日期格式不正确");
     }
 
     private LocalDate resolveDeliveryDate(String leadTime) {

@@ -18,6 +18,9 @@
           <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
             生成报价单
           </el-button>
+          <el-button type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
+            一键刷新核价
+          </el-button>
           <el-button type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
             完成报价提交
           </el-button>
@@ -253,7 +256,7 @@
             <el-alert
               type="info"
               :closable="false"
-              title="组合件父件价格 = 子件含税单价汇总 + 组装费；不会再次计算管理费、利润、税费。"
+              title="组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装费对应的管理费/利润/税费；组装费不收运输费。"
               class="assembly-tip"
             />
             <div class="assembly-actions">
@@ -309,7 +312,18 @@
             <div class="assembly-summary">
               子件含税汇总：¥ {{ assemblyChildrenTotal.toFixed(2) }}，
               组装费：¥ {{ Number(assemblyFee || 0).toFixed(2) }}，
+              组装费附加费用：¥ {{ assemblyFeeMarkupTotal.toFixed(2) }}，
               父件含税单价：¥ {{ assemblyFinalUnitPrice.toFixed(2) }}
+            </div>
+            <div v-if="assemblyFeeMarkupRows.length" class="assembly-fee-breakdown">
+              <el-tag
+                v-for="row in assemblyFeeMarkupRows"
+                :key="row.feeName"
+                type="info"
+                size="small"
+              >
+                {{ row.feeName }} {{ row.ratePercent }}%：¥ {{ row.cost.toFixed(2) }}
+              </el-tag>
             </div>
           </div>
         </div>
@@ -440,7 +454,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import { API_BASE_URL, apiUrl } from '../config'
@@ -453,10 +467,12 @@ const globalConfig = ref({ materialName: '45#', shape: '板材', processRoute: [
 const quoteData = ref(null)
 const loading = ref(false)
 const completeLoading = ref(false)
+const refreshLoading = ref(false)
 const pricingTableRef = ref(null)
 const materialOptions = ref([])
 const processOptions = ref([])
 const extraFeeOptions = ref([])
+const markupFeeOptions = ref([])
 const repeatAnalysis = ref(null)
 
 const combinedProcessOptions = computed(() => [
@@ -538,6 +554,13 @@ const canCompleteQuote = computed(() => {
     && drawableItems.every(item => item.finalUnitPrice != null)
 })
 
+const canRefreshQuotes = computed(() => {
+  const items = quoteData.value?.itemList || []
+  return !!rfqId.value
+    && !!quoteData.value
+    && items.some(item => item.finalUnitPrice != null || isAssemblyItem(item))
+})
+
 // 页面加载时自动拉取数据
 onMounted(async () => {
   rfqId.value = route.query.rfqId
@@ -559,14 +582,16 @@ onMounted(async () => {
 
 const fetchDicts = async () => {
   try {
-    const [materialResponse, processResponse, extraFeeResponse] = await Promise.all([
+    const [materialResponse, processResponse, extraFeeResponse, markupFeeResponse] = await Promise.all([
       axios.get(`${API_BASE_URL}/api/dict/materials`),
       axios.get(`${API_BASE_URL}/api/dict/processes`),
-      axios.get(`${API_BASE_URL}/api/dict/extra-fee-items`)
+      axios.get(`${API_BASE_URL}/api/dict/extra-fee-items`),
+      axios.get(`${API_BASE_URL}/api/dict/markup-fees`)
     ])
     materialOptions.value = materialResponse.data || []
     processOptions.value = processResponse.data || []
     extraFeeOptions.value = extraFeeResponse.data || []
+    markupFeeOptions.value = markupFeeResponse.data || []
   } catch (error) {
     console.error(error)
     materialOptions.value = [
@@ -577,6 +602,12 @@ const fetchDicts = async () => {
       { id: 'fallback-cnc1', processName: 'CNC1' }
     ]
     extraFeeOptions.value = []
+    markupFeeOptions.value = [
+      { id: 'fallback-freight', feeName: '运输费', ratePercent: 5, enabled: true },
+      { id: 'fallback-management', feeName: '管理费', ratePercent: 5, enabled: true },
+      { id: 'fallback-profit', feeName: '利润', ratePercent: 15, enabled: true },
+      { id: 'fallback-tax', feeName: '税费', ratePercent: 13, enabled: true }
+    ]
     ElMessage.warning('基础字典加载失败，已启用本地兜底数据。')
   }
 }
@@ -657,6 +688,44 @@ const completeOrderQuote = async () => {
   }
 }
 
+const refreshOrderQuotes = async () => {
+  if (!canRefreshQuotes.value) {
+    return ElMessage.warning('当前订单没有可刷新的核价数据。')
+  }
+  try {
+    await ElMessageBox.confirm(
+      '将使用当前材料单价、工艺单价、费率字典，对本 RFQ 已有核价参数的零件重新计算价格；未核价且没有参数的零件不会被自动报价。',
+      '确认一键刷新核价',
+      {
+        confirmButtonText: '确认刷新',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  refreshLoading.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/engineer/refresh-quotes/${rfqId.value}`)
+    const data = response.data || {}
+    await fetchDicts()
+    await fetchQuoteData({ keepScroll: true })
+    const skippedCount = Number(data.skippedCount || 0)
+    if (skippedCount > 0) {
+      ElMessage.warning(`${data.message || '一键刷新核价完成'} 有 ${skippedCount} 个零件未刷新，请查看控制台或逐件核价。`)
+    } else {
+      ElMessage.success(data.message || '一键刷新核价完成。')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '一键刷新核价失败，请检查后端服务。')
+  } finally {
+    refreshLoading.value = false
+  }
+}
+
 // 图纸预览核心逻辑
 const pdfVisible = ref(false)
 const currentPdfUrl = ref('')
@@ -720,7 +789,26 @@ const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum,
   return Number.isFinite(unitPrice) ? sum + unitPrice * qty : sum
 }, 0))
 
-const assemblyFinalUnitPrice = computed(() => assemblyChildrenTotal.value + numberOrZero(assemblyFee.value))
+const isTransportMarkupFee = (feeName) => {
+  const text = String(feeName || '')
+  return text.includes('运输') || text.includes('运费')
+}
+
+const assemblyFeeMarkupRows = computed(() => markupFeeOptions.value
+  .filter(fee => fee.enabled !== false && !isTransportMarkupFee(fee.feeName))
+  .map(fee => {
+    const ratePercent = Number(fee.ratePercent || 0)
+    const cost = numberOrZero(assemblyFee.value) * ratePercent / 100
+    return {
+      feeName: fee.feeName,
+      ratePercent,
+      cost
+    }
+  }))
+
+const assemblyFeeMarkupTotal = computed(() => assemblyFeeMarkupRows.value.reduce((sum, row) => sum + numberOrZero(row.cost), 0))
+
+const assemblyFinalUnitPrice = computed(() => assemblyChildrenTotal.value + numberOrZero(assemblyFee.value) + assemblyFeeMarkupTotal.value)
 
 const numericSortNo = (value) => {
   const numericValue = Number(value)
@@ -1346,6 +1434,14 @@ const submitCurrentQuote = async () => {
   color: var(--erp-danger);
   font-weight: 700;
   text-align: right;
+}
+
+.assembly-fee-breakdown {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
 }
 
 .assembly-picker-toolbar {

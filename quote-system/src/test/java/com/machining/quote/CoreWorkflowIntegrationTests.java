@@ -2,8 +2,12 @@ package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.DeliveryGenerateReq;
+import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
+import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
 import com.machining.quote.dto.InventorySaveReq;
 import com.machining.quote.dto.InventoryStockOpReq;
+import com.machining.quote.dto.QuoteLeadTimeSetReq;
+import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.InventoryMaster;
@@ -18,7 +22,9 @@ import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
+import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.InventoryService;
+import com.machining.quote.service.QuoteProcessService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 @SpringBootTest(properties = {
@@ -55,6 +62,10 @@ class CoreWorkflowIntegrationTests {
     private DeliveryService deliveryService;
     @Autowired
     private EngineerService engineerService;
+    @Autowired
+    private QuoteProcessService quoteProcessService;
+    @Autowired
+    private InternalTargetLeadTimeService internalTargetLeadTimeService;
 
     @Test
     void quoteSavePersistsGrossAndNetWeights() {
@@ -98,6 +109,108 @@ class CoreWorkflowIntegrationTests {
         ItemQuoteVersion saved = itemMapper.selectById(item.getId());
         assertThat(saved.getMaterialGrossWeight()).isCloseTo(1.57, within(0.000001));
         assertThat(saved.getPartNetWeight()).isCloseTo(1.23, within(0.000001));
+    }
+
+    @Test
+    void quoteLeadTimeCanBeSetInBatchAndClearedToCustomerLeadTime() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("QUOTE-DATE-" + System.nanoTime());
+        order.setCustomerName("报价交期客户");
+        order.setStatus("已报价");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = quotedItem(order, "QD-100");
+        item.setLeadTime("2026.03.20");
+        itemMapper.updateById(item);
+
+        QuoteLeadTimeSetReq setReq = new QuoteLeadTimeSetReq();
+        setReq.setRfqId(order.getId());
+        setReq.setItemIds(List.of(item.getId()));
+        setReq.setQuoteLeadTime("2026.4.5");
+        quoteProcessService.setLeadTimes(setReq);
+
+        ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+        assertThat(saved.getQuoteLeadTime()).isEqualTo("2026-04-05");
+
+        QuoteLeadTimeUpdateReq clearReq = new QuoteLeadTimeUpdateReq();
+        clearReq.setRfqId(order.getId());
+        clearReq.setItemId(item.getId());
+        clearReq.setQuoteLeadTime("");
+        quoteProcessService.updateLeadTime(clearReq);
+
+        Map<String, Object> process = quoteProcessService.getQuoteProcess(order.getId());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) process.get("itemList");
+        assertThat(itemMapper.selectById(item.getId()).getQuoteLeadTime()).isNull();
+        assertThat(rows.get(0).get("effectiveLeadTime")).isEqualTo("2026.03.20");
+    }
+
+    @Test
+    void quoteLeadTimeBatchSetRejectsInvalidDateWithoutWriting() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("QUOTE-BAD-DATE-" + System.nanoTime());
+        order.setCustomerName("报价非法日期客户");
+        order.setStatus("已报价");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = quotedItem(order, "QBAD-100");
+
+        QuoteLeadTimeSetReq setReq = new QuoteLeadTimeSetReq();
+        setReq.setRfqId(order.getId());
+        setReq.setItemIds(List.of(item.getId()));
+        setReq.setQuoteLeadTime("7天");
+
+        assertThatThrownBy(() -> quoteProcessService.setLeadTimes(setReq))
+                .hasMessageContaining("日期格式不正确");
+        assertThat(itemMapper.selectById(item.getId()).getQuoteLeadTime()).isNull();
+    }
+
+    @Test
+    void internalTargetLeadTimeCanBeSetClearedAndUsedForDeliveryOutputs() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("INTERNAL-DATE-" + System.nanoTime());
+        order.setCustomerName("内部交期客户");
+        order.setStatus("已报价");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = quotedItem(order, "ID-100");
+        item.setLeadTime("2026-03-20");
+        item.setQuoteLeadTime("2026-03-25");
+        itemMapper.updateById(item);
+
+        InternalTargetLeadTimeSetReq setReq = new InternalTargetLeadTimeSetReq();
+        setReq.setRfqId(order.getId());
+        setReq.setItemIds(List.of(item.getId()));
+        setReq.setInternalTargetLeadTime("2026.04.10");
+        internalTargetLeadTimeService.setLeadTimes(setReq);
+        assertThat(itemMapper.selectById(item.getId()).getInternalTargetLeadTime()).isEqualTo("2026-04-10");
+
+        InternalTargetLeadTimeUpdateReq clearReq = new InternalTargetLeadTimeUpdateReq();
+        clearReq.setRfqId(order.getId());
+        clearReq.setItemId(item.getId());
+        clearReq.setInternalTargetLeadTime("");
+        internalTargetLeadTimeService.updateLeadTime(clearReq);
+        assertThat(itemMapper.selectById(item.getId()).getInternalTargetLeadTime()).isNull();
+        assertThat(internalTargetLeadTimeService.listItemRows(order.getId()).get(0).get("effectiveDeliveryLeadTime"))
+                .isEqualTo("2026-03-25");
+
+        internalTargetLeadTimeService.setLeadTimes(setReq);
+        DeliveryGenerateReq req = new DeliveryGenerateReq();
+        req.setRfqId(order.getId());
+        req.setInternalProjectNo("IP-DATE");
+        DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
+        line.setItemId(item.getId());
+        line.setAcceptedQty(1);
+        req.setItems(List.of(line));
+
+        List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
+
+        assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
+                .containsOnly(LocalDate.of(2026, 4, 10));
+        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
+        sheetQw.eq("item_id", item.getId());
+        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getDeliveryDate)
+                .containsOnly(LocalDate.of(2026, 4, 10));
     }
 
     @Test
@@ -331,5 +444,20 @@ class CoreWorkflowIntegrationTests {
 
         engineerService.completeOrderQuote(currentOrder.getId());
         assertThat(orderMapper.selectById(currentOrder.getId()).getStatus()).isEqualTo("已报价");
+    }
+
+    private ItemQuoteVersion quotedItem(OrderRfq order, String partNo) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo(partNo);
+        item.setVersion("A");
+        item.setDescription(partNo + "描述");
+        item.setQty(1);
+        item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
+        item.setFinalUnitPrice(10.0);
+        item.setFinalTotalPrice(10.0);
+        item.setStatus("已报价");
+        itemMapper.insert(item);
+        return itemMapper.selectById(item.getId());
     }
 }

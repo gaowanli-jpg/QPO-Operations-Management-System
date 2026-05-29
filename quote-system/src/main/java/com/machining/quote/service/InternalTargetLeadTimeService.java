@@ -1,6 +1,8 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeShiftReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -69,6 +71,39 @@ public class InternalTargetLeadTimeService {
     }
 
     @Transactional
+    public Map<String, Object> setLeadTimes(InternalTargetLeadTimeSetReq req) {
+        requireOrder(req.getRfqId());
+        if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
+            throw new RuntimeException("请至少选择一个零件");
+        }
+        String normalizedDate = leadTimeService.normalizeRequiredDate(req.getInternalTargetLeadTime());
+
+        List<Map<String, Object>> skipped = new ArrayList<>();
+        int adjustedCount = 0;
+        for (Integer itemId : req.getItemIds()) {
+            ItemQuoteVersion item = itemMapper.selectById(itemId);
+            if (item == null || !req.getRfqId().equals(item.getRfqId())) {
+                skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
+                continue;
+            }
+
+            Object before = buildItemRow(item);
+            item.setInternalTargetLeadTime(normalizedDate);
+            itemMapper.updateById(item);
+            auditService.record("INTERNAL_TARGET_LEAD_TIME_SET", "item_quote_version", item.getId(), before, buildItemRow(itemMapper.selectById(item.getId())));
+            adjustedCount++;
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("adjustedCount", adjustedCount);
+        result.put("skippedCount", skipped.size());
+        result.put("skippedItems", skipped);
+        result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        return result;
+    }
+
+    @Transactional
     public Map<String, Object> updateLeadTime(InternalTargetLeadTimeUpdateReq req) {
         requireOrder(req.getRfqId());
         if (req.getItemId() == null) {
@@ -80,8 +115,10 @@ public class InternalTargetLeadTimeService {
         }
 
         Object before = buildItemRow(item);
-        item.setInternalTargetLeadTime(leadTimeService.normalizeForQuote(req.getInternalTargetLeadTime()));
-        itemMapper.updateById(item);
+        String normalizedLeadTime = leadTimeService.normalizeForQuote(req.getInternalTargetLeadTime());
+        UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+        update.eq("id", item.getId()).set("internal_target_lead_time", normalizedLeadTime);
+        itemMapper.update(null, update);
         ItemQuoteVersion saved = itemMapper.selectById(item.getId());
         Map<String, Object> savedRow = buildItemRow(saved);
         auditService.record("INTERNAL_TARGET_LEAD_TIME_UPDATE", "item_quote_version", item.getId(), before, savedRow);

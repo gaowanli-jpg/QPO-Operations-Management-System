@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequireRole;
+import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.service.QuoteProcessService;
@@ -29,6 +30,11 @@ public class QuoteProcessController {
     @PostMapping("/lead-time/shift")
     public Map<String, Object> shiftLeadTimes(@RequestBody QuoteLeadTimeShiftReq req) {
         return quoteProcessService.shiftLeadTimes(req);
+    }
+
+    @PostMapping("/lead-time/set")
+    public Map<String, Object> setLeadTimes(@RequestBody QuoteLeadTimeSetReq req) {
+        return quoteProcessService.setLeadTimes(req);
     }
 
     @PostMapping("/lead-time/update")

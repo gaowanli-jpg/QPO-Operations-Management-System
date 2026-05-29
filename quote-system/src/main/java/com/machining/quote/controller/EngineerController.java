@@ -57,6 +57,11 @@ public class EngineerController {
         return Map.of("success", true, "message", "订单报价已完成，状态已更新为已报价");
     }
 
+    @PostMapping("/refresh-quotes/{rfqId}")
+    public Map<String, Object> refreshOrderQuotes(@PathVariable Integer rfqId) {
+        return engineerService.refreshOrderQuotes(rfqId);
+    }
+
     @GetMapping("/repeat-analysis/{rfqId}")
     public Map<String, Object> analyzeRepeatOrder(@PathVariable Integer rfqId) {
         return engineerService.analyzeRepeatOrder(rfqId);

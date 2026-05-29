@@ -69,6 +69,65 @@ public class EngineerService {
         auditService.record("ITEM_QUOTE_SAVE", "item_quote_version", item.getId(), before, itemMapper.selectById(item.getId()));
     }
 
+    @Transactional
+    public Map<String, Object> refreshOrderQuotes(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        Map<Integer, ItemQuoteVersion> itemMap = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : items) {
+            itemMap.put(item.getId(), item);
+        }
+
+        int normalCount = 0;
+        int assemblyCount = 0;
+        List<Map<String, Object>> skippedItems = new ArrayList<>();
+
+        for (ItemQuoteVersion item : items) {
+            if (QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(item.getQuoteMode()))) {
+                continue;
+            }
+            if (!isRefreshableNormalQuote(item)) {
+                continue;
+            }
+            try {
+                saveCalculatedQuote(
+                        item,
+                        normalizeMap(item.getMaterialData()),
+                        toProcessSubmitRows(item.getProcessRoute()),
+                        item.getPartNetWeight()
+                );
+                itemMap.put(item.getId(), item);
+                normalCount++;
+            } catch (RuntimeException ex) {
+                skippedItems.add(buildSkipInfo(item, ex.getMessage()));
+            }
+        }
+
+        Set<Integer> refreshedAssemblies = new HashSet<>();
+        for (ItemQuoteVersion item : items) {
+            if (!QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(item.getQuoteMode()))) {
+                continue;
+            }
+            try {
+                assemblyCount += refreshAssemblyQuoteRecursive(item, itemMap, refreshedAssemblies, new HashSet<>());
+            } catch (RuntimeException ex) {
+                skippedItems.add(buildSkipInfo(item, ex.getMessage()));
+            }
+        }
+
+        int refreshedCount = normalCount + assemblyCount;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "一键刷新核价完成，已刷新 " + refreshedCount + " 个零件。");
+        result.put("refreshedCount", refreshedCount);
+        result.put("normalCount", normalCount);
+        result.put("assemblyCount", assemblyCount);
+        result.put("skippedCount", skippedItems.size());
+        result.put("skippedItems", skippedItems);
+        auditService.record("ORDER_QUOTE_REFRESH", "order_rfq", order.getId(), null, result);
+        return result;
+    }
+
     private void saveCalculatedQuote(ItemQuoteVersion item, Map<String, Object> materialData,
                                      List<QuoteSubmitReq.ProcessSubmitDTO> processRoute, Double partNetWeight) {
         int qty = item.getQty() == null ? 0 : item.getQty();
@@ -174,13 +233,19 @@ public class EngineerService {
         }
 
         double safeAssemblyFee = nonNegativeOrZero(assemblyFee);
-        double finalUnitPrice = childrenTotal + safeAssemblyFee;
+        List<Map<String, Object>> assemblyFeeBreakdown = calculateAssemblyFeeMarkupFees(safeAssemblyFee);
+        double assemblyFeeMarkupCost = sumFeeCosts(assemblyFeeBreakdown);
+        double baseCost = childrenTotal + safeAssemblyFee;
+        double finalUnitPrice = baseCost + assemblyFeeMarkupCost;
         int parentQty = parent.getQty() == null ? 0 : parent.getQty();
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("quoteMode", QUOTE_MODE_ASSEMBLY);
         materialData.put("childrenTotal", childrenTotal);
         materialData.put("assemblyFee", safeAssemblyFee);
+        materialData.put("assemblyFeeMarkupCost", assemblyFeeMarkupCost);
+        materialData.put("assemblyFeeMarkupRows", assemblyFeeBreakdown);
+        materialData.put("baseCost", baseCost);
         materialData.put("cost", 0.0);
         materialData.put("weight", 0.0);
         materialData.put("grossWeight", 0.0);
@@ -208,15 +273,15 @@ public class EngineerService {
         parent.setAssemblyFee(safeAssemblyFee);
         parent.setMaterialData(materialData);
         parent.setProcessRoute(processRoute);
-        parent.setFeeData(List.of());
+        parent.setFeeData(assemblyFeeBreakdown);
         parent.setMaterialGrossWeight(0.0);
         parent.setPartNetWeight(0.0);
-        parent.setBaseCost(finalUnitPrice);
+        parent.setBaseCost(baseCost);
         parent.setFinalUnitPrice(finalUnitPrice);
         parent.setFinalTotalPrice(finalUnitPrice * parentQty);
         parent.setStatus("已报价");
         itemMapper.updateById(parent);
-        System.out.println("===> 组合件 ID " + parent.getId() + " 核价完毕！子件汇总: " + childrenTotal + ", 组装费: " + safeAssemblyFee + ", 最终单价: " + finalUnitPrice);
+        System.out.println("===> 组合件 ID " + parent.getId() + " 核价完毕！子件汇总: " + childrenTotal + ", 组装费: " + safeAssemblyFee + ", 组装费附加费用: " + assemblyFeeMarkupCost + ", 最终单价: " + finalUnitPrice);
     }
 
     public List<Map<String, Object>> listAssemblyRelations(Integer parentItemId) {
@@ -355,6 +420,62 @@ public class EngineerService {
         QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
         qw.eq("parent_item_id", parentItemId).orderByAsc("sort_no").orderByAsc("id");
         return assemblyRelationMapper.selectList(qw);
+    }
+
+    private boolean isRefreshableNormalQuote(ItemQuoteVersion item) {
+        return item != null
+                && item.getFinalUnitPrice() != null
+                && (item.getMaterialData() != null || item.getProcessRoute() != null);
+    }
+
+    private int refreshAssemblyQuoteRecursive(ItemQuoteVersion parent,
+                                              Map<Integer, ItemQuoteVersion> itemMap,
+                                              Set<Integer> refreshedAssemblies,
+                                              Set<Integer> visiting) {
+        if (parent == null || parent.getId() == null) {
+            return 0;
+        }
+        if (refreshedAssemblies.contains(parent.getId())) {
+            return 0;
+        }
+        if (!visiting.add(parent.getId())) {
+            throw new RuntimeException("组合件关系存在循环引用，无法刷新核价");
+        }
+
+        try {
+            List<ItemAssemblyRelation> relations = listRelationsByParent(parent.getId());
+            if (relations.isEmpty()) {
+                throw new RuntimeException("组合件缺少子件关系，无法刷新核价");
+            }
+
+            int refreshedCount = 0;
+            List<QuoteSubmitReq.AssemblyChildDTO> children = new ArrayList<>();
+            for (ItemAssemblyRelation relation : relations) {
+                ItemQuoteVersion child = itemMap.get(relation.getChildItemId());
+                if (child == null) {
+                    throw new RuntimeException("组合件子件已不存在，无法刷新核价");
+                }
+                if (QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(child.getQuoteMode()))) {
+                    refreshedCount += refreshAssemblyQuoteRecursive(child, itemMap, refreshedAssemblies, visiting);
+                }
+                if (child.getFinalUnitPrice() == null) {
+                    throw new RuntimeException("子件 " + itemLabel(child) + " 尚未核价，无法刷新组合件");
+                }
+
+                QuoteSubmitReq.AssemblyChildDTO childDto = new QuoteSubmitReq.AssemblyChildDTO();
+                childDto.setChildItemId(relation.getChildItemId());
+                childDto.setQtyPerParent(relation.getChildQtyPerParent());
+                childDto.setSortNo(relation.getSortNo());
+                children.add(childDto);
+            }
+
+            saveAssemblyQuote(parent, parent.getAssemblyFee(), children);
+            itemMap.put(parent.getId(), parent);
+            refreshedAssemblies.add(parent.getId());
+            return refreshedCount + 1;
+        } finally {
+            visiting.remove(parent.getId());
+        }
     }
 
     private void markAncestorAssembliesPending(Integer childItemId, Set<Integer> visited) {
@@ -853,11 +974,22 @@ public class EngineerService {
     }
 
     private List<Map<String, Object>> calculateMarkupFees(double baseCost) {
+        return calculateMarkupFees(baseCost, false);
+    }
+
+    private List<Map<String, Object>> calculateAssemblyFeeMarkupFees(double assemblyFee) {
+        return calculateMarkupFees(assemblyFee, true);
+    }
+
+    private List<Map<String, Object>> calculateMarkupFees(double baseCost, boolean excludeTransportFee) {
         QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
         qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
         List<DictMarkupFee> fees = markupFeeMapper.selectList(qw);
         List<Map<String, Object>> rows = new ArrayList<>();
         for (DictMarkupFee fee : fees) {
+            if (excludeTransportFee && isTransportFee(fee.getFeeName())) {
+                continue;
+            }
             double ratePercent = fee.getRatePercent() == null ? 0.0 : fee.getRatePercent();
             double cost = baseCost * ratePercent / 100.0;
             Map<String, Object> row = new LinkedHashMap<>();
@@ -867,6 +999,22 @@ public class EngineerService {
             rows.add(row);
         }
         return rows;
+    }
+
+    private boolean isTransportFee(String feeName) {
+        return feeName != null && (feeName.contains("运输") || feeName.contains("运费"));
+    }
+
+    private double sumFeeCosts(List<Map<String, Object>> feeRows) {
+        if (feeRows == null) {
+            return 0.0;
+        }
+        return feeRows.stream()
+                .mapToDouble(row -> {
+                    Double cost = doubleValue(row.get("cost"));
+                    return cost == null ? 0.0 : cost;
+                })
+                .sum();
     }
 
     private double getTieredRate(DictProcess dp, int qty) {
