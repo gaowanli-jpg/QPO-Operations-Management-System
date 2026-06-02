@@ -42,6 +42,7 @@ mybatis-plus:
 erp:
   upload-dir: ${ERP_UPLOAD_DIR:D:/ERP_Files/}
   backup-dir: ${ERP_BACKUP_DIR:D:/ERP_Files/backup/}
+  public-base-url: ${ERP_PUBLIC_BASE_URL:http://localhost:8088}
   cors:
     allowed-origins: ${ERP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:4173}
   auth:
