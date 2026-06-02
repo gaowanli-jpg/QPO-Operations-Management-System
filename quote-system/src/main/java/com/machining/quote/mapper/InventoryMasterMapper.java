@@ -15,4 +15,7 @@ public interface InventoryMasterMapper extends BaseMapper<InventoryMaster> {
     InventoryMaster selectByCustomerPartAndVersionForUpdate(@Param("customerName") String customerName,
                                                             @Param("partNo") String partNo,
                                                             @Param("version") String version);
+
+    @Select("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(#{lockKey})::bigint)) AS lock_guard")
+    Integer lockBusinessKey(@Param("lockKey") String lockKey);
 }

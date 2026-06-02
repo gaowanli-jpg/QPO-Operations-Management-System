@@ -56,8 +56,7 @@ public class EngineerService {
 
     @Transactional
     public void calculateAndSaveQuote(QuoteSubmitReq req) {
-        ItemQuoteVersion item = itemMapper.selectById(req.getItemId());
-        if (item == null) throw new RuntimeException("找不到该零件！");
+        ItemQuoteVersion item = requireQuoteItemForUpdate(req.getItemId());
         ItemQuoteVersion before = copyItem(item);
         String quoteMode = normalizeQuoteMode(req.getQuoteMode());
         if (QUOTE_MODE_ASSEMBLY.equals(quoteMode)) {
@@ -71,8 +70,8 @@ public class EngineerService {
 
     @Transactional
     public Map<String, Object> refreshOrderQuotes(Integer rfqId) {
-        OrderRfq order = requireOrder(rfqId);
-        List<ItemQuoteVersion> items = listItems(rfqId);
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
         Map<Integer, ItemQuoteVersion> itemMap = new LinkedHashMap<>();
         for (ItemQuoteVersion item : items) {
             itemMap.put(item.getId(), item);
@@ -504,17 +503,9 @@ public class EngineerService {
 
     @Transactional
     public void completeOrderQuote(Integer rfqId) {
-        if (rfqId == null) {
-            throw new RuntimeException("订单 ID 不能为空");
-        }
-        OrderRfq order = orderMapper.selectById(rfqId);
-        if (order == null) {
-            throw new RuntimeException("订单不存在");
-        }
+        OrderRfq order = requireOrderForUpdate(rfqId);
 
-        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId);
-        List<ItemQuoteVersion> items = itemMapper.selectList(qw);
+        List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
         if (items.isEmpty()) {
             throw new RuntimeException("该订单没有零件明细，不能完成报价");
         }
@@ -596,8 +587,8 @@ public class EngineerService {
 
     @Transactional
     public Map<String, Object> applyRepeatQuotes(Integer rfqId) {
-        OrderRfq order = requireOrder(rfqId);
-        List<ItemQuoteVersion> currentItems = listItems(rfqId);
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        List<ItemQuoteVersion> currentItems = listItemsForUpdate(rfqId);
         Map<String, RepeatSource> repeatSources = findRepeatSources(order, currentItems);
 
         List<Map<String, Object>> appliedItems = new ArrayList<>();
@@ -652,7 +643,7 @@ public class EngineerService {
 
     @Transactional
     public void saveOrderEngineerConfig(Integer rfqId, Map<String, Object> config) {
-        OrderRfq order = requireOrder(rfqId);
+        OrderRfq order = requireOrderForUpdate(rfqId);
         Object before = order.getEngineerConfig();
         order.setEngineerConfig(config == null ? Map.of() : config);
         orderMapper.updateById(order);
@@ -701,9 +692,42 @@ public class EngineerService {
         return order;
     }
 
+    private OrderRfq requireOrderForUpdate(Integer rfqId) {
+        if (rfqId == null) {
+            throw new RuntimeException("订单 ID 不能为空");
+        }
+        OrderRfq order = orderMapper.selectByIdForUpdate(rfqId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+        return order;
+    }
+
+    private ItemQuoteVersion requireQuoteItemForUpdate(Integer itemId) {
+        if (itemId == null) {
+            throw new RuntimeException("零件 ID 不能为空");
+        }
+        ItemQuoteVersion snapshot = itemMapper.selectById(itemId);
+        if (snapshot == null) {
+            throw new RuntimeException("找不到该零件！");
+        }
+        requireOrderForUpdate(snapshot.getRfqId());
+        ItemQuoteVersion lockedItem = itemMapper.selectByIdForUpdate(itemId);
+        if (lockedItem == null) {
+            throw new RuntimeException("找不到该零件！");
+        }
+        return lockedItem;
+    }
+
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
+        return itemMapper.selectList(qw);
+    }
+
+    private List<ItemQuoteVersion> listItemsForUpdate(Integer rfqId) {
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId).orderByAsc("id").last("FOR UPDATE");
         return itemMapper.selectList(qw);
     }
 
@@ -725,30 +749,60 @@ public class EngineerService {
                 .ne("id", order.getId())
                 .orderByDesc("id");
         List<OrderRfq> historicalOrders = orderMapper.selectList(orderQw);
+        if (historicalOrders.isEmpty()) {
+            return result;
+        }
 
+        List<Integer> historicalOrderIds = new ArrayList<>();
+        Map<Integer, OrderRfq> historicalOrderMap = new LinkedHashMap<>();
         for (OrderRfq historicalOrder : historicalOrders) {
-            QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
-            ticketQw.eq("rfq_id", historicalOrder.getId());
-            List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQw);
-            Set<String> ticketItemKeys = new HashSet<>();
-            for (OrderDeliveryTicket ticket : tickets) {
-                String itemKey = itemKey(ticket.getPartNo(), ticket.getVersion());
-                if (currentItemKeys.contains(itemKey)) {
-                    ticketItemKeys.add(itemKey);
-                }
-            }
-            if (ticketItemKeys.isEmpty()) {
+            if (historicalOrder.getId() == null) {
                 continue;
             }
+            historicalOrderIds.add(historicalOrder.getId());
+            historicalOrderMap.put(historicalOrder.getId(), historicalOrder);
+        }
+        if (historicalOrderIds.isEmpty()) {
+            return result;
+        }
 
-            QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
-            itemQw.eq("rfq_id", historicalOrder.getId());
-            List<ItemQuoteVersion> historicalItems = itemMapper.selectList(itemQw);
-            for (ItemQuoteVersion historicalItem : historicalItems) {
-                String itemKey = itemKey(historicalItem);
-                if (!ticketItemKeys.contains(itemKey) || result.containsKey(itemKey) || !hasReusableQuote(historicalItem)) {
-                    continue;
-                }
+        QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
+        ticketQw.in("rfq_id", historicalOrderIds)
+                .orderByDesc("rfq_id")
+                .orderByDesc("id");
+        Map<Integer, Set<String>> ticketKeysByRfqId = new LinkedHashMap<>();
+        for (OrderDeliveryTicket ticket : ticketMapper.selectList(ticketQw)) {
+            String itemKey = itemKey(ticket.getPartNo(), ticket.getVersion());
+            if (currentItemKeys.contains(itemKey)) {
+                ticketKeysByRfqId.computeIfAbsent(ticket.getRfqId(), key -> new HashSet<>()).add(itemKey);
+            }
+        }
+        if (ticketKeysByRfqId.isEmpty()) {
+            return result;
+        }
+
+        QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
+        itemQw.in("rfq_id", ticketKeysByRfqId.keySet());
+        List<ItemQuoteVersion> historicalItems = itemMapper.selectList(itemQw);
+        historicalItems.sort((left, right) -> {
+            int rfqCompare = Integer.compare(right.getRfqId() == null ? 0 : right.getRfqId(), left.getRfqId() == null ? 0 : left.getRfqId());
+            if (rfqCompare != 0) {
+                return rfqCompare;
+            }
+            return Integer.compare(right.getId() == null ? 0 : right.getId(), left.getId() == null ? 0 : left.getId());
+        });
+
+        for (ItemQuoteVersion historicalItem : historicalItems) {
+            String itemKey = itemKey(historicalItem);
+            Set<String> ticketItemKeys = ticketKeysByRfqId.get(historicalItem.getRfqId());
+            if (ticketItemKeys == null
+                    || !ticketItemKeys.contains(itemKey)
+                    || result.containsKey(itemKey)
+                    || !hasReusableQuote(historicalItem)) {
+                continue;
+            }
+            OrderRfq historicalOrder = historicalOrderMap.get(historicalItem.getRfqId());
+            if (historicalOrder != null) {
                 result.put(itemKey, new RepeatSource(historicalOrder, historicalItem));
             }
             if (result.size() == currentItemKeys.size()) {

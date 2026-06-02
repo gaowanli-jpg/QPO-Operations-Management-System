@@ -10,6 +10,12 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:123456}
     hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:15}
+      minimum-idle: ${DB_POOL_MIN_IDLE:3}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:3000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      validation-timeout: ${DB_POOL_VALIDATION_TIMEOUT_MS:3000}
       connection-init-sql: SET TIME ZONE 'Asia/Shanghai'
   sql:
     init:
@@ -42,3 +48,8 @@ erp:
     enabled: ${ERP_AUTH_ENABLED:true}
     jwt-secret: ${ERP_JWT_SECRET:change-this-secret-before-production}
     jwt-ttl-minutes: ${ERP_JWT_TTL_MINUTES:720}
+  task:
+    core-pool-size: ${ERP_TASK_CORE_POOL_SIZE:2}
+    max-pool-size: ${ERP_TASK_MAX_POOL_SIZE:4}
+    queue-capacity: ${ERP_TASK_QUEUE_CAPACITY:50}
+    output-dir: ${ERP_TASK_OUTPUT_DIR:D:/ERP_Files/tasks/}

@@ -4,6 +4,7 @@ import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequireRole;
 import com.machining.quote.dto.DeliveryGenerateReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -14,6 +15,7 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.OrderFilePathService;
+import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.QuoteTemplateExportService;
 import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.util.DrawingPartNoResolver;
@@ -53,6 +55,9 @@ public class MarketController {
     private OrderRfqMapper orderRfqMapper;
 
     @Autowired
+    private OrderManagementService orderManagementService;
+
+    @Autowired
     private ItemQuoteVersionMapper itemQuoteVersionMapper;
 
     @Autowired
@@ -63,10 +68,13 @@ public class MarketController {
 
     @GetMapping("/orders")
     @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
-    public List<OrderRfq> listOrders() {
-        QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
-        qw.orderByDesc("id");
-        return orderRfqMapper.selectList(qw);
+    public PageResult<OrderRfq> listOrders(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/tickets/{rfqId}")

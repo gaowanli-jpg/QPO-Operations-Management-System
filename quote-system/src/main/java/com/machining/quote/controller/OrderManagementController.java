@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequireRole;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.OrderManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -18,9 +19,13 @@ public class OrderManagementController {
     private OrderManagementService orderManagementService;
 
     @GetMapping("/orders")
-    public List<Map<String, Object>> listOrders(
-            @RequestParam(value = "customerName", required = false) String customerName) {
-        return orderManagementService.listOrderSummaries(customerName);
+    public PageResult<Map<String, Object>> listOrders(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listOrderSummaries(customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/orders/{rfqId}")
@@ -29,6 +34,7 @@ public class OrderManagementController {
     }
 
     @GetMapping("/customers")
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
     public List<String> listCustomers() {
         return orderManagementService.listCustomers();
     }

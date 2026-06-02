@@ -1,3 +1,11 @@
+name: quote-system
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-20m}
+    max-file: "${LOG_MAX_FILE:-5}"
+
 services:
   postgres:
     image: postgres:15
@@ -6,14 +14,23 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting}
       TZ: Asia/Shanghai
       PGTZ: Asia/Shanghai
     ports:
-      - "${POSTGRES_BIND:-0.0.0.0}:${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups/postgres:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1g}
+    cpus: "${POSTGRES_CPUS:-1.0}"
 
   backend:
     build:
@@ -21,18 +38,29 @@ services:
     container_name: quote-backend
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       SERVER_PORT: 8080
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-postgres}
       DB_USERNAME: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-15}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE:-3}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-3000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-600000}
+      DB_POOL_MAX_LIFETIME_MS: ${DB_POOL_MAX_LIFETIME_MS:-1800000}
+      DB_POOL_VALIDATION_TIMEOUT_MS: ${DB_POOL_VALIDATION_TIMEOUT_MS:-3000}
       ERP_UPLOAD_DIR: /data/uploads/
       ERP_BACKUP_DIR: /data/backups/
       ERP_CORS_ALLOWED_ORIGINS: ${ERP_CORS_ALLOWED_ORIGINS:-http://localhost:8088}
       ERP_AUTH_ENABLED: true
-      ERP_JWT_SECRET: ${ERP_JWT_SECRET:-change-this-secret-before-production}
+      ERP_JWT_SECRET: ${ERP_JWT_SECRET:?Set ERP_JWT_SECRET in .env before starting}
       ERP_JWT_TTL_MINUTES: ${ERP_JWT_TTL_MINUTES:-720}
+      ERP_TASK_CORE_POOL_SIZE: ${ERP_TASK_CORE_POOL_SIZE:-2}
+      ERP_TASK_MAX_POOL_SIZE: ${ERP_TASK_MAX_POOL_SIZE:-4}
+      ERP_TASK_QUEUE_CAPACITY: ${ERP_TASK_QUEUE_CAPACITY:-50}
+      ERP_TASK_OUTPUT_DIR: ${ERP_TASK_OUTPUT_DIR:-/data/backups/tasks/}
       FLYWAY_ENABLED: true
       SQL_INIT_MODE: never
       MYBATIS_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
@@ -42,7 +70,18 @@ services:
       - uploads_data:/data/uploads
       - backups_data:/data/backups
     ports:
-      - "${BACKEND_BIND:-0.0.0.0}:${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    logging: *default-logging
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    cpus: "${BACKEND_CPUS:-1.0}"
+    security_opt:
+      - no-new-privileges:true
 
   frontend:
     build:
@@ -52,11 +91,23 @@ services:
     container_name: quote-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-8088}:80"
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8088}:80"
     volumes:
       - uploads_data:/data/uploads:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
+    cpus: "${FRONTEND_CPUS:-0.5}"
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   postgres_data:

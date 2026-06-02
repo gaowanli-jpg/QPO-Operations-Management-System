@@ -5,6 +5,7 @@ import com.machining.quote.dto.InventoryModifyReq;
 import com.machining.quote.dto.InventorySaveReq;
 import com.machining.quote.dto.InventoryStockOpReq;
 import com.machining.quote.dto.InventoryTransferReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.InventoryPendingStock;
 import com.machining.quote.entity.OrderRfq;
@@ -39,23 +40,27 @@ public class InventoryService {
     @Autowired
     private AuditService auditService;
 
-    public List<Map<String, Object>> list(String customerName, String keyword) {
+    public PageResult<Map<String, Object>> list(String customerName, String keyword, Integer page, Integer pageSize) {
         String customer = normalizeCustomerName(customerName);
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
         if (customer.isEmpty()) {
-            return List.of();
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
 
         QueryWrapper<InventoryMaster> qw = new QueryWrapper<>();
-        qw.eq("customer_name", customer);
-        if (!isBlank(keyword)) {
-            String normalizedKeyword = normalizePartNo(keyword);
-            qw.and(wrapper -> wrapper.like("part_no", normalizedKeyword).or().like("version", normalizeVersion(keyword)));
+        applyInventoryFilters(qw, customer, keyword);
+        Long total = inventoryMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
         qw.orderByAsc("part_no").orderByAsc("version").orderByAsc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
 
-        return inventoryMapper.selectList(qw).stream()
+        List<Map<String, Object>> rows = inventoryMapper.selectList(qw).stream()
                 .map(this::buildInventoryRow)
                 .toList();
+        return PageResult.of(rows, total, safePage, safePageSize);
     }
 
     public List<String> listCustomers() {
@@ -110,6 +115,7 @@ public class InventoryService {
             throw new RuntimeException("图号不能为空");
         }
 
+        lockInventoryBusinessKey(customerName, partNo, version);
         InventoryMaster inventory = findByCustomerPartAndVersionForUpdate(customerName, partNo, version);
         Object before = inventory == null ? null : buildInventoryRow(inventory);
         if (inventory == null) {
@@ -401,6 +407,7 @@ public class InventoryService {
         if (normalizedPartNo.isEmpty()) {
             throw new RuntimeException("图号不能为空");
         }
+        lockInventoryBusinessKey(customer, normalizedPartNo, normalizedVersion);
         InventoryMaster inventory = findByCustomerPartAndVersionForUpdate(customer, normalizedPartNo, normalizedVersion);
         if (inventory != null) {
             return inventory;
@@ -415,6 +422,32 @@ public class InventoryService {
         inventory.setUpdatedAt(LocalDateTime.now());
         inventoryMapper.insert(inventory);
         return inventory;
+    }
+
+    private void lockInventoryBusinessKey(String customerName, String partNo, String version) {
+        inventoryMapper.lockBusinessKey("inventory:" + normalizeCustomerName(customerName)
+                + "|" + normalizePartNo(partNo)
+                + "|" + normalizeVersion(version));
+    }
+
+    private void applyInventoryFilters(QueryWrapper<InventoryMaster> qw, String customerName, String keyword) {
+        qw.eq("customer_name", customerName);
+        if (!isBlank(keyword)) {
+            String normalizedKeyword = normalizePartNo(keyword);
+            String normalizedVersion = normalizeVersion(keyword);
+            qw.and(wrapper -> wrapper.like("part_no", normalizedKeyword).or().like("version", normalizedVersion));
+        }
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
     }
 
     private InventoryMaster requireInventory(Integer inventoryId, String customerName, String partNo, String version) {

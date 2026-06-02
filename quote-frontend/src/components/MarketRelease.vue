@@ -7,7 +7,7 @@
             <h2>市场部：议价确认与提单生成</h2>
             <p>选择客户最终通过的零件，系统会按在产库存、已入库库存、净生产需求自动拆分提单行。</p>
           </div>
-          <el-button type="primary" :loading="loading" @click="loadOrders">刷新订单</el-button>
+          <el-button type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button>
         </div>
       </template>
 
@@ -296,21 +296,19 @@
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择市场部议价订单"
-      :orders="orders"
       @select="handleOrderSelected"
     />
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { API_BASE_URL } from '../config'
 import { downloadByAxios } from '../download'
 
-const orders = ref([])
 const selectedRfqId = ref(null)
 const orderPickerVisible = ref(false)
 const orderInfo = ref({})
@@ -342,23 +340,7 @@ const releaseForm = reactive({
   arrangeType: '计划'
 })
 
-const loadOrders = async () => {
-  loading.value = true
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/orders`)
-    orders.value = response.data || []
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('订单列表加载失败，请检查后端服务。')
-  } finally {
-    loading.value = false
-  }
-}
-
-const openOrderPicker = async () => {
-  if (orders.value.length === 0) {
-    await loadOrders()
-  }
+const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
@@ -720,7 +702,6 @@ const exportExcel = async (type) => {
   }
 }
 
-onMounted(loadOrders)
 </script>
 
 <style scoped>

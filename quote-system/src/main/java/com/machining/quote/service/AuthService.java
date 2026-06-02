@@ -1,6 +1,5 @@
 package com.machining.quote.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.entity.ErpUser;
 import com.machining.quote.mapper.ErpUserMapper;
@@ -35,9 +34,7 @@ public class AuthService {
             throw new RuntimeException("请输入用户名和密码");
         }
 
-        QueryWrapper<ErpUser> qw = new QueryWrapper<>();
-        qw.eq("username", safeUsername).last("LIMIT 1");
-        ErpUser user = userMapper.selectOne(qw);
+        ErpUser user = userMapper.selectByUsernameForUpdate(safeUsername);
         if (user == null || Boolean.FALSE.equals(user.getEnabled())) {
             throw new RuntimeException("用户名或密码错误");
         }

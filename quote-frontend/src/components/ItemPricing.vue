@@ -708,8 +708,14 @@ const refreshOrderQuotes = async () => {
 
   refreshLoading.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/engineer/refresh-quotes/${rfqId.value}`)
-    const data = response.data || {}
+    const submitResponse = await axios.post(`${API_BASE_URL}/api/tasks/engineer/refresh-quotes/${rfqId.value}`)
+    const taskId = submitResponse.data?.task?.id
+    if (!taskId) {
+      throw new Error('任务提交失败')
+    }
+    ElMessage.info('一键刷新核价任务已提交，系统正在后台处理。')
+    const task = await waitSystemTask(taskId)
+    const data = task.resultJson || {}
     await fetchDicts()
     await fetchQuoteData({ keepScroll: true })
     const skippedCount = Number(data.skippedCount || 0)
@@ -720,10 +726,25 @@ const refreshOrderQuotes = async () => {
     }
   } catch (error) {
     console.error(error)
-    ElMessage.error(error.response?.data?.message || '一键刷新核价失败，请检查后端服务。')
+    ElMessage.error(error.response?.data?.message || error.message || '一键刷新核价失败，请检查后端服务。')
   } finally {
     refreshLoading.value = false
   }
+}
+
+const waitSystemTask = async (taskId) => {
+  for (let i = 0; i < 120; i++) {
+    const response = await axios.get(`${API_BASE_URL}/api/tasks/${taskId}`)
+    const task = response.data || {}
+    if (task.status === 'SUCCESS') {
+      return task
+    }
+    if (task.status === 'FAILED') {
+      throw new Error(task.errorMessage || '后台任务执行失败')
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500))
+  }
+  throw new Error('后台任务执行超时，请稍后查看结果。')
 }
 
 // 图纸预览核心逻辑

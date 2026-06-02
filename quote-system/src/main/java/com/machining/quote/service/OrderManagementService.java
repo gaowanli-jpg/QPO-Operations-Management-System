@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderProcessSheet;
@@ -29,6 +30,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderManagementService {
@@ -53,9 +56,41 @@ public class OrderManagementService {
             qw.eq("customer_name", customerName.trim());
         }
         qw.orderByDesc("id");
-        return orderMapper.selectList(qw).stream()
-                .map(this::buildSummary)
-                .toList();
+        return buildSummaries(orderMapper.selectList(qw));
+    }
+
+    public PageResult<Map<String, Object>> listOrderSummaries(
+            String customerName,
+            String keyword,
+            String status,
+            Integer page,
+            Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderFilters(qw, customerName, keyword, status);
+        Long total = orderMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByDesc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        List<OrderRfq> orders = orderMapper.selectList(qw);
+        return PageResult.of(buildSummaries(orders), total, safePage, safePageSize);
+    }
+
+    public PageResult<OrderRfq> listOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderFilters(qw, customerName, keyword, status);
+        Long total = orderMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByDesc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(orderMapper.selectList(qw), total, safePage, safePageSize);
     }
 
     public List<String> listCustomers() {
@@ -85,7 +120,7 @@ public class OrderManagementService {
 
     @Transactional
     public void resetProductionData(Integer rfqId) {
-        OrderRfq order = requireOrder(rfqId);
+        OrderRfq order = requireOrderForUpdate(rfqId);
 
         for (OrderDeliveryTicket ticket : listTickets(rfqId)) {
             deliveryService.deleteTicket(ticket.getId());
@@ -100,7 +135,7 @@ public class OrderManagementService {
 
     @Transactional
     public Map<String, Object> supplementDrawings(Integer rfqId, List<MultipartFile> drawings) {
-        OrderRfq order = requireOrder(rfqId);
+        OrderRfq order = requireOrderForUpdate(rfqId);
         if (drawings == null || drawings.isEmpty()) {
             throw new RuntimeException("请至少上传一份 PDF 图纸");
         }
@@ -188,7 +223,7 @@ public class OrderManagementService {
 
     @Transactional
     public void deleteOrderCompletely(Integer rfqId, boolean deleteFiles) {
-        OrderRfq order = requireOrder(rfqId);
+        OrderRfq order = requireOrderForUpdate(rfqId);
 
         List<ItemQuoteVersion> items = listItems(rfqId);
 
@@ -241,6 +276,151 @@ public class OrderManagementService {
         return summary;
     }
 
+    private List<Map<String, Object>> buildSummaries(List<OrderRfq> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> rfqIds = orders.stream()
+                .map(OrderRfq::getId)
+                .filter(id -> id != null)
+                .toList();
+        Map<Integer, ItemStats> itemStatsMap = loadItemStats(rfqIds);
+        Map<Integer, TicketStats> ticketStatsMap = loadTicketStats(rfqIds);
+        Map<Integer, Integer> processSheetCountMap = loadProcessSheetCounts(rfqIds);
+
+        return orders.stream()
+                .map(order -> buildSummary(order,
+                        itemStatsMap.getOrDefault(order.getId(), new ItemStats()),
+                        ticketStatsMap.getOrDefault(order.getId(), new TicketStats()),
+                        processSheetCountMap.getOrDefault(order.getId(), 0)))
+                .toList();
+    }
+
+    private Map<String, Object> buildSummary(OrderRfq order, ItemStats itemStats, TicketStats ticketStats, int processSheetCount) {
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("id", order.getId());
+        summary.put("rfqNo", order.getRfqNo());
+        summary.put("customerName", order.getCustomerName());
+        summary.put("projectName", order.getProjectName());
+        summary.put("status", order.getStatus());
+        summary.put("createdAt", order.getCreatedAt());
+        summary.put("itemCount", itemStats.itemCount);
+        summary.put("quotedCount", itemStats.quotedCount);
+        summary.put("missingDrawingCount", itemStats.missingDrawingCount);
+        summary.put("ticketCount", ticketStats.ticketCount);
+        summary.put("ticketQty", ticketStats.ticketQty);
+        summary.put("processSheetCount", processSheetCount);
+        summary.put("fileRoot", buildOrderFileRoot(order));
+        return summary;
+    }
+
+    private Map<Integer, ItemStats> loadItemStats(List<Integer> rfqIds) {
+        if (rfqIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.select(
+                "rfq_id",
+                "COUNT(*) AS item_count",
+                "SUM(CASE WHEN final_unit_price IS NOT NULL THEN 1 ELSE 0 END) AS quoted_count",
+                "SUM(CASE WHEN drawing_url IS NULL OR drawing_url = '' THEN 1 ELSE 0 END) AS missing_drawing_count"
+        );
+        qw.in("rfq_id", rfqIds);
+        qw.groupBy("rfq_id");
+        return itemMapper.selectMaps(qw).stream()
+                .map(ItemStats::from)
+                .collect(Collectors.toMap(stats -> stats.rfqId, Function.identity()));
+    }
+
+    private Map<Integer, TicketStats> loadTicketStats(List<Integer> rfqIds) {
+        if (rfqIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
+        qw.select("rfq_id", "COUNT(*) AS ticket_count", "COALESCE(SUM(qty), 0) AS ticket_qty");
+        qw.in("rfq_id", rfqIds);
+        qw.groupBy("rfq_id");
+        return ticketMapper.selectMaps(qw).stream()
+                .map(TicketStats::from)
+                .collect(Collectors.toMap(stats -> stats.rfqId, Function.identity()));
+    }
+
+    private Map<Integer, Integer> loadProcessSheetCounts(List<Integer> rfqIds) {
+        if (rfqIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
+        qw.select("rfq_id", "COUNT(*) AS process_sheet_count");
+        qw.in("rfq_id", rfqIds);
+        qw.groupBy("rfq_id");
+        return processSheetMapper.selectMaps(qw).stream()
+                .collect(Collectors.toMap(
+                        row -> numberValue(row.get("rfq_id")).intValue(),
+                        row -> numberValue(row.get("process_sheet_count")).intValue()
+                ));
+    }
+
+    private void applyOrderFilters(QueryWrapper<OrderRfq> qw, String customerName, String keyword, String status) {
+        if (!isBlank(customerName)) {
+            qw.eq("customer_name", customerName.trim());
+        }
+        if (!isBlank(status)) {
+            qw.eq("status", status.trim());
+        }
+        if (!isBlank(keyword)) {
+            String text = keyword.trim();
+            qw.and(wrapper -> wrapper
+                    .like("rfq_no", text)
+                    .or()
+                    .like("status", text));
+        }
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private static Number numberValue(Object value) {
+        return value instanceof Number number ? number : 0;
+    }
+
+    private static class ItemStats {
+        private Integer rfqId;
+        private int itemCount;
+        private int quotedCount;
+        private int missingDrawingCount;
+
+        private static ItemStats from(Map<String, Object> row) {
+            ItemStats stats = new ItemStats();
+            stats.rfqId = numberValue(row.get("rfq_id")).intValue();
+            stats.itemCount = numberValue(row.get("item_count")).intValue();
+            stats.quotedCount = numberValue(row.get("quoted_count")).intValue();
+            stats.missingDrawingCount = numberValue(row.get("missing_drawing_count")).intValue();
+            return stats;
+        }
+    }
+
+    private static class TicketStats {
+        private Integer rfqId;
+        private int ticketCount;
+        private int ticketQty;
+
+        private static TicketStats from(Map<String, Object> row) {
+            TicketStats stats = new TicketStats();
+            stats.rfqId = numberValue(row.get("rfq_id")).intValue();
+            stats.ticketCount = numberValue(row.get("ticket_count")).intValue();
+            stats.ticketQty = numberValue(row.get("ticket_qty")).intValue();
+            return stats;
+        }
+    }
+
     private String resolveOrderStatusAfterReset(Integer rfqId) {
         List<ItemQuoteVersion> items = listItems(rfqId);
         if (items.isEmpty()) {
@@ -264,6 +444,17 @@ public class OrderManagementService {
             throw new RuntimeException("订单 ID 不能为空");
         }
         OrderRfq order = orderMapper.selectById(rfqId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+        return order;
+    }
+
+    private OrderRfq requireOrderForUpdate(Integer rfqId) {
+        if (rfqId == null) {
+            throw new RuntimeException("订单 ID 不能为空");
+        }
+        OrderRfq order = orderMapper.selectByIdForUpdate(rfqId);
         if (order == null) {
             throw new RuntimeException("订单不存在");
         }

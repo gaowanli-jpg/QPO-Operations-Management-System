@@ -170,7 +170,6 @@
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择工程核价订单"
-      :orders="orders"
       @select="handleOrderSelected"
     />
 
@@ -191,7 +190,6 @@ const testRfqId = ref(null)
 
 // 数据存放区
 const isLoading = ref(false)
-const orders = ref([])
 const orderPickerVisible = ref(false)
 const orderInfo = ref({})
 const itemList = ref([])
@@ -389,23 +387,7 @@ const handleNext = async () => {
   })
 }
 
-const loadOrders = async () => {
-  isLoading.value = true
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/orders`)
-    orders.value = response.data || []
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('订单列表加载失败，请检查后端服务。')
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const openOrderPicker = async () => {
-  if (orders.value.length === 0) {
-    await loadOrders()
-  }
+const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
@@ -508,7 +490,6 @@ const applyRecommendedConfig = (recommendedConfig) => {
 
 onMounted(async () => {
   await fetchDicts()
-  await loadOrders()
 })
 </script>
 

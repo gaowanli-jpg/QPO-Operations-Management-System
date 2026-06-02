@@ -30,53 +30,63 @@
               clearable
               :disabled="!selectedCustomer"
               class="search-input"
-              @keyup.enter="loadInventory"
-              @clear="loadInventory"
+              @keyup.enter="searchInventory"
+              @clear="searchInventory"
             />
-            <el-button type="primary" :disabled="!selectedCustomer" @click="loadInventory">查询</el-button>
+            <el-button type="primary" :disabled="!selectedCustomer" @click="searchInventory">查询</el-button>
             <el-button type="success" :disabled="!selectedCustomer" @click="openCreateDialog">录入图号版本</el-button>
           </div>
         </div>
       </template>
 
       <el-empty v-if="!selectedCustomer" description="请先选择客户名称" />
-      <el-table
-        v-else
-        :data="inventoryList"
-        border
-        stripe
-        height="560"
-        v-loading="loading"
-        row-key="id"
-      >
-        <el-table-column prop="partNo" label="图号" min-width="160" fixed />
-        <el-table-column prop="version" label="版本" width="90" align="center" />
-        <el-table-column prop="inStockQty" label="已入库库存" width="120" align="center" />
-        <el-table-column prop="pendingQty" label="在产库存" width="120" align="center" />
-        <el-table-column label="在产单号" min-width="220">
-          <template #default="{ row }">
-            <el-space wrap v-if="row.pendingRows && row.pendingRows.length">
-              <el-tag
-                v-for="pending in row.pendingRows"
-                :key="pending.id || pending.pendingRefNo"
-                size="small"
-                type="info"
-              >
-                {{ displayPendingRefNo(pending.pendingRefNo) }}：{{ pending.pendingQty }}
-              </el-tag>
-            </el-space>
-            <span v-else class="muted">无</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="updatedAt" label="更新时间" width="180" />
-        <el-table-column label="操作" width="300" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" @click="openAddDialog(row)">新增库存</el-button>
-            <el-button type="warning" size="small" plain @click="openModifyDialog(row)">修改库存</el-button>
-            <el-button type="danger" size="small" plain @click="deleteInventory(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template v-else>
+        <el-table
+          :data="inventoryList"
+          border
+          stripe
+          height="560"
+          v-loading="loading"
+          row-key="id"
+        >
+          <el-table-column prop="partNo" label="图号" min-width="160" fixed />
+          <el-table-column prop="version" label="版本" width="90" align="center" />
+          <el-table-column prop="inStockQty" label="已入库库存" width="120" align="center" />
+          <el-table-column prop="pendingQty" label="在产库存" width="120" align="center" />
+          <el-table-column label="在产单号" min-width="220">
+            <template #default="{ row }">
+              <el-space wrap v-if="row.pendingRows && row.pendingRows.length">
+                <el-tag
+                  v-for="pending in row.pendingRows"
+                  :key="pending.id || pending.pendingRefNo"
+                  size="small"
+                  type="info"
+                >
+                  {{ displayPendingRefNo(pending.pendingRefNo) }}：{{ pending.pendingQty }}
+                </el-tag>
+              </el-space>
+              <span v-else class="muted">无</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="updatedAt" label="更新时间" width="180" />
+          <el-table-column label="操作" width="300" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" @click="openAddDialog(row)">新增库存</el-button>
+              <el-button type="warning" size="small" plain @click="openModifyDialog(row)">修改库存</el-button>
+              <el-button type="danger" size="small" plain @click="deleteInventory(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="pagination-wrap">
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            :total="total"
+          />
+        </div>
+      </template>
     </el-card>
 
     <el-dialog v-model="createDialogVisible" title="录入图号版本" width="460px">
@@ -209,7 +219,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { API_BASE_URL } from '../config'
@@ -220,6 +230,9 @@ const keyword = ref('')
 const inventoryList = ref([])
 const loading = ref(false)
 const saving = ref(false)
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
 const createDialogVisible = ref(false)
 const addDialogVisible = ref(false)
@@ -254,6 +267,7 @@ const loadCustomers = async () => {
 const loadInventory = async () => {
   if (!selectedCustomer.value) {
     inventoryList.value = []
+    total.value = 0
     return
   }
   loading.value = true
@@ -261,10 +275,13 @@ const loadInventory = async () => {
     const response = await axios.get(`${API_BASE_URL}/api/warehouse/inventory`, {
       params: {
         customerName: selectedCustomer.value,
-        keyword: keyword.value
+        keyword: keyword.value,
+        page: page.value,
+        pageSize: pageSize.value
       }
     })
-    inventoryList.value = response.data || []
+    inventoryList.value = response.data?.records || []
+    total.value = response.data?.total || 0
   } catch (error) {
     console.error(error)
     ElMessage.error('库存列表加载失败，请检查后端服务。')
@@ -276,6 +293,13 @@ const loadInventory = async () => {
 const handleCustomerChange = async () => {
   keyword.value = ''
   inventoryList.value = []
+  total.value = 0
+  page.value = 1
+  await loadInventory()
+}
+
+const searchInventory = async () => {
+  page.value = 1
   await loadInventory()
 }
 
@@ -514,6 +538,12 @@ const formatPartVersion = (row) => {
 onMounted(async () => {
   await loadCustomers()
 })
+
+watch([page, pageSize], () => {
+  if (selectedCustomer.value) {
+    loadInventory()
+  }
+})
 </script>
 
 <style scoped>
@@ -599,6 +629,12 @@ onMounted(async () => {
 
 .warehouse-card :deep(.el-table) {
   margin-top: 6px;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
 }
 
 @media (max-width: 1200px) {

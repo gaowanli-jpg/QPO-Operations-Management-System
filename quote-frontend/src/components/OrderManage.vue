@@ -30,7 +30,10 @@
               :disabled="!selectedCustomer"
               placeholder="搜索 RFQ 号 / 状态"
               class="search-input"
+              @keyup.enter="handleSearch"
+              @clear="handleSearch"
             />
+            <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
             <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
           </div>
         </div>
@@ -38,42 +41,54 @@
 
       <el-empty v-if="!selectedCustomer" description="请先选择客户查看订单" />
 
-      <el-table v-else :data="filteredOrders" border stripe height="640" v-loading="loading">
-        <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
-        <el-table-column prop="status" label="状态" width="120" align="center">
-          <template #default="scope">
-            <el-tag type="success" size="small">
-              {{ scope.row.status || '-' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="零件" width="90" align="center">
-          <template #default="scope">{{ scope.row.itemCount || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="已报价" width="90" align="center">
-          <template #default="scope">{{ scope.row.quotedCount || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="缺图" width="90" align="center">
-          <template #default="scope">
-            <el-tag :type="scope.row.missingDrawingCount > 0 ? 'warning' : 'success'" size="small">
-              {{ scope.row.missingDrawingCount || 0 }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="提单行" width="90" align="center">
-          <template #default="scope">{{ scope.row.ticketCount || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="工艺表行" width="100" align="center">
-          <template #default="scope">{{ scope.row.processSheetCount || 0 }}</template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="280" align="center" fixed="right">
-          <template #default="scope">
-            <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
-            <el-button size="small" type="warning" plain @click="resetProduction(scope.row)">重置提单/工艺</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template v-else>
+        <el-table :data="orders" border stripe height="600" v-loading="loading">
+          <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="120" align="center">
+            <template #default="scope">
+              <el-tag type="success" size="small">
+                {{ scope.row.status || '-' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="零件" width="90" align="center">
+            <template #default="scope">{{ scope.row.itemCount || 0 }}</template>
+          </el-table-column>
+          <el-table-column label="已报价" width="90" align="center">
+            <template #default="scope">{{ scope.row.quotedCount || 0 }}</template>
+          </el-table-column>
+          <el-table-column label="缺图" width="90" align="center">
+            <template #default="scope">
+              <el-tag :type="scope.row.missingDrawingCount > 0 ? 'warning' : 'success'" size="small">
+                {{ scope.row.missingDrawingCount || 0 }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="提单行" width="90" align="center">
+            <template #default="scope">{{ scope.row.ticketCount || 0 }}</template>
+          </el-table-column>
+          <el-table-column label="工艺表行" width="100" align="center">
+            <template #default="scope">{{ scope.row.processSheetCount || 0 }}</template>
+          </el-table-column>
+          <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
+          <el-table-column label="操作" width="280" align="center" fixed="right">
+            <template #default="scope">
+              <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
+              <el-button size="small" type="warning" plain @click="resetProduction(scope.row)">重置提单/工艺</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="pagination-wrap">
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            :total="total"
+            background
+          />
+        </div>
+      </template>
     </el-card>
 
     <el-drawer v-model="detailVisible" title="订单详情" size="72%">
@@ -228,7 +243,7 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, ref, onMounted } from 'vue'
+import { computed, defineComponent, h, ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -238,6 +253,9 @@ const orders = ref([])
 const customers = ref([])
 const selectedCustomer = ref('')
 const keyword = ref('')
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
@@ -267,16 +285,13 @@ const ResultList = defineComponent({
   }
 })
 
-const filteredOrders = computed(() => {
-  const text = keyword.value.trim().toLowerCase()
-  if (!text) return orders.value
-  return orders.value.filter(order => [
-    order.rfqNo,
-    order.status
-  ].some(value => String(value || '').toLowerCase().includes(text)))
-})
-
 const missingDrawingItems = computed(() => (orderDetail.value?.itemList || []).filter(item => !item.drawingUrl))
+
+watch([page, pageSize], () => {
+  if (selectedCustomer.value) {
+    loadOrders()
+  }
+})
 
 const loadCustomers = async () => {
   try {
@@ -296,9 +311,15 @@ const loadOrders = async () => {
   loading.value = true
   try {
     const response = await axios.get(`${API_BASE_URL}/api/order-management/orders`, {
-      params: { customerName: selectedCustomer.value }
+      params: {
+        customerName: selectedCustomer.value,
+        keyword: keyword.value.trim() || undefined,
+        page: page.value,
+        pageSize: pageSize.value
+      }
     })
-    orders.value = response.data || []
+    orders.value = response.data.records || []
+    total.value = response.data.total || 0
   } catch (error) {
     console.error(error)
     ElMessage.error('订单列表加载失败。')
@@ -312,8 +333,14 @@ const refreshOrders = async () => {
   await loadOrders()
 }
 
+const handleSearch = async () => {
+  page.value = 1
+  await loadOrders()
+}
+
 const handleCustomerChange = async () => {
   keyword.value = ''
+  page.value = 1
   orderDetail.value = null
   detailVisible.value = false
   await loadOrders()
@@ -322,6 +349,8 @@ const handleCustomerChange = async () => {
 const handleCustomerClear = () => {
   keyword.value = ''
   orders.value = []
+  total.value = 0
+  page.value = 1
   orderDetail.value = null
   detailVisible.value = false
 }
@@ -485,6 +514,12 @@ onMounted(loadCustomers)
 
 .search-input {
   width: 260px;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .detail-wrap {

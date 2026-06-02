@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,7 +49,7 @@ public class DeliveryService {
             throw new RuntimeException("请至少选择一个通过议价的零件");
         }
 
-        OrderRfq order = orderRfqMapper.selectById(req.getRfqId());
+        OrderRfq order = orderRfqMapper.selectByIdForUpdate(req.getRfqId());
         if (order == null) {
             throw new RuntimeException("询价单不存在");
         }
@@ -64,9 +65,10 @@ public class DeliveryService {
         }
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
+        Map<Integer, ItemQuoteVersion> lockedItemMap = lockRequestedItems(req.getItems());
         Map<Integer, DemandLine> demandByItemId = new LinkedHashMap<>();
         for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
-            ItemQuoteVersion item = itemMapper.selectById(line.getItemId());
+            ItemQuoteVersion item = lockedItemMap.get(line.getItemId());
             if (item == null) {
                 throw new RuntimeException("零件不存在，ID=" + line.getItemId());
             }
@@ -157,6 +159,16 @@ public class DeliveryService {
         if (ticket == null) {
             throw new RuntimeException("提单行不存在");
         }
+        if (ticket.getRfqId() != null) {
+            OrderRfq lockedOrder = orderRfqMapper.selectByIdForUpdate(ticket.getRfqId());
+            if (lockedOrder == null) {
+                throw new RuntimeException("提单所属订单已被删除");
+            }
+            ticket = ticketMapper.selectById(ticketId);
+            if (ticket == null) {
+                throw new RuntimeException("提单行已被删除");
+            }
+        }
 
         ItemQuoteVersion item = findItemByTicket(ticket);
         restoreInventoryForDeletedTicket(ticket);
@@ -174,6 +186,16 @@ public class DeliveryService {
         OrderProcessSheet sheet = processSheetMapper.selectById(sheetId);
         if (sheet == null) {
             throw new RuntimeException("工艺表行不存在");
+        }
+        if (sheet.getRfqId() != null) {
+            OrderRfq lockedOrder = orderRfqMapper.selectByIdForUpdate(sheet.getRfqId());
+            if (lockedOrder == null) {
+                throw new RuntimeException("工艺表所属订单已被删除");
+            }
+            sheet = processSheetMapper.selectById(sheetId);
+            if (sheet == null) {
+                throw new RuntimeException("工艺表行已被删除");
+            }
         }
         processSheetMapper.deleteById(sheetId);
         auditService.record("PROCESS_SHEET_DELETE", "order_process_sheet", sheetId, sheet, null);
@@ -209,9 +231,26 @@ public class DeliveryService {
                 (left, right) -> new DemandLine(left.item(), left.qty() + right.qty()));
     }
 
+    private Map<Integer, ItemQuoteVersion> lockRequestedItems(List<DeliveryGenerateReq.DeliveryItemReq> lines) {
+        List<Integer> itemIds = lines.stream()
+                .map(DeliveryGenerateReq.DeliveryItemReq::getItemId)
+                .filter(id -> id != null)
+                .distinct()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        Map<Integer, ItemQuoteVersion> result = new HashMap<>();
+        for (Integer itemId : itemIds) {
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
+            if (item != null) {
+                result.put(itemId, item);
+            }
+        }
+        return result;
+    }
+
     private ItemQuoteVersion findItemByTicket(OrderDeliveryTicket ticket) {
         if (ticket.getItemId() != null) {
-            ItemQuoteVersion item = itemMapper.selectById(ticket.getItemId());
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(ticket.getItemId());
             if (item != null) {
                 return item;
             }
@@ -221,7 +260,7 @@ public class DeliveryService {
         if (!isBlank(ticket.getVersion())) {
             qw.eq("version", normalizeVersion(ticket.getVersion()));
         }
-        qw.last("LIMIT 1");
+        qw.last("LIMIT 1 FOR UPDATE");
         return itemMapper.selectOne(qw);
     }
 

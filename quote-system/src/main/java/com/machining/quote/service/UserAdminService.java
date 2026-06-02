@@ -67,7 +67,7 @@ public class UserAdminService {
 
     @Transactional
     public Map<String, Object> updateUser(Integer id, UserSaveReq req) {
-        ErpUser user = requireUser(id);
+        ErpUser user = requireUserForUpdate(id);
         Map<String, Object> before = publicUser(user);
         if (!isBlank(req.getDisplayName())) {
             user.setDisplayName(req.getDisplayName().trim());
@@ -98,7 +98,7 @@ public class UserAdminService {
         if (current == null) {
             throw new RuntimeException("请先登录");
         }
-        ErpUser user = requireUser(current.id());
+        ErpUser user = requireUserForUpdate(current.id());
         if (!authService.matchesPassword(req.getOldPassword(), user.getPasswordHash())) {
             throw new RuntimeException("原密码不正确");
         }
@@ -117,7 +117,7 @@ public class UserAdminService {
 
     @Transactional
     public void deleteUser(Integer id) {
-        ErpUser user = requireUser(id);
+        ErpUser user = requireUserForUpdate(id);
         if (isProtectedUser(user)) {
             throw new RuntimeException("初始账号不可删除");
         }
@@ -126,11 +126,11 @@ public class UserAdminService {
         auditService.record("USER_DELETE", "erp_user", id, before, null);
     }
 
-    private ErpUser requireUser(Integer id) {
+    private ErpUser requireUserForUpdate(Integer id) {
         if (id == null) {
             throw new RuntimeException("用户 ID 不能为空");
         }
-        ErpUser user = userMapper.selectById(id);
+        ErpUser user = userMapper.selectByIdForUpdate(id);
         if (user == null) {
             throw new RuntimeException("用户不存在");
         }

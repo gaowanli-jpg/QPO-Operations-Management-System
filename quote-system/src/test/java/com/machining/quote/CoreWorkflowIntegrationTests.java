@@ -6,6 +6,7 @@ import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
 import com.machining.quote.dto.InventorySaveReq;
 import com.machining.quote.dto.InventoryStockOpReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
@@ -24,6 +25,7 @@ import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.InventoryService;
+import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.QuoteProcessService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +68,46 @@ class CoreWorkflowIntegrationTests {
     private QuoteProcessService quoteProcessService;
     @Autowired
     private InternalTargetLeadTimeService internalTargetLeadTimeService;
+    @Autowired
+    private OrderManagementService orderManagementService;
+
+    @Test
+    void orderSummaryPaginationUsesAggregatedCountsAndFilters() {
+        String customerName = "分页客户-" + System.nanoTime();
+        OrderRfq first = orderWithItemsTicketsAndSheets(customerName, "PAGE-A", "已报价", 2, 1, 1, 1, 2);
+        OrderRfq second = orderWithItemsTicketsAndSheets(customerName, "PAGE-B", "已生成提单", 1, 1, 0, 0, 0);
+        orderWithItemsTicketsAndSheets("其他分页客户-" + System.nanoTime(), "PAGE-C", "已报价", 1, 0, 0, 0, 0);
+
+        PageResult<Map<String, Object>> firstPage = orderManagementService.listOrderSummaries(
+                customerName, null, null, 1, 1);
+
+        assertThat(firstPage.getTotal()).isEqualTo(2);
+        assertThat(firstPage.getPage()).isEqualTo(1);
+        assertThat(firstPage.getPageSize()).isEqualTo(1);
+        assertThat(firstPage.getRecords()).hasSize(1);
+        assertThat(firstPage.getRecords().get(0).get("id")).isEqualTo(second.getId());
+
+        PageResult<Map<String, Object>> secondPage = orderManagementService.listOrderSummaries(
+                customerName, null, null, 2, 1);
+        Map<String, Object> summary = secondPage.getRecords().get(0);
+        assertThat(summary.get("id")).isEqualTo(first.getId());
+        assertThat(summary.get("itemCount")).isEqualTo(2);
+        assertThat(summary.get("quotedCount")).isEqualTo(1);
+        assertThat(summary.get("missingDrawingCount")).isEqualTo(1);
+        assertThat(summary.get("ticketCount")).isEqualTo(1);
+        assertThat(summary.get("ticketQty")).isEqualTo(3);
+        assertThat(summary.get("processSheetCount")).isEqualTo(2);
+
+        PageResult<Map<String, Object>> keywordFiltered = orderManagementService.listOrderSummaries(
+                customerName, "PAGE-A", null, 1, 20);
+        assertThat(keywordFiltered.getTotal()).isEqualTo(1);
+        assertThat(keywordFiltered.getRecords().get(0).get("id")).isEqualTo(first.getId());
+
+        PageResult<Map<String, Object>> statusFiltered = orderManagementService.listOrderSummaries(
+                customerName, null, "已生成提单", 1, 20);
+        assertThat(statusFiltered.getTotal()).isEqualTo(1);
+        assertThat(statusFiltered.getRecords().get(0).get("id")).isEqualTo(second.getId());
+    }
 
     @Test
     void quoteSavePersistsGrossAndNetWeights() {
@@ -459,5 +501,56 @@ class CoreWorkflowIntegrationTests {
         item.setStatus("已报价");
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    private OrderRfq orderWithItemsTicketsAndSheets(
+            String customerName,
+            String rfqPrefix,
+            String status,
+            int itemCount,
+            int quotedCount,
+            int missingDrawingCount,
+            int ticketCount,
+            int processSheetCount) {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo(rfqPrefix + "-" + System.nanoTime());
+        order.setCustomerName(customerName);
+        order.setStatus(status);
+        orderMapper.insert(order);
+
+        for (int i = 0; i < itemCount; i++) {
+            ItemQuoteVersion item = new ItemQuoteVersion();
+            item.setRfqId(order.getId());
+            item.setPartNo(rfqPrefix + "-P" + i);
+            item.setVersion("A");
+            item.setDescription("分页测试零件");
+            item.setQty(1);
+            item.setStatus(i < quotedCount ? "已报价" : "待核价");
+            if (i < quotedCount) {
+                item.setFinalUnitPrice(10.0);
+                item.setFinalTotalPrice(10.0);
+            }
+            if (i >= missingDrawingCount) {
+                item.setDrawingUrl("/uploads/test/" + rfqPrefix + "-P" + i + ".pdf");
+            }
+            itemMapper.insert(item);
+        }
+
+        for (int i = 0; i < ticketCount; i++) {
+            OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+            ticket.setRfqId(order.getId());
+            ticket.setPartNo(rfqPrefix + "-T" + i);
+            ticket.setQty(3);
+            ticketMapper.insert(ticket);
+        }
+
+        for (int i = 0; i < processSheetCount; i++) {
+            OrderProcessSheet sheet = new OrderProcessSheet();
+            sheet.setRfqId(order.getId());
+            sheet.setPartNo(rfqPrefix + "-S" + i);
+            sheet.setQty(1);
+            processSheetMapper.insert(sheet);
+        }
+        return order;
     }
 }

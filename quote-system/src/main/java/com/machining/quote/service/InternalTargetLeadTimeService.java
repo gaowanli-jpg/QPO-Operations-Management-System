@@ -31,7 +31,7 @@ public class InternalTargetLeadTimeService {
 
     @Transactional
     public Map<String, Object> shiftLeadTimes(InternalTargetLeadTimeShiftReq req) {
-        requireOrder(req.getRfqId());
+        requireOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -43,7 +43,7 @@ public class InternalTargetLeadTimeService {
         List<Map<String, Object>> skipped = new ArrayList<>();
         int adjustedCount = 0;
         for (Integer itemId : req.getItemIds()) {
-            ItemQuoteVersion item = itemMapper.selectById(itemId);
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
                 continue;
@@ -72,7 +72,7 @@ public class InternalTargetLeadTimeService {
 
     @Transactional
     public Map<String, Object> setLeadTimes(InternalTargetLeadTimeSetReq req) {
-        requireOrder(req.getRfqId());
+        requireOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -81,7 +81,7 @@ public class InternalTargetLeadTimeService {
         List<Map<String, Object>> skipped = new ArrayList<>();
         int adjustedCount = 0;
         for (Integer itemId : req.getItemIds()) {
-            ItemQuoteVersion item = itemMapper.selectById(itemId);
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
                 continue;
@@ -105,11 +105,11 @@ public class InternalTargetLeadTimeService {
 
     @Transactional
     public Map<String, Object> updateLeadTime(InternalTargetLeadTimeUpdateReq req) {
-        requireOrder(req.getRfqId());
+        requireOrderForUpdate(req.getRfqId());
         if (req.getItemId() == null) {
             throw new RuntimeException("零件 ID 不能为空");
         }
-        ItemQuoteVersion item = itemMapper.selectById(req.getItemId());
+        ItemQuoteVersion item = itemMapper.selectByIdForUpdate(req.getItemId());
         if (item == null || !req.getRfqId().equals(item.getRfqId())) {
             throw new RuntimeException("零件不存在或不属于当前 RFQ");
         }
@@ -139,6 +139,17 @@ public class InternalTargetLeadTimeService {
             throw new RuntimeException("RFQ ID 不能为空");
         }
         OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (order == null) {
+            throw new RuntimeException("RFQ 订单不存在");
+        }
+        return order;
+    }
+
+    private OrderRfq requireOrderForUpdate(Integer rfqId) {
+        if (rfqId == null) {
+            throw new RuntimeException("RFQ ID 不能为空");
+        }
+        OrderRfq order = orderRfqMapper.selectByIdForUpdate(rfqId);
         if (order == null) {
             throw new RuntimeException("RFQ 订单不存在");
         }

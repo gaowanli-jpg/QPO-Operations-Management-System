@@ -7,8 +7,7 @@
             <h2>市场部：报价单处理生成</h2>
           </div>
           <div class="header-actions">
-            <el-button :icon="Refresh" type="primary" plain :loading="loadingOrders" @click="loadOrders">刷新订单</el-button>
-            <el-button :icon="DocumentChecked" type="primary" @click="openOrderPicker" :loading="loadingOrders">选择订单</el-button>
+            <el-button :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
           </div>
         </div>
       </template>
@@ -201,7 +200,6 @@
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择已报价 RFQ 订单"
-      :orders="orders"
       :allowed-statuses="['已报价']"
       @select="handleOrderSelected"
     />
@@ -209,15 +207,14 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { Check, DocumentChecked, Download, Minus, Plus, Refresh } from '@element-plus/icons-vue'
+import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { API_BASE_URL } from '../config'
 import { downloadByAxios } from '../download'
 
-const orders = ref([])
 const selectedRfqId = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])
@@ -227,28 +224,11 @@ const shiftDays = ref(0)
 const manualQuoteDate = ref('')
 const savingRowMap = reactive({})
 
-const loadingOrders = ref(false)
 const loadingItems = ref(false)
 const adjusting = ref(false)
 const settingQuoteDate = ref(false)
 
-const loadOrders = async () => {
-  loadingOrders.value = true
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/orders`)
-    orders.value = response.data || []
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('订单列表加载失败。')
-  } finally {
-    loadingOrders.value = false
-  }
-}
-
-const openOrderPicker = async () => {
-  if (orders.value.length === 0) {
-    await loadOrders()
-  }
+const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
@@ -413,7 +393,6 @@ const exportTemplateSimpleQuote = async () => {
   }
 }
 
-onMounted(loadOrders)
 </script>
 
 <style scoped>

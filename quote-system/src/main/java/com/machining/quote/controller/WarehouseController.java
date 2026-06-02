@@ -4,6 +4,7 @@ import com.machining.quote.dto.InventoryModifyReq;
 import com.machining.quote.dto.InventorySaveReq;
 import com.machining.quote.dto.InventoryStockOpReq;
 import com.machining.quote.dto.InventoryTransferReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.config.RequireRole;
 import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.InventoryPendingStock;
@@ -35,10 +36,12 @@ public class WarehouseController {
     }
 
     @GetMapping("/inventory")
-    public List<Map<String, Object>> listInventory(
+    public PageResult<Map<String, Object>> listInventory(
             @RequestParam("customerName") String customerName,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return inventoryService.list(customerName, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return inventoryService.list(customerName, keyword, page, pageSize);
     }
 
     @GetMapping("/inventory/{inventoryId}/pending")

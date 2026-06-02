@@ -43,7 +43,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> shiftLeadTimes(QuoteLeadTimeShiftReq req) {
-        requireQuotedOrder(req.getRfqId());
+        requireQuotedOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -55,7 +55,7 @@ public class QuoteProcessService {
         List<Map<String, Object>> skipped = new ArrayList<>();
         int adjustedCount = 0;
         for (Integer itemId : req.getItemIds()) {
-            ItemQuoteVersion item = itemMapper.selectById(itemId);
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
                 continue;
@@ -84,7 +84,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> setLeadTimes(QuoteLeadTimeSetReq req) {
-        requireQuotedOrder(req.getRfqId());
+        requireQuotedOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -93,7 +93,7 @@ public class QuoteProcessService {
         List<Map<String, Object>> skipped = new ArrayList<>();
         int adjustedCount = 0;
         for (Integer itemId : req.getItemIds()) {
-            ItemQuoteVersion item = itemMapper.selectById(itemId);
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
                 continue;
@@ -117,12 +117,12 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> updateLeadTime(QuoteLeadTimeUpdateReq req) {
-        requireQuotedOrder(req.getRfqId());
+        requireQuotedOrderForUpdate(req.getRfqId());
         if (req.getItemId() == null) {
             throw new RuntimeException("零件 ID 不能为空");
         }
 
-        ItemQuoteVersion item = itemMapper.selectById(req.getItemId());
+        ItemQuoteVersion item = itemMapper.selectByIdForUpdate(req.getItemId());
         if (item == null || !req.getRfqId().equals(item.getRfqId())) {
             throw new RuntimeException("零件不存在或不属于当前 RFQ");
         }
@@ -147,6 +147,20 @@ public class QuoteProcessService {
             throw new RuntimeException("RFQ ID 不能为空");
         }
         OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (order == null) {
+            throw new RuntimeException("RFQ 订单不存在");
+        }
+        if (!QUOTED_STATUS.equals(order.getStatus())) {
+            throw new RuntimeException("只有已报价订单可以处理报价单");
+        }
+        return order;
+    }
+
+    private OrderRfq requireQuotedOrderForUpdate(Integer rfqId) {
+        if (rfqId == null) {
+            throw new RuntimeException("RFQ ID 不能为空");
+        }
+        OrderRfq order = orderRfqMapper.selectByIdForUpdate(rfqId);
         if (order == null) {
             throw new RuntimeException("RFQ 订单不存在");
         }

@@ -19,11 +19,36 @@ notepad .env
 ```
 
 Important values:
-- `POSTGRES_PASSWORD`: change before production.
-- `ERP_JWT_SECRET`: change before production.
+- `POSTGRES_PASSWORD`: must be filled before startup. Use a long random password.
+- `ERP_JWT_SECRET`: must be filled before startup. Use a strong random value with at least 32 characters; the backend refuses to start with the old default value or a short secret.
 - `ERP_CORS_ALLOWED_ORIGINS`: set to the real frontend origin, for example `https://erp.example.com`.
-- `POSTGRES_BIND`, `BACKEND_BIND`, `FRONTEND_BIND`: use `127.0.0.1` when an external Nginx on the same server proxies traffic.
+- `POSTGRES_BIND`: keep `127.0.0.1` unless a separate database server or trusted internal network requires otherwise.
+- `BACKEND_BIND`: keep `127.0.0.1`; the frontend container reaches the backend through Docker's internal network.
+- `FRONTEND_BIND`: use `127.0.0.1` when an external Nginx on the same server proxies HTTPS traffic; use `0.0.0.0` only when exposing the frontend container directly.
 - `FRONTEND_PORT`: set to `8088` behind an external Nginx proxy, or `80` only if no external reverse proxy is used.
+- `DB_POOL_MAX_SIZE`: backend database connection pool size. Keep the default `15` for one backend container; avoid setting it very high unless PostgreSQL `max_connections` and server capacity are checked.
+- `DB_POOL_MIN_IDLE`: idle database connections kept ready. Default `3` is enough for normal internal use.
+- `ERP_TASK_CORE_POOL_SIZE` / `ERP_TASK_MAX_POOL_SIZE`: background task thread pool for long-running jobs such as quote refresh and large exports. Keep the defaults `2` / `4` unless CPU and database capacity are checked.
+
+Connection pool rule of thumb:
+
+```text
+backend container count * DB_POOL_MAX_SIZE + other database clients < PostgreSQL max_connections
+```
+
+Generate secrets on Windows PowerShell:
+
+```powershell
+[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+Generate secrets on Linux:
+
+```bash
+openssl rand -base64 48
+```
+
+The Compose file also enables container health checks, log rotation, conservative CPU/memory limits, and `no-new-privileges` for application containers.
 
 ## HTTPS reverse proxy
 Use `deploy/nginx/quote-system.https.example.conf` as the server-level Nginx example.
@@ -46,4 +71,11 @@ After changing `.env`, recreate containers:
 
 ```powershell
 docker compose up -d --build
+```
+
+Check health after startup:
+
+```powershell
+docker compose ps
+curl http://localhost:8080/api/health
 ```

@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -158,6 +160,39 @@ public class ExcelExportService {
             rows.add(buildSimpleQuoteRow(items.get(i), i + 1));
         }
         write(response, buildFileName(rfqId, "简化报价单"), "简化报价单", head, rows);
+    }
+
+    public Path exportQuoteSheetFile(Integer rfqId, Path outputDir, String exportType) throws IOException {
+        Files.createDirectories(outputDir);
+        String safeType = exportType == null ? "" : exportType.trim().toUpperCase();
+        boolean simple = "SIMPLE".equals(safeType);
+        boolean useQuoteLeadTime = !"CUSTOMER_LEAD_TIME".equals(safeType);
+
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        List<ItemQuoteVersion> items = itemMapper.selectList(qw);
+
+        String suffix = simple ? "简化报价单" : "报价单";
+        String sheetName = simple ? "简化报价单" : "报价单";
+        Path file = uniqueExportFile(outputDir, buildFileName(rfqId, suffix));
+        if (simple) {
+            List<List<Object>> rows = new ArrayList<>();
+            for (int i = 0; i < items.size(); i++) {
+                rows.add(buildSimpleQuoteRow(items.get(i), i + 1));
+            }
+            EasyExcel.write(file.toFile()).head(buildSimpleQuoteHead()).sheet(sheetName).doWrite(rows);
+            return file;
+        }
+
+        int maxRouteSize = resolveMaxRouteSize(items);
+        List<String> feeNames = collectQuoteFeeNames(items);
+        List<List<String>> head = buildQuoteHead(maxRouteSize, feeNames);
+        List<List<Object>> rows = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            rows.add(buildQuoteRow(items.get(i), i + 1, maxRouteSize, feeNames, useQuoteLeadTime));
+        }
+        EasyExcel.write(file.toFile()).head(head).sheet(sheetName).doWrite(rows);
+        return file;
     }
 
     private void exportQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime) throws IOException {
@@ -387,6 +422,23 @@ public class ExcelExportService {
         String rfqNo = order == null ? "" : safe(order.getRfqNo());
         String prefix = rfqNo.isEmpty() ? "RFQ-" + rfqId : rfqNo;
         return prefix + "-" + suffix;
+    }
+
+    private Path uniqueExportFile(Path outputDir, String baseName) {
+        String cleanName = sanitizeFileName(baseName);
+        Path file = outputDir.resolve(cleanName + ".xlsx");
+        int index = 1;
+        while (Files.exists(file)) {
+            file = outputDir.resolve(cleanName + "-" + index + ".xlsx");
+            index++;
+        }
+        return file;
+    }
+
+    private String sanitizeFileName(String value) {
+        String text = value == null ? "export" : value.trim();
+        text = text.replaceAll("[\\\\/:*?\"<>|]", "_");
+        return text.isEmpty() ? "export" : text;
     }
 
     private String resolveRfqNo(Integer rfqId) {
