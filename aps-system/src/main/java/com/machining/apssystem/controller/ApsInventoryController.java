@@ -13,7 +13,9 @@ import com.machining.apssystem.dto.PartInventoryModifyReq;
 import com.machining.apssystem.dto.PartInventorySaveReq;
 import com.machining.apssystem.dto.PartInventoryStockOpReq;
 import com.machining.apssystem.dto.PartInventoryTransferReq;
+import com.machining.apssystem.service.ApsInventoryExportService;
 import com.machining.apssystem.service.ApsInventoryService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +37,9 @@ import java.util.Map;
 public class ApsInventoryController {
     @Autowired
     private ApsInventoryService inventoryService;
+
+    @Autowired
+    private ApsInventoryExportService inventoryExportService;
 
     @GetMapping("/parts")
     public List<ApsPartInventoryDTO> listPartInventory(
@@ -93,8 +99,28 @@ public class ApsInventoryController {
     }
 
     @GetMapping("/parts/locks")
-    public List<ApsPartInventoryLockDTO> listPartLocks(@RequestParam(value = "limit", required = false) Integer limit) {
-        return inventoryService.listPartLocks(limit);
+    public List<ApsPartInventoryLockDTO> listPartLocks(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return inventoryService.listPartLocks(customerName, limit);
+    }
+
+    @GetMapping("/parts/locks/export")
+    public void exportPartLocks(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "limit", required = false) Integer limit,
+            HttpServletResponse response) throws IOException {
+        inventoryExportService.exportPartLocks(customerName, limit, response);
+    }
+
+    @PostMapping("/parts/locks/{id}/confirm")
+    public Map<String, Object> confirmPartLock(@PathVariable Long id) {
+        return inventoryService.confirmPartLock(id);
+    }
+
+    @PostMapping("/parts/locks/{id}/release")
+    public Map<String, Object> releasePartLock(@PathVariable Long id) {
+        return inventoryService.releasePartLock(id);
     }
 
     @GetMapping("/parts/production-requirements")
@@ -128,8 +154,25 @@ public class ApsInventoryController {
     }
 
     @GetMapping("/materials/locks")
-    public List<ApsMaterialLockDTO> listMaterialLocks(@RequestParam(value = "limit", required = false) Integer limit) {
-        return inventoryService.listMaterialLocks(limit);
+    public List<ApsMaterialLockDTO> listMaterialLocks(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return inventoryService.listMaterialLocks(customerName, limit);
+    }
+
+    @GetMapping("/materials/locks/customers")
+    public List<String> listMaterialLockCustomers() {
+        return inventoryService.listMaterialLockCustomers();
+    }
+
+    @PostMapping("/materials/locks/{id}/confirm")
+    public Map<String, Object> confirmMaterialLock(@PathVariable Long id) {
+        return inventoryService.confirmMaterialLock(id);
+    }
+
+    @PostMapping("/materials/locks/{id}/release")
+    public Map<String, Object> releaseMaterialLock(@PathVariable Long id) {
+        return inventoryService.releaseMaterialLock(id);
     }
 
     @GetMapping("/materials/shortages")

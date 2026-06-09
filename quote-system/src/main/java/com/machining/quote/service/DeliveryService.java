@@ -61,6 +61,17 @@ public class DeliveryService {
         if (internalProjectNo.length() > 100) {
             throw new RuntimeException("内部项目号不能超过 100 个字符");
         }
+        String customerOrderNo = req.getCustomerOrderNo() == null ? "" : req.getCustomerOrderNo().trim();
+        if (customerOrderNo.isEmpty()) {
+            throw new RuntimeException("客户订单号不能为空");
+        }
+        if (customerOrderNo.length() > 100) {
+            throw new RuntimeException("客户订单号不能超过 100 个字符");
+        }
+        String customerProjectNo = req.getCustomerProjectNo() == null ? "" : req.getCustomerProjectNo().trim();
+        if (customerProjectNo.length() > 100) {
+            throw new RuntimeException("客户项目号不能超过 100 个字符");
+        }
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
         Map<Integer, ItemQuoteVersion> lockedItemMap = lockRequestedItems(req.getItems());
@@ -100,7 +111,7 @@ public class DeliveryService {
             ItemQuoteVersion item = demand.item();
             int acceptedQty = demand.qty();
 
-            createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, acceptedQty,
+            createdTickets.add(insertTicket(order, item, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
                     item.getRemark(), arrangeType));
 
             insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)), internalProjectNo);
@@ -179,13 +190,16 @@ public class DeliveryService {
         auditService.record("PROCESS_SHEET_DELETE", "order_process_sheet", sheetId, sheet, null);
     }
 
-    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String internalProjectNo, String projectNo,
+    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String internalProjectNo,
+                                             String customerOrderNo, String customerProjectNo, String projectNo,
                                              LocalDate startDate, int qty, String remark, String arrangeType) {
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(order.getId());
         ticket.setItemId(item.getId());
         ticket.setOrderType(isBlank(item.getOrderType()) ? "新订单" : item.getOrderType());
         ticket.setInternalProjectNo(internalProjectNo);
+        ticket.setCustomerOrderNo(customerOrderNo);
+        ticket.setCustomerProjectNo(customerProjectNo);
         ticket.setProjectNo(projectNo);
         ticket.setItemType(resolveItemType(item));
         ticket.setPartNo(item.getPartNo());

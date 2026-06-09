@@ -16,11 +16,14 @@ public class ApsMaterialLockDTO {
     @JsonProperty("material_inventory_id")
     private Long materialInventoryId;
 
-    @JsonProperty("rfq_no")
-    private String rfqNo;
-
     @JsonProperty("internal_project_no")
     private String internalProjectNo;
+
+    @JsonProperty("customer_order_no")
+    private String customerOrderNo;
+
+    @JsonProperty("customer_project_no")
+    private String customerProjectNo;
 
     @JsonProperty("customer_name")
     private String customerName;
@@ -47,8 +50,14 @@ public class ApsMaterialLockDTO {
 
     private String status;
 
+    @JsonProperty("warehouse_status")
+    private String warehouseStatus;
+
     @JsonProperty("locked_at")
     private LocalDateTime lockedAt;
+
+    @JsonProperty("confirmed_at")
+    private LocalDateTime confirmedAt;
 
     @JsonProperty("released_at")
     private LocalDateTime releasedAt;

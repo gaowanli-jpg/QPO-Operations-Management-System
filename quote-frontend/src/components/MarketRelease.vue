@@ -108,6 +108,20 @@
                 maxlength="100"
                 clearable
               />
+              <el-input
+                v-model="releaseForm.customerOrderNo"
+                placeholder="请输入客户订单号"
+                maxlength="100"
+                clearable
+                class="release-meta-input"
+              />
+              <el-input
+                v-model="releaseForm.customerProjectNo"
+                placeholder="请输入客户项目号（可选）"
+                maxlength="100"
+                clearable
+                class="release-meta-input"
+              />
             </div>
 
             <div class="main-actions">
@@ -115,7 +129,7 @@
                 type="success"
                 size="large"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0 || !releaseForm.internalProjectNo.trim()"
+                :disabled="selectedRows.length === 0 || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim()"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -342,6 +356,8 @@ const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
   projectNo: '',
   internalProjectNo: '',
+  customerOrderNo: '',
+  customerProjectNo: '',
   startDate: today,
   arrangeType: '计划'
 })
@@ -364,6 +380,8 @@ const loadOrder = async (rfqId) => {
     await loadInternalTargetItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''
     releaseForm.internalProjectNo = ''
+    releaseForm.customerOrderNo = ''
+    releaseForm.customerProjectNo = ''
     selectedRows.value = []
     await loadTickets(rfqId)
     await loadProcessSheets(rfqId)
@@ -583,6 +601,9 @@ const submitTicket = async () => {
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
   const internalProjectNo = releaseForm.internalProjectNo.trim()
   if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')
+  const customerOrderNo = releaseForm.customerOrderNo.trim()
+  if (!customerOrderNo) return ElMessage.warning('请填写客户订单号后再生成正式提单。')
+  const customerProjectNo = releaseForm.customerProjectNo.trim()
 
   const unquoted = selectedRows.value.filter(row => row.finalUnitPrice == null)
   if (unquoted.length > 0) {
@@ -601,6 +622,8 @@ const submitTicket = async () => {
       rfqId: selectedRfqId.value,
       projectNo: releaseForm.projectNo,
       internalProjectNo,
+      customerOrderNo,
+      customerProjectNo,
       startDate: releaseForm.startDate,
       arrangeType: releaseForm.arrangeType,
       items: selectedRows.value.map(row => ({
@@ -828,6 +851,10 @@ const exportExcel = async (type) => {
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--erp-border-soft);
+}
+
+.release-meta-input {
+  margin-top: 10px;
 }
 
 .lead-actions {

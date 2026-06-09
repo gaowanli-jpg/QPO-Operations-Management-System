@@ -5,6 +5,7 @@ import com.machining.apssystem.dto.ApsMachineCapabilityDTO;
 import com.machining.apssystem.dto.ApsMachineDTO;
 import com.machining.apssystem.dto.ApsPmcTaskDetailDTO;
 import com.machining.apssystem.dto.ApsWorkItemDTO;
+import com.machining.apssystem.dto.ApsWorkItemPageDTO;
 import com.machining.apssystem.dto.DepartmentAssignmentReq;
 import com.machining.apssystem.dto.DepartmentCapacityAdjustReq;
 import com.machining.apssystem.dto.DepartmentCapacityResetReq;
@@ -118,6 +119,14 @@ public class ApsPmcController {
             @RequestParam(value = "assignmentStatus", required = false) String assignmentStatus,
             @RequestParam(value = "limit", required = false) Integer limit) {
         return pmcService.listPmcTasks(assignmentStatus, limit);
+    }
+
+    @GetMapping("/tasks/page")
+    public ApsWorkItemPageDTO listPmcTaskPage(
+            @RequestParam(value = "assignmentStatus", required = false) String assignmentStatus,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return pmcService.listPmcTaskPage(assignmentStatus, page, pageSize);
     }
 
     @GetMapping("/tasks/{id}")

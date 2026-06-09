@@ -1,5 +1,5 @@
 <script setup>
-import { field, label, number, statusClass } from '../helpers'
+import { field, label, number, statusClass, taskOrderText } from '../helpers'
 
 defineProps({
   title: {
@@ -58,7 +58,7 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
             <th>任务</th>
             <th>客户</th>
             <th>图号 / 版本</th>
-            <th>数量</th>
+            <th>需生产</th>
             <th>交期</th>
             <th>材料</th>
             <th>工时</th>
@@ -79,7 +79,7 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
             </td>
             <td>
               <strong>#{{ field(task, 'id') }}</strong>
-              <small>{{ field(task, 'rfq_no', 'rfqNo') || '-' }} / {{ field(task, 'internal_project_no', 'internalProjectNo') || '-' }}</small>
+              <small>{{ taskOrderText(task) }}</small>
             </td>
             <td>{{ field(task, 'customer_name', 'customerName') || '-' }}</td>
             <td>

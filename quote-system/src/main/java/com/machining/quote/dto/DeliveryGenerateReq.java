@@ -10,6 +10,8 @@ public class DeliveryGenerateReq {
     private Integer rfqId;
     private String projectNo;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private LocalDate startDate;
     private String arrangeType;
     private List<DeliveryItemReq> items;

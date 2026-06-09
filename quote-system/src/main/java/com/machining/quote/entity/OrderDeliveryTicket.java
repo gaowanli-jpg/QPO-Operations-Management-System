@@ -17,6 +17,8 @@ public class OrderDeliveryTicket {
     private Integer itemId;
     private String orderType;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private String projectNo;
     private String itemType;
     private String partNo;

@@ -16,6 +16,9 @@ public class ApsPartInventoryLockDTO {
     @JsonProperty("part_inventory_id")
     private Long partInventoryId;
 
+    @JsonProperty("part_inventory_lock_id")
+    private Long partInventoryLockId;
+
     @JsonProperty("customer_name")
     private String customerName;
 
@@ -36,6 +39,21 @@ public class ApsPartInventoryLockDTO {
     @JsonProperty("production_required_qty")
     private Integer productionRequiredQty;
 
+    @JsonProperty("lock_type")
+    private String lockType;
+
+    @JsonProperty("lock_type_text")
+    private String lockTypeText;
+
+    @JsonProperty("pending_stock_id")
+    private Long pendingStockId;
+
+    @JsonProperty("pending_ref_no")
+    private String pendingRefNo;
+
+    @JsonProperty("locked_qty")
+    private Integer lockedQty;
+
     private String status;
 
     @JsonProperty("locked_at")
@@ -44,11 +62,14 @@ public class ApsPartInventoryLockDTO {
     @JsonProperty("released_at")
     private LocalDateTime releasedAt;
 
-    @JsonProperty("rfq_no")
-    private String rfqNo;
-
     @JsonProperty("internal_project_no")
     private String internalProjectNo;
+
+    @JsonProperty("customer_order_no")
+    private String customerOrderNo;
+
+    @JsonProperty("customer_project_no")
+    private String customerProjectNo;
 
     @JsonProperty("delivery_date")
     private LocalDate deliveryDate;

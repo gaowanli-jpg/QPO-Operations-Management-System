@@ -9,8 +9,9 @@ import java.time.LocalDate;
 public class WorkItemSummaryDTO {
     private Long id;
     private Integer erpTicketId;
-    private String rfqNo;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private String customerName;
     private String partNo;
     private String version;

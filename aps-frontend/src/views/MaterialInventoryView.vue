@@ -7,8 +7,6 @@ const loading = ref(false)
 const error = ref('')
 const notice = ref('')
 const materialInventory = ref([])
-const materialLocks = ref([])
-const materialShortages = ref([])
 
 const form = reactive({
   materialName: '',
@@ -34,14 +32,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadData = async () => {
-  const [inventory, locks, shortages] = await Promise.all([
-    request('/api/aps/inventory/materials?limit=200'),
-    request('/api/aps/inventory/materials/locks?limit=100'),
-    request('/api/aps/inventory/materials/shortages?limit=100')
-  ])
-  materialInventory.value = inventory
-  materialLocks.value = locks
-  materialShortages.value = shortages
+  materialInventory.value = await request('/api/aps/inventory/materials?limit=200')
 }
 
 const save = async () => {
@@ -109,18 +100,5 @@ onMounted(() => run(loadData))
       ['locked_weight_kg', '锁定 kg'], ['available_weight_kg', '可用 kg'],
       ['safety_stock_weight_kg', '安全库存'], ['unit', '单位']
     ]" @delete-row="remove" />
-
-    <DataTable title="材料锁定记录" :rows="materialLocks" :columns="[
-      ['work_item_id', '任务'], ['rfq_no', 'RFQ'], ['internal_project_no', '内部项目号'],
-      ['customer_name', '客户'], ['part_no', '图号'], ['material_name', '材料'],
-      ['material_type', '类型'], ['demand_weight_kg', '需求 kg'],
-      ['locked_weight_kg', '锁定 kg'], ['shortage_weight_kg', '缺口 kg'], ['status', '状态']
-    ]" />
-
-    <DataTable title="材料缺口" :rows="materialShortages" :columns="[
-      ['work_item_id', '任务'], ['rfq_no', 'RFQ'], ['internal_project_no', '内部项目号'],
-      ['customer_name', '客户'], ['part_no', '图号'], ['material_name', '材料'],
-      ['material_type', '类型'], ['shortage_weight_kg', '缺口 kg'], ['status', '状态']
-    ]" />
   </section>
 </template>

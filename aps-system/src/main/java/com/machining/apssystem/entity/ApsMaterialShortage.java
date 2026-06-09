@@ -15,7 +15,6 @@ public class ApsMaterialShortage {
     private Long id;
 
     private Long workItemId;
-    private String rfqNo;
     private String internalProjectNo;
     private String customerName;
     private String partNo;

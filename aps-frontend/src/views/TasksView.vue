@@ -1,7 +1,7 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { request } from '../api'
-import { field, label, number } from '../helpers'
+import { customerProjectText, field, label, number } from '../helpers'
 import TaskTable from '../components/TaskTable.vue'
 
 const loading = ref(false)
@@ -12,6 +12,10 @@ const departments = ref([])
 const selectedTaskId = ref(null)
 const selectedTaskIds = ref([])
 const taskDetail = ref(null)
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 const assignmentForm = reactive({
   departmentId: '',
@@ -34,7 +38,19 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadTasks = async () => {
-  tasks.value = await request('/api/aps/pmc/tasks?assignmentStatus=PENDING&limit=100')
+  const query = new URLSearchParams({
+    assignmentStatus: 'PENDING',
+    page: String(page.value),
+    pageSize: String(pageSize.value)
+  })
+  const result = await request(`/api/aps/pmc/tasks/page?${query}`)
+  tasks.value = result.records || []
+  total.value = result.total || 0
+  if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
+    page.value = totalPages.value
+    await loadTasks()
+    return
+  }
   const visibleIds = new Set(tasks.value.map((task) => field(task, 'id')))
   selectedTaskIds.value = selectedTaskIds.value.filter((id) => visibleIds.has(id))
 }
@@ -82,6 +98,20 @@ const toggleAllTasks = (checked) => {
   selectedTaskIds.value = checked ? tasks.value.map((task) => field(task, 'id')).filter(Boolean) : []
 }
 
+const goPage = async (nextPage) => {
+  page.value = nextPage
+  selectedTaskId.value = null
+  taskDetail.value = null
+  await run(loadTasks)
+}
+
+const changePageSize = async () => {
+  page.value = 1
+  selectedTaskId.value = null
+  taskDetail.value = null
+  await run(loadTasks)
+}
+
 const deleteSelectedTasks = async () => {
   if (selectedTaskIds.value.length === 0) return
   const ids = [...selectedTaskIds.value]
@@ -123,6 +153,18 @@ onMounted(() => run(() => Promise.all([loadTasks(), loadDepartments()])))
       @delete-selected="deleteSelectedTasks"
     />
 
+    <div class="pager">
+      <span>共 {{ total }} 条</span>
+      <button class="secondary" type="button" :disabled="page <= 1 || loading" @click="goPage(page - 1)">上一页</button>
+      <span>第 {{ page }} / {{ totalPages }} 页</span>
+      <button class="secondary" type="button" :disabled="page >= totalPages || loading" @click="goPage(page + 1)">下一页</button>
+      <select v-model.number="pageSize" class="page-size" :disabled="loading" @change="changePageSize">
+        <option :value="20">20 条</option>
+        <option :value="50">50 条</option>
+        <option :value="100">100 条</option>
+      </select>
+    </div>
+
     <section class="panel detail-panel">
       <div class="section-head">
         <h2>任务详情</h2>
@@ -131,8 +173,9 @@ onMounted(() => run(() => Promise.all([loadTasks(), loadDepartments()])))
       <div v-if="taskDetail" class="detail-layout">
         <div class="detail-main">
           <dl>
-            <div><dt>RFQ</dt><dd>{{ field(taskDetail.task, 'rfq_no', 'rfqNo') || '-' }}</dd></div>
             <div><dt>内部项目号</dt><dd>{{ field(taskDetail.task, 'internal_project_no', 'internalProjectNo') || '-' }}</dd></div>
+            <div><dt>客户订单号</dt><dd>{{ field(taskDetail.task, 'customer_order_no', 'customerOrderNo') || '-' }}</dd></div>
+            <div><dt>客户项目号</dt><dd>{{ customerProjectText(taskDetail.task) }}</dd></div>
             <div><dt>客户</dt><dd>{{ field(taskDetail.task, 'customer_name', 'customerName') || '-' }}</dd></div>
             <div><dt>图号/版本</dt><dd>{{ field(taskDetail.task, 'part_no', 'partNo') }} / {{ field(taskDetail.task, 'version') || '-' }}</dd></div>
             <div><dt>交期</dt><dd>{{ field(taskDetail.task, 'delivery_date', 'deliveryDate') || '-' }}</dd></div>

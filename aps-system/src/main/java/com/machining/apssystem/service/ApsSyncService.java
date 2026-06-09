@@ -11,6 +11,7 @@ import com.machining.apssystem.entity.ApsMaterialLock;
 import com.machining.apssystem.entity.ApsMaterialShortage;
 import com.machining.apssystem.entity.ApsPartInventory;
 import com.machining.apssystem.entity.ApsPartInventoryLock;
+import com.machining.apssystem.entity.ApsPartInventoryLockDetail;
 import com.machining.apssystem.entity.ApsPartInventoryPendingStock;
 import com.machining.apssystem.entity.ApsProductionRequirement;
 import com.machining.apssystem.entity.ApsWorkItem;
@@ -19,6 +20,7 @@ import com.machining.apssystem.mapper.ApsErpSyncRunMapper;
 import com.machining.apssystem.mapper.ApsMaterialInventoryMapper;
 import com.machining.apssystem.mapper.ApsMaterialLockMapper;
 import com.machining.apssystem.mapper.ApsMaterialShortageMapper;
+import com.machining.apssystem.mapper.ApsPartInventoryLockDetailMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryLockMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryPendingStockMapper;
@@ -41,6 +43,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -66,6 +69,8 @@ public class ApsSyncService {
     private ApsPartInventoryPendingStockMapper partInventoryPendingStockMapper;
     @Autowired
     private ApsPartInventoryLockMapper partInventoryLockMapper;
+    @Autowired
+    private ApsPartInventoryLockDetailMapper partInventoryLockDetailMapper;
     @Autowired
     private ApsProductionRequirementMapper productionRequirementMapper;
     @Autowired
@@ -165,10 +170,11 @@ public class ApsSyncService {
         workItem.setErpItemId(item.getItemId());
         workItem.setErpProcessSheetId(item.getSourceProcessSheetId());
         workItem.setProcessSnapshotSource(text(item.getProcessSnapshotSource(), "ITEM_QUOTE_VERSION"));
-        workItem.setRfqNo(text(item.getRfqNo()));
         workItem.setCustomerName(text(item.getCustomerName()));
         workItem.setOrderStatus(text(item.getOrderStatus()));
         workItem.setInternalProjectNo(text(item.getInternalProjectNo()));
+        workItem.setCustomerOrderNo(text(item.getCustomerOrderNo()));
+        workItem.setCustomerProjectNo(text(item.getCustomerProjectNo()));
         workItem.setProjectNo(text(item.getProjectNo()));
         workItem.setOrderType(text(item.getOrderType()));
         workItem.setItemType(text(item.getItemType()));
@@ -233,6 +239,7 @@ public class ApsSyncService {
         int lockedInStock = 0;
         int lockedInProduction = 0;
         int productionRequired = demandQty;
+        List<PendingLockAllocation> productionAllocations = List.of();
         if (inventory != null) {
             inventoryId = inventory.getId();
             int availableInStock = Math.max(0, numberInt(inventory.getAvailableInStockQty()));
@@ -242,7 +249,7 @@ public class ApsSyncService {
             int availableInProduction = Math.max(0, numberInt(inventory.getAvailableInProductionQty()));
             lockedInProduction = Math.min(productionRequired, availableInProduction);
             if (lockedInProduction > 0) {
-                lockPendingPartInventory(inventoryId, lockedInProduction);
+                productionAllocations = lockPendingPartInventory(inventoryId, lockedInProduction);
             }
             productionRequired -= lockedInProduction;
 
@@ -264,6 +271,7 @@ public class ApsSyncService {
         lock.setProductionRequiredQty(productionRequired);
         lock.setStatus(status);
         partInventoryLockMapper.insert(lock);
+        insertPartLockDetails(lock, workItemId, inventoryId, lockedInStock, productionAllocations);
 
         int productionRequirementCount = 0;
         if (productionRequired > 0) {
@@ -280,8 +288,9 @@ public class ApsSyncService {
         return new PartLockResult(status, productionRequirementCount);
     }
 
-    private void lockPendingPartInventory(Long inventoryId, int lockQty) {
+    private List<PendingLockAllocation> lockPendingPartInventory(Long inventoryId, int lockQty) {
         int remaining = lockQty;
+        List<PendingLockAllocation> allocations = new ArrayList<>();
         List<ApsPartInventoryPendingStock> pendingRows =
                 partInventoryPendingStockMapper.selectAvailableRowsForUpdate(inventoryId);
         for (ApsPartInventoryPendingStock row : pendingRows) {
@@ -293,11 +302,59 @@ public class ApsSyncService {
                 continue;
             }
             partInventoryPendingStockMapper.addLockedQty(row.getId(), used);
+            allocations.add(new PendingLockAllocation(row.getId(), text(row.getPendingRefNo()), used));
             remaining -= used;
         }
         if (remaining > 0) {
             throw new IllegalStateException("Pending stock detail is lower than APS part inventory summary.");
         }
+        return allocations;
+    }
+
+    private void insertPartLockDetails(
+            ApsPartInventoryLock lock,
+            Long workItemId,
+            Long inventoryId,
+            int lockedInStock,
+            List<PendingLockAllocation> productionAllocations) {
+        Long lockId = lock.getId();
+        if (lockId == null && workItemId != null) {
+            ApsPartInventoryLock persisted = partInventoryLockMapper.selectByWorkItemIdForUpdate(workItemId);
+            lockId = persisted == null ? null : persisted.getId();
+        }
+        if (lockId == null) {
+            throw new IllegalStateException("Failed to create APS part inventory lock detail.");
+        }
+        if (lockedInStock > 0) {
+            insertPartLockDetail(lockId, workItemId, inventoryId, "IN_STOCK", null, null, lockedInStock);
+        }
+        for (PendingLockAllocation allocation : productionAllocations) {
+            insertPartLockDetail(lockId, workItemId, inventoryId, "IN_PRODUCTION",
+                    allocation.pendingStockId(), allocation.pendingRefNo(), allocation.lockedQty());
+        }
+    }
+
+    private void insertPartLockDetail(
+            Long lockId,
+            Long workItemId,
+            Long inventoryId,
+            String lockType,
+            Long pendingStockId,
+            String pendingRefNo,
+            int lockedQty) {
+        if (lockedQty <= 0) {
+            return;
+        }
+        ApsPartInventoryLockDetail detail = new ApsPartInventoryLockDetail();
+        detail.setPartInventoryLockId(lockId);
+        detail.setWorkItemId(workItemId);
+        detail.setPartInventoryId(inventoryId);
+        detail.setLockType(lockType);
+        detail.setPendingStockId(pendingStockId);
+        detail.setPendingRefNo(text(pendingRefNo));
+        detail.setLockedQty(lockedQty);
+        detail.setStatus("PENDING");
+        partInventoryLockDetailMapper.insert(detail);
     }
 
     private MaterialLockResult lockMaterialInventory(Long workItemId, ErpDeliveryItemDTO item) {
@@ -327,7 +384,6 @@ public class ApsSyncService {
         ApsMaterialLock lock = new ApsMaterialLock();
         lock.setWorkItemId(workItemId);
         lock.setMaterialInventoryId(inventoryId);
-        lock.setRfqNo(text(item.getRfqNo()));
         lock.setInternalProjectNo(text(item.getInternalProjectNo()));
         lock.setCustomerName(text(item.getCustomerName()));
         lock.setPartNo(requireText(item.getPartNo(), "partNo"));
@@ -338,6 +394,7 @@ public class ApsSyncService {
         lock.setLockedWeightKg(lockedWeight);
         lock.setShortageWeightKg(shortageWeight);
         lock.setStatus(status);
+        lock.setWarehouseStatus("PENDING");
         materialLockMapper.insert(lock);
 
         int shortageCount = 0;
@@ -345,7 +402,6 @@ public class ApsSyncService {
             shortageCount = 1;
             ApsMaterialShortage shortage = new ApsMaterialShortage();
             shortage.setWorkItemId(workItemId);
-            shortage.setRfqNo(text(item.getRfqNo()));
             shortage.setInternalProjectNo(text(item.getInternalProjectNo()));
             shortage.setCustomerName(text(item.getCustomerName()));
             shortage.setPartNo(requireText(item.getPartNo(), "partNo"));
@@ -520,6 +576,9 @@ public class ApsSyncService {
     }
 
     private record PartLockResult(String status, int productionRequirementCount) {
+    }
+
+    private record PendingLockAllocation(Long pendingStockId, String pendingRefNo, int lockedQty) {
     }
 
     private record MaterialLockResult(String status, int shortageCount) {

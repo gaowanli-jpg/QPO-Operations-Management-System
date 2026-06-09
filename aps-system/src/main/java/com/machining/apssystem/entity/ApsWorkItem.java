@@ -21,10 +21,11 @@ public class ApsWorkItem {
     private Integer erpItemId;
     private Integer erpProcessSheetId;
     private String processSnapshotSource;
-    private String rfqNo;
     private String customerName;
     private String orderStatus;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private String projectNo;
     private String orderType;
     private String itemType;

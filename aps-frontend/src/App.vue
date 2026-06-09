@@ -23,7 +23,15 @@ const menus = [
       { path: '/part-inventory/requirements', label: '生产需求' }
     ]
   },
-  { path: '/material-inventory', label: '材料库存' },
+  {
+    path: '/material-inventory',
+    label: '材料库存',
+    children: [
+      { path: '/material-inventory/manage', label: '材料库存维护' },
+      { path: '/material-inventory/locks', label: '材料锁定记录' },
+      { path: '/material-inventory/shortages', label: '材料缺口' }
+    ]
+  },
   { path: '/departments', label: '部门管理' },
   { path: '/processes', label: '工艺管理' },
   { path: '/machines', label: '机台能力' }

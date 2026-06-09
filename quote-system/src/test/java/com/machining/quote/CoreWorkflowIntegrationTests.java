@@ -244,6 +244,7 @@ class CoreWorkflowIntegrationTests {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
         req.setInternalProjectNo("IP-DATE");
+        req.setCustomerOrderNo("CO-DATE");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(1);
@@ -302,6 +303,8 @@ class CoreWorkflowIntegrationTests {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
         req.setInternalProjectNo("IP-001");
+        req.setCustomerOrderNo("CO-001");
+        req.setCustomerProjectNo("CP-001");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(5);
@@ -318,6 +321,10 @@ class CoreWorkflowIntegrationTests {
                 .containsOnly(LocalDate.of(2026, 3, 22));
         assertThat(tickets).extracting(OrderDeliveryTicket::getInternalProjectNo)
                 .containsOnly("IP-001");
+        assertThat(tickets).extracting(OrderDeliveryTicket::getCustomerOrderNo)
+                .containsOnly("CO-001");
+        assertThat(tickets).extracting(OrderDeliveryTicket::getCustomerProjectNo)
+                .containsOnly("CP-001");
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
                 .containsOnly("普通件");
 
@@ -391,6 +398,8 @@ class CoreWorkflowIntegrationTests {
         DeliveryGenerateReq deliveryReq = new DeliveryGenerateReq();
         deliveryReq.setRfqId(order.getId());
         deliveryReq.setInternalProjectNo("IP-APS-MAT");
+        deliveryReq.setCustomerOrderNo("CO-APS-MAT");
+        deliveryReq.setCustomerProjectNo("CP-APS-MAT");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(3);
@@ -421,6 +430,8 @@ class CoreWorkflowIntegrationTests {
         assertThat(row.getMaterialDemandWeight()).isEqualTo(7.5);
         assertThat(row.getPartNetWeight()).isEqualTo(1.2);
         assertThat(row.getDescription()).isEqualTo("imported material description");
+        assertThat(row.getCustomerOrderNo()).isEqualTo("CO-APS-MAT");
+        assertThat(row.getCustomerProjectNo()).isEqualTo("CP-APS-MAT");
     }
 
     @Test
@@ -454,6 +465,7 @@ class CoreWorkflowIntegrationTests {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
         req.setInternalProjectNo("IP-DELETE-NO-RESTORE");
+        req.setCustomerOrderNo("CO-DELETE-NO-RESTORE");
         req.setArrangeType("库存冲销");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());

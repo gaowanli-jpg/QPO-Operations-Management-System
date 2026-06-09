@@ -145,6 +145,8 @@ public class ApsSourceService {
         row.setCustomerName(order == null ? "" : order.getCustomerName());
         row.setOrderStatus(order == null ? "" : order.getStatus());
         row.setInternalProjectNo(ticket.getInternalProjectNo());
+        row.setCustomerOrderNo(ticket.getCustomerOrderNo());
+        row.setCustomerProjectNo(ticket.getCustomerProjectNo());
         row.setProjectNo(ticket.getProjectNo());
         row.setOrderType(ticket.getOrderType());
         row.setItemType(ticket.getItemType());

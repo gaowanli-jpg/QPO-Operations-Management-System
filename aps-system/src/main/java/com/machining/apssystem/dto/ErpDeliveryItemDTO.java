@@ -12,10 +12,11 @@ public class ErpDeliveryItemDTO {
     private Integer itemId;
     private Integer sourceProcessSheetId;
 
-    private String rfqNo;
     private String customerName;
     private String orderStatus;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private String projectNo;
     private String orderType;
     private String itemType;

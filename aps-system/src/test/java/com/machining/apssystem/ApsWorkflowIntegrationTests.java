@@ -4,9 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.apssystem.dto.ApsDepartmentDTO;
 import com.machining.apssystem.dto.ApsMachineDTO;
 import com.machining.apssystem.dto.ApsMaterialInventoryDTO;
+import com.machining.apssystem.dto.ApsMaterialLockDTO;
+import com.machining.apssystem.dto.ApsMaterialShortageDTO;
 import com.machining.apssystem.dto.ApsPartInventoryDTO;
+import com.machining.apssystem.dto.ApsPartInventoryLockDTO;
 import com.machining.apssystem.dto.ApsPartInventoryPendingStockDTO;
+import com.machining.apssystem.dto.ApsPartProductionRequirementDTO;
 import com.machining.apssystem.dto.ApsSyncResultDTO;
+import com.machining.apssystem.dto.ApsWorkItemDTO;
+import com.machining.apssystem.dto.ApsWorkItemPageDTO;
 import com.machining.apssystem.dto.DepartmentSaveReq;
 import com.machining.apssystem.dto.ErpDeliveryItemBatchDTO;
 import com.machining.apssystem.dto.ErpDeliveryItemDTO;
@@ -58,6 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -141,6 +148,7 @@ class ApsWorkflowIntegrationTests {
                     aps_material_lock,
                     aps_material_inventory,
                     aps_production_requirement,
+                    aps_part_inventory_lock_detail,
                     aps_part_inventory_lock,
                     aps_part_inventory_pending_stock,
                     aps_part_inventory,
@@ -217,6 +225,8 @@ class ApsWorkflowIntegrationTests {
         assertEquals(0, first.getProductionRequirementCount());
         assertEquals(0, first.getMaterialShortageCount());
         assertEquals(1, workItemMapper.countByErpTicketId(1001));
+        assertEquals("CO-APS", first.getImportedItems().get(0).getCustomerOrderNo());
+        assertEquals("", first.getImportedItems().get(0).getCustomerProjectNo());
 
         ApsPartInventory part = partInventoryMapper.selectById(seeded.partInventoryId());
         assertEquals(3, part.getLockedInStockQty());
@@ -227,7 +237,83 @@ class ApsWorkflowIntegrationTests {
         assertEquals(1, pendingRows.size());
         assertEquals(2, pendingRows.get(0).getLockedQty());
 
+        List<ApsPartInventoryLockDTO> lockRows = inventoryService.listPartLocks(null, 10);
+        assertEquals(2, lockRows.size());
+        ApsPartInventoryLockDTO inStockLock = findLockRow(lockRows, "IN_STOCK", null);
+        assertNotNull(inStockLock);
+        assertEquals("锁定已入库库存", inStockLock.getLockTypeText());
+        assertEquals(3, inStockLock.getLockedQty());
+        ApsPartInventoryLockDTO productionLock = findLockRow(lockRows, "IN_PRODUCTION", "WO-1");
+        assertNotNull(productionLock);
+        assertEquals("锁定在产库存", productionLock.getLockTypeText());
+        assertEquals(2, productionLock.getLockedQty());
+
+        var exportResult = mockMvc.perform(get("/api/aps/inventory/parts/locks/export")
+                        .param("customerName", "ACME")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertTrue(exportResult.getResponse().getHeader("Content-Disposition").contains("filename*=UTF-8''"));
+        assertTrue(exportResult.getResponse().getContentAsByteArray().length > 100);
+
+        List<ApsWorkItemDTO> pendingTasks = pmcService.listPmcTasks("PENDING", 10);
+        assertEquals(1, pendingTasks.size());
+        assertEquals(0, pendingTasks.get(0).getQty());
+
+        ApsWorkItemPageDTO pendingPage = pmcService.listPmcTaskPage("PENDING", 1, 20);
+        assertEquals(1, pendingPage.getTotal());
+        assertEquals(1, pendingPage.getPage());
+        assertEquals(20, pendingPage.getPageSize());
+        assertEquals(1, pendingPage.getRecords().size());
+
+        ApsWorkItemPageDTO assignedPage = pmcService.listPmcTaskPage("ASSIGNED", 1, 20);
+        assertEquals(0, assignedPage.getTotal());
+        assertEquals(0, assignedPage.getRecords().size());
+
+        inventoryService.confirmPartLock(productionLock.getId());
+
+        part = partInventoryMapper.selectById(seeded.partInventoryId());
+        assertEquals(3, part.getLockedInStockQty());
+        assertEquals(2, part.getLockedInProductionQty());
+
+        lockRows = inventoryService.listPartLocks(null, 10);
+        assertEquals(1, lockRows.size());
+        assertEquals("IN_STOCK", lockRows.get(0).getLockType());
+
+        assertEquals(1, inventoryService.listPartLocks("ACME", 10).size());
+        assertEquals(0, inventoryService.listPartLocks("NO_SUCH_CUSTOMER", 10).size());
+
+        inventoryService.releasePartLock(inStockLock.getId());
+
+        part = partInventoryMapper.selectById(seeded.partInventoryId());
+        assertEquals(0, part.getLockedInStockQty());
+        assertEquals(2, part.getLockedInProductionQty());
+
+        assertEquals(0, inventoryService.listPartLocks(null, 10).size());
+
+        List<ApsPartProductionRequirementDTO> productionRequirements =
+                inventoryService.listProductionRequirements("PENDING_PRODUCTION", 10);
+        assertEquals(1, productionRequirements.size());
+        assertEquals(3, productionRequirements.get(0).getRequiredQty());
+
+        pendingTasks = pmcService.listPmcTasks("PENDING", 10);
+        assertEquals(1, pendingTasks.size());
+        assertEquals(3, pendingTasks.get(0).getQty());
+        assertEquals("PARTIAL_LOCKED", pendingTasks.get(0).getPartStockStatus());
+
         ApsMaterialInventory material = materialInventoryMapper.selectById(seeded.materialInventoryId());
+        assertEquals(0, material.getLockedWeightKg().compareTo(new BigDecimal("1.5000")));
+
+        List<ApsMaterialLockDTO> materialLockRows = inventoryService.listMaterialLocks(null, 10);
+        assertEquals(1, materialLockRows.size());
+        assertEquals(0, materialLockRows.get(0).getLockedWeightKg().compareTo(new BigDecimal("1.5000")));
+        assertEquals(1, inventoryService.listMaterialLocks("ACME", 10).size());
+        assertEquals(0, inventoryService.listMaterialLocks("NO_SUCH_CUSTOMER", 10).size());
+
+        inventoryService.confirmMaterialLock(materialLockRows.get(0).getId());
+        assertEquals(0, inventoryService.listMaterialLocks(null, 10).size());
+
+        material = materialInventoryMapper.selectById(seeded.materialInventoryId());
         assertEquals(0, material.getLockedWeightKg().compareTo(new BigDecimal("1.5000")));
 
         ApsSyncResultDTO second = syncService.syncErpDeliveryItems(50);
@@ -235,6 +321,88 @@ class ApsWorkflowIntegrationTests {
         assertEquals(0, second.getImportedCount());
         assertEquals(1, second.getSkippedCount());
         assertEquals(1, workItemMapper.countByErpTicketId(1001));
+    }
+
+    @Test
+    void materialLockReleaseRollsBackInventoryAndCreatesShortage() throws Exception {
+        SeededInventory seeded = seedLockedInventory();
+        setErpBatch(buildDeliveryItem(1001, 1, new BigDecimal("1.5000")));
+        syncService.syncErpDeliveryItems(50);
+
+        List<ApsMaterialLockDTO> materialLockRows = inventoryService.listMaterialLocks(null, 10);
+        assertEquals(1, materialLockRows.size());
+
+        inventoryService.releaseMaterialLock(materialLockRows.get(0).getId());
+
+        ApsMaterialInventory material = materialInventoryMapper.selectById(seeded.materialInventoryId());
+        assertEquals(0, material.getLockedWeightKg().compareTo(BigDecimal.ZERO));
+        assertEquals(0, inventoryService.listMaterialLocks(null, 10).size());
+
+        List<ApsMaterialShortageDTO> materialShortages =
+                inventoryService.listMaterialShortages("PENDING_PURCHASE", 10);
+        assertEquals(1, materialShortages.size());
+        assertEquals(0, materialShortages.get(0).getShortageWeightKg().compareTo(new BigDecimal("1.5000")));
+
+        List<ApsWorkItemDTO> pendingTasks = pmcService.listPmcTasks("PENDING", 10);
+        assertEquals(1, pendingTasks.size());
+        assertEquals("SHORTAGE", pendingTasks.get(0).getMaterialStockStatus());
+    }
+
+    @Test
+    void partLockRowsSplitInStockAndEachPendingReference() throws Exception {
+        PartInventorySaveReq partReq = new PartInventorySaveReq();
+        partReq.setCustomerName("ACME");
+        partReq.setPartNo("P-100");
+        partReq.setVersion("A");
+        partReq.setInStockQty(2);
+        partReq.setInProductionQty(0);
+        ApsPartInventoryDTO part = inventoryService.savePartInventory(partReq);
+
+        PartInventoryStockOpReq firstPending = new PartInventoryStockOpReq();
+        firstPending.setInventoryId(part.getId());
+        firstPending.setStockType("PENDING");
+        firstPending.setPendingRefNo("WO-1");
+        firstPending.setQty(2);
+        inventoryService.addPartStock(firstPending);
+
+        PartInventoryStockOpReq secondPending = new PartInventoryStockOpReq();
+        secondPending.setInventoryId(part.getId());
+        secondPending.setStockType("PENDING");
+        secondPending.setPendingRefNo("WO-2");
+        secondPending.setQty(3);
+        inventoryService.addPartStock(secondPending);
+
+        setErpBatch(buildDeliveryItem(1001, 6, BigDecimal.ZERO));
+        ApsSyncResultDTO syncResult = syncService.syncErpDeliveryItems(50);
+        Long workItemId = syncResult.getImportedItems().get(0).getId();
+
+        List<ApsPartInventoryLockDTO> lockRows = inventoryService.listPartLocks(null, 10);
+        assertEquals(3, lockRows.size());
+        assertEquals(2, findLockRow(lockRows, "IN_STOCK", null).getLockedQty());
+        assertEquals(2, findLockRow(lockRows, "IN_PRODUCTION", "WO-1").getLockedQty());
+        assertEquals(2, findLockRow(lockRows, "IN_PRODUCTION", "WO-2").getLockedQty());
+
+        List<ApsPartInventoryPendingStockDTO> pendingRows =
+                pendingStockMapper.selectDtosByInventoryId(part.getId());
+        assertEquals(2, pendingRows.size());
+        assertEquals(2, pendingRows.stream()
+                .filter(row -> "WO-1".equals(row.getPendingRefNo()))
+                .findFirst()
+                .orElseThrow()
+                .getLockedQty());
+        assertEquals(2, pendingRows.stream()
+                .filter(row -> "WO-2".equals(row.getPendingRefNo()))
+                .findFirst()
+                .orElseThrow()
+                .getLockedQty());
+
+        WorkItemBulkDeleteReq deleteReq = new WorkItemBulkDeleteReq();
+        deleteReq.setIds(List.of(workItemId));
+        pmcService.deleteWorkItems(deleteReq);
+
+        pendingRows = pendingStockMapper.selectDtosByInventoryId(part.getId());
+        assertEquals(0, pendingRows.stream().mapToInt(ApsPartInventoryPendingStockDTO::getLockedQty).sum());
+        assertEquals(0, inventoryService.listPartLocks(null, 10).size());
     }
 
     @Test
@@ -446,9 +614,10 @@ class ApsWorkflowIntegrationTests {
         item.setRfqId(2001);
         item.setItemId(3001);
         item.setSourceProcessSheetId(4001);
-        item.setRfqNo("RFQ-2001");
         item.setCustomerName("ACME");
         item.setInternalProjectNo("PRJ-APS");
+        item.setCustomerOrderNo("CO-APS");
+        item.setCustomerProjectNo("");
         item.setPartNo("P-100");
         item.setVersion("A");
         item.setQty(qty);
@@ -478,6 +647,17 @@ class ApsWorkflowIntegrationTests {
         batch.setNextAfterTicketId(items.length == 0 ? null : items[items.length - 1].getTicketId());
         batch.setHasMore(false);
         ERP_RESPONSE.set(objectMapper.writeValueAsString(batch));
+    }
+
+    private ApsPartInventoryLockDTO findLockRow(
+            List<ApsPartInventoryLockDTO> rows,
+            String lockType,
+            String pendingRefNo) {
+        return rows.stream()
+                .filter(row -> lockType.equals(row.getLockType()))
+                .filter(row -> pendingRefNo == null || pendingRefNo.equals(row.getPendingRefNo()))
+                .findFirst()
+                .orElse(null);
     }
 
     private static HttpServer startErpServer() {

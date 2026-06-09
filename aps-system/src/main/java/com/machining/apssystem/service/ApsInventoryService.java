@@ -14,21 +14,29 @@ import com.machining.apssystem.dto.PartInventorySaveReq;
 import com.machining.apssystem.dto.PartInventoryStockOpReq;
 import com.machining.apssystem.dto.PartInventoryTransferReq;
 import com.machining.apssystem.entity.ApsMaterialInventory;
+import com.machining.apssystem.entity.ApsMaterialLock;
+import com.machining.apssystem.entity.ApsMaterialShortage;
 import com.machining.apssystem.entity.ApsPartInventory;
+import com.machining.apssystem.entity.ApsPartInventoryLock;
+import com.machining.apssystem.entity.ApsPartInventoryLockDetail;
 import com.machining.apssystem.entity.ApsPartInventoryPendingStock;
+import com.machining.apssystem.entity.ApsProductionRequirement;
 import com.machining.apssystem.mapper.ApsMaterialInventoryMapper;
 import com.machining.apssystem.mapper.ApsMaterialLockMapper;
 import com.machining.apssystem.mapper.ApsMaterialShortageMapper;
+import com.machining.apssystem.mapper.ApsPartInventoryLockDetailMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryLockMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryPendingStockMapper;
 import com.machining.apssystem.mapper.ApsProductionRequirementMapper;
+import com.machining.apssystem.mapper.ApsWorkItemMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ApsInventoryService {
@@ -45,7 +53,13 @@ public class ApsInventoryService {
     private ApsPartInventoryLockMapper partInventoryLockMapper;
 
     @Autowired
+    private ApsPartInventoryLockDetailMapper partInventoryLockDetailMapper;
+
+    @Autowired
     private ApsProductionRequirementMapper productionRequirementMapper;
+
+    @Autowired
+    private ApsWorkItemMapper workItemMapper;
 
     @Autowired
     private ApsMaterialInventoryMapper materialInventoryMapper;
@@ -239,8 +253,78 @@ public class ApsInventoryService {
         return partInventoryPendingStockMapper.selectDtosByInventoryId(inventoryId);
     }
 
-    public List<ApsPartInventoryLockDTO> listPartLocks(Integer requestedLimit) {
-        return partInventoryLockMapper.selectDtos(normalizeLimit(requestedLimit));
+    public List<ApsPartInventoryLockDTO> listPartLocks(String customerName, Integer requestedLimit) {
+        return partInventoryLockMapper.selectDtos(text(customerName), normalizeLimit(requestedLimit));
+    }
+
+    @Transactional
+    public Map<String, Object> confirmPartLock(Long lockDetailId) {
+        requireId(lockDetailId, "part lock detail id");
+        ApsPartInventoryLockDetail detail = partInventoryLockDetailMapper.selectByIdForUpdate(lockDetailId);
+        if (detail == null) {
+            throw new IllegalArgumentException("Part lock detail not found.");
+        }
+        requirePendingLockDetail(detail);
+        partInventoryLockDetailMapper.markConfirmed(detail.getId());
+        return Map.of(
+                "success", true,
+                "confirmedQty", numberInt(detail.getLockedQty())
+        );
+    }
+
+    @Transactional
+    public Map<String, Object> releasePartLock(Long lockDetailId) {
+        requireId(lockDetailId, "part lock detail id");
+        ApsPartInventoryLockDetail detail = partInventoryLockDetailMapper.selectByIdForUpdate(lockDetailId);
+        if (detail == null) {
+            throw new IllegalArgumentException("Part lock detail not found.");
+        }
+        requirePendingLockDetail(detail);
+        ApsPartInventoryLock lock = partInventoryLockMapper.selectByIdForUpdate(detail.getPartInventoryLockId());
+        if (lock == null) {
+            throw new IllegalStateException("Part inventory lock not found.");
+        }
+
+        int lockedQty = positive(detail.getLockedQty(), "Locked quantity must be greater than 0.");
+        boolean inStockLock = "IN_STOCK".equals(detail.getLockType());
+        boolean inProductionLock = "IN_PRODUCTION".equals(detail.getLockType());
+        if (!inStockLock && !inProductionLock) {
+            throw new IllegalStateException("Unknown part lock type: " + detail.getLockType());
+        }
+
+        int releaseStockQty = inStockLock ? lockedQty : 0;
+        int releaseProductionQty = inProductionLock ? lockedQty : 0;
+        Long inventoryId = detail.getPartInventoryId() == null ? lock.getPartInventoryId() : detail.getPartInventoryId();
+        if (inventoryId != null) {
+            if (releaseProductionQty > 0) {
+                if (detail.getPendingStockId() != null) {
+                    partInventoryPendingStockMapper.releaseLockedQty(detail.getPendingStockId(), releaseProductionQty);
+                } else {
+                    releasePendingPartLocks(inventoryId, releaseProductionQty);
+                }
+            }
+            partInventoryMapper.releaseLockedQuantities(inventoryId, releaseStockQty, releaseProductionQty);
+        }
+
+        int nextLockedInStock = Math.max(0, numberInt(lock.getLockedInStockQty()) - releaseStockQty);
+        int nextLockedInProduction = Math.max(0, numberInt(lock.getLockedInProductionQty()) - releaseProductionQty);
+        int nextProductionRequired = numberInt(lock.getProductionRequiredQty()) + lockedQty;
+        String nextStatus = partLockStatus(
+                numberInt(lock.getDemandQty()),
+                nextLockedInStock + nextLockedInProduction,
+                nextProductionRequired);
+        partInventoryLockMapper.updateLockQuantities(
+                lock.getId(), nextLockedInStock, nextLockedInProduction, nextProductionRequired, nextStatus);
+        partInventoryLockDetailMapper.markReleased(detail.getId());
+        addProductionRequirement(lock, lockedQty);
+        workItemMapper.updatePartStockStatus(lock.getWorkItemId(), nextStatus);
+
+        return Map.of(
+                "success", true,
+                "releasedQty", lockedQty,
+                "productionRequiredQty", nextProductionRequired,
+                "partStockStatus", nextStatus
+        );
     }
 
     public List<ApsPartProductionRequirementDTO> listProductionRequirements(String status, Integer requestedLimit) {
@@ -300,8 +384,59 @@ public class ApsInventoryService {
         materialInventoryMapper.deleteById(id);
     }
 
-    public List<ApsMaterialLockDTO> listMaterialLocks(Integer requestedLimit) {
-        return materialLockMapper.selectDtos(normalizeLimit(requestedLimit));
+    public List<String> listMaterialLockCustomers() {
+        return materialLockMapper.selectCustomerNames().stream()
+                .map(this::text)
+                .filter(name -> !name.isEmpty())
+                .toList();
+    }
+
+    public List<ApsMaterialLockDTO> listMaterialLocks(String customerName, Integer requestedLimit) {
+        return materialLockMapper.selectDtos(text(customerName), normalizeLimit(requestedLimit));
+    }
+
+    @Transactional
+    public Map<String, Object> confirmMaterialLock(Long materialLockId) {
+        requireId(materialLockId, "material lock id");
+        ApsMaterialLock lock = materialLockMapper.selectByIdForUpdate(materialLockId);
+        if (lock == null) {
+            throw new IllegalArgumentException("Material lock not found.");
+        }
+        requirePendingMaterialLock(lock);
+        BigDecimal lockedWeight = positive(decimal(lock.getLockedWeightKg()), "Locked weight must be greater than 0.");
+        materialLockMapper.markConfirmed(lock.getId());
+        return Map.of(
+                "success", true,
+                "confirmedWeightKg", lockedWeight
+        );
+    }
+
+    @Transactional
+    public Map<String, Object> releaseMaterialLock(Long materialLockId) {
+        requireId(materialLockId, "material lock id");
+        ApsMaterialLock lock = materialLockMapper.selectByIdForUpdate(materialLockId);
+        if (lock == null) {
+            throw new IllegalArgumentException("Material lock not found.");
+        }
+        requirePendingMaterialLock(lock);
+        BigDecimal lockedWeight = positive(decimal(lock.getLockedWeightKg()), "Locked weight must be greater than 0.");
+
+        if (lock.getMaterialInventoryId() != null) {
+            materialInventoryMapper.releaseLockedWeight(lock.getMaterialInventoryId(), lockedWeight);
+        }
+
+        BigDecimal nextShortageWeight = decimal(lock.getShortageWeightKg()).add(lockedWeight);
+        String nextStatus = materialLockStatus(decimal(lock.getDemandWeightKg()), BigDecimal.ZERO, nextShortageWeight);
+        materialLockMapper.markReleased(lock.getId(), nextShortageWeight, nextStatus);
+        addMaterialShortage(lock, lockedWeight);
+        workItemMapper.updateMaterialStockStatus(lock.getWorkItemId(), nextStatus);
+
+        return Map.of(
+                "success", true,
+                "releasedWeightKg", lockedWeight,
+                "shortageWeightKg", nextShortageWeight,
+                "materialStockStatus", nextStatus
+        );
     }
 
     public List<ApsMaterialShortageDTO> listMaterialShortages(String status, Integer requestedLimit) {
@@ -391,6 +526,95 @@ public class ApsInventoryService {
         return pending;
     }
 
+    private void addProductionRequirement(ApsPartInventoryLock lock, int qty) {
+        if (qty <= 0) {
+            return;
+        }
+        ApsProductionRequirement requirement =
+                productionRequirementMapper.selectByWorkItemIdForUpdate(lock.getWorkItemId());
+        if (requirement == null) {
+            requirement = new ApsProductionRequirement();
+            requirement.setWorkItemId(lock.getWorkItemId());
+            requirement.setCustomerName(text(lock.getCustomerName()));
+            requirement.setPartNo(text(lock.getPartNo()));
+            requirement.setVersion(text(lock.getVersion()));
+            requirement.setRequiredQty(qty);
+            requirement.setStatus("PENDING_PRODUCTION");
+            productionRequirementMapper.insert(requirement);
+            return;
+        }
+        productionRequirementMapper.addRequiredQty(requirement.getId(), qty);
+    }
+
+    private void requirePendingLockDetail(ApsPartInventoryLockDetail detail) {
+        if (!"PENDING".equals(text(detail.getStatus()))) {
+            throw new IllegalStateException("Part lock detail has already been processed.");
+        }
+    }
+
+    private void requirePendingMaterialLock(ApsMaterialLock lock) {
+        if (!"PENDING".equals(text(lock.getWarehouseStatus()))) {
+            throw new IllegalStateException("Material lock has already been processed.");
+        }
+    }
+
+    private void addMaterialShortage(ApsMaterialLock lock, BigDecimal shortageWeight) {
+        if (shortageWeight == null || shortageWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        ApsMaterialShortage shortage = materialShortageMapper.selectByWorkItemIdForUpdate(lock.getWorkItemId());
+        if (shortage == null) {
+            shortage = new ApsMaterialShortage();
+            shortage.setWorkItemId(lock.getWorkItemId());
+            shortage.setInternalProjectNo(text(lock.getInternalProjectNo()));
+            shortage.setCustomerName(text(lock.getCustomerName()));
+            shortage.setPartNo(text(lock.getPartNo()));
+            shortage.setVersion(text(lock.getVersion()));
+            shortage.setMaterialName(text(lock.getMaterialName()));
+            shortage.setMaterialType(text(lock.getMaterialType()));
+            shortage.setShortageWeightKg(shortageWeight);
+            shortage.setSourceTask("APS_WORK_ITEM:" + lock.getWorkItemId());
+            shortage.setStatus("PENDING_PURCHASE");
+            materialShortageMapper.insert(shortage);
+            return;
+        }
+        materialShortageMapper.addShortageWeight(shortage.getId(), shortageWeight, "PENDING_PURCHASE");
+    }
+
+    private void releasePendingPartLocks(Long inventoryId, int releaseQty) {
+        int remaining = releaseQty;
+        List<ApsPartInventoryPendingStock> pendingRows =
+                partInventoryPendingStockMapper.selectLockedRowsForUpdate(inventoryId);
+        for (ApsPartInventoryPendingStock row : pendingRows) {
+            if (remaining <= 0) {
+                break;
+            }
+            int released = Math.min(remaining, numberInt(row.getLockedQty()));
+            if (released <= 0) {
+                continue;
+            }
+            partInventoryPendingStockMapper.releaseLockedQty(row.getId(), released);
+            remaining -= released;
+        }
+        if (remaining > 0) {
+            throw new IllegalStateException("Pending stock locked detail is lower than release quantity.");
+        }
+    }
+
+    private String partLockStatus(int demandQty, int lockedQty, int productionRequiredQty) {
+        if (demandQty <= 0 || productionRequiredQty <= 0) {
+            return "LOCKED";
+        }
+        return lockedQty > 0 ? "PARTIAL_LOCKED" : "NEED_PRODUCTION";
+    }
+
+    private String materialLockStatus(BigDecimal demandWeight, BigDecimal lockedWeight, BigDecimal shortageWeight) {
+        if (demandWeight.compareTo(BigDecimal.ZERO) <= 0 || shortageWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            return "LOCKED";
+        }
+        return lockedWeight.compareTo(BigDecimal.ZERO) > 0 ? "PARTIAL_LOCKED" : "SHORTAGE";
+    }
+
     private int normalizeLimit(Integer limit) {
         if (limit == null || limit <= 0) {
             return DEFAULT_LIMIT;
@@ -473,6 +697,14 @@ public class ApsInventoryService {
         BigDecimal number = value == null ? BigDecimal.ZERO : value;
         if (number.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Weight cannot be negative.");
+        }
+        return number;
+    }
+
+    private BigDecimal positive(BigDecimal value, String message) {
+        BigDecimal number = value == null ? BigDecimal.ZERO : value;
+        if (number.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(message);
         }
         return number;
     }

@@ -16,7 +16,6 @@ public class ApsMaterialLock {
 
     private Long workItemId;
     private Long materialInventoryId;
-    private String rfqNo;
     private String internalProjectNo;
     private String customerName;
     private String partNo;
@@ -27,7 +26,9 @@ public class ApsMaterialLock {
     private BigDecimal lockedWeightKg;
     private BigDecimal shortageWeightKg;
     private String status;
+    private String warehouseStatus;
     private LocalDateTime lockedAt;
+    private LocalDateTime confirmedAt;
     private LocalDateTime releasedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

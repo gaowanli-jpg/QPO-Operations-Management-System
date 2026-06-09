@@ -33,11 +33,14 @@ public class ApsPartProductionRequirementDTO {
     @JsonProperty("updated_at")
     private LocalDateTime updatedAt;
 
-    @JsonProperty("rfq_no")
-    private String rfqNo;
-
     @JsonProperty("internal_project_no")
     private String internalProjectNo;
+
+    @JsonProperty("customer_order_no")
+    private String customerOrderNo;
+
+    @JsonProperty("customer_project_no")
+    private String customerProjectNo;
 
     @JsonProperty("delivery_date")
     private LocalDate deliveryDate;

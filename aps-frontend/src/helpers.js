@@ -43,3 +43,11 @@ export const field = (row, ...keys) => {
   }
   return ''
 }
+
+export const customerProjectText = (row) => field(row, 'customer_project_no', 'customerProjectNo') || '空'
+
+export const taskOrderText = (row) => [
+  field(row, 'internal_project_no', 'internalProjectNo') || '-',
+  field(row, 'customer_order_no', 'customerOrderNo') || '-',
+  customerProjectText(row)
+].join(' / ')

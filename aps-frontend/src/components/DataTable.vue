@@ -17,13 +17,22 @@ defineProps({
   deletable: {
     type: Boolean,
     default: false
+  },
+  actionLabel: {
+    type: String,
+    default: '删除'
+  },
+  actions: {
+    type: Array,
+    default: () => []
   }
 })
 
-defineEmits(['deleteRow'])
+defineEmits(['deleteRow', 'rowAction'])
 
 const showValue = (row, key) => {
   const value = row[key]
+  if (key === 'customer_project_no' && (value === undefined || value === null || value === '')) return '空'
   if (value === undefined || value === null || value === '') return '-'
   return value
 }
@@ -48,7 +57,7 @@ const isStatus = (key) => (
         <thead>
           <tr>
             <th v-for="column in columns" :key="column[0]">{{ column[1] }}</th>
-            <th v-if="deletable">操作</th>
+            <th v-if="deletable || actions.length" class="action-col">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -59,12 +68,23 @@ const isStatus = (key) => (
               </span>
               <span v-else>{{ showValue(row, column[0]) }}</span>
             </td>
-            <td v-if="deletable">
-              <button class="text-button danger" type="button" @click="$emit('deleteRow', row.id)">删除</button>
+            <td v-if="deletable || actions.length" class="action-cell">
+              <div class="row-actions">
+                <button
+                  v-for="action in actions"
+                  :key="action[0]"
+                  :class="['row-action', action[2] || '']"
+                  type="button"
+                  @click="$emit('rowAction', action[0], row)"
+                >
+                  {{ action[1] }}
+                </button>
+                <button v-if="deletable" class="row-action danger" type="button" @click="$emit('deleteRow', row.id)">{{ actionLabel }}</button>
+              </div>
             </td>
           </tr>
           <tr v-if="rows.length === 0">
-            <td class="empty" :colspan="columns.length + (deletable ? 1 : 0)">暂无数据</td>
+            <td class="empty" :colspan="columns.length + (deletable || actions.length ? 1 : 0)">暂无数据</td>
           </tr>
         </tbody>
       </table>

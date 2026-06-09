@@ -3,17 +3,20 @@ package com.machining.apssystem.service;
 import com.machining.apssystem.dto.DepartmentAssignmentReq;
 import com.machining.apssystem.dto.WorkItemBulkDeleteReq;
 import com.machining.apssystem.dto.ApsPmcTaskDetailDTO;
+import com.machining.apssystem.dto.ApsWorkItemPageDTO;
 import com.machining.apssystem.dto.ApsWorkItemDTO;
 import com.machining.apssystem.entity.ApsDepartment;
 import com.machining.apssystem.entity.ApsDepartmentAssignment;
 import com.machining.apssystem.entity.ApsMaterialLock;
 import com.machining.apssystem.entity.ApsPartInventoryLock;
+import com.machining.apssystem.entity.ApsPartInventoryLockDetail;
 import com.machining.apssystem.entity.ApsPartInventoryPendingStock;
 import com.machining.apssystem.mapper.ApsDepartmentAssignmentMapper;
 import com.machining.apssystem.mapper.ApsDepartmentMapper;
 import com.machining.apssystem.mapper.ApsMaterialInventoryMapper;
 import com.machining.apssystem.mapper.ApsMaterialLockMapper;
 import com.machining.apssystem.mapper.ApsMaterialShortageMapper;
+import com.machining.apssystem.mapper.ApsPartInventoryLockDetailMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryLockMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryMapper;
 import com.machining.apssystem.mapper.ApsPartInventoryPendingStockMapper;
@@ -49,6 +52,9 @@ public class ApsPmcService {
     private ApsPartInventoryLockMapper partInventoryLockMapper;
 
     @Autowired
+    private ApsPartInventoryLockDetailMapper partInventoryLockDetailMapper;
+
+    @Autowired
     private ApsPartInventoryPendingStockMapper partInventoryPendingStockMapper;
 
     @Autowired
@@ -70,6 +76,19 @@ public class ApsPmcService {
         int limit = normalizeLimit(requestedLimit);
         String safeStatus = text(assignmentStatus).toUpperCase();
         return workItemMapper.selectPmcTaskDtos(safeStatus, limit);
+    }
+
+    public ApsWorkItemPageDTO listPmcTaskPage(String assignmentStatus, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        String safeStatus = text(assignmentStatus).toUpperCase();
+        ApsWorkItemPageDTO result = new ApsWorkItemPageDTO();
+        result.setPage(safePage);
+        result.setPageSize(safePageSize);
+        result.setTotal(workItemMapper.countPmcTaskPage(safeStatus));
+        result.setRecords(workItemMapper.selectPmcTaskPageDtos(
+                safeStatus, safePageSize, (safePage - 1) * safePageSize));
+        return result;
     }
 
     public ApsPmcTaskDetailDTO getTaskDetail(Long workItemId) {
@@ -176,9 +195,31 @@ public class ApsPmcService {
                 partInventoryMapper.releaseLockedQuantities(inventoryId, lockedInStock, lockedInProduction);
             }
             if (lockedInProduction > 0) {
-                releasePendingPartLocks(inventoryId, lockedInProduction);
+                int releasedByDetail = releasePendingPartLockDetails(workItemId);
+                int remaining = lockedInProduction - releasedByDetail;
+                if (remaining > 0) {
+                    releasePendingPartLocks(inventoryId, remaining);
+                }
             }
         }
+    }
+
+    private int releasePendingPartLockDetails(Long workItemId) {
+        int releasedQty = 0;
+        List<ApsPartInventoryLockDetail> details =
+                partInventoryLockDetailMapper.selectByWorkItemIdForUpdate(workItemId);
+        for (ApsPartInventoryLockDetail detail : details) {
+            if (!"IN_PRODUCTION".equals(detail.getLockType()) || detail.getPendingStockId() == null) {
+                continue;
+            }
+            int lockedQty = numberInt(detail.getLockedQty());
+            if (lockedQty <= 0) {
+                continue;
+            }
+            partInventoryPendingStockMapper.releaseLockedQty(detail.getPendingStockId(), lockedQty);
+            releasedQty += lockedQty;
+        }
+        return releasedQty;
     }
 
     private void releasePendingPartLocks(Long inventoryId, int releaseQty) {
@@ -253,6 +294,17 @@ public class ApsPmcService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
     }
 
     private Long requireIdValue(Long id, String fieldName) {
