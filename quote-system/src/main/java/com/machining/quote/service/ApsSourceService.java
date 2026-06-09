@@ -5,10 +5,15 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.dto.aps.ApsDeliveryItemBatchDTO;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
+import com.machining.quote.dto.aps.ApsProcessDTO;
+import com.machining.quote.entity.DictExtraFeeItem;
+import com.machining.quote.entity.DictProcess;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.DictExtraFeeItemMapper;
+import com.machining.quote.mapper.DictProcessMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
@@ -30,6 +35,9 @@ import java.util.stream.Collectors;
 public class ApsSourceService {
     private static final int DEFAULT_LIMIT = 100;
     private static final int MAX_LIMIT = 500;
+    private static final String WORK_HOUR_PROCESS = "WORK_HOUR";
+    private static final String NON_WORK_HOUR_PROCESS = "NON_WORK_HOUR";
+    private static final String WORK_HOUR = "\u5de5\u65f6";
     private static final String NON_WORK_HOUR_FEE = "\u975e\u5de5\u65f6\u8d39\u7528";
 
     @Autowired
@@ -40,11 +48,27 @@ public class ApsSourceService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private OrderRfqMapper orderRfqMapper;
+    @Autowired
+    private DictProcessMapper processMapper;
+    @Autowired
+    private DictExtraFeeItemMapper extraFeeItemMapper;
 
     @Value("${erp.public-base-url:http://localhost:8088}")
     private String publicBaseUrl;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public List<ApsProcessDTO> listProcesses(String processType) {
+        String safeType = normalizeProcessType(processType);
+        List<ApsProcessDTO> result = new ArrayList<>();
+        if (safeType.isEmpty() || WORK_HOUR_PROCESS.equals(safeType)) {
+            result.addAll(listWorkHourProcesses());
+        }
+        if (safeType.isEmpty() || NON_WORK_HOUR_PROCESS.equals(safeType)) {
+            result.addAll(listNonWorkHourProcesses());
+        }
+        return result;
+    }
 
     public ApsDeliveryItemBatchDTO listDeliveryItems(Integer afterTicketId, Integer limit) {
         int pageSize = normalizeLimit(limit);
@@ -75,6 +99,40 @@ public class ApsSourceService {
         return result;
     }
 
+    private List<ApsProcessDTO> listWorkHourProcesses() {
+        QueryWrapper<DictProcess> qw = new QueryWrapper<>();
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        return processMapper.selectList(qw).stream()
+                .filter(process -> !stringValue(process.getProcessName()).isEmpty())
+                .map(process -> {
+                    ApsProcessDTO row = new ApsProcessDTO();
+                    row.setSourceId(process.getId());
+                    row.setProcessName(process.getProcessName().trim());
+                    row.setProcessType(WORK_HOUR_PROCESS);
+                    row.setCalcType(WORK_HOUR);
+                    row.setSortNo(process.getSortNo());
+                    return row;
+                })
+                .toList();
+    }
+
+    private List<ApsProcessDTO> listNonWorkHourProcesses() {
+        QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
+        qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
+        return extraFeeItemMapper.selectList(qw).stream()
+                .filter(item -> !stringValue(item.getFeeName()).isEmpty())
+                .map(item -> {
+                    ApsProcessDTO row = new ApsProcessDTO();
+                    row.setSourceId(item.getId());
+                    row.setProcessName(item.getFeeName().trim());
+                    row.setProcessType(NON_WORK_HOUR_PROCESS);
+                    row.setCalcType(NON_WORK_HOUR_FEE);
+                    row.setSortNo(item.getSortNo());
+                    return row;
+                })
+                .toList();
+    }
+
     private ApsDeliveryItemDTO buildRow(OrderDeliveryTicket ticket, OrderRfq order, ItemQuoteVersion item,
                                         OrderProcessSheet processSheet) {
         ApsDeliveryItemDTO row = new ApsDeliveryItemDTO();
@@ -98,7 +156,7 @@ public class ApsSourceService {
         row.setSourceItemQty(item == null ? null : item.getQty());
         row.setUnit(item == null ? "" : item.getUnit());
 
-        row.setMaterialName(firstText(ticket.getMaterialName(), item == null ? "" : item.getMaterialName()));
+        row.setMaterialName(resolveEngineeringMaterialName(ticket, item));
         row.setMaterialType(resolveMaterialType(item));
         row.setMaterialGrossWeight(item == null ? null : item.getMaterialGrossWeight());
         row.setMaterialDemandWeight(multiply(item == null ? null : item.getMaterialGrossWeight(), ticket.getQty()));
@@ -126,11 +184,12 @@ public class ApsSourceService {
                 : "ITEM_QUOTE_VERSION");
         List<ApsDeliveryItemDTO.ProcessRow> processRows = normalizeProcessRows(routeSource);
         row.setProcessRows(processRows);
-        row.setTotalWorkHours(processRows.stream()
+        double unitWorkHours = processRows.stream()
                 .map(ApsDeliveryItemDTO.ProcessRow::getWorkHours)
                 .filter(value -> value != null)
                 .mapToDouble(Double::doubleValue)
-                .sum());
+                .sum();
+        row.setTotalWorkHours(multiply(unitWorkHours, ticket.getQty()));
         return row;
     }
 
@@ -256,6 +315,13 @@ public class ApsSourceService {
         return stringValue(materialData.get("shape"));
     }
 
+    private String resolveEngineeringMaterialName(OrderDeliveryTicket ticket, ItemQuoteVersion item) {
+        return firstText(
+                ticket == null ? "" : ticket.getEngineeringMaterialName(),
+                item == null ? "" : item.getEngineeringMaterialName()
+        );
+    }
+
     private Map<String, Object> normalizeMap(Object value) {
         if (value instanceof Map<?, ?> rawMap) {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -293,6 +359,17 @@ public class ApsSourceService {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
+    }
+
+    private String normalizeProcessType(String processType) {
+        String safeType = stringValue(processType).toUpperCase();
+        if (safeType.isEmpty()) {
+            return "";
+        }
+        if (!WORK_HOUR_PROCESS.equals(safeType) && !NON_WORK_HOUR_PROCESS.equals(safeType)) {
+            throw new IllegalArgumentException("processType must be WORK_HOUR or NON_WORK_HOUR.");
+        }
+        return safeType;
     }
 
     private String firstText(String primary, String fallback) {

@@ -10,6 +10,7 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -21,6 +22,7 @@ import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.ApsSourceService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
@@ -70,6 +72,8 @@ class CoreWorkflowIntegrationTests {
     private InternalTargetLeadTimeService internalTargetLeadTimeService;
     @Autowired
     private OrderManagementService orderManagementService;
+    @Autowired
+    private ApsSourceService apsSourceService;
 
     @Test
     void orderSummaryPaginationUsesAggregatedCountsAndFilters() {
@@ -256,7 +260,7 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
-    void deliveryGenerationConsumesInStockBeforePendingInventory() {
+    void deliveryGenerationDoesNotConsumeErpInventory() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("TEST-" + System.nanoTime());
         order.setCustomerName("TEST客户");
@@ -305,11 +309,11 @@ class CoreWorkflowIntegrationTests {
 
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
 
-        assertThat(tickets).hasSize(3);
+        assertThat(tickets).hasSize(1);
         assertThat(tickets).extracting(OrderDeliveryTicket::getArrangeType)
-                .containsExactly("库存冲销", "在产冲销", "计划");
+                .containsExactly("计划");
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
-                .containsExactly(1, 2, 2);
+                .containsExactly(5);
         assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
                 .containsOnly(LocalDate.of(2026, 3, 22));
         assertThat(tickets).extracting(OrderDeliveryTicket::getInternalProjectNo)
@@ -318,8 +322,8 @@ class CoreWorkflowIntegrationTests {
                 .containsOnly("普通件");
 
         InventoryMaster after = inventoryService.findByCustomerPartAndVersion("TEST客户", "P-100", "A");
-        assertThat(after.getInStockQty()).isZero();
-        assertThat(after.getPendingQty()).isZero();
+        assertThat(after.getInStockQty()).isEqualTo(1);
+        assertThat(after.getPendingQty()).isEqualTo(2);
 
         QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
         itemQw.eq("id", item.getId());
@@ -333,6 +337,136 @@ class CoreWorkflowIntegrationTests {
                 .containsOnly("IP-001");
         assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getItemType)
                 .containsOnly("普通件");
+    }
+
+    @Test
+    void deliveryGenerationUsesEngineeringMaterialForTicketProcessSheetAndApsSource() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("APS-MAT-" + System.nanoTime());
+        order.setCustomerName("APS-MAT-CUSTOMER");
+        order.setStatus("QUOTED");
+        orderMapper.insert(order);
+
+        String engineeringMaterial = "ENG-MATERIAL-" + System.nanoTime();
+        DictMaterial material = new DictMaterial();
+        material.setMaterialName(engineeringMaterial);
+        material.setRemarks("");
+        material.setPlateDensity(7850.0);
+        material.setPlatePrice(7.1);
+        materialMapper.insert(material);
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("name", engineeringMaterial);
+        materialData.put("shape", "BAR");
+        materialData.put("weight", 2.5);
+
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo("APS-MAT-PART");
+        item.setVersion("A");
+        item.setDescription("imported material description");
+        item.setQty(5);
+        item.setMaterialName("IMPORTED-MATERIAL-DESCRIPTION");
+        item.setUnit("PCS");
+        item.setLeadTime("2026-06-20");
+        item.setDrawingUrl("/uploads/test/APS-MAT-PART.pdf");
+        item.setStatus("PENDING");
+        itemMapper.insert(item);
+
+        QuoteSubmitReq quoteReq = new QuoteSubmitReq();
+        quoteReq.setItemId(item.getId());
+        quoteReq.setPartNetWeight(1.2);
+        quoteReq.setMaterialData(materialData);
+        quoteReq.setProcessRoute(List.of());
+        engineerService.calculateAndSaveQuote(quoteReq);
+
+        ItemQuoteVersion savedItem = itemMapper.selectById(item.getId());
+        assertThat(savedItem.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
+        assertThat(savedItem.getEngineeringMaterialName()).isEqualTo(engineeringMaterial);
+        Map<String, Object> marketRow = internalTargetLeadTimeService.listItemRows(order.getId()).get(0);
+        assertThat(marketRow.get("materialName")).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
+        assertThat(marketRow.get("engineeringMaterialName"))
+                .isEqualTo(engineeringMaterial);
+
+        DeliveryGenerateReq deliveryReq = new DeliveryGenerateReq();
+        deliveryReq.setRfqId(order.getId());
+        deliveryReq.setInternalProjectNo("IP-APS-MAT");
+        DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
+        line.setItemId(item.getId());
+        line.setAcceptedQty(3);
+        deliveryReq.setItems(List.of(line));
+
+        OrderDeliveryTicket ticket = deliveryService.generateTickets(deliveryReq).get(0);
+        assertThat(ticket.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
+        assertThat(ticket.getEngineeringMaterialName()).isEqualTo(engineeringMaterial);
+
+        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
+        sheetQw.eq("item_id", item.getId());
+        OrderProcessSheet sheet = processSheetMapper.selectOne(sheetQw);
+        assertThat(sheet.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
+        assertThat(sheet.getEngineeringMaterialName()).isEqualTo(engineeringMaterial);
+        assertThat(sheet.getMaterialGrossWeight()).isEqualTo(2.5);
+        assertThat(sheet.getPartNetWeight()).isEqualTo(1.2);
+
+        ApsDeliveryItemDTO row = apsSourceService.listDeliveryItems(ticket.getId() - 1, 5)
+                .getRecords()
+                .stream()
+                .filter(record -> ticket.getId().equals(record.getTicketId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(row.getMaterialName()).isEqualTo(engineeringMaterial);
+        assertThat(row.getMaterialType()).isEqualTo("BAR");
+        assertThat(row.getMaterialGrossWeight()).isEqualTo(2.5);
+        assertThat(row.getMaterialDemandWeight()).isEqualTo(7.5);
+        assertThat(row.getPartNetWeight()).isEqualTo(1.2);
+        assertThat(row.getDescription()).isEqualTo("imported material description");
+    }
+
+    @Test
+    void deletingDeliveryTicketDoesNotRestoreErpInventory() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("DELETE-NO-RESTORE-" + System.nanoTime());
+        order.setCustomerName("DELETE-NO-RESTORE");
+        order.setProjectName("DELETE-NO-RESTORE");
+        order.setStatus("已报价");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo("DEL-NO-RESTORE");
+        item.setDescription("delete ticket inventory guard");
+        item.setQty(3);
+        item.setVersion("A");
+        item.setLeadTime("2026-03-20");
+        item.setFinalUnitPrice(10.0);
+        item.setFinalTotalPrice(30.0);
+        item.setStatus("已报价");
+        itemMapper.insert(item);
+
+        InventorySaveReq saveReq = new InventorySaveReq();
+        saveReq.setCustomerName(order.getCustomerName());
+        saveReq.setPartNo(item.getPartNo());
+        saveReq.setVersion(item.getVersion());
+        saveReq.setInStockQty(1);
+        inventoryService.saveOrUpdate(saveReq);
+
+        DeliveryGenerateReq req = new DeliveryGenerateReq();
+        req.setRfqId(order.getId());
+        req.setInternalProjectNo("IP-DELETE-NO-RESTORE");
+        req.setArrangeType("库存冲销");
+        DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
+        line.setItemId(item.getId());
+        line.setAcceptedQty(3);
+        req.setItems(List.of(line));
+
+        List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
+        deliveryService.deleteTicket(tickets.get(0).getId());
+
+        InventoryMaster after = inventoryService.findByCustomerPartAndVersion(
+                order.getCustomerName(), item.getPartNo(), item.getVersion());
+        assertThat(after.getInStockQty()).isEqualTo(1);
+        assertThat(after.getPendingQty()).isZero();
     }
 
     @Test

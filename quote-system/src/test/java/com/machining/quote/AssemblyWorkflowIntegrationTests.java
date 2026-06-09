@@ -198,11 +198,11 @@ class AssemblyWorkflowIntegrationTests {
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
 
         assertThat(tickets).extracting(OrderDeliveryTicket::getArrangeType)
-                .containsExactly("计划", "库存冲销", "在产冲销");
+                .containsExactly("计划", "计划");
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
-                .containsExactly(1, 1, 1);
+                .containsExactly(1, 2);
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
-                .containsExactly("组合件", "普通件", "普通件");
+                .containsExactly("组合件", "普通件");
         assertThat(inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), parent.getPartNo(), parent.getVersion())).isNull();
 
         QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
@@ -215,10 +215,10 @@ class AssemblyWorkflowIntegrationTests {
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", order.getId());
-        assertThat(ticketMapper.selectList(ticketQw)).hasSize(3);
+        assertThat(ticketMapper.selectList(ticketQw)).hasSize(2);
         InventoryMaster childInventoryAfter = inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), child.getPartNo(), child.getVersion());
-        assertThat(childInventoryAfter.getInStockQty()).isZero();
-        assertThat(childInventoryAfter.getPendingQty()).isZero();
+        assertThat(childInventoryAfter.getInStockQty()).isEqualTo(1);
+        assertThat(childInventoryAfter.getPendingQty()).isEqualTo(1);
     }
 
     @Test

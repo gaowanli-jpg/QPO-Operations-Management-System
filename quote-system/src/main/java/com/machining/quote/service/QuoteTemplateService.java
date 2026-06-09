@@ -35,6 +35,7 @@ public class QuoteTemplateService {
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
     );
+    private static final List<String> DETAIL_REQUIRED_HEADERS = List.of("工艺名称", "费率(%)", "基础成本");
 
     @Value("${erp.upload-dir}")
     private String uploadDir;
@@ -123,6 +124,12 @@ public class QuoteTemplateService {
             if (!missing.isEmpty()) {
                 throw new RuntimeException("报价单模板缺少必要表头：" + String.join("、", missing));
             }
+            List<String> missingDetailHeaders = DETAIL_REQUIRED_HEADERS.stream()
+                    .filter(header -> !hasDetailHeader(headers, header))
+                    .toList();
+            if (!missingDetailHeaders.isEmpty()) {
+                throw new RuntimeException("报价单模板缺少详细报价单必要表头：" + String.join("、", missingDetailHeaders));
+            }
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -170,6 +177,25 @@ public class QuoteTemplateService {
     }
 
     private String normalizeHeader(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", "").trim();
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace('\u00A0', ' ')
+                .replace('\u3000', ' ')
+                .replace('\uFEFF', ' ')
+                .replace('（', '(')
+                .replace('）', ')')
+                .replace('％', '%')
+                .replaceAll("[\\s\\u200B\\u200C\\u200D]+", "")
+                .trim();
+    }
+
+    private boolean hasDetailHeader(Set<String> headers, String requiredHeader) {
+        String normalized = normalizeHeader(requiredHeader);
+        if ("费率(%)".equals(requiredHeader)) {
+            return headers.stream().anyMatch(header -> header.contains(normalized));
+        }
+        return headers.contains(normalized);
     }
 }

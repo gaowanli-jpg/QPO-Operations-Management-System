@@ -44,11 +44,13 @@ erp:
   backup-dir: ${ERP_BACKUP_DIR:D:/ERP_Files/backup/}
   public-base-url: ${ERP_PUBLIC_BASE_URL:http://localhost:8088}
   cors:
-    allowed-origins: ${ERP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:4173}
+    allowed-origins: ${ERP_CORS_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173}
   auth:
     enabled: ${ERP_AUTH_ENABLED:true}
     jwt-secret: ${ERP_JWT_SECRET:change-this-secret-before-production}
     jwt-ttl-minutes: ${ERP_JWT_TTL_MINUTES:720}
+  aps:
+    source-token: ${ERP_APS_SOURCE_TOKEN:}
   task:
     core-pool-size: ${ERP_TASK_CORE_POOL_SIZE:2}
     max-pool-size: ${ERP_TASK_MAX_POOL_SIZE:4}

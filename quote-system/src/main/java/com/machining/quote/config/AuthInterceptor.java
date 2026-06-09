@@ -11,6 +11,8 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +30,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Value("${erp.auth.enabled:true}")
     private boolean authEnabled;
 
+    @Value("${erp.aps.source-token:}")
+    private String apsSourceToken;
+
     @Autowired
     private AuthService authService;
 
@@ -35,6 +40,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         AuthContext.clear();
         if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || !authEnabled || isPublicPath(request.getRequestURI())) {
+            return true;
+        }
+        if (isApsSourcePath(request.getRequestURI()) && hasValidApsSourceToken(request)) {
             return true;
         }
 
@@ -70,6 +78,27 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || uri.startsWith("/api/health")
                 || uri.startsWith("/uploads/")
                 || uri.equals("/error");
+    }
+
+    private boolean isApsSourcePath(String uri) {
+        return uri.startsWith("/api/aps/source/");
+    }
+
+    private boolean hasValidApsSourceToken(HttpServletRequest request) {
+        String expected = apsSourceToken == null ? "" : apsSourceToken.trim();
+        if (expected.isEmpty()) {
+            return false;
+        }
+        String actual = resolveToken(request);
+        if (actual == null || actual.trim().isEmpty()) {
+            actual = request.getHeader("X-APS-Auth-Token");
+        }
+        if (actual == null) {
+            return false;
+        }
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        byte[] actualBytes = actual.trim().getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expectedBytes, actualBytes);
     }
 
     private boolean isPasswordChangeAllowedPath(String uri) {

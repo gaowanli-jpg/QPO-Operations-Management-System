@@ -24,6 +24,9 @@ public class OrderProcessSheet {
     private String description;
     private Integer qty;
     private String materialName;
+    private String engineeringMaterialName;
+    private Double materialGrossWeight;
+    private Double partNetWeight;
     private String substituteMaterial;
     private String surfaceTreatment;
     private String heatTreatment;

@@ -111,6 +111,30 @@ class QuoteTemplateExportServiceTests {
         }
     }
 
+    @Test
+    void detailTemplateExportRepairsLooseDetailHeaderLayout() throws Exception {
+        try (Workbook workbook = looseDetailHeaderTemplateWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workbook.write(outputStream);
+            Files.write(quoteTemplateService.templatePath(), outputStream.toByteArray());
+        }
+        OrderRfq order = createOrder();
+        createQuotedItems(order.getId(), 1);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        quoteTemplateExportService.exportTemplateQuoteDetail(order.getId(), response);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("工艺名称");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("工时/金额");
+            assertThat(rowContains(sheet, HEADER_ROW_INDEX, "运输费率(%)")).isTrue();
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("下料");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "基础成本"))).isEqualTo("70");
+        }
+    }
+
     private OrderRfq createOrder() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("RFQ-TPL-" + System.nanoTime());
@@ -203,7 +227,7 @@ class QuoteTemplateExportServiceTests {
             headers.addAll(List.of("工艺名称", "类型", "工时/金额", "单价", "费用"));
         }
         headers.addAll(List.of(
-                "运输费率(%)", "运输金额",
+                "运输费率（％）", "运输金额",
                 "管理费率(%)", "管理金额",
                 "利润费率(%)", "利润金额",
                 "税费率(%)", "税金额",
@@ -227,6 +251,39 @@ class QuoteTemplateExportServiceTests {
         }
         sheet.createRow(18).createCell(0).setCellValue("QUOTATION VALIDITY");
         sheet.addMergedRegion(new CellRangeAddress(18, 18, 0, 39));
+        return workbook;
+    }
+
+    private Workbook looseDetailHeaderTemplateWorkbook() {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("第2份");
+        sheet.createRow(0).createCell(0).setCellValue("客户报价单模板");
+        Row infoRow = sheet.createRow(2);
+        infoRow.createCell(0).setCellValue("询价日：");
+        infoRow.createCell(8).setCellValue("RFQ No.");
+
+        Row groupRow = sheet.createRow(6);
+        Row headerRow = sheet.createRow(HEADER_ROW_INDEX);
+        List<String> headers = new ArrayList<>(List.of(
+                "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
+                "重量(KG)", "材料费",
+                "工艺名称", "工序类型", "工时", "加工单价", "加工费用",
+                "运输费率(%)", "运输金额",
+                "基础成本", "百分比费用合计", "含税单价", "含税总价", "交货周期", "备注"
+        ));
+        for (int col = 0; col < headers.size(); col++) {
+            headerRow.createCell(col).setCellValue(headers.get(col));
+            groupRow.createCell(col).setCellValue("");
+            sheet.setColumnWidth(col, 12 * 256);
+        }
+        groupRow.getCell(0).setCellValue("基础信息");
+        groupRow.getCell(11).setCellValue("加工明细");
+        groupRow.getCell(16).setCellValue("百分比费用");
+        groupRow.getCell(18).setCellValue("合计");
+
+        Row row = sheet.createRow(DETAIL_START_ROW_INDEX);
+        row.createCell(0).setCellValue(1);
+        sheet.createRow(DETAIL_START_ROW_INDEX + 1).createCell(0).setCellValue("QUOTATION VALIDITY");
         return workbook;
     }
 

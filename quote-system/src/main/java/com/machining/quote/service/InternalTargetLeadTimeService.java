@@ -9,6 +9,7 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -173,6 +174,7 @@ public class InternalTargetLeadTimeService {
         row.put("qty", item.getQty());
         row.put("unit", item.getUnit());
         row.put("materialName", item.getMaterialName());
+        row.put("engineeringMaterialName", MaterialDataResolver.engineeringMaterialName(item));
         row.put("surfaceTreatment", item.getSurfaceTreatment());
         row.put("leadTime", item.getLeadTime());
         row.put("quoteLeadTime", item.getQuoteLeadTime());

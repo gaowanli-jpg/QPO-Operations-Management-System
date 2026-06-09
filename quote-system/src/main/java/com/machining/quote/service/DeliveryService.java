@@ -2,7 +2,6 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.DeliveryGenerateReq;
-import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderProcessSheet;
@@ -11,6 +10,7 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,8 +33,6 @@ public class DeliveryService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderProcessSheetMapper processSheetMapper;
-    @Autowired
-    private InventoryService inventoryService;
     @Autowired
     private AuditService auditService;
     @Autowired
@@ -102,27 +100,8 @@ public class DeliveryService {
             ItemQuoteVersion item = demand.item();
             int acceptedQty = demand.qty();
 
-            int remaining = acceptedQty;
-            InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), item.getPartNo(), item.getVersion());
-            if (inventory != null) {
-                int stockUsed = inventoryService.consumeInStock(inventory.getId(), remaining);
-                if (stockUsed > 0) {
-                    createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, stockUsed,
-                            "已入库库存", "库存冲销"));
-                    remaining -= stockUsed;
-                }
-
-                for (InventoryService.PendingConsumption consumption : inventoryService.consumePending(inventory.getId(), remaining)) {
-                    createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, consumption.qty(),
-                            remarkOrDefault(consumption.pendingRefNo(), "冲销在产"), "在产冲销"));
-                    remaining -= consumption.qty();
-                }
-            }
-
-            if (remaining > 0) {
-                createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, remaining,
-                        item.getRemark(), arrangeType));
-            }
+            createdTickets.add(insertTicket(order, item, internalProjectNo, projectNo, startDate, acceptedQty,
+                    item.getRemark(), arrangeType));
 
             insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)), internalProjectNo);
         }
@@ -171,7 +150,6 @@ public class DeliveryService {
         }
 
         ItemQuoteVersion item = findItemByTicket(ticket);
-        restoreInventoryForDeletedTicket(ticket);
         ticketMapper.deleteById(ticketId);
 
         if (item != null) {
@@ -213,6 +191,7 @@ public class DeliveryService {
         ticket.setPartNo(item.getPartNo());
         ticket.setQty(qty);
         ticket.setMaterialName(item.getMaterialName());
+        ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
         ticket.setSurfaceTreatment(item.getSurfaceTreatment());
         ticket.setVersion(item.getVersion());
         ticket.setStartDate(startDate);
@@ -262,28 +241,6 @@ public class DeliveryService {
         }
         qw.last("LIMIT 1 FOR UPDATE");
         return itemMapper.selectOne(qw);
-    }
-
-    private void restoreInventoryForDeletedTicket(OrderDeliveryTicket ticket) {
-        if (ticket.getQty() == null || ticket.getQty() <= 0) {
-            return;
-        }
-        String arrangeType = ticket.getArrangeType();
-        if (isBlank(arrangeType) || (!isPendingOffset(arrangeType) && !arrangeType.contains("库存冲销"))) {
-            return;
-        }
-
-        OrderRfq order = ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
-        String customerName = order == null ? "" : order.getCustomerName();
-        if (isPendingOffset(arrangeType)) {
-            inventoryService.restorePending(customerName, ticket.getPartNo(), ticket.getVersion(), ticket.getRemark(), ticket.getQty());
-        } else if (arrangeType.contains("库存冲销")) {
-            inventoryService.restoreInStock(customerName, ticket.getPartNo(), ticket.getVersion(), ticket.getQty());
-        }
-    }
-
-    private boolean isPendingOffset(String arrangeType) {
-        return arrangeType != null && (arrangeType.contains("在产冲销") || arrangeType.contains("待产冲销"));
     }
 
     private void refreshItemTicketStatus(ItemQuoteVersion item) {
@@ -395,6 +352,9 @@ public class DeliveryService {
         sheet.setDescription(item.getDescription());
         sheet.setQty(acceptedQty);
         sheet.setMaterialName(item.getMaterialName());
+        sheet.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
+        sheet.setMaterialGrossWeight(item.getMaterialGrossWeight());
+        sheet.setPartNetWeight(item.getPartNetWeight() == null ? 0.0 : item.getPartNetWeight());
         sheet.setSubstituteMaterial("");
         sheet.setSurfaceTreatment(item.getSurfaceTreatment());
         sheet.setHeatTreatment("");
@@ -431,10 +391,6 @@ public class DeliveryService {
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
         return normalized;
-    }
-
-    private String remarkOrDefault(String value, String defaultValue) {
-        return isBlank(value) ? defaultValue : value;
     }
 
     private String resolveProjectNo(OrderRfq order) {

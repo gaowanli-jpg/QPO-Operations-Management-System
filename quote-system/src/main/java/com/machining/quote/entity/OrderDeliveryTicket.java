@@ -22,6 +22,7 @@ public class OrderDeliveryTicket {
     private String partNo;
     private Integer qty;
     private String materialName;
+    private String engineeringMaterialName;
     private String surfaceTreatment;
     private String version;
     private LocalDate startDate;

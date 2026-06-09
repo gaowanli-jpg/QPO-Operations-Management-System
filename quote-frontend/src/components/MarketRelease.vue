@@ -217,7 +217,7 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column prop="materialName" label="材料" width="110" show-overflow-tooltip />
+              <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
               <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
               <el-table-column label="含税单价" width="110" align="right">
                 <template #default="scope">
@@ -242,7 +242,7 @@
               <el-table-column prop="partNo" label="图号" width="130" />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
-              <el-table-column prop="materialName" label="材料" width="110" show-overflow-tooltip />
+              <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
               <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
               <el-table-column prop="startDate" label="开工日期" width="110" />
               <el-table-column prop="deliveryDate" label="交货日期" width="110" />
@@ -274,7 +274,13 @@
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
-              <el-table-column prop="materialName" label="材料" width="120" show-overflow-tooltip />
+              <el-table-column prop="engineeringMaterialName" label="材料" width="120" show-overflow-tooltip />
+              <el-table-column label="毛重(kg)" width="95" align="right">
+                <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
+              </el-table-column>
+              <el-table-column label="净重(kg)" width="95" align="right">
+                <template #default="{ row }">{{ formatWeight(row.partNetWeight) }}</template>
+              </el-table-column>
               <el-table-column prop="surfaceTreatment" label="表面处理" width="130" show-overflow-tooltip />
               <el-table-column prop="deliveryDate" label="交期" width="110" />
               <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
@@ -680,6 +686,12 @@ const formatRoute = (route) => {
     .map(item => `${item.processName || ''}${item.inputVal ? `(${item.inputVal})` : ''}`)
     .filter(Boolean)
     .join(' / ')
+}
+
+const formatWeight = (value) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return number.toFixed(3).replace(/\.?0+$/, '')
 }
 
 const displayInventoryText = (value) => {

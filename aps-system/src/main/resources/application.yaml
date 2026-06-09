@@ -26,3 +26,11 @@ mybatis-plus:
   configuration:
     log-impl: ${MYBATIS_LOG_IMPL:org.apache.ibatis.logging.nologging.NoLoggingImpl}
     map-underscore-to-camel-case: true
+
+aps:
+  erp:
+    base-url: ${APS_ERP_BASE_URL:http://localhost:8080}
+    auth-token: ${APS_ERP_AUTH_TOKEN:}
+    page-size: ${APS_ERP_SYNC_PAGE_SIZE:200}
+  cors:
+    allowed-origins: ${APS_CORS_ALLOWED_ORIGINS:http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:4174,http://127.0.0.1:4174}

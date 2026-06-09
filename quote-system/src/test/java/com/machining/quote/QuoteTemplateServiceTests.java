@@ -21,6 +21,12 @@ class QuoteTemplateServiceTests {
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
     );
+    private static final List<String> VALID_TEMPLATE_HEADERS = List.of(
+            "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
+            "工艺名称", "类型", "工时/金额", "单价", "费用",
+            "运输费率(%)", "运输金额", "基础成本",
+            "含税单价", "含税总价", "交货周期", "备注"
+    );
 
     @TempDir
     private Path tempDir;
@@ -58,7 +64,7 @@ class QuoteTemplateServiceTests {
                 "templateFile",
                 "客户模板.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                workbookBytes(REQUIRED_HEADERS)
+                workbookBytes(VALID_TEMPLATE_HEADERS)
         );
 
         var status = service.uploadTemplate(file);
@@ -66,6 +72,24 @@ class QuoteTemplateServiceTests {
         assertThat(status).containsEntry("exists", true);
         assertThat(status).containsEntry("fileName", "客户模板.xlsx");
         assertThat(service.templatePath()).exists();
+    }
+
+    @Test
+    void uploadTemplateAcceptsFullWidthFeeRateHeader() throws Exception {
+        QuoteTemplateService service = service();
+        List<String> headers = VALID_TEMPLATE_HEADERS.stream()
+                .map(header -> "运输费率(%)".equals(header) ? "运输费率（％）" : header)
+                .toList();
+        MockMultipartFile file = new MockMultipartFile(
+                "templateFile",
+                "客户模板.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                workbookBytes(headers)
+        );
+
+        var status = service.uploadTemplate(file);
+
+        assertThat(status).containsEntry("exists", true);
     }
 
     @Test

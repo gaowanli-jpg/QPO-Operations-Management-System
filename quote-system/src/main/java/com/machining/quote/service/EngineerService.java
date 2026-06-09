@@ -143,6 +143,7 @@ public class EngineerService {
         materialData.put("grossWeightUnit", "kg");
         materialData.put("netWeight", normalizedPartNetWeight);
         materialData.put("netWeightUnit", "kg");
+        String engineeringMaterialName = stringValue(materialData.get("name"));
 
         double totalProcessCost = 0.0;
         Set<String> extraFeeNames = loadEnabledExtraFeeNames();
@@ -184,6 +185,7 @@ public class EngineerService {
         double finalTotalPrice = finalUnitPrice * qty;
 
         item.setMaterialData(materialData);
+        item.setEngineeringMaterialName(engineeringMaterialName);
         item.setProcessRoute(processRoute);
         item.setFeeData(feeBreakdown);
         item.setMaterialGrossWeight(materialGrossWeight);
@@ -271,6 +273,7 @@ public class EngineerService {
         parent.setQuoteMode(QUOTE_MODE_ASSEMBLY);
         parent.setAssemblyFee(safeAssemblyFee);
         parent.setMaterialData(materialData);
+        parent.setEngineeringMaterialName("");
         parent.setProcessRoute(processRoute);
         parent.setFeeData(assemblyFeeBreakdown);
         parent.setMaterialGrossWeight(0.0);

@@ -91,11 +91,11 @@ public class QuoteTemplateExportService {
     }
 
     private TemplateColumns configureDetailColumns(Sheet sheet, List<ItemQuoteVersion> items) {
-        int maxRouteSize = resolveMaxRouteSize(items);
+        int maxRouteSize = Math.max(resolveMaxRouteSize(items), 1);
         List<String> feeNames = collectQuoteFeeNames(items);
+        int requiredFeeSlots = Math.max(feeNames.size(), 1);
 
-        ColumnLayout layout = detectColumnLayout(sheet);
-        requireDetailLayout(layout);
+        ColumnLayout layout = ensureDetailLayout(sheet, maxRouteSize, requiredFeeSlots);
         if (maxRouteSize > layout.processSlots()) {
             int extraBlocks = maxRouteSize - layout.processSlots();
             int insertAt = layout.feeStartCol() >= 0 ? layout.feeStartCol() : layout.baseCostCol();
@@ -107,8 +107,8 @@ public class QuoteTemplateExportService {
 
         layout = detectColumnLayout(sheet);
         int feeSlots = layout.feeSlots();
-        if (feeNames.size() > feeSlots) {
-            int extraBlocks = feeNames.size() - feeSlots;
+        if (requiredFeeSlots > feeSlots) {
+            int extraBlocks = requiredFeeSlots - feeSlots;
             int sourceStart = layout.feeStartCol() + Math.max(feeSlots - 1, 0) * FEE_BLOCK_WIDTH;
             for (int i = 0; i < extraBlocks; i++) {
                 insertColumns(sheet, layout.baseCostCol() + i * FEE_BLOCK_WIDTH, FEE_BLOCK_WIDTH, sourceStart, FEE_BLOCK_WIDTH);
@@ -119,7 +119,7 @@ public class QuoteTemplateExportService {
         int processSlots = Math.max(layout.processSlots(), maxRouteSize);
         writeProcessHeaders(sheet, layout.processStartCol(), processSlots);
 
-        int finalFeeSlots = Math.max(layout.feeSlots(), feeNames.size());
+        int finalFeeSlots = Math.max(Math.max(layout.feeSlots(), feeNames.size()), 1);
         writeFeeHeaders(sheet, layout.feeStartCol(), finalFeeSlots, feeNames);
         writeGroupHeader(sheet, layout.baseCostCol(), 6, "合计");
 
@@ -378,10 +378,88 @@ public class QuoteTemplateExportService {
         return new ColumnLayout(processStart, processSlots, feeStart, feeSlots, baseCost);
     }
 
-    private void requireDetailLayout(ColumnLayout layout) {
-        if (layout.processStartCol() < 0 || layout.processSlots() <= 0 || layout.feeStartCol() < 0 || layout.baseCostCol() < 0) {
-            throw new RuntimeException("报价单模板缺少详细报价单必要表头：工艺名称、费率(%)、基础成本");
+    private ColumnLayout ensureDetailLayout(Sheet sheet, int processSlots, int feeSlots) {
+        ColumnLayout layout = detectColumnLayout(sheet);
+        if (layout.baseCostCol() < 0) {
+            int insertAt = findFirstHeader(sheet.getRow(HEADER_ROW_INDEX), List.of("含税单价", "含税总价", "交货周期", "备注"));
+            if (insertAt < 0) {
+                insertAt = maxColumn(sheet) + 1;
+            }
+            insertColumnsLike(sheet, insertAt, 2);
+            Row headerRow = getOrCreateRow(sheet, HEADER_ROW_INDEX);
+            setCell(headerRow, insertAt, "基础成本");
+            setCell(headerRow, insertAt + 1, "百分比费用合计");
+            layout = detectColumnLayout(sheet);
         }
+
+        if (layout.feeStartCol() < 0 || layout.feeSlots() <= 0) {
+            int insertAt = layout.baseCostCol() >= 0
+                    ? layout.baseCostCol()
+                    : firstPositive(findFirstHeader(sheet.getRow(HEADER_ROW_INDEX), List.of("含税单价", "含税总价", "交货周期", "备注")), maxColumn(sheet) + 1);
+            insertColumnsLike(sheet, insertAt, feeSlots * FEE_BLOCK_WIDTH);
+            writeFeeHeaders(sheet, insertAt, feeSlots, List.of());
+            layout = detectColumnLayout(sheet);
+        }
+
+        if (layout.processStartCol() >= 0 && layout.processSlots() <= 0) {
+            int inferredSlots = inferProcessSlots(sheet, layout);
+            writeProcessHeaders(sheet, layout.processStartCol(), Math.max(inferredSlots, 1));
+            layout = detectColumnLayout(sheet);
+        }
+
+        if (layout.processStartCol() < 0 || layout.processSlots() <= 0) {
+            int insertAt = firstPositive(layout.feeStartCol(), layout.baseCostCol(),
+                    findFirstHeader(sheet.getRow(HEADER_ROW_INDEX), List.of("含税单价", "含税总价", "交货周期", "备注")),
+                    maxColumn(sheet) + 1);
+            insertColumnsLike(sheet, insertAt, processSlots * PROCESS_BLOCK_WIDTH);
+            writeProcessHeaders(sheet, insertAt, processSlots);
+            layout = detectColumnLayout(sheet);
+        }
+
+        return layout;
+    }
+
+    private int inferProcessSlots(Sheet sheet, ColumnLayout layout) {
+        Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
+        if (headerRow == null || layout.processStartCol() < 0) {
+            return 1;
+        }
+        int boundary = firstPositive(layout.feeStartCol(), layout.baseCostCol(),
+                findFirstHeader(headerRow, List.of("含税单价", "含税总价", "交货周期", "备注")),
+                maxColumn(sheet) + 1);
+        int slots = 0;
+        for (int col = layout.processStartCol(); col < boundary; col += PROCESS_BLOCK_WIDTH) {
+            if (!normalizeHeader("工艺名称").equals(normalizeHeader(dataFormatter.formatCellValue(headerRow.getCell(col))))) {
+                break;
+            }
+            slots++;
+        }
+        return Math.max(slots, 1);
+    }
+
+    private int findFirstHeader(Row row, List<String> headers) {
+        int result = -1;
+        for (String header : headers) {
+            int col = findHeader(row, header, 0);
+            if (col >= 0) {
+                result = result < 0 ? col : Math.min(result, col);
+            }
+        }
+        return result;
+    }
+
+    private int firstPositive(int... values) {
+        for (int value : values) {
+            if (value >= 0) {
+                return value;
+            }
+        }
+        return 0;
+    }
+
+    private void insertColumnsLike(Sheet sheet, int insertAt, int count) {
+        int sourceCol = insertAt > 0 ? insertAt - 1 : Math.min(1, maxColumn(sheet));
+        insertColumns(sheet, insertAt, count, sourceCol, 1);
     }
 
     private void writeProcessHeaders(Sheet sheet, int processStartCol, int processSlots) {
@@ -409,8 +487,13 @@ public class QuoteTemplateExportService {
         for (int i = 0; i < feeSlots; i++) {
             int startCol = feeStartCol + i * FEE_BLOCK_WIDTH;
             String feeName = i < feeNames.size() ? feeNames.get(i) : "";
-            setCell(headerRow, startCol, feeName.isEmpty() ? "" : feeName + "费率(%)");
-            setCell(headerRow, startCol + 1, feeName.isEmpty() ? "" : feeName + "金额");
+            if (feeName.isEmpty() && feeNames.isEmpty()) {
+                setCell(headerRow, startCol, "费率(%)");
+                setCell(headerRow, startCol + 1, "金额");
+            } else {
+                setCell(headerRow, startCol, feeName.isEmpty() ? "" : feeName + "费率(%)");
+                setCell(headerRow, startCol + 1, feeName.isEmpty() ? "" : feeName + "金额");
+            }
         }
     }
 
@@ -826,7 +909,18 @@ public class QuoteTemplateExportService {
     }
 
     private String normalizeHeader(String value) {
-        return value == null ? "" : value.replaceAll("\\s+", "").trim();
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace('\u00A0', ' ')
+                .replace('\u3000', ' ')
+                .replace('\uFEFF', ' ')
+                .replace('（', '(')
+                .replace('）', ')')
+                .replace('％', '%')
+                .replaceAll("[\\s\\u200B\\u200C\\u200D]+", "")
+                .trim();
     }
 
     private String safe(Object value) {

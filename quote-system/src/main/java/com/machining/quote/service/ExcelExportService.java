@@ -77,7 +77,7 @@ public class ExcelExportService {
                     safe(ticket.getItemType()),
                     safe(ticket.getPartNo()),
                     safeInt(ticket.getQty()),
-                    safe(ticket.getMaterialName()),
+                    safe(ticket.getEngineeringMaterialName()),
                     safe(ticket.getSurfaceTreatment()),
                     safe(ticket.getVersion()),
                     formatDate(ticket.getStartDate()),
@@ -100,6 +100,8 @@ public class ExcelExportService {
         for (String title : List.of("序号", "内部项目号", "RFQ号", "类型", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(List.of(title));
         }
+        head.add(9, List.of("毛重(kg)"));
+        head.add(10, List.of("净重(kg)"));
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
             head.add(List.of(String.valueOf(i * 10)));
             head.add(List.of("工时"));
@@ -117,7 +119,9 @@ public class ExcelExportService {
             row.add(safe(sheet.getVersion()));
             row.add(safe(sheet.getDescription()));
             row.add(safeInt(sheet.getQty()));
-            row.add(safe(sheet.getMaterialName()));
+            row.add(safe(sheet.getEngineeringMaterialName()));
+            row.add(safeNumber(sheet.getMaterialGrossWeight()));
+            row.add(safeNumber(sheet.getPartNetWeight()));
             row.add(safe(sheet.getSubstituteMaterial()));
             row.add(safe(sheet.getSurfaceTreatment()));
             row.add(safe(sheet.getHeatTreatment()));
