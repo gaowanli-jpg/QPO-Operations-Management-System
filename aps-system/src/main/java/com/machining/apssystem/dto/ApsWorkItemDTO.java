@@ -57,6 +57,18 @@ public class ApsWorkItemDTO {
     @JsonProperty("total_work_hours")
     private BigDecimal totalWorkHours;
 
+    @JsonProperty("process_route_text")
+    private String processRouteText;
+
+    @JsonProperty("process_route_signature")
+    private String processRouteSignature;
+
+    @JsonProperty("process_group_count")
+    private Integer processGroupCount;
+
+    @JsonProperty("process_match_count")
+    private Integer processMatchCount;
+
     @JsonProperty("part_stock_status")
     private String partStockStatus;
 
@@ -76,6 +88,9 @@ public class ApsWorkItemDTO {
 
     @JsonProperty("assigned_at")
     private LocalDateTime assignedAt;
+
+    @JsonProperty("department_task_status")
+    private String departmentTaskStatus;
 
     @JsonProperty("created_at")
     private LocalDateTime createdAt;

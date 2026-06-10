@@ -123,6 +123,10 @@ onMounted(() => run(loadTasks))
             <div><dt>已分配部门</dt><dd>{{ field(taskDetail.task, 'assigned_department_name', 'assignedDepartmentName') || '-' }}</dd></div>
             <div><dt>分配时间</dt><dd>{{ field(taskDetail.task, 'assigned_at', 'assignedAt') || '-' }}</dd></div>
             <div><dt>PMC 状态</dt><dd>{{ label(field(taskDetail.task, 'assignment_status', 'assignmentStatus')) }}</dd></div>
+            <div class="detail-wide route-text">
+              <dt>完整工艺路线</dt>
+              <dd>{{ field(taskDetail.task, 'process_route_text', 'processRouteText') || '-' }}</dd>
+            </div>
           </dl>
           <div class="table-wrap compact">
             <table>

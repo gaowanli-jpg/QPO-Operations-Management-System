@@ -14,6 +14,7 @@ const menus = [
       { path: '/assignment/assigned', label: '已分配' }
     ]
   },
+  { path: '/department-center', label: '部门中心' },
   {
     path: '/part-inventory',
     label: '零件库存',

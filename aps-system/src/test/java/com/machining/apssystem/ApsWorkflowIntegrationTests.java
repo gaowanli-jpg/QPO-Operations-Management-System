@@ -22,6 +22,7 @@ import com.machining.apssystem.dto.MachineSaveReq;
 import com.machining.apssystem.dto.PartInventoryModifyReq;
 import com.machining.apssystem.dto.PartInventorySaveReq;
 import com.machining.apssystem.dto.PartInventoryStockOpReq;
+import com.machining.apssystem.dto.WorkItemBulkAssignReq;
 import com.machining.apssystem.dto.WorkItemBulkDeleteReq;
 import com.machining.apssystem.entity.ApsMaterialInventory;
 import com.machining.apssystem.entity.ApsPartInventory;
@@ -32,6 +33,7 @@ import com.machining.apssystem.mapper.ApsPartInventoryPendingStockMapper;
 import com.machining.apssystem.mapper.ApsProcessMapper;
 import com.machining.apssystem.mapper.ApsWorkItemMapper;
 import com.machining.apssystem.service.ApsDepartmentService;
+import com.machining.apssystem.service.ApsDepartmentCenterService;
 import com.machining.apssystem.service.ApsInventoryService;
 import com.machining.apssystem.service.ApsMachineCapabilityService;
 import com.machining.apssystem.service.ApsPmcService;
@@ -56,6 +58,7 @@ import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,6 +112,9 @@ class ApsWorkflowIntegrationTests {
     private ApsDepartmentService departmentService;
 
     @Autowired
+    private ApsDepartmentCenterService departmentCenterService;
+
+    @Autowired
     private ApsMachineCapabilityService machineCapabilityService;
 
     @Autowired
@@ -139,6 +145,7 @@ class ApsWorkflowIntegrationTests {
                 """);
         jdbcTemplate.execute("""
                 TRUNCATE TABLE
+                    aps_department_task,
                     aps_department_assignment,
                     aps_machine_process_capability,
                     aps_machine,
@@ -321,6 +328,133 @@ class ApsWorkflowIntegrationTests {
         assertEquals(0, second.getImportedCount());
         assertEquals(1, second.getSkippedCount());
         assertEquals(1, workItemMapper.countByErpTicketId(1001));
+    }
+
+    @Test
+    void pmcTaskPageSupportsCustomerFilterMaterialSortAndProcessGrouping() throws Exception {
+        ErpDeliveryItemDTO first = buildDeliveryItem(1001, 1, BigDecimal.ZERO);
+        first.setPartNo("P-100");
+        first.setMaterialName("AL-6061");
+        first.setMaterialType("PLATE");
+        first.setProcessRows(List.of(
+                processRow(1, "下料"),
+                processRow(2, "CNC"),
+                processRow(3, "检验")));
+
+        ErpDeliveryItemDTO second = buildDeliveryItem(1002, 1, BigDecimal.ZERO);
+        second.setPartNo("P-200");
+        second.setMaterialName("BRASS");
+        second.setMaterialType("BAR");
+        second.setProcessRows(List.of(
+                processRow(1, "下料"),
+                processRow(2, "CNC"),
+                processRow(3, "检验")));
+
+        ErpDeliveryItemDTO third = buildDeliveryItem(1003, 1, BigDecimal.ZERO);
+        third.setCustomerName("BETA");
+        third.setPartNo("P-300");
+        third.setMaterialName("AL-6061");
+        third.setMaterialType("PLATE");
+        third.setProcessRows(List.of(
+                processRow(1, "下料"),
+                processRow(2, "CNC"),
+                processRow(3, "表处")));
+
+        setErpBatch(first, second, third);
+        ApsSyncResultDTO syncResult = syncService.syncErpDeliveryItems(50);
+        assertEquals(3, syncResult.getImportedCount());
+
+        assertEquals(List.of("ACME", "BETA"), pmcService.listTaskCustomerNames("PENDING"));
+
+        ApsWorkItemPageDTO customerPage = pmcService.listPmcTaskPage("PENDING", "ACME", "", 1, 20);
+        assertEquals(2, customerPage.getTotal());
+        assertTrue(customerPage.getRecords().stream()
+                .allMatch(task -> "ACME".equals(task.getCustomerName())));
+
+        ApsWorkItemPageDTO materialPage = pmcService.listPmcTaskPage("PENDING", null, "MATERIAL", 1, 20);
+        assertEquals(List.of("AL-6061", "AL-6061", "BRASS"), materialPage.getRecords().stream()
+                .map(ApsWorkItemDTO::getMaterialName)
+                .toList());
+
+        ApsWorkItemPageDTO processPage = pmcService.listPmcTaskPage("PENDING", null, "PROCESS", 1, 20);
+        assertEquals(3, processPage.getRecords().size());
+        assertEquals(2, processPage.getRecords().get(0).getProcessGroupCount());
+        assertEquals(2, processPage.getRecords().get(1).getProcessGroupCount());
+        assertEquals(1, processPage.getRecords().get(2).getProcessGroupCount());
+        assertEquals("下料 > CNC > 检验", processPage.getRecords().get(0).getProcessRouteText());
+        assertNotNull(processPage.getRecords().get(0).getProcessRouteSignature());
+
+        ApsWorkItemPageDTO processMatchPage = pmcService.listPmcTaskPage("PENDING", null, "PROCESS_MATCH", 1, 20);
+        assertEquals(3, processMatchPage.getRecords().size());
+        assertEquals(List.of(3, 3, 2), processMatchPage.getRecords().stream()
+                .map(ApsWorkItemDTO::getProcessMatchCount)
+                .toList());
+        assertEquals("下料 > CNC > 表处", processMatchPage.getRecords().get(2).getProcessRouteText());
+
+        var detail = pmcService.getTaskDetail(processPage.getRecords().get(0).getId());
+        assertEquals("下料 > CNC > 检验", detail.getTask().getProcessRouteText());
+    }
+
+    @Test
+    void bulkAssignDepartmentsAssignsSelectedPendingTasksInOneCall() throws Exception {
+        ErpDeliveryItemDTO first = buildDeliveryItem(1001, 1, BigDecimal.ZERO);
+        first.setPartNo("P-100");
+        first.setTotalWorkHours(2.0);
+
+        ErpDeliveryItemDTO second = buildDeliveryItem(1002, 1, BigDecimal.ZERO);
+        second.setPartNo("P-200");
+        second.setTotalWorkHours(3.0);
+
+        setErpBatch(first, second);
+        syncService.syncErpDeliveryItems(50);
+
+        DepartmentSaveReq departmentReq = new DepartmentSaveReq();
+        departmentReq.setDepartmentName("Batch Department");
+        departmentReq.setDepartmentType("PRODUCTION");
+        departmentReq.setDepartmentStatus("ENABLED");
+        departmentReq.setMonthlyAvailableHours(new BigDecimal("20"));
+        ApsDepartmentDTO department = departmentService.saveDepartment(departmentReq);
+
+        List<Long> ids = pmcService.listPmcTaskPage("PENDING", 1, 20).getRecords().stream()
+                .map(ApsWorkItemDTO::getId)
+                .toList();
+        assertEquals(2, ids.size());
+
+        WorkItemBulkAssignReq req = new WorkItemBulkAssignReq();
+        req.setIds(ids);
+        req.setDepartmentId(department.getId());
+        req.setAssignedBy("PMC");
+        req.setRemark("bulk");
+
+        Map<String, Object> result = pmcService.assignDepartments(req);
+        assertEquals(true, result.get("success"));
+        assertEquals(2, result.get("assignedCount"));
+
+        ApsWorkItemPageDTO assignedPage = pmcService.listPmcTaskPage("ASSIGNED", 1, 20);
+        assertEquals(2, assignedPage.getTotal());
+        assertTrue(assignedPage.getRecords().stream()
+                .allMatch(task -> department.getId().equals(task.getAssignedDepartmentId())));
+        assertEquals(0, pmcService.listPmcTaskPage("PENDING", 1, 20).getTotal());
+
+        ApsWorkItemPageDTO departmentTaskPage =
+                departmentCenterService.listDepartmentTaskPage(department.getId(), "ACTIVE", 1, 20);
+        assertEquals(2, departmentTaskPage.getTotal());
+        assertTrue(departmentTaskPage.getRecords().stream()
+                .allMatch(task -> department.getId().equals(task.getAssignedDepartmentId())));
+        assertTrue(departmentTaskPage.getRecords().stream()
+                .allMatch(task -> "ACTIVE".equals(task.getDepartmentTaskStatus())));
+
+        ApsWorkItemPageDTO otherDepartmentTaskPage =
+                departmentCenterService.listDepartmentTaskPage(department.getId() + 1, "ACTIVE", 1, 20);
+        assertEquals(0, otherDepartmentTaskPage.getTotal());
+
+        pmcService.releaseAssignment(ids.get(0));
+
+        assertEquals(1, departmentCenterService.listDepartmentTaskPage(department.getId(), "ACTIVE", 1, 20).getTotal());
+        ApsWorkItemPageDTO releasedDepartmentTaskPage =
+                departmentCenterService.listDepartmentTaskPage(department.getId(), "RELEASED", 1, 20);
+        assertEquals(1, releasedDepartmentTaskPage.getTotal());
+        assertEquals("RELEASED", releasedDepartmentTaskPage.getRecords().get(0).getDepartmentTaskStatus());
     }
 
     @Test
@@ -628,6 +762,13 @@ class ApsWorkflowIntegrationTests {
         item.setMaterialGrossWeight(materialDemandWeight.doubleValue());
         item.setProcessRows(List.of());
         return item;
+    }
+
+    private ErpDeliveryItemDTO.ProcessRow processRow(Integer sortNo, String processName) {
+        ErpDeliveryItemDTO.ProcessRow row = new ErpDeliveryItemDTO.ProcessRow();
+        row.setSortNo(sortNo);
+        row.setProcessName(processName);
+        return row;
     }
 
     private ApsProcess seedProcess(String processName, String processType, String calcType) {

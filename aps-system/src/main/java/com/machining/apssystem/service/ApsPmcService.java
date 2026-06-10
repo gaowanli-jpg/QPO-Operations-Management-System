@@ -1,18 +1,21 @@
 package com.machining.apssystem.service;
 
 import com.machining.apssystem.dto.DepartmentAssignmentReq;
+import com.machining.apssystem.dto.WorkItemBulkAssignReq;
 import com.machining.apssystem.dto.WorkItemBulkDeleteReq;
 import com.machining.apssystem.dto.ApsPmcTaskDetailDTO;
 import com.machining.apssystem.dto.ApsWorkItemPageDTO;
 import com.machining.apssystem.dto.ApsWorkItemDTO;
 import com.machining.apssystem.entity.ApsDepartment;
 import com.machining.apssystem.entity.ApsDepartmentAssignment;
+import com.machining.apssystem.entity.ApsDepartmentTask;
 import com.machining.apssystem.entity.ApsMaterialLock;
 import com.machining.apssystem.entity.ApsPartInventoryLock;
 import com.machining.apssystem.entity.ApsPartInventoryLockDetail;
 import com.machining.apssystem.entity.ApsPartInventoryPendingStock;
 import com.machining.apssystem.mapper.ApsDepartmentAssignmentMapper;
 import com.machining.apssystem.mapper.ApsDepartmentMapper;
+import com.machining.apssystem.mapper.ApsDepartmentTaskMapper;
 import com.machining.apssystem.mapper.ApsMaterialInventoryMapper;
 import com.machining.apssystem.mapper.ApsMaterialLockMapper;
 import com.machining.apssystem.mapper.ApsMaterialShortageMapper;
@@ -44,6 +47,9 @@ public class ApsPmcService {
 
     @Autowired
     private ApsDepartmentAssignmentMapper assignmentMapper;
+
+    @Autowired
+    private ApsDepartmentTaskMapper departmentTaskMapper;
 
     @Autowired
     private ApsPartInventoryMapper partInventoryMapper;
@@ -79,16 +85,31 @@ public class ApsPmcService {
     }
 
     public ApsWorkItemPageDTO listPmcTaskPage(String assignmentStatus, Integer page, Integer pageSize) {
+        return listPmcTaskPage(assignmentStatus, null, null, page, pageSize);
+    }
+
+    public ApsWorkItemPageDTO listPmcTaskPage(
+            String assignmentStatus,
+            String customerName,
+            String sortMode,
+            Integer page,
+            Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         String safeStatus = text(assignmentStatus).toUpperCase();
+        String safeCustomerName = text(customerName);
+        String safeSortMode = normalizeSortMode(sortMode);
         ApsWorkItemPageDTO result = new ApsWorkItemPageDTO();
         result.setPage(safePage);
         result.setPageSize(safePageSize);
-        result.setTotal(workItemMapper.countPmcTaskPage(safeStatus));
+        result.setTotal(workItemMapper.countPmcTaskPage(safeStatus, safeCustomerName));
         result.setRecords(workItemMapper.selectPmcTaskPageDtos(
-                safeStatus, safePageSize, (safePage - 1) * safePageSize));
+                safeStatus, safeCustomerName, safeSortMode, safePageSize, (safePage - 1) * safePageSize));
         return result;
+    }
+
+    public List<String> listTaskCustomerNames(String assignmentStatus) {
+        return workItemMapper.selectTaskCustomerNames(text(assignmentStatus).toUpperCase());
     }
 
     public ApsPmcTaskDetailDTO getTaskDetail(Long workItemId) {
@@ -156,8 +177,44 @@ public class ApsPmcService {
         assignment.setCapacityCounted(true);
         assignmentMapper.insert(assignment);
 
+        ApsDepartmentTask departmentTask = new ApsDepartmentTask();
+        departmentTask.setWorkItemId(workItemId);
+        departmentTask.setDepartmentAssignmentId(assignment.getId());
+        departmentTask.setDepartmentId(departmentId);
+        departmentTask.setDepartmentName(department.getDepartmentName());
+        departmentTask.setRequiredHours(requiredHours);
+        departmentTask.setTaskStatus("ACTIVE");
+        departmentTask.setAssignedBy(text(req.getAssignedBy()));
+        departmentTask.setRemark(text(req.getRemark()));
+        departmentTaskMapper.insert(departmentTask);
+
         workItemMapper.markAssigned(workItemId, departmentId, department.getDepartmentName());
         return getTaskDetail(workItemId);
+    }
+
+    @Transactional
+    public Map<String, Object> assignDepartments(WorkItemBulkAssignReq req) {
+        Set<Long> ids = normalizeIds(req == null ? null : req.getIds());
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("Select at least one APS task to assign.");
+        }
+
+        DepartmentAssignmentReq assignmentReq = new DepartmentAssignmentReq();
+        assignmentReq.setDepartmentId(req.getDepartmentId());
+        assignmentReq.setAssignedBy(req.getAssignedBy());
+        assignmentReq.setRemark(req.getRemark());
+
+        List<Long> assignedIds = new ArrayList<>();
+        for (Long workItemId : ids) {
+            assignDepartment(workItemId, assignmentReq);
+            assignedIds.add(workItemId);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("assignedCount", assignedIds.size());
+        result.put("assignedIds", assignedIds);
+        return result;
     }
 
     @Transactional
@@ -179,6 +236,7 @@ public class ApsPmcService {
         if (departmentId != null && capacityCounted) {
             departmentMapper.subtractOccupiedHours(departmentId, requiredHours);
         }
+        departmentTaskMapper.releaseActiveByWorkItemId(workItemId);
         assignmentMapper.releaseById(active.getId());
     }
 
@@ -305,6 +363,14 @@ public class ApsPmcService {
             return 20;
         }
         return Math.min(pageSize, 100);
+    }
+
+    private String normalizeSortMode(String sortMode) {
+        String value = text(sortMode).toUpperCase();
+        return switch (value) {
+            case "MATERIAL", "PROCESS", "PROCESS_MATCH" -> value;
+            default -> "";
+        };
     }
 
     private Long requireIdValue(Long id, String fieldName) {

@@ -11,6 +11,7 @@ export const statusLabels = {
   RELEASED: '已释放',
   PENDING_PRODUCTION: '待生产',
   PENDING_PURCHASE: '待采购',
+  ACTIVE: '当前任务',
   ENABLED: '启用',
   DISABLED: '停用',
   PRODUCTION: '生产部门',

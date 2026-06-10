@@ -19,7 +19,8 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                    w.customer_name, w.part_no, w.version,
                    COALESCE(l.production_required_qty, w.qty) AS qty,
                    w.delivery_date, w.material_name, w.material_type, w.material_demand_weight_kg,
-                   w.total_work_hours, w.part_stock_status, w.material_stock_status,
+                   w.total_work_hours, w.process_route_text, w.process_route_signature,
+                   w.part_stock_status, w.material_stock_status,
                    w.assignment_status, w.status, w.assigned_department_id, w.assigned_department_name, w.assigned_at
             FROM aps_work_item w
             LEFT JOIN aps_part_inventory_lock l ON l.work_item_id = w.id
@@ -44,34 +45,116 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                 <if test="assignmentStatus != null and assignmentStatus != ''">
                     w.assignment_status = #{assignmentStatus}
                 </if>
+                <if test="customerName != null and customerName != ''">
+                    AND w.customer_name = #{customerName}
+                </if>
             </where>
             </script>
             """)
-    long countPmcTaskPage(@Param("assignmentStatus") String assignmentStatus);
+    long countPmcTaskPage(
+            @Param("assignmentStatus") String assignmentStatus,
+            @Param("customerName") String customerName);
 
     @Select("""
             <script>
-            SELECT w.id, w.erp_ticket_id, w.internal_project_no, w.customer_order_no, w.customer_project_no,
-                   w.customer_name, w.part_no, w.version,
-                   COALESCE(l.production_required_qty, w.qty) AS qty,
-                   w.delivery_date, w.material_name, w.material_type, w.material_demand_weight_kg,
-                   w.total_work_hours, w.part_stock_status, w.material_stock_status,
-                   w.assignment_status, w.status, w.assigned_department_id, w.assigned_department_name, w.assigned_at
-            FROM aps_work_item w
-            LEFT JOIN aps_part_inventory_lock l ON l.work_item_id = w.id
-            <where>
-                <if test="assignmentStatus != null and assignmentStatus != ''">
-                    w.assignment_status = #{assignmentStatus}
-                </if>
-            </where>
-            ORDER BY w.id DESC
+            WITH filtered AS (
+                SELECT w.id, w.erp_ticket_id, w.internal_project_no, w.customer_order_no, w.customer_project_no,
+                       w.customer_name, w.part_no, w.version,
+                       COALESCE(l.production_required_qty, w.qty) AS qty,
+                       w.delivery_date, w.material_name, w.material_type, w.material_demand_weight_kg,
+                       w.total_work_hours, w.process_route_text, w.process_route_signature,
+                       CASE
+                           WHEN COALESCE(w.process_route_signature, '') = '' THEN 0
+                           ELSE COUNT(*) OVER (PARTITION BY w.process_route_signature)
+                       END AS process_group_count,
+                       w.part_stock_status, w.material_stock_status,
+                       w.assignment_status, w.status, w.assigned_department_id, w.assigned_department_name, w.assigned_at
+                FROM aps_work_item w
+                LEFT JOIN aps_part_inventory_lock l ON l.work_item_id = w.id
+                <where>
+                    <if test="assignmentStatus != null and assignmentStatus != ''">
+                        w.assignment_status = #{assignmentStatus}
+                    </if>
+                    <if test="customerName != null and customerName != ''">
+                        AND w.customer_name = #{customerName}
+                    </if>
+                </where>
+            )
+            <if test="sortMode == 'PROCESS_MATCH'">
+            ,
+            process_names AS (
+                SELECT DISTINCT p.work_item_id, TRIM(p.process_name) AS process_name
+                FROM aps_work_item_process p
+                JOIN filtered f ON f.id = p.work_item_id
+                WHERE p.process_name IS NOT NULL AND TRIM(p.process_name) != ''
+            ),
+            process_pair_matches AS (
+                SELECT left_side.work_item_id AS id,
+                       right_side.work_item_id AS other_id,
+                       COUNT(*) AS match_count
+                FROM process_names left_side
+                JOIN process_names right_side
+                  ON right_side.process_name = left_side.process_name
+                 AND right_side.work_item_id != left_side.work_item_id
+                GROUP BY left_side.work_item_id, right_side.work_item_id
+            ),
+            process_matches AS (
+                SELECT id, MAX(match_count) AS process_match_count
+                FROM process_pair_matches
+                GROUP BY id
+            )
+            </if>
+            SELECT filtered.*
+            <if test="sortMode == 'PROCESS_MATCH'">
+                   , COALESCE(process_matches.process_match_count, 0) AS process_match_count
+            </if>
+            FROM filtered
+            <if test="sortMode == 'PROCESS_MATCH'">
+            LEFT JOIN process_matches ON process_matches.id = filtered.id
+            </if>
+            <choose>
+                <when test="sortMode == 'MATERIAL'">
+                    ORDER BY NULLIF(material_name, '') NULLS LAST,
+                             NULLIF(material_type, '') NULLS LAST,
+                             id DESC
+                </when>
+                <when test="sortMode == 'PROCESS'">
+                    ORDER BY process_group_count DESC,
+                             NULLIF(process_route_text, '') NULLS LAST,
+                             id DESC
+                </when>
+                <when test="sortMode == 'PROCESS_MATCH'">
+                    ORDER BY process_match_count DESC,
+                             process_group_count DESC,
+                             NULLIF(process_route_text, '') NULLS LAST,
+                             id DESC
+                </when>
+                <otherwise>
+                    ORDER BY id DESC
+                </otherwise>
+            </choose>
             LIMIT #{limit} OFFSET #{offset}
             </script>
             """)
     List<ApsWorkItemDTO> selectPmcTaskPageDtos(
             @Param("assignmentStatus") String assignmentStatus,
+            @Param("customerName") String customerName,
+            @Param("sortMode") String sortMode,
             @Param("limit") int limit,
             @Param("offset") int offset);
+
+    @Select("""
+            <script>
+            SELECT DISTINCT customer_name
+            FROM aps_work_item
+            WHERE customer_name IS NOT NULL AND customer_name != ''
+            <if test="assignmentStatus != null and assignmentStatus != ''">
+                AND assignment_status = #{assignmentStatus}
+            </if>
+            ORDER BY customer_name
+            </script>
+            """)
+    List<String> selectTaskCustomerNames(@Param("assignmentStatus") String assignmentStatus);
 
     @Select("""
             SELECT id, erp_ticket_id, internal_project_no, customer_order_no, customer_project_no,
@@ -108,7 +191,7 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                 unit, material_name, material_type, material_gross_weight_kg, material_demand_weight_kg,
                 part_net_weight_kg, surface_treatment, lead_time, quote_lead_time, internal_target_lead_time,
                 start_date, delivery_date, remark, arrange_type, drawing_url, drawing_view_url,
-                material_data, source_payload, total_work_hours
+                material_data, source_payload, total_work_hours, process_route_text, process_route_signature
             ) VALUES (
                 #{erpSyncRunId}, #{erpTicketId}, #{erpRfqId}, #{erpItemId}, #{erpProcessSheetId},
                 #{processSnapshotSource}, #{customerName}, #{orderStatus}, #{internalProjectNo},
@@ -117,7 +200,7 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                 #{partNetWeightKg}, #{surfaceTreatment}, #{leadTime}, #{quoteLeadTime}, #{internalTargetLeadTime},
                 #{startDate}, #{deliveryDate}, #{remark}, #{arrangeType}, #{drawingUrl}, #{drawingViewUrl},
                 CAST(#{materialData,jdbcType=VARCHAR} AS jsonb), CAST(#{sourcePayload,jdbcType=VARCHAR} AS jsonb),
-                #{totalWorkHours}
+                #{totalWorkHours}, #{processRouteText}, #{processRouteSignature}
             )
             ON CONFLICT (erp_ticket_id) DO NOTHING
             RETURNING id
@@ -130,6 +213,7 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                    w.description, COALESCE(l.production_required_qty, w.qty) AS qty, w.unit,
                    w.delivery_date, w.drawing_url, w.drawing_view_url,
                    w.material_name, w.material_type, w.material_demand_weight_kg, w.total_work_hours,
+                   w.process_route_text, w.process_route_signature,
                    w.part_stock_status, w.material_stock_status, w.assignment_status, w.status,
                    w.assigned_department_id, w.assigned_department_name, w.assigned_at,
                    w.created_at, w.updated_at
@@ -145,6 +229,7 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                    w.description, COALESCE(l.production_required_qty, w.qty) AS qty, w.unit,
                    w.delivery_date, w.drawing_url, w.drawing_view_url,
                    w.material_name, w.material_type, w.material_demand_weight_kg, w.total_work_hours,
+                   w.process_route_text, w.process_route_signature,
                    w.part_stock_status, w.material_stock_status, w.assignment_status, w.status,
                    w.assigned_department_id, w.assigned_department_name, w.assigned_at,
                    w.created_at, w.updated_at

@@ -12,6 +12,7 @@ import com.machining.apssystem.dto.DepartmentCapacityResetReq;
 import com.machining.apssystem.dto.DepartmentSaveReq;
 import com.machining.apssystem.dto.MachineCapabilitySaveReq;
 import com.machining.apssystem.dto.MachineSaveReq;
+import com.machining.apssystem.dto.WorkItemBulkAssignReq;
 import com.machining.apssystem.dto.WorkItemBulkDeleteReq;
 import com.machining.apssystem.service.ApsDepartmentService;
 import com.machining.apssystem.service.ApsMachineCapabilityService;
@@ -124,9 +125,17 @@ public class ApsPmcController {
     @GetMapping("/tasks/page")
     public ApsWorkItemPageDTO listPmcTaskPage(
             @RequestParam(value = "assignmentStatus", required = false) String assignmentStatus,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "sortMode", required = false) String sortMode,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return pmcService.listPmcTaskPage(assignmentStatus, page, pageSize);
+        return pmcService.listPmcTaskPage(assignmentStatus, customerName, sortMode, page, pageSize);
+    }
+
+    @GetMapping("/tasks/customers")
+    public List<String> listTaskCustomerNames(
+            @RequestParam(value = "assignmentStatus", required = false) String assignmentStatus) {
+        return pmcService.listTaskCustomerNames(assignmentStatus);
     }
 
     @GetMapping("/tasks/{id}")
@@ -137,6 +146,11 @@ public class ApsPmcController {
     @DeleteMapping("/tasks")
     public Map<String, Object> deleteTasks(@Valid @RequestBody WorkItemBulkDeleteReq req) {
         return pmcService.deleteWorkItems(req);
+    }
+
+    @PostMapping("/tasks/assign-department")
+    public Map<String, Object> assignDepartments(@Valid @RequestBody WorkItemBulkAssignReq req) {
+        return pmcService.assignDepartments(req);
     }
 
     @PostMapping("/tasks/{id}/assign-department")

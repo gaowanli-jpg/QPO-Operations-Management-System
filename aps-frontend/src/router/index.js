@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import SyncView from '../views/SyncView.vue'
 import TasksView from '../views/TasksView.vue'
 import AssignedTasksView from '../views/AssignedTasksView.vue'
+import DepartmentCenterView from '../views/DepartmentCenterView.vue'
 import PartInventoryView from '../views/PartInventoryView.vue'
 import PartInventoryLocksView from '../views/PartInventoryLocksView.vue'
 import PartProductionRequirementsView from '../views/PartProductionRequirementsView.vue'
@@ -19,6 +20,7 @@ const routes = [
   { path: '/assignment', redirect: '/assignment/pending' },
   { path: '/assignment/pending', component: TasksView, meta: { title: '待分配' } },
   { path: '/assignment/assigned', component: AssignedTasksView, meta: { title: '已分配' } },
+  { path: '/department-center', component: DepartmentCenterView, meta: { title: '部门中心' } },
   { path: '/part-inventory', redirect: '/part-inventory/manage' },
   { path: '/part-inventory/manage', component: PartInventoryView, meta: { title: '零件库存维护' } },
   { path: '/part-inventory/locks', component: PartInventoryLocksView, meta: { title: '零件锁定记录' } },

@@ -1,7 +1,7 @@
 <script setup>
 import { field, label, number, statusClass, taskOrderText } from '../helpers'
 
-defineProps({
+const props = defineProps({
   title: {
     type: String,
     default: 'APS 任务'
@@ -21,10 +21,46 @@ defineProps({
   deletable: {
     type: Boolean,
     default: true
+  },
+  showProcessGroup: {
+    type: Boolean,
+    default: false
+  },
+  showDepartment: {
+    type: Boolean,
+    default: false
+  },
+  processSortMode: {
+    type: String,
+    default: ''
+  },
+  actionLabel: {
+    type: String,
+    default: '详情'
+  },
+  bulkAssignable: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSelected'])
+const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSelected', 'bulkAssign'])
+
+const processGroupText = (task) => {
+  if (!field(task, 'process_route_text', 'processRouteText')) return '-'
+  if (props.processSortMode === 'PROCESS_MATCH') {
+    return `最多相同 ${number(field(task, 'process_match_count', 'processMatchCount') || 0, 0)} 道`
+  }
+  return `同路线 ${number(field(task, 'process_group_count', 'processGroupCount') || 1, 0)} 件`
+}
+
+const emptyColspan = () => {
+  let count = 11
+  if (props.selectable) count += 1
+  if (props.showProcessGroup) count += 1
+  if (props.showDepartment) count += 1
+  return count
+}
 </script>
 
 <template>
@@ -32,8 +68,18 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
     <div class="section-head">
       <h2>{{ title }}</h2>
       <span>{{ tasks.length }} 条</span>
-      <div v-if="deletable" class="section-actions">
+      <div v-if="deletable || bulkAssignable" class="section-actions">
         <button
+          v-if="bulkAssignable"
+          class="text-button"
+          type="button"
+          :disabled="selectedIds.length === 0"
+          @click="emit('bulkAssign')"
+        >
+          批量分配 {{ selectedIds.length || '' }}
+        </button>
+        <button
+          v-if="deletable"
           class="text-button danger"
           type="button"
           :disabled="selectedIds.length === 0"
@@ -57,14 +103,16 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
             </th>
             <th>任务</th>
             <th>客户</th>
+            <th v-if="showDepartment">部门</th>
             <th>图号 / 版本</th>
             <th>需生产</th>
             <th>交期</th>
             <th>材料</th>
+            <th v-if="showProcessGroup">工艺组合</th>
             <th>工时</th>
             <th>零件库存</th>
             <th>材料库存</th>
-            <th>PMC</th>
+            <th>{{ showDepartment ? '部门任务' : 'PMC' }}</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -82,6 +130,7 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
               <small>{{ taskOrderText(task) }}</small>
             </td>
             <td>{{ field(task, 'customer_name', 'customerName') || '-' }}</td>
+            <td v-if="showDepartment">{{ field(task, 'assigned_department_name', 'assignedDepartmentName') || '-' }}</td>
             <td>
               <strong>{{ field(task, 'part_no', 'partNo') }}</strong>
               <small>{{ field(task, 'version') || '-' }}</small>
@@ -91,6 +140,9 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
             <td>
               <strong>{{ field(task, 'material_name', 'materialName') || '-' }}</strong>
               <small>{{ field(task, 'material_type', 'materialType') || '-' }}</small>
+            </td>
+            <td v-if="showProcessGroup">
+              <span class="pill muted">{{ processGroupText(task) }}</span>
             </td>
             <td>{{ number(field(task, 'total_work_hours', 'totalWorkHours'), 2) }}</td>
             <td>
@@ -104,16 +156,19 @@ const emit = defineEmits(['select', 'toggleSelect', 'toggleSelectAll', 'deleteSe
               </span>
             </td>
             <td>
-              <span class="pill" :class="statusClass(field(task, 'assignment_status', 'assignmentStatus'))">
-                {{ label(field(task, 'assignment_status', 'assignmentStatus')) }}
+              <span
+                class="pill"
+                :class="statusClass(showDepartment ? field(task, 'department_task_status', 'departmentTaskStatus') : field(task, 'assignment_status', 'assignmentStatus'))"
+              >
+                {{ label(showDepartment ? field(task, 'department_task_status', 'departmentTaskStatus') : field(task, 'assignment_status', 'assignmentStatus')) }}
               </span>
             </td>
             <td>
-              <button class="text-button" type="button" @click="$emit('select', field(task, 'id'))">详情</button>
+              <button class="text-button" type="button" @click="$emit('select', field(task, 'id'))">{{ actionLabel }}</button>
             </td>
           </tr>
           <tr v-if="tasks.length === 0">
-            <td class="empty" :colspan="selectable ? 12 : 11">暂无 APS 任务</td>
+            <td class="empty" :colspan="emptyColspan()">暂无 APS 任务</td>
           </tr>
         </tbody>
       </table>

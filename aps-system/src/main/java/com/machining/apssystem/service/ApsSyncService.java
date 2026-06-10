@@ -43,7 +43,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 
 @Service
@@ -202,6 +207,9 @@ public class ApsSyncService {
         workItem.setMaterialData(json(item.getMaterialData()));
         workItem.setSourcePayload(json(item));
         workItem.setTotalWorkHours(decimal(item.getTotalWorkHours()));
+        ProcessRoute processRoute = processRoute(item.getProcessRows());
+        workItem.setProcessRouteText(processRoute.text());
+        workItem.setProcessRouteSignature(processRoute.signature());
 
         Long id = workItemMapper.insertFromErp(workItem);
         return id;
@@ -575,6 +583,39 @@ public class ApsSyncService {
         }
     }
 
+    private ProcessRoute processRoute(List<ErpDeliveryItemDTO.ProcessRow> processRows) {
+        if (processRows == null || processRows.isEmpty()) {
+            return new ProcessRoute(null, "");
+        }
+        List<ProcessRouteRow> routeRows = new ArrayList<>();
+        for (int i = 0; i < processRows.size(); i++) {
+            ErpDeliveryItemDTO.ProcessRow row = processRows.get(i);
+            if (row == null || isBlank(row.getProcessName())) {
+                continue;
+            }
+            routeRows.add(new ProcessRouteRow(row.getSortNo(), i, text(row.getProcessName())));
+        }
+        if (routeRows.isEmpty()) {
+            return new ProcessRoute(null, "");
+        }
+        routeRows.sort(Comparator
+                .comparing(ProcessRouteRow::sortNo, Comparator.nullsLast(Integer::compareTo))
+                .thenComparingInt(ProcessRouteRow::sourceIndex));
+        String routeText = String.join(" > ", routeRows.stream()
+                .map(ProcessRouteRow::processName)
+                .toList());
+        return new ProcessRoute(routeText, md5Hex(routeText));
+    }
+
+    private String md5Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("MD5 digest is not available.", ex);
+        }
+    }
+
     private record PartLockResult(String status, int productionRequirementCount) {
     }
 
@@ -582,6 +623,12 @@ public class ApsSyncService {
     }
 
     private record MaterialLockResult(String status, int shortageCount) {
+    }
+
+    private record ProcessRoute(String text, String signature) {
+    }
+
+    private record ProcessRouteRow(Integer sortNo, int sourceIndex, String processName) {
     }
 
     private record ImportOutcome(boolean skipped, int productionRequirementCount, int materialShortageCount,

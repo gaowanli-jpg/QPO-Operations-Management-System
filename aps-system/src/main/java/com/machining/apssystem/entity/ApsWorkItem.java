@@ -53,6 +53,8 @@ public class ApsWorkItem {
     private String materialData;
     private String sourcePayload;
     private BigDecimal totalWorkHours;
+    private String processRouteText;
+    private String processRouteSignature;
     private String partStockStatus;
     private String materialStockStatus;
     private String assignmentStatus;
