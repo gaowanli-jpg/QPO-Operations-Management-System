@@ -36,6 +36,10 @@ const loadData = async () => {
 }
 
 const save = async () => {
+  if (!form.materialName.trim()) {
+    error.value = '请输入材料名称'
+    return
+  }
   await run(async () => {
     try {
       await request('/api/aps/inventory/materials', {
@@ -81,17 +85,17 @@ onMounted(() => run(loadData))
         <h2>材料库存维护</h2>
         <div class="section-actions">
           <span>材料名称 + 类型</span>
-          <button class="secondary" type="button" :disabled="loading" @click="run(loadData)">刷新</button>
+          <el-button :disabled="loading" @click="run(loadData)">刷新</el-button>
         </div>
       </div>
       <form class="form-grid six" @submit.prevent="save">
-        <label>材料名称<input v-model="form.materialName" required /></label>
-        <label>材料类型<input v-model="form.materialType" placeholder="板材/棒材/管材" /></label>
-        <label>库存 kg<input v-model.number="form.stockWeightKg" min="0" step="0.01" type="number" /></label>
-        <label>安全库存 kg<input v-model.number="form.safetyStockWeightKg" min="0" step="0.01" type="number" /></label>
-        <label>单位<input v-model="form.unit" /></label>
-        <label>备注<input v-model="form.remark" /></label>
-        <button class="primary" type="submit" :disabled="loading">保存材料库存</button>
+        <label>材料名称<el-input v-model="form.materialName" placeholder="必填" /></label>
+        <label>材料类型<el-input v-model="form.materialType" placeholder="板材/棒材/管材" /></label>
+        <label>库存 kg<el-input-number v-model="form.stockWeightKg" :min="0" :precision="2" :step="0.01" controls-position="right" /></label>
+        <label>安全库存 kg<el-input-number v-model="form.safetyStockWeightKg" :min="0" :precision="2" :step="0.01" controls-position="right" /></label>
+        <label>单位<el-input v-model="form.unit" /></label>
+        <label>备注<el-input v-model="form.remark" /></label>
+        <el-button type="primary" native-type="submit" :disabled="loading">保存材料库存</el-button>
       </form>
     </section>
 

@@ -34,11 +34,10 @@ onMounted(() => run(loadData))
 <template>
   <section class="content-grid">
     <div class="toolbar">
-      <select v-model="status" class="control-short" @change="run(loadData)">
-        <option value="">全部状态</option>
-        <option value="PENDING_PRODUCTION">待生产</option>
-      </select>
-      <button class="secondary" type="button" :disabled="loading" @click="run(loadData)">刷新</button>
+      <el-select v-model="status" class="control-short" placeholder="全部状态" clearable @change="run(loadData)">
+        <el-option label="待生产" value="PENDING_PRODUCTION" />
+      </el-select>
+      <el-button :disabled="loading" @click="run(loadData)">刷新</el-button>
     </div>
     <p v-if="error" class="message error">{{ error }}</p>
     <p v-else-if="notice" class="message notice">{{ notice }}</p>

@@ -32,7 +32,7 @@ onMounted(() => run(loadData))
 <template>
   <section class="content-grid">
     <div class="toolbar">
-      <button class="secondary" type="button" :disabled="loading" @click="run(loadData)">刷新</button>
+      <el-button :disabled="loading" @click="run(loadData)">刷新</el-button>
     </div>
     <p v-if="error" class="message error">{{ error }}</p>
     <p v-else-if="notice" class="message notice">{{ notice }}</p>

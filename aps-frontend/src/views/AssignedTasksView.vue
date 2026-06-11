@@ -1,7 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { request } from '../api'
-import { customerProjectText, field, label, number } from '../helpers'
+import { customerProjectText, field, number } from '../helpers'
+import ApsPager from '../components/ApsPager.vue'
+import ApsProcessTable from '../components/ApsProcessTable.vue'
+import ApsStatusTag from '../components/ApsStatusTag.vue'
 import TaskTable from '../components/TaskTable.vue'
 
 const loading = ref(false)
@@ -66,7 +69,8 @@ const goPage = async (nextPage) => {
   await run(loadTasks)
 }
 
-const changePageSize = async () => {
+const changePageSize = async (nextSize) => {
+  pageSize.value = nextSize
   page.value = 1
   selectedTaskId.value = null
   taskDetail.value = null
@@ -79,7 +83,7 @@ onMounted(() => run(loadTasks))
 <template>
   <section class="content-grid">
     <div class="toolbar">
-      <button class="secondary" type="button" :disabled="loading" @click="run(loadTasks)">刷新已分配</button>
+      <el-button :disabled="loading" @click="run(loadTasks)">刷新已分配</el-button>
     </div>
 
     <p v-if="error" class="message error">{{ error }}</p>
@@ -93,17 +97,14 @@ onMounted(() => run(loadTasks))
       @select="loadTaskDetail"
     />
 
-    <div class="pager">
-      <span>共 {{ total }} 条</span>
-      <button class="secondary" type="button" :disabled="page <= 1 || loading" @click="goPage(page - 1)">上一页</button>
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
-      <button class="secondary" type="button" :disabled="page >= totalPages || loading" @click="goPage(page + 1)">下一页</button>
-      <select v-model.number="pageSize" class="page-size" :disabled="loading" @change="changePageSize">
-        <option :value="20">20 条</option>
-        <option :value="50">50 条</option>
-        <option :value="100">100 条</option>
-      </select>
-    </div>
+    <ApsPager
+      :disabled="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="goPage"
+      @size-change="changePageSize"
+    />
 
     <section class="panel detail-panel">
       <div class="section-head">
@@ -122,49 +123,25 @@ onMounted(() => run(loadTasks))
             <div><dt>工时</dt><dd>{{ number(field(taskDetail.task, 'total_work_hours', 'totalWorkHours'), 2) }}</dd></div>
             <div><dt>已分配部门</dt><dd>{{ field(taskDetail.task, 'assigned_department_name', 'assignedDepartmentName') || '-' }}</dd></div>
             <div><dt>分配时间</dt><dd>{{ field(taskDetail.task, 'assigned_at', 'assignedAt') || '-' }}</dd></div>
-            <div><dt>PMC 状态</dt><dd>{{ label(field(taskDetail.task, 'assignment_status', 'assignmentStatus')) }}</dd></div>
+            <div><dt>PMC 状态</dt><dd><ApsStatusTag :value="field(taskDetail.task, 'assignment_status', 'assignmentStatus')" /></dd></div>
             <div class="detail-wide route-text">
               <dt>完整工艺路线</dt>
               <dd>{{ field(taskDetail.task, 'process_route_text', 'processRouteText') || '-' }}</dd>
             </div>
           </dl>
-          <div class="table-wrap compact">
-            <table>
-              <thead>
-                <tr>
-                  <th>顺序</th>
-                  <th>工艺</th>
-                  <th>类型</th>
-                  <th>工时</th>
-                  <th>费用</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in taskDetail.processRows" :key="row.id">
-                  <td>{{ row.sort_no || '-' }}</td>
-                  <td>{{ row.process_name }}</td>
-                  <td>{{ row.calc_type || row.source_type || '-' }}</td>
-                  <td>{{ number(row.work_hours, 2) }}</td>
-                  <td>{{ number(row.line_cost, 2) }}</td>
-                </tr>
-                <tr v-if="!taskDetail.processRows?.length">
-                  <td class="empty" colspan="5">暂无工艺</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ApsProcessTable :rows="taskDetail.processRows || []" />
         </div>
 
         <form class="form-grid side-form" @submit.prevent>
           <label>
             当前部门
-            <input :value="field(taskDetail.task, 'assigned_department_name', 'assignedDepartmentName') || '-'" disabled />
+            <el-input :model-value="field(taskDetail.task, 'assigned_department_name', 'assignedDepartmentName') || '-'" disabled />
           </label>
           <label>
             已分配工时
-            <input :value="number(field(taskDetail.task, 'total_work_hours', 'totalWorkHours'), 2)" disabled />
+            <el-input :model-value="number(field(taskDetail.task, 'total_work_hours', 'totalWorkHours'), 2)" disabled />
           </label>
-          <button class="secondary" type="button" :disabled="loading" @click="releaseAssignment">释放分配</button>
+          <el-button :disabled="loading" @click="releaseAssignment">释放分配</el-button>
         </form>
       </div>
       <p v-else class="empty-state">从已分配列表选择一条任务查看分配信息。</p>

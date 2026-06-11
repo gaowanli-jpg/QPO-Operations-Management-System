@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { request } from '../api'
 import { customerProjectText, field, label, number } from '../helpers'
+import ApsPager from '../components/ApsPager.vue'
+import ApsProcessTable from '../components/ApsProcessTable.vue'
 import TaskTable from '../components/TaskTable.vue'
 
 const loading = ref(false)
@@ -84,7 +86,8 @@ const goPage = async (nextPage) => {
   await run(loadTasks)
 }
 
-const changePageSize = async () => {
+const changePageSize = async (nextSize) => {
+  pageSize.value = nextSize
   page.value = 1
   resetDetail()
   await run(loadTasks)
@@ -99,25 +102,28 @@ onMounted(() => run(refreshAll))
       <div class="task-filter">
         <label>
           部门
-          <select v-model="departmentId" :disabled="loading" @change="applyFilters">
-            <option value="">全部部门</option>
-            <option v-for="department in departments" :key="department.id" :value="department.id">
-              {{ department.department_name }} / {{ label(department.department_type) }}
-            </option>
-          </select>
+          <el-select v-model="departmentId" :disabled="loading" placeholder="全部部门" clearable @change="applyFilters">
+            <el-option label="全部部门" value="" />
+            <el-option
+              v-for="department in departments"
+              :key="department.id"
+              :label="`${department.department_name} / ${label(department.department_type)}`"
+              :value="department.id"
+            />
+          </el-select>
         </label>
         <label>
           状态
-          <select v-model="status" :disabled="loading" @change="applyFilters">
-            <option value="ACTIVE">当前任务</option>
-            <option value="RELEASED">已释放</option>
-            <option value="ALL">全部</option>
-          </select>
+          <el-select v-model="status" :disabled="loading" @change="applyFilters">
+            <el-option label="当前任务" value="ACTIVE" />
+            <el-option label="已释放" value="RELEASED" />
+            <el-option label="全部" value="ALL" />
+          </el-select>
         </label>
         <div class="task-filter-actions">
-          <button class="primary" type="button" :disabled="loading" @click="applyFilters">查询</button>
-          <button class="secondary" type="button" :disabled="loading || (!departmentId && status === 'ACTIVE')" @click="clearFilters">清空</button>
-          <button class="secondary" type="button" :disabled="loading" @click="run(refreshAll)">刷新</button>
+          <el-button type="primary" :disabled="loading" @click="applyFilters">查询</el-button>
+          <el-button :disabled="loading || (!departmentId && status === 'ACTIVE')" @click="clearFilters">清空</el-button>
+          <el-button :disabled="loading" @click="run(refreshAll)">刷新</el-button>
         </div>
       </div>
     </section>
@@ -135,17 +141,14 @@ onMounted(() => run(refreshAll))
       @select="loadTaskDetail"
     />
 
-    <div class="pager">
-      <span>共 {{ total }} 条</span>
-      <button class="secondary" type="button" :disabled="page <= 1 || loading" @click="goPage(page - 1)">上一页</button>
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
-      <button class="secondary" type="button" :disabled="page >= totalPages || loading" @click="goPage(page + 1)">下一页</button>
-      <select v-model.number="pageSize" class="page-size" :disabled="loading" @change="changePageSize">
-        <option :value="20">20 条</option>
-        <option :value="50">50 条</option>
-        <option :value="100">100 条</option>
-      </select>
-    </div>
+    <ApsPager
+      :disabled="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="goPage"
+      @size-change="changePageSize"
+    />
 
     <section class="panel detail-panel">
       <div class="section-head">
@@ -169,45 +172,21 @@ onMounted(() => run(refreshAll))
               <dd>{{ field(taskDetail.task, 'process_route_text', 'processRouteText') || '-' }}</dd>
             </div>
           </dl>
-          <div class="table-wrap compact">
-            <table>
-              <thead>
-                <tr>
-                  <th>顺序</th>
-                  <th>工艺</th>
-                  <th>类型</th>
-                  <th>工时</th>
-                  <th>费用</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in taskDetail.processRows" :key="row.id">
-                  <td>{{ row.sort_no || '-' }}</td>
-                  <td>{{ row.process_name }}</td>
-                  <td>{{ row.calc_type || row.source_type || '-' }}</td>
-                  <td>{{ number(row.work_hours, 2) }}</td>
-                  <td>{{ number(row.line_cost, 2) }}</td>
-                </tr>
-                <tr v-if="!taskDetail.processRows?.length">
-                  <td class="empty" colspan="5">暂无工艺</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <ApsProcessTable :rows="taskDetail.processRows || []" />
         </div>
 
         <form class="form-grid side-form" @submit.prevent>
           <label>
             当前部门
-            <input :value="field(taskDetail.task, 'assigned_department_name', 'assignedDepartmentName') || '-'" disabled />
+            <el-input :model-value="field(taskDetail.task, 'assigned_department_name', 'assignedDepartmentName') || '-'" disabled />
           </label>
           <label>
             需生产数量
-            <input :value="number(field(taskDetail.task, 'qty'), 0)" disabled />
+            <el-input :model-value="number(field(taskDetail.task, 'qty'), 0)" disabled />
           </label>
           <label>
             已分配工时
-            <input :value="number(field(taskDetail.task, 'total_work_hours', 'totalWorkHours'), 2)" disabled />
+            <el-input :model-value="number(field(taskDetail.task, 'total_work_hours', 'totalWorkHours'), 2)" disabled />
           </label>
         </form>
       </div>

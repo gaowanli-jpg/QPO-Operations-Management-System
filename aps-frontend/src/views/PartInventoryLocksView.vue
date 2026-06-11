@@ -268,17 +268,16 @@ onMounted(() => run(() => Promise.all([loadCustomers(), loadData()])))
       <div class="lock-filter">
         <label class="lock-filter-field">
           客户
-          <select v-model="customerName" @change="run(loadData)">
-            <option value="">全部客户</option>
-            <option v-for="customer in customerOptions" :key="customer" :value="customer">{{ customer }}</option>
-          </select>
+          <el-select v-model="customerName" placeholder="全部客户" clearable filterable @change="run(loadData)">
+            <el-option v-for="customer in customerOptions" :key="customer" :label="customer" :value="customer" />
+          </el-select>
         </label>
         <div class="lock-filter-actions">
-          <button class="primary" type="button" :disabled="loading" @click="run(loadData)">查询</button>
-          <button class="secondary" type="button" :disabled="loading || !customerName" @click="clearCustomer">清空</button>
-          <button class="secondary" type="button" :disabled="loading" @click="run(loadData)">刷新</button>
-          <button class="secondary" type="button" :disabled="loading" @click="exportData">导出当前表格</button>
-          <button class="secondary" type="button" :disabled="loading" @click="printData">打印当前表格</button>
+          <el-button type="primary" :disabled="loading" @click="run(loadData)">查询</el-button>
+          <el-button :disabled="loading || !customerName" @click="clearCustomer">清空</el-button>
+          <el-button :disabled="loading" @click="run(loadData)">刷新</el-button>
+          <el-button :disabled="loading" @click="exportData">导出当前表格</el-button>
+          <el-button :disabled="loading" @click="printData">打印当前表格</el-button>
         </div>
       </div>
     </section>

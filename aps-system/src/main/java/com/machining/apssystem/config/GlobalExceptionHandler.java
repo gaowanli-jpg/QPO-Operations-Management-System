@@ -85,6 +85,9 @@ public class GlobalExceptionHandler {
         if (message.contains("uq_aps_machine_process")) {
             return "Machine capability already exists.";
         }
+        if (message.contains("uq_aps_user_username")) {
+            return "Username already exists.";
+        }
         return message;
     }
 }

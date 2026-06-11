@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { request } from '../api'
 import { field, number } from '../helpers'
+import ApsPager from '../components/ApsPager.vue'
 import TaskTable from '../components/TaskTable.vue'
 
 const loading = ref(false)
@@ -81,7 +82,8 @@ const goPage = async (nextPage) => {
   await run(loadTasks)
 }
 
-const changePageSize = async () => {
+const changePageSize = async (nextSize) => {
+  pageSize.value = nextSize
   page.value = 1
   await run(loadTasks)
 }
@@ -121,9 +123,9 @@ onMounted(() => run(loadTasks))
         <h2>同步结果</h2>
         <div class="section-actions">
           <span>{{ syncResult ? `批次 ${syncResult.syncRunId}` : '等待同步' }}</span>
-          <button class="primary" type="button" :disabled="loading" @click="syncErp">
+          <el-button type="primary" :disabled="loading" @click="syncErp">
             {{ loading ? '同步中' : '同步 ERP 提单零件' }}
-          </button>
+          </el-button>
         </div>
       </div>
       <div class="sync-summary">
@@ -143,16 +145,13 @@ onMounted(() => run(loadTasks))
       @delete-selected="deleteSelectedTasks"
     />
 
-    <div class="pager">
-      <span>共 {{ total }} 条</span>
-      <button class="secondary" type="button" :disabled="page <= 1 || loading" @click="goPage(page - 1)">上一页</button>
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
-      <button class="secondary" type="button" :disabled="page >= totalPages || loading" @click="goPage(page + 1)">下一页</button>
-      <select v-model.number="pageSize" class="page-size" :disabled="loading" @change="changePageSize">
-        <option :value="20">20 条</option>
-        <option :value="50">50 条</option>
-        <option :value="100">100 条</option>
-      </select>
-    </div>
+    <ApsPager
+      :disabled="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="goPage"
+      @size-change="changePageSize"
+    />
   </section>
 </template>

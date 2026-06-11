@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { request } from '../api'
 import { customerProjectText, field, label, number } from '../helpers'
+import ApsPager from '../components/ApsPager.vue'
+import ApsProcessTable from '../components/ApsProcessTable.vue'
 import TaskTable from '../components/TaskTable.vue'
 
 const loading = ref(false)
@@ -158,7 +160,8 @@ const goPage = async (nextPage) => {
   await run(loadTasks)
 }
 
-const changePageSize = async () => {
+const changePageSize = async (nextSize) => {
+  pageSize.value = nextSize
   page.value = 1
   closeAssignmentModal()
   await run(loadTasks)
@@ -203,21 +206,21 @@ onMounted(() => run(() => Promise.all([loadTasks(), loadDepartments(), loadCusto
       <div class="task-filter">
         <label>
           客户
-          <select v-model="customerName" :disabled="loading" @change="applyFilters">
-            <option value="">全部客户</option>
-            <option v-for="customer in customerOptions" :key="customer" :value="customer">{{ customer }}</option>
-          </select>
+          <el-select v-model="customerName" :disabled="loading" placeholder="全部客户" clearable @change="applyFilters">
+            <el-option label="全部客户" value="" />
+            <el-option v-for="customer in customerOptions" :key="customer" :label="customer" :value="customer" />
+          </el-select>
         </label>
         <label>
           排列方式
-          <select v-model="sortMode" :disabled="loading" @change="applyFilters">
-            <option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
+          <el-select v-model="sortMode" :disabled="loading" placeholder="默认排序" @change="applyFilters">
+            <el-option v-for="option in sortOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
         </label>
         <div class="task-filter-actions">
-          <button class="primary" type="button" :disabled="loading" @click="applyFilters">查询</button>
-          <button class="secondary" type="button" :disabled="loading || (!customerName && !sortMode)" @click="clearFilters">清空</button>
-          <button class="secondary" type="button" :disabled="loading" @click="run(() => Promise.all([loadTasks(), loadDepartments(), loadCustomers()]))">刷新待分配</button>
+          <el-button type="primary" :disabled="loading" @click="applyFilters">查询</el-button>
+          <el-button :disabled="loading || (!customerName && !sortMode)" @click="clearFilters">清空</el-button>
+          <el-button :disabled="loading" @click="run(() => Promise.all([loadTasks(), loadDepartments(), loadCustomers()]))">刷新待分配</el-button>
         </div>
       </div>
     </section>
@@ -240,112 +243,98 @@ onMounted(() => run(() => Promise.all([loadTasks(), loadDepartments(), loadCusto
       @bulk-assign="openBulkAssignment"
     />
 
-    <div class="pager">
-      <span>共 {{ total }} 条</span>
-      <button class="secondary" type="button" :disabled="page <= 1 || loading" @click="goPage(page - 1)">上一页</button>
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
-      <button class="secondary" type="button" :disabled="page >= totalPages || loading" @click="goPage(page + 1)">下一页</button>
-      <select v-model.number="pageSize" class="page-size" :disabled="loading" @change="changePageSize">
-        <option :value="20">20 条</option>
-        <option :value="50">50 条</option>
-        <option :value="100">100 条</option>
-      </select>
-    </div>
+    <ApsPager
+      :disabled="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @current-change="goPage"
+      @size-change="changePageSize"
+    />
 
-    <div v-if="assignmentModal.open" class="modal-overlay" @click.self="closeAssignmentModal">
-      <section class="modal-panel assignment-modal" role="dialog" aria-modal="true">
-        <div class="modal-head">
-          <div>
-            <h2>{{ assignmentModal.mode === 'bulk' ? '批量分配' : '分配零件' }}</h2>
-            <span>{{ assignmentModal.mode === 'bulk' ? `已选择 ${assignmentModal.ids.length} 条任务` : `#${assignmentModal.ids[0]}` }}</span>
-          </div>
-          <button class="text-button" type="button" @click="closeAssignmentModal">关闭</button>
+    <el-dialog
+      v-model="assignmentModal.open"
+      class="assignment-dialog"
+      width="1120px"
+      @close="closeAssignmentModal"
+    >
+      <template #header>
+        <div class="dialog-title">
+          <h2>{{ assignmentModal.mode === 'bulk' ? '批量分配' : '分配零件' }}</h2>
+          <span>{{ assignmentModal.mode === 'bulk' ? `已选择 ${assignmentModal.ids.length} 条任务` : `#${assignmentModal.ids[0]}` }}</span>
+        </div>
+      </template>
+
+      <div class="assignment-modal-body">
+        <div class="assignment-info">
+          <dl v-if="assignmentModal.mode === 'single' && assignmentDetail">
+            <div><dt>内部项目号</dt><dd>{{ field(assignmentDetail.task, 'internal_project_no', 'internalProjectNo') || '-' }}</dd></div>
+            <div><dt>客户订单号</dt><dd>{{ field(assignmentDetail.task, 'customer_order_no', 'customerOrderNo') || '-' }}</dd></div>
+            <div><dt>客户项目号</dt><dd>{{ customerProjectText(assignmentDetail.task) }}</dd></div>
+            <div><dt>客户</dt><dd>{{ field(assignmentDetail.task, 'customer_name', 'customerName') || '-' }}</dd></div>
+            <div><dt>图号/版本</dt><dd>{{ field(assignmentDetail.task, 'part_no', 'partNo') }} / {{ field(assignmentDetail.task, 'version') || '-' }}</dd></div>
+            <div><dt>交期</dt><dd>{{ field(assignmentDetail.task, 'delivery_date', 'deliveryDate') || '-' }}</dd></div>
+            <div><dt>工时</dt><dd>{{ number(field(assignmentDetail.task, 'total_work_hours', 'totalWorkHours'), 2) }}</dd></div>
+            <div class="detail-wide route-text">
+              <dt>完整工艺路线</dt>
+              <dd>{{ field(assignmentDetail.task, 'process_route_text', 'processRouteText') || '-' }}</dd>
+            </div>
+          </dl>
+
+          <ApsProcessTable
+            v-if="assignmentModal.mode === 'single' && assignmentDetail"
+            :rows="assignmentDetail.processRows || []"
+            empty-text="暂无工艺"
+          />
+
+          <el-table
+            v-if="assignmentModal.mode === 'bulk'"
+            :data="assignmentModal.tasks"
+            border
+            class="aps-data-table"
+            empty-text="暂无任务"
+            row-key="id"
+            stripe
+          >
+            <el-table-column label="任务" width="86">
+              <template #default="{ row: task }">#{{ field(task, 'id') }}</template>
+            </el-table-column>
+            <el-table-column label="客户" min-width="130">
+              <template #default="{ row: task }">{{ field(task, 'customer_name', 'customerName') || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="图号 / 版本" min-width="150">
+              <template #default="{ row: task }">{{ field(task, 'part_no', 'partNo') }} / {{ field(task, 'version') || '-' }}</template>
+            </el-table-column>
+            <el-table-column align="right" label="需生产" width="92">
+              <template #default="{ row: task }">{{ number(field(task, 'qty'), 0) }}</template>
+            </el-table-column>
+            <el-table-column align="right" label="工时" width="92">
+              <template #default="{ row: task }">{{ number(field(task, 'total_work_hours', 'totalWorkHours'), 2) }}</template>
+            </el-table-column>
+          </el-table>
         </div>
 
-        <div class="assignment-modal-body">
-          <div class="assignment-info">
-            <dl v-if="assignmentModal.mode === 'single' && assignmentDetail">
-              <div><dt>内部项目号</dt><dd>{{ field(assignmentDetail.task, 'internal_project_no', 'internalProjectNo') || '-' }}</dd></div>
-              <div><dt>客户订单号</dt><dd>{{ field(assignmentDetail.task, 'customer_order_no', 'customerOrderNo') || '-' }}</dd></div>
-              <div><dt>客户项目号</dt><dd>{{ customerProjectText(assignmentDetail.task) }}</dd></div>
-              <div><dt>客户</dt><dd>{{ field(assignmentDetail.task, 'customer_name', 'customerName') || '-' }}</dd></div>
-              <div><dt>图号/版本</dt><dd>{{ field(assignmentDetail.task, 'part_no', 'partNo') }} / {{ field(assignmentDetail.task, 'version') || '-' }}</dd></div>
-              <div><dt>交期</dt><dd>{{ field(assignmentDetail.task, 'delivery_date', 'deliveryDate') || '-' }}</dd></div>
-              <div><dt>工时</dt><dd>{{ number(field(assignmentDetail.task, 'total_work_hours', 'totalWorkHours'), 2) }}</dd></div>
-              <div class="detail-wide route-text">
-                <dt>完整工艺路线</dt>
-                <dd>{{ field(assignmentDetail.task, 'process_route_text', 'processRouteText') || '-' }}</dd>
-              </div>
-            </dl>
-
-            <div v-if="assignmentModal.mode === 'single' && assignmentDetail" class="table-wrap compact">
-              <table>
-                <thead>
-                  <tr>
-                    <th>顺序</th>
-                    <th>工艺</th>
-                    <th>类型</th>
-                    <th>工时</th>
-                    <th>费用</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in assignmentDetail.processRows" :key="row.id">
-                    <td>{{ row.sort_no || '-' }}</td>
-                    <td>{{ row.process_name }}</td>
-                    <td>{{ row.calc_type || row.source_type || '-' }}</td>
-                    <td>{{ number(row.work_hours, 2) }}</td>
-                    <td>{{ number(row.line_cost, 2) }}</td>
-                  </tr>
-                  <tr v-if="!assignmentDetail.processRows?.length">
-                    <td class="empty" colspan="5">暂无工艺</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div v-if="assignmentModal.mode === 'bulk'" class="table-wrap compact">
-              <table>
-                <thead>
-                  <tr>
-                    <th>任务</th>
-                    <th>客户</th>
-                    <th>图号 / 版本</th>
-                    <th>需生产</th>
-                    <th>工时</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="task in assignmentModal.tasks" :key="field(task, 'id')">
-                    <td>#{{ field(task, 'id') }}</td>
-                    <td>{{ field(task, 'customer_name', 'customerName') || '-' }}</td>
-                    <td>{{ field(task, 'part_no', 'partNo') }} / {{ field(task, 'version') || '-' }}</td>
-                    <td>{{ number(field(task, 'qty'), 0) }}</td>
-                    <td>{{ number(field(task, 'total_work_hours', 'totalWorkHours'), 2) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <form class="form-grid assignment-form" @submit.prevent="submitAssignment">
-            <label>
-              部门
-              <select v-model="assignmentForm.departmentId" required>
-                <option value="">选择部门</option>
-                <option v-for="department in departments" :key="department.id" :value="department.id">
-                  {{ department.department_name }} / {{ label(department.department_type) }} / 剩余 {{ number(department.remaining_hours, 2) }}h
-                </option>
-              </select>
-            </label>
-            <label>分配人<input v-model="assignmentForm.assignedBy" /></label>
-            <label>备注<input v-model="assignmentForm.remark" /></label>
-            <button class="primary" type="submit" :disabled="loading || !assignmentForm.departmentId">
-              {{ assignmentModal.mode === 'bulk' ? '批量分配到部门' : '分配到部门' }}
-            </button>
-          </form>
-        </div>
-      </section>
-    </div>
+        <form class="form-grid assignment-form" @submit.prevent="submitAssignment">
+          <label>
+            部门
+            <el-select v-model="assignmentForm.departmentId" placeholder="选择部门">
+              <el-option
+                v-for="department in departments"
+                :key="department.id"
+                :label="`${department.department_name} / ${label(department.department_type)} / 剩余 ${number(department.remaining_hours, 2)}h`"
+                :value="department.id"
+              >
+                {{ department.department_name }} / {{ label(department.department_type) }} / 剩余 {{ number(department.remaining_hours, 2) }}h
+              </el-option>
+            </el-select>
+          </label>
+          <label>分配人<el-input v-model="assignmentForm.assignedBy" /></label>
+          <label>备注<el-input v-model="assignmentForm.remark" /></label>
+          <el-button type="primary" native-type="submit" :disabled="loading || !assignmentForm.departmentId">
+            {{ assignmentModal.mode === 'bulk' ? '批量分配到部门' : '分配到部门' }}
+          </el-button>
+        </form>
+      </div>
+    </el-dialog>
   </section>
 </template>

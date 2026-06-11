@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { request } from '../api'
-import { label, statusClass } from '../helpers'
+import ApsStatusTag from '../components/ApsStatusTag.vue'
 
 const PROCESS_TYPES = [
   { value: 'WORK_HOUR', label: '工时工艺' },
@@ -158,16 +158,24 @@ const saveMachine = async () => {
     error.value = '请先选择部门'
     return
   }
+  if (!machineForm.machineCode.trim()) {
+    error.value = '请输入机台编号'
+    return
+  }
+  if (!machineForm.machineName.trim()) {
+    error.value = '请输入机台名称'
+    return
+  }
   await run(async () => {
     try {
       await request('/api/aps/pmc/machines', {
         method: 'POST',
         body: JSON.stringify({
           departmentId: Number(selectedDepartmentId.value),
-          machineCode: machineForm.machineCode,
-          machineName: machineForm.machineName,
+          machineCode: machineForm.machineCode.trim(),
+          machineName: machineForm.machineName.trim(),
           machineStatus: machineForm.machineStatus,
-          remark: machineForm.remark
+          remark: machineForm.remark.trim()
         })
       })
     } catch (err) {
@@ -194,10 +202,10 @@ const updateMachine = async (machine) => {
         method: 'PUT',
         body: JSON.stringify({
           departmentId: Number(machine.department_id),
-          machineCode: draft.machineCode,
-          machineName: draft.machineName,
+          machineCode: String(draft.machineCode || '').trim(),
+          machineName: String(draft.machineName || '').trim(),
           machineStatus: draft.machineStatus,
-          remark: draft.remark
+          remark: String(draft.remark || '').trim()
         })
       })
     } catch (err) {
@@ -279,13 +287,15 @@ onMounted(() => run(loadData))
       <div class="section-head">
         <h2>机台能力</h2>
         <div class="section-actions">
-          <select v-model="selectedDepartmentId" class="control-short" @change="selectDepartment">
-            <option value="">选择部门</option>
-            <option v-for="department in departments" :key="department.id" :value="String(department.id)">
-              {{ department.department_name }}
-            </option>
-          </select>
-          <button class="secondary" type="button" :disabled="loading" @click="run(loadData)">刷新</button>
+          <el-select v-model="selectedDepartmentId" class="control-short" placeholder="选择部门" clearable filterable @change="selectDepartment">
+            <el-option
+              v-for="department in departments"
+              :key="department.id"
+              :label="department.department_name"
+              :value="String(department.id)"
+            />
+          </el-select>
+          <el-button :disabled="loading" @click="run(loadData)">刷新</el-button>
         </div>
       </div>
 
@@ -312,18 +322,16 @@ onMounted(() => run(loadData))
         </div>
 
         <form class="form-grid six" @submit.prevent="saveMachine">
-          <label>机台编号<input v-model="machineForm.machineCode" required /></label>
-          <label>机台名称<input v-model="machineForm.machineName" required /></label>
+          <label>机台编号<el-input v-model="machineForm.machineCode" placeholder="必填" /></label>
+          <label>机台名称<el-input v-model="machineForm.machineName" placeholder="必填" /></label>
           <label>
             状态
-            <select v-model="machineForm.machineStatus">
-              <option v-for="status in MACHINE_STATUSES" :key="status.value" :value="status.value">
-                {{ status.label }}
-              </option>
-            </select>
+            <el-select v-model="machineForm.machineStatus">
+              <el-option v-for="status in MACHINE_STATUSES" :key="status.value" :label="status.label" :value="status.value" />
+            </el-select>
           </label>
-          <label>备注<input v-model="machineForm.remark" /></label>
-          <button class="primary" type="submit" :disabled="loading">新增机台</button>
+          <label>备注<el-input v-model="machineForm.remark" /></label>
+          <el-button type="primary" native-type="submit" :disabled="loading">新增机台</el-button>
         </form>
       </template>
     </section>
@@ -335,25 +343,23 @@ onMounted(() => run(loadData))
             <h2>{{ machine.machine_name }}</h2>
             <div class="mini-line">
               <span>{{ machine.machine_code || '未编号' }}</span>
-              <span class="pill" :class="statusClass(machine.machine_status)">{{ label(machine.machine_status) }}</span>
+              <ApsStatusTag :value="machine.machine_status" />
             </div>
           </div>
-          <button class="text-button danger" type="button" :disabled="loading" @click="removeMachine(machine)">删除</button>
+          <el-button type="danger" link :disabled="loading" @click="removeMachine(machine)">删除</el-button>
         </div>
 
         <div v-if="machineDrafts[machine.id]" class="machine-edit">
-          <label>编号<input v-model="machineDrafts[machine.id].machineCode" /></label>
-          <label>名称<input v-model="machineDrafts[machine.id].machineName" required /></label>
+          <label>编号<el-input v-model="machineDrafts[machine.id].machineCode" /></label>
+          <label>名称<el-input v-model="machineDrafts[machine.id].machineName" placeholder="必填" /></label>
           <label>
             状态
-            <select v-model="machineDrafts[machine.id].machineStatus">
-              <option v-for="status in MACHINE_STATUSES" :key="status.value" :value="status.value">
-                {{ status.label }}
-              </option>
-            </select>
+            <el-select v-model="machineDrafts[machine.id].machineStatus">
+              <el-option v-for="status in MACHINE_STATUSES" :key="status.value" :label="status.label" :value="status.value" />
+            </el-select>
           </label>
-          <label>备注<input v-model="machineDrafts[machine.id].remark" /></label>
-          <button class="secondary" type="button" :disabled="loading" @click="updateMachine(machine)">保存机台</button>
+          <label>备注<el-input v-model="machineDrafts[machine.id].remark" /></label>
+          <el-button :disabled="loading" @click="updateMachine(machine)">保存机台</el-button>
         </div>
 
         <div class="capability-list">
@@ -362,13 +368,13 @@ onMounted(() => run(loadData))
             <span>{{ capabilitiesForMachine(machine.id).length }} 项</span>
           </div>
           <div v-if="capabilitiesForMachine(machine.id).length" class="capability-tags">
-            <span v-for="capability in capabilitiesForMachine(machine.id)" :key="capability.id" class="capability-tag">
+            <el-tag v-for="capability in capabilitiesForMachine(machine.id)" :key="capability.id" class="capability-tag" type="info" effect="plain" disable-transitions>
               <span>
                 {{ capability.process_name }}
                 <small>{{ typeLabel(processTypeForCapability(capability)) }}</small>
               </span>
-              <button class="text-button danger" type="button" :disabled="loading" @click="removeCapability(capability)">删除</button>
-            </span>
+              <el-button type="danger" link :disabled="loading" @click="removeCapability(capability)">删除</el-button>
+            </el-tag>
           </div>
           <p v-else class="muted">暂无工艺能力</p>
         </div>
@@ -376,33 +382,30 @@ onMounted(() => run(loadData))
         <form v-if="capabilityDrafts[machine.id]" class="capability-form" @submit.prevent="saveCapability(machine)">
           <label>
             类型
-            <select v-model="capabilityDrafts[machine.id].processType" @change="resetCapabilityProcess(machine.id)">
-              <option v-for="type in PROCESS_TYPES" :key="type.value" :value="type.value">
-                {{ type.label }}
-              </option>
-            </select>
+            <el-select v-model="capabilityDrafts[machine.id].processType" @change="resetCapabilityProcess(machine.id)">
+              <el-option v-for="type in PROCESS_TYPES" :key="type.value" :label="type.label" :value="type.value" />
+            </el-select>
           </label>
           <label>
             工艺
-            <select
+            <el-select
               v-model="capabilityDrafts[machine.id].processId"
+              placeholder="选择工艺"
               :disabled="availableProcessesForMachine(machine.id).length === 0"
-              required
+              filterable
             >
-              <option value="">选择工艺</option>
-              <option
+              <el-option
                 v-for="process in availableProcessesForMachine(machine.id)"
                 :key="process.id"
+                :label="process.process_name"
                 :value="process.id"
-              >
-                {{ process.process_name }}
-              </option>
-            </select>
+              />
+            </el-select>
           </label>
-          <label>备注<input v-model="capabilityDrafts[machine.id].remark" /></label>
-          <button class="primary" type="submit" :disabled="loading || availableProcessesForMachine(machine.id).length === 0">
+          <label>备注<el-input v-model="capabilityDrafts[machine.id].remark" /></label>
+          <el-button type="primary" native-type="submit" :disabled="loading || availableProcessesForMachine(machine.id).length === 0">
             添加能力
-          </button>
+          </el-button>
         </form>
 
         <p

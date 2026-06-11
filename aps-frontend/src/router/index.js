@@ -12,6 +12,7 @@ import MaterialShortagesView from '../views/MaterialShortagesView.vue'
 import DepartmentsView from '../views/DepartmentsView.vue'
 import MachinesView from '../views/MachinesView.vue'
 import ProcessesView from '../views/ProcessesView.vue'
+import UsersView from '../views/UsersView.vue'
 
 const routes = [
   { path: '/', redirect: '/sync' },
@@ -31,7 +32,8 @@ const routes = [
   { path: '/material-inventory/shortages', component: MaterialShortagesView, meta: { title: '材料缺口' } },
   { path: '/departments', component: DepartmentsView, meta: { title: '部门管理' } },
   { path: '/processes', component: ProcessesView, meta: { title: '工艺管理' } },
-  { path: '/machines', component: MachinesView, meta: { title: '机台能力' } }
+  { path: '/machines', component: MachinesView, meta: { title: '机台能力' } },
+  { path: '/users', component: UsersView, meta: { title: '用户权限' } }
 ]
 
 const router = createRouter({

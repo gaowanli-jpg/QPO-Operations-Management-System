@@ -64,60 +64,44 @@ onMounted(() => run(loadProcesses))
       <div class="section-head">
         <h2>工艺管理</h2>
         <div class="section-actions">
-          <button class="secondary" type="button" :disabled="loading" @click="syncProcesses(selectedType)">
+          <el-button :disabled="loading" @click="syncProcesses(selectedType)">
             同步当前类型
-          </button>
-          <button class="secondary" type="button" :disabled="loading" @click="syncProcesses()">
+          </el-button>
+          <el-button :disabled="loading" @click="syncProcesses()">
             同步全部
-          </button>
-          <button class="secondary" type="button" :disabled="loading" @click="run(loadProcesses)">刷新</button>
+          </el-button>
+          <el-button :disabled="loading" @click="run(loadProcesses)">刷新</el-button>
         </div>
       </div>
 
       <div class="process-toolbar">
-        <div class="segmented" role="tablist" aria-label="工艺类型">
-          <button
-            v-for="type in PROCESS_TYPES"
-            :key="type.value"
-            type="button"
-            :class="{ active: selectedType === type.value }"
-            @click="selectedType = type.value"
-          >
+        <el-radio-group v-model="selectedType" class="process-tabs">
+          <el-radio-button v-for="type in PROCESS_TYPES" :key="type.value" :label="type.value">
             {{ type.label }}
-          </button>
-        </div>
+          </el-radio-button>
+        </el-radio-group>
         <div class="process-counts">
-          <span v-for="type in PROCESS_TYPES" :key="type.value">
+          <el-tag v-for="type in PROCESS_TYPES" :key="type.value" type="info" effect="plain">
             {{ type.label }}：{{ countByType(type.value) }}
-          </span>
+          </el-tag>
         </div>
       </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>工艺名称</th>
-              <th>类型</th>
-              <th>ERP 来源 ID</th>
-              <th>排序</th>
-              <th>同步时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="process in visibleProcesses" :key="process.id">
-              <td><strong>{{ process.process_name }}</strong></td>
-              <td><span class="pill muted">{{ typeLabel(process.process_type) }}</span></td>
-              <td>{{ process.erp_source_id || '-' }}</td>
-              <td>{{ process.sort_no ?? '-' }}</td>
-              <td>{{ process.synced_at || '-' }}</td>
-            </tr>
-            <tr v-if="visibleProcesses.length === 0">
-              <td class="empty" colspan="5">暂无工艺</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <el-table :data="visibleProcesses" border stripe class="aps-data-table" empty-text="暂无工艺" row-key="id">
+        <el-table-column label="工艺名称" min-width="180">
+          <template #default="{ row }">
+            <strong>{{ row.process_name }}</strong>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" min-width="120">
+          <template #default="{ row }">
+            <el-tag type="info" effect="plain">{{ typeLabel(row.process_type) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="erp_source_id" label="ERP 来源 ID" min-width="140" />
+        <el-table-column prop="sort_no" label="排序" width="90" />
+        <el-table-column prop="synced_at" label="同步时间" min-width="180" />
+      </el-table>
     </section>
   </section>
 </template>

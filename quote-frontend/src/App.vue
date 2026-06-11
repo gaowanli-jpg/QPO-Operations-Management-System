@@ -10,28 +10,24 @@
 
         <el-menu
           :default-active="activeMenu"
+          :default-openeds="defaultOpeneds"
           class="el-menu-vertical"
-          background-color="#25364a"
-          text-color="#bfcbd9"
-          active-text-color="#8ec5ff"
+          background-color="#172331"
+          text-color="#a9bbcc"
+          active-text-color="#ffffff"
           router
         >
           <div class="menu-title">核心业务流</div>
 
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/market">
-            <el-icon><DataBoard /></el-icon>
-            <span>市场部：新单导入中心</span>
-          </el-menu-item>
-
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/quote-process">
-            <el-icon><Document /></el-icon>
-            <span>市场部：报价单处理生成</span>
-          </el-menu-item>
-
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/release">
-            <el-icon><Tickets /></el-icon>
-            <span>市场部：议价与提单</span>
-          </el-menu-item>
+          <el-sub-menu v-if="canSee(['MARKET', 'ADMIN'])" index="/market-orders">
+            <template #title>
+              <el-icon><DataBoard /></el-icon>
+              <span>市场部订单处理</span>
+            </template>
+            <el-menu-item index="/market">新单导入中心</el-menu-item>
+            <el-menu-item index="/quote-process">报价单处理生成</el-menu-item>
+            <el-menu-item index="/release">议价与提单</el-menu-item>
+          </el-sub-menu>
 
           <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/engineering">
             <el-icon><Setting /></el-icon>
@@ -40,7 +36,7 @@
 
           <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/material-process">
             <el-icon><Tools /></el-icon>
-            <span>工程部：材料与工艺管理</span>
+            <span>材料与工艺管理</span>
           </el-menu-item>
 
           <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/orders">
@@ -80,11 +76,7 @@
         </el-header>
 
         <el-main class="app-main">
-          <router-view v-slot="{ Component }">
-            <transition name="fade-transform" mode="out-in">
-              <component :is="Component" />
-            </transition>
-          </router-view>
+          <router-view />
         </el-main>
       </el-container>
 
@@ -129,7 +121,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { DataBoard, Document, Files, Fold, Setting, Tickets, Tools, User } from '@element-plus/icons-vue'
+import { DataBoard, Document, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
 import { authState, clearAuth, hasRole, updateAuthUser } from './auth'
 import { API_BASE_URL } from './config'
 
@@ -137,6 +129,7 @@ const route = useRoute()
 const router = useRouter()
 
 const activeMenu = computed(() => route.path)
+const defaultOpeneds = ['/market-orders']
 const isLoginPage = computed(() => route.path === '/login')
 const displayName = computed(() => authState.user?.displayName || authState.user?.username || '未登录')
 const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
@@ -236,7 +229,7 @@ html, body, #app {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
 }
 
 .erp-layout {
@@ -247,8 +240,7 @@ html, body, #app {
 }
 
 .sidebar {
-  background-color: #25364a;
-  transition: width 0.3s;
+  background-color: var(--erp-rail);
   box-shadow: none;
   z-index: 1000;
   display: flex;
@@ -256,23 +248,35 @@ html, body, #app {
 }
 
 .logo-box {
-  height: 56px;
+  min-height: 70px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background-color: #1f2d3d;
-  color: #fff;
-  font-size: 18px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 16px;
+  background-color: var(--erp-rail);
+  color: #dbe7f3;
+  font-size: 16px;
   font-weight: 700;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo-icon {
-  margin-right: 8px;
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-right: 0;
   font-size: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-  padding: 2px 5px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: var(--erp-accent);
+  color: var(--erp-rail);
+}
+
+.logo-text {
+  line-height: 1.2;
 }
 
 .el-menu-vertical {
@@ -281,9 +285,46 @@ html, body, #app {
 }
 
 .menu-title {
-  color: #8090a5;
+  color: #7f93a8;
   font-size: 12px;
-  padding: 16px 20px 6px;
+  padding: 16px 16px 6px;
+}
+
+.sidebar .el-menu {
+  padding: 0 10px 16px;
+}
+
+.sidebar .el-menu-item,
+.sidebar .el-sub-menu__title {
+  min-height: 40px;
+  height: 40px;
+  margin: 4px 0;
+  border-radius: 8px;
+  padding: 0 12px !important;
+}
+
+.sidebar .el-sub-menu .el-menu-item {
+  min-width: 0;
+  min-height: 34px;
+  height: 34px;
+  margin: 4px 0 4px 14px;
+  padding-left: 38px !important;
+  font-size: 13px;
+}
+
+.sidebar .el-menu-item:hover,
+.sidebar .el-sub-menu__title:hover,
+.sidebar .el-menu-item.is-active {
+  background-color: var(--erp-rail-soft) !important;
+}
+
+.sidebar .el-sub-menu.is-active > .el-sub-menu__title {
+  color: #ffffff !important;
+}
+
+.sidebar .el-menu-item .el-icon,
+.sidebar .el-sub-menu__title .el-icon {
+  margin-right: 8px;
 }
 
 .main-container {
@@ -294,7 +335,7 @@ html, body, #app {
 .header {
   height: 56px;
   background-color: var(--erp-surface);
-  border-bottom: 1px solid var(--erp-border-soft);
+  border-bottom: 1px solid var(--erp-border);
   box-shadow: none;
   display: flex;
   align-items: center;
@@ -311,7 +352,7 @@ html, body, #app {
 
 .collapse-btn {
   font-size: 20px;
-  color: #606266;
+  color: var(--erp-text-secondary);
   margin-right: 15px;
 }
 
@@ -330,7 +371,7 @@ html, body, #app {
 
 .app-main {
   background-color: var(--erp-bg);
-  padding: 16px;
+  padding: 24px;
   overflow-y: auto;
 }
 
@@ -338,18 +379,4 @@ html, body, #app {
   margin-bottom: 16px;
 }
 
-.fade-transform-leave-active,
-.fade-transform-enter-active {
-  transition: all .3s;
-}
-
-.fade-transform-enter-from {
-  opacity: 0;
-  transform: translateX(-30px);
-}
-
-.fade-transform-leave-to {
-  opacity: 0;
-  transform: translateX(30px);
-}
 </style>

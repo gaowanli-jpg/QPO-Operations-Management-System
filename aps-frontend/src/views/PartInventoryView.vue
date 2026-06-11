@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { request } from '../api'
 import { field, number } from '../helpers'
+import ApsPager from '../components/ApsPager.vue'
 
 const loading = ref(false)
 const error = ref('')
@@ -83,17 +84,21 @@ const createInventory = async () => {
     error.value = '请先选择客户'
     return
   }
+  if (!createForm.partNo.trim()) {
+    error.value = '请输入图号'
+    return
+  }
   await run(async () => {
     try {
       await request('/api/aps/inventory/parts', {
         method: 'POST',
         body: JSON.stringify({
           customerName: selectedCustomer.value,
-          partNo: createForm.partNo,
-          version: createForm.version,
+          partNo: createForm.partNo.trim(),
+          version: createForm.version.trim(),
           inStockQty: 0,
           inProductionQty: 0,
-          remark: createForm.remark
+          remark: createForm.remark.trim()
         })
       })
     } catch (err) {
@@ -139,6 +144,14 @@ const refreshActiveRow = async () => {
 
 const submitAddStock = async () => {
   if (!activeRow.value) return
+  if (stockMode.value === 'PENDING' && !stockForm.pendingRefNo.trim()) {
+    error.value = '请输入在产单号'
+    return
+  }
+  if (Number(stockForm.qty || 0) <= 0) {
+    error.value = '请输入大于 0 的数量'
+    return
+  }
   await run(async () => {
     await request('/api/aps/inventory/parts/add-stock', {
       method: 'POST',
@@ -146,7 +159,7 @@ const submitAddStock = async () => {
         inventoryId: activeRow.value.id,
         stockType: stockMode.value,
         qty: Number(stockForm.qty || 0),
-        pendingRefNo: stockForm.pendingRefNo
+        pendingRefNo: stockForm.pendingRefNo.trim()
       })
     })
     Object.assign(stockForm, { qty: 1, pendingRefNo: '' })
@@ -156,6 +169,10 @@ const submitAddStock = async () => {
 
 const submitTransfer = async () => {
   if (!activeRow.value || !transferForm.pendingRefNo) return
+  if (Number(transferForm.qty || 0) <= 0) {
+    error.value = '请输入大于 0 的转入数量'
+    return
+  }
   await run(async () => {
     await request('/api/aps/inventory/parts/transfer-pending', {
       method: 'POST',
@@ -177,6 +194,10 @@ const syncPendingQty = () => {
 
 const submitModifyInStock = async () => {
   if (!activeRow.value) return
+  if (Number(modifyForm.inStockQty || 0) < 0) {
+    error.value = '已入库库存不能小于 0'
+    return
+  }
   await run(async () => {
     await request('/api/aps/inventory/parts/modify', {
       method: 'POST',
@@ -191,6 +212,10 @@ const submitModifyInStock = async () => {
 
 const submitModifyPending = async () => {
   if (!activeRow.value || !modifyForm.pendingRefNo) return
+  if (Number(modifyForm.pendingQty || 0) < 0) {
+    error.value = '在产库存不能小于 0'
+    return
+  }
   await run(async () => {
     await request('/api/aps/inventory/parts/modify', {
       method: 'POST',
@@ -218,6 +243,15 @@ const remove = async (id) => {
 
 const formatPart = (row) => row ? `${field(row, 'part_no') || '-'} / ${field(row, 'version') || '-'}` : '未选择'
 
+const goPage = (nextPage) => {
+  page.value = nextPage
+}
+
+const changePageSize = (nextSize) => {
+  pageSize.value = nextSize
+  page.value = 1
+}
+
 onMounted(() => run(loadData))
 
 watch([page, pageSize], () => {
@@ -236,79 +270,76 @@ watch([page, pageSize], () => {
       <div class="section-head">
         <h2>零件库存维护</h2>
         <div class="section-actions">
-          <select v-model="selectedCustomer" class="control-short" @change="selectCustomer">
-            <option value="">先选择客户</option>
-            <option v-for="customer in customers" :key="customer" :value="customer">{{ customer }}</option>
-          </select>
-          <input v-model="keyword" class="control-short" placeholder="图号或版本" :disabled="!selectedCustomer" @keyup.enter="searchInventory" />
-          <button class="secondary" type="button" :disabled="loading || !selectedCustomer" @click="searchInventory">查询</button>
-          <button class="secondary" type="button" :disabled="loading" @click="run(loadData)">刷新</button>
+          <el-select v-model="selectedCustomer" class="control-short" placeholder="先选择客户" clearable filterable @change="selectCustomer">
+            <el-option v-for="customer in customers" :key="customer" :label="customer" :value="customer" />
+          </el-select>
+          <el-input v-model="keyword" class="control-short" placeholder="图号或版本" :disabled="!selectedCustomer" clearable @keyup.enter="searchInventory" />
+          <el-button type="primary" :disabled="loading || !selectedCustomer" @click="searchInventory">查询</el-button>
+          <el-button :disabled="loading" @click="run(loadData)">刷新</el-button>
         </div>
       </div>
 
       <p v-if="!selectedCustomer" class="empty-state">请先选择客户，再维护该客户的图号版本、已入库库存和在产库存。</p>
       <template v-else>
         <form class="form-grid" @submit.prevent="createInventory">
-          <label>图号<input v-model="createForm.partNo" required /></label>
-          <label>版本<input v-model="createForm.version" /></label>
-          <label>备注<input v-model="createForm.remark" /></label>
-          <button class="primary" type="submit" :disabled="loading">录入图号版本</button>
+          <label>图号<el-input v-model="createForm.partNo" placeholder="必填" /></label>
+          <label>版本<el-input v-model="createForm.version" /></label>
+          <label>备注<el-input v-model="createForm.remark" /></label>
+          <el-button type="primary" native-type="submit" :disabled="loading">录入图号版本</el-button>
         </form>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>图号</th>
-                <th>版本</th>
-                <th>已入库</th>
-                <th>在产</th>
-                <th>入库锁定</th>
-                <th>在产锁定</th>
-                <th>可用入库</th>
-                <th>可用在产</th>
-                <th>在产单号</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in partInventory" :key="row.id">
-                <td><strong>{{ field(row, 'part_no') }}</strong></td>
-                <td>{{ field(row, 'version') || '-' }}</td>
-                <td>{{ number(field(row, 'in_stock_qty'), 0) }}</td>
-                <td>{{ number(field(row, 'in_production_qty'), 0) }}</td>
-                <td>{{ number(field(row, 'locked_in_stock_qty'), 0) }}</td>
-                <td>{{ number(field(row, 'locked_in_production_qty'), 0) }}</td>
-                <td>{{ number(field(row, 'available_in_stock_qty'), 0) }}</td>
-                <td>{{ number(field(row, 'available_in_production_qty'), 0) }}</td>
-                <td>
-                  <span v-if="!row.pendingRows?.length" class="muted">无</span>
-                  <span v-for="pending in row.pendingRows" v-else :key="pending.id" class="mini-tag">
-                    {{ pending.pending_ref_no }}：{{ number(pending.pending_qty, 0) }}
-                  </span>
-                </td>
-                <td>
-                  <button class="text-button" type="button" @click="setActiveRow(row)">维护</button>
-                  <button class="text-button danger" type="button" @click="remove(row.id)">删除</button>
-                </td>
-              </tr>
-              <tr v-if="partInventory.length === 0">
-                <td class="empty" colspan="10">该客户暂无零件库存</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="pager">
-          <span>共 {{ total }} 条</span>
-          <button class="secondary" type="button" :disabled="page <= 1 || loading" @click="page--">上一页</button>
-          <span>第 {{ page }} 页</span>
-          <button class="secondary" type="button" :disabled="page * pageSize >= total || loading" @click="page++">下一页</button>
-          <select v-model.number="pageSize" class="page-size">
-            <option :value="20">20 条</option>
-            <option :value="50">50 条</option>
-            <option :value="100">100 条</option>
-          </select>
-        </div>
+        <el-table :data="partInventory" border stripe class="aps-data-table inventory-table" empty-text="该客户暂无零件库存" row-key="id">
+          <el-table-column label="图号" min-width="150">
+            <template #default="{ row }">
+              <strong>{{ field(row, 'part_no') }}</strong>
+            </template>
+          </el-table-column>
+          <el-table-column label="版本" min-width="90">
+            <template #default="{ row }">{{ field(row, 'version') || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="已入库" min-width="90">
+            <template #default="{ row }">{{ number(field(row, 'in_stock_qty'), 0) }}</template>
+          </el-table-column>
+          <el-table-column label="在产" min-width="90">
+            <template #default="{ row }">{{ number(field(row, 'in_production_qty'), 0) }}</template>
+          </el-table-column>
+          <el-table-column label="入库锁定" min-width="100">
+            <template #default="{ row }">{{ number(field(row, 'locked_in_stock_qty'), 0) }}</template>
+          </el-table-column>
+          <el-table-column label="在产锁定" min-width="100">
+            <template #default="{ row }">{{ number(field(row, 'locked_in_production_qty'), 0) }}</template>
+          </el-table-column>
+          <el-table-column label="可用入库" min-width="100">
+            <template #default="{ row }">{{ number(field(row, 'available_in_stock_qty'), 0) }}</template>
+          </el-table-column>
+          <el-table-column label="可用在产" min-width="100">
+            <template #default="{ row }">{{ number(field(row, 'available_in_production_qty'), 0) }}</template>
+          </el-table-column>
+          <el-table-column label="在产单号" min-width="210">
+            <template #default="{ row }">
+              <span v-if="!row.pendingRows?.length" class="muted">无</span>
+              <el-tag v-for="pending in row.pendingRows" v-else :key="pending.id" class="mini-tag" type="info" effect="plain">
+                {{ pending.pending_ref_no }}：{{ number(pending.pending_qty, 0) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="118" fixed="right">
+            <template #default="{ row }">
+              <div class="row-actions">
+                <el-button type="primary" link @click="setActiveRow(row)">维护</el-button>
+                <el-button type="danger" link @click="remove(row.id)">删除</el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+        <ApsPager
+          :disabled="loading"
+          :page="page"
+          :page-size="pageSize"
+          :total="total"
+          @current-change="goPage"
+          @size-change="changePageSize"
+        />
       </template>
     </section>
 
@@ -321,44 +352,48 @@ watch([page, pageSize], () => {
         <form class="action-box" @submit.prevent="submitAddStock">
           <h3>新增库存</h3>
           <label>类型
-            <select v-model="stockMode">
-              <option value="IN_STOCK">直接入库</option>
-              <option value="PENDING">新增在产</option>
-            </select>
+            <el-select v-model="stockMode">
+              <el-option label="直接入库" value="IN_STOCK" />
+              <el-option label="新增在产" value="PENDING" />
+            </el-select>
           </label>
-          <label v-if="stockMode === 'PENDING'">在产单号<input v-model="stockForm.pendingRefNo" required /></label>
-          <label>数量<input v-model.number="stockForm.qty" min="1" type="number" /></label>
-          <button class="primary" type="submit" :disabled="loading">确认新增</button>
+          <label v-if="stockMode === 'PENDING'">在产单号<el-input v-model="stockForm.pendingRefNo" /></label>
+          <label>数量<el-input-number v-model="stockForm.qty" :min="1" :precision="0" :step="1" controls-position="right" /></label>
+          <el-button type="primary" native-type="submit" :disabled="loading">确认新增</el-button>
         </form>
 
         <form class="action-box" @submit.prevent="submitTransfer">
           <h3>在产转入库</h3>
           <label>在产单号
-            <select v-model="transferForm.pendingRefNo" required>
-              <option value="">选择在产单号</option>
-              <option v-for="pending in pendingRows" :key="pending.id" :value="pending.pending_ref_no">
-                {{ pending.pending_ref_no }} / 可用 {{ number(pending.available_qty, 0) }}
-              </option>
-            </select>
+            <el-select v-model="transferForm.pendingRefNo" placeholder="选择在产单号" clearable>
+              <el-option
+                v-for="pending in pendingRows"
+                :key="pending.id"
+                :label="`${pending.pending_ref_no} / 可用 ${number(pending.available_qty, 0)}`"
+                :value="pending.pending_ref_no"
+              />
+            </el-select>
           </label>
-          <label>转入数量<input v-model.number="transferForm.qty" min="1" :max="selectedPendingQty" type="number" /></label>
-          <button class="primary" type="submit" :disabled="loading || !transferForm.pendingRefNo">确认转入</button>
+          <label>转入数量<el-input-number v-model="transferForm.qty" :min="1" :max="selectedPendingQty" :precision="0" :step="1" controls-position="right" /></label>
+          <el-button type="primary" native-type="submit" :disabled="loading || !transferForm.pendingRefNo">确认转入</el-button>
         </form>
 
         <form class="action-box" @submit.prevent="submitModifyInStock">
           <h3>修改库存</h3>
-          <label>已入库库存<input v-model.number="modifyForm.inStockQty" min="0" type="number" /></label>
-          <button class="secondary" type="submit" :disabled="loading">保存已入库</button>
+          <label>已入库库存<el-input-number v-model="modifyForm.inStockQty" :min="0" :precision="0" :step="1" controls-position="right" /></label>
+          <el-button native-type="submit" :disabled="loading">保存已入库</el-button>
           <label>在产单号
-            <select v-model="modifyForm.pendingRefNo" @change="syncPendingQty">
-              <option value="">选择在产单号</option>
-              <option v-for="pending in pendingRows" :key="pending.id" :value="pending.pending_ref_no">
-                {{ pending.pending_ref_no }} / 当前 {{ number(pending.pending_qty, 0) }}
-              </option>
-            </select>
+            <el-select v-model="modifyForm.pendingRefNo" placeholder="选择在产单号" clearable @change="syncPendingQty">
+              <el-option
+                v-for="pending in pendingRows"
+                :key="pending.id"
+                :label="`${pending.pending_ref_no} / 当前 ${number(pending.pending_qty, 0)}`"
+                :value="pending.pending_ref_no"
+              />
+            </el-select>
           </label>
-          <label>在产库存<input v-model.number="modifyForm.pendingQty" min="0" type="number" :disabled="!modifyForm.pendingRefNo" /></label>
-          <button class="secondary" type="button" :disabled="loading || !modifyForm.pendingRefNo" @click="submitModifyPending">保存在产</button>
+          <label>在产库存<el-input-number v-model="modifyForm.pendingQty" :min="0" :precision="0" :step="1" controls-position="right" :disabled="!modifyForm.pendingRefNo" /></label>
+          <el-button type="primary" plain :disabled="loading || !modifyForm.pendingRefNo" @click="submitModifyPending">保存在产</el-button>
         </form>
       </div>
     </section>
