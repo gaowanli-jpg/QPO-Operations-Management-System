@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h2>市场部：议价确认与提单生成</h2>
-            <p>选择客户最终通过的零件，系统会按在产库存、已入库库存、净生产需求自动拆分提单行。</p>
+            <p>选择客户最终通过的零件，生成正式提单和对应工艺表。</p>
           </div>
           <el-button type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button>
         </div>
@@ -261,10 +261,10 @@
               <el-table-column prop="startDate" label="开工日期" width="110" />
               <el-table-column prop="deliveryDate" label="交货日期" width="110" />
               <el-table-column label="安排类型" width="100">
-                <template #default="{ row }">{{ displayInventoryText(row.arrangeType) }}</template>
+                <template #default="{ row }">{{ displayTicketText(row.arrangeType) }}</template>
               </el-table-column>
               <el-table-column label="备注" min-width="180" show-overflow-tooltip>
-                <template #default="{ row }">{{ displayInventoryText(row.remark) }}</template>
+                <template #default="{ row }">{{ displayTicketText(row.remark) }}</template>
               </el-table-column>
               <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
@@ -611,7 +611,7 @@ const submitTicket = async () => {
   }
 
   await ElMessageBox.confirm(
-    `确认生成 ${selectedRows.value.length} 个零件的正式提单？生成后会扣减库存，不能重复生成。`,
+    `确认生成 ${selectedRows.value.length} 个零件的正式提单？同一零件不能重复生成。`,
     '生成提单确认',
     { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
   )
@@ -656,7 +656,7 @@ const resolveDeliveryLeadTime = (row) => {
 
 const deleteTicket = async (row) => {
   await ElMessageBox.confirm(
-    `确认删除提单行「${row.partNo} / ${row.version || '-'}」数量 ${row.qty}？如果该行曾冲销库存，系统会恢复对应库存数量。`,
+    `确认删除提单行「${row.partNo} / ${row.version || '-'}」数量 ${row.qty}？`,
     '删除提单行',
     { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
   )
@@ -717,7 +717,7 @@ const formatWeight = (value) => {
   return number.toFixed(3).replace(/\.?0+$/, '')
 }
 
-const displayInventoryText = (value) => {
+const displayTicketText = (value) => {
   return String(value || '').replaceAll('待产', '在产')
 }
 

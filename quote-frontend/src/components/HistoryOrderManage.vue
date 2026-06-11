@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h2>历史订单管理</h2>
-            <p>先选择客户，再查看该客户下的历史订单；彻底删除不会恢复库存。</p>
+            <p>先选择客户，再查看该客户下的历史订单；彻底删除后不可恢复。</p>
           </div>
           <div class="header-actions">
             <el-select
@@ -100,7 +100,7 @@
 
         <el-alert
           class="delete-alert"
-          title="彻底删除不会恢复库存，只会删除订单、零件、提单、工艺表和图纸文件。适合订单完成很久后清理历史记录。"
+          title="彻底删除只会删除订单、零件、提单、工艺表和图纸文件。适合订单完成很久后清理历史记录。"
           type="warning"
           show-icon
           :closable="false"
@@ -265,7 +265,7 @@ const openDetail = async (row) => {
 
 const deleteHistoryOrder = async (row) => {
   await ElMessageBox.confirm(
-    `确认彻底删除历史订单「${row.rfqNo || row.id} / ${row.customerName || '-'}」？库存不会恢复，订单数据和图纸文件将被删除。`,
+    `确认彻底删除历史订单「${row.rfqNo || row.id} / ${row.customerName || '-'}」？订单数据和图纸文件将被删除。`,
     '彻底删除历史订单',
     { type: 'error', confirmButtonText: '彻底删除', cancelButtonText: '取消' }
   )

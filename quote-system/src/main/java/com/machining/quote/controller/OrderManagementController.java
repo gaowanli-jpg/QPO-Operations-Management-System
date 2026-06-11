@@ -58,6 +58,6 @@ public class OrderManagementController {
             @PathVariable Integer rfqId,
             @RequestParam(value = "deleteFiles", defaultValue = "true") boolean deleteFiles) {
         orderManagementService.deleteOrderCompletely(rfqId, deleteFiles);
-        return Map.of("success", true, "message", "订单及关联数据已彻底删除，库存不会回滚");
+        return Map.of("success", true, "message", "订单及关联数据已彻底删除");
     }
 }

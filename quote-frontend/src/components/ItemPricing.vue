@@ -344,10 +344,10 @@
               新窗口打开
             </el-button>
           </div>
-          <div v-if="currentRow?.drawingUrl" class="drawing-frame">
+          <div v-if="currentRow?.drawingUrl" v-loading="currentDrawingLoading" class="drawing-frame">
             <iframe
               :key="currentRow?.id"
-              :src="drawingUrl(currentRow.drawingUrl)"
+              :src="currentDrawingSrc"
               class="drawing-frame-iframe"
               frameborder="0"
             ></iframe>
@@ -452,13 +452,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
-import { API_BASE_URL, apiUrl } from '../config'
+import { API_BASE_URL } from '../config'
 import { downloadByAxios } from '../download'
+import {
+  createAuthenticatedObjectUrl,
+  openAuthenticatedFileInNewWindow,
+  readFileErrorMessage,
+  revokeObjectUrl
+} from '../authenticatedFile'
 
 const route = useRoute()
 const rfqId = ref('')
@@ -752,31 +758,45 @@ const pdfVisible = ref(false)
 const currentPdfUrl = ref('')
 const pdfTitle = ref('')
 const pdfLoaded = ref(false)
-const currentPdfSrc = computed(() => apiUrl(currentPdfUrl.value))
-const drawingUrl = (url) => apiUrl(url)
+const currentPdfSrc = ref('')
 
-const openPdfPreview = (url, partNo) => {
-  pdfTitle.value = partNo
-  currentPdfUrl.value = url
-  pdfLoaded.value = false
-  pdfVisible.value = true
+const cleanupPdfSrc = () => {
+  revokeObjectUrl(currentPdfSrc.value)
+  currentPdfSrc.value = ''
 }
 
-const openDrawingInNewWindow = (url) => {
+const openPdfPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
   }
-  const newWindow = window.open(apiUrl(url), '_blank')
-  if (newWindow) {
-    newWindow.opener = null
-  } else {
-    ElMessage.warning('浏览器拦截了新窗口，请允许弹窗后重试。')
+  pdfTitle.value = partNo
+  currentPdfUrl.value = url
+  pdfLoaded.value = false
+  cleanupPdfSrc()
+  pdfVisible.value = true
+  try {
+    currentPdfSrc.value = await createAuthenticatedObjectUrl(url)
+  } catch (error) {
+    pdfVisible.value = false
+    ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+  }
+}
+
+const openDrawingInNewWindow = async (url) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  const result = await openAuthenticatedFileInNewWindow(url)
+  if (!result.success) {
+    ElMessage.warning(result.blocked ? '浏览器拦截了新窗口，请允许弹窗后重试。' : (result.message || '图纸打开失败。'))
   }
 }
 
 // 核价弹窗核心逻辑
 const dialogVisible = ref(false)
 const currentRow = ref(null)
+const currentDrawingSrc = ref('')
+const currentDrawingLoading = ref(false)
 const submitLoading = ref(false)
 const quoteMode = ref('NORMAL')
 const assemblyFee = ref(null)
@@ -785,6 +805,61 @@ const assemblyPickerVisible = ref(false)
 const assemblyPickerSelection = ref([])
 const assemblyPickerTableRef = ref(null)
 let assemblyChildSeq = 0
+let currentDrawingRequestSeq = 0
+
+const cleanupCurrentDrawingSrc = () => {
+  revokeObjectUrl(currentDrawingSrc.value)
+  currentDrawingSrc.value = ''
+}
+
+const loadCurrentDrawing = async (url) => {
+  currentDrawingRequestSeq += 1
+  const requestSeq = currentDrawingRequestSeq
+  cleanupCurrentDrawingSrc()
+  currentDrawingLoading.value = false
+  if (!url) return
+
+  currentDrawingLoading.value = true
+  try {
+    const objectUrl = await createAuthenticatedObjectUrl(url)
+    if (requestSeq === currentDrawingRequestSeq) {
+      currentDrawingSrc.value = objectUrl
+    } else {
+      revokeObjectUrl(objectUrl)
+    }
+  } catch (error) {
+    if (requestSeq === currentDrawingRequestSeq) {
+      ElMessage.warning(await readFileErrorMessage(error) || '当前图纸加载失败。')
+    }
+  } finally {
+    if (requestSeq === currentDrawingRequestSeq) {
+      currentDrawingLoading.value = false
+    }
+  }
+}
+
+watch(dialogVisible, (visible) => {
+  if (visible) {
+    loadCurrentDrawing(currentRow.value?.drawingUrl)
+  } else {
+    currentDrawingRequestSeq += 1
+    cleanupCurrentDrawingSrc()
+    currentDrawingLoading.value = false
+  }
+})
+
+watch(pdfVisible, (visible) => {
+  if (!visible) {
+    cleanupPdfSrc()
+    pdfLoaded.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  currentDrawingRequestSeq += 1
+  cleanupCurrentDrawingSrc()
+  cleanupPdfSrc()
+})
 
 const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: null })
 const processRoute = ref([])

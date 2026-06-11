@@ -382,7 +382,7 @@ public class DeliveryService {
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
         qw.eq("rfq_id", item.getRfqId()).eq("item_id", item.getId());
         if (ticketMapper.selectCount(qw) > 0) {
-            throw new RuntimeException("零件 " + itemLabel(item) + " 已生成过提单，请勿重复扣减库存");
+            throw new RuntimeException("零件 " + itemLabel(item) + " 已生成过提单，请勿重复生成");
         }
     }
 

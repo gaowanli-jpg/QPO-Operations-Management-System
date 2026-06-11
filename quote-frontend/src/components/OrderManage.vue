@@ -371,7 +371,7 @@ const openDetail = async (row) => {
 
 const resetProduction = async (row) => {
   await ElMessageBox.confirm(
-    `确认重置订单「${row.rfqNo}」的提单行和工艺表行？库存冲销数量会恢复，零件可重新生成提单。`,
+    `确认重置订单「${row.rfqNo}」的提单行和工艺表行？零件可重新生成提单。`,
     '重置提单和工艺表',
     { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' }
   )

@@ -3,11 +3,8 @@ package com.machining.quote;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.DeliveryGenerateReq;
-import com.machining.quote.dto.InventorySaveReq;
-import com.machining.quote.dto.InventoryStockOpReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMarkupFee;
-import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -21,7 +18,6 @@ import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
-import com.machining.quote.service.InventoryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -58,8 +54,6 @@ class AssemblyWorkflowIntegrationTests {
     private EngineerService engineerService;
     @Autowired
     private DeliveryService deliveryService;
-    @Autowired
-    private InventoryService inventoryService;
 
     @Test
     @SuppressWarnings("unchecked")
@@ -169,21 +163,6 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion parent = createPendingItem(order, "PARENT", 2);
         submitAssembly(parent, 5.0, child(parent, child, 2));
 
-        InventorySaveReq saveReq = new InventorySaveReq();
-        saveReq.setCustomerName(order.getCustomerName());
-        saveReq.setPartNo(child.getPartNo());
-        saveReq.setVersion(child.getVersion());
-        saveReq.setInStockQty(1);
-        inventoryService.saveOrUpdate(saveReq);
-
-        InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), child.getPartNo(), child.getVersion());
-        InventoryStockOpReq pendingReq = new InventoryStockOpReq();
-        pendingReq.setInventoryId(inventory.getId());
-        pendingReq.setStockType("PENDING");
-        pendingReq.setPendingRefNo("WO-ASSY");
-        pendingReq.setQty(1);
-        inventoryService.addStock(pendingReq);
-
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
         req.setInternalProjectNo("IP-ASSY");
@@ -204,7 +183,6 @@ class AssemblyWorkflowIntegrationTests {
                 .containsExactly(1, 2);
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
                 .containsExactly("组合件", "普通件");
-        assertThat(inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), parent.getPartNo(), parent.getVersion())).isNull();
 
         QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
         sheetQw.eq("rfq_id", order.getId()).orderByAsc("item_id");
@@ -217,9 +195,6 @@ class AssemblyWorkflowIntegrationTests {
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", order.getId());
         assertThat(ticketMapper.selectList(ticketQw)).hasSize(2);
-        InventoryMaster childInventoryAfter = inventoryService.findByCustomerPartAndVersion(order.getCustomerName(), child.getPartNo(), child.getVersion());
-        assertThat(childInventoryAfter.getInStockQty()).isEqualTo(1);
-        assertThat(childInventoryAfter.getPendingQty()).isEqualTo(1);
     }
 
     @Test

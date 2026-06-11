@@ -11,7 +11,7 @@
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @keyup.enter="handleLogin">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model.trim="form.username" size="large" placeholder="admin / market / engineer / warehouse" />
+          <el-input v-model.trim="form.username" size="large" placeholder="admin / market / engineer" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input v-model="form.password" size="large" type="password" show-password placeholder="请输入密码" />
@@ -50,8 +50,7 @@ const rules = {
 const roleHome = {
   ADMIN: '/market',
   MARKET: '/market',
-  ENGINEER: '/engineering',
-  WAREHOUSE: '/warehouse'
+  ENGINEER: '/engineering'
 }
 
 const handleLogin = async () => {

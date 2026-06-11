@@ -52,13 +52,13 @@ public class SystemTaskController {
     }
 
     @GetMapping("/{taskId}")
-    @RequireRole({"MARKET", "ENGINEER", "WAREHOUSE", "ADMIN"})
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
     public SystemTask getTask(@PathVariable Long taskId) {
         return systemTaskService.getTask(taskId);
     }
 
     @GetMapping("/{taskId}/download")
-    @RequireRole({"MARKET", "ENGINEER", "WAREHOUSE", "ADMIN"})
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
     public void downloadTaskFile(@PathVariable Long taskId, HttpServletResponse response) throws IOException {
         Path file = systemTaskService.getTaskFile(taskId);
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
@@ -69,7 +69,7 @@ public class SystemTaskController {
     }
 
     @GetMapping
-    @RequireRole({"MARKET", "ENGINEER", "WAREHOUSE", "ADMIN"})
+    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
     public List<SystemTask> recentTasks(
             @RequestParam(value = "taskType", required = false) String taskType,
             @RequestParam(value = "limit", required = false) Integer limit) {

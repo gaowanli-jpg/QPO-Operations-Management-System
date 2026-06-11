@@ -70,7 +70,6 @@
             <el-option label="管理员" value="ADMIN" />
             <el-option label="市场部" value="MARKET" />
             <el-option label="工程部" value="ENGINEER" />
-            <el-option label="仓库部" value="WAREHOUSE" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -129,11 +128,10 @@ const form = reactive({
 const roleLabel = (role) => ({
   ADMIN: '管理员',
   MARKET: '市场部',
-  ENGINEER: '工程部',
-  WAREHOUSE: '仓库部'
+  ENGINEER: '工程部'
 }[role] || role)
 
-const protectedUsernames = new Set(['admin', 'market', 'engineer', 'warehouse'])
+const protectedUsernames = new Set(['admin', 'market', 'engineer'])
 
 const isProtectedUser = (row) => protectedUsernames.has(String(row.username || '').trim().toLowerCase())
 

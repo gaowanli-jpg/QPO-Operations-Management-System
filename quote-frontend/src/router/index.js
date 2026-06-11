@@ -4,7 +4,6 @@ import MarketRelease from '../components/MarketRelease.vue'
 import QuoteProcess from '../components/QuoteProcess.vue'
 import GlobalSetup from '../components/GlobalSetup.vue'
 import ItemPricing from '../components/ItemPricing.vue'
-import WarehouseInventory from '../components/WarehouseInventory.vue'
 import MaterialProcessManage from '../components/MaterialProcessManage.vue'
 import OrderManage from '../components/OrderManage.vue'
 import HistoryOrderManage from '../components/HistoryOrderManage.vue'
@@ -25,8 +24,7 @@ const routes = [
   { path: '/history-orders', component: HistoryOrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/users', component: UserManage, meta: { roles: ['ADMIN'] } },
   { path: '/quote-template', component: QuoteTemplateManage, meta: { roles: ['ADMIN'] } },
-  { path: '/pricing', component: ItemPricing, meta: { roles: ['ENGINEER', 'ADMIN'] } },
-  { path: '/warehouse', component: WarehouseInventory, meta: { roles: ['WAREHOUSE', 'ADMIN'] } }
+  { path: '/pricing', component: ItemPricing, meta: { roles: ['ENGINEER', 'ADMIN'] } }
 ]
 
 const router = createRouter({
@@ -37,8 +35,7 @@ const router = createRouter({
 const roleHome = {
   ADMIN: '/market',
   MARKET: '/market',
-  ENGINEER: '/engineering',
-  WAREHOUSE: '/warehouse'
+  ENGINEER: '/engineering'
 }
 
 router.beforeEach(async (to) => {

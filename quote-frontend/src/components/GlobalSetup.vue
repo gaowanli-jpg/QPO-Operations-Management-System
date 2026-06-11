@@ -177,12 +177,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { API_BASE_URL, apiUrl } from '../config'
+import { API_BASE_URL } from '../config'
+import {
+  createAuthenticatedObjectUrl,
+  openAuthenticatedFileInNewWindow,
+  readFileErrorMessage,
+  revokeObjectUrl
+} from '../authenticatedFile'
 
 const router = useRouter()
 
@@ -427,26 +433,48 @@ const previewVisible = ref(false)
 const currentPreviewUrl = ref('')
 const previewTitle = ref('')
 const iframeLoaded = ref(false)
-const previewSrc = computed(() => apiUrl(currentPreviewUrl.value))
+const previewSrc = ref('')
 
-const openPreview = (url, partNo) => {
-  previewTitle.value = partNo
-  currentPreviewUrl.value = url
-  iframeLoaded.value = false
-  previewVisible.value = true
+const cleanupPreviewSrc = () => {
+  revokeObjectUrl(previewSrc.value)
+  previewSrc.value = ''
 }
 
-const openDrawingInNewWindow = (url) => {
+const openPreview = async (url, partNo) => {
   if (!url) {
     return ElMessage.warning('当前零件没有绑定图纸。')
   }
-  const newWindow = window.open(apiUrl(url), '_blank')
-  if (newWindow) {
-    newWindow.opener = null
-  } else {
-    ElMessage.warning('浏览器拦截了新窗口，请允许弹窗后重试。')
+  previewTitle.value = partNo
+  currentPreviewUrl.value = url
+  iframeLoaded.value = false
+  cleanupPreviewSrc()
+  previewVisible.value = true
+  try {
+    previewSrc.value = await createAuthenticatedObjectUrl(url)
+  } catch (error) {
+    previewVisible.value = false
+    ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
   }
 }
+
+const openDrawingInNewWindow = async (url) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  const result = await openAuthenticatedFileInNewWindow(url)
+  if (!result.success) {
+    ElMessage.warning(result.blocked ? '浏览器拦截了新窗口，请允许弹窗后重试。' : (result.message || '图纸打开失败。'))
+  }
+}
+
+watch(previewVisible, (visible) => {
+  if (!visible) {
+    cleanupPreviewSrc()
+    iframeLoaded.value = false
+  }
+})
+
+onBeforeUnmount(cleanupPreviewSrc)
 
 const loadRepeatAnalysis = async (rfqId, skipRecommendedConfig = false) => {
   repeatAnalysis.value = null

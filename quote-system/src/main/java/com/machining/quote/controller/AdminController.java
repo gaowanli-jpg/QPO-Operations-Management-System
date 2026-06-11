@@ -45,7 +45,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/me/password")
-    @RequireRole({"ADMIN", "MARKET", "ENGINEER", "WAREHOUSE"})
+    @RequireRole({"ADMIN", "MARKET", "ENGINEER"})
     public Map<String, Object> changeMyPassword(@RequestBody PasswordChangeReq req) {
         userAdminService.changeMyPassword(req);
         return Map.of("success", true, "message", "密码已修改");

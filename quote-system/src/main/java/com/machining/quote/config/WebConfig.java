@@ -5,27 +5,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-    @Value("${erp.upload-dir}")
-    private String uploadDir;
-
     @Value("${erp.cors.allowed-origins}")
     private String allowedOrigins;
 
     @Autowired
     private AuthInterceptor authInterceptor;
-
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadDir);
-    }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -45,7 +35,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
-                .addPathPatterns("/api/**")
+                .addPathPatterns("/api/**", "/uploads/**")
                 .excludePathPatterns("/api/auth/login", "/api/health");
     }
 }

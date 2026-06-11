@@ -113,57 +113,6 @@ CREATE TABLE IF NOT EXISTS dict_extra_fee_item (
     remarks TEXT
 );
 
-CREATE TABLE IF NOT EXISTS inventory_master (
-    id SERIAL PRIMARY KEY,
-    customer_name VARCHAR(200) NOT NULL,
-    part_no VARCHAR(100) NOT NULL,
-    version VARCHAR(20) NOT NULL DEFAULT 'V1',
-    in_stock_qty INTEGER DEFAULT 0,
-    pending_qty INTEGER DEFAULT 0,
-    pending_ref_no VARCHAR(100),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-ALTER TABLE inventory_master ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200);
-ALTER TABLE inventory_master ADD COLUMN IF NOT EXISTS version VARCHAR(20);
-UPDATE inventory_master SET customer_name = '未指定客户' WHERE customer_name IS NULL OR customer_name = '';
-UPDATE inventory_master SET version = 'V1' WHERE version IS NULL OR TRIM(version) = '';
-ALTER TABLE inventory_master ALTER COLUMN customer_name SET NOT NULL;
-ALTER TABLE inventory_master ALTER COLUMN version SET DEFAULT 'V1';
-ALTER TABLE inventory_master ALTER COLUMN version SET NOT NULL;
-ALTER TABLE inventory_master ALTER COLUMN in_stock_qty SET DEFAULT 0;
-ALTER TABLE inventory_master ALTER COLUMN pending_qty SET DEFAULT 0;
-ALTER TABLE inventory_master DROP CONSTRAINT IF EXISTS inventory_master_part_no_key;
-DROP INDEX IF EXISTS inventory_master_part_no_key;
-DROP INDEX IF EXISTS idx_inventory_customer_part;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_customer_part_version ON inventory_master(customer_name, part_no, version);
-CREATE INDEX IF NOT EXISTS idx_inventory_customer_name ON inventory_master(customer_name);
-
-CREATE TABLE IF NOT EXISTS inventory_pending_stock (
-    id SERIAL PRIMARY KEY,
-    inventory_id INTEGER REFERENCES inventory_master(id) ON DELETE CASCADE,
-    pending_ref_no VARCHAR(100) NOT NULL,
-    pending_qty INTEGER DEFAULT 0,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(inventory_id, pending_ref_no)
-);
-CREATE INDEX IF NOT EXISTS idx_inventory_pending_inventory ON inventory_pending_stock(inventory_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_pending_inventory_ref ON inventory_pending_stock(inventory_id, pending_ref_no);
-
-INSERT INTO inventory_pending_stock (inventory_id, pending_ref_no, pending_qty, updated_at)
-SELECT id, pending_ref_no, pending_qty, updated_at
-FROM inventory_master
-WHERE pending_qty > 0 AND pending_ref_no IS NOT NULL AND TRIM(pending_ref_no) <> ''
-ON CONFLICT (inventory_id, pending_ref_no) DO NOTHING;
-
-UPDATE inventory_master
-SET pending_ref_no = NULL,
-    pending_qty = COALESCE((
-        SELECT SUM(pending_qty)
-        FROM inventory_pending_stock
-        WHERE inventory_pending_stock.inventory_id = inventory_master.id
-    ), 0);
-
 CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     id SERIAL PRIMARY KEY,
     rfq_id INTEGER REFERENCES order_rfq(id),

@@ -82,8 +82,8 @@ public class ExcelExportService {
                     safe(ticket.getVersion()),
                     formatDate(ticket.getStartDate()),
                     formatDate(ticket.getDeliveryDate()),
-                    displayInventoryText(ticket.getRemark()),
-                    displayInventoryText(ticket.getArrangeType())
+                    displayTicketText(ticket.getRemark()),
+                    displayTicketText(ticket.getArrangeType())
             ));
         }
 
@@ -575,7 +575,7 @@ public class ExcelExportService {
         return value == null ? "" : value.toString();
     }
 
-    private String displayInventoryText(Object value) {
+    private String displayTicketText(Object value) {
         return safe(value).replace("待产", "在产");
     }
 

@@ -18,8 +18,8 @@ import java.util.Set;
 
 @Service
 public class UserAdminService {
-    private static final Set<String> ROLES = Set.of("ADMIN", "MARKET", "ENGINEER", "WAREHOUSE");
-    private static final Set<String> PROTECTED_USERNAMES = Set.of("admin", "market", "engineer", "warehouse");
+    private static final Set<String> ROLES = Set.of("ADMIN", "MARKET", "ENGINEER");
+    private static final Set<String> PROTECTED_USERNAMES = Set.of("admin", "market", "engineer");
 
     @Autowired
     private ErpUserMapper userMapper;

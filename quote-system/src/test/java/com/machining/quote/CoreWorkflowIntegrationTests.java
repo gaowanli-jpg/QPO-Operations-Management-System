@@ -4,15 +4,12 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
-import com.machining.quote.dto.InventorySaveReq;
-import com.machining.quote.dto.InventoryStockOpReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
-import com.machining.quote.entity.InventoryMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderProcessSheet;
@@ -26,7 +23,6 @@ import com.machining.quote.service.ApsSourceService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
-import com.machining.quote.service.InventoryService;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.QuoteProcessService;
 import org.junit.jupiter.api.Test;
@@ -60,8 +56,6 @@ class CoreWorkflowIntegrationTests {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderProcessSheetMapper processSheetMapper;
-    @Autowired
-    private InventoryService inventoryService;
     @Autowired
     private DeliveryService deliveryService;
     @Autowired
@@ -261,7 +255,7 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
-    void deliveryGenerationDoesNotConsumeErpInventory() {
+    void deliveryGenerationCreatesTicketsAndProcessSheets() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("TEST-" + System.nanoTime());
         order.setCustomerName("TEST客户");
@@ -284,21 +278,6 @@ class CoreWorkflowIntegrationTests {
         item.setFinalTotalPrice(50.0);
         item.setStatus("已报价");
         itemMapper.insert(item);
-
-        InventorySaveReq saveReq = new InventorySaveReq();
-        saveReq.setCustomerName("TEST客户");
-        saveReq.setPartNo("P-100");
-        saveReq.setVersion("A");
-        saveReq.setInStockQty(1);
-        inventoryService.saveOrUpdate(saveReq);
-
-        InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion("TEST客户", "P-100", "A");
-        InventoryStockOpReq pendingReq = new InventoryStockOpReq();
-        pendingReq.setInventoryId(inventory.getId());
-        pendingReq.setStockType("PENDING");
-        pendingReq.setPendingRefNo("WO-1");
-        pendingReq.setQty(2);
-        inventoryService.addStock(pendingReq);
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
@@ -327,10 +306,6 @@ class CoreWorkflowIntegrationTests {
                 .containsOnly("CP-001");
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
                 .containsOnly("普通件");
-
-        InventoryMaster after = inventoryService.findByCustomerPartAndVersion("TEST客户", "P-100", "A");
-        assertThat(after.getInStockQty()).isEqualTo(1);
-        assertThat(after.getPendingQty()).isEqualTo(2);
 
         QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
         itemQw.eq("id", item.getId());
@@ -435,7 +410,7 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
-    void deletingDeliveryTicketDoesNotRestoreErpInventory() {
+    void deletingDeliveryTicketClearsGeneratedStatus() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("DELETE-NO-RESTORE-" + System.nanoTime());
         order.setCustomerName("DELETE-NO-RESTORE");
@@ -446,7 +421,7 @@ class CoreWorkflowIntegrationTests {
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setRfqId(order.getId());
         item.setPartNo("DEL-NO-RESTORE");
-        item.setDescription("delete ticket inventory guard");
+        item.setDescription("delete ticket status guard");
         item.setQty(3);
         item.setVersion("A");
         item.setLeadTime("2026-03-20");
@@ -455,18 +430,11 @@ class CoreWorkflowIntegrationTests {
         item.setStatus("已报价");
         itemMapper.insert(item);
 
-        InventorySaveReq saveReq = new InventorySaveReq();
-        saveReq.setCustomerName(order.getCustomerName());
-        saveReq.setPartNo(item.getPartNo());
-        saveReq.setVersion(item.getVersion());
-        saveReq.setInStockQty(1);
-        inventoryService.saveOrUpdate(saveReq);
-
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
         req.setInternalProjectNo("IP-DELETE-NO-RESTORE");
         req.setCustomerOrderNo("CO-DELETE-NO-RESTORE");
-        req.setArrangeType("库存冲销");
+        req.setArrangeType("计划");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(3);
@@ -475,35 +443,7 @@ class CoreWorkflowIntegrationTests {
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
         deliveryService.deleteTicket(tickets.get(0).getId());
 
-        InventoryMaster after = inventoryService.findByCustomerPartAndVersion(
-                order.getCustomerName(), item.getPartNo(), item.getVersion());
-        assertThat(after.getInStockQty()).isEqualTo(1);
-        assertThat(after.getPendingQty()).isZero();
-    }
-
-    @Test
-    void deleteInventoryRemovesMasterAndPendingRows() {
-        InventorySaveReq saveReq = new InventorySaveReq();
-        saveReq.setCustomerName("删除库存客户");
-        saveReq.setPartNo("DEL-100");
-        saveReq.setVersion("A");
-        saveReq.setInStockQty(3);
-        inventoryService.saveOrUpdate(saveReq);
-
-        InventoryMaster inventory = inventoryService.findByCustomerPartAndVersion("删除库存客户", "DEL-100", "A");
-        InventoryStockOpReq pendingReq = new InventoryStockOpReq();
-        pendingReq.setInventoryId(inventory.getId());
-        pendingReq.setStockType("PENDING");
-        pendingReq.setPendingRefNo("WO-DEL");
-        pendingReq.setQty(2);
-        inventoryService.addStock(pendingReq);
-
-        assertThat(inventoryService.listPending(inventory.getId())).hasSize(1);
-
-        inventoryService.deleteInventory(inventory.getId());
-
-        assertThat(inventoryService.findByCustomerPartAndVersion("删除库存客户", "DEL-100", "A")).isNull();
-        assertThat(inventoryService.listPending(inventory.getId())).isEmpty();
+        assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo("已报价");
     }
 
     @Test

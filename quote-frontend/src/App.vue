@@ -53,11 +53,6 @@
             <span>历史订单管理</span>
           </el-menu-item>
 
-          <el-menu-item v-if="canSee(['WAREHOUSE', 'ADMIN'])" index="/warehouse">
-            <el-icon><Box /></el-icon>
-            <span>仓库部：库存管理</span>
-          </el-menu-item>
-
           <el-menu-item v-if="canSee(['ADMIN'])" index="/users">
             <el-icon><User /></el-icon>
             <span>系统管理：用户权限</span>
@@ -134,7 +129,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { Box, DataBoard, Document, Files, Fold, Setting, Tickets, Tools, User } from '@element-plus/icons-vue'
+import { DataBoard, Document, Files, Fold, Setting, Tickets, Tools, User } from '@element-plus/icons-vue'
 import { authState, clearAuth, hasRole, updateAuthUser } from './auth'
 import { API_BASE_URL } from './config'
 
@@ -148,8 +143,7 @@ const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const roleName = computed(() => ({
   ADMIN: '管理员',
   MARKET: '市场部',
-  ENGINEER: '工程部',
-  WAREHOUSE: '仓库部'
+  ENGINEER: '工程部'
 }[authState.user?.role] || '未知角色'))
 const mustChangePassword = computed(() => !!authState.user?.forcePasswordChange)
 
