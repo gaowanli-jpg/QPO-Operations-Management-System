@@ -1,5 +1,6 @@
 package com.machining.apssystem.controller;
 
+import com.machining.apssystem.config.RequireRole;
 import com.machining.apssystem.dto.ApsPmcTaskDetailDTO;
 import com.machining.apssystem.dto.ApsWorkItemPageDTO;
 import com.machining.apssystem.service.ApsDepartmentCenterService;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequireRole({"ADMIN"})
 @RequestMapping("/api/aps/department-center")
 public class ApsDepartmentCenterController {
     @Autowired

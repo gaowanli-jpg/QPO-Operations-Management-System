@@ -150,14 +150,10 @@
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-form-item label="材质选择">
-                  <el-select v-model="matForm.materialName" class="full-width">
-                    <el-option
-                      v-for="material in materialOptions"
-                      :key="material.id"
-                      :label="material.remarks ? `${material.materialName} ${material.remarks}` : material.materialName"
-                      :value="material.materialName"
-                    />
-                  </el-select>
+                  <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
+                    <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
+                    <span class="picker-trigger-action">选择</span>
+                  </el-button>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -216,14 +212,12 @@
             </el-empty>
             <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="proc.rowKey || index" class="process-row">
               <el-col :span="7">
-                <el-select v-model="proc.optionKey" class="full-width" @change="syncProcessMeta(proc)">
-                  <el-option
-                    v-for="process in combinedProcessOptions"
-                    :key="process.optionKey"
-                    :label="process.label"
-                    :value="process.optionKey"
-                  />
-                </el-select>
+                <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
+                  <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
+                    {{ formatProcessLabel(proc, '选择工序') }}
+                  </span>
+                  <span class="picker-trigger-action">选择</span>
+                </el-button>
               </el-col>
               <el-col :span="3">
                 <el-tag :type="proc.calcType === '非工时费用' ? 'warning' : 'info'">{{ proc.calcType || '工时' }}</el-tag>
@@ -429,6 +423,26 @@
       </template>
     </el-dialog>
 
+    <EngineeringOptionPickerDialog
+      v-model="materialPickerVisible"
+      title="选择材料"
+      type="material"
+      :items="materialOptions"
+      :selected-key="matForm.materialName"
+      empty-text="暂无材料字典数据"
+      @confirm="selectMaterial"
+    />
+
+    <EngineeringOptionPickerDialog
+      v-model="processPickerVisible"
+      title="选择工艺"
+      type="process"
+      :items="combinedProcessOptions"
+      :selected-key="selectedProcessOptionKey"
+      empty-text="暂无工艺字典数据"
+      @confirm="selectProcess"
+    />
+
     <!-- 图纸预览 -->
     <el-dialog
       v-model="pdfVisible"
@@ -457,6 +471,7 @@ import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
+import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import { API_BASE_URL } from '../config'
 import { downloadByAxios } from '../download'
 import {
@@ -479,6 +494,9 @@ const materialOptions = ref([])
 const processOptions = ref([])
 const extraFeeOptions = ref([])
 const markupFeeOptions = ref([])
+const materialPickerVisible = ref(false)
+const processPickerVisible = ref(false)
+const editingProcessIndex = ref(null)
 const repeatAnalysis = ref(null)
 
 const combinedProcessOptions = computed(() => [
@@ -845,6 +863,15 @@ watch(dialogVisible, (visible) => {
     currentDrawingRequestSeq += 1
     cleanupCurrentDrawingSrc()
     currentDrawingLoading.value = false
+    materialPickerVisible.value = false
+    processPickerVisible.value = false
+    editingProcessIndex.value = null
+  }
+})
+
+watch(processPickerVisible, (visible) => {
+  if (!visible) {
+    editingProcessIndex.value = null
   }
 })
 
@@ -865,6 +892,60 @@ const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: nul
 const processRoute = ref([])
 let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
+
+const formatMaterialLabel = (material) => {
+  if (!material) return ''
+  return material.remarks ? `${material.materialName} ${material.remarks}` : material.materialName
+}
+
+const selectedMaterialLabel = computed(() => {
+  const material = materialOptions.value.find(item => item.materialName === matForm.materialName)
+  return formatMaterialLabel(material) || matForm.materialName || '请选择材质'
+})
+
+const findProcessOption = (proc) => {
+  if (!proc) return null
+  return combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
+    || combinedProcessOptions.value.find(item => item.processName === proc.processName && item.sourceType === (proc.sourceType || 'process'))
+    || combinedProcessOptions.value.find(item => item.processName === proc.processName)
+    || null
+}
+
+const selectedProcessOptionKey = computed(() => {
+  const proc = processRoute.value[editingProcessIndex.value]
+  return findProcessOption(proc)?.optionKey || proc?.optionKey || ''
+})
+
+const formatProcessLabel = (proc, fallback = '请选择工序') => {
+  const option = findProcessOption(proc)
+  if (option?.label) return option.label
+  if (proc?.processName) return `${proc.processName}（${proc.calcType || '工时'}）`
+  return fallback
+}
+
+const applyProcessSelection = (proc, selected) => {
+  if (!proc || !selected) return
+  proc.optionKey = selected.optionKey
+  proc.processName = selected.processName
+  proc.calcType = selected.calcType
+  proc.sourceType = selected.sourceType
+}
+
+const selectMaterial = (material) => {
+  if (!material?.materialName) return
+  matForm.materialName = material.materialName
+}
+
+const openProcessPicker = (index) => {
+  editingProcessIndex.value = index
+  processPickerVisible.value = true
+}
+
+const selectProcess = (selected) => {
+  const proc = processRoute.value[editingProcessIndex.value]
+  applyProcessSelection(proc, selected)
+  editingProcessIndex.value = null
+}
 
 const isAssemblyItem = (item) => String(item?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
@@ -1000,9 +1081,7 @@ const removeProcess = (index) => {
 const syncProcessMeta = (proc) => {
   const selected = combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
   if (!selected) return
-  proc.processName = selected.processName
-  proc.calcType = selected.calcType
-  proc.sourceType = selected.sourceType
+  applyProcessSelection(proc, selected)
 }
 
 const hydrateRouteItem = (proc) => {
@@ -1373,6 +1452,45 @@ const submitCurrentQuote = async () => {
 .pricing-table,
 .full-width {
   width: 100%;
+}
+
+.picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-color: var(--erp-border);
+  background: var(--erp-surface);
+  color: var(--erp-text);
+}
+
+.picker-trigger:hover,
+.picker-trigger:focus {
+  border-color: var(--erp-primary);
+  color: var(--erp-primary);
+}
+
+.picker-trigger-text,
+.picker-trigger-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-trigger-placeholder {
+  color: var(--erp-text-secondary);
+}
+
+.picker-trigger-action {
+  flex: none;
+  color: var(--erp-primary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .muted-price {

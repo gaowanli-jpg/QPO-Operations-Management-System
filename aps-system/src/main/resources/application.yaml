@@ -28,6 +28,10 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 aps:
+  auth:
+    enabled: ${APS_AUTH_ENABLED:true}
+    jwt-secret: ${APS_JWT_SECRET:change-this-aps-secret-before-production-32chars}
+    jwt-ttl-minutes: ${APS_JWT_TTL_MINUTES:720}
   erp:
     base-url: ${APS_ERP_BASE_URL:http://localhost:8080}
     auth-token: ${APS_ERP_AUTH_TOKEN:}

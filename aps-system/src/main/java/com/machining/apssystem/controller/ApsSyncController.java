@@ -1,5 +1,6 @@
 package com.machining.apssystem.controller;
 
+import com.machining.apssystem.config.RequireRole;
 import com.machining.apssystem.dto.ApsSyncResultDTO;
 import com.machining.apssystem.dto.WorkItemSummaryDTO;
 import com.machining.apssystem.service.ApsSyncService;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@RequireRole({"ADMIN"})
 @RequestMapping("/api/aps")
 public class ApsSyncController {
     @Autowired

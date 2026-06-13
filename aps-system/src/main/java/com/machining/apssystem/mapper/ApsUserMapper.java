@@ -10,4 +10,7 @@ import org.apache.ibatis.annotations.Select;
 public interface ApsUserMapper extends BaseMapper<ApsUser> {
     @Select("SELECT * FROM aps_user WHERE id = #{id} FOR UPDATE")
     ApsUser selectByIdForUpdate(@Param("id") Long id);
+
+    @Select("SELECT * FROM aps_user WHERE username = #{username} LIMIT 1 FOR UPDATE")
+    ApsUser selectByUsernameForUpdate(@Param("username") String username);
 }

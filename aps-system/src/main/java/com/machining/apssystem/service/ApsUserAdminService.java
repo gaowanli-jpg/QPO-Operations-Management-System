@@ -1,8 +1,10 @@
 package com.machining.apssystem.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.machining.apssystem.config.ApsAuthContext;
 import com.machining.apssystem.dto.ApsUserDTO;
 import com.machining.apssystem.dto.ApsUserSaveReq;
+import com.machining.apssystem.dto.PasswordChangeReq;
 import com.machining.apssystem.entity.ApsUser;
 import com.machining.apssystem.mapper.ApsUserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,6 +94,30 @@ public class ApsUserAdminService {
             throw new IllegalStateException("Initial admin account cannot be deleted.");
         }
         userMapper.deleteById(id);
+    }
+
+    @Transactional
+    public void changeMyPassword(PasswordChangeReq req) {
+        ApsAuthContext.SessionUser current = ApsAuthContext.get();
+        if (current == null) {
+            throw new IllegalArgumentException("请先登录");
+        }
+        ApsUser user = requireUserForUpdate(current.id());
+        if (!passwordService.matchesPassword(req == null ? null : req.getOldPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("原密码不正确");
+        }
+        String newPassword = req == null ? "" : req.getNewPassword();
+        assertPasswordLength(newPassword);
+        if (!text(req.getConfirmPassword()).isEmpty() && !newPassword.equals(req.getConfirmPassword())) {
+            throw new IllegalArgumentException("两次输入的新密码不一致");
+        }
+        user.setPasswordHash(passwordService.hashPassword(newPassword));
+        user.setForcePasswordChange(false);
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
     }
 
     private ApsUser requireUserForUpdate(Long id) {

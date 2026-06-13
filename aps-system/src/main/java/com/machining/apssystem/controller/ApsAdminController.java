@@ -1,5 +1,6 @@
 package com.machining.apssystem.controller;
 
+import com.machining.apssystem.config.RequireRole;
 import com.machining.apssystem.dto.ApsUserDTO;
 import com.machining.apssystem.dto.ApsUserSaveReq;
 import com.machining.apssystem.service.ApsUserAdminService;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@RequireRole({"ADMIN"})
 @RequestMapping("/api/aps/admin")
 public class ApsAdminController {
     @Autowired

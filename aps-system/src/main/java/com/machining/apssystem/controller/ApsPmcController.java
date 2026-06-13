@@ -1,5 +1,6 @@
 package com.machining.apssystem.controller;
 
+import com.machining.apssystem.config.RequireRole;
 import com.machining.apssystem.dto.ApsDepartmentDTO;
 import com.machining.apssystem.dto.ApsMachineCapabilityDTO;
 import com.machining.apssystem.dto.ApsMachineDTO;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@RequireRole({"ADMIN"})
 @RequestMapping("/api/aps/pmc")
 public class ApsPmcController {
     @Autowired

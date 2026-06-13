@@ -1,0 +1,106 @@
+name: aps-system
+
+# APS uses a dedicated environment file:
+# docker compose --env-file aps.env -f docker-compose.aps.yml up -d --build
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${APS_LOG_MAX_SIZE:-20m}
+    max-file: "${APS_LOG_MAX_FILE:-5}"
+
+services:
+  aps-postgres:
+    image: postgres:15
+    container_name: aps-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${APS_POSTGRES_DB:-aps}
+      POSTGRES_USER: ${APS_POSTGRES_USER:-aps}
+      POSTGRES_PASSWORD: ${APS_POSTGRES_PASSWORD:?Set APS_POSTGRES_PASSWORD in aps.env before starting}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    volumes:
+      - aps_postgres_data:/var/lib/postgresql/data
+      - ./backups/aps-postgres:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+    mem_limit: ${APS_POSTGRES_MEM_LIMIT:-1g}
+    cpus: "${APS_POSTGRES_CPUS:-1.0}"
+
+  aps-backend:
+    build:
+      context: ./aps-system
+    container_name: aps-backend
+    restart: unless-stopped
+    depends_on:
+      aps-postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8091
+      DB_URL: jdbc:postgresql://aps-postgres:5432/${APS_POSTGRES_DB:-aps}
+      DB_USERNAME: ${APS_POSTGRES_USER:-aps}
+      DB_PASSWORD: ${APS_POSTGRES_PASSWORD:?Set APS_POSTGRES_PASSWORD in aps.env before starting}
+      DB_POOL_MAX_SIZE: ${APS_DB_POOL_MAX_SIZE:-10}
+      DB_POOL_MIN_IDLE: ${APS_DB_POOL_MIN_IDLE:-2}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${APS_DB_POOL_CONNECTION_TIMEOUT_MS:-3000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${APS_DB_POOL_IDLE_TIMEOUT_MS:-600000}
+      DB_POOL_MAX_LIFETIME_MS: ${APS_DB_POOL_MAX_LIFETIME_MS:-1800000}
+      DB_POOL_VALIDATION_TIMEOUT_MS: ${APS_DB_POOL_VALIDATION_TIMEOUT_MS:-3000}
+      APS_AUTH_ENABLED: ${APS_AUTH_ENABLED:-true}
+      APS_JWT_SECRET: ${APS_JWT_SECRET:?Set APS_JWT_SECRET in aps.env before starting}
+      APS_JWT_TTL_MINUTES: ${APS_JWT_TTL_MINUTES:-720}
+      APS_ERP_BASE_URL: ${APS_ERP_BASE_URL:?Set APS_ERP_BASE_URL in aps.env before starting}
+      APS_ERP_AUTH_TOKEN: ${APS_ERP_AUTH_TOKEN:-}
+      APS_ERP_SYNC_PAGE_SIZE: ${APS_ERP_SYNC_PAGE_SIZE:-200}
+      APS_CORS_ALLOWED_ORIGINS: ${APS_CORS_ALLOWED_ORIGINS:-http://localhost:8095,http://127.0.0.1:8095}
+      FLYWAY_ENABLED: true
+      MYBATIS_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8091/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
+    logging: *default-logging
+    mem_limit: ${APS_BACKEND_MEM_LIMIT:-1g}
+    cpus: "${APS_BACKEND_CPUS:-1.0}"
+    security_opt:
+      - no-new-privileges:true
+
+  aps-frontend:
+    build:
+      context: ./aps-frontend
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: aps-frontend
+    restart: unless-stopped
+    depends_on:
+      aps-backend:
+        condition: service_healthy
+    ports:
+      - "${APS_FRONTEND_BIND:-127.0.0.1}:${APS_FRONTEND_PORT:-8095}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    mem_limit: ${APS_FRONTEND_MEM_LIMIT:-256m}
+    cpus: "${APS_FRONTEND_CPUS:-0.5}"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  aps_postgres_data:
+    name: ${APS_POSTGRES_VOLUME_NAME:-aps_postgres_data}

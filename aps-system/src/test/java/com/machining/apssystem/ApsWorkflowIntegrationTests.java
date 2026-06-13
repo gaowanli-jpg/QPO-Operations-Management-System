@@ -93,6 +93,7 @@ class ApsWorkflowIntegrationTests {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("aps.erp.base-url", () -> "http://127.0.0.1:" + ERP_SERVER.getAddress().getPort());
         registry.add("aps.erp.auth-token", () -> "");
+        registry.add("aps.auth.enabled", () -> false);
         registry.add("spring.flyway.enabled", () -> true);
     }
 

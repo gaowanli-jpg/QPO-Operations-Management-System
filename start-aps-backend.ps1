@@ -6,7 +6,8 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = $PSScriptRoot
 $ApsDir = Join-Path $RootDir "aps-system"
-$EnvFile = Join-Path $RootDir ".env"
+$ApsEnvFile = Join-Path $ApsDir ".env"
+$ErpEnvFile = Join-Path $RootDir "erp.env"
 
 function Read-DotEnv {
     param([string]$Path)
@@ -49,13 +50,18 @@ function Get-ConfigValue {
     return $Fallback
 }
 
-$config = Read-DotEnv -Path $EnvFile
+$config = @{}
+foreach ($source in @((Read-DotEnv -Path $ErpEnvFile), (Read-DotEnv -Path $ApsEnvFile))) {
+    foreach ($key in $source.Keys) {
+        $config[$key] = $source[$key]
+    }
+}
 $token = Get-ConfigValue -Values $config -Name "APS_ERP_AUTH_TOKEN" -Fallback ""
 if ([string]::IsNullOrWhiteSpace($token)) {
     $token = Get-ConfigValue -Values $config -Name "ERP_APS_SOURCE_TOKEN" -Fallback ""
 }
 if ([string]::IsNullOrWhiteSpace($token)) {
-    throw "Missing APS_ERP_AUTH_TOKEN or ERP_APS_SOURCE_TOKEN in $EnvFile"
+    throw "Missing APS_ERP_AUTH_TOKEN or ERP_APS_SOURCE_TOKEN in $ApsEnvFile or $ErpEnvFile"
 }
 
 $env:APS_ERP_AUTH_TOKEN = $token

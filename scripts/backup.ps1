@@ -2,6 +2,7 @@ param(
     [string]$ProjectRoot = "D:\Code",
     [string]$BackupRoot = "",
     [string]$ComposeFile = "",
+    [string]$EnvFile = "",
     [switch]$PruneOld,
     [int]$KeepDays = 14
 )
@@ -58,10 +59,14 @@ if (-not $BackupRoot) {
 if (-not $ComposeFile) {
     $ComposeFile = Join-Path $ProjectRoot "docker-compose.yml"
 }
+if (-not $EnvFile) {
+    $EnvFile = Join-Path $ProjectRoot "erp.env"
+}
+$EnvFile = (Resolve-Path $EnvFile).Path
 
-$envFile = Read-DotEnv (Join-Path $ProjectRoot ".env")
-$dbUser = Resolve-Setting $envFile "POSTGRES_USER" "postgres"
-$dbName = Resolve-Setting $envFile "POSTGRES_DB" "postgres"
+$envValues = Read-DotEnv $EnvFile
+$dbUser = Resolve-Setting $envValues "POSTGRES_USER" "postgres"
+$dbName = Resolve-Setting $envValues "POSTGRES_DB" "postgres"
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $runDir = Join-Path $BackupRoot $timestamp
@@ -74,7 +79,7 @@ New-Item -ItemType Directory -Force -Path $dbDir, $uploadsDir, $metaDir | Out-Nu
 
 Push-Location $ProjectRoot
 try {
-    $compose = @("-f", $ComposeFile)
+    $compose = @("--env-file", $EnvFile, "-f", $ComposeFile)
     $containerDump = "/tmp/quote-system-backup-$timestamp.sql"
     $dumpCommand = "pg_dump -U $(Escape-ShSingle $dbUser) -d $(Escape-ShSingle $dbName) > $(Escape-ShSingle $containerDump)"
 
@@ -110,6 +115,7 @@ try {
         backupTime = (Get-Date).ToString("o")
         projectRoot = $ProjectRoot
         composeFile = $ComposeFile
+        envFile = $EnvFile
         database = $dbName
         databaseUser = $dbUser
         dbDump = "db/postgres.sql"

@@ -1,6 +1,7 @@
 param(
     [string]$ProjectRoot = "D:\Code",
     [string]$ArchiveRoot = "",
+    [string]$EnvFile = "",
     [int]$AuditLogKeepDays = 180,
     [int]$OrderCandidateDays = 730,
     [switch]$DryRun
@@ -80,11 +81,15 @@ $ProjectRoot = (Resolve-Path $ProjectRoot).Path
 if (-not $ArchiveRoot) {
     $ArchiveRoot = Join-Path $ProjectRoot "archives"
 }
-$envFile = Read-DotEnv (Join-Path $ProjectRoot ".env")
+if (-not $EnvFile) {
+    $EnvFile = Join-Path $ProjectRoot "erp.env"
+}
+$EnvFile = (Resolve-Path $EnvFile).Path
+$envValues = Read-DotEnv $EnvFile
 $composeFile = Join-Path $ProjectRoot "docker-compose.yml"
-$compose = @("-f", $composeFile)
-$dbUser = Resolve-Setting $envFile "POSTGRES_USER" "postgres"
-$dbName = Resolve-Setting $envFile "POSTGRES_DB" "postgres"
+$compose = @("--env-file", $EnvFile, "-f", $composeFile)
+$dbUser = Resolve-Setting $envValues "POSTGRES_USER" "postgres"
+$dbName = Resolve-Setting $envValues "POSTGRES_DB" "postgres"
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $archiveDir = Join-Path $ArchiveRoot $timestamp

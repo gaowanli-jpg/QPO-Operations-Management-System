@@ -1,0 +1,44 @@
+# ERP后端系统说明
+
+## 项目用途
+
+`quote-system` 是ERP后端服务，负责订单、报价、材料与工艺、文件、库存和APS数据同步等业务接口。
+
+## 技术栈
+
+- Spring Boot
+- PostgreSQL
+- Flyway
+- MyBatis-Plus
+- Maven
+
+## 本地运行
+
+```powershell
+cd D:\Code\quote-system
+.\mvnw.cmd spring-boot:run
+```
+
+默认后端端口是 `8080`，可通过环境变量 `SERVER_PORT` 修改。
+
+## 测试
+
+```powershell
+cd D:\Code\quote-system
+.\mvnw.cmd test
+```
+
+## Docker部署
+
+ERP的Docker编排文件在 `D:\Code\docker-compose.yml`，运行配置在 `D:\Code\erp.env`。
+
+```powershell
+cd D:\Code
+docker compose --env-file erp.env up -d --build
+```
+
+## 相关文档
+
+- [Maven官方文档](https://maven.apache.org/guides/index.html)
+- [Spring Boot Maven插件](https://docs.spring.io/spring-boot/docs/current/maven-plugin/reference/htmlsingle/)
+- [Spring Web文档](https://docs.spring.io/spring-boot/reference/web/servlet.html)

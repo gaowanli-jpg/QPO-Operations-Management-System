@@ -1,66 +1,66 @@
-# Operations
+# ERP运维说明
 
-## Capacity report
+## 容量报告
 
-Run a one-time capacity report:
+生成一次容量报告：
 
 ```powershell
 cd D:\Code
 powershell -ExecutionPolicy Bypass -File .\scripts\capacity-report.ps1
 ```
 
-Output:
+输出文件：
 - `capacity-reports/<timestamp>/capacity-report.txt`
 - `capacity-reports/<timestamp>/capacity-report.json`
 
-The report includes:
-- host disk usage
-- database size
-- largest PostgreSQL tables
-- local backup and archive directory size
-- Docker volume usage for PostgreSQL and uploaded files
+报告包含：
+- 宿主机磁盘使用情况。
+- 数据库大小。
+- PostgreSQL最大数据表。
+- 本地备份和归档目录大小。
+- PostgreSQL和上传文件相关Docker卷使用情况。
 
-## Monthly archive
+## 月度归档
 
-Run a one-time monthly archive:
+手动执行一次月度归档：
 
 ```powershell
 cd D:\Code
 powershell -ExecutionPolicy Bypass -File .\scripts\archive-monthly.ps1
 ```
 
-Default behavior:
-- exports `audit_log` rows older than 180 days to CSV, then deletes them from the live database
-- exports old order candidates older than 730 days to CSV only
-- does not delete historical order data automatically
+默认行为：
+- 把180天以前的 `audit_log` 导出为CSV，然后从在线数据库删除。
+- 把730天以前的旧订单候选记录只导出为CSV。
+- 不会自动删除历史订单业务数据。
 
-Output:
+输出文件：
 - `archives/<timestamp>/db/audit_log_before_180_days.csv`
 - `archives/<timestamp>/db/old_order_candidates_before_730_days.csv`
 - `archives/<timestamp>/meta/archive.json`
 
-Dry run:
+试运行，不删除数据：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\archive-monthly.ps1 -DryRun
 ```
 
-## Install monthly archive task
+## 安装月度归档任务
 
 ```powershell
 cd D:\Code
 powershell -ExecutionPolicy Bypass -File .\scripts\install-archive-task.ps1 -MonthlyAt "03:00" -DayOfMonth 1
 ```
 
-This creates Windows Task Scheduler task `QuoteSystemMonthlyArchive`.
+这会创建Windows计划任务 `QuoteSystemMonthlyArchive`。
 
-Disable it:
+禁用任务：
 
 ```powershell
 Unregister-ScheduledTask -TaskName QuoteSystemMonthlyArchive -Confirm:$false
 ```
 
-View it:
+查看任务：
 
 ```powershell
 Get-ScheduledTask -TaskName QuoteSystemMonthlyArchive

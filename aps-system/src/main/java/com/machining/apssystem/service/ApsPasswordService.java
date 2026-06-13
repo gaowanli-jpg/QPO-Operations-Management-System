@@ -11,7 +11,7 @@ import java.util.HexFormat;
 
 @Service
 public class ApsPasswordService {
-    private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
+    private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
 
     public String hashPassword(String rawPassword) {
         if (rawPassword == null || rawPassword.isBlank()) {

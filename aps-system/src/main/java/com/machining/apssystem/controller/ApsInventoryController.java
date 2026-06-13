@@ -1,5 +1,6 @@
 package com.machining.apssystem.controller;
 
+import com.machining.apssystem.config.RequireRole;
 import com.machining.apssystem.dto.ApsMaterialInventoryDTO;
 import com.machining.apssystem.dto.ApsMaterialLockDTO;
 import com.machining.apssystem.dto.ApsMaterialShortageDTO;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@RequireRole({"ADMIN"})
 @RequestMapping("/api/aps/inventory")
 public class ApsInventoryController {
     @Autowired

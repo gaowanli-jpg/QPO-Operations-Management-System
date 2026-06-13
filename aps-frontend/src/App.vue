@@ -1,9 +1,13 @@
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { Box, Cpu, DataBoard, Document, OfficeBuilding, SetUp, Tickets, Tools, User } from '@element-plus/icons-vue'
+import { request } from './api'
+import { authState, clearAuth, updateAuthUser } from './auth'
 
 const route = useRoute()
+const router = useRouter()
 
 const menus = [
   { path: '/sync', label: 'ERP 同步', icon: DataBoard },
@@ -45,13 +49,92 @@ const menus = [
 
 const pageTitle = computed(() => route.meta?.title || 'APS')
 const activeMenu = computed(() => route.path)
+const isLoginPage = computed(() => route.path === '/login')
+const displayName = computed(() => authState.user?.displayName || authState.user?.username || '未登录')
+const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
+const roleName = computed(() => ({
+  ADMIN: '管理员'
+}[authState.user?.role] || '未知角色'))
+const mustChangePassword = computed(() => !!authState.user?.forcePasswordChange)
 const defaultOpeneds = menus
   .filter((menu) => menu.children)
   .map((menu) => menu.path)
+
+const passwordVisible = ref(false)
+const forcePasswordMode = ref(false)
+const passwordSaving = ref(false)
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+const resetPasswordForm = () => {
+  Object.assign(passwordForm, {
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
+}
+
+const openPasswordDialog = (force = false) => {
+  forcePasswordMode.value = force
+  resetPasswordForm()
+  passwordVisible.value = true
+}
+
+watch(mustChangePassword, (value) => {
+  if (value && !isLoginPage.value) {
+    openPasswordDialog(true)
+  }
+}, { immediate: true })
+
+const changePassword = async () => {
+  if (!passwordForm.oldPassword) {
+    ElMessage.warning('请输入原密码')
+    return
+  }
+  if (!passwordForm.newPassword || passwordForm.newPassword.length < 8) {
+    ElMessage.warning('新密码至少 8 位')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  passwordSaving.value = true
+  try {
+    await request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(passwordForm)
+    })
+    updateAuthUser({ forcePasswordChange: false })
+    ElMessage.success('密码已修改')
+    passwordVisible.value = false
+    forcePasswordMode.value = false
+    resetPasswordForm()
+  } catch (err) {
+    ElMessage.error(err.message || '密码修改失败')
+  } finally {
+    passwordSaving.value = false
+  }
+}
+
+const logout = async () => {
+  try {
+    await request('/api/auth/logout', { method: 'POST' })
+  } catch {
+    // 本地退出不依赖服务端响应。
+  } finally {
+    clearAuth()
+    router.replace('/login')
+  }
+}
 </script>
 
 <template>
-  <el-container class="aps-layout">
+  <router-view v-if="isLoginPage" />
+  <el-container v-else class="aps-layout">
     <el-aside width="236px" class="aps-sidebar">
       <div class="brand">
         <span class="brand-mark">APS</span>
@@ -101,6 +184,12 @@ const defaultOpeneds = menus
           <p class="eyebrow">APS</p>
           <h1>{{ pageTitle }}</h1>
         </div>
+        <div class="header-right">
+          <el-avatar size="small">{{ userInitial }}</el-avatar>
+          <span class="username">{{ displayName }}（{{ roleName }}）</span>
+          <el-button text type="primary" @click="openPasswordDialog(false)">修改密码</el-button>
+          <el-button text type="primary" @click="logout">退出</el-button>
+        </div>
       </el-header>
 
       <el-main class="workspace">
@@ -108,4 +197,31 @@ const defaultOpeneds = menus
       </el-main>
     </el-container>
   </el-container>
+
+  <el-dialog
+    v-model="passwordVisible"
+    :title="forcePasswordMode ? '首次使用请修改密码' : '修改密码'"
+    width="440px"
+    :close-on-click-modal="!forcePasswordMode"
+    :close-on-press-escape="!forcePasswordMode"
+    :show-close="!forcePasswordMode"
+  >
+    <el-alert
+      v-if="forcePasswordMode"
+      title="当前账号使用初始密码或管理员重置密码，必须修改后才能继续使用系统。"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="password-alert"
+    />
+    <form class="form-grid user-dialog-form" @submit.prevent="changePassword">
+      <label>原密码<el-input v-model="passwordForm.oldPassword" type="password" show-password autocomplete="current-password" /></label>
+      <label>新密码<el-input v-model="passwordForm.newPassword" type="password" show-password autocomplete="new-password" /></label>
+      <label>确认密码<el-input v-model="passwordForm.confirmPassword" type="password" show-password autocomplete="new-password" /></label>
+    </form>
+    <template #footer>
+      <el-button v-if="!forcePasswordMode" @click="passwordVisible = false">取消</el-button>
+      <el-button type="primary" :loading="passwordSaving" @click="changePassword">保存</el-button>
+    </template>
+  </el-dialog>
 </template>

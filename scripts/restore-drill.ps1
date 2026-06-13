@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BackupDir,
     [string]$ProjectRoot = "D:\Code",
+    [string]$EnvFile = "",
     [string]$ContainerName = "",
     [string]$Image = "postgres:15"
 )
@@ -38,16 +39,20 @@ function Resolve-Setting {
 }
 
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+if (-not $EnvFile) {
+    $EnvFile = Join-Path $ProjectRoot "erp.env"
+}
+$EnvFile = (Resolve-Path $EnvFile).Path
 $dbDump = Join-Path $BackupDir "db\postgres.sql"
 $metaFile = Join-Path $BackupDir "meta\backup.json"
 if (-not (Test-Path $dbDump)) {
     throw "Database backup file not found: $dbDump"
 }
 
-$envFile = Read-DotEnv (Join-Path $ProjectRoot ".env")
-$dbUser = Resolve-Setting $envFile "POSTGRES_USER" "postgres"
-$dbName = Resolve-Setting $envFile "POSTGRES_DB" "postgres"
-$dbPassword = Resolve-Setting $envFile "POSTGRES_PASSWORD" "123456"
+$envValues = Read-DotEnv $EnvFile
+$dbUser = Resolve-Setting $envValues "POSTGRES_USER" "postgres"
+$dbName = Resolve-Setting $envValues "POSTGRES_DB" "postgres"
+$dbPassword = Resolve-Setting $envValues "POSTGRES_PASSWORD" "123456"
 if (Test-Path $metaFile) {
     $meta = Get-Content $metaFile -Raw | ConvertFrom-Json
     if ($meta.databaseUser) {
@@ -93,7 +98,7 @@ try {
         throw "Restore drill failed while loading dump."
     }
 
-    $checkSql = "select 'order_rfq' as table_name, count(*) from order_rfq union all select 'item_quote_version', count(*) from item_quote_version union all select 'dict_material', count(*) from dict_material union all select 'dict_process', count(*) from dict_process union all select 'inventory_master', count(*) from inventory_master order by table_name;"
+    $checkSql = "select 'order_rfq' as table_name, count(*) from order_rfq union all select 'item_quote_version', count(*) from item_quote_version union all select 'order_delivery_ticket', count(*) from order_delivery_ticket union all select 'order_process_sheet', count(*) from order_process_sheet union all select 'dict_material', count(*) from dict_material union all select 'dict_process', count(*) from dict_process union all select 'erp_user', count(*) from erp_user order by table_name;"
     docker exec $ContainerName psql -U $dbUser -d $dbName -c $checkSql
     if ($LASTEXITCODE -ne 0) {
         throw "Restore drill verification query failed."

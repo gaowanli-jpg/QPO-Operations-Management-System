@@ -1,36 +1,36 @@
-# Backup Flow
+# ERP备份与恢复说明
 
-## Manual backup
+## 手动备份
 ```powershell
 cd D:\Code
 powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1
 ```
 
-## Prune old backups
+## 清理旧备份
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -PruneOld -KeepDays 14
 ```
 
-## Restore from a backup
-This overwrites the target Docker database, so it requires `-Force`.
+## 从备份恢复
+恢复会覆盖目标Docker数据库，所以必须显式添加 `-Force`。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir "D:\Code\backups\20260517_020000" -Force
 ```
 
-## Restore drill without touching the business database
+## 不影响业务库的恢复演练
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir "D:\Code\backups\20260517_020000"
 ```
 
-## Install daily scheduled backup
+## 安装每日定时备份
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-backup-task.ps1 -DailyAt "02:00"
 ```
 
-## Backup contents
-- `db/postgres.sql`: PostgreSQL logical backup
-- `uploads/`: drawings and uploaded files
-- `meta/backup.json`: backup metadata
+## 备份内容
+- `db/postgres.sql`：PostgreSQL逻辑备份。
+- `uploads/`：图纸和上传文件。
+- `meta/backup.json`：备份元数据。
 
-The scripts read `POSTGRES_USER`, `POSTGRES_DB`, and `POSTGRES_PASSWORD` from `.env` first, then fall back to the local development defaults.
+脚本会优先从 `erp.env` 读取 `POSTGRES_USER`、`POSTGRES_DB`、`POSTGRES_PASSWORD`，读取不到时才使用本地开发默认值。
