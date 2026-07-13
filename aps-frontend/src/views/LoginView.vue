@@ -28,8 +28,8 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { request } from '../api'
 import { setAuth } from '../auth'
+import { login } from '../services/authApi'
 
 const router = useRouter()
 const route = useRoute()
@@ -50,10 +50,7 @@ const handleLogin = async () => {
   await formRef.value?.validate()
   loading.value = true
   try {
-    const response = await request('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(form)
-    })
+    const response = await login({ ...form })
     setAuth(response.token, response.user)
     ElMessage.success(response.message || '登录成功')
     router.replace(route.query.redirect || '/sync')

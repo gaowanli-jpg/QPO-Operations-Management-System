@@ -1,6 +1,15 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { request } from '../api'
+import {
+  addPartStock,
+  createPartInventory,
+  deletePartInventory,
+  listPartCustomers,
+  listPartInventoryPage,
+  listPartPending,
+  modifyPartInventory,
+  transferPartPending
+} from '../services/inventoryApi'
 import { field, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 
@@ -43,7 +52,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadCustomers = async () => {
-  customers.value = await request('/api/aps/inventory/parts/customers')
+  customers.value = await listPartCustomers()
 }
 
 const loadInventory = async () => {
@@ -58,7 +67,7 @@ const loadInventory = async () => {
     pageSize: String(pageSize.value)
   })
   if (keyword.value) query.set('keyword', keyword.value)
-  const result = await request(`/api/aps/inventory/parts/page?${query}`)
+  const result = await listPartInventoryPage(query)
   partInventory.value = result.records || []
   total.value = result.total || 0
 }
@@ -90,16 +99,13 @@ const createInventory = async () => {
   }
   await run(async () => {
     try {
-      await request('/api/aps/inventory/parts', {
-        method: 'POST',
-        body: JSON.stringify({
-          customerName: selectedCustomer.value,
-          partNo: createForm.partNo.trim(),
-          version: createForm.version.trim(),
-          inStockQty: 0,
-          inProductionQty: 0,
-          remark: createForm.remark.trim()
-        })
+      await createPartInventory({
+        customerName: selectedCustomer.value,
+        partNo: createForm.partNo.trim(),
+        version: createForm.version.trim(),
+        inStockQty: 0,
+        inProductionQty: 0,
+        remark: createForm.remark.trim()
       })
     } catch (err) {
       if (err?.status === 409) {
@@ -130,7 +136,7 @@ const refreshPendingRows = async () => {
     pendingRows.value = []
     return
   }
-  pendingRows.value = await request(`/api/aps/inventory/parts/${activeRow.value.id}/pending`)
+  pendingRows.value = await listPartPending(activeRow.value.id)
 }
 
 const refreshActiveRow = async () => {
@@ -153,14 +159,11 @@ const submitAddStock = async () => {
     return
   }
   await run(async () => {
-    await request('/api/aps/inventory/parts/add-stock', {
-      method: 'POST',
-      body: JSON.stringify({
-        inventoryId: activeRow.value.id,
-        stockType: stockMode.value,
-        qty: Number(stockForm.qty || 0),
-        pendingRefNo: stockForm.pendingRefNo.trim()
-      })
+    await addPartStock({
+      inventoryId: activeRow.value.id,
+      stockType: stockMode.value,
+      qty: Number(stockForm.qty || 0),
+      pendingRefNo: stockForm.pendingRefNo.trim()
     })
     Object.assign(stockForm, { qty: 1, pendingRefNo: '' })
     await refreshActiveRow()
@@ -174,13 +177,10 @@ const submitTransfer = async () => {
     return
   }
   await run(async () => {
-    await request('/api/aps/inventory/parts/transfer-pending', {
-      method: 'POST',
-      body: JSON.stringify({
-        inventoryId: activeRow.value.id,
-        pendingRefNo: transferForm.pendingRefNo,
-        qty: Number(transferForm.qty || 0)
-      })
+    await transferPartPending({
+      inventoryId: activeRow.value.id,
+      pendingRefNo: transferForm.pendingRefNo,
+      qty: Number(transferForm.qty || 0)
     })
     Object.assign(transferForm, { pendingRefNo: '', qty: 1 })
     await refreshActiveRow()
@@ -199,12 +199,9 @@ const submitModifyInStock = async () => {
     return
   }
   await run(async () => {
-    await request('/api/aps/inventory/parts/modify', {
-      method: 'POST',
-      body: JSON.stringify({
-        inventoryId: activeRow.value.id,
-        inStockQty: Number(modifyForm.inStockQty || 0)
-      })
+    await modifyPartInventory({
+      inventoryId: activeRow.value.id,
+      inStockQty: Number(modifyForm.inStockQty || 0)
     })
     await refreshActiveRow()
   }, '已入库库存已修改')
@@ -217,13 +214,10 @@ const submitModifyPending = async () => {
     return
   }
   await run(async () => {
-    await request('/api/aps/inventory/parts/modify', {
-      method: 'POST',
-      body: JSON.stringify({
-        inventoryId: activeRow.value.id,
-        pendingRefNo: modifyForm.pendingRefNo,
-        pendingQty: Number(modifyForm.pendingQty || 0)
-      })
+    await modifyPartInventory({
+      inventoryId: activeRow.value.id,
+      pendingRefNo: modifyForm.pendingRefNo,
+      pendingQty: Number(modifyForm.pendingQty || 0)
     })
     await refreshActiveRow()
   }, '在产库存已修改')
@@ -232,7 +226,7 @@ const submitModifyPending = async () => {
 const remove = async (id) => {
   if (!window.confirm('确认删除这条零件库存？已锁定库存不能删除。')) return
   await run(async () => {
-    await request(`/api/aps/inventory/parts/${id}`, { method: 'DELETE' })
+    await deletePartInventory(id)
     if (activeRow.value?.id === id) {
       activeRow.value = null
       pendingRows.value = []

@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Box, Cpu, DataBoard, Document, OfficeBuilding, SetUp, Tickets, Tools, User } from '@element-plus/icons-vue'
-import { request } from './api'
+import { changePassword as changePasswordApi, logout as logoutApi } from './services/authApi'
 import { authState, clearAuth, updateAuthUser } from './auth'
 
 const route = useRoute()
@@ -104,10 +104,7 @@ const changePassword = async () => {
   }
   passwordSaving.value = true
   try {
-    await request('/api/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify(passwordForm)
-    })
+    await changePasswordApi(passwordForm)
     updateAuthUser({ forcePasswordChange: false })
     ElMessage.success('密码已修改')
     passwordVisible.value = false
@@ -122,7 +119,7 @@ const changePassword = async () => {
 
 const logout = async () => {
   try {
-    await request('/api/auth/logout', { method: 'POST' })
+    await logoutApi()
   } catch {
     // 本地退出不依赖服务端响应。
   } finally {

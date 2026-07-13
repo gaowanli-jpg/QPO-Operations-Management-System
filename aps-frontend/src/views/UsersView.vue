@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '../api'
+import { createUser, deleteUser as deleteUserApi, listUsers, updateUser } from '../services/userApi'
 import ApsStatusTag from '../components/ApsStatusTag.vue'
 
 const users = ref([])
@@ -45,7 +45,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadUsers = async () => {
-  users.value = await request('/api/aps/admin/users')
+  users.value = await listUsers()
 }
 
 const resetForm = () => {
@@ -97,8 +97,8 @@ const saveUser = async () => {
     }
     if (form.password) payload.password = form.password
     const response = editingId.value
-      ? await request(`/api/aps/admin/users/${editingId.value}`, { method: 'PUT', body: JSON.stringify(payload) })
-      : await request('/api/aps/admin/users', { method: 'POST', body: JSON.stringify(payload) })
+      ? await updateUser(editingId.value, payload)
+      : await createUser(payload)
     notice.value = response?.message || '保存成功'
     dialogVisible.value = false
     await loadUsers()
@@ -124,10 +124,7 @@ const resetPassword = async () => {
   error.value = ''
   notice.value = ''
   try {
-    const response = await request(`/api/aps/admin/users/${passwordTarget.value.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ password: newPassword.value })
-    })
+    const response = await updateUser(passwordTarget.value.id, { password: newPassword.value })
     notice.value = response?.message || '密码已重置'
     passwordVisible.value = false
     await loadUsers()
@@ -141,10 +138,7 @@ const resetPassword = async () => {
 const toggleEnabled = async (row) => {
   await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}账号 ${row.username}？`, '确认操作')
   await run(async () => {
-    const response = await request(`/api/aps/admin/users/${row.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ enabled: !row.enabled })
-    })
+    const response = await updateUser(row.id, { enabled: !row.enabled })
     await loadUsers()
     notice.value = response?.message || '状态已更新'
   })
@@ -165,7 +159,7 @@ const deleteUser = async (row) => {
     }
   )
   await run(async () => {
-    const response = await request(`/api/aps/admin/users/${row.id}`, { method: 'DELETE' })
+    const response = await deleteUserApi(row.id)
     await loadUsers()
     notice.value = response?.message || '用户已删除'
   })

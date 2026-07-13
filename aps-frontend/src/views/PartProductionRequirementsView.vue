@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { request } from '../api'
+import { listPartProductionRequirements } from '../services/inventoryApi'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
@@ -24,8 +24,9 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadData = async () => {
-  const query = status.value ? `?status=${encodeURIComponent(status.value)}&limit=200` : '?limit=200'
-  rows.value = await request(`/api/aps/inventory/parts/production-requirements${query}`)
+  const params = { limit: '200' }
+  if (status.value) params.status = status.value
+  rows.value = await listPartProductionRequirements(params)
 }
 
 onMounted(() => run(loadData))

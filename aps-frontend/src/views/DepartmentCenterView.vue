@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { request } from '../api'
+import { listDepartments } from '../services/departmentApi'
+import { getDepartmentCenterTask, listDepartmentCenterTasks } from '../services/taskApi'
 import { customerProjectText, field, label, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
@@ -35,7 +36,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadDepartments = async () => {
-  departments.value = await request('/api/aps/pmc/departments')
+  departments.value = await listDepartments()
 }
 
 const loadTasks = async () => {
@@ -45,7 +46,7 @@ const loadTasks = async () => {
     pageSize: String(pageSize.value)
   })
   if (departmentId.value) query.set('departmentId', departmentId.value)
-  const result = await request(`/api/aps/department-center/tasks/page?${query}`)
+  const result = await listDepartmentCenterTasks(query)
   tasks.value = result.records || []
   total.value = result.total || 0
   if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
@@ -56,7 +57,7 @@ const loadTasks = async () => {
 
 const loadTaskDetail = async (id) => {
   selectedTaskId.value = id
-  taskDetail.value = await request(`/api/aps/department-center/tasks/${id}`)
+  taskDetail.value = await getDepartmentCenterTask(id)
 }
 
 const resetDetail = () => {

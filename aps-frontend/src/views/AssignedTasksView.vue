@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { request } from '../api'
+import { getPmcTask, listPmcTasks, releaseAssignment as releaseTaskAssignment } from '../services/taskApi'
 import { customerProjectText, field, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
@@ -38,7 +38,7 @@ const loadTasks = async () => {
     page: String(page.value),
     pageSize: String(pageSize.value)
   })
-  const result = await request(`/api/aps/pmc/tasks/page?${query}`)
+  const result = await listPmcTasks(query)
   tasks.value = result.records || []
   total.value = result.total || 0
   if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
@@ -49,13 +49,13 @@ const loadTasks = async () => {
 
 const loadTaskDetail = async (id) => {
   selectedTaskId.value = id
-  taskDetail.value = await request(`/api/aps/pmc/tasks/${id}`)
+  taskDetail.value = await getPmcTask(id)
 }
 
 const releaseAssignment = async () => {
   if (!selectedTaskId.value) return
   await run(async () => {
-    await request(`/api/aps/pmc/tasks/${selectedTaskId.value}/release-assignment`, { method: 'POST' })
+    await releaseTaskAssignment(selectedTaskId.value)
     selectedTaskId.value = null
     taskDetail.value = null
     await loadTasks()

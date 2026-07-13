@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { request } from '../api'
+import { listMaterialShortages } from '../services/inventoryApi'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
@@ -23,7 +23,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadData = async () => {
-  rows.value = await request('/api/aps/inventory/materials/shortages?limit=200')
+  rows.value = await listMaterialShortages({ limit: '200' })
 }
 
 onMounted(() => run(loadData))

@@ -1,6 +1,12 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { apiUrl, request } from '../api'
+import {
+  confirmPartLock,
+  exportPartLocks,
+  listPartCustomers,
+  listPartLocks,
+  releasePartLock
+} from '../services/inventoryApi'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
@@ -40,17 +46,17 @@ const run = async (fn, successMessage = '') => {
 const loadData = async () => {
   const params = new URLSearchParams({ limit: '200' })
   if (customerName.value) params.set('customerName', customerName.value)
-  rows.value = await request(`/api/aps/inventory/parts/locks?${params.toString()}`)
+  rows.value = await listPartLocks(params)
 }
 
 const loadCustomers = async () => {
-  customerOptions.value = await request('/api/aps/inventory/parts/customers')
+  customerOptions.value = await listPartCustomers()
 }
 
 const confirmLock = async (id) => {
   if (!id) return
   await run(async () => {
-    await request(`/api/aps/inventory/parts/locks/${id}/confirm`, { method: 'POST' })
+    await confirmPartLock(id)
     await loadData()
   }, '锁定已确认')
 }
@@ -59,7 +65,7 @@ const releaseLock = async (id) => {
   if (!id) return
   if (!window.confirm('确认释放这一条零件库存锁定？释放后库存会回滚，需生产数量会增加。')) return
   await run(async () => {
-    await request(`/api/aps/inventory/parts/locks/${id}/release`, { method: 'POST' })
+    await releasePartLock(id)
     await loadData()
   }, '锁定已释放')
 }
@@ -87,34 +93,16 @@ const exportData = async () => {
   try {
     const params = new URLSearchParams({ limit: '200' })
     if (customerName.value) params.set('customerName', customerName.value)
-    const response = await fetch(apiUrl(`/api/aps/inventory/parts/locks/export?${params.toString()}`))
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(text || `导出失败：${response.status}`)
+    const result = await exportPartLocks(params)
+    if (!result.success) {
+      throw new Error(result.message || '????')
     }
-    const blob = await response.blob()
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = exportFileName(response.headers.get('Content-Disposition'))
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(link.href)
-    notice.value = '导出已生成'
+    notice.value = '?????'
   } catch (err) {
-    error.value = err.message || '导出失败'
+    error.value = err.message || '????'
   } finally {
     loading.value = false
   }
-}
-
-const exportFileName = (contentDisposition) => {
-  const header = contentDisposition || ''
-  const encodedMatch = header.match(/filename\*=UTF-8''([^;]+)/)
-  if (encodedMatch?.[1]) return decodeURIComponent(encodedMatch[1])
-  const plainMatch = header.match(/filename="?([^";]+)"?/)
-  if (plainMatch?.[1]) return plainMatch[1]
-  return '零件锁定记录.xlsx'
 }
 
 const printData = () => {

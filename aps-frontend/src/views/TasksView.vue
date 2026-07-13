@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { request } from '../api'
+import { listDepartments } from '../services/departmentApi'
+import { assignDepartment, deleteTasks, getPmcTask, listPmcTasks, listTaskCustomers } from '../services/taskApi'
 import { customerProjectText, field, label, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
@@ -63,7 +64,7 @@ const loadTasks = async () => {
   })
   if (customerName.value) query.set('customerName', customerName.value)
   if (sortMode.value) query.set('sortMode', sortMode.value)
-  const result = await request(`/api/aps/pmc/tasks/page?${query}`)
+  const result = await listPmcTasks(query)
   tasks.value = result.records || []
   total.value = result.total || 0
   if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
@@ -76,17 +77,17 @@ const loadTasks = async () => {
 }
 
 const loadDepartments = async () => {
-  departments.value = await request('/api/aps/pmc/departments')
+  departments.value = await listDepartments()
 }
 
 const loadCustomers = async () => {
-  customerOptions.value = await request('/api/aps/pmc/tasks/customers?assignmentStatus=PENDING')
+  customerOptions.value = await listTaskCustomers({ assignmentStatus: 'PENDING' })
 }
 
 const openSingleAssignment = async (id) => {
   if (!id) return
   await run(async () => {
-    const detail = await request(`/api/aps/pmc/tasks/${id}`)
+    const detail = await getPmcTask(id)
     assignmentDetail.value = detail
     assignmentModal.open = true
     assignmentModal.mode = 'single'
@@ -124,14 +125,11 @@ const submitAssignment = async () => {
   const ids = [...assignmentModal.ids]
   const assignedCount = ids.length
   await run(async () => {
-    await request('/api/aps/pmc/tasks/assign-department', {
-      method: 'POST',
-      body: JSON.stringify({
-        ids,
-        departmentId: Number(assignmentForm.departmentId),
-        assignedBy: assignmentForm.assignedBy,
-        remark: assignmentForm.remark
-      })
+    await assignDepartment({
+      ids,
+      departmentId: Number(assignmentForm.departmentId),
+      assignedBy: assignmentForm.assignedBy,
+      remark: assignmentForm.remark
     })
     closeAssignmentModal()
     selectedTaskIds.value = selectedTaskIds.value.filter((id) => !ids.includes(id))
@@ -185,10 +183,7 @@ const deleteSelectedTasks = async () => {
   const ids = [...selectedTaskIds.value]
   if (!window.confirm(`确认删除 ${ids.length} 条 APS 任务？删除后同一 ERP 提单可重新同步。`)) return
   await run(async () => {
-    await request('/api/aps/pmc/tasks', {
-      method: 'DELETE',
-      body: JSON.stringify({ ids })
-    })
+    await deleteTasks(ids)
     if (assignmentModal.ids.some((id) => ids.includes(id))) {
       closeAssignmentModal()
     }

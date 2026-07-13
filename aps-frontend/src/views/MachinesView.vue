@@ -1,6 +1,13 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { request } from '../api'
+import {
+  createMachine,
+  createMachineCapability,
+  deleteMachine as deleteMachineApi,
+  deleteMachineCapability,
+  listMachineSetupData,
+  updateMachine as updateMachineApi
+} from '../services/machineApi'
 import ApsStatusTag from '../components/ApsStatusTag.vue'
 
 const PROCESS_TYPES = [
@@ -133,16 +140,11 @@ const syncSelectedDepartment = () => {
 }
 
 const loadData = async () => {
-  const [departmentRows, machineRows, capabilityRows, processRows] = await Promise.all([
-    request('/api/aps/pmc/departments'),
-    request('/api/aps/pmc/machines'),
-    request('/api/aps/pmc/machine-capabilities'),
-    request('/api/aps/processes')
-  ])
-  departments.value = departmentRows
-  machines.value = machineRows
-  capabilities.value = capabilityRows
-  processes.value = processRows
+  const setupData = await listMachineSetupData()
+  departments.value = setupData.departments
+  machines.value = setupData.machines
+  capabilities.value = setupData.capabilities
+  processes.value = setupData.processes
   syncSelectedDepartment()
   syncDrafts()
 }
@@ -168,15 +170,12 @@ const saveMachine = async () => {
   }
   await run(async () => {
     try {
-      await request('/api/aps/pmc/machines', {
-        method: 'POST',
-        body: JSON.stringify({
-          departmentId: Number(selectedDepartmentId.value),
-          machineCode: machineForm.machineCode.trim(),
-          machineName: machineForm.machineName.trim(),
-          machineStatus: machineForm.machineStatus,
-          remark: machineForm.remark.trim()
-        })
+      await createMachine({
+        departmentId: Number(selectedDepartmentId.value),
+        machineCode: machineForm.machineCode.trim(),
+        machineName: machineForm.machineName.trim(),
+        machineStatus: machineForm.machineStatus,
+        remark: machineForm.remark.trim()
       })
     } catch (err) {
       if (err?.status === 409) {
@@ -198,15 +197,12 @@ const updateMachine = async (machine) => {
   }
   await run(async () => {
     try {
-      await request(`/api/aps/pmc/machines/${machine.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          departmentId: Number(machine.department_id),
-          machineCode: String(draft.machineCode || '').trim(),
-          machineName: String(draft.machineName || '').trim(),
-          machineStatus: draft.machineStatus,
-          remark: String(draft.remark || '').trim()
-        })
+      await updateMachineApi(machine.id, {
+        departmentId: Number(machine.department_id),
+        machineCode: String(draft.machineCode || '').trim(),
+        machineName: String(draft.machineName || '').trim(),
+        machineStatus: draft.machineStatus,
+        remark: String(draft.remark || '').trim()
       })
     } catch (err) {
       if (err?.status === 409) {
@@ -221,7 +217,7 @@ const updateMachine = async (machine) => {
 const removeMachine = async (machine) => {
   if (!window.confirm(`确认删除机台“${machine.machine_name}”？相关能力会一起删除。`)) return
   await run(async () => {
-    await request(`/api/aps/pmc/machines/${machine.id}`, { method: 'DELETE' })
+    await deleteMachineApi(machine.id)
     await loadData()
   }, '机台已删除')
 }
@@ -234,13 +230,10 @@ const saveCapability = async (machine) => {
   }
   await run(async () => {
     try {
-      await request('/api/aps/pmc/machine-capabilities', {
-        method: 'POST',
-        body: JSON.stringify({
-          machineId: machine.id,
-          processId: Number(draft.processId),
-          remark: draft.remark
-        })
+      await createMachineCapability({
+        machineId: machine.id,
+        processId: Number(draft.processId),
+        remark: draft.remark
       })
     } catch (err) {
       if (err?.status === 409) {
@@ -266,7 +259,7 @@ const resetCapabilityProcess = (machineId) => {
 const removeCapability = async (capability) => {
   if (!window.confirm(`确认删除“${capability.process_name}”能力？`)) return
   await run(async () => {
-    await request(`/api/aps/pmc/machine-capabilities/${capability.id}`, { method: 'DELETE' })
+    await deleteMachineCapability(capability.id)
     await loadData()
   }, '机台能力已删除')
 }

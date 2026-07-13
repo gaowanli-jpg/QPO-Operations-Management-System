@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { request } from '../api'
+import { listProcesses, syncProcessesFromErp } from '../services/processApi'
 
 const PROCESS_TYPES = [
   { value: 'WORK_HOUR', label: '工时工艺' },
@@ -40,13 +40,12 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadProcesses = async () => {
-  processes.value = await request('/api/aps/processes')
+  processes.value = await listProcesses()
 }
 
 const syncProcesses = async (processType = '') => {
   await run(async () => {
-    const suffix = processType ? `?processType=${encodeURIComponent(processType)}` : ''
-    const result = await request(`/api/aps/processes/sync-from-erp${suffix}`, { method: 'POST' })
+    const result = await syncProcessesFromErp(processType)
     await loadProcesses()
     notice.value = `已同步 ${result.importedCount || 0} 项工艺`
   })

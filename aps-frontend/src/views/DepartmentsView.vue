@@ -1,6 +1,12 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { request } from '../api'
+import {
+  adjustDepartmentCapacity,
+  createDepartment,
+  deleteDepartment,
+  listDepartments,
+  resetDepartmentCapacity
+} from '../services/departmentApi'
 import { number } from '../helpers'
 import ApsStatusTag from '../components/ApsStatusTag.vue'
 
@@ -43,7 +49,7 @@ const syncDrafts = () => {
 }
 
 const loadData = async () => {
-  departments.value = await request('/api/aps/pmc/departments')
+  departments.value = await listDepartments()
   syncDrafts()
 }
 
@@ -58,15 +64,12 @@ const save = async () => {
   }
   await run(async () => {
     try {
-      await request('/api/aps/pmc/departments', {
-        method: 'POST',
-        body: JSON.stringify({
-          departmentName: form.departmentName.trim(),
-          departmentType: form.departmentType,
-          departmentStatus: form.departmentStatus,
-          remark: form.remark.trim(),
-          monthlyAvailableHours: form.monthlyAvailableHours === '' ? null : Number(form.monthlyAvailableHours)
-        })
+      await createDepartment({
+        departmentName: form.departmentName.trim(),
+        departmentType: form.departmentType,
+        departmentStatus: form.departmentStatus,
+        remark: form.remark.trim(),
+        monthlyAvailableHours: form.monthlyAvailableHours === '' ? null : Number(form.monthlyAvailableHours)
       })
     } catch (err) {
       if (err?.status === 409) {
@@ -86,10 +89,7 @@ const adjustCapacity = async (department, direction) => {
     return
   }
   await run(async () => {
-    await request(`/api/aps/pmc/departments/${department.id}/adjust-capacity`, {
-      method: 'POST',
-      body: JSON.stringify({ deltaHours: direction * hours })
-    })
+    await adjustDepartmentCapacity(department.id, direction * hours)
     await loadData()
   }, direction > 0 ? '月可用工时已增加' : '月可用工时已减少')
 }
@@ -102,10 +102,7 @@ const resetCapacity = async (department) => {
   }
   if (!window.confirm(`确认重置“${department.department_name}”的新月容量？已使用工时将清零。`)) return
   await run(async () => {
-    await request(`/api/aps/pmc/departments/${department.id}/reset-capacity`, {
-      method: 'POST',
-      body: JSON.stringify({ monthlyAvailableHours })
-    })
+    await resetDepartmentCapacity(department.id, monthlyAvailableHours)
     await loadData()
   }, '部门月度容量已重置')
 }
@@ -113,7 +110,7 @@ const resetCapacity = async (department) => {
 const remove = async (department) => {
   if (!window.confirm(`确认删除部门“${department.department_name}”？有正在分配任务时不能删除。`)) return
   await run(async () => {
-    await request(`/api/aps/pmc/departments/${department.id}`, { method: 'DELETE' })
+    await deleteDepartment(department.id)
     await loadData()
   }, '部门已删除')
 }

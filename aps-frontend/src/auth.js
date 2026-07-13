@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
-import { API_BASE_URL } from './config'
+import { configureApiAuth } from './api'
+import { getCurrentUser } from './services/authApi'
 
 const TOKEN_KEY = 'aps_token'
 const USER_KEY = 'aps_user'
@@ -55,16 +56,7 @@ export const verifyAuth = async () => {
     return true
   }
   try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${authState.token}`
-      }
-    })
-    if (!response.ok) {
-      clearAuth()
-      return false
-    }
-    const data = await response.json()
+    const data = await getCurrentUser()
     if (!data?.success || !data?.data) {
       clearAuth()
       return false
@@ -84,3 +76,20 @@ export const hasRole = (roles) => {
   if (role === 'ADMIN') return true
   return roles.includes(role)
 }
+
+const redirectToLogin = () => {
+  if (window.location.pathname === '/login') {
+    return
+  }
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.location.assign(`/login?redirect=${encodeURIComponent(current)}`)
+}
+
+configureApiAuth({
+  getToken: () => authState.token,
+  onUnauthorized: () => {
+    clearAuth()
+    redirectToLogin()
+  },
+  onPasswordChangeRequired: () => updateAuthUser({ forcePasswordChange: true })
+})

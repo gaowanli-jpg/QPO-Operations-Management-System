@@ -1,6 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { request } from '../api'
+import {
+  confirmMaterialLock,
+  listMaterialLockCustomers,
+  listMaterialLocks,
+  releaseMaterialLock
+} from '../services/inventoryApi'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
@@ -27,17 +32,17 @@ const run = async (fn, successMessage = '') => {
 const loadData = async () => {
   const params = new URLSearchParams({ limit: '200' })
   if (customerName.value) params.set('customerName', customerName.value)
-  rows.value = await request(`/api/aps/inventory/materials/locks?${params.toString()}`)
+  rows.value = await listMaterialLocks(params)
 }
 
 const loadCustomers = async () => {
-  customerOptions.value = await request('/api/aps/inventory/materials/locks/customers')
+  customerOptions.value = await listMaterialLockCustomers()
 }
 
 const confirmLock = async (id) => {
   if (!id) return
   await run(async () => {
-    await request(`/api/aps/inventory/materials/locks/${id}/confirm`, { method: 'POST' })
+    await confirmMaterialLock(id)
     await loadData()
   }, '锁定已确认')
 }
@@ -46,7 +51,7 @@ const releaseLock = async (id) => {
   if (!id) return
   if (!window.confirm('确认释放这一条材料库存锁定？释放后库存会回滚，材料缺口会增加。')) return
   await run(async () => {
-    await request(`/api/aps/inventory/materials/locks/${id}/release`, { method: 'POST' })
+    await releaseMaterialLock(id)
     await loadData()
   }, '锁定已释放')
 }

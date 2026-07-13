@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { request } from '../api'
 import { field, number } from '../helpers'
+import { deleteTasks, listPmcTasks, syncErpDeliveryItems } from '../services/taskApi'
 import ApsPager from '../components/ApsPager.vue'
 import TaskTable from '../components/TaskTable.vue'
 
@@ -43,7 +43,7 @@ const loadTasks = async () => {
     page: String(page.value),
     pageSize: String(pageSize.value)
   })
-  const result = await request(`/api/aps/pmc/tasks/page?${query}`)
+  const result = await listPmcTasks(query)
   tasks.value = result.records || []
   total.value = result.total || 0
   if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
@@ -57,7 +57,7 @@ const loadTasks = async () => {
 
 const syncErp = async () => {
   await run(async () => {
-    syncResult.value = await request('/api/aps/sync/erp-delivery-items', { method: 'POST' })
+    syncResult.value = await syncErpDeliveryItems()
     await loadTasks()
   }, 'ERP 提单零件同步完成')
 }
@@ -93,10 +93,7 @@ const deleteSelectedTasks = async () => {
   const ids = [...selectedTaskIds.value]
   if (!window.confirm(`确认删除 ${ids.length} 条 APS 任务？删除后同一 ERP 提单可重新同步。`)) return
   await run(async () => {
-    await request('/api/aps/pmc/tasks', {
-      method: 'DELETE',
-      body: JSON.stringify({ ids })
-    })
+    await deleteTasks(ids)
     selectedTaskIds.value = []
     await loadTasks()
   }, `已删除 ${ids.length} 条 APS 任务`)

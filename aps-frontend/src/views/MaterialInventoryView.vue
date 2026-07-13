@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { request } from '../api'
+import { createMaterial, deleteMaterial, listMaterials } from '../services/inventoryApi'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
@@ -32,7 +32,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadData = async () => {
-  materialInventory.value = await request('/api/aps/inventory/materials?limit=200')
+  materialInventory.value = await listMaterials({ limit: '200' })
 }
 
 const save = async () => {
@@ -42,13 +42,10 @@ const save = async () => {
   }
   await run(async () => {
     try {
-      await request('/api/aps/inventory/materials', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...form,
-          stockWeightKg: Number(form.stockWeightKg || 0),
-          safetyStockWeightKg: Number(form.safetyStockWeightKg || 0)
-        })
+      await createMaterial({
+        ...form,
+        stockWeightKg: Number(form.stockWeightKg || 0),
+        safetyStockWeightKg: Number(form.safetyStockWeightKg || 0)
       })
     } catch (err) {
       if (err?.status === 409) {
@@ -63,7 +60,7 @@ const save = async () => {
 
 const remove = async (id) => {
   await run(async () => {
-    await request(`/api/aps/inventory/materials/${id}`, { method: 'DELETE' })
+    await deleteMaterial(id)
     await loadData()
   }, '材料库存已删除')
 }
