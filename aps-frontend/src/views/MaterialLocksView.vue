@@ -1,18 +1,14 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import {
-  confirmMaterialLock,
-  listMaterialLockCustomers,
-  listMaterialLocks,
-  releaseMaterialLock
-} from '../services/inventoryApi'
+import { storeToRefs } from 'pinia'
+import { useInventoryStore } from '../stores/inventoryStore'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const rows = ref([])
-const customerOptions = ref([])
+const inventoryStore = useInventoryStore()
+const { materialLocks: rows, materialLockCustomers: customerOptions } = storeToRefs(inventoryStore)
 const customerName = ref('')
 
 const run = async (fn, successMessage = '') => {
@@ -29,21 +25,20 @@ const run = async (fn, successMessage = '') => {
   }
 }
 
+const materialLockFilters = () => ({ customerName: customerName.value })
+
 const loadData = async () => {
-  const params = new URLSearchParams({ limit: '200' })
-  if (customerName.value) params.set('customerName', customerName.value)
-  rows.value = await listMaterialLocks(params)
+  await inventoryStore.loadMaterialLocks(materialLockFilters())
 }
 
 const loadCustomers = async () => {
-  customerOptions.value = await listMaterialLockCustomers()
+  await inventoryStore.loadMaterialLockCustomers()
 }
 
 const confirmLock = async (id) => {
   if (!id) return
   await run(async () => {
-    await confirmMaterialLock(id)
-    await loadData()
+    await inventoryStore.confirmMaterialLock(id)
   }, '锁定已确认')
 }
 
@@ -51,8 +46,7 @@ const releaseLock = async (id) => {
   if (!id) return
   if (!window.confirm('确认释放这一条材料库存锁定？释放后库存会回滚，材料缺口会增加。')) return
   await run(async () => {
-    await releaseMaterialLock(id)
-    await loadData()
+    await inventoryStore.releaseMaterialLock(id)
   }, '锁定已释放')
 }
 

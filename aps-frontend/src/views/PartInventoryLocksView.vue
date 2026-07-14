@@ -1,19 +1,15 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import {
-  confirmPartLock,
-  exportPartLocks,
-  listPartCustomers,
-  listPartLocks,
-  releasePartLock
-} from '../services/inventoryApi'
+import { storeToRefs } from 'pinia'
+import { exportPartLocks } from '../services/inventoryApi'
+import { useInventoryStore } from '../stores/inventoryStore'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const rows = ref([])
-const customerOptions = ref([])
+const inventoryStore = useInventoryStore()
+const { partLocks: rows, partCustomers: customerOptions } = storeToRefs(inventoryStore)
 const customerName = ref('')
 
 const tableColumns = [
@@ -43,21 +39,20 @@ const run = async (fn, successMessage = '') => {
   }
 }
 
+const partLockFilters = () => ({ customerName: customerName.value })
+
 const loadData = async () => {
-  const params = new URLSearchParams({ limit: '200' })
-  if (customerName.value) params.set('customerName', customerName.value)
-  rows.value = await listPartLocks(params)
+  await inventoryStore.loadPartLocks(partLockFilters())
 }
 
 const loadCustomers = async () => {
-  customerOptions.value = await listPartCustomers()
+  await inventoryStore.loadPartCustomers()
 }
 
 const confirmLock = async (id) => {
   if (!id) return
   await run(async () => {
-    await confirmPartLock(id)
-    await loadData()
+    await inventoryStore.confirmPartLock(id)
   }, '锁定已确认')
 }
 
@@ -65,8 +60,7 @@ const releaseLock = async (id) => {
   if (!id) return
   if (!window.confirm('确认释放这一条零件库存锁定？释放后库存会回滚，需生产数量会增加。')) return
   await run(async () => {
-    await releasePartLock(id)
-    await loadData()
+    await inventoryStore.releasePartLock(id)
   }, '锁定已释放')
 }
 

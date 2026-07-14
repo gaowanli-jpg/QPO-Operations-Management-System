@@ -1,12 +1,14 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { createMaterial, deleteMaterial, listMaterials } from '../services/inventoryApi'
+import { storeToRefs } from 'pinia'
+import { useInventoryStore } from '../stores/inventoryStore'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const materialInventory = ref([])
+const inventoryStore = useInventoryStore()
+const { materials: materialInventory } = storeToRefs(inventoryStore)
 
 const form = reactive({
   materialName: '',
@@ -32,7 +34,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadData = async () => {
-  materialInventory.value = await listMaterials({ limit: '200' })
+  await inventoryStore.loadMaterials()
 }
 
 const save = async () => {
@@ -42,7 +44,7 @@ const save = async () => {
   }
   await run(async () => {
     try {
-      await createMaterial({
+      await inventoryStore.createMaterial({
         ...form,
         stockWeightKg: Number(form.stockWeightKg || 0),
         safetyStockWeightKg: Number(form.safetyStockWeightKg || 0)
@@ -60,8 +62,7 @@ const save = async () => {
 
 const remove = async (id) => {
   await run(async () => {
-    await deleteMaterial(id)
-    await loadData()
+    await inventoryStore.deleteMaterial(id)
   }, '材料库存已删除')
 }
 

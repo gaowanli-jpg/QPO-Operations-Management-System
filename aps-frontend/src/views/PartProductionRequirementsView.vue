@@ -1,12 +1,14 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { listPartProductionRequirements } from '../services/inventoryApi'
+import { storeToRefs } from 'pinia'
+import { useInventoryStore } from '../stores/inventoryStore'
 import DataTable from '../components/DataTable.vue'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const rows = ref([])
+const inventoryStore = useInventoryStore()
+const { partProductionRequirements: rows } = storeToRefs(inventoryStore)
 const status = ref('')
 
 const run = async (fn, successMessage = '') => {
@@ -24,9 +26,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadData = async () => {
-  const params = { limit: '200' }
-  if (status.value) params.status = status.value
-  rows.value = await listPartProductionRequirements(params)
+  await inventoryStore.loadPartProductionRequirements({ status: status.value })
 }
 
 onMounted(() => run(loadData))

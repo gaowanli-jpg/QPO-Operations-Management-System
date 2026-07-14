@@ -1,30 +1,25 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import {
-  addPartStock,
-  createPartInventory,
-  deletePartInventory,
-  listPartCustomers,
-  listPartInventoryPage,
-  listPartPending,
-  modifyPartInventory,
-  transferPartPending
-} from '../services/inventoryApi'
+import { storeToRefs } from 'pinia'
+import { useInventoryStore } from '../stores/inventoryStore'
 import { field, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const customers = ref([])
+const inventoryStore = useInventoryStore()
+const {
+  partCustomers: customers,
+  partInventory,
+  partPage: page,
+  partPageSize: pageSize,
+  partTotal: total,
+  activePartRow: activeRow,
+  partPendingRows: pendingRows
+} = storeToRefs(inventoryStore)
 const selectedCustomer = ref('')
 const keyword = ref('')
-const partInventory = ref([])
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
-const activeRow = ref(null)
-const pendingRows = ref([])
 const stockMode = ref('IN_STOCK')
 
 const createForm = reactive({ partNo: '', version: '', remark: '' })
@@ -52,24 +47,19 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadCustomers = async () => {
-  customers.value = await listPartCustomers()
+  await inventoryStore.loadPartCustomers()
 }
 
 const loadInventory = async () => {
   if (!selectedCustomer.value) {
-    partInventory.value = []
-    total.value = 0
+    inventoryStore.partInventory = []
+    inventoryStore.partTotal = 0
     return
   }
-  const query = new URLSearchParams({
+  await inventoryStore.loadPartInventoryPage({
     customerName: selectedCustomer.value,
-    page: String(page.value),
-    pageSize: String(pageSize.value)
+    keyword: keyword.value
   })
-  if (keyword.value) query.set('keyword', keyword.value)
-  const result = await listPartInventoryPage(query)
-  partInventory.value = result.records || []
-  total.value = result.total || 0
 }
 
 const loadData = async () => {
@@ -78,8 +68,7 @@ const loadData = async () => {
 
 const selectCustomer = async () => {
   page.value = 1
-  activeRow.value = null
-  pendingRows.value = []
+  inventoryStore.clearActivePartRow()
   await run(loadInventory)
 }
 
@@ -99,7 +88,7 @@ const createInventory = async () => {
   }
   await run(async () => {
     try {
-      await createPartInventory({
+      await inventoryStore.createPartInventory({
         customerName: selectedCustomer.value,
         partNo: createForm.partNo.trim(),
         version: createForm.version.trim(),
@@ -119,7 +108,7 @@ const createInventory = async () => {
 }
 
 const setActiveRow = async (row) => {
-  activeRow.value = row
+  inventoryStore.setActivePartRow(row)
   stockMode.value = 'IN_STOCK'
   Object.assign(stockForm, { qty: 1, pendingRefNo: '' })
   Object.assign(transferForm, { pendingRefNo: '', qty: 1 })
@@ -133,19 +122,14 @@ const setActiveRow = async (row) => {
 
 const refreshPendingRows = async () => {
   if (!activeRow.value?.id) {
-    pendingRows.value = []
+    inventoryStore.partPendingRows = []
     return
   }
-  pendingRows.value = await listPartPending(activeRow.value.id)
+  await inventoryStore.loadPartPending(activeRow.value.id)
 }
 
 const refreshActiveRow = async () => {
-  await loadInventory()
-  const updated = partInventory.value.find((row) => row.id === activeRow.value?.id)
-  if (updated) {
-    activeRow.value = updated
-    await refreshPendingRows()
-  }
+  await inventoryStore.refreshActivePartRow()
 }
 
 const submitAddStock = async () => {
@@ -159,7 +143,7 @@ const submitAddStock = async () => {
     return
   }
   await run(async () => {
-    await addPartStock({
+    await inventoryStore.addPartStock({
       inventoryId: activeRow.value.id,
       stockType: stockMode.value,
       qty: Number(stockForm.qty || 0),
@@ -177,7 +161,7 @@ const submitTransfer = async () => {
     return
   }
   await run(async () => {
-    await transferPartPending({
+    await inventoryStore.transferPartPending({
       inventoryId: activeRow.value.id,
       pendingRefNo: transferForm.pendingRefNo,
       qty: Number(transferForm.qty || 0)
@@ -199,7 +183,7 @@ const submitModifyInStock = async () => {
     return
   }
   await run(async () => {
-    await modifyPartInventory({
+    await inventoryStore.modifyPartInventory({
       inventoryId: activeRow.value.id,
       inStockQty: Number(modifyForm.inStockQty || 0)
     })
@@ -214,7 +198,7 @@ const submitModifyPending = async () => {
     return
   }
   await run(async () => {
-    await modifyPartInventory({
+    await inventoryStore.modifyPartInventory({
       inventoryId: activeRow.value.id,
       pendingRefNo: modifyForm.pendingRefNo,
       pendingQty: Number(modifyForm.pendingQty || 0)
@@ -226,11 +210,7 @@ const submitModifyPending = async () => {
 const remove = async (id) => {
   if (!window.confirm('确认删除这条零件库存？已锁定库存不能删除。')) return
   await run(async () => {
-    await deletePartInventory(id)
-    if (activeRow.value?.id === id) {
-      activeRow.value = null
-      pendingRows.value = []
-    }
+    await inventoryStore.deletePartInventory(id)
     await Promise.all([loadInventory(), loadCustomers()])
   }, '零件库存已删除')
 }
