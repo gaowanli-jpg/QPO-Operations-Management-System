@@ -119,26 +119,21 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { DataBoard, Document, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
-import { authState, clearAuth, hasRole, updateAuthUser } from './auth'
-import { API_BASE_URL } from './config'
+import { useAuthStore } from './stores/authStore'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const activeMenu = computed(() => route.path)
 const defaultOpeneds = ['/market-orders']
 const isLoginPage = computed(() => route.path === '/login')
-const displayName = computed(() => authState.user?.displayName || authState.user?.username || '未登录')
+const displayName = computed(() => authStore.displayName)
 const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
-const roleName = computed(() => ({
-  ADMIN: '管理员',
-  MARKET: '市场部',
-  ENGINEER: '工程部'
-}[authState.user?.role] || '未知角色'))
-const mustChangePassword = computed(() => !!authState.user?.forcePasswordChange)
+const roleName = computed(() => authStore.roleName)
+const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 const passwordVisible = ref(false)
 const forcePasswordMode = ref(false)
@@ -170,7 +165,7 @@ const passwordRules = {
   ]
 }
 
-const canSee = (roles) => hasRole(roles)
+const canSee = (roles) => authStore.hasRole(roles)
 
 const resetPasswordForm = () => {
   passwordForm.oldPassword = ''
@@ -195,32 +190,25 @@ const changePassword = async () => {
   await passwordFormRef.value?.validate()
   passwordSaving.value = true
   try {
-    await axios.post(`${API_BASE_URL}/api/auth/change-password`, {
+    await authStore.changePassword({
       oldPassword: passwordForm.oldPassword,
       newPassword: passwordForm.newPassword,
       confirmPassword: passwordForm.confirmPassword
     })
-    updateAuthUser({ forcePasswordChange: false })
     ElMessage.success('密码已修改')
     passwordVisible.value = false
     forcePasswordMode.value = false
     resetPasswordForm()
   } catch (error) {
-    ElMessage.error(error.response?.data?.message || '密码修改失败')
+    ElMessage.error(error.response?.data?.message || error.message || '密码修改失败')
   } finally {
     passwordSaving.value = false
   }
 }
 
 const logout = async () => {
-  try {
-    await axios.post(`${API_BASE_URL}/api/auth/logout`)
-  } catch {
-    // 本地退出不依赖服务端响应。
-  } finally {
-    clearAuth()
-    router.replace('/login')
-  }
+  await authStore.logout()
+  router.replace('/login')
 }
 </script>
 

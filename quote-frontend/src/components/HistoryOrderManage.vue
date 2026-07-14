@@ -165,9 +165,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { hasRole } from '../auth'
+import { useAuthStore } from '../stores/authStore'
 import { API_BASE_URL } from '../config'
 
+const authStore = useAuthStore()
 const customers = ref([])
 const orders = ref([])
 const selectedCustomer = ref('')
@@ -179,7 +180,7 @@ const orderDetail = ref(null)
 const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
-const canDeleteHistoryOrders = computed(() => hasRole(['MARKET', 'ADMIN']))
+const canDeleteHistoryOrders = computed(() => authStore.hasRole(['MARKET', 'ADMIN']))
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {

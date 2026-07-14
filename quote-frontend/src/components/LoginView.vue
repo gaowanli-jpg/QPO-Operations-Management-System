@@ -28,12 +28,11 @@
 import { reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
-import { API_BASE_URL } from '../config'
-import { setAuth } from '../auth'
+import { useAuthStore } from '../stores/authStore'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 const formRef = ref()
 const loading = ref(false)
 
@@ -57,16 +56,12 @@ const handleLogin = async () => {
   await formRef.value?.validate()
   loading.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/auth/login`, form)
-    if (!response.data?.success) {
-      throw new Error(response.data?.message || '登录失败')
-    }
-    setAuth(response.data.token, response.data.user)
+    const response = await authStore.login(form)
     ElMessage.success('登录成功')
-    const redirect = route.query.redirect || roleHome[response.data.user?.role] || '/market'
+    const redirect = route.query.redirect || roleHome[response.user?.role || authStore.user?.role] || '/market'
     router.replace(redirect)
   } catch (error) {
-    ElMessage.error(error.response?.data?.message || error.message || '登录失败')
+    ElMessage.error(error.message || '登录失败')
   } finally {
     loading.value = false
   }

@@ -10,7 +10,7 @@ import HistoryOrderManage from '../components/HistoryOrderManage.vue'
 import LoginView from '../components/LoginView.vue'
 import UserManage from '../components/UserManage.vue'
 import QuoteTemplateManage from '../components/QuoteTemplateManage.vue'
-import { authState, hasRole, verifyAuth } from '../auth'
+import { useAuthStore } from '../stores/authStore'
 
 const routes = [
   { path: '/login', component: LoginView },
@@ -39,19 +39,20 @@ const roleHome = {
 }
 
 router.beforeEach(async (to) => {
+  const authStore = useAuthStore()
   if (to.path === '/login') {
     return true
   }
-  if (!authState.token) {
+  if (!authStore.token) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
-  const valid = await verifyAuth()
+  const valid = await authStore.verifyAuth()
   if (!valid) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
   const roles = to.meta?.roles
-  if (roles?.length && !hasRole(roles)) {
-    return roleHome[authState.user?.role] || '/login'
+  if (roles?.length && !authStore.hasRole(roles)) {
+    return roleHome[authStore.user?.role] || '/login'
   }
   return true
 })
