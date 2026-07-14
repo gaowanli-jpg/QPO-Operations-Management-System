@@ -3,11 +3,11 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Box, Cpu, DataBoard, Document, OfficeBuilding, SetUp, Tickets, Tools, User } from '@element-plus/icons-vue'
-import { changePassword as changePasswordApi, logout as logoutApi } from './services/authApi'
-import { authState, clearAuth, updateAuthUser } from './auth'
+import { useAuthStore } from './stores/authStore'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const menus = [
   { path: '/sync', label: 'ERP 同步', icon: DataBoard },
@@ -50,12 +50,10 @@ const menus = [
 const pageTitle = computed(() => route.meta?.title || 'APS')
 const activeMenu = computed(() => route.path)
 const isLoginPage = computed(() => route.path === '/login')
-const displayName = computed(() => authState.user?.displayName || authState.user?.username || '未登录')
+const displayName = computed(() => authStore.displayName)
 const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
-const roleName = computed(() => ({
-  ADMIN: '管理员'
-}[authState.user?.role] || '未知角色'))
-const mustChangePassword = computed(() => !!authState.user?.forcePasswordChange)
+const roleName = computed(() => authStore.roleName)
+const mustChangePassword = computed(() => authStore.mustChangePassword)
 const defaultOpeneds = menus
   .filter((menu) => menu.children)
   .map((menu) => menu.path)
@@ -104,8 +102,7 @@ const changePassword = async () => {
   }
   passwordSaving.value = true
   try {
-    await changePasswordApi(passwordForm)
-    updateAuthUser({ forcePasswordChange: false })
+    await authStore.changePassword({ ...passwordForm })
     ElMessage.success('密码已修改')
     passwordVisible.value = false
     forcePasswordMode.value = false
@@ -118,14 +115,8 @@ const changePassword = async () => {
 }
 
 const logout = async () => {
-  try {
-    await logoutApi()
-  } catch {
-    // 本地退出不依赖服务端响应。
-  } finally {
-    clearAuth()
-    router.replace('/login')
-  }
+  await authStore.logout()
+  router.replace('/login')
 }
 </script>
 

@@ -28,11 +28,11 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { setAuth } from '../auth'
-import { login } from '../services/authApi'
+import { useAuthStore } from '../stores/authStore'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 const formRef = ref()
 const loading = ref(false)
 
@@ -50,8 +50,7 @@ const handleLogin = async () => {
   await formRef.value?.validate()
   loading.value = true
   try {
-    const response = await login({ ...form })
-    setAuth(response.token, response.user)
+    const response = await authStore.login({ ...form })
     ElMessage.success(response.message || '登录成功')
     router.replace(route.query.redirect || '/sync')
   } catch (err) {

@@ -14,7 +14,7 @@ import MachinesView from '../views/MachinesView.vue'
 import ProcessesView from '../views/ProcessesView.vue'
 import UsersView from '../views/UsersView.vue'
 import LoginView from '../views/LoginView.vue'
-import { authState, hasRole, verifyAuth } from '../auth'
+import { useAuthStore } from '../stores/authStore'
 
 const routes = [
   { path: '/login', component: LoginView },
@@ -45,18 +45,19 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  const authStore = useAuthStore()
   if (to.path === '/login') {
     return true
   }
-  if (!authState.token) {
+  if (!authStore.token) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
-  const valid = await verifyAuth()
+  const valid = await authStore.verifyAuth()
   if (!valid) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
   const roles = to.meta?.roles
-  if (roles?.length && !hasRole(roles)) {
+  if (roles?.length && !authStore.hasRole(roles)) {
     return '/sync'
   }
   return true
