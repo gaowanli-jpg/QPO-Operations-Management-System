@@ -105,9 +105,9 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { API_BASE_URL } from '../config'
+import { listMarketOrders } from '../services/marketApi'
+import { listCustomers } from '../services/orderApi'
 
 const DEFAULT_STATUS_OPTIONS = ['待工程部评估', '已报价', '部分已提单', '已生成提单']
 
@@ -222,8 +222,8 @@ const resetPageAndRows = () => {
 const loadCustomers = async () => {
   loadingCustomers.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/customers`)
-    customerOptions.value = response.data || []
+    const response = await listCustomers()
+    customerOptions.value = response || []
   } catch (error) {
     console.error(error)
     ElMessage.error('客户列表加载失败。')
@@ -240,17 +240,15 @@ const loadOrders = async () => {
   }
   loadingOrders.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/orders`, {
-      params: {
-        customerName: selectedCustomer.value,
-        status: selectedStatus.value,
-        keyword: keyword.value.trim() || undefined,
-        page: page.value,
-        pageSize: pageSize.value
-      }
+    const response = await listMarketOrders({
+      customerName: selectedCustomer.value,
+      status: selectedStatus.value,
+      keyword: keyword.value.trim() || undefined,
+      page: page.value,
+      pageSize: pageSize.value
     })
-    orders.value = response.data.records || []
-    total.value = response.data.total || 0
+    orders.value = response.records || []
+    total.value = response.total || 0
   } catch (error) {
     console.error(error)
     ElMessage.error('订单列表加载失败。')

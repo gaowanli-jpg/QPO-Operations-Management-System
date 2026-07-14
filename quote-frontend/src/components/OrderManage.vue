@@ -244,10 +244,15 @@
 
 <script setup>
 import { computed, defineComponent, h, ref, onMounted, watch } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { API_BASE_URL } from '../config'
+import {
+  getOrder,
+  listCustomers,
+  listOrders,
+  resetProduction as resetProductionRequest,
+  supplementDrawings
+} from '../services/orderApi'
 
 const orders = ref([])
 const customers = ref([])
@@ -295,8 +300,8 @@ watch([page, pageSize], () => {
 
 const loadCustomers = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/customers`)
-    customers.value = response.data || []
+    const response = await listCustomers()
+    customers.value = response || []
   } catch (error) {
     console.error(error)
     ElMessage.error('客户列表加载失败。')
@@ -310,16 +315,14 @@ const loadOrders = async () => {
   }
   loading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/orders`, {
-      params: {
-        customerName: selectedCustomer.value,
-        keyword: keyword.value.trim() || undefined,
-        page: page.value,
-        pageSize: pageSize.value
-      }
+    const response = await listOrders({
+      customerName: selectedCustomer.value,
+      keyword: keyword.value.trim() || undefined,
+      page: page.value,
+      pageSize: pageSize.value
     })
-    orders.value = response.data.records || []
-    total.value = response.data.total || 0
+    orders.value = response.records || []
+    total.value = response.total || 0
   } catch (error) {
     console.error(error)
     ElMessage.error('订单列表加载失败。')
@@ -359,8 +362,7 @@ const openDetail = async (row) => {
   detailVisible.value = true
   detailLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/orders/${row.id}`)
-    orderDetail.value = response.data
+    orderDetail.value = await getOrder(row.id)
   } catch (error) {
     console.error(error)
     ElMessage.error('订单详情加载失败。')
@@ -375,7 +377,7 @@ const resetProduction = async (row) => {
     '重置提单和工艺表',
     { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' }
   )
-  await postAction(`${API_BASE_URL}/api/order-management/orders/${row.id}/reset-production`, '订单提单和工艺表已重置')
+  await postAction(() => resetProductionRequest(row.id), '订单提单和工艺表已重置')
 }
 
 const openSupplementDialog = () => {
@@ -398,8 +400,7 @@ const handleSupplementFileRemove = (uploadFile, uploadFiles) => {
 const refreshCurrentDetail = async () => {
   if (!orderDetail.value?.orderInfo?.id) return
   const currentId = orderDetail.value.orderInfo.id
-  const detailResponse = await axios.get(`${API_BASE_URL}/api/order-management/orders/${currentId}`)
-  orderDetail.value = detailResponse.data
+  orderDetail.value = await getOrder(currentId)
 }
 
 const submitSupplementDrawings = async () => {
@@ -412,13 +413,9 @@ const submitSupplementDrawings = async () => {
 
   try {
     const rfqId = orderDetail.value.orderInfo.id
-    const response = await axios.post(
-      `${API_BASE_URL}/api/order-management/orders/${rfqId}/supplement-drawings`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    )
-    supplementResult.value = response.data
-    ElMessage.success(response.data.message || '补传图纸处理完成。')
+    const response = await supplementDrawings(rfqId, formData)
+    supplementResult.value = response
+    ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
     if (supplementUploadRef.value) {
       supplementUploadRef.value.clearFiles()
@@ -433,11 +430,11 @@ const submitSupplementDrawings = async () => {
   }
 }
 
-const postAction = async (url, fallbackMessage) => {
+const postAction = async (action, fallbackMessage) => {
   loading.value = true
   try {
-    const response = await axios.post(url)
-    ElMessage.success(response.data.message || fallbackMessage)
+    const response = await action()
+    ElMessage.success(response.message || fallbackMessage)
     await loadOrders()
     if (orderDetail.value?.orderInfo?.id) {
       await refreshCurrentDetail()

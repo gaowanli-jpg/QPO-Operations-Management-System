@@ -76,6 +76,7 @@ export const unwrapResponsePayload = (payload, status) => {
     const error = new Error(payload.message || `Request failed: ${status}`)
     error.status = status
     error.payload = payload
+    error.response = { status, data: payload }
     throw error
   }
   return payload

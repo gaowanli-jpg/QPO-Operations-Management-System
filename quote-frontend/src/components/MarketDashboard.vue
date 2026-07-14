@@ -92,10 +92,9 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { API_BASE_URL } from '../config'
+import { importRfq } from '../services/marketApi'
 
 const rfqForm = reactive({ customerName: '' })
 const excelFile = ref(null)
@@ -262,14 +261,12 @@ const submitRfqPackage = async () => {
   })
 
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/import-rfq`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    const response = await importRfq(formData)
     
-    if (response.data.success) {
-      const drawingReportHtml = buildDrawingReportHtml(response.data.drawingReport)
+    if (response.success) {
+      const drawingReportHtml = buildDrawingReportHtml(response.drawingReport)
       ElMessageBox.alert(
-        `<div style="font-size: 15px; line-height: 1.5;">${response.data.message}</div>
+        `<div style="font-size: 15px; line-height: 1.5;">${response.message}</div>
          <div style="color: #67C23A; margin-top: 10px;">工程部已收到系统推送任务。</div>
          ${drawingReportHtml}`,
         '订单导入成功',
@@ -290,7 +287,7 @@ const submitRfqPackage = async () => {
       
     } else {
       ElMessage.error({
-        message: response.data.message,
+        message: response.message,
         duration: 5000, 
         showClose: true
       })

@@ -18,4 +18,15 @@ describe('api client helpers', () => {
     expect(() => unwrapResponsePayload({ success: false, message: 'denied' }, 403))
       .toThrow('denied')
   })
+
+  test('unwrapResponsePayload preserves response shape for component error handlers', () => {
+    try {
+      unwrapResponsePayload({ success: false, message: 'denied' }, 403)
+    } catch (error) {
+      expect(error.response).toEqual({
+        status: 403,
+        data: { success: false, message: 'denied' }
+      })
+    }
+  })
 })

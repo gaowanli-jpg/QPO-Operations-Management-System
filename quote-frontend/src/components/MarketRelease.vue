@@ -323,11 +323,22 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { API_BASE_URL } from '../config'
-import { downloadByAxios } from '../download'
+import {
+  deleteProcessSheet as deleteProcessSheetRequest,
+  deleteTicket as deleteTicketRequest,
+  downloadMarketExport,
+  generateTicket,
+  getMarketSummary,
+  listInternalTargetLeadTimeItems,
+  listProcessSheets,
+  listTickets,
+  parsePartSelection,
+  setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
+  shiftInternalTargetLeadTime,
+  updateInternalTargetLeadTime
+} from '../services/marketApi'
 
 const selectedRfqId = ref(null)
 const orderPickerVisible = ref(false)
@@ -375,8 +386,8 @@ const loadOrder = async (rfqId) => {
   if (!rfqId) return
   loading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/summary/${rfqId}`)
-    orderInfo.value = response.data.orderInfo || {}
+    const response = await getMarketSummary(rfqId)
+    orderInfo.value = response.orderInfo || {}
     await loadInternalTargetItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''
     releaseForm.internalProjectNo = ''
@@ -394,8 +405,8 @@ const loadOrder = async (rfqId) => {
 }
 
 const loadInternalTargetItems = async (rfqId) => {
-  const response = await axios.get(`${API_BASE_URL}/api/market/internal-target-lead-time/${rfqId}/items`)
-  setItemList(response.data || [])
+  const response = await listInternalTargetLeadTimeItems(rfqId)
+  setItemList(response || [])
 }
 
 const setItemList = (rows) => {
@@ -413,8 +424,8 @@ const setItemList = (rows) => {
 const loadTickets = async (rfqId) => {
   loadingTickets.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/tickets/${rfqId}`)
-    ticketList.value = response.data || []
+    const response = await listTickets(rfqId)
+    ticketList.value = response || []
   } catch (error) {
     console.error(error)
     ElMessage.error('提单列表加载失败。')
@@ -426,8 +437,8 @@ const loadTickets = async (rfqId) => {
 const loadProcessSheets = async (rfqId) => {
   loadingProcessSheets.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/process-sheets/${rfqId}`)
-    processSheetList.value = response.data || []
+    const response = await listProcessSheets(rfqId)
+    processSheetList.value = response || []
   } catch (error) {
     console.error(error)
     ElMessage.error('工艺表列表加载失败。')
@@ -468,10 +479,8 @@ const handleSelectionExcelChange = async (uploadFile) => {
   formData.append('excelFile', file)
   importSelecting.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/parse-part-selection`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-    const importedItems = response.data?.data || []
+    const response = await parsePartSelection(formData)
+    const importedItems = response?.data || []
     const importedKeys = new Set(
       importedItems
         .map(item => `${normalizePartNo(item.normalizedPartNo || item.partNo)}||${normalizeVersion(item.normalizedVersion ?? item.version)}`)
@@ -519,15 +528,15 @@ const adjustInternalLeadTime = async (direction) => {
 
   adjustingInternalLeadTime.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/internal-target-lead-time/shift`, {
+    const response = await shiftInternalTargetLeadTime({
       rfqId: selectedRfqId.value,
       itemIds: selectedRows.value.map(row => row.id),
       days
     })
-    setItemList(response.data.itemList || [])
+    setItemList(response.itemList || [])
     selectedRows.value = []
-    const adjusted = response.data.adjustedCount || 0
-    const skipped = response.data.skippedCount || 0
+    const adjusted = response.adjustedCount || 0
+    const skipped = response.skippedCount || 0
     if (skipped > 0) {
       ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
     } else {
@@ -548,15 +557,15 @@ const setInternalTargetLeadTime = async () => {
 
   settingInternalTargetLeadTime.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/internal-target-lead-time/set`, {
+    const response = await setInternalTargetLeadTimeRequest({
       rfqId: selectedRfqId.value,
       itemIds: selectedRows.value.map(row => row.id),
       internalTargetLeadTime: manualInternalTargetDate.value
     })
-    setItemList(response.data.itemList || [])
+    setItemList(response.itemList || [])
     selectedRows.value = []
-    const adjusted = response.data.adjustedCount || 0
-    const skipped = response.data.skippedCount || 0
+    const adjusted = response.adjustedCount || 0
+    const skipped = response.skippedCount || 0
     if (skipped > 0) {
       ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
     } else {
@@ -574,14 +583,14 @@ const saveInternalTargetLeadTime = async (row) => {
   if (!selectedRfqId.value || !row?.id) return
   savingInternalRowMap[row.id] = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/internal-target-lead-time/update`, {
+    const response = await updateInternalTargetLeadTime({
       rfqId: selectedRfqId.value,
       itemId: row.id,
       internalTargetLeadTime: row.internalTargetLeadTimeDraft
     })
     const saved = {
-      ...(response.data.data || {}),
-      internalTargetLeadTimeDraft: response.data.data?.internalTargetLeadTime || ''
+      ...(response.data || {}),
+      internalTargetLeadTimeDraft: response.data?.internalTargetLeadTime || ''
     }
     const index = itemList.value.findIndex(item => item.id === row.id)
     if (index >= 0) {
@@ -631,12 +640,12 @@ const submitTicket = async () => {
         acceptedQty: acceptedQtyMap[row.id] || row.qty
       }))
     }
-    const response = await axios.post(`${API_BASE_URL}/api/market/generate-ticket`, payload)
-    if (response.data.success) {
-      ElMessage.success(response.data.message)
+    const response = await generateTicket(payload)
+    if (response.success) {
+      ElMessage.success(response.message)
       await loadOrder(selectedRfqId.value)
     } else {
-      ElMessage.error(response.data.message || '提单生成失败。')
+      ElMessage.error(response.message || '提单生成失败。')
     }
   } catch (error) {
     console.error(error)
@@ -663,8 +672,8 @@ const deleteTicket = async (row) => {
 
   deleting.value = true
   try {
-    const response = await axios.delete(`${API_BASE_URL}/api/market/tickets/${row.id}`)
-    ElMessage.success(response.data.message || '提单行已删除')
+    const response = await deleteTicketRequest(row.id)
+    ElMessage.success(response.message || '提单行已删除')
     await loadOrder(selectedRfqId.value)
   } catch (error) {
     console.error(error)
@@ -683,8 +692,8 @@ const deleteProcessSheet = async (row) => {
 
   deleting.value = true
   try {
-    const response = await axios.delete(`${API_BASE_URL}/api/market/process-sheets/${row.id}`)
-    ElMessage.success(response.data.message || '工艺表行已删除')
+    const response = await deleteProcessSheetRequest(row.id)
+    ElMessage.success(response.message || '工艺表行已删除')
     await loadOrder(selectedRfqId.value)
   } catch (error) {
     console.error(error)
@@ -728,10 +737,7 @@ const exportExcel = async (type) => {
     process: 'process-sheets'
   }
   const path = pathMap[type] || 'process-sheets'
-  const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/${path}/${selectedRfqId.value}`,
-    `${path}-${selectedRfqId.value}.xlsx`
-  )
+  const result = await downloadMarketExport(path, selectedRfqId.value, `${path}-${selectedRfqId.value}.xlsx`)
   if (!result.success) {
     ElMessage.error(result.message || 'Excel 导出失败。')
   }

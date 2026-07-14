@@ -104,9 +104,14 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { API_BASE_URL } from '../config'
+import {
+  changeUserPassword,
+  deleteUser as deleteUserRequest,
+  listUsers,
+  saveUser as saveUserRequest,
+  updateUserStatus
+} from '../services/adminApi'
 
 const users = ref([])
 const loading = ref(false)
@@ -138,8 +143,8 @@ const isProtectedUser = (row) => protectedUsernames.has(String(row.username || '
 const loadUsers = async () => {
   loading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/admin/users`)
-    users.value = response.data || []
+    const response = await listUsers()
+    users.value = response || []
   } finally {
     loading.value = false
   }
@@ -187,10 +192,8 @@ const saveUser = async () => {
       enabled: form.enabled
     }
     if (form.password) payload.password = form.password
-    const response = editingId.value
-      ? await axios.put(`${API_BASE_URL}/api/admin/users/${editingId.value}`, payload)
-      : await axios.post(`${API_BASE_URL}/api/admin/users`, payload)
-    ElMessage.success(response.data?.message || '保存成功')
+    const response = await saveUserRequest(editingId.value ? { ...payload, id: editingId.value } : payload)
+    ElMessage.success(response.message || '保存成功')
     dialogVisible.value = false
     await loadUsers()
   } finally {
@@ -211,7 +214,7 @@ const resetPassword = async () => {
   }
   saving.value = true
   try {
-    await axios.put(`${API_BASE_URL}/api/admin/users/${passwordTarget.value.id}`, {
+    await changeUserPassword(passwordTarget.value.id, {
       password: newPassword.value
     })
     ElMessage.success('密码已重置，用户下次登录必须修改密码')
@@ -224,9 +227,7 @@ const resetPassword = async () => {
 
 const toggleEnabled = async (row) => {
   await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}账号 ${row.username}？`, '确认操作')
-  await axios.put(`${API_BASE_URL}/api/admin/users/${row.id}`, {
-    enabled: !row.enabled
-  })
+  await updateUserStatus(row.id, !row.enabled)
   ElMessage.success('状态已更新')
   await loadUsers()
 }
@@ -245,7 +246,7 @@ const deleteUser = async (row) => {
       cancelButtonText: '取消'
     }
   )
-  await axios.delete(`${API_BASE_URL}/api/admin/users/${row.id}`)
+  await deleteUserRequest(row.id)
   ElMessage.success('用户已删除')
   await loadUsers()
 }

@@ -74,10 +74,9 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Refresh, UploadFilled } from '@element-plus/icons-vue'
-import { API_BASE_URL } from '../config'
+import { getQuoteTemplate, saveQuoteTemplate } from '../services/adminApi'
 
 const loading = ref(false)
 const uploading = ref(false)
@@ -93,12 +92,12 @@ const templateStatus = reactive({
 const loadStatus = async () => {
   loading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/admin/quote-template`)
+    const response = await getQuoteTemplate()
     Object.assign(templateStatus, {
-      exists: !!response.data?.exists,
-      fileName: response.data?.fileName || '',
-      updatedAt: response.data?.updatedAt || '',
-      size: response.data?.size || 0
+      exists: !!response?.exists,
+      fileName: response?.fileName || '',
+      updatedAt: response?.updatedAt || '',
+      size: response?.size || 0
     })
   } catch (error) {
     ElMessage.error(error.response?.data?.message || '报价单模板状态加载失败。')
@@ -139,10 +138,8 @@ const uploadTemplate = async () => {
   formData.append('templateFile', selectedFile.value)
   uploading.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/admin/quote-template`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-    ElMessage.success(response.data?.message || '报价单模板已更新。')
+    const response = await saveQuoteTemplate(formData)
+    ElMessage.success(response.message || '报价单模板已更新。')
     selectedFile.value = null
     uploadRef.value?.clearFiles()
     await loadStatus()

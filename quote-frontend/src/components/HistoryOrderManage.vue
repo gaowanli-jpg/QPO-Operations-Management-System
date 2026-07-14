@@ -163,10 +163,9 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
-import { API_BASE_URL } from '../config'
+import { deleteOrder, getOrder, listCustomers, listOrders } from '../services/orderApi'
 
 const authStore = useAuthStore()
 const customers = ref([])
@@ -190,8 +189,8 @@ watch([page, pageSize], () => {
 
 const loadCustomers = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/customers`)
-    customers.value = response.data || []
+    const response = await listCustomers()
+    customers.value = response || []
   } catch (error) {
     console.error(error)
     ElMessage.error('客户列表加载失败。')
@@ -205,16 +204,14 @@ const loadOrders = async () => {
   }
   loading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/orders`, {
-      params: {
-        customerName: selectedCustomer.value,
-        keyword: keyword.value.trim() || undefined,
-        page: page.value,
-        pageSize: pageSize.value
-      }
+    const response = await listOrders({
+      customerName: selectedCustomer.value,
+      keyword: keyword.value.trim() || undefined,
+      page: page.value,
+      pageSize: pageSize.value
     })
-    orders.value = response.data.records || []
-    total.value = response.data.total || 0
+    orders.value = response.records || []
+    total.value = response.total || 0
   } catch (error) {
     console.error(error)
     ElMessage.error('历史订单列表加载失败。')
@@ -254,8 +251,7 @@ const openDetail = async (row) => {
   detailVisible.value = true
   detailLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/order-management/orders/${row.id}`)
-    orderDetail.value = response.data
+    orderDetail.value = await getOrder(row.id)
   } catch (error) {
     console.error(error)
     ElMessage.error('历史订单详情加载失败。')
@@ -273,8 +269,8 @@ const deleteHistoryOrder = async (row) => {
 
   loading.value = true
   try {
-    const response = await axios.delete(`${API_BASE_URL}/api/order-management/orders/${row.id}?deleteFiles=true`)
-    ElMessage.success(response.data.message || '历史订单已删除')
+    const response = await deleteOrder(row.id, { deleteFiles: true })
+    ElMessage.success(response.message || '历史订单已删除')
     if (orderDetail.value?.orderInfo?.id === row.id) {
       orderDetail.value = null
       detailVisible.value = false

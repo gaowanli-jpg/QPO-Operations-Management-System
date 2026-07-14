@@ -467,15 +467,19 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
-import { API_BASE_URL } from '../config'
-import { downloadByAxios } from '../download'
-import { getRepeatAnalysis, saveOrderConfig } from '../services/engineerApi'
-import { getMarketSummary } from '../services/marketApi'
+import {
+  completeOrderQuote as completeOrderQuoteRequest,
+  getRepeatAnalysis,
+  listAssemblyRelations,
+  saveOrderConfig,
+  submitQuote
+} from '../services/engineerApi'
+import { downloadCustomerLeadTimeQuote, getMarketSummary } from '../services/marketApi'
+import { getTask, refreshEngineerQuotes } from '../services/taskApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
@@ -649,10 +653,7 @@ const loadRepeatAnalysis = async () => {
 
 const exportQuoteSheet = async () => {
   if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
-  const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/quote/customer-lead-time/${rfqId.value}`,
-    `quote-${rfqId.value}.xlsx`
-  )
+  const result = await downloadCustomerLeadTimeQuote(rfqId.value)
   if (!result.success) {
     ElMessage.error(result.message || '报价单导出失败。')
   }
@@ -664,8 +665,8 @@ const completeOrderQuote = async () => {
   }
   completeLoading.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/engineer/complete-order/${rfqId.value}`)
-    ElMessage.success(response.data.message || '订单报价已完成。')
+    const response = await completeOrderQuoteRequest(rfqId.value)
+    ElMessage.success(response.message || '订单报价已完成。')
     await fetchQuoteData()
   } catch (error) {
     console.error(error)
@@ -695,8 +696,8 @@ const refreshOrderQuotes = async () => {
 
   refreshLoading.value = true
   try {
-    const submitResponse = await axios.post(`${API_BASE_URL}/api/tasks/engineer/refresh-quotes/${rfqId.value}`)
-    const taskId = submitResponse.data?.task?.id
+    const submitResponse = await refreshEngineerQuotes(rfqId.value)
+    const taskId = submitResponse?.task?.id
     if (!taskId) {
       throw new Error('任务提交失败')
     }
@@ -721,8 +722,7 @@ const refreshOrderQuotes = async () => {
 
 const waitSystemTask = async (taskId) => {
   for (let i = 0; i < 120; i++) {
-    const response = await axios.get(`${API_BASE_URL}/api/tasks/${taskId}`)
-    const task = response.data || {}
+    const task = await getTask(taskId) || {}
     if (task.status === 'SUCCESS') {
       return task
     }
@@ -1171,8 +1171,8 @@ const loadAssemblyRelations = async (row) => {
   assemblyChildren.value = []
   if (!row?.id) return
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/engineer/assembly-relations/${row.id}`)
-    assemblyChildren.value = (response.data || []).map(item => createAssemblyChildRow(item))
+    const response = await listAssemblyRelations(row.id)
+    assemblyChildren.value = (response || []).map(item => createAssemblyChildRow(item))
   } catch (error) {
     console.error(error)
     ElMessage.error('组合件子件关系加载失败。')
@@ -1322,7 +1322,7 @@ const submitCurrentQuote = async () => {
   }
 
   try {
-    await axios.post(`${API_BASE_URL}/api/engineer/submit-quote`, payload)
+    await submitQuote(payload)
     let globalSynced = true
     let globalUpdated = false
     if (quoteMode.value === 'NORMAL') {

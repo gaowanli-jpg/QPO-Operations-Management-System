@@ -208,12 +208,19 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { API_BASE_URL } from '../config'
-import { downloadByAxios } from '../download'
+import {
+  downloadQuote,
+  downloadQuoteTemplateDetail,
+  downloadQuoteTemplateSimple,
+  downloadSimpleQuote,
+  getQuoteProcess,
+  setQuoteProcessLeadTime,
+  shiftQuoteProcessLeadTime,
+  updateQuoteProcessLeadTime
+} from '../services/marketApi'
 
 const selectedRfqId = ref(null)
 const orderInfo = ref({})
@@ -240,9 +247,9 @@ const handleOrderSelected = async (order) => {
 const loadQuoteProcess = async (rfqId) => {
   loadingItems.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/quote-process/${rfqId}`)
-    orderInfo.value = response.data.orderInfo || {}
-    itemList.value = normalizeRows(response.data.itemList || [])
+    const response = await getQuoteProcess(rfqId)
+    orderInfo.value = response.orderInfo || {}
+    itemList.value = normalizeRows(response.itemList || [])
     selectedRows.value = []
   } catch (error) {
     console.error(error)
@@ -271,15 +278,15 @@ const applyShift = async (direction) => {
 
   adjusting.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/quote-process/lead-time/shift`, {
+    const response = await shiftQuoteProcessLeadTime({
       rfqId: selectedRfqId.value,
       itemIds: selectedRows.value.map(row => row.id),
       days
     })
-    itemList.value = normalizeRows(response.data.itemList || [])
+    itemList.value = normalizeRows(response.itemList || [])
     selectedRows.value = []
-    const adjusted = response.data.adjustedCount || 0
-    const skipped = response.data.skippedCount || 0
+    const adjusted = response.adjustedCount || 0
+    const skipped = response.skippedCount || 0
     if (skipped > 0) {
       ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
     } else {
@@ -300,15 +307,15 @@ const setQuoteLeadTime = async () => {
 
   settingQuoteDate.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/quote-process/lead-time/set`, {
+    const response = await setQuoteProcessLeadTime({
       rfqId: selectedRfqId.value,
       itemIds: selectedRows.value.map(row => row.id),
       quoteLeadTime: manualQuoteDate.value
     })
-    itemList.value = normalizeRows(response.data.itemList || [])
+    itemList.value = normalizeRows(response.itemList || [])
     selectedRows.value = []
-    const adjusted = response.data.adjustedCount || 0
-    const skipped = response.data.skippedCount || 0
+    const adjusted = response.adjustedCount || 0
+    const skipped = response.skippedCount || 0
     if (skipped > 0) {
       ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
     } else {
@@ -326,12 +333,12 @@ const saveLeadTime = async (row) => {
   if (!selectedRfqId.value || !row?.id) return
   savingRowMap[row.id] = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/market/quote-process/lead-time/update`, {
+    const response = await updateQuoteProcessLeadTime({
       rfqId: selectedRfqId.value,
       itemId: row.id,
       quoteLeadTime: row.quoteLeadTimeDraft
     })
-    const saved = normalizeRows([response.data.data || {}])[0]
+    const saved = normalizeRows([response.data || {}])[0]
     const index = itemList.value.findIndex(item => item.id === row.id)
     if (index >= 0) {
       itemList.value.splice(index, 1, saved)
@@ -348,10 +355,7 @@ const saveLeadTime = async (row) => {
 const exportQuote = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-详细报价单.xlsx`
-  const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/quote/${selectedRfqId.value}`,
-    fallbackName
-  )
+  const result = await downloadQuote(selectedRfqId.value, fallbackName)
   if (!result.success) {
     ElMessage.error(result.message || '报价单导出失败。')
   }
@@ -360,10 +364,7 @@ const exportQuote = async () => {
 const exportSimpleQuote = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-简化报价单.xlsx`
-  const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/quote/simple/${selectedRfqId.value}`,
-    fallbackName
-  )
+  const result = await downloadSimpleQuote(selectedRfqId.value, fallbackName)
   if (!result.success) {
     ElMessage.error(result.message || '简化报价单导出失败。')
   }
@@ -372,10 +373,7 @@ const exportSimpleQuote = async () => {
 const exportTemplateQuote = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板详细报价单.xlsx`
-  const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/quote/template/detail/${selectedRfqId.value}`,
-    fallbackName
-  )
+  const result = await downloadQuoteTemplateDetail(selectedRfqId.value, fallbackName)
   if (!result.success) {
     ElMessage.error(result.message || '客户模板详细报价单导出失败。')
   }
@@ -384,10 +382,7 @@ const exportTemplateQuote = async () => {
 const exportTemplateSimpleQuote = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板简化报价单.xlsx`
-  const result = await downloadByAxios(
-    `${API_BASE_URL}/api/market/export/quote/template/simple/${selectedRfqId.value}`,
-    fallbackName
-  )
+  const result = await downloadQuoteTemplateSimple(selectedRfqId.value, fallbackName)
   if (!result.success) {
     ElMessage.error(result.message || '客户模板简化报价单导出失败。')
   }

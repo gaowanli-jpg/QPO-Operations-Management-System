@@ -10,3 +10,14 @@ export const applyRepeatQuotes = (orderId) => request(`/api/engineer/apply-repea
 })
 
 export const getRepeatAnalysis = (rfqId) => request(`/api/engineer/repeat-analysis/${rfqId}`)
+
+export const completeOrderQuote = (rfqId) => request(`/api/engineer/complete-order/${rfqId}`, {
+  method: 'POST'
+})
+
+export const listAssemblyRelations = (itemId) => request(`/api/engineer/assembly-relations/${itemId}`)
+
+export const submitQuote = (payload) => request('/api/engineer/submit-quote', {
+  method: 'POST',
+  data: payload
+})
