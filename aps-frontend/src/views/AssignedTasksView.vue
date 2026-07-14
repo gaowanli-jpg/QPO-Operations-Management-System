@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { getPmcTask, listPmcTasks, releaseAssignment as releaseTaskAssignment } from '../services/taskApi'
+import { onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useTaskStore } from '../stores/taskStore'
 import { customerProjectText, field, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
@@ -10,13 +11,8 @@ import TaskTable from '../components/TaskTable.vue'
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const tasks = ref([])
-const selectedTaskId = ref(null)
-const taskDetail = ref(null)
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const taskStore = useTaskStore()
+const { tasks, selectedTaskId, taskDetail, page, pageSize, total } = storeToRefs(taskStore)
 
 const run = async (fn, successMessage = '') => {
   loading.value = true
@@ -33,47 +29,30 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadTasks = async () => {
-  const query = new URLSearchParams({
-    assignmentStatus: 'ASSIGNED',
-    page: String(page.value),
-    pageSize: String(pageSize.value)
-  })
-  const result = await listPmcTasks(query)
-  tasks.value = result.records || []
-  total.value = result.total || 0
-  if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
-    page.value = totalPages.value
-    await loadTasks()
-  }
+  await taskStore.loadPmcTasks({ assignmentStatus: 'ASSIGNED' })
 }
 
 const loadTaskDetail = async (id) => {
-  selectedTaskId.value = id
-  taskDetail.value = await getPmcTask(id)
+  await taskStore.loadPmcTask(id)
 }
 
 const releaseAssignment = async () => {
   if (!selectedTaskId.value) return
   await run(async () => {
-    await releaseTaskAssignment(selectedTaskId.value)
-    selectedTaskId.value = null
-    taskDetail.value = null
-    await loadTasks()
+    await taskStore.releaseSelectedAssignment()
   }, '任务分配已释放')
 }
 
 const goPage = async (nextPage) => {
   page.value = nextPage
-  selectedTaskId.value = null
-  taskDetail.value = null
+  taskStore.resetDetail()
   await run(loadTasks)
 }
 
 const changePageSize = async (nextSize) => {
   pageSize.value = nextSize
   page.value = 1
-  selectedTaskId.value = null
-  taskDetail.value = null
+  taskStore.resetDetail()
   await run(loadTasks)
 }
 

@@ -1,7 +1,9 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { listDepartments } from '../services/departmentApi'
-import { assignDepartment, deleteTasks, getPmcTask, listPmcTasks, listTaskCustomers } from '../services/taskApi'
+import { listTaskCustomers } from '../services/taskApi'
+import { useTaskStore } from '../stores/taskStore'
 import { customerProjectText, field, label, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
@@ -10,17 +12,13 @@ import TaskTable from '../components/TaskTable.vue'
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const tasks = ref([])
 const departments = ref([])
 const customerOptions = ref([])
 const customerName = ref('')
 const sortMode = ref('')
-const selectedTaskIds = ref([])
 const assignmentDetail = ref(null)
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const taskStore = useTaskStore()
+const { tasks, selectedTaskIds, page, pageSize, total } = storeToRefs(taskStore)
 
 const assignmentModal = reactive({
   open: false,
@@ -56,24 +54,14 @@ const run = async (fn, successMessage = '') => {
   }
 }
 
+const taskFilters = () => ({
+  assignmentStatus: 'PENDING',
+  customerName: customerName.value,
+  sortMode: sortMode.value
+})
+
 const loadTasks = async () => {
-  const query = new URLSearchParams({
-    assignmentStatus: 'PENDING',
-    page: String(page.value),
-    pageSize: String(pageSize.value)
-  })
-  if (customerName.value) query.set('customerName', customerName.value)
-  if (sortMode.value) query.set('sortMode', sortMode.value)
-  const result = await listPmcTasks(query)
-  tasks.value = result.records || []
-  total.value = result.total || 0
-  if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
-    page.value = totalPages.value
-    await loadTasks()
-    return
-  }
-  const visibleIds = new Set(tasks.value.map((task) => field(task, 'id')))
-  selectedTaskIds.value = selectedTaskIds.value.filter((id) => visibleIds.has(id))
+  await taskStore.loadPmcTasks(taskFilters())
 }
 
 const loadDepartments = async () => {
@@ -87,7 +75,7 @@ const loadCustomers = async () => {
 const openSingleAssignment = async (id) => {
   if (!id) return
   await run(async () => {
-    const detail = await getPmcTask(id)
+    const detail = await taskStore.loadPmcTask(id)
     assignmentDetail.value = detail
     assignmentModal.open = true
     assignmentModal.mode = 'single'
@@ -125,31 +113,26 @@ const submitAssignment = async () => {
   const ids = [...assignmentModal.ids]
   const assignedCount = ids.length
   await run(async () => {
-    await assignDepartment({
+    await taskStore.assignTasks(
       ids,
-      departmentId: Number(assignmentForm.departmentId),
-      assignedBy: assignmentForm.assignedBy,
-      remark: assignmentForm.remark
-    })
+      {
+        departmentId: Number(assignmentForm.departmentId),
+        assignedBy: assignmentForm.assignedBy,
+        remark: assignmentForm.remark
+      },
+      taskFilters()
+    )
     closeAssignmentModal()
-    selectedTaskIds.value = selectedTaskIds.value.filter((id) => !ids.includes(id))
-    await Promise.all([loadTasks(), loadDepartments(), loadCustomers()])
+    await Promise.all([loadDepartments(), loadCustomers()])
   }, assignedCount > 1 ? `已批量分配 ${assignedCount} 条任务` : '任务已分配到部门')
 }
 
 const toggleTaskSelect = (id, checked) => {
-  if (!id) return
-  if (checked) {
-    if (!selectedTaskIds.value.includes(id)) {
-      selectedTaskIds.value = [...selectedTaskIds.value, id]
-    }
-    return
-  }
-  selectedTaskIds.value = selectedTaskIds.value.filter((selectedId) => selectedId !== id)
+  taskStore.toggleTaskSelect(id, checked)
 }
 
 const toggleAllTasks = (checked) => {
-  selectedTaskIds.value = checked ? tasks.value.map((task) => field(task, 'id')).filter(Boolean) : []
+  taskStore.toggleAllTasks(checked)
 }
 
 const goPage = async (nextPage) => {
@@ -168,7 +151,7 @@ const changePageSize = async (nextSize) => {
 const applyFilters = async () => {
   page.value = 1
   closeAssignmentModal()
-  selectedTaskIds.value = []
+  taskStore.clearSelection()
   await run(loadTasks)
 }
 
@@ -183,12 +166,11 @@ const deleteSelectedTasks = async () => {
   const ids = [...selectedTaskIds.value]
   if (!window.confirm(`确认删除 ${ids.length} 条 APS 任务？删除后同一 ERP 提单可重新同步。`)) return
   await run(async () => {
-    await deleteTasks(ids)
     if (assignmentModal.ids.some((id) => ids.includes(id))) {
       closeAssignmentModal()
     }
-    selectedTaskIds.value = []
-    await Promise.all([loadTasks(), loadDepartments(), loadCustomers()])
+    await taskStore.deleteSelectedTasks(taskFilters())
+    await Promise.all([loadDepartments(), loadCustomers()])
   }, `已删除 ${ids.length} 条 APS 任务`)
 }
 

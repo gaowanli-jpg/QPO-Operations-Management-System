@@ -1,20 +1,16 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { field, number } from '../helpers'
-import { deleteTasks, listPmcTasks, syncErpDeliveryItems } from '../services/taskApi'
+import { useTaskStore } from '../stores/taskStore'
 import ApsPager from '../components/ApsPager.vue'
 import TaskTable from '../components/TaskTable.vue'
 
+const taskStore = useTaskStore()
+const { tasks, selectedTaskIds, page, pageSize, total, syncResult } = storeToRefs(taskStore)
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const syncResult = ref(null)
-const tasks = ref([])
-const selectedTaskIds = ref([])
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 const metric = computed(() => {
   const pendingTasks = tasks.value.filter((row) => field(row, 'assignment_status', 'assignmentStatus') !== 'ASSIGNED').length
@@ -39,42 +35,21 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadTasks = async () => {
-  const query = new URLSearchParams({
-    page: String(page.value),
-    pageSize: String(pageSize.value)
-  })
-  const result = await listPmcTasks(query)
-  tasks.value = result.records || []
-  total.value = result.total || 0
-  if (tasks.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
-    page.value = totalPages.value
-    await loadTasks()
-    return
-  }
-  const visibleIds = new Set(tasks.value.map((task) => field(task, 'id')))
-  selectedTaskIds.value = selectedTaskIds.value.filter((id) => visibleIds.has(id))
+  await taskStore.loadPmcTasks()
 }
 
 const syncErp = async () => {
   await run(async () => {
-    syncResult.value = await syncErpDeliveryItems()
-    await loadTasks()
+    await taskStore.syncErpDeliveryItems()
   }, 'ERP 提单零件同步完成')
 }
 
 const toggleTaskSelect = (id, checked) => {
-  if (!id) return
-  if (checked) {
-    if (!selectedTaskIds.value.includes(id)) {
-      selectedTaskIds.value = [...selectedTaskIds.value, id]
-    }
-    return
-  }
-  selectedTaskIds.value = selectedTaskIds.value.filter((selectedId) => selectedId !== id)
+  taskStore.toggleTaskSelect(id, checked)
 }
 
 const toggleAllTasks = (checked) => {
-  selectedTaskIds.value = checked ? tasks.value.map((task) => field(task, 'id')).filter(Boolean) : []
+  taskStore.toggleAllTasks(checked)
 }
 
 const goPage = async (nextPage) => {
@@ -93,9 +68,7 @@ const deleteSelectedTasks = async () => {
   const ids = [...selectedTaskIds.value]
   if (!window.confirm(`确认删除 ${ids.length} 条 APS 任务？删除后同一 ERP 提单可重新同步。`)) return
   await run(async () => {
-    await deleteTasks(ids)
-    selectedTaskIds.value = []
-    await loadTasks()
+    await taskStore.deleteSelectedTasks()
   }, `已删除 ${ids.length} 条 APS 任务`)
 }
 
