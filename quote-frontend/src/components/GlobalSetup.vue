@@ -192,12 +192,14 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { API_BASE_URL } from '../config'
+import { applyRepeatQuotes, getRepeatAnalysis, saveOrderConfig } from '../services/engineerApi'
+import { getMarketSummary } from '../services/marketApi'
+import { useDictionaryStore } from '../stores/dictionaryStore'
+import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
   createAuthenticatedObjectUrl,
   openAuthenticatedFileInNewWindow,
@@ -206,6 +208,8 @@ import {
 } from '../authenticatedFile'
 
 const router = useRouter()
+const dictionaryStore = useDictionaryStore()
+const globalConfigStore = useGlobalConfigStore()
 
 const testRfqId = ref(null)
 
@@ -217,9 +221,9 @@ const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])
-const materialOptions = ref([])
-const processOptions = ref([])
-const extraFeeOptions = ref([])
+const materialOptions = computed(() => dictionaryStore.materials)
+const processOptions = computed(() => dictionaryStore.processes)
+const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
 const repeatAnalysis = ref(null)
 
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
@@ -291,22 +295,7 @@ const assignConfig = (source) => {
   hydrateProcessRoute()
 }
 
-const combinedProcessOptions = computed(() => [
-  ...processOptions.value.map(item => ({
-    optionKey: `process-${item.id}`,
-    processName: item.processName,
-    label: `${item.processName}（${item.calcType || '工时'}）`,
-    calcType: item.calcType || '工时',
-    sourceType: 'process'
-  })),
-  ...extraFeeOptions.value.map(item => ({
-    optionKey: `extra-${item.id}`,
-    processName: item.feeName,
-    label: `${item.feeName}（非工时费用）`,
-    calcType: '非工时费用',
-    sourceType: 'extra'
-  }))
-])
+const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
 
 const formatMaterialLabel = (material) => {
   if (!material) return ''
@@ -394,14 +383,7 @@ const hydrateProcessRoute = () => {
 
 const fetchDicts = async () => {
   try {
-    const [materialResponse, processResponse, extraFeeResponse] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/dict/materials`),
-      axios.get(`${API_BASE_URL}/api/dict/processes`),
-      axios.get(`${API_BASE_URL}/api/dict/extra-fee-items`)
-    ])
-    materialOptions.value = materialResponse.data || []
-    processOptions.value = processResponse.data || []
-    extraFeeOptions.value = extraFeeResponse.data || []
+    await dictionaryStore.loadBaseDicts()
     if (!config.materialName && materialOptions.value.length > 0) {
       config.materialName = materialOptions.value[0].materialName
     }
@@ -433,7 +415,9 @@ const handleNext = async () => {
 
   try {
     assignProcessSortNos()
-    await axios.post(`${API_BASE_URL}/api/engineer/order-config/${orderInfo.value.id}`, JSON.parse(JSON.stringify(config)))
+    const nextConfig = JSON.parse(JSON.stringify(config))
+    await saveOrderConfig(orderInfo.value.id, nextConfig)
+    globalConfigStore.setConfig(orderInfo.value.id, nextConfig)
   } catch (error) {
     console.error(error)
     return ElMessage.error('订单全局默认设定保存失败，请检查后端服务。')
@@ -441,18 +425,15 @@ const handleNext = async () => {
 
   if (repeatAnalysis.value?.repeatCount > 0) {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/engineer/apply-repeat-quotes/${orderInfo.value.id}`)
-      if (response.data.appliedCount > 0) {
-        ElMessage.success(`已自动套用 ${response.data.appliedCount} 个重复零件的历史核价，请进入逐件核价页审核后手动完成报价提交。`)
+      const response = await applyRepeatQuotes(orderInfo.value.id)
+      if (response.appliedCount > 0) {
+        ElMessage.success(`已自动套用 ${response.appliedCount} 个重复零件的历史核价，请进入逐件核价页审核后手动完成报价提交。`)
       }
     } catch (error) {
       console.error(error)
       ElMessage.warning('重复件自动核价失败，可进入逐件核价页面手动处理。')
     }
   }
-
-  localStorage.setItem(`erp_global_config_${orderInfo.value.id}`, JSON.stringify(config))
-  localStorage.setItem('erp_global_config', JSON.stringify(config))
 
   ElMessage.success('基础设定已保存，正在为您跳转至逐件核价中心...')
 
@@ -478,11 +459,12 @@ const fetchOrderData = async () => {
   
   isLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/market/summary/${testRfqId.value}`)
-    if (response.data && response.data.orderInfo) {
-      orderInfo.value = response.data.orderInfo
-      itemList.value = response.data.itemList
+    const response = await getMarketSummary(testRfqId.value)
+    if (response && response.orderInfo) {
+      orderInfo.value = response.orderInfo
+      itemList.value = response.itemList
       if (orderInfo.value.engineerConfig) {
+        globalConfigStore.applyEngineerConfig(orderInfo.value.id, orderInfo.value.engineerConfig)
         assignConfig(orderInfo.value.engineerConfig)
       }
       await loadRepeatAnalysis(orderInfo.value.id, !!orderInfo.value.engineerConfig)
@@ -556,10 +538,10 @@ const loadRepeatAnalysis = async (rfqId, skipRecommendedConfig = false) => {
   repeatAnalysis.value = null
   if (!rfqId) return
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/engineer/repeat-analysis/${rfqId}`)
-    repeatAnalysis.value = response.data
+    const response = await getRepeatAnalysis(rfqId)
+    repeatAnalysis.value = response
     if (!skipRecommendedConfig) {
-      applyRecommendedConfig(response.data?.recommendedConfig)
+      applyRecommendedConfig(response?.recommendedConfig)
     }
   } catch (error) {
     console.error(error)

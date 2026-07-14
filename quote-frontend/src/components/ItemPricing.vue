@@ -474,6 +474,10 @@ import { useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import { API_BASE_URL } from '../config'
 import { downloadByAxios } from '../download'
+import { getRepeatAnalysis, saveOrderConfig } from '../services/engineerApi'
+import { getMarketSummary } from '../services/marketApi'
+import { useDictionaryStore } from '../stores/dictionaryStore'
+import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
   createAuthenticatedObjectUrl,
   openAuthenticatedFileInNewWindow,
@@ -482,6 +486,8 @@ import {
 } from '../authenticatedFile'
 
 const route = useRoute()
+const dictionaryStore = useDictionaryStore()
+const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
 const globalConfig = ref({ materialName: '45#', shape: '板材', processRoute: [] }) // 默认保底配置
 
@@ -490,31 +496,16 @@ const loading = ref(false)
 const completeLoading = ref(false)
 const refreshLoading = ref(false)
 const pricingTableRef = ref(null)
-const materialOptions = ref([])
-const processOptions = ref([])
-const extraFeeOptions = ref([])
-const markupFeeOptions = ref([])
+const materialOptions = computed(() => dictionaryStore.materials)
+const processOptions = computed(() => dictionaryStore.processes)
+const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
+const markupFeeOptions = computed(() => dictionaryStore.markupFees)
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
 const repeatAnalysis = ref(null)
 
-const combinedProcessOptions = computed(() => [
-  ...processOptions.value.map(item => ({
-    optionKey: `process-${item.id}`,
-    processName: item.processName,
-    label: `${item.processName}（${item.calcType || '工时'}）`,
-    calcType: item.calcType || '工时',
-    sourceType: 'process'
-  })),
-  ...extraFeeOptions.value.map(item => ({
-    optionKey: `extra-${item.id}`,
-    processName: item.feeName,
-    label: `${item.feeName}（非工时费用）`,
-    calcType: '非工时费用',
-    sourceType: 'extra'
-  }))
-])
+const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
 
 const defaultGlobalConfig = () => ({ materialName: '45#', shape: '板材', processRoute: [] })
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
@@ -591,10 +582,7 @@ onMounted(async () => {
   await fetchDicts()
   
   // 1. 读取全局缓存
-  const savedConfig = localStorage.getItem(`erp_global_config_${rfqId.value}`) || localStorage.getItem('erp_global_config')
-  if (savedConfig) {
-    globalConfig.value = JSON.parse(savedConfig)
-  }
+  globalConfig.value = globalConfigStore.loadLocalConfig(rfqId.value)
 
   // 2. 自动根据路由 ID 获取数据
   if (rfqId.value) {
@@ -606,32 +594,10 @@ onMounted(async () => {
 
 const fetchDicts = async () => {
   try {
-    const [materialResponse, processResponse, extraFeeResponse, markupFeeResponse] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/dict/materials`),
-      axios.get(`${API_BASE_URL}/api/dict/processes`),
-      axios.get(`${API_BASE_URL}/api/dict/extra-fee-items`),
-      axios.get(`${API_BASE_URL}/api/dict/markup-fees`)
-    ])
-    materialOptions.value = materialResponse.data || []
-    processOptions.value = processResponse.data || []
-    extraFeeOptions.value = extraFeeResponse.data || []
-    markupFeeOptions.value = markupFeeResponse.data || []
+    await dictionaryStore.loadBaseDicts({ includeMarkupFees: true })
   } catch (error) {
     console.error(error)
-    materialOptions.value = [
-      { id: 'fallback-45', materialName: '45#', density: 7850, plateDensity: 7850, platePrice: 7.1, barDensity: 7850, barPrice: 10, tubeDensity: 7850, tubePrice: 10 }
-    ]
-    processOptions.value = [
-      { id: 'fallback-mill', processName: '铣' },
-      { id: 'fallback-cnc1', processName: 'CNC1' }
-    ]
-    extraFeeOptions.value = []
-    markupFeeOptions.value = [
-      { id: 'fallback-freight', feeName: '运输费', ratePercent: 5, enabled: true },
-      { id: 'fallback-management', feeName: '管理费', ratePercent: 5, enabled: true },
-      { id: 'fallback-profit', feeName: '利润', ratePercent: 15, enabled: true },
-      { id: 'fallback-tax', feeName: '税费', ratePercent: 13, enabled: true }
-    ]
+    dictionaryStore.applyPricingFallbackData()
     ElMessage.warning('基础字典加载失败，已启用本地兜底数据。')
   }
 }
@@ -655,12 +621,10 @@ const fetchQuoteData = async (options = {}) => {
   const scrollTop = options.keepScroll ? getPricingTableScrollTop() : 0
   loading.value = true
   try {
-    // 动态拼接真实的 rfqId
-    const response = await axios.get(`${API_BASE_URL}/api/market/summary/${rfqId.value}`)
-    quoteData.value = response.data
+    // 动态加载真实的 rfqId
+    quoteData.value = await getMarketSummary(rfqId.value)
     if (quoteData.value?.orderInfo?.engineerConfig) {
-      globalConfig.value = normalizeGlobalConfig(quoteData.value.orderInfo.engineerConfig)
-      localStorage.setItem(`erp_global_config_${rfqId.value}`, JSON.stringify(globalConfig.value))
+      globalConfig.value = globalConfigStore.applyEngineerConfig(rfqId.value, quoteData.value.orderInfo.engineerConfig)
     }
     await loadRepeatAnalysis()
     if (options.keepScroll) {
@@ -676,8 +640,7 @@ const fetchQuoteData = async (options = {}) => {
 const loadRepeatAnalysis = async () => {
   if (!rfqId.value) return
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/engineer/repeat-analysis/${rfqId.value}`)
-    repeatAnalysis.value = response.data
+    repeatAnalysis.value = await getRepeatAnalysis(rfqId.value)
   } catch (error) {
     console.error(error)
     repeatAnalysis.value = null
@@ -1199,10 +1162,8 @@ const syncCurrentRouteToGlobalConfig = async () => {
     ...normalizeGlobalConfig(globalConfig.value),
     processRoute: nextProcessRoute
   }
-  globalConfig.value = nextConfig
-  localStorage.setItem(`erp_global_config_${rfqId.value}`, JSON.stringify(nextConfig))
-  localStorage.setItem('erp_global_config', JSON.stringify(nextConfig))
-  await axios.post(`${API_BASE_URL}/api/engineer/order-config/${rfqId.value}`, JSON.parse(JSON.stringify(nextConfig)))
+  globalConfig.value = globalConfigStore.setConfig(rfqId.value, nextConfig)
+  await saveOrderConfig(rfqId.value, JSON.parse(JSON.stringify(nextConfig)))
   return { updated: true }
 }
 

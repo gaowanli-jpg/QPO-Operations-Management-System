@@ -274,16 +274,26 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
-import axios from 'axios'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { API_BASE_URL } from '../config'
+import {
+  deleteExtraFeeItem,
+  deleteMarkupFee as deleteMarkupFeeRequest,
+  deleteMaterial as deleteMaterialRequest,
+  deleteProcess as deleteProcessRequest,
+  saveExtraFeeItem,
+  saveMarkupFee as saveMarkupFeeRequest,
+  saveMaterial as saveMaterialRequest,
+  saveProcess as saveProcessRequest
+} from '../services/dictApi'
+import { useDictionaryStore } from '../stores/dictionaryStore'
 
+const dictionaryStore = useDictionaryStore()
 const activeTab = ref('materials')
-const materials = ref([])
-const processes = ref([])
-const markupFees = ref([])
-const extraFeeItems = ref([])
+const materials = computed(() => dictionaryStore.materials)
+const processes = computed(() => dictionaryStore.processes)
+const markupFees = computed(() => dictionaryStore.markupFees)
+const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
 const loading = ref(false)
 const saving = ref(false)
 
@@ -376,16 +386,7 @@ function createEmptyExtraFee() {
 const loadAll = async () => {
   loading.value = true
   try {
-    const [materialResponse, processResponse, markupFeeResponse, extraFeeResponse] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/dict/materials`),
-      axios.get(`${API_BASE_URL}/api/dict/processes`),
-      axios.get(`${API_BASE_URL}/api/dict/markup-fees`),
-      axios.get(`${API_BASE_URL}/api/dict/extra-fee-items/all`)
-    ])
-    materials.value = materialResponse.data || []
-    processes.value = processResponse.data || []
-    markupFees.value = markupFeeResponse.data || []
-    extraFeeItems.value = extraFeeResponse.data || []
+    await dictionaryStore.loadBaseDicts({ includeMarkupFees: true, includeAllExtraFees: true, force: true })
   } catch (error) {
     console.error(error)
     ElMessage.error('材料或工艺数据加载失败，请检查后端服务。')
@@ -420,13 +421,10 @@ const saveMaterial = async () => {
   saving.value = true
   try {
     const payload = { ...materialForm, density: materialForm.plateDensity || materialForm.barDensity || materialForm.tubeDensity || 0 }
-    const request = materialForm.id
-      ? axios.put(`${API_BASE_URL}/api/dict/materials/${materialForm.id}`, payload)
-      : axios.post(`${API_BASE_URL}/api/dict/materials`, payload)
-    const response = await request
-    ElMessage.success(response.data.message || '保存成功')
+    const response = await saveMaterialRequest(payload)
+    ElMessage.success(response.message || '保存成功')
     materialDialogVisible.value = false
-    await loadAll()
+    await dictionaryStore.reloadAfterMutation()
   } catch (error) {
     console.error(error)
     ElMessage.error('材料保存失败。')
@@ -440,13 +438,10 @@ const saveProcess = async () => {
   processForm.calcType = '工时'
   saving.value = true
   try {
-    const request = processForm.id
-      ? axios.put(`${API_BASE_URL}/api/dict/processes/${processForm.id}`, processForm)
-      : axios.post(`${API_BASE_URL}/api/dict/processes`, processForm)
-    const response = await request
-    ElMessage.success(response.data.message || '保存成功')
+    const response = await saveProcessRequest(processForm)
+    ElMessage.success(response.message || '保存成功')
     processDialogVisible.value = false
-    await loadAll()
+    await dictionaryStore.reloadAfterMutation()
   } catch (error) {
     console.error(error)
     ElMessage.error('工艺保存失败。')
@@ -459,13 +454,10 @@ const saveMarkupFee = async () => {
   if (!markupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
   saving.value = true
   try {
-    const request = markupFeeForm.id
-      ? axios.put(`${API_BASE_URL}/api/dict/markup-fees/${markupFeeForm.id}`, markupFeeForm)
-      : axios.post(`${API_BASE_URL}/api/dict/markup-fees`, markupFeeForm)
-    const response = await request
-    ElMessage.success(response.data.message || '保存成功')
+    const response = await saveMarkupFeeRequest(markupFeeForm)
+    ElMessage.success(response.message || '保存成功')
     markupFeeDialogVisible.value = false
-    await loadAll()
+    await dictionaryStore.reloadAfterMutation()
   } catch (error) {
     console.error(error)
     ElMessage.error('费用类保存失败。')
@@ -478,13 +470,10 @@ const saveExtraFee = async () => {
   if (!extraFeeForm.feeName) return ElMessage.warning('请填写工艺名称。')
   saving.value = true
   try {
-    const request = extraFeeForm.id
-      ? axios.put(`${API_BASE_URL}/api/dict/extra-fee-items/${extraFeeForm.id}`, extraFeeForm)
-      : axios.post(`${API_BASE_URL}/api/dict/extra-fee-items`, extraFeeForm)
-    const response = await request
-    ElMessage.success(response.data.message || '保存成功')
+    const response = await saveExtraFeeItem(extraFeeForm)
+    ElMessage.success(response.message || '保存成功')
     extraFeeDialogVisible.value = false
-    await loadAll()
+    await dictionaryStore.reloadAfterMutation()
   } catch (error) {
     console.error(error)
     ElMessage.error('非工时费用工艺保存失败。')
@@ -495,30 +484,30 @@ const saveExtraFee = async () => {
 
 const deleteMaterial = async (row) => {
   await ElMessageBox.confirm(`确认删除材料「${row.materialName}」？`, '删除确认', { type: 'warning' })
-  await axios.delete(`${API_BASE_URL}/api/dict/materials/${row.id}`)
+  await deleteMaterialRequest(row.id)
   ElMessage.success('材料已删除')
-  await loadAll()
+  await dictionaryStore.reloadAfterMutation()
 }
 
 const deleteProcess = async (row) => {
   await ElMessageBox.confirm(`确认删除工艺「${row.processName}」？`, '删除确认', { type: 'warning' })
-  await axios.delete(`${API_BASE_URL}/api/dict/processes/${row.id}`)
+  await deleteProcessRequest(row.id)
   ElMessage.success('工艺已删除')
-  await loadAll()
+  await dictionaryStore.reloadAfterMutation()
 }
 
 const deleteMarkupFee = async (row) => {
   await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
-  await axios.delete(`${API_BASE_URL}/api/dict/markup-fees/${row.id}`)
+  await deleteMarkupFeeRequest(row.id)
   ElMessage.success('费用类已删除')
-  await loadAll()
+  await dictionaryStore.reloadAfterMutation()
 }
 
 const deleteExtraFee = async (row) => {
   await ElMessageBox.confirm(`确认删除非工时费用工艺「${row.feeName}」？`, '删除确认', { type: 'warning' })
-  await axios.delete(`${API_BASE_URL}/api/dict/extra-fee-items/${row.id}`)
+  await deleteExtraFeeItem(row.id)
   ElMessage.success('非工时费用工艺已删除')
-  await loadAll()
+  await dictionaryStore.reloadAfterMutation()
 }
 
 onMounted(loadAll)
