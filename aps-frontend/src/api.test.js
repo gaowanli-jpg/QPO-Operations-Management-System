@@ -56,6 +56,17 @@ describe('unwrapResponsePayload', () => {
   test('throws backend message when success is false', () => {
     expect(() => api.unwrapResponsePayload({ success: false, message: '保存失败' }, 200)).toThrow('保存失败')
   })
+
+  test('preserves axios-like response shape for component error handlers', () => {
+    try {
+      api.unwrapResponsePayload({ success: false, message: '保存失败' }, 400)
+    } catch (error) {
+      expect(error.response).toEqual({
+        status: 400,
+        data: { success: false, message: '保存失败' }
+      })
+    }
+  })
 })
 
 describe('extractFilename', () => {
