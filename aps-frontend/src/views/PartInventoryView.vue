@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useInventoryStore } from '../stores/inventoryStore'
 import { field, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
+import { confirmAction } from '../utils/confirm'
 
 const loading = ref(false)
 const error = ref('')
@@ -208,7 +209,7 @@ const submitModifyPending = async () => {
 }
 
 const remove = async (id) => {
-  if (!window.confirm('确认删除这条零件库存？已锁定库存不能删除。')) return
+  if (!await confirmAction('\u786e\u8ba4\u5220\u9664\u8fd9\u6761\u96f6\u4ef6\u5e93\u5b58\uff1f\u5df2\u9501\u5b9a\u5e93\u5b58\u4e0d\u80fd\u5220\u9664\u3002')) return
   await run(async () => {
     await inventoryStore.deletePartInventory(id)
     await Promise.all([loadInventory(), loadCustomers()])

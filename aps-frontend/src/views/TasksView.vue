@@ -1,18 +1,20 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { listDepartments } from '../services/departmentApi'
 import { listTaskCustomers } from '../services/taskApi'
 import { useTaskStore } from '../stores/taskStore'
+import { useReferenceDataStore } from '../stores/referenceDataStore'
 import { customerProjectText, field, label, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
 import TaskTable from '../components/TaskTable.vue'
+import { confirmAction } from '../utils/confirm'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const departments = ref([])
+const referenceStore = useReferenceDataStore()
+const { departments } = storeToRefs(referenceStore)
 const customerOptions = ref([])
 const customerName = ref('')
 const sortMode = ref('')
@@ -65,7 +67,7 @@ const loadTasks = async () => {
 }
 
 const loadDepartments = async () => {
-  departments.value = await listDepartments()
+  await referenceStore.loadDepartments({ force: true })
 }
 
 const loadCustomers = async () => {
@@ -164,7 +166,7 @@ const clearFilters = async () => {
 const deleteSelectedTasks = async () => {
   if (selectedTaskIds.value.length === 0) return
   const ids = [...selectedTaskIds.value]
-  if (!window.confirm(`确认删除 ${ids.length} 条 APS 任务？删除后同一 ERP 提单可重新同步。`)) return
+  if (!await confirmAction(`\u786e\u8ba4\u5220\u9664 ${ids.length} \u6761 APS \u4efb\u52a1\uff1f\u5220\u9664\u540e\u540c\u4e00 ERP \u63d0\u5355\u53ef\u91cd\u65b0\u540c\u6b65\u3002`)) return
   await run(async () => {
     if (assignmentModal.ids.some((id) => ids.includes(id))) {
       closeAssignmentModal()

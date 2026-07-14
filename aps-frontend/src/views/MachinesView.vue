@@ -1,13 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import {
-  createMachine,
-  createMachineCapability,
-  deleteMachine as deleteMachineApi,
-  deleteMachineCapability,
-  listMachineSetupData,
-  updateMachine as updateMachineApi
-} from '../services/machineApi'
+import { storeToRefs } from 'pinia'
+import { useReferenceDataStore } from '../stores/referenceDataStore'
+import { confirmAction } from '../utils/confirm'
 import ApsStatusTag from '../components/ApsStatusTag.vue'
 
 const PROCESS_TYPES = [
@@ -25,10 +20,13 @@ const MACHINE_STATUSES = [
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const departments = ref([])
-const machines = ref([])
-const capabilities = ref([])
-const processes = ref([])
+const referenceStore = useReferenceDataStore()
+const {
+  departments,
+  machines,
+  machineCapabilities: capabilities,
+  processes
+} = storeToRefs(referenceStore)
 const selectedDepartmentId = ref('')
 const machineDrafts = reactive({})
 const capabilityDrafts = reactive({})
@@ -140,11 +138,7 @@ const syncSelectedDepartment = () => {
 }
 
 const loadData = async () => {
-  const setupData = await listMachineSetupData()
-  departments.value = setupData.departments
-  machines.value = setupData.machines
-  capabilities.value = setupData.capabilities
-  processes.value = setupData.processes
+  await referenceStore.loadMachineSetupData({ force: true })
   syncSelectedDepartment()
   syncDrafts()
 }
@@ -170,7 +164,7 @@ const saveMachine = async () => {
   }
   await run(async () => {
     try {
-      await createMachine({
+      await referenceStore.createMachine({
         departmentId: Number(selectedDepartmentId.value),
         machineCode: machineForm.machineCode.trim(),
         machineName: machineForm.machineName.trim(),
@@ -184,7 +178,8 @@ const saveMachine = async () => {
       throw err
     }
     resetMachine()
-    await loadData()
+    syncSelectedDepartment()
+    syncDrafts()
   }, '机台已保存')
 }
 
@@ -197,7 +192,7 @@ const updateMachine = async (machine) => {
   }
   await run(async () => {
     try {
-      await updateMachineApi(machine.id, {
+      await referenceStore.updateMachine(machine.id, {
         departmentId: Number(machine.department_id),
         machineCode: String(draft.machineCode || '').trim(),
         machineName: String(draft.machineName || '').trim(),
@@ -210,15 +205,15 @@ const updateMachine = async (machine) => {
       }
       throw err
     }
-    await loadData()
+    syncDrafts()
   }, '机台已更新')
 }
 
 const removeMachine = async (machine) => {
-  if (!window.confirm(`确认删除机台“${machine.machine_name}”？相关能力会一起删除。`)) return
+  if (!await confirmAction(`\u786e\u8ba4\u5220\u9664\u673a\u53f0\u201c${machine.machine_name}\u201d\uff1f\u76f8\u5173\u80fd\u529b\u4f1a\u4e00\u8d77\u5220\u9664\u3002`)) return
   await run(async () => {
-    await deleteMachineApi(machine.id)
-    await loadData()
+    await referenceStore.deleteMachine(machine.id)
+    syncDrafts()
   }, '机台已删除')
 }
 
@@ -230,7 +225,7 @@ const saveCapability = async (machine) => {
   }
   await run(async () => {
     try {
-      await createMachineCapability({
+      await referenceStore.createMachineCapability({
         machineId: machine.id,
         processId: Number(draft.processId),
         remark: draft.remark
@@ -246,7 +241,6 @@ const saveCapability = async (machine) => {
       processId: '',
       remark: ''
     }
-    await loadData()
   }, '机台能力已保存')
 }
 
@@ -257,10 +251,9 @@ const resetCapabilityProcess = (machineId) => {
 }
 
 const removeCapability = async (capability) => {
-  if (!window.confirm(`确认删除“${capability.process_name}”能力？`)) return
+  if (!await confirmAction(`\u786e\u8ba4\u5220\u9664\u201c${capability.process_name}\u201d\u80fd\u529b\uff1f`)) return
   await run(async () => {
-    await deleteMachineCapability(capability.id)
-    await loadData()
+    await referenceStore.deleteMachineCapability(capability.id)
   }, '机台能力已删除')
 }
 

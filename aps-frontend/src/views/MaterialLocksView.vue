@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useInventoryStore } from '../stores/inventoryStore'
 import DataTable from '../components/DataTable.vue'
+import { confirmAction } from '../utils/confirm'
 
 const loading = ref(false)
 const error = ref('')
@@ -44,7 +45,7 @@ const confirmLock = async (id) => {
 
 const releaseLock = async (id) => {
   if (!id) return
-  if (!window.confirm('确认释放这一条材料库存锁定？释放后库存会回滚，材料缺口会增加。')) return
+  if (!await confirmAction('\u786e\u8ba4\u91ca\u653e\u8fd9\u4e00\u6761\u6750\u6599\u5e93\u5b58\u9501\u5b9a\uff1f\u91ca\u653e\u540e\u5e93\u5b58\u4f1a\u56de\u6eda\uff0c\u6750\u6599\u7f3a\u53e3\u4f1a\u589e\u52a0\u3002')) return
   await run(async () => {
     await inventoryStore.releaseMaterialLock(id)
   }, '锁定已释放')

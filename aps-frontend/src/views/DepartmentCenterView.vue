@@ -1,9 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { listDepartments } from '../services/departmentApi'
 import { getDepartmentCenterTask } from '../services/taskApi'
 import { useTaskStore } from '../stores/taskStore'
+import { useReferenceDataStore } from '../stores/referenceDataStore'
 import { customerProjectText, field, label, number } from '../helpers'
 import ApsPager from '../components/ApsPager.vue'
 import ApsProcessTable from '../components/ApsProcessTable.vue'
@@ -12,7 +12,8 @@ import TaskTable from '../components/TaskTable.vue'
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const departments = ref([])
+const referenceStore = useReferenceDataStore()
+const { departments } = storeToRefs(referenceStore)
 const departmentId = ref('')
 const status = ref('ACTIVE')
 const selectedTaskId = ref(null)
@@ -40,7 +41,7 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadDepartments = async () => {
-  departments.value = await listDepartments()
+  await referenceStore.loadDepartments({ force: true })
 }
 
 const loadTasks = async () => {

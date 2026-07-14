@@ -5,6 +5,7 @@ import { field, number } from '../helpers'
 import { useTaskStore } from '../stores/taskStore'
 import ApsPager from '../components/ApsPager.vue'
 import TaskTable from '../components/TaskTable.vue'
+import { confirmAction } from '../utils/confirm'
 
 const taskStore = useTaskStore()
 const { tasks, selectedTaskIds, page, pageSize, total, syncResult } = storeToRefs(taskStore)
@@ -66,7 +67,7 @@ const changePageSize = async (nextSize) => {
 const deleteSelectedTasks = async () => {
   if (selectedTaskIds.value.length === 0) return
   const ids = [...selectedTaskIds.value]
-  if (!window.confirm(`确认删除 ${ids.length} 条 APS 任务？删除后同一 ERP 提单可重新同步。`)) return
+  if (!await confirmAction(`\u786e\u8ba4\u5220\u9664 ${ids.length} \u6761 APS \u4efb\u52a1\uff1f\u5220\u9664\u540e\u540c\u4e00 ERP \u63d0\u5355\u53ef\u91cd\u65b0\u540c\u6b65\u3002`)) return
   await run(async () => {
     await taskStore.deleteSelectedTasks()
   }, `已删除 ${ids.length} 条 APS 任务`)

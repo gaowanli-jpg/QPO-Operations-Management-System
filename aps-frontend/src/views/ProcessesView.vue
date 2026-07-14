@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { listProcesses, syncProcessesFromErp } from '../services/processApi'
+import { storeToRefs } from 'pinia'
+import { useReferenceDataStore } from '../stores/referenceDataStore'
 
 const PROCESS_TYPES = [
   { value: 'WORK_HOUR', label: '工时工艺' },
@@ -10,7 +11,8 @@ const PROCESS_TYPES = [
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const processes = ref([])
+const referenceStore = useReferenceDataStore()
+const { processes } = storeToRefs(referenceStore)
 const selectedType = ref('WORK_HOUR')
 
 const visibleProcesses = computed(() => (
@@ -40,13 +42,12 @@ const run = async (fn, successMessage = '') => {
 }
 
 const loadProcesses = async () => {
-  processes.value = await listProcesses()
+  await referenceStore.loadProcesses({ force: true })
 }
 
 const syncProcesses = async (processType = '') => {
   await run(async () => {
-    const result = await syncProcessesFromErp(processType)
-    await loadProcesses()
+    const result = await referenceStore.syncProcessesFromErp(processType)
     notice.value = `已同步 ${result.importedCount || 0} 项工艺`
   })
 }

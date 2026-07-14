@@ -1,19 +1,16 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import {
-  adjustDepartmentCapacity,
-  createDepartment,
-  deleteDepartment,
-  listDepartments,
-  resetDepartmentCapacity
-} from '../services/departmentApi'
+import { storeToRefs } from 'pinia'
+import { useReferenceDataStore } from '../stores/referenceDataStore'
+import { confirmAction } from '../utils/confirm'
 import { number } from '../helpers'
 import ApsStatusTag from '../components/ApsStatusTag.vue'
 
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
-const departments = ref([])
+const referenceStore = useReferenceDataStore()
+const { departments } = storeToRefs(referenceStore)
 const adjustForms = reactive({})
 const resetForms = reactive({})
 
@@ -49,7 +46,7 @@ const syncDrafts = () => {
 }
 
 const loadData = async () => {
-  departments.value = await listDepartments()
+  await referenceStore.loadDepartments({ force: true })
   syncDrafts()
 }
 
@@ -64,7 +61,7 @@ const save = async () => {
   }
   await run(async () => {
     try {
-      await createDepartment({
+      await referenceStore.createDepartment({
         departmentName: form.departmentName.trim(),
         departmentType: form.departmentType,
         departmentStatus: form.departmentStatus,
@@ -78,7 +75,7 @@ const save = async () => {
       throw err
     }
     reset()
-    await loadData()
+    syncDrafts()
   }, '部门已保存')
 }
 
@@ -89,8 +86,8 @@ const adjustCapacity = async (department, direction) => {
     return
   }
   await run(async () => {
-    await adjustDepartmentCapacity(department.id, direction * hours)
-    await loadData()
+    await referenceStore.adjustDepartmentCapacity(department.id, direction * hours)
+    syncDrafts()
   }, direction > 0 ? '月可用工时已增加' : '月可用工时已减少')
 }
 
@@ -100,18 +97,18 @@ const resetCapacity = async (department) => {
     error.value = '月可用工时不能为负数'
     return
   }
-  if (!window.confirm(`确认重置“${department.department_name}”的新月容量？已使用工时将清零。`)) return
+  if (!await confirmAction(`\u786e\u8ba4\u91cd\u7f6e\u201c${department.department_name}\u201d\u7684\u65b0\u6708\u5bb9\u91cf\uff1f\u5df2\u4f7f\u7528\u5de5\u65f6\u5c06\u6e05\u96f6\u3002`)) return
   await run(async () => {
-    await resetDepartmentCapacity(department.id, monthlyAvailableHours)
-    await loadData()
+    await referenceStore.resetDepartmentCapacity(department.id, monthlyAvailableHours)
+    syncDrafts()
   }, '部门月度容量已重置')
 }
 
 const remove = async (department) => {
-  if (!window.confirm(`确认删除部门“${department.department_name}”？有正在分配任务时不能删除。`)) return
+  if (!await confirmAction(`\u786e\u8ba4\u5220\u9664\u90e8\u95e8\u201c${department.department_name}\u201d\uff1f\u6709\u6b63\u5728\u5206\u914d\u4efb\u52a1\u65f6\u4e0d\u80fd\u5220\u9664\u3002`)) return
   await run(async () => {
-    await deleteDepartment(department.id)
-    await loadData()
+    await referenceStore.deleteDepartment(department.id)
+    syncDrafts()
   }, '部门已删除')
 }
 
