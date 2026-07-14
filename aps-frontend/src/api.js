@@ -39,7 +39,6 @@ apiClient.interceptors.response.use(
 export const buildRequestConfig = (path, options = {}) => {
   const {
     method = 'GET',
-    body,
     data,
     headers,
     ...rest
@@ -53,17 +52,9 @@ export const buildRequestConfig = (path, options = {}) => {
 
   if (data !== undefined) {
     config.data = data
-  } else if (body !== undefined) {
-    config.data = parseBody(body, nextHeaders)
-    if (!hasHeader(nextHeaders, 'Content-Type') && !(body instanceof FormData)) {
-      config.headers = {
-        ...(nextHeaders || {}),
-        'Content-Type': 'application/json'
-      }
-    }
   }
 
-  if (!config.headers && nextHeaders) {
+  if (nextHeaders) {
     config.headers = nextHeaders
   }
 
@@ -163,27 +154,4 @@ const handleApiStatus = (status) => {
   if (status === 428) {
     onPasswordChangeRequired()
   }
-}
-
-const parseBody = (body, headers) => {
-  if (typeof body !== 'string') return body
-  if (!isJsonBody(headers)) return body
-  try {
-    return JSON.parse(body)
-  } catch {
-    return body
-  }
-}
-
-const isJsonBody = (headers) => {
-  const contentType = getHeader(headers, 'Content-Type')
-  return !contentType || contentType.includes('application/json')
-}
-
-const hasHeader = (headers, name) => getHeader(headers, name) !== undefined
-
-const getHeader = (headers, name) => {
-  if (!headers) return undefined
-  const match = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase())
-  return match ? headers[match] : undefined
 }

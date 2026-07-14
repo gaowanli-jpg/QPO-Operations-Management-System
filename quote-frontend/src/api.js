@@ -40,7 +40,6 @@ apiClient.interceptors.response.use(
 export const buildRequestConfig = (path, options = {}) => {
   const {
     method = 'GET',
-    body,
     data,
     headers,
     ...rest
@@ -54,17 +53,9 @@ export const buildRequestConfig = (path, options = {}) => {
 
   if (data !== undefined) {
     config.data = data
-  } else if (body !== undefined) {
-    config.data = parseBody(body, nextHeaders)
-    if (!hasHeader(nextHeaders, 'Content-Type') && !(body instanceof FormData)) {
-      config.headers = {
-        ...(nextHeaders || {}),
-        'Content-Type': 'application/json'
-      }
-    }
   }
 
-  if (!config.headers && nextHeaders) {
+  if (nextHeaders) {
     config.headers = nextHeaders
   }
 
@@ -143,6 +134,40 @@ export const readBlobErrorMessage = async (error) => {
   return data?.message || error.message || ''
 }
 
+export const readFileErrorMessage = readBlobErrorMessage
+
+export const revokeObjectUrl = (url) => {
+  if (url?.startsWith('blob:')) {
+    window.URL.revokeObjectURL(url)
+  }
+}
+
+export const createAuthenticatedObjectUrl = async (path) => {
+  const response = await apiClient.get(path, { responseType: 'blob' })
+  return window.URL.createObjectURL(response.data)
+}
+
+export const openAuthenticatedFileInNewWindow = async (path) => {
+  const targetWindow = window.open('', '_blank')
+  if (!targetWindow) {
+    return { success: false, blocked: true }
+  }
+  targetWindow.opener = null
+
+  try {
+    const objectUrl = await createAuthenticatedObjectUrl(path)
+    targetWindow.location.href = objectUrl
+    window.setTimeout?.(() => revokeObjectUrl(objectUrl), 60_000)
+    return { success: true }
+  } catch (error) {
+    targetWindow.close?.()
+    return {
+      success: false,
+      message: await readBlobErrorMessage(error)
+    }
+  }
+}
+
 const normalizeRequestError = async (error) => {
   if (error.payload) {
     return error
@@ -164,27 +189,4 @@ const handleApiStatus = (status) => {
   if (status === 428) {
     onPasswordChangeRequired()
   }
-}
-
-const parseBody = (body, headers) => {
-  if (typeof body !== 'string') return body
-  if (!isJsonBody(headers)) return body
-  try {
-    return JSON.parse(body)
-  } catch {
-    return body
-  }
-}
-
-const isJsonBody = (headers) => {
-  const contentType = getHeader(headers, 'Content-Type')
-  return !contentType || contentType.includes('application/json')
-}
-
-const hasHeader = (headers, name) => getHeader(headers, name) !== undefined
-
-const getHeader = (headers, name) => {
-  if (!headers) return undefined
-  const match = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase())
-  return match ? headers[match] : undefined
 }

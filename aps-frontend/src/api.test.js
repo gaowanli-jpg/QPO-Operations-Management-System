@@ -21,28 +21,30 @@ beforeAll(async () => {
 })
 
 describe('buildRequestConfig', () => {
-  test('converts legacy JSON body options into axios data', () => {
+  test('uses axios data instead of legacy body options', () => {
     const config = api.buildRequestConfig('/api/aps/pmc/tasks', {
       method: 'POST',
-      body: JSON.stringify({ ids: [1, 2] })
+      data: { ids: [1, 2] }
     })
 
     expect(config).toEqual({
       url: '/api/aps/pmc/tasks',
       method: 'POST',
-      data: { ids: [1, 2] },
-      headers: { 'Content-Type': 'application/json' }
+      data: { ids: [1, 2] }
     })
   })
 
-  test('prefers explicit data over legacy body', () => {
+  test('preserves explicit headers without injecting defaults', () => {
     const config = api.buildRequestConfig('/api/aps/admin/users', {
       method: 'PUT',
-      body: JSON.stringify({ ignored: true }),
-      data: { enabled: false }
+      headers: { 'X-Trace-Id': 'trace-1' }
     })
 
-    expect(config.data).toEqual({ enabled: false })
+    expect(config).toEqual({
+      url: '/api/aps/admin/users',
+      method: 'PUT',
+      headers: { 'X-Trace-Id': 'trace-1' }
+    })
   })
 })
 

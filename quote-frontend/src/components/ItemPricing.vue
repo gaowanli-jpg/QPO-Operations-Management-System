@@ -487,7 +487,7 @@ import {
   openAuthenticatedFileInNewWindow,
   readFileErrorMessage,
   revokeObjectUrl
-} from '../authenticatedFile'
+} from '../api'
 
 const route = useRoute()
 const dictionaryStore = useDictionaryStore()

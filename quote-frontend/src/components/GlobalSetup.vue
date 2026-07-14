@@ -205,7 +205,7 @@ import {
   openAuthenticatedFileInNewWindow,
   readFileErrorMessage,
   revokeObjectUrl
-} from '../authenticatedFile'
+} from '../api'
 
 const router = useRouter()
 const dictionaryStore = useDictionaryStore()
