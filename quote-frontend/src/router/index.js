@@ -1,16 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import MarketDashboard from '../components/MarketDashboard.vue'
-import MarketRelease from '../components/MarketRelease.vue'
-import QuoteProcess from '../components/QuoteProcess.vue'
-import GlobalSetup from '../components/GlobalSetup.vue'
-import ItemPricing from '../components/ItemPricing.vue'
-import MaterialProcessManage from '../components/MaterialProcessManage.vue'
-import OrderManage from '../components/OrderManage.vue'
-import HistoryOrderManage from '../components/HistoryOrderManage.vue'
 import LoginView from '../components/LoginView.vue'
-import UserManage from '../components/UserManage.vue'
-import QuoteTemplateManage from '../components/QuoteTemplateManage.vue'
 import { useAuthStore } from '../stores/authStore'
+
+const MarketDashboard = () => import('../components/MarketDashboard.vue')
+const MarketRelease = () => import('../components/MarketRelease.vue')
+const QuoteProcess = () => import('../components/QuoteProcess.vue')
+const GlobalSetup = () => import('../components/GlobalSetup.vue')
+const ItemPricing = () => import('../components/ItemPricing.vue')
+const MaterialProcessManage = () => import('../components/MaterialProcessManage.vue')
+const OrderManage = () => import('../components/OrderManage.vue')
+const HistoryOrderManage = () => import('../components/HistoryOrderManage.vue')
+const UserManage = () => import('../components/UserManage.vue')
+const QuoteTemplateManage = () => import('../components/QuoteTemplateManage.vue')
 
 const routes = [
   { path: '/login', component: LoginView },

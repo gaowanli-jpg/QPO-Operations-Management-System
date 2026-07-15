@@ -42,7 +42,8 @@ Files and meaning:
 - The staged ERP UI redesign is structurally complete.
 - Final browser walkthrough is complete and documented in `docs/erp-ui-redesign/19-final-browser-walkthrough.md`. Final screenshots are captured in `docs/erp-ui-redesign/screenshots/final-*.png` against the Vite hot-start frontend at `http://localhost:5173` with Docker ERP backend data.
 - Final punch-list sprint is complete and documented in `docs/erp-ui-redesign/19-final-walkthrough-and-punch-list.md`. It only tightened the market import fallback folder button and dense table/action button spacing.
-- Next recommended follow-up is to freeze the ERP UI baseline, or move to a separate performance/code-splitting task. Defer bundle splitting, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
+- Performance code-splitting step is complete and documented in `docs/erp-ui-redesign/20-performance-code-splitting.md`: ERP business routes are lazy-loaded and Vite/Rolldown vendor chunks split the previous oversized main bundle without changing page logic.
+- Next recommended follow-up is to freeze the ERP UI and first-pass frontend performance baseline. Defer deeper startup profiling, Element Plus on-demand registration, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
 - Stage 0 screenshots are now captured in `docs/erp-ui-redesign/screenshots/` using local Microsoft Edge plus a temporary Playwright package from npm cache. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
 
 ## Work Cadence For ERP UI Stages
