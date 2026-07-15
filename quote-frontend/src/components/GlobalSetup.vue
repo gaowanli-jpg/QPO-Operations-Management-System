@@ -1,28 +1,62 @@
 <template>
-  <div class="setup-container">
-    <div class="test-header">
-      <div class="selected-order">
-        <span class="selected-order-label">当前订单</span>
-        <span class="selected-order-value">{{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择' }}</span>
+  <div class="erp-page engineering-setup-page">
+    <header class="erp-page-header engineering-page-header">
+      <div>
+        <h1 class="erp-page-title">工程部工艺与核价</h1>
+        <p class="erp-page-description">
+          先选择待核价订单，核对图纸和零件清单，再设置整单默认材料、形态和通用工艺路线。
+        </p>
       </div>
-      <el-button type="primary" @click="openOrderPicker" :loading="isLoading">
-        选择订单
-      </el-button>
-      <el-button @click="fetchOrderData" :disabled="!testRfqId" :loading="isLoading">
-        刷新当前订单
-      </el-button>
-    </div>
+      <div class="erp-page-actions engineering-header-actions">
+        <el-button type="primary" @click="openOrderPicker" :loading="isLoading">
+          选择订单
+        </el-button>
+        <el-button @click="fetchOrderData" :disabled="!testRfqId" :loading="isLoading">
+          刷新当前订单
+        </el-button>
+      </div>
+    </header>
 
-    <el-row :gutter="16" class="setup-grid">
-      <el-col :span="12">
-        <div class="overview-section">
-          <h3 class="panel-heading">
-            订单概览 <span v-if="orderInfo.rfqNo" class="order-no">({{ orderInfo.rfqNo }})</span>
-          </h3>
-          <p class="panel-desc">
-            系统已自动同步市场部传入的 Excel 明细与图纸，请工程师在此核对并预览。
-          </p>
+    <section class="erp-surface engineering-context-card">
+      <div class="engineering-context-main">
+        <span class="selected-order-label">当前订单</span>
+        <strong class="selected-order-value">
+          {{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
+        </strong>
+      </div>
+      <div class="engineering-metric-grid">
+        <div class="engineering-metric">
+          <span>零件数</span>
+          <strong>{{ itemList.length || 0 }}</strong>
+        </div>
+        <div class="engineering-metric">
+          <span>重复件</span>
+          <strong>{{ repeatAnalysis?.repeatCount ?? '-' }}</strong>
+        </div>
+        <div class="engineering-metric">
+          <span>新件</span>
+          <strong>{{ repeatAnalysis?.newCount ?? '-' }}</strong>
+        </div>
+        <div class="engineering-metric">
+          <span>通用工序</span>
+          <strong>{{ config.processRoute.length }}</strong>
+        </div>
+      </div>
+    </section>
 
+    <section class="engineering-workspace">
+      <section class="erp-table-surface engineering-overview-panel">
+        <div class="erp-table-header engineering-panel-header">
+          <div>
+            <h2 class="erp-table-title">
+              订单概览 <span v-if="orderInfo.rfqNo" class="order-no">({{ orderInfo.rfqNo }})</span>
+            </h2>
+            <p class="panel-desc">
+              系统已自动同步市场部传入的 Excel 明细与图纸，请工程师在此核对并预览。
+            </p>
+          </div>
+        </div>
+        <div class="erp-table-body engineering-table-body">
           <el-alert
             v-if="repeatAnalysis"
             :title="`重复订单识别：${repeatAnalysis.repeatCount || 0} 个重复零件，${repeatAnalysis.newCount || 0} 个新零件`"
@@ -32,7 +66,12 @@
             class="repeat-alert"
           />
 
-          <el-table :data="itemList" border stripe height="450" v-loading="isLoading">
+          <div v-if="!orderInfo.id" class="erp-empty-state engineering-order-empty">
+            <strong>请先选择工程核价订单</strong>
+            <span>选择订单后，这里会显示零件清单、重复件识别和图纸预览入口。</span>
+          </div>
+
+          <el-table v-else :data="itemList" border stripe height="520" v-loading="isLoading">
             <el-table-column prop="partNo" label="图号" width="140" />
             <el-table-column prop="version" label="版本" width="80" align="center" />
             <el-table-column prop="description" label="物料描述" min-width="120" show-overflow-tooltip />
@@ -43,10 +82,9 @@
                 <el-tag v-else type="info" size="small">新件</el-tag>
               </template>
             </el-table-column>
-            
-            <el-table-column label="图纸" width="155" align="center">
+            <el-table-column label="图纸" width="170" align="center">
               <template #default="scope">
-                <div v-if="scope.row.drawingUrl" class="drawing-actions">
+                <div v-if="scope.row.drawingUrl" class="erp-table-actions drawing-actions">
                   <el-button
                     type="success"
                     size="small"
@@ -69,13 +107,17 @@
             </el-table-column>
           </el-table>
         </div>
-      </el-col>
+      </section>
 
-      <el-col :span="12">
-        <div class="config-section">
-          <h2 class="panel-heading">订单全局默认设定</h2>
-          <p class="desc">工程师请先总览左侧图纸，设定适用于本批次大部分零件的【基础材质】与【工序路线】。</p>
+      <section class="erp-surface engineering-config-panel">
+        <div class="erp-section-header engineering-panel-header">
+          <div>
+            <h2 class="erp-section-title">订单全局默认设定</h2>
+            <p class="desc">设置适用于本批次大部分零件的基础材质、形态与工序路线，后续逐件核价仍可单独调整。</p>
+          </div>
+        </div>
 
+        <div class="erp-section-body">
           <el-alert
             v-if="repeatAnalysis?.repeatCount > 0"
             title="已根据同客户已提单历史重复件推荐默认材料与工艺路线，可继续手动调整后覆盖到本单其他零件。"
@@ -85,58 +127,66 @@
             class="repeat-alert"
           />
 
-          <el-form label-width="100px" class="setup-form">
-            <div class="section-title">默认材料设定</div>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="默认材质">
-                  <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
-                    <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
-                    <span class="picker-trigger-action">选择</span>
-                  </el-button>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="默认形态">
-                  <el-select v-model="config.shape" class="full-width">
-                    <el-option label="板材/方块" value="板材" />
-                    <el-option label="圆棒材" value="棒材" />
-                    <el-option label="管材" value="管材" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <div class="section-title process-title">通用工艺路线排程</div>
-            <div class="process-box">
-              <el-row :gutter="10" v-for="(proc, index) in config.processRoute" :key="index" class="process-row">
-                <el-col :span="4"><el-tag type="info">第{{ index + 1 }}道</el-tag></el-col>
-                <el-col :span="14">
-                  <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
-                    <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
-                      {{ formatProcessLabel(proc, '选择全局默认工序') }}
-                    </span>
-                    <span class="picker-trigger-action">选择</span>
-                  </el-button>
+          <el-form label-width="100px" class="erp-dialog-form setup-form">
+            <section class="erp-dialog-section engineering-config-section">
+              <div class="section-title">默认材料与形态</div>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="默认材质">
+                    <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
+                      <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
+                      <span class="picker-trigger-action">选择</span>
+                    </el-button>
+                  </el-form-item>
                 </el-col>
-                <el-col :span="6">
-                  <el-button type="danger" plain size="small" @click="removeProcess(index)">删除</el-button>
+                <el-col :span="12">
+                  <el-form-item label="默认形态">
+                    <el-select v-model="config.shape" class="full-width">
+                      <el-option label="板材/方块" value="板材" />
+                      <el-option label="圆棒材" value="棒材" />
+                      <el-option label="管材" value="管材" />
+                    </el-select>
+                  </el-form-item>
                 </el-col>
               </el-row>
-              <el-button type="primary" plain class="add-process-btn" @click="addProcess">
-                + 添加通用工序
-              </el-button>
-            </div>
+            </section>
 
-            <div class="form-actions">
+            <section class="erp-dialog-section engineering-config-section">
+              <div class="section-title process-title">通用工艺路线排程</div>
+              <div class="process-box">
+                <el-row :gutter="10" v-for="(proc, index) in config.processRoute" :key="index" class="process-row">
+                  <el-col :span="4"><el-tag type="info">第{{ index + 1 }}道</el-tag></el-col>
+                  <el-col :span="14">
+                    <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
+                      <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
+                        {{ formatProcessLabel(proc, '选择全局默认工序') }}
+                      </span>
+                      <span class="picker-trigger-action">选择</span>
+                    </el-button>
+                  </el-col>
+                  <el-col :span="6">
+                    <el-button type="danger" plain size="small" class="erp-danger-action" @click="removeProcess(index)">删除</el-button>
+                  </el-col>
+                </el-row>
+                <el-button type="primary" plain class="add-process-btn" @click="addProcess">
+                  + 添加通用工序
+                </el-button>
+              </div>
+            </section>
+
+            <div class="engineering-save-panel">
+              <div>
+                <strong>保存整单默认设定</strong>
+                <span>保存后进入逐件核价中心，逐个零件仍可覆盖材料、工艺和费用。</span>
+              </div>
               <el-button type="primary" size="large" @click="handleNext" class="submit-btn">
                 保存设定，进入逐件核价
               </el-button>
             </div>
           </el-form>
         </div>
-      </el-col>
-    </el-row>
+      </section>
+    </section>
 
     <el-dialog
       v-model="previewVisible"
@@ -145,11 +195,6 @@
       top="5vh"
       destroy-on-close
     >
-      <div class="preview-toolbar">
-        <el-button type="primary" plain @click="openDrawingInNewWindow(currentPreviewUrl)">
-          新窗口打开图纸
-        </el-button>
-      </div>
       <div v-loading="!iframeLoaded" class="pdf-frame-shell">
         <iframe 
           :src="previewSrc" 
@@ -159,6 +204,13 @@
           @load="iframeLoaded = true"
         ></iframe>
       </div>
+      <template #footer>
+        <div class="erp-dialog-footer preview-dialog-footer">
+          <el-button type="primary" plain @click="openDrawingInNewWindow(currentPreviewUrl)">
+            新窗口打开图纸
+          </el-button>
+        </div>
+      </template>
     </el-dialog>
 
     <OrderPickerDialog
@@ -580,61 +632,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.setup-container {
-  padding: 0;
-}
-
-.test-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 14px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface);
-}
-
-.selected-order {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  color: var(--erp-text);
-}
-
-.selected-order-label {
-  flex: none;
-  padding-left: 10px;
-  border-left: 3px solid var(--erp-primary);
-  color: var(--erp-text);
-  font-weight: 700;
-}
-
-.selected-order-value {
-  overflow: hidden;
-  color: var(--erp-text-secondary);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.overview-section,
-.config-section {
-  min-height: 560px;
-  padding: 16px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface);
-}
-
-.panel-heading {
-  margin: 0;
-  color: var(--erp-text);
-  font-size: 18px;
-  line-height: 1.3;
-}
-
 .order-no {
   color: var(--erp-primary);
   font-size: 13px;
@@ -643,29 +640,126 @@ onMounted(async () => {
 
 .panel-desc,
 .desc {
+  margin: 6px 0 0;
   color: var(--erp-text-secondary);
   font-size: 13px;
   line-height: 1.6;
 }
 
-.panel-desc {
-  margin: 6px 0 12px;
+.engineering-page-header {
+  align-items: center;
 }
 
-.desc {
-  margin: 6px 0 14px;
+.engineering-header-actions {
+  min-width: 260px;
+}
+
+.engineering-context-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(360px, 2fr);
+  gap: var(--erp-space-4);
+  align-items: center;
+  padding: var(--erp-space-4) var(--erp-space-5);
+}
+
+.engineering-context-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-2);
+  min-width: 0;
+}
+
+.selected-order-label {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+  font-weight: var(--erp-font-weight-bold);
+  letter-spacing: 0.02em;
+}
+
+.selected-order-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--erp-text);
+  font-size: var(--erp-font-size-lg);
+  line-height: var(--erp-line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engineering-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--erp-space-2);
+}
+
+.engineering-metric {
+  min-width: 0;
+  padding: var(--erp-space-3);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface-muted);
+}
+
+.engineering-metric span {
+  display: block;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+}
+
+.engineering-metric strong {
+  display: block;
+  margin-top: var(--erp-space-1);
+  color: var(--erp-text);
+  font-size: var(--erp-font-size-xl);
+  line-height: var(--erp-line-height-tight);
+}
+
+.engineering-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
+  gap: var(--erp-space-4);
+  align-items: start;
+}
+
+.engineering-overview-panel,
+.engineering-config-panel {
+  overflow: hidden;
+}
+
+.engineering-panel-header {
+  align-items: flex-start;
+}
+
+.engineering-table-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-3);
+}
+
+.engineering-order-empty strong,
+.engineering-order-empty span {
+  display: block;
+}
+
+.engineering-order-empty strong {
+  color: var(--erp-text);
+}
+
+.engineering-config-section + .engineering-config-section,
+.engineering-save-panel {
+  margin-top: var(--erp-space-3);
 }
 
 .repeat-alert {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .setup-form {
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .section-title {
-  margin: 18px 0 10px;
+  margin: 0 0 12px;
   padding-left: 10px;
   border-left: 3px solid var(--erp-primary);
   color: var(--erp-text);
@@ -675,7 +769,7 @@ onMounted(async () => {
 }
 
 .process-title {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .process-box {
@@ -690,8 +784,11 @@ onMounted(async () => {
   align-items: center;
 }
 
+.process-row:last-of-type {
+  margin-bottom: 12px;
+}
+
 .add-process-btn,
-.submit-btn,
 .full-width {
   width: 100%;
 }
@@ -735,28 +832,43 @@ onMounted(async () => {
   font-weight: 700;
 }
 
-.form-actions {
+.engineering-save-panel {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--erp-border-soft);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-4);
+  border: 1px solid var(--erp-primary);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-primary-soft);
+}
+
+.engineering-save-panel strong,
+.engineering-save-panel span {
+  display: block;
+}
+
+.engineering-save-panel strong {
+  color: var(--erp-text);
+  font-size: var(--erp-font-size-md);
+}
+
+.engineering-save-panel span {
+  margin-top: var(--erp-space-1);
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+}
+
+.submit-btn {
+  min-width: 210px;
 }
 
 .drawing-actions {
-  display: flex;
   justify-content: center;
-  gap: 6px;
 }
 
 .drawing-actions :deep(.el-button + .el-button) {
   margin-left: 0;
-}
-
-.preview-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 10px;
 }
 
 .pdf-frame-shell {
@@ -765,27 +877,33 @@ onMounted(async () => {
 }
 
 @media (max-width: 1180px) {
-  .setup-grid :deep(.el-row) {
-    display: block;
+  .engineering-context-card,
+  .engineering-workspace {
+    grid-template-columns: 1fr;
   }
 
-  .setup-grid :deep(.el-col) {
-    max-width: 100%;
-    width: 100%;
-    margin-bottom: 14px;
-  }
-
-  .overview-section,
-  .config-section {
-    min-height: auto;
+  .engineering-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 760px) {
-  .test-header,
-  .selected-order {
-    flex-direction: column;
+  .engineering-context-card,
+  .engineering-save-panel {
     align-items: stretch;
+  }
+
+  .engineering-header-actions,
+  .engineering-save-panel {
+    flex-direction: column;
+  }
+
+  .engineering-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .submit-btn {
+    width: 100%;
   }
 }
 </style>

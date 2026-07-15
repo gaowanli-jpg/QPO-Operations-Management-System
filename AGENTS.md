@@ -35,7 +35,8 @@ Files and meaning:
 - Stage 2 is complete: `quote-frontend/src/App.vue` now has grouped short sidebar labels, route-aware header context, clearer active navigation, and polished user controls.
 - Stage 3 is complete: `MarketDashboard.vue`, `OrderManage.vue`, and `MaterialProcessManage.vue` now use shared `erp-page`, `erp-toolbar`, `erp-surface`, and `erp-table-surface` layout patterns without changing business behavior.
 - Stage 4 is complete: `OrderManage.vue` and `MaterialProcessManage.vue` now use shared dialog form, dialog section, table action, upload surface, footer, and danger action classes without changing business behavior.
-- The next ERP UI stage is Stage 5: redesign `GlobalSetup.vue` into a clearer engineering setup workflow while preserving existing configuration, upload, API, Pinia, and route behavior.
+- Stage 5 is complete: `GlobalSetup.vue` now uses the shared ERP page shell, prominent order context, clearer drawing review, grouped global configuration sections, and an obvious save/continue panel without changing business behavior.
+- The next ERP UI stage is Stage 6: redesign `ItemPricing.vue` as a clearer item pricing workbench while preserving calculation logic, API calls, Pinia/store behavior, and submission flow.
 - Stage 0 screenshots are now captured in `docs/erp-ui-redesign/screenshots/` using local Microsoft Edge plus a temporary Playwright package from npm cache. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
 
 ## Work Cadence For ERP UI Stages
