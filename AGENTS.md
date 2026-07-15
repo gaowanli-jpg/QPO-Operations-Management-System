@@ -32,8 +32,9 @@ Files and meaning:
 
 - Stage 0 is complete and committed in `25e9fd3` (`docs: add ERP UI stage 0 audit`).
 - Stage 1 is complete: `quote-frontend/src/style.css` now contains expanded ERP tokens, Element Plus base mappings, and shared classes for later page migrations.
-- The next ERP UI stage is Stage 2: polish `quote-frontend/src/App.vue` and shared shell styling without changing auth, routing, or permissions.
-- Screenshot capture was not available in Stage 0 because browser automation could not initialize and Playwright Chromium did not finish downloading. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
+- Stage 2 is complete: `quote-frontend/src/App.vue` now has grouped short sidebar labels, route-aware header context, clearer active navigation, and polished user controls.
+- The next ERP UI stage is Stage 3: migrate 2-3 simpler business pages to shared `erp-page`, `erp-toolbar`, `erp-surface`, and `erp-table-surface` patterns without changing behavior.
+- Stage 0 screenshots are now captured in `docs/erp-ui-redesign/screenshots/` using local Microsoft Edge plus a temporary Playwright package from npm cache. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
 
 ## Work Cadence For ERP UI Stages
 

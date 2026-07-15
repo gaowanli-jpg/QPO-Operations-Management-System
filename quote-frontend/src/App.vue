@@ -10,53 +10,51 @@
 
         <el-menu
           :default-active="activeMenu"
-          :default-openeds="defaultOpeneds"
           class="el-menu-vertical"
-          background-color="#172331"
-          text-color="#a9bbcc"
-          active-text-color="#ffffff"
           router
         >
-          <div class="menu-title">核心业务流</div>
+          <div v-if="canSee(['MARKET', 'ADMIN'])" class="menu-section">市场</div>
+          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/market">
+            <el-icon><DataBoard /></el-icon>
+            <span>新单导入</span>
+          </el-menu-item>
+          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/quote-process">
+            <el-icon><Document /></el-icon>
+            <span>报价处理</span>
+          </el-menu-item>
+          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/release">
+            <el-icon><Files /></el-icon>
+            <span>议价提单</span>
+          </el-menu-item>
 
-          <el-sub-menu v-if="canSee(['MARKET', 'ADMIN'])" index="/market-orders">
-            <template #title>
-              <el-icon><DataBoard /></el-icon>
-              <span>市场部订单处理</span>
-            </template>
-            <el-menu-item index="/market">新单导入中心</el-menu-item>
-            <el-menu-item index="/quote-process">报价单处理生成</el-menu-item>
-            <el-menu-item index="/release">议价与提单</el-menu-item>
-          </el-sub-menu>
-
+          <div v-if="canSee(['ENGINEER', 'ADMIN'])" class="menu-section">工程</div>
           <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/engineering">
             <el-icon><Setting /></el-icon>
-            <span>工程部：工艺与核价</span>
+            <span>工程设置</span>
           </el-menu-item>
-
           <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/material-process">
             <el-icon><Tools /></el-icon>
-            <span>材料与工艺管理</span>
+            <span>材料工艺</span>
           </el-menu-item>
 
+          <div v-if="canSee(['MARKET', 'ADMIN'])" class="menu-section">订单</div>
           <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/orders">
             <el-icon><Document /></el-icon>
             <span>订单管理</span>
           </el-menu-item>
-
           <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/history-orders">
             <el-icon><Files /></el-icon>
-            <span>历史订单管理</span>
+            <span>历史订单</span>
           </el-menu-item>
 
+          <div v-if="canSee(['ADMIN'])" class="menu-section">系统</div>
           <el-menu-item v-if="canSee(['ADMIN'])" index="/users">
             <el-icon><User /></el-icon>
-            <span>系统管理：用户权限</span>
+            <span>用户权限</span>
           </el-menu-item>
-
           <el-menu-item v-if="canSee(['ADMIN'])" index="/quote-template">
             <el-icon><Files /></el-icon>
-            <span>系统管理：报价单模板</span>
+            <span>报价模板</span>
           </el-menu-item>
         </el-menu>
       </el-aside>
@@ -64,14 +62,26 @@
       <el-container class="main-container">
         <el-header class="header">
           <div class="header-left">
-            <el-icon class="collapse-btn"><Fold /></el-icon>
-            <span class="breadcrumb">当前系统状态：正常运行</span>
+            <span class="shell-icon-button" aria-hidden="true">
+              <el-icon><Fold /></el-icon>
+            </span>
+            <div class="header-copy">
+              <div class="shell-title">{{ shellMeta.title }}</div>
+              <div class="shell-subtitle">{{ shellMeta.description }}</div>
+            </div>
           </div>
           <div class="header-right">
-            <el-avatar size="small">{{ userInitial }}</el-avatar>
-            <span class="username">{{ displayName }}（{{ roleName }}）</span>
-            <el-button text type="primary" @click="openPasswordDialog(false)">修改密码</el-button>
-            <el-button text type="primary" @click="logout">退出</el-button>
+            <div class="user-card">
+              <el-avatar size="small" class="user-avatar">{{ userInitial }}</el-avatar>
+              <div class="user-copy">
+                <span class="username">{{ displayName }}</span>
+                <span class="role-pill">{{ roleName }}</span>
+              </div>
+            </div>
+            <div class="header-actions">
+              <el-button text type="primary" @click="openPasswordDialog(false)">修改密码</el-button>
+              <el-button text type="danger" @click="logout">退出</el-button>
+            </div>
           </div>
         </el-header>
 
@@ -127,13 +137,63 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const activeMenu = computed(() => route.path)
-const defaultOpeneds = ['/market-orders']
+const activeMenu = computed(() => {
+  if (route.path === '/pricing') return '/engineering'
+  return route.path
+})
 const isLoginPage = computed(() => route.path === '/login')
 const displayName = computed(() => authStore.displayName)
 const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const roleName = computed(() => authStore.roleName)
 const mustChangePassword = computed(() => authStore.mustChangePassword)
+
+const shellMetaByPath = {
+  '/market': {
+    title: '新单导入',
+    description: '导入客户询价表和图纸，推送工程评估。'
+  },
+  '/quote-process': {
+    title: '报价处理',
+    description: '维护报价交期，生成客户报价输出。'
+  },
+  '/release': {
+    title: '议价提单',
+    description: '处理议价结果并生成生产交付资料。'
+  },
+  '/engineering': {
+    title: '工程设置',
+    description: '选择订单并配置默认材料、形态和工艺路线。'
+  },
+  '/pricing': {
+    title: '逐件核价',
+    description: '逐项完成材料、工艺和费用核算。'
+  },
+  '/material-process': {
+    title: '材料工艺',
+    description: '维护工程核价使用的材料、工艺和费用字典。'
+  },
+  '/orders': {
+    title: '订单管理',
+    description: '查看订单、图纸、提单和工艺表状态。'
+  },
+  '/history-orders': {
+    title: '历史订单',
+    description: '查询历史报价、提单和工艺资料。'
+  },
+  '/users': {
+    title: '用户权限',
+    description: '维护账号状态、角色和密码安全。'
+  },
+  '/quote-template': {
+    title: '报价模板',
+    description: '维护客户报价单导出模板。'
+  }
+}
+
+const shellMeta = computed(() => shellMetaByPath[route.path] || {
+  title: '智能运营管理',
+  description: '当前系统状态：正常运行'
+})
 
 const passwordVisible = ref(false)
 const forcePasswordMode = ref(false)
@@ -217,7 +277,7 @@ html, body, #app {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+  font-family: var(--erp-font-sans);
 }
 
 .erp-layout {
@@ -228,25 +288,21 @@ html, body, #app {
 }
 
 .sidebar {
-  background-color: var(--erp-rail);
-  box-shadow: none;
-  z-index: 1000;
+  z-index: var(--erp-z-sticky);
   display: flex;
   flex-direction: column;
+  background: var(--erp-rail);
+  box-shadow: none;
 }
 
 .logo-box {
-  min-height: 70px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 0 16px;
-  background-color: var(--erp-rail);
-  color: #dbe7f3;
-  font-size: 16px;
-  font-weight: 700;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: var(--erp-space-3);
+  min-height: 72px;
+  padding: 0 var(--erp-space-4);
+  color: var(--erp-rail-text);
+  border-bottom: 1px solid var(--erp-rail-border);
 }
 
 .logo-icon {
@@ -254,65 +310,80 @@ html, body, #app {
   place-items: center;
   width: 42px;
   height: 42px;
-  margin-right: 0;
-  font-size: 15px;
-  border: 0;
-  border-radius: 8px;
+  flex: 0 0 42px;
   padding: 0;
-  background: var(--erp-accent);
   color: var(--erp-rail);
+  font-size: var(--erp-font-size-sm);
+  font-weight: var(--erp-font-weight-bold);
+  background: var(--erp-accent);
+  border: 0;
+  border-radius: var(--erp-radius-lg);
 }
 
 .logo-text {
-  line-height: 1.2;
+  min-width: 0;
+  color: var(--erp-rail-text);
+  font-size: var(--erp-font-size-lg);
+  font-weight: var(--erp-font-weight-bold);
+  line-height: var(--erp-line-height-tight);
 }
 
 .el-menu-vertical {
-  border-right: none !important;
   flex: 1;
+  padding: var(--erp-space-3) var(--erp-space-3) var(--erp-space-4);
+  border-right: none !important;
+  overflow-y: auto;
+  background: var(--erp-rail) !important;
 }
 
-.menu-title {
-  color: #7f93a8;
-  font-size: 12px;
-  padding: 16px 16px 6px;
+.menu-section {
+  padding: var(--erp-space-4) var(--erp-space-3) var(--erp-space-1);
+  color: var(--erp-rail-muted);
+  font-size: var(--erp-font-size-xs);
+  font-weight: var(--erp-font-weight-bold);
+  line-height: var(--erp-line-height-tight);
 }
 
-.sidebar .el-menu {
-  padding: 0 10px 16px;
+.menu-section:first-child {
+  padding-top: var(--erp-space-1);
 }
 
-.sidebar .el-menu-item,
-.sidebar .el-sub-menu__title {
-  min-height: 40px;
+.sidebar .el-menu-item {
   height: 40px;
-  margin: 4px 0;
-  border-radius: 8px;
-  padding: 0 12px !important;
+  min-height: 40px;
+  margin: var(--erp-space-1) 0;
+  padding: 0 var(--erp-space-3) !important;
+  color: var(--erp-rail-text) !important;
+  border-radius: var(--erp-radius-lg);
+  background: transparent !important;
+  transition:
+    background-color var(--erp-duration-fast) var(--erp-ease-standard),
+    color var(--erp-duration-fast) var(--erp-ease-standard);
 }
 
-.sidebar .el-sub-menu .el-menu-item {
-  min-width: 0;
-  min-height: 34px;
-  height: 34px;
-  margin: 4px 0 4px 14px;
-  padding-left: 38px !important;
-  font-size: 13px;
+.sidebar .el-menu-item:hover {
+  color: var(--erp-rail-active) !important;
+  background: var(--erp-rail-hover) !important;
 }
 
-.sidebar .el-menu-item:hover,
-.sidebar .el-sub-menu__title:hover,
 .sidebar .el-menu-item.is-active {
-  background-color: var(--erp-rail-soft) !important;
+  color: var(--erp-rail-active) !important;
+  background: var(--erp-rail-active-bg) !important;
+  font-weight: var(--erp-font-weight-bold);
 }
 
-.sidebar .el-sub-menu.is-active > .el-sub-menu__title {
-  color: #ffffff !important;
+.sidebar .el-menu-item.is-active::before {
+  width: 3px;
+  height: 18px;
+  margin-right: var(--erp-space-2);
+  background: var(--erp-accent);
+  border-radius: var(--erp-radius-full);
+  content: '';
 }
 
-.sidebar .el-menu-item .el-icon,
-.sidebar .el-sub-menu__title .el-icon {
-  margin-right: 8px;
+.sidebar .el-menu-item .el-icon {
+  margin-right: var(--erp-space-2);
+  color: inherit;
 }
 
 .main-container {
@@ -321,50 +392,136 @@ html, body, #app {
 }
 
 .header {
-  height: 56px;
-  background-color: var(--erp-surface);
-  border-bottom: 1px solid var(--erp-border);
-  box-shadow: none;
+  z-index: var(--erp-z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 18px;
-  z-index: 999;
+  height: 64px;
+  padding: 0 var(--erp-space-5);
+  background: var(--erp-surface);
+  border-bottom: 1px solid var(--erp-border);
+  box-shadow: var(--erp-shadow-none);
 }
 
 .header-left,
 .header-right {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
-.collapse-btn {
-  font-size: 20px;
-  color: var(--erp-text-secondary);
-  margin-right: 15px;
+.header-left {
+  gap: var(--erp-space-3);
 }
 
-.breadcrumb {
-  font-size: 14px;
+.header-right {
+  gap: var(--erp-space-3);
+}
+
+.shell-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   color: var(--erp-text-secondary);
+  border-radius: var(--erp-radius-lg);
+}
+
+.header-copy {
+  min-width: 0;
+}
+
+.shell-title {
+  color: var(--erp-text);
+  font-size: var(--erp-font-size-lg);
+  font-weight: var(--erp-font-weight-bold);
+  line-height: var(--erp-line-height-tight);
+}
+
+.shell-subtitle {
+  margin-top: 2px;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+  line-height: var(--erp-line-height-tight);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-2);
+  min-width: 0;
+  padding: var(--erp-space-1) var(--erp-space-2);
+  background: var(--erp-surface-muted);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-full);
+}
+
+.user-avatar {
+  flex: 0 0 auto;
+  color: var(--erp-text-inverse);
+  background: var(--erp-primary);
+}
+
+.user-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-2);
+  min-width: 0;
 }
 
 .username {
-  margin-left: 10px;
-  margin-right: 10px;
-  font-size: 14px;
   color: var(--erp-text);
-  font-weight: 500;
+  font-size: var(--erp-font-size-sm);
+  font-weight: var(--erp-font-weight-bold);
+  white-space: nowrap;
+}
+
+.role-pill {
+  padding: 2px var(--erp-space-2);
+  color: var(--erp-primary);
+  font-size: var(--erp-font-size-xs);
+  font-weight: var(--erp-font-weight-bold);
+  background: var(--erp-primary-soft);
+  border-radius: var(--erp-radius-full);
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-1);
 }
 
 .app-main {
-  background-color: var(--erp-bg);
-  padding: 24px;
+  min-width: 0;
+  background: var(--erp-bg);
+  padding: var(--erp-space-6);
   overflow-y: auto;
 }
 
 .password-alert {
-  margin-bottom: 16px;
+  margin-bottom: var(--erp-space-4);
 }
 
+@media (max-width: 960px) {
+  .header {
+    height: auto;
+    min-height: 64px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--erp-space-2);
+    padding: var(--erp-space-3) var(--erp-space-4);
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .app-main {
+    padding: var(--erp-space-4);
+  }
+}
 </style>

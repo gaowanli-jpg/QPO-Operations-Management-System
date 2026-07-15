@@ -48,6 +48,11 @@
   --erp-rail: #172331;
   --erp-rail-soft: #223247;
   --erp-rail-hover: #2b3d55;
+  --erp-rail-text: #dbe7f3;
+  --erp-rail-muted: #8ea3b8;
+  --erp-rail-active: #ffffff;
+  --erp-rail-active-bg: #263a52;
+  --erp-rail-border: rgba(255, 255, 255, 0.08);
   --erp-accent: #f3c44f;
 
   --erp-space-0: 0;

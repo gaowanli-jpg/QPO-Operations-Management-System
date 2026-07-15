@@ -10,6 +10,6 @@ Stage 0 screenshot targets:
 - `stage0-order-management.png`
 - `stage0-material-process-management.png`
 
-These images were not generated during the 2026-07-15 Stage 0 pass because the available browser automation runtime could not initialize and the temporary Playwright Chromium download did not complete within the available command window.
+These images were generated after the Stage 1 foundation pass using the local Microsoft Edge executable with a temporary Playwright package from the npm cache. No browser binary or screenshot dependency was added to the project.
 
-Keep this folder as the expected location for before/after screenshots when browser capture is available.
+The in-app browser runtime still fails in this environment with a runtime property conflict, so future automated visual checks can reuse the local Edge fallback when needed.

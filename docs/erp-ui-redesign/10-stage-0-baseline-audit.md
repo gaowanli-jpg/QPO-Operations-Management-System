@@ -28,13 +28,13 @@ Required screenshot targets from the roadmap:
 
 | Target | Route / Surface | Status |
 | --- | --- | --- |
-| Login | `/login` | Not captured in this pass. |
-| App shell | authenticated shell on `/market` | Not captured in this pass. |
-| Market import | `/market` | Not captured in this pass. |
-| Engineering setup | `/engineering` | Not captured in this pass. |
-| Item pricing | `/pricing?rfqId=...` | Not captured in this pass. |
-| Order management | `/orders` | Not captured in this pass. |
-| Material/process management | `/material-process` | Not captured in this pass. |
+| Login | `/login` | Captured: `screenshots/stage0-login.png`. |
+| App shell | authenticated shell on `/market` | Captured: `screenshots/stage0-app-shell-market.png`. |
+| Market import | `/market` | Captured: `screenshots/stage0-market-import.png`. |
+| Engineering setup | `/engineering` | Captured: `screenshots/stage0-engineering-setup.png`. |
+| Item pricing | `/pricing?rfqId=...` | Captured: `screenshots/stage0-item-pricing.png`. |
+| Order management | `/orders` | Captured: `screenshots/stage0-order-management.png`. |
+| Material/process management | `/material-process` | Captured: `screenshots/stage0-material-process-management.png`. |
 
 Screenshot capture was attempted without changing project dependencies:
 
@@ -44,7 +44,7 @@ Screenshot capture was attempted without changing project dependencies:
 - `npm exec --yes --package playwright -- playwright install chromium` exceeded the command timeout and the expected Chromium executable was still absent after additional monitoring.
 - The temporary Vite preview service used for the attempt was stopped after the check.
 
-Decision: do not introduce Playwright, browser binaries, or screenshot tooling into the project for Stage 0. Treat screenshots as an environment-dependent follow-up and capture them before or during Stage 1 once a browser runtime is available.
+Follow-up resolution: screenshots were later captured with the local Microsoft Edge executable and a temporary Playwright package from the npm cache. No browser binary or screenshot dependency was added to the project.
 
 ## Current UI Code Inventory
 
@@ -104,13 +104,13 @@ These should become shared ERP layout/component classes over time:
 
 | Acceptance item | Status | Evidence |
 | --- | --- | --- |
-| Login screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
-| App shell screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
-| Market import screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
-| Engineering setup screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
-| Item pricing screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
-| Order management screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
-| Material/process screenshot exists | Not met | Browser capture tooling unavailable in this pass. |
+| Login screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-login.png`, 1440x960. |
+| App shell screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-app-shell-market.png`, 1440x960. |
+| Market import screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-market-import.png`, 1440x960. |
+| Engineering setup screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-engineering-setup.png`, 1440x960. |
+| Item pricing screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-item-pricing.png`, 1440x960. |
+| Order management screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-order-management.png`, 1440x960. |
+| Material/process screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-material-process-management.png`, 1440x960. |
 | `npm test` passes | Met | 11 files, 59 tests passed. |
 | `npm run build` passes | Met | Build completed successfully with one chunk-size warning. |
 
