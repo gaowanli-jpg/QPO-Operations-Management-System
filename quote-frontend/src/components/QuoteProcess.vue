@@ -1,20 +1,19 @@
 <template>
-  <div class="quote-process-container">
-    <el-card shadow="never" class="quote-card">
-      <template #header>
-        <div class="card-header">
+  <div class="erp-page quote-process-page">
+    <header class="erp-page-header quote-process-page-header">
           <div>
             <h2>市场部：报价单处理生成</h2>
           </div>
-          <div class="header-actions">
+          <div class="erp-page-actions header-actions">
             <el-button :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
           </div>
-        </div>
-      </template>
 
+    </header>
+
+    <section class="erp-surface quote-process-workspace">
       <el-row :gutter="16">
         <el-col :span="6">
-          <div class="panel">
+          <div class="erp-surface quote-side-panel">
             <div class="panel-title">RFQ 订单</div>
             <div class="selected-order-text">
               {{ orderInfo.id ? `${orderInfo.rfqNo || orderInfo.id} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
@@ -37,7 +36,7 @@
                 controls-position="right"
                 class="days-input"
               />
-              <div class="batch-actions">
+              <div class="erp-table-actions batch-actions">
                 <el-button :icon="Plus" type="success" :disabled="selectedRows.length === 0" :loading="adjusting" @click="applyShift(1)">
                   增加
                 </el-button>
@@ -113,8 +112,8 @@
         </el-col>
 
         <el-col :span="18">
-          <div class="panel">
-            <div class="panel-title-row">
+          <div class="erp-table-surface quote-process-table-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">零件交期</div>
               <el-tag v-if="itemList.length" type="info">{{ itemList.length }} 项</el-tag>
             </div>
@@ -195,7 +194,7 @@
           </div>
         </el-col>
       </el-row>
-    </el-card>
+    </section>
 
     <OrderPickerDialog
       v-model="orderPickerVisible"
@@ -391,23 +390,14 @@ const exportTemplateSimpleQuote = async () => {
 </script>
 
 <style scoped>
-.quote-process-container {
-  padding: 0;
-}
-
-.quote-card {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-}
-
-.card-header {
+.quote-process-page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
 }
 
-.card-header h2 {
+.quote-process-page-header h2 {
   margin: 0;
   color: var(--erp-text);
   font-size: 20px;
@@ -421,10 +411,8 @@ const exportTemplateSimpleQuote = async () => {
   flex-wrap: wrap;
 }
 
-.panel {
-  background: var(--erp-surface);
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
+.quote-side-panel,
+.quote-process-table-panel {
   padding: 14px;
 }
 
@@ -531,11 +519,11 @@ const exportTemplateSimpleQuote = async () => {
 }
 
 @media (max-width: 1180px) {
-  .quote-process-container :deep(.el-row) {
+  .quote-process-page :deep(.el-row) {
     display: block;
   }
 
-  .quote-process-container :deep(.el-col) {
+  .quote-process-page :deep(.el-col) {
     max-width: 100%;
     width: 100%;
     margin-bottom: 14px;
@@ -543,7 +531,7 @@ const exportTemplateSimpleQuote = async () => {
 }
 
 @media (max-width: 760px) {
-  .card-header {
+  .quote-process-page-header {
     flex-direction: column;
     align-items: stretch;
   }

@@ -1,82 +1,100 @@
 <template>
-  <div class="history-container">
-    <el-card shadow="never" class="history-card">
-      <template #header>
-        <div class="card-header">
-          <div>
-            <h2>历史订单管理</h2>
-            <p>先选择客户，再查看该客户下的历史订单；彻底删除后不可恢复。</p>
-          </div>
-          <div class="header-actions">
-            <el-select
-              v-model="selectedCustomer"
-              filterable
-              clearable
-              placeholder="先选择客户"
-              class="customer-select"
-              @change="handleCustomerChange"
-              @clear="handleCustomerClear"
-            >
-              <el-option
-                v-for="customer in customers"
-                :key="customer"
-                :label="customer"
-                :value="customer"
-              />
-            </el-select>
-            <el-input
-              v-model="keyword"
-              clearable
-              :disabled="!selectedCustomer"
-              placeholder="搜索 RFQ 号 / 状态"
-              class="search-input"
-              @keyup.enter="handleSearch"
-              @clear="handleSearch"
-            />
-            <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
-            <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
-          </div>
-        </div>
-      </template>
+  <div class="erp-page history-page">
+    <header class="erp-page-header history-page-header">
+      <div>
+        <h1 class="erp-page-title">历史订单管理</h1>
+        <p class="erp-page-description">先选择客户，再查看该客户下的历史订单；彻底删除后不可恢复。</p>
+      </div>
+      <div class="erp-page-actions history-page-actions">
+        <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
+      </div>
+    </header>
 
-      <el-empty v-if="!selectedCustomer" description="请先选择客户查看历史订单" />
+    <section class="erp-toolbar history-toolbar">
+      <div class="erp-toolbar-group history-filter-group">
+        <el-select
+          v-model="selectedCustomer"
+          filterable
+          clearable
+          placeholder="先选择客户"
+          class="customer-select"
+          @change="handleCustomerChange"
+          @clear="handleCustomerClear"
+        >
+          <el-option
+            v-for="customer in customers"
+            :key="customer"
+            :label="customer"
+            :value="customer"
+          />
+        </el-select>
+        <el-input
+          v-model="keyword"
+          clearable
+          :disabled="!selectedCustomer"
+          placeholder="搜索 RFQ 号 / 状态"
+          class="search-input"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        />
+        <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface history-table-surface">
+      <div v-if="!selectedCustomer" class="erp-empty-state history-empty-state">
+        <el-empty description="请先选择客户查看历史订单" />
+      </div>
 
       <template v-else>
-        <el-table :data="orders" border stripe height="600" v-loading="loading">
-          <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
-          <el-table-column prop="status" label="状态" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag type="info" size="small">{{ row.status || '-' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="零件" width="90" align="center">
-            <template #default="{ row }">{{ row.itemCount || 0 }}</template>
-          </el-table-column>
-          <el-table-column label="已报价" width="90" align="center">
-            <template #default="{ row }">{{ row.quotedCount || 0 }}</template>
-          </el-table-column>
-          <el-table-column label="缺图" width="90" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.missingDrawingCount > 0 ? 'warning' : 'success'" size="small">
-                {{ row.missingDrawingCount || 0 }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="提单行" width="90" align="center">
-            <template #default="{ row }">{{ row.ticketCount || 0 }}</template>
-          </el-table-column>
-          <el-table-column label="工艺表行" width="100" align="center">
-            <template #default="{ row }">{{ row.processSheetCount || 0 }}</template>
-          </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-          <el-table-column label="操作" width="210" align="center" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="openDetail(row)">查看订单</el-button>
-              <el-button v-if="canDeleteHistoryOrders" size="small" type="danger" plain @click="deleteHistoryOrder(row)">彻底删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="pagination-wrap">
+        <div class="erp-table-body">
+          <el-table :data="orders" border stripe height="600" v-loading="loading">
+            <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
+            <el-table-column prop="status" label="状态" width="120" align="center">
+              <template #default="{ row }">
+                <el-tag type="info" size="small">{{ row.status || '-' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="零件" width="90" align="center">
+              <template #default="{ row }">{{ row.itemCount || 0 }}</template>
+            </el-table-column>
+            <el-table-column label="已报价" width="90" align="center">
+              <template #default="{ row }">{{ row.quotedCount || 0 }}</template>
+            </el-table-column>
+            <el-table-column label="缺图" width="90" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.missingDrawingCount > 0 ? 'warning' : 'success'" size="small">
+                  {{ row.missingDrawingCount || 0 }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="提单行" width="90" align="center">
+              <template #default="{ row }">{{ row.ticketCount || 0 }}</template>
+            </el-table-column>
+            <el-table-column label="工艺表行" width="100" align="center">
+              <template #default="{ row }">{{ row.processSheetCount || 0 }}</template>
+            </el-table-column>
+            <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
+            <el-table-column label="操作" width="210" align="center" fixed="right">
+              <template #default="{ row }">
+                <div class="erp-table-actions history-row-actions">
+                  <el-button size="small" @click="openDetail(row)">查看订单</el-button>
+                  <el-button
+                    v-if="canDeleteHistoryOrders"
+                    size="small"
+                    type="danger"
+                    plain
+                    class="erp-danger-action"
+                    @click="deleteHistoryOrder(row)"
+                  >
+                    彻底删除
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <div class="erp-pagination">
           <el-pagination
             v-model:current-page="page"
             v-model:page-size="pageSize"
@@ -87,7 +105,7 @@
           />
         </div>
       </template>
-    </el-card>
+    </section>
 
     <el-drawer v-model="detailVisible" title="历史订单详情" size="72%">
       <div v-if="orderDetail" v-loading="detailLoading" class="detail-wrap">
@@ -160,7 +178,6 @@
     </el-drawer>
   </div>
 </template>
-
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -306,41 +323,8 @@ onMounted(loadCustomers)
 </script>
 
 <style scoped>
-.history-container {
-  padding: 0;
-}
-
-.history-card {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.card-header h2 {
-  margin: 0;
-  color: var(--erp-text);
-  font-size: 20px;
-  line-height: 1.3;
-}
-
-.card-header p {
-  margin: 6px 0 0;
-  color: var(--erp-text-secondary);
-  font-size: 13px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.history-filter-group {
+  width: 100%;
 }
 
 .customer-select {
@@ -351,10 +335,16 @@ onMounted(loadCustomers)
   width: 260px;
 }
 
-.pagination-wrap {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
+.history-table-surface .erp-table-body {
+  padding: var(--erp-space-3);
+}
+
+.history-empty-state {
+  margin: var(--erp-space-4);
+}
+
+.history-row-actions {
+  width: 100%;
 }
 
 .detail-wrap {
@@ -363,7 +353,7 @@ onMounted(loadCustomers)
 
 .detail-descriptions :deep(.el-descriptions__label) {
   color: var(--erp-text-secondary);
-  background: #f5f7fb;
+  background: var(--erp-surface-soft);
 }
 
 .detail-tabs {
@@ -372,17 +362,6 @@ onMounted(loadCustomers)
 
 .delete-alert {
   margin: 14px 0;
-}
-
-@media (max-width: 1200px) {
-  .card-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 760px) {

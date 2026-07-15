@@ -1,64 +1,65 @@
 <template>
-  <div class="page">
-    <el-card shadow="never">
-      <template #header>
-        <div class="toolbar">
-          <div>
-            <h2>用户管理</h2>
-            <p>维护登录账号、部门角色和启用状态</p>
-          </div>
-          <el-button type="primary" @click="openCreate">新增用户</el-button>
-        </div>
-      </template>
+  <div class="erp-page user-manage-page">
+    <header class="erp-page-header user-page-header">
+      <div>
+        <h1 class="erp-page-title">用户管理</h1>
+        <p class="erp-page-description">维护登录账号、部门角色和启用状态。</p>
+      </div>
+      <div class="erp-page-actions user-page-actions">
+        <el-button type="primary" @click="openCreate">新增用户</el-button>
+      </div>
+    </header>
 
-      <el-table :data="users" border v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="username" label="账号" min-width="130" />
-        <el-table-column prop="displayName" label="显示名称" min-width="150" />
-        <el-table-column label="角色" width="130">
-          <template #default="{ row }">{{ roleLabel(row.role) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="安全状态" width="160">
-          <template #default="{ row }">
-            <el-tag v-if="isLocked(row)" type="danger" size="small">已锁定</el-tag>
-            <el-tag v-else-if="row.forcePasswordChange" type="warning" size="small">需改密</el-tag>
-            <el-tag v-else type="success" size="small">正常</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="lastLoginAt" label="最近登录" min-width="180" />
-        <el-table-column prop="createdAt" label="创建时间" min-width="180" />
-        <el-table-column label="操作" width="330" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" @click="openPassword(row)">重置密码</el-button>
-            <el-button
-              size="small"
-              :type="row.enabled ? 'warning' : 'success'"
-              @click="toggleEnabled(row)"
-            >
-              {{ row.enabled ? '禁用' : '启用' }}
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              plain
-              :disabled="isProtectedUser(row)"
-              @click="deleteUser(row)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <section class="erp-toolbar user-toolbar">
+      <div class="erp-toolbar-group">
+        <strong>账号列表</strong>
+        <span class="user-toolbar-note">启用、禁用、重置密码和删除账号都在这里处理。</span>
+      </div>
+    </section>
+
+    <section class="erp-table-surface user-table-surface">
+      <div class="erp-table-body">
+        <el-table :data="users" border v-loading="loading">
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column prop="username" label="账号" min-width="130" />
+          <el-table-column prop="displayName" label="显示名称" min-width="150" />
+          <el-table-column label="角色" width="130">
+            <template #default="{ row }">{{ roleLabel(row.role) }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="安全状态" width="160">
+            <template #default="{ row }">
+              <el-tag v-if="isLocked(row)" type="danger" size="small">已锁定</el-tag>
+              <el-tag v-else-if="row.forcePasswordChange" type="warning" size="small">需改密</el-tag>
+              <el-tag v-else type="success" size="small">正常</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="lastLoginAt" label="最近登录" min-width="180" />
+          <el-table-column prop="createdAt" label="创建时间" min-width="180" />
+          <el-table-column label="操作" width="330" fixed="right">
+            <template #default="{ row }">
+              <div class="erp-table-actions user-row-actions">
+                <el-button size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button size="small" @click="openPassword(row)">重置密码</el-button>
+                <el-button size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleEnabled(row)">
+                  {{ row.enabled ? '禁用' : '启用' }}
+                </el-button>
+                <el-button size="small" type="danger" plain class="erp-danger-action" :disabled="isProtectedUser(row)" @click="deleteUser(row)">
+                  删除
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </section>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑用户' : '新增用户'" width="460px">
-      <el-form :model="form" label-width="90px">
+      <el-form :model="form" label-width="90px" class="erp-dialog-form">
         <el-form-item label="账号">
           <el-input v-model.trim="form.username" :disabled="!!editingId" />
         </el-form-item>
@@ -80,13 +81,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
+        </div>
       </template>
     </el-dialog>
 
     <el-dialog v-model="passwordVisible" title="重置密码" width="420px">
-      <el-form label-width="90px">
+      <el-form label-width="90px" class="erp-dialog-form">
         <el-form-item label="账号">
           <el-input :model-value="passwordTarget?.username" disabled />
         </el-form-item>
@@ -95,13 +98,14 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="passwordVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="resetPassword">确定</el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="passwordVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="resetPassword">确定</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
 </template>
-
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -257,25 +261,16 @@ onMounted(loadUsers)
 </script>
 
 <style scoped>
-.page {
-  min-height: 100%;
+.user-toolbar-note {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+.user-table-surface .erp-table-body {
+  padding: var(--erp-space-3);
 }
 
-h2 {
-  margin: 0 0 6px;
-  font-size: 20px;
-}
-
-p {
-  margin: 0;
-  color: #7a869a;
-  font-size: 13px;
+.user-row-actions {
+  justify-content: flex-start;
 }
 </style>

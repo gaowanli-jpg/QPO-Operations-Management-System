@@ -1,77 +1,87 @@
 <template>
-  <div class="page">
-    <el-card shadow="never" class="template-card">
-      <template #header>
-        <div class="toolbar">
-          <div>
-            <h2>系统管理：报价单模板</h2>
-            <p>维护市场部客户模板报价单，全系统共用一份 .xlsx 模板</p>
-          </div>
-          <el-button :icon="Refresh" plain :loading="loading" @click="loadStatus">刷新状态</el-button>
-        </div>
-      </template>
+  <div class="erp-page template-page">
+    <header class="erp-page-header template-page-header">
+      <div>
+        <h1 class="erp-page-title">系统管理：报价单模板</h1>
+        <p class="erp-page-description">维护市场部客户模板报价单，全系统共用一份 .xlsx 模板。</p>
+      </div>
+      <div class="erp-page-actions template-page-actions">
+        <el-button :icon="Refresh" plain :loading="loading" @click="loadStatus">刷新状态</el-button>
+      </div>
+    </header>
 
-      <el-row :gutter="16">
-        <el-col :span="10">
-          <div class="panel">
-            <div class="panel-title">当前模板</div>
-            <el-descriptions :column="1" border>
-              <el-descriptions-item label="状态">
-                <el-tag :type="templateStatus.exists ? 'success' : 'warning'">
-                  {{ templateStatus.exists ? '已上传' : '未上传' }}
-                </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="文件名">
-                {{ templateStatus.fileName || '-' }}
-              </el-descriptions-item>
-              <el-descriptions-item label="更新时间">
-                {{ formatDateTime(templateStatus.updatedAt) }}
-              </el-descriptions-item>
-              <el-descriptions-item label="大小">
-                {{ formatSize(templateStatus.size) }}
-              </el-descriptions-item>
-            </el-descriptions>
-          </div>
-        </el-col>
+    <section class="erp-toolbar template-toolbar">
+      <div class="erp-toolbar-group">
+        <strong>模板配置</strong>
+        <span class="template-toolbar-note">查看当前模板状态，或上传新的 .xlsx 文件替换全局模板。</span>
+      </div>
+    </section>
 
-        <el-col :span="14">
-          <div class="panel">
-            <div class="panel-title">上传并替换模板</div>
-            <el-alert
-              title="模板第 8 行必须包含：序号、图号、物料描述、图纸状态、材料名称、表面处理、版本、数量、单位、含税单价、含税总价、交货周期、备注。"
-              type="info"
-              show-icon
-              :closable="false"
-              class="template-alert"
-            />
-            <el-upload
-              ref="uploadRef"
-              drag
-              :auto-upload="false"
-              :limit="1"
-              accept=".xlsx"
-              :on-change="handleFileChange"
-              :on-remove="handleFileRemove"
-              :on-exceed="handleExceed"
-            >
-              <el-icon class="upload-icon"><UploadFilled /></el-icon>
-              <div class="el-upload__text">拖入 .xlsx 模板，或点击选择文件</div>
-              <template #tip>
-                <div class="el-upload__tip">上传成功后会立即替换当前全局报价单模板。</div>
-              </template>
-            </el-upload>
-            <div class="actions">
-              <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadTemplate">
-                上传并替换模板
-              </el-button>
+    <section class="erp-table-surface template-workspace">
+      <div class="erp-table-body">
+        <el-row :gutter="16">
+          <el-col :span="10">
+            <div class="erp-surface template-panel">
+              <div class="erp-section-title template-section-title">当前模板</div>
+              <el-descriptions :column="1" border>
+                <el-descriptions-item label="状态">
+                  <el-tag :type="templateStatus.exists ? 'success' : 'warning'">
+                    {{ templateStatus.exists ? '已上传' : '未上传' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="文件名">
+                  {{ templateStatus.fileName || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="更新时间">
+                  {{ formatDateTime(templateStatus.updatedAt) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="大小">
+                  {{ formatSize(templateStatus.size) }}
+                </el-descriptions-item>
+              </el-descriptions>
             </div>
-          </div>
-        </el-col>
-      </el-row>
-    </el-card>
+          </el-col>
+
+          <el-col :span="14">
+            <div class="erp-surface template-panel">
+              <div class="erp-section-title template-section-title">上传并替换模板</div>
+              <el-alert
+                title="模板第 8 行必须包含：序号、图号、物料描述、图纸状态、材料名称、表面处理、版本、数量、单位、含税单价、含税总价、交货周期、备注。"
+                type="info"
+                show-icon
+                :closable="false"
+                class="template-alert"
+              />
+              <div class="erp-upload-surface template-upload-surface">
+                <el-upload
+                  ref="uploadRef"
+                  drag
+                  :auto-upload="false"
+                  :limit="1"
+                  accept=".xlsx"
+                  :on-change="handleFileChange"
+                  :on-remove="handleFileRemove"
+                  :on-exceed="handleExceed"
+                >
+                  <el-icon class="upload-icon"><UploadFilled /></el-icon>
+                  <div class="el-upload__text">拖入 .xlsx 模板，或点击选择文件</div>
+                  <template #tip>
+                    <div class="el-upload__tip">上传成功后会立即替换当前全局报价单模板。</div>
+                  </template>
+                </el-upload>
+              </div>
+              <div class="erp-dialog-footer template-actions">
+                <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadTemplate">
+                  上传并替换模板
+                </el-button>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+      </div>
+    </section>
   </div>
 </template>
-
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -169,76 +179,50 @@ onMounted(loadStatus)
 </script>
 
 <style scoped>
-.page {
-  padding: 0;
-}
-
-.template-card {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.toolbar h2 {
-  margin: 0;
-  font-size: 20px;
-  color: var(--erp-text);
-}
-
-.toolbar p {
-  margin: 6px 0 0;
+.template-toolbar-note {
   color: var(--erp-text-secondary);
-  font-size: 13px;
+  font-size: var(--erp-font-size-sm);
 }
 
-.panel {
+.template-workspace .erp-table-body {
+  padding: var(--erp-space-4);
+}
+
+.template-panel {
   min-height: 280px;
-  padding: 14px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface);
+  padding: var(--erp-space-4);
 }
 
-.panel-title {
-  margin-bottom: 12px;
-  padding-left: 10px;
-  border-left: 3px solid var(--erp-primary);
-  color: var(--erp-text);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.2;
+.template-section-title {
+  margin-bottom: var(--erp-space-3);
 }
 
 .template-alert {
-  margin-bottom: 14px;
+  margin-bottom: var(--erp-space-3);
+}
+
+.template-upload-surface {
+  padding: var(--erp-space-3);
 }
 
 .upload-icon {
-  font-size: 42px;
   color: var(--erp-primary);
+  font-size: 42px;
 }
 
-.actions {
-  margin-top: 14px;
-  display: flex;
-  justify-content: flex-end;
+.template-actions {
+  margin-top: var(--erp-space-3);
 }
 
 @media (max-width: 980px) {
-  .page :deep(.el-row) {
+  .template-page :deep(.el-row) {
     display: block;
   }
 
-  .page :deep(.el-col) {
+  .template-page :deep(.el-col) {
     max-width: 100%;
     width: 100%;
-    margin-bottom: 14px;
+    margin-bottom: var(--erp-space-3);
   }
 }
 </style>

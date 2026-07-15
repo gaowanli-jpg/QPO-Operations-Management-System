@@ -1,19 +1,18 @@
 <template>
-  <div class="release-container">
-    <el-card shadow="never" class="release-card">
-      <template #header>
-        <div class="card-header">
+  <div class="erp-page release-page">
+    <header class="erp-page-header release-page-header">
           <div>
             <h2>市场部：议价确认与提单生成</h2>
             <p>选择客户最终通过的零件，生成正式提单和对应工艺表。</p>
           </div>
-          <el-button type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button>
-        </div>
-      </template>
+          <div class="erp-page-actions release-page-actions"><el-button type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
 
+    </header>
+
+    <section class="erp-surface release-workspace">
       <el-row :gutter="20">
         <el-col :span="7">
-          <div class="panel">
+          <div class="erp-surface release-panel">
             <div class="panel-title">询价单</div>
             <div class="order-picker-row">
               <div class="selected-order-text">
@@ -59,7 +58,7 @@
                 controls-position="right"
                 class="full-width"
               />
-              <div class="lead-actions">
+              <div class="erp-table-actions lead-actions">
                 <el-button
                   type="success"
                   :disabled="selectedRows.length === 0"
@@ -124,7 +123,7 @@
               />
             </div>
 
-            <div class="main-actions">
+            <div class="erp-dialog-footer main-actions">
               <el-button
                 type="success"
                 size="large"
@@ -139,8 +138,8 @@
         </el-col>
 
         <el-col :span="17">
-          <div class="panel">
-            <div class="panel-title-row">
+          <div class="erp-table-surface release-table-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">通过零件选择</div>
               <el-upload
                 ref="selectionUploadRef"
@@ -243,8 +242,8 @@
             </el-table>
           </div>
 
-          <div class="panel ticket-panel">
-            <div class="panel-title-row">
+          <div class="erp-table-surface release-table-panel ticket-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">已生成提单行</div>
               <el-button size="small" type="primary" plain :disabled="ticketList.length === 0" @click="exportExcel('tickets')">
                 导出提单 Excel
@@ -268,14 +267,14 @@
               </el-table-column>
               <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
-                  <el-button type="danger" size="small" plain @click="deleteTicket(scope.row)">删除</el-button>
+                  <div class="erp-table-actions"><el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteTicket(scope.row)">删除</el-button></div>
                 </template>
               </el-table-column>
             </el-table>
           </div>
 
-          <div class="panel ticket-panel">
-            <div class="panel-title-row">
+          <div class="erp-table-surface release-table-panel ticket-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">已生成工艺表行</div>
               <el-button size="small" type="primary" plain :disabled="processSheetList.length === 0" @click="exportExcel('process')">
                 导出工艺表 Excel
@@ -304,14 +303,14 @@
               </el-table-column>
               <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
-                  <el-button type="danger" size="small" plain @click="deleteProcessSheet(scope.row)">删除</el-button>
+                  <div class="erp-table-actions"><el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteProcessSheet(scope.row)">删除</el-button></div>
                 </template>
               </el-table-column>
             </el-table>
           </div>
         </el-col>
       </el-row>
-    </el-card>
+    </section>
 
     <OrderPickerDialog
       v-model="orderPickerVisible"
@@ -746,39 +745,32 @@ const exportExcel = async (type) => {
 </script>
 
 <style scoped>
-.release-container {
+.release-page {
   padding: 0;
 }
 
-.release-card {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-}
-
-.card-header {
+.release-page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
 }
 
-.card-header h2 {
+.release-page-header h2 {
   margin: 0;
   color: var(--erp-text);
   font-size: 20px;
   line-height: 1.3;
 }
 
-.card-header p {
+.release-page-header p {
   margin: 6px 0 0;
   color: var(--erp-text-secondary);
   font-size: 13px;
 }
 
-.panel {
-  background: var(--erp-surface);
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
+.release-panel,
+.release-table-panel {
   padding: 14px;
 }
 
@@ -923,11 +915,11 @@ const exportExcel = async (type) => {
 }
 
 @media (max-width: 1180px) {
-  .release-container :deep(.el-row) {
+  .release-page :deep(.el-row) {
     display: block;
   }
 
-  .release-container :deep(.el-col) {
+  .release-page :deep(.el-col) {
     max-width: 100%;
     width: 100%;
     margin-bottom: 14px;
@@ -935,7 +927,7 @@ const exportExcel = async (type) => {
 }
 
 @media (max-width: 760px) {
-  .card-header,
+  .release-page-header,
   .panel-title-row,
   .order-picker-row {
     grid-template-columns: 1fr;
