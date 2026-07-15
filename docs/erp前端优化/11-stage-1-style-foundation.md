@@ -13,7 +13,7 @@ Stage 1 changes only the global visual foundation and supporting documentation. 
 | `AGENTS.md` | Adds long-term agent memory for the ERP UI redesign docs, cadence, guardrails, and next-step rules. |
 | `quote-frontend/src/style.css` | Expands ERP design tokens, maps Element Plus base variables, and introduces shared ERP layout/component classes. |
 | `quote-frontend/src/styleFoundation.test.js` | Guards that the Stage 1 style foundation keeps required tokens, Element Plus mappings, and shared classes. |
-| `docs/erp-ui-redesign/11-stage-1-style-foundation.md` | Records what Stage 1 changed and what Stage 2 should do next. |
+| `docs/erp前端优化/11-stage-1-style-foundation.md` | Records what Stage 1 changed and what Stage 2 should do next. |
 
 ## What Changed
 

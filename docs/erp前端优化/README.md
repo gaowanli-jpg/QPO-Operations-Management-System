@@ -33,6 +33,7 @@ Use a **clean manufacturing ERP workbench** style:
 
 ## Folder Map
 
+- `AGENTS.md` - ERP frontend optimization memory, working cadence, guardrails, and stable maintenance rules.
 - `01-current-ui-audit.md` - what is messy today and why.
 - `02-open-source-reference.md` - open-source ERP/admin projects to borrow from.
 - `03-design-direction.md` - chosen product design direction.

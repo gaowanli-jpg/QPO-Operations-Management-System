@@ -104,13 +104,13 @@ These should become shared ERP layout/component classes over time:
 
 | Acceptance item | Status | Evidence |
 | --- | --- | --- |
-| Login screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-login.png`, 1440x960. |
-| App shell screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-app-shell-market.png`, 1440x960. |
-| Market import screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-market-import.png`, 1440x960. |
-| Engineering setup screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-engineering-setup.png`, 1440x960. |
-| Item pricing screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-item-pricing.png`, 1440x960. |
-| Order management screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-order-management.png`, 1440x960. |
-| Material/process screenshot exists | Met | `docs/erp-ui-redesign/screenshots/stage0-material-process-management.png`, 1440x960. |
+| Login screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-login.png`, 1440x960. |
+| App shell screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-app-shell-market.png`, 1440x960. |
+| Market import screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-market-import.png`, 1440x960. |
+| Engineering setup screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-engineering-setup.png`, 1440x960. |
+| Item pricing screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-item-pricing.png`, 1440x960. |
+| Order management screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-order-management.png`, 1440x960. |
+| Material/process screenshot exists | Met | `docs/erp前端优化/screenshots/stage0-material-process-management.png`, 1440x960. |
 | `npm test` passes | Met | 11 files, 59 tests passed. |
 | `npm run build` passes | Met | Build completed successfully with one chunk-size warning. |
 

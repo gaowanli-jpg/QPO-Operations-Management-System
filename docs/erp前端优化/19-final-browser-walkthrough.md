@@ -8,7 +8,7 @@ Scope: final visual walkthrough for the ERP frontend redesign after Stage 0-7 an
 - Backend data source: Docker ERP backend at `http://localhost:8080`.
 - Database sample: RFQ `174` / `RFQ-20260612-0002` / customer `大疆`.
 - Viewport: `1440x960`.
-- Screenshot directory: `docs/erp-ui-redesign/screenshots/`.
+- Screenshot directory: `docs/erp前端优化/screenshots/`.
 
 Important: Docker `quote-frontend` was not used for this visual walkthrough because it still represents the older composed frontend image. The screenshots intentionally use the hot-start frontend.
 

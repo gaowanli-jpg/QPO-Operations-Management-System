@@ -14,7 +14,7 @@ Stage 4 starts from the two Stage 3 business pages the user selected: `OrderMana
 | `quote-frontend/src/components/OrderManage.vue` | Applies shared action, danger, dialog-section, upload-surface, and footer classes to order actions and supplement drawing upload dialog. |
 | `quote-frontend/src/components/MaterialProcessManage.vue` | Applies shared form, footer, action-group, and danger-action classes to material/process/fee dictionary dialogs and operation columns. |
 | `quote-frontend/src/pageNormalizationStage4.test.js` | Guards Stage 4 shared class coverage for styles and the two migrated pages. |
-| `docs/erp-ui-redesign/14-stage-4-dialog-form-table-normalization.md` | Records Stage 4 scope, verification, and next-step recommendation. |
+| `docs/erp前端优化/14-stage-4-dialog-form-table-normalization.md` | Records Stage 4 scope, verification, and next-step recommendation. |
 
 ## What Changed
 

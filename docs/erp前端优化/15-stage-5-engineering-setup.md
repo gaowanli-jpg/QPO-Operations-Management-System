@@ -12,7 +12,7 @@ Stage 5 focuses on `GlobalSetup.vue`. It keeps `ItemPricing.vue` deferred to Sta
 | --- | --- |
 | `quote-frontend/src/components/GlobalSetup.vue` | Moves the engineering setup page onto the shared ERP shell and reorganizes order context, drawing review, configuration groups, and save/continue action. |
 | `quote-frontend/src/engineeringSetupStage5.test.js` | Guards the Stage 5 structure and confirms `ItemPricing.vue` remains deferred. |
-| `docs/erp-ui-redesign/15-stage-5-engineering-setup.md` | Records Stage 5 scope, behavior preservation, verification, and next-step recommendation. |
+| `docs/erp前端优化/15-stage-5-engineering-setup.md` | Records Stage 5 scope, behavior preservation, verification, and next-step recommendation. |
 | `AGENTS.md` | Updates long-term memory with Stage 5 completion and Stage 6 as the next UI stage. |
 
 ## What Changed

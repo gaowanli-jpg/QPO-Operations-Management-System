@@ -13,9 +13,9 @@ Stage 2 improves the sidebar, header, active navigation, user controls, and app 
 | `quote-frontend/src/App.vue` | Reworks shell navigation labels, route-to-active-menu mapping, header context, user card, and shell CSS. |
 | `quote-frontend/src/style.css` | Adds rail-specific design tokens for the app shell. |
 | `quote-frontend/src/appShell.test.js` | Guards Stage 2 shell structure, short labels, tokenized colors, and `/pricing` active route behavior. |
-| `docs/erp-ui-redesign/screenshots/*.png` | Adds Stage 0 baseline screenshots and Stage 2 visual check screenshots. |
-| `docs/erp-ui-redesign/10-stage-0-baseline-audit.md` | Updates Stage 0 screenshot acceptance from missing to complete. |
-| `docs/erp-ui-redesign/screenshots/README.md` | Documents the local Edge screenshot fallback. |
+| `docs/erp前端优化/screenshots/*.png` | Adds Stage 0 baseline screenshots and Stage 2 visual check screenshots. |
+| `docs/erp前端优化/10-stage-0-baseline-audit.md` | Updates Stage 0 screenshot acceptance from missing to complete. |
+| `docs/erp前端优化/screenshots/README.md` | Documents the local Edge screenshot fallback. |
 
 ## Screenshot Gap Resolution
 

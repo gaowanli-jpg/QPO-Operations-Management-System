@@ -12,7 +12,7 @@ Goal:
 Files:
 
 - No production code required.
-- Optional: `docs/erp-ui-redesign/screenshots/`.
+- Optional: `docs/erp前端优化/screenshots/`.
 
 Acceptance:
 

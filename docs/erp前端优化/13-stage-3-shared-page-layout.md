@@ -1,4 +1,4 @@
-﻿# 13 Stage 3 Shared Page Layout
+# 13 Stage 3 Shared Page Layout
 
 Date: 2026-07-15
 
@@ -14,7 +14,7 @@ Stage 3 moves three simpler business pages onto the shared Stage 1 layout classe
 | `quote-frontend/src/components/OrderManage.vue` | Moves page title, filters, table body, and pagination into shared page, toolbar, table surface, and pagination classes. |
 | `quote-frontend/src/components/MaterialProcessManage.vue` | Moves dictionary management title, action row, tabs, and table area into shared page, toolbar, and table surface classes. |
 | `quote-frontend/src/pageLayoutStage3.test.js` | Guards the Stage 3 shared page layout migration for all three pages. |
-| `docs/erp-ui-redesign/screenshots/stage3-*.png` | Adds visual check screenshots for the migrated order and material/process pages. |
+| `docs/erp前端优化/screenshots/stage3-*.png` | Adds visual check screenshots for the migrated order and material/process pages. |
 
 ## What Changed
 
