@@ -1,38 +1,70 @@
 <template>
-  <div class="pricing-container">
-    <el-card shadow="never" class="main-card">
-      <template #header>
-        <div class="card-header">
-          <h2>工程部：逐件工艺路线与核价中心</h2>
-          <div class="header-tags">
-            <el-tag type="success" size="large" v-if="rfqId">正在处理询价单 ID: {{ rfqId }}</el-tag>
-            <el-tag size="large" v-if="quoteData?.orderInfo?.status">订单状态：{{ quoteData.orderInfo.status }}</el-tag>
-          </div>
-        </div>
-      </template>
+  <div class="erp-page pricing-workbench-page">
+    <header class="erp-page-header pricing-page-header">
+      <div>
+        <h1 class="erp-page-title">逐件工艺路线与核价中心</h1>
+        <p class="erp-page-description">
+          按零件逐项核算材料、工艺、费用与报价，完成后提交市场报价。
+        </p>
+      </div>
+      <div class="erp-page-actions pricing-page-actions">
+        <el-tag type="success" size="large" v-if="rfqId">询价单 ID: {{ rfqId }}</el-tag>
+        <el-tag size="large" v-if="quoteData?.orderInfo?.status">订单状态：{{ quoteData.orderInfo.status }}</el-tag>
+      </div>
+    </header>
 
-      <!-- 头部操作区 -->
-      <div class="toolbar-row">
-        <div class="toolbar-actions">
-          <el-button @click="$router.back()">返回修改全局设定</el-button>
-          <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
-            生成报价单
-          </el-button>
-          <el-button type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
-            一键刷新核价
-          </el-button>
-          <el-button type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
-            完成报价提交
-          </el-button>
+    <section class="erp-surface pricing-context-card">
+      <div class="pricing-context-copy">
+        <span class="pricing-context-kicker">当前核价任务</span>
+        <strong>RFQ {{ rfqId || '-' }}</strong>
+        <p>继承工程全局配置后，在这里完成每个零件的材料与工艺核价。</p>
+      </div>
+      <div class="pricing-metric-grid">
+        <div class="pricing-metric">
+          <span class="pricing-metric-label">零件总数</span>
+          <strong class="pricing-metric-value">{{ quoteData?.itemList?.length || 0 }}</strong>
+        </div>
+        <div class="pricing-metric">
+          <span class="pricing-metric-label">已核价</span>
+          <strong class="pricing-metric-value">
+            {{ quoteData?.itemList?.filter(item => item.finalUnitPrice != null).length || 0 }}
+          </strong>
+        </div>
+        <div class="pricing-metric">
+          <span class="pricing-metric-label">重复件</span>
+          <strong class="pricing-metric-value">
+            {{ quoteData?.itemList?.filter(item => repeatItemMap.has(itemIdentityKey(item))).length || 0 }}
+          </strong>
         </div>
       </div>
+    </section>
 
-      <div v-if="!quoteData" class="empty-state" v-loading="loading">
+    <section class="erp-toolbar pricing-toolbar">
+      <div class="erp-toolbar-group pricing-toolbar-copy">
+        <span class="pricing-toolbar-title">逐件核价清单</span>
+        <small>先处理有图纸零件，再生成报价单并提交。</small>
+      </div>
+      <div class="erp-toolbar-group pricing-toolbar-actions">
+        <el-button @click="$router.back()">返回修改全局设定</el-button>
+        <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
+          生成报价单
+        </el-button>
+        <el-button type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
+          一键刷新核价
+        </el-button>
+        <el-button type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
+          完成报价提交
+        </el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface pricing-table-surface">
+      <div v-if="!quoteData" class="erp-empty-state pricing-empty-state" v-loading="loading">
         <el-empty description="正在拉取市场部数据..." />
       </div>
 
       <!-- 数据大表格 -->
-      <div v-else class="table-shell">
+      <div v-else class="erp-table-body pricing-table-body">
         <el-table
           ref="pricingTableRef"
           :data="quoteData.itemList"
@@ -65,14 +97,19 @@
               <el-tag v-else type="info" size="small">新件</el-tag>
             </template>
           </el-table-column>
-          
+
           <el-table-column label="图纸" width="90" align="center">
             <template #default="scope">
-              <el-button 
-                v-if="scope.row.drawingUrl" 
-                type="success" size="small" plain 
-                @click="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"
-              >图纸</el-button>
+              <div v-if="scope.row.drawingUrl" class="erp-table-actions pricing-row-actions">
+                <el-button
+                  type="success"
+                  size="small"
+                  plain
+                  @click="openPdfPreview(scope.row.drawingUrl, scope.row.partNo)"
+                >
+                  图纸
+                </el-button>
+              </div>
               <el-tag v-else type="info" size="small">无图</el-tag>
             </template>
           </el-table-column>
@@ -91,18 +128,22 @@
           <el-table-column prop="status" label="状态" width="100" align="center" />
           <el-table-column label="操作" width="120" align="center" fixed="right">
             <template #default="scope">
-              <el-button
-                v-if="scope.row.drawingUrl"
-                type="primary"
-                size="small"
-                @click="openQuoteDialog(scope.row)"
-              >去核价</el-button>
-              <el-tag v-else type="warning" size="small">无图不核价</el-tag>
+              <div class="erp-table-actions pricing-row-actions">
+                <el-button
+                  v-if="scope.row.drawingUrl"
+                  type="primary"
+                  size="small"
+                  @click="openQuoteDialog(scope.row)"
+                >
+                  去核价
+                </el-button>
+                <el-tag v-else type="warning" size="small">无图不核价</el-tag>
+              </div>
             </template>
           </el-table-column>
         </el-table>
       </div>
-    </el-card>
+    </section>
 
     <!-- 工程师核价控制台 -->
     <el-dialog
@@ -124,7 +165,7 @@
               :closable="false"
               class="current-item-alert"
             />
-            <div v-if="currentRow?.drawingUrl" class="dialog-drawing-actions">
+            <div v-if="currentRow?.drawingUrl" class="erp-table-actions dialog-drawing-actions">
               <el-button type="warning" plain @click="openPdfPreview(currentRow.drawingUrl, currentRow.partNo)">
                 弹窗预览
               </el-button>
@@ -134,126 +175,133 @@
             </div>
           </div>
 
-          <el-form label-width="100px" class="pricing-section-form quote-mode-form">
-            <el-form-item label="核价类型">
-              <el-radio-group v-model="quoteMode">
-                <el-radio-button label="NORMAL">普通零件</el-radio-button>
-                <el-radio-button label="ASSEMBLY">组合件</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-          </el-form>
+          <section class="erp-dialog-section pricing-workbench-section pricing-mode-section">
+            <div class="form-section-title pricing-section-title">核价模式</div>
+            <el-form label-width="100px" class="pricing-section-form quote-mode-form">
+              <el-form-item label="核价类型">
+                <el-radio-group v-model="quoteMode">
+                  <el-radio-button label="NORMAL">普通零件</el-radio-button>
+                  <el-radio-button label="ASSEMBLY">组合件</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+            </el-form>
+          </section>
 
           <template v-if="quoteMode === 'NORMAL'">
-          <!-- 模块A：材料 -->
-          <div class="form-section-title">模块 A：材料成本核算（已继承全局设定）</div>
-          <el-form label-width="100px" class="pricing-section-form">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="材质选择">
-                  <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
-                    <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
-                    <span class="picker-trigger-action">选择</span>
-                  </el-button>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="毛坯形态">
-                  <el-radio-group v-model="matForm.shape">
-                    <el-radio label="板材">板/块</el-radio><el-radio label="棒材">棒材</el-radio><el-radio label="管材">管材</el-radio>
-                  </el-radio-group>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            
-            <!-- 尺寸填写 -->
-            <el-row :gutter="20" class="dimension-row">
-              <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="长(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="宽(m)"><el-input-number v-model="matForm.W" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="厚(m)"><el-input-number v-model="matForm.T" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="长度(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="外径(m)"><el-input-number v-model="matForm.outR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
-              <el-col :span="12" v-if="matForm.shape === '管材'"><el-form-item label="内径(m)"><el-input-number v-model="matForm.inR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
-            </el-row>
-            <el-row :gutter="20" class="weight-row">
-              <el-col :span="12">
-                <el-form-item label="材料毛重(kg)">
-                  <el-input :model-value="calculatedWeight.toFixed(3)" disabled class="full-width" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="零件净重(kg)">
-                  <el-input-number
-                    v-model="matForm.netWeight"
-                    :min="0"
-                    :step="0.01"
-                    :precision="3"
-                    placeholder="请输入"
-                    controls-position="right"
-                    class="full-width"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <p class="material-summary">
-              毛坯体积：{{ calculatedVolume.toFixed(6) }} m³，毛坯重量：{{ calculatedWeight.toFixed(3) }} kg，材料单价：{{ currentUnitPrice.toFixed(2) }} 元/kg，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
-            </p>
-          </el-form>
+          <section class="erp-dialog-section pricing-workbench-section pricing-material-section">
+            <!-- 模块A：材料 -->
+            <div class="form-section-title pricing-section-title">模块 A：材料成本核算（已继承全局设定）</div>
+            <el-form label-width="100px" class="pricing-section-form">
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="材质选择">
+                    <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
+                      <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
+                      <span class="picker-trigger-action">选择</span>
+                    </el-button>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="毛坯形态">
+                    <el-radio-group v-model="matForm.shape">
+                      <el-radio label="板材">板/块</el-radio><el-radio label="棒材">棒材</el-radio><el-radio label="管材">管材</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <!-- 尺寸填写 -->
+              <el-row :gutter="20" class="dimension-row">
+                <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="长(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="宽(m)"><el-input-number v-model="matForm.W" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape === '板材'"><el-form-item label="厚(m)"><el-input-number v-model="matForm.T" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="长度(m)"><el-input-number v-model="matForm.L" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape !== '板材'"><el-form-item label="外径(m)"><el-input-number v-model="matForm.outR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+                <el-col :span="12" v-if="matForm.shape === '管材'"><el-form-item label="内径(m)"><el-input-number v-model="matForm.inR" :min="0" :step="0.01" :precision="4" placeholder="请输入" controls-position="right" class="full-width" /></el-form-item></el-col>
+              </el-row>
+              <el-row :gutter="20" class="weight-row">
+                <el-col :span="12">
+                  <el-form-item label="材料毛重(kg)">
+                    <el-input :model-value="calculatedWeight.toFixed(3)" disabled class="full-width" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="零件净重(kg)">
+                    <el-input-number
+                      v-model="matForm.netWeight"
+                      :min="0"
+                      :step="0.01"
+                      :precision="3"
+                      placeholder="请输入"
+                      controls-position="right"
+                      class="full-width"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <p class="pricing-workbench-summary material-summary">
+                毛坯体积：{{ calculatedVolume.toFixed(6) }} m³，毛坯重量：{{ calculatedWeight.toFixed(3) }} kg，材料单价：{{ currentUnitPrice.toFixed(2) }} 元/kg，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
+              </p>
+            </el-form>
+          </section>
 
           <!-- 模块B：工艺 -->
-          <div class="process-title-row">
-            <div class="form-section-title process-title">模块 B：工艺路线排程（已继承全局设定）</div>
-            <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">
-              新增工序
-            </el-button>
-          </div>
-          <div class="process-box">
-            <el-empty v-if="processRoute.length === 0" description="暂无工艺路线" :image-size="60">
-              <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">新增工序</el-button>
-            </el-empty>
-            <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="proc.rowKey || index" class="process-row">
-              <el-col :span="7">
-                <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
-                  <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
-                    {{ formatProcessLabel(proc, '选择工序') }}
-                  </span>
-                  <span class="picker-trigger-action">选择</span>
-                </el-button>
-              </el-col>
-              <el-col :span="3">
-                <el-tag :type="proc.calcType === '非工时费用' ? 'warning' : 'info'">{{ proc.calcType || '工时' }}</el-tag>
-              </el-col>
-              <el-col :span="8">
-                <el-input-number
-                  v-model="proc.inputVal"
-                  :min="0"
-                  :step="proc.calcType === '非工时费用' ? 10 : 0.5"
-                  placeholder="请输入"
-                  class="full-width"
-                />
-              </el-col>
-              <el-col :span="6">
-                <div class="process-row-actions">
-                  <el-tooltip content="在当前行前插入工序" placement="top">
-                    <el-button size="small" plain :icon="Plus" @click="insertProcess(index)">插入</el-button>
-                  </el-tooltip>
-                  <el-tooltip content="删除当前工序" placement="top">
-                    <el-button size="small" type="danger" plain :icon="Delete" @click="removeProcess(index)">删除</el-button>
-                  </el-tooltip>
-                </div>
-              </el-col>
-            </el-row>
-          </div>
+          <section class="erp-dialog-section pricing-workbench-section pricing-process-section">
+            <div class="process-title-row">
+              <div class="form-section-title process-title pricing-section-title">模块 B：工艺路线排程（已继承全局设定）</div>
+              <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">
+                新增工序
+              </el-button>
+            </div>
+            <div class="process-box">
+              <el-empty v-if="processRoute.length === 0" description="暂无工艺路线" :image-size="60">
+                <el-button type="primary" plain size="small" :icon="Plus" @click="addProcess">新增工序</el-button>
+              </el-empty>
+              <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="proc.rowKey || index" class="process-row">
+                <el-col :span="7">
+                  <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
+                    <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
+                      {{ formatProcessLabel(proc, '选择工序') }}
+                    </span>
+                    <span class="picker-trigger-action">选择</span>
+                  </el-button>
+                </el-col>
+                <el-col :span="3">
+                  <el-tag :type="proc.calcType === '非工时费用' ? 'warning' : 'info'">{{ proc.calcType || '工时' }}</el-tag>
+                </el-col>
+                <el-col :span="8">
+                  <el-input-number
+                    v-model="proc.inputVal"
+                    :min="0"
+                    :step="proc.calcType === '非工时费用' ? 10 : 0.5"
+                    placeholder="请输入"
+                    class="full-width"
+                  />
+                </el-col>
+                <el-col :span="6">
+                  <div class="erp-table-actions process-row-actions">
+                    <el-tooltip content="在当前行前插入工序" placement="top">
+                      <el-button size="small" plain :icon="Plus" @click="insertProcess(index)">插入</el-button>
+                    </el-tooltip>
+                    <el-tooltip content="删除当前工序" placement="top">
+                      <el-button size="small" type="danger" plain :icon="Delete" @click="removeProcess(index)">删除</el-button>
+                    </el-tooltip>
+                  </div>
+                </el-col>
+              </el-row>
+            </div>
+          </section>
           </template>
 
-          <div v-else class="assembly-box">
-            <div class="form-section-title">模块 A：组合件子件汇总</div>
+          <section v-else class="erp-dialog-section pricing-workbench-section pricing-assembly-section assembly-box">
+            <div class="form-section-title pricing-section-title">模块 A：组合件子件汇总</div>
             <el-alert
               type="info"
               :closable="false"
               title="组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装费对应的管理费/利润/税费；组装费不收运输费。"
               class="assembly-tip"
             />
-            <div class="assembly-actions">
+            <div class="erp-table-actions assembly-actions">
               <el-button type="primary" plain size="small" :icon="Plus" @click="openAssemblyChildPicker">选择子件</el-button>
             </div>
             <el-empty v-if="assemblyChildren.length === 0" description="暂无子件关系" :image-size="60">
@@ -287,7 +335,9 @@
                 </div>
               </el-col>
               <el-col :span="4">
-                <el-button size="small" type="danger" plain :icon="Delete" @click="removeAssemblyChild(index)">删除</el-button>
+                <div class="erp-table-actions assembly-child-actions">
+                  <el-button size="small" type="danger" plain :icon="Delete" @click="removeAssemblyChild(index)">删除</el-button>
+                </div>
               </el-col>
             </el-row>
             <el-form label-width="100px" class="pricing-section-form assembly-fee-form">
@@ -303,7 +353,7 @@
                 />
               </el-form-item>
             </el-form>
-            <div class="assembly-summary">
+            <div class="pricing-workbench-summary assembly-summary">
               子件含税汇总：¥ {{ assemblyChildrenTotal.toFixed(2) }}，
               组装费：¥ {{ Number(assemblyFee || 0).toFixed(2) }}，
               组装费附加费用：¥ {{ assemblyFeeMarkupTotal.toFixed(2) }}，
@@ -319,7 +369,7 @@
                 {{ row.feeName }} {{ row.ratePercent }}%：¥ {{ row.cost.toFixed(2) }}
               </el-tag>
             </div>
-          </div>
+          </section>
         </div>
 
         <aside class="drawing-pane">
@@ -351,8 +401,10 @@
       </div>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="success" @click="submitCurrentQuote" :loading="submitLoading">确认提交</el-button>
+        <div class="erp-dialog-footer pricing-dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="success" @click="submitCurrentQuote" :loading="submitLoading">确认提交</el-button>
+        </div>
       </template>
     </el-dialog>
 
@@ -403,7 +455,7 @@
         </el-table-column>
         <el-table-column label="图纸" width="190" align="center" fixed="right">
           <template #default="{ row }">
-            <div v-if="row.drawingUrl" class="picker-drawing-actions">
+            <div v-if="row.drawingUrl" class="erp-table-actions picker-drawing-actions">
               <el-button type="warning" plain size="small" @click.stop="openPdfPreview(row.drawingUrl, row.partNo)">
                 弹窗预览
               </el-button>
@@ -416,10 +468,12 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="assemblyPickerVisible = false">取消</el-button>
-        <el-button type="primary" :disabled="assemblyPickerSelection.length === 0" @click="confirmAssemblyChildPicker">
-          加入子件
-        </el-button>
+        <div class="erp-dialog-footer pricing-dialog-footer assembly-picker-footer">
+          <el-button @click="assemblyPickerVisible = false">取消</el-button>
+          <el-button type="primary" :disabled="assemblyPickerSelection.length === 0" @click="confirmAssemblyChildPicker">
+            加入子件
+          </el-button>
+        </div>
       </template>
     </el-dialog>
 
@@ -452,10 +506,10 @@
       destroy-on-close
     >
       <div v-loading="!pdfLoaded" class="pdf-frame-shell">
-        <iframe 
-          :src="currentPdfSrc" 
-          width="100%" 
-          height="100%" 
+        <iframe
+          :src="currentPdfSrc"
+          width="100%"
+          height="100%"
           frameborder="0"
           @load="pdfLoaded = true"
         ></iframe>
@@ -584,7 +638,7 @@ const canRefreshQuotes = computed(() => {
 onMounted(async () => {
   rfqId.value = route.query.rfqId
   await fetchDicts()
-  
+
   // 1. 读取全局缓存
   globalConfig.value = globalConfigStore.loadLocalConfig(rfqId.value)
 
@@ -1186,7 +1240,7 @@ const openQuoteDialog = async (row) => {
   quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
   assemblyFee.value = numberOrNullForInput(row.assemblyFee)
   assemblyChildren.value = []
-  
+
   // 继承阶段 1 的材料设置
   const savedMaterialData = row.materialData || {}
   const savedDimensions = savedMaterialData.dimensions || {}
@@ -1353,65 +1407,123 @@ const submitCurrentQuote = async () => {
 </script>
 
 <style scoped>
-.pricing-container {
-  padding: 0;
+.pricing-workbench-page {
+  gap: var(--erp-space-4);
 }
 
-.main-card {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
+.pricing-page-header {
+  align-items: center;
 }
 
-.card-header {
+.pricing-page-actions {
+  min-width: 260px;
+}
+
+.pricing-context-card {
   display: flex;
+  align-items: stretch;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  gap: var(--erp-space-5);
+  padding: var(--erp-space-5);
 }
 
-.card-header h2 {
-  margin: 0;
+.pricing-context-copy {
+  display: flex;
+  min-width: 240px;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--erp-space-2);
+}
+
+.pricing-context-kicker {
+  color: var(--erp-primary);
+  font-size: var(--erp-font-size-xs);
+  font-weight: var(--erp-font-weight-bold);
+  letter-spacing: 0;
+}
+
+.pricing-context-copy strong {
   color: var(--erp-text);
-  font-size: 20px;
-  line-height: 1.3;
+  font-size: var(--erp-font-size-xl);
+  line-height: var(--erp-line-height-tight);
 }
 
-.header-tags {
+.pricing-context-copy p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.pricing-metric-grid {
+  display: grid;
+  min-width: 360px;
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
+  gap: var(--erp-space-3);
+}
+
+.pricing-metric {
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--erp-space-2);
+  min-height: 84px;
+  padding: var(--erp-space-4);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface-muted);
+}
+
+.pricing-metric-label {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+}
+
+.pricing-metric-value {
+  color: var(--erp-text);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.pricing-toolbar {
   align-items: center;
+}
+
+.pricing-toolbar-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.pricing-toolbar-title {
+  color: var(--erp-text);
+  font-weight: var(--erp-font-weight-bold);
+}
+
+.pricing-toolbar-copy small {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+}
+
+.pricing-toolbar-actions {
   justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
-.toolbar-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 14px 0 0;
+.pricing-table-body {
+  padding: var(--erp-space-3);
 }
 
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.empty-state {
-  padding: 48px 0;
-  text-align: center;
-}
-
-.table-shell {
-  border-top: 1px solid var(--erp-border-soft);
-  padding-top: 14px;
+.pricing-empty-state {
+  margin: var(--erp-space-4);
 }
 
 .pricing-table,
 .full-width {
+  width: 100%;
+}
+
+.pricing-row-actions {
   width: 100%;
 }
 
@@ -1468,8 +1580,16 @@ const submitCurrentQuote = async () => {
   font-weight: 700;
 }
 
+.pricing-workbench-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-4);
+  background: var(--erp-surface);
+}
+
 .form-section-title {
-  margin: 18px 0 10px;
+  margin: 0;
   padding-left: 10px;
   border-left: 3px solid var(--erp-primary);
   color: var(--erp-text);
@@ -1479,33 +1599,37 @@ const submitCurrentQuote = async () => {
 }
 
 .pricing-section-form {
-  padding: 14px 16px 12px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface-soft);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.quote-mode-form {
+  margin-top: 0;
 }
 
 .dimension-row,
 .weight-row {
   margin-top: 4px;
   padding: 10px;
+  border: 1px solid var(--erp-border-soft);
   border-radius: 6px;
-  background: var(--erp-surface);
+  background: var(--erp-surface-muted);
 }
 
 .weight-row {
   margin-top: 10px;
 }
 
-.material-summary {
+.pricing-workbench-summary {
   margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
   color: var(--erp-danger);
   font-weight: 700;
   text-align: right;
-}
-
-.process-title {
-  margin-top: 18px;
 }
 
 .process-title-row {
@@ -1513,18 +1637,13 @@ const submitCurrentQuote = async () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 18px;
-}
-
-.process-title-row .process-title {
-  margin-top: 0;
 }
 
 .process-box {
   padding: 14px;
   border: 1px dashed var(--erp-border);
   border-radius: 8px;
-  background: var(--erp-surface-soft);
+  background: var(--erp-surface-muted);
 }
 
 .process-row {
@@ -1533,27 +1652,20 @@ const submitCurrentQuote = async () => {
 }
 
 .process-row-actions {
-  display: flex;
+  width: 100%;
   justify-content: flex-end;
-  gap: 8px;
-}
-
-.quote-mode-form {
-  margin-top: 12px;
 }
 
 .assembly-box {
-  margin-top: 14px;
+  margin-top: 0;
 }
 
 .assembly-tip {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .assembly-actions {
-  display: flex;
   justify-content: flex-end;
-  margin-bottom: 10px;
 }
 
 .assembly-row {
@@ -1562,7 +1674,7 @@ const submitCurrentQuote = async () => {
   padding: 10px;
   border: 1px solid var(--erp-border-soft);
   border-radius: 8px;
-  background: var(--erp-surface-soft);
+  background: var(--erp-surface-muted);
 }
 
 .assembly-child-info {
@@ -1597,18 +1709,13 @@ const submitCurrentQuote = async () => {
   font-weight: 700;
 }
 
-.assembly-fee-form {
-  margin-top: 12px;
+.assembly-child-actions {
+  width: 100%;
+  justify-content: flex-end;
 }
 
-.assembly-summary {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: #f5f7fb;
-  color: var(--erp-danger);
-  font-weight: 700;
-  text-align: right;
+.assembly-fee-form {
+  margin-top: 0;
 }
 
 .assembly-fee-breakdown {
@@ -1641,14 +1748,15 @@ const submitCurrentQuote = async () => {
 }
 
 .picker-drawing-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  width: 100%;
 }
 
 .picker-drawing-actions :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+.pricing-dialog-footer {
+  width: 100%;
 }
 
 :deep(.pricing-workbench-dialog .el-dialog__body) {
@@ -1672,6 +1780,9 @@ const submitCurrentQuote = async () => {
 }
 
 .pricing-form-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-3);
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -1730,9 +1841,10 @@ const submitCurrentQuote = async () => {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--erp-border-soft);
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
 }
 
 .current-item-alert {
@@ -1740,8 +1852,6 @@ const submitCurrentQuote = async () => {
 }
 
 .dialog-drawing-actions {
-  display: flex;
-  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -1754,6 +1864,19 @@ const submitCurrentQuote = async () => {
   :deep(.pricing-workbench-dialog .el-dialog__body) {
     max-height: none;
     overflow: visible;
+  }
+
+  .pricing-context-card,
+  .pricing-page-header,
+  .pricing-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricing-metric-grid,
+  .pricing-page-actions {
+    width: 100%;
+    min-width: 0;
   }
 
   .pricing-workbench {
@@ -1769,6 +1892,17 @@ const submitCurrentQuote = async () => {
 
   .drawing-pane {
     min-height: 520px;
+  }
+}
+
+@media (max-width: 720px) {
+  .pricing-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-header-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>
