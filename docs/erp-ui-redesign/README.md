@@ -1,8 +1,25 @@
 # ERP Frontend UI Redesign Guide
 
-This folder is the working guide for redesigning `quote-frontend` into a cleaner, more consistent manufacturing ERP interface.
+This folder is the source of truth for the completed `quote-frontend` ERP UI redesign and the ongoing stable maintenance baseline.
 
-The goal is not to copy a template skin. The goal is to turn the current ERP into a disciplined Element Plus workspace with consistent layout, spacing, color, tables, forms, dialogs, and page patterns.
+The goal is not to copy a template skin. The ERP UI is now a disciplined Element Plus workspace with consistent layout, spacing, color, tables, forms, dialogs, and page patterns.
+
+## Stable Baseline
+
+The ERP UI redesign is now frozen as a stable baseline. Future pages and features must extend the existing design system instead of inventing new local visual systems.
+
+Required shared classes for new or substantially edited pages:
+
+- `erp-page`
+- `erp-page-header`
+- `erp-toolbar`
+- `erp-surface`
+- `erp-table-surface`
+- `erp-table-actions`
+- `erp-dialog-form`
+- `erp-dialog-footer`
+
+Do not add a separate page-local card/header/table style unless the shared class is first proven insufficient and the new pattern is promoted back into the shared token/class layer.
 
 ## Recommended Direction
 
@@ -25,14 +42,18 @@ Use a **clean manufacturing ERP workbench** style:
 - `07-page-patterns.md` - page-level patterns for Market, Engineer, Pricing, Orders, Dictionary, Admin.
 - `08-implementation-roadmap.md` - phased development plan for the UI cleanup.
 - `09-acceptance-checklist.md` - quality gate before each visual refactor is accepted.
+- `10-stage-0-baseline-audit.md` through `20-performance-code-splitting.md` - completed stage notes and verification history.
+- `21-stable-maintenance-baseline.md` - final freeze rules for future ERP UI work.
 - `references/` - summarized notes from reference projects and docs.
 
 ## Non-Goals
 
 - Do not replace Vue, Element Plus, Pinia, or the existing API/store architecture.
-- Do not redesign business workflows before visual structure is stabilized.
-- Do not rewrite large pages just to make them smaller unless the visual refactor needs it.
+- Do not restart broad visual redesign now that the UI baseline is stable.
+- Do not redesign business workflows as part of visual maintenance work.
+- Do not rewrite large pages just to make them smaller unless a separate maintainability task explicitly requires it.
 - Do not introduce a second UI kit.
+- Do not add one-off card, header, toolbar, table, dialog, or button systems inside a page when an ERP shared class already exists.
 
 ## Primary Files In Current ERP
 
@@ -43,4 +64,3 @@ Use a **clean manufacturing ERP workbench** style:
 - `quote-frontend/src/components/ItemPricing.vue` - quotation workbench, currently the densest page.
 - `quote-frontend/src/components/OrderManage.vue` - order management page.
 - `quote-frontend/src/components/MaterialProcessManage.vue` - dictionary management page.
-
