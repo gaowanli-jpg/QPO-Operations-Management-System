@@ -26,7 +26,7 @@ Files and meaning:
 - `08-implementation-roadmap.md`: staged execution plan. Follow this order unless the user explicitly changes it.
 - `09-acceptance-checklist.md`: checklist to apply after each UI stage.
 - `10-stage-0-baseline-audit.md`: Stage 0 baseline verification, current style inventory, risks, and Stage 1 recommendation.
-- `20-performance-code-splitting.md`: separate performance pass that split route and vendor chunks after the UI baseline.
+- `20-performance-code-splitting.md`: separate performance pass that lazy-loads business routes after the UI baseline and documents why fragile manual vendor chunking is disabled.
 - `21-stable-maintenance-baseline.md`: final ERP UI baseline freeze and maintenance rules.
 - `screenshots/README.md`: expected location and names for before/after visual screenshots.
 
@@ -44,7 +44,7 @@ Files and meaning:
 - The staged ERP UI redesign is structurally complete.
 - Final browser walkthrough is complete and documented in `docs/erp-ui-redesign/19-final-browser-walkthrough.md`. Final screenshots are captured in `docs/erp-ui-redesign/screenshots/final-*.png` against the Vite hot-start frontend at `http://localhost:5173` with Docker ERP backend data.
 - Final punch-list sprint is complete and documented in `docs/erp-ui-redesign/19-final-walkthrough-and-punch-list.md`. It only tightened the market import fallback folder button and dense table/action button spacing.
-- Performance code-splitting step is complete and documented in `docs/erp-ui-redesign/20-performance-code-splitting.md`: ERP business routes are lazy-loaded and Vite/Rolldown vendor chunks split the previous oversized main bundle without changing page logic.
+- Performance code-splitting step is complete and documented in `docs/erp-ui-redesign/20-performance-code-splitting.md`: ERP business routes are lazy-loaded without changing page logic. Manual Vite/Rolldown third-party vendor chunk groups are intentionally disabled because Docker/browser verification showed they can break runtime module bindings and leave the app blank before Vue mounts.
 - ERP UI redesign is now in stable maintenance, documented in `docs/erp-ui-redesign/21-stable-maintenance-baseline.md`. New pages must use the existing ERP tokens and shared classes such as `erp-page`, `erp-page-header`, `erp-toolbar`, `erp-surface`, `erp-table-surface`, `erp-dialog-form`, and `erp-table-actions`; do not invent a separate card/header/table visual system inside individual pages.
 - Next recommended follow-up is to treat ERP UI as frozen unless a new feature requires page-scoped work. Defer deeper startup profiling, Element Plus on-demand registration, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
 - Stage 0 screenshots are now captured in `docs/erp-ui-redesign/screenshots/` using local Microsoft Edge plus a temporary Playwright package from npm cache. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
