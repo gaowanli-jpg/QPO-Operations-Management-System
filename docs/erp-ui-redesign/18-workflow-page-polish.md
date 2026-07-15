@@ -25,8 +25,8 @@ This pass refines quote processing into a calmer workflow workbench, while keepi
 | --- | --- |
 | `quote-frontend/src/style.css` | Adds shared `workflow-*` classes for dense business workbenches, quiet secondary buttons, action stacks, and grouped batch panels. |
 | `quote-frontend/src/components/QuoteProcess.vue` | Applies workflow layout classes, reduces quote adjustment/export button color noise, and lays out manual quote-date selection as one compact row. |
-| `quote-frontend/src/components/MarketRelease.vue` | Restores the tighter Stage 7 layout while keeping selected secondary actions visually quieter. |
-| `quote-frontend/src/workflowPolish.test.js` | Guards the quote workflow classes, one-row manual date control, compact market release layout, quiet action styling, and key click handlers. |
+| `quote-frontend/src/components/MarketRelease.vue` | Restores the tighter Stage 7 layout, keeps selected secondary actions visually quieter, and lays out manual internal target-date selection as one compact row. |
+| `quote-frontend/src/workflowPolish.test.js` | Guards the quote workflow classes, one-row manual quote/internal target-date controls, compact market release layout, quiet action styling, and key click handlers. |
 
 ## Behavior Preserved
 

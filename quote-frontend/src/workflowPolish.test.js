@@ -75,6 +75,16 @@ describe('ERP workflow page polish', () => {
     ])
   })
 
+  test('lays out manual internal target date as one compact control row', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      'market-manual-date-row',
+      'market-manual-date-input',
+      'market-manual-date-button'
+    ])
+  })
+
   test('keeps batch and export actions visually quiet', () => {
     const pages = ['QuoteProcess.vue', 'MarketRelease.vue']
 

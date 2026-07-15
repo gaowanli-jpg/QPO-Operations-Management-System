@@ -78,24 +78,26 @@
                   减少
                 </el-button>
               </div>
-              <el-date-picker
-                v-model="manualInternalTargetDate"
-                type="date"
-                value-format="YYYY-MM-DD"
-                format="YYYY-MM-DD"
-                placeholder="手动指定内部目标交期"
-                clearable
-                class="full-width manual-date-picker"
-              />
-              <el-button
-                plain
-                class="workflow-soft-button set-date-btn"
-                :disabled="selectedRows.length === 0 || !manualInternalTargetDate"
-                :loading="settingInternalTargetLeadTime"
-                @click="setInternalTargetLeadTime"
-              >
-                指定内部目标交期
-              </el-button>
+              <div class="market-manual-date-row">
+                <el-date-picker
+                  v-model="manualInternalTargetDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  format="YYYY-MM-DD"
+                  placeholder="手动指定内部目标交期"
+                  clearable
+                  class="full-width manual-date-picker market-manual-date-input"
+                />
+                <el-button
+                  plain
+                  class="workflow-soft-button market-manual-date-button"
+                  :disabled="selectedRows.length === 0 || !manualInternalTargetDate"
+                  :loading="settingInternalTargetLeadTime"
+                  @click="setInternalTargetLeadTime"
+                >
+                  指定
+                </el-button>
+              </div>
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
@@ -870,6 +872,28 @@ const exportExcel = async (type) => {
 .manual-date-picker,
 .set-date-btn {
   margin-top: 10px;
+}
+
+.market-manual-date-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.market-manual-date-input {
+  min-width: 0;
+}
+
+.market-manual-date-row .manual-date-picker {
+  margin-top: 0;
+}
+
+.market-manual-date-button {
+  width: 100%;
+  margin-left: 0;
+  white-space: nowrap;
 }
 
 .set-date-btn {
