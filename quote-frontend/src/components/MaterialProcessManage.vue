@@ -1,23 +1,25 @@
 <template>
-  <div class="manage-container">
-    <el-card shadow="never" class="manage-card">
-      <template #header>
-        <div class="card-header">
-          <div>
-            <h2>材料与工艺管理</h2>
-            <p>维护材料价格字典和工艺阶梯费率，工程核价会直接读取这里的数据。</p>
-          </div>
-          <div class="header-actions">
-            <el-button @click="loadAll" :loading="loading">刷新</el-button>
-            <el-button v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
-            <el-button v-else-if="activeTab === 'processes'" type="primary" @click="openProcessDialog()">新增工艺</el-button>
-            <el-button v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
-            <el-button v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
-          </div>
-        </div>
-      </template>
+  <div class="erp-page material-process-page">
+    <header class="erp-page-header">
+      <div>
+        <h1 class="erp-page-title">材料与工艺管理</h1>
+        <p class="erp-page-description">维护材料价格字典和工艺阶梯费率，工程核价会直接读取这里的数据。</p>
+      </div>
+    </header>
 
-      <el-tabs v-model="activeTab">
+    <section class="erp-toolbar">
+      <div class="erp-toolbar-group material-toolbar">
+        <el-button @click="loadAll" :loading="loading">刷新</el-button>
+        <el-button v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
+        <el-button v-else-if="activeTab === 'processes'" type="primary" @click="openProcessDialog()">新增工艺</el-button>
+        <el-button v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
+        <el-button v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface material-table-surface">
+      <div class="erp-table-body">
+        <el-tabs v-model="activeTab">
         <el-tab-pane label="材料费用" name="materials">
           <el-table :data="materials" border stripe height="560" v-loading="loading">
             <el-table-column prop="materialName" label="材料" width="120" fixed />
@@ -115,8 +117,9 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
-      </el-tabs>
-    </el-card>
+        </el-tabs>
+      </div>
+    </section>
 
     <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="760px">
       <el-form :model="materialForm" label-width="140px">
@@ -514,12 +517,13 @@ onMounted(loadAll)
 </script>
 
 <style scoped>
-.manage-container { padding: 20px; }
-.manage-card { border-radius: 8px; }
-.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.card-header h2 { margin: 0; color: #303133; font-size: 22px; }
-.card-header p { margin: 8px 0 0; color: #606266; font-size: 14px; }
-.header-actions { display: flex; align-items: center; gap: 10px; }
+.material-toolbar {
+  justify-content: flex-end;
+}
+
+.material-table-surface {
+  overflow: hidden;
+}
 .unit-input { display: flex; align-items: center; width: 100%; gap: 8px; }
 .unit-input-control { flex: 1; min-width: 0; }
 .unit-label {

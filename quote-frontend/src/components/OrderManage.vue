@@ -1,48 +1,52 @@
 <template>
-  <div class="order-manage-container">
-    <el-card shadow="never" class="manage-card">
-      <template #header>
-        <div class="card-header">
-          <div>
-            <h2>订单管理</h2>
-            <p>先选择客户，再管理该客户下的订单、零件、图纸文件、提单和工艺表数据。</p>
-          </div>
-          <div class="header-actions">
-            <el-select
-              v-model="selectedCustomer"
-              filterable
-              clearable
-              placeholder="先选择客户"
-              class="customer-select"
-              @change="handleCustomerChange"
-              @clear="handleCustomerClear"
-            >
-              <el-option
-                v-for="customer in customers"
-                :key="customer"
-                :label="customer"
-                :value="customer"
-              />
-            </el-select>
-            <el-input
-              v-model="keyword"
-              clearable
-              :disabled="!selectedCustomer"
-              placeholder="搜索 RFQ 号 / 状态"
-              class="search-input"
-              @keyup.enter="handleSearch"
-              @clear="handleSearch"
-            />
-            <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
-            <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
-          </div>
-        </div>
-      </template>
+  <div class="erp-page order-manage-page">
+    <header class="erp-page-header">
+      <div>
+        <h1 class="erp-page-title">订单管理</h1>
+        <p class="erp-page-description">先选择客户，再管理该客户下的订单、零件、图纸文件、提单和工艺表数据。</p>
+      </div>
+    </header>
 
-      <el-empty v-if="!selectedCustomer" description="请先选择客户查看订单" />
+    <section class="erp-toolbar">
+      <div class="erp-toolbar-group order-filter-group">
+        <el-select
+          v-model="selectedCustomer"
+          filterable
+          clearable
+          placeholder="先选择客户"
+          class="customer-select"
+          @change="handleCustomerChange"
+          @clear="handleCustomerClear"
+        >
+          <el-option
+            v-for="customer in customers"
+            :key="customer"
+            :label="customer"
+            :value="customer"
+          />
+        </el-select>
+        <el-input
+          v-model="keyword"
+          clearable
+          :disabled="!selectedCustomer"
+          placeholder="搜索 RFQ 号 / 状态"
+          class="search-input"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        />
+        <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
+        <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface order-table-surface">
+      <div v-if="!selectedCustomer" class="erp-empty-state">
+        <el-empty description="请先选择客户查看订单" />
+      </div>
 
       <template v-else>
-        <el-table :data="orders" border stripe height="600" v-loading="loading">
+        <div class="erp-table-body">
+          <el-table :data="orders" border stripe height="600" v-loading="loading">
           <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="120" align="center">
             <template #default="scope">
@@ -77,8 +81,9 @@
               <el-button size="small" type="warning" plain @click="resetProduction(scope.row)">重置提单/工艺</el-button>
             </template>
           </el-table-column>
-        </el-table>
-        <div class="pagination-wrap">
+          </el-table>
+        </div>
+        <div class="erp-pagination">
           <el-pagination
             v-model:current-page="page"
             v-model:page-size="pageSize"
@@ -89,7 +94,7 @@
           />
         </div>
       </template>
-    </el-card>
+    </section>
 
     <el-drawer v-model="detailVisible" title="订单详情" size="72%">
       <div v-if="orderDetail" v-loading="detailLoading" class="detail-wrap">
@@ -468,55 +473,23 @@ onMounted(loadCustomers)
 </script>
 
 <style scoped>
-.order-manage-container {
-  padding: 0;
-}
-
-.manage-card {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.card-header h2 {
-  margin: 0;
-  color: var(--erp-text);
-  font-size: 20px;
-  line-height: 1.3;
-}
-
-.card-header p {
-  margin: 6px 0 0;
-  color: var(--erp-text-secondary);
-  font-size: 13px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.order-filter-group {
+  width: 100%;
   justify-content: flex-end;
 }
 
 .customer-select {
   width: 220px;
+  flex: 0 0 220px;
 }
 
 .search-input {
   width: 260px;
+  flex: 0 0 260px;
 }
 
-.pagination-wrap {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
+.order-table-surface {
+  overflow: hidden;
 }
 
 .detail-wrap {
@@ -611,12 +584,7 @@ onMounted(loadCustomers)
 }
 
 @media (max-width: 1200px) {
-  .card-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
+  .order-filter-group {
     justify-content: flex-start;
   }
 }

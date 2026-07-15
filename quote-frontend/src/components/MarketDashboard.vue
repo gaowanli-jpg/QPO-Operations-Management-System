@@ -1,11 +1,13 @@
 <template>
-  <div class="market-container">
-    <el-card class="main-card">
-      <template #header>
-        <div class="card-header">
-          <h2>市场部：新询价单导入中心</h2>
-        </div>
-      </template>
+  <div class="erp-page market-page">
+    <header class="erp-page-header">
+      <div>
+        <h1 class="erp-page-title">市场部：新询价单导入中心</h1>
+        <p class="erp-page-description">上传客户询价表和关联图纸，提交工程部评估。</p>
+      </div>
+    </header>
+
+    <section class="erp-surface import-workflow">
 
       <!-- 第一步：客户与主单信息 -->
       <div class="section-title">步骤 1：客户基础信息</div>
@@ -81,12 +83,12 @@
       </div>
 
       <!-- 底部提交按钮 -->
-      <div class="submit-footer">
+      <div class="erp-toolbar submit-footer">
         <el-button type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn">
           确认无误，提交工程部评估
         </el-button>
       </div>
-    </el-card>
+    </section>
   </div>
 </template>
 
@@ -302,36 +304,8 @@ const submitRfqPackage = async () => {
 </script>
 
 <style scoped>
-.market-container {
-  padding: 0;
-  min-height: auto;
-}
-
-.main-card {
-  max-width: none;
-  margin: 0;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-}
-
-.card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.card-header h2 {
-  margin: 0;
-  color: var(--erp-text);
-  font-size: 20px;
-  line-height: 1.3;
-}
-
-.card-header p {
-  margin: 6px 0 0;
-  color: var(--erp-text-secondary);
-  font-size: 13px;
+.import-workflow {
+  padding: var(--erp-space-5);
 }
 
 .section-title {
@@ -421,7 +395,6 @@ const submitRfqPackage = async () => {
 .pdf-list li:last-child { border-bottom: none; }
 
 .submit-footer {
-  display: flex;
   justify-content: flex-end;
   margin-top: 18px;
   padding-top: 16px;
@@ -430,7 +403,6 @@ const submitRfqPackage = async () => {
 .submit-btn { width: auto; min-width: 260px; font-size: 14px; font-weight: 700; }
 
 @media (max-width: 900px) {
-  .card-header,
   .submit-footer {
     flex-direction: column;
     align-items: stretch;
