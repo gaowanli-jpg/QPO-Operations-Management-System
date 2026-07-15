@@ -39,7 +39,9 @@ Files and meaning:
 - Stage 6 is complete: `ItemPricing.vue` now uses the shared ERP page shell, workbench context metrics, normalized toolbar/table actions, and clearer pricing dialog sections while preserving calculation logic, API calls, Pinia/store behavior, and submission flow.
 - Stage 7 is complete: `HistoryOrderManage.vue`, `MarketRelease.vue`, `QuoteProcess.vue`, `QuoteTemplateManage.vue`, and `UserManage.vue` now use shared ERP page/table/action/dialog patterns where appropriate, with obsolete local card/header/table shells removed.
 - Post Stage 7 workflow polish is complete: `QuoteProcess.vue` uses shared workflow workbench classes with a compact one-row manual quote-date control; `MarketRelease.vue` keeps the tighter Stage 7 layout with quieter secondary action buttons and a compact one-row manual internal target-date control. Business behavior is preserved.
-- The staged ERP UI redesign is structurally complete. Next recommended follow-up is a browser walkthrough plus optional updated screenshots for `QuoteProcess.vue` and `MarketRelease.vue` in `docs/erp-ui-redesign/screenshots/`; defer bundle splitting, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
+- The staged ERP UI redesign is structurally complete.
+- Final browser walkthrough is complete and documented in `docs/erp-ui-redesign/19-final-browser-walkthrough.md`. Final screenshots are captured in `docs/erp-ui-redesign/screenshots/final-*.png` against the Vite hot-start frontend at `http://localhost:5173` with Docker ERP backend data.
+- Next recommended follow-up is a small punch-list sprint only if the user wants to polish minor issues found during browser review; otherwise move to a separate performance/code-splitting task. Defer bundle splitting, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
 - Stage 0 screenshots are now captured in `docs/erp-ui-redesign/screenshots/` using local Microsoft Edge plus a temporary Playwright package from npm cache. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
 
 ## Work Cadence For ERP UI Stages
