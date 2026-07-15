@@ -445,6 +445,12 @@ a:hover {
   margin-left: 0;
 }
 
+.erp-table-actions .el-button--small,
+.workflow-soft-button.el-button--small {
+  min-height: 30px;
+  padding-inline: 10px;
+}
+
 .workflow-page {
   gap: var(--erp-space-5);
 }

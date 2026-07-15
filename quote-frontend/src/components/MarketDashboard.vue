@@ -65,7 +65,7 @@
           
           <!-- 备用的点击选文件夹按钮 -->
           <div class="folder-select-row">
-             或点击 <el-button size="small" @click="triggerFolderSelect">选择文件夹</el-button>
+             或点击 <el-button plain class="workflow-soft-button folder-select-button" @click="triggerFolderSelect">选择文件夹</el-button>
              <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
           </div>
         </div>
@@ -374,8 +374,17 @@ const submitRfqPackage = async () => {
 }
 
 .folder-select-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
   margin-top: 14px;
   color: var(--erp-text-secondary);
+}
+
+.folder-select-row :deep(.workflow-soft-button) {
+  min-height: 32px;
+  padding-inline: 14px;
 }
 
 .hidden-input {
