@@ -1,5 +1,5 @@
 <template>
-  <div class="erp-page release-page workflow-page">
+  <div class="erp-page release-page">
     <header class="erp-page-header release-page-header">
           <div>
             <h2>市场部：议价确认与提单生成</h2>
@@ -9,10 +9,10 @@
 
     </header>
 
-    <section class="erp-surface workflow-workspace release-workspace">
+    <section class="erp-surface release-workspace">
       <el-row :gutter="20">
         <el-col :span="7">
-          <div class="erp-surface workflow-side-panel release-panel">
+          <div class="erp-surface release-panel">
             <div class="panel-title">询价单</div>
             <div class="order-picker-row">
               <div class="selected-order-text">
@@ -48,7 +48,7 @@
               </el-form-item>
             </el-form>
 
-            <div class="workflow-batch-panel internal-lead-panel">
+            <div class="internal-lead-panel">
               <div class="panel-title compact">内部目标交期调整</div>
               <el-input-number
                 v-model="internalShiftDays"
@@ -99,7 +99,7 @@
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
-            <div class="workflow-batch-panel internal-project-panel">
+            <div class="internal-project-panel">
               <div class="panel-title compact">内部项目号</div>
               <el-input
                 v-model="releaseForm.internalProjectNo"
@@ -123,7 +123,7 @@
               />
             </div>
 
-            <div class="erp-dialog-footer workflow-action-stack main-actions">
+            <div class="erp-dialog-footer main-actions">
               <el-button
                 type="primary"
                 size="large"
@@ -139,8 +139,8 @@
         </el-col>
 
         <el-col :span="17">
-          <div class="erp-table-surface workflow-main-panel release-table-panel">
-            <div class="erp-table-header workflow-table-header panel-title-row">
+          <div class="erp-table-surface release-table-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">通过零件选择</div>
               <el-upload
                 ref="selectionUploadRef"
@@ -243,8 +243,8 @@
             </el-table>
           </div>
 
-          <div class="erp-table-surface workflow-main-panel release-table-panel ticket-panel">
-            <div class="erp-table-header workflow-table-header panel-title-row">
+          <div class="erp-table-surface release-table-panel ticket-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">已生成提单行</div>
               <el-button size="small" plain class="workflow-soft-button" :disabled="ticketList.length === 0" @click="exportExcel('tickets')">
                 导出提单 Excel
@@ -274,8 +274,8 @@
             </el-table>
           </div>
 
-          <div class="erp-table-surface workflow-main-panel release-table-panel ticket-panel">
-            <div class="erp-table-header workflow-table-header panel-title-row">
+          <div class="erp-table-surface release-table-panel ticket-panel">
+            <div class="erp-table-header panel-title-row">
               <div class="panel-title">已生成工艺表行</div>
               <el-button size="small" plain class="workflow-soft-button" :disabled="processSheetList.length === 0" @click="exportExcel('process')">
                 导出工艺表 Excel
@@ -842,10 +842,14 @@ const exportExcel = async (type) => {
 
 .internal-lead-panel {
   margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
 }
 
 .internal-project-panel {
   margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
 }
 
 .release-meta-input {

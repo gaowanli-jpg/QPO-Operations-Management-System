@@ -9,24 +9,24 @@ Scope: ERP frontend visual polish for the two dense market workflow pages after 
 
 The user identified that quote processing and market release still felt visually noisy after Stage 7. The specific issue was not page shell inconsistency, but the dense concentration of colorful buttons and interactive controls in the left workflow panels.
 
-This pass refines those pages into calmer workflow workbenches without changing business behavior.
+This pass refines quote processing into a calmer workflow workbench, while keeping market release compact because its tighter original table rhythm is better for frequent operator actions. Business behavior is unchanged.
 
 ## Design Decisions
 
 - Keep one clear primary action per workflow zone.
 - Replace success/warning colored batch buttons with neutral workflow buttons.
-- Group batch edits, metadata inputs, exports, and submit actions into reusable workflow classes.
+- Use workflow workbench classes only where they improve clarity, mainly on `QuoteProcess.vue`.
+- Keep `MarketRelease.vue` compact instead of adding wider workflow spacing.
 - Preserve semantic danger styling only for destructive table actions.
-- Keep table density high, but use spacing and surfaces to separate setup, batch action, and output regions.
 
 ## Files Changed
 
 | File | Purpose |
 | --- | --- |
 | `quote-frontend/src/style.css` | Adds shared `workflow-*` classes for dense business workbenches, quiet secondary buttons, action stacks, and grouped batch panels. |
-| `quote-frontend/src/components/QuoteProcess.vue` | Applies workflow layout classes and reduces quote adjustment/export button color noise. |
-| `quote-frontend/src/components/MarketRelease.vue` | Applies workflow layout classes and reduces internal lead-time, import/export, and submit button color noise. |
-| `quote-frontend/src/workflowPolish.test.js` | Guards the workflow classes, quiet action styling, and key click handlers. |
+| `quote-frontend/src/components/QuoteProcess.vue` | Applies workflow layout classes, reduces quote adjustment/export button color noise, and lays out manual quote-date selection as one compact row. |
+| `quote-frontend/src/components/MarketRelease.vue` | Restores the tighter Stage 7 layout while keeping selected secondary actions visually quieter. |
+| `quote-frontend/src/workflowPolish.test.js` | Guards the quote workflow classes, one-row manual date control, compact market release layout, quiet action styling, and key click handlers. |
 
 ## Behavior Preserved
 

@@ -58,24 +58,26 @@
                   减少
                 </el-button>
               </div>
-              <el-date-picker
-                v-model="manualQuoteDate"
-                type="date"
-                value-format="YYYY-MM-DD"
-                format="YYYY-MM-DD"
-                placeholder="手动指定报价交期"
-                clearable
-                class="date-input batch-date-input"
-              />
-              <el-button
-                plain
-                class="workflow-soft-button set-date-btn"
-                :disabled="selectedRows.length === 0 || !manualQuoteDate"
-                :loading="settingQuoteDate"
-                @click="setQuoteLeadTime"
-              >
-                指定报价交期
-              </el-button>
+              <div class="quote-manual-date-row">
+                <el-date-picker
+                  v-model="manualQuoteDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  format="YYYY-MM-DD"
+                  placeholder="手动指定报价交期"
+                  clearable
+                  class="date-input batch-date-input quote-manual-date-input"
+                />
+                <el-button
+                  plain
+                  class="workflow-soft-button quote-manual-date-button"
+                  :disabled="selectedRows.length === 0 || !manualQuoteDate"
+                  :loading="settingQuoteDate"
+                  @click="setQuoteLeadTime"
+                >
+                  指定
+                </el-button>
+              </div>
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
@@ -487,6 +489,28 @@ const exportTemplateSimpleQuote = async () => {
 
 .batch-date-input {
   margin-top: 10px;
+}
+
+.quote-manual-date-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.quote-manual-date-input {
+  min-width: 0;
+}
+
+.quote-manual-date-row .batch-date-input {
+  margin-top: 0;
+}
+
+.quote-manual-date-button {
+  width: 100%;
+  margin-left: 0;
+  white-space: nowrap;
 }
 
 .batch-actions {

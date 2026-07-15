@@ -15,33 +15,64 @@ const expectIncludes = (source, fileName, tokens) => {
   }
 }
 
+const expectExcludes = (source, fileName, tokens) => {
+  for (const token of tokens) {
+    expect(source, `Expected ${fileName} to exclude ${token}`).not.toContain(token)
+  }
+}
+
 const countNoisySemanticButtons = (source) => {
   return [...source.matchAll(/<el-button\b[^>]*\btype="(?:success|warning)"/g)].length
 }
 
 describe('ERP workflow page polish', () => {
-  test('uses shared workflow workbench classes on dense market pages', () => {
-    const expectations = [
-      ['QuoteProcess.vue', 'quote-process-page'],
-      ['MarketRelease.vue', 'release-page']
-    ]
+  test('keeps quote process as a focused workflow workbench', () => {
+    const source = readComponent('QuoteProcess.vue')
 
-    for (const [fileName, pageClass] of expectations) {
-      const source = readComponent(fileName)
+    expectIncludes(source, 'QuoteProcess.vue', [
+      'workflow-page',
+      'quote-process-page',
+      'workflow-workspace',
+      'workflow-side-panel',
+      'workflow-main-panel',
+      'workflow-batch-panel',
+      'workflow-action-stack',
+      'workflow-muted-actions',
+      'workflow-soft-button',
+      'workflow-primary-action'
+    ])
+  })
 
-      expectIncludes(source, fileName, [
-        'workflow-page',
-        pageClass,
-        'workflow-workspace',
-        'workflow-side-panel',
-        'workflow-main-panel',
-        'workflow-batch-panel',
-        'workflow-action-stack',
-        'workflow-muted-actions',
-        'workflow-soft-button',
-        'workflow-primary-action'
-      ])
-    }
+  test('lays out manual quote date as one compact control row', () => {
+    const source = readComponent('QuoteProcess.vue')
+
+    expectIncludes(source, 'QuoteProcess.vue', [
+      'quote-manual-date-row',
+      'quote-manual-date-input',
+      'quote-manual-date-button'
+    ])
+    expect(source).toContain('手动指定报价交期')
+  })
+
+  test('keeps market release compact instead of using wide workflow spacing', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      'erp-page release-page',
+      'erp-surface release-workspace',
+      'erp-surface release-panel',
+      'erp-table-surface release-table-panel',
+      'internal-lead-panel',
+      'internal-project-panel'
+    ])
+    expectExcludes(source, 'MarketRelease.vue', [
+      'workflow-page',
+      'workflow-workspace',
+      'workflow-side-panel',
+      'workflow-main-panel',
+      'workflow-batch-panel',
+      'workflow-action-stack'
+    ])
   })
 
   test('keeps batch and export actions visually quiet', () => {
