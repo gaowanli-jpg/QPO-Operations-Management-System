@@ -445,6 +445,74 @@ a:hover {
   margin-left: 0;
 }
 
+.workflow-page {
+  gap: var(--erp-space-5);
+}
+
+.workflow-workspace {
+  padding: var(--erp-space-4);
+  background: linear-gradient(180deg, var(--erp-surface), var(--erp-bg-subtle));
+}
+
+.workflow-side-panel,
+.workflow-main-panel {
+  min-height: 100%;
+}
+
+.workflow-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-4);
+  background: var(--erp-surface);
+}
+
+.workflow-main-panel {
+  background: var(--erp-surface);
+}
+
+.workflow-table-header {
+  border-radius: calc(var(--erp-radius-lg) - 1px) calc(var(--erp-radius-lg) - 1px) 0 0;
+}
+
+.workflow-batch-panel {
+  padding: var(--erp-space-4);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface-muted);
+}
+
+.workflow-muted-actions {
+  width: 100%;
+}
+
+.workflow-action-stack {
+  display: grid;
+  gap: var(--erp-space-2);
+}
+
+.workflow-action-stack .el-button {
+  width: 100%;
+  margin-left: 0;
+}
+
+.workflow-soft-button.el-button {
+  --el-button-text-color: var(--erp-text);
+  --el-button-border-color: var(--erp-border);
+  --el-button-bg-color: var(--erp-surface);
+  --el-button-hover-text-color: var(--erp-primary);
+  --el-button-hover-border-color: var(--erp-primary);
+  --el-button-hover-bg-color: var(--erp-primary-soft);
+  --el-button-active-text-color: var(--erp-primary-active);
+  --el-button-active-border-color: var(--erp-primary-active);
+  --el-button-active-bg-color: var(--erp-primary-soft);
+  font-weight: var(--erp-font-weight-medium);
+}
+
+.workflow-primary-action.el-button {
+  font-weight: var(--erp-font-weight-bold);
+  box-shadow: var(--erp-shadow-sm);
+}
+
 .erp-danger-action {
   --el-button-text-color: var(--erp-danger);
   --el-button-border-color: rgba(180, 35, 24, 0.28);

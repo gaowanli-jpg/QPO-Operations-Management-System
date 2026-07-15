@@ -38,7 +38,8 @@ Files and meaning:
 - Stage 5 is complete: `GlobalSetup.vue` now uses the shared ERP page shell, prominent order context, clearer drawing review, grouped global configuration sections, and an obvious save/continue panel without changing business behavior.
 - Stage 6 is complete: `ItemPricing.vue` now uses the shared ERP page shell, workbench context metrics, normalized toolbar/table actions, and clearer pricing dialog sections while preserving calculation logic, API calls, Pinia/store behavior, and submission flow.
 - Stage 7 is complete: `HistoryOrderManage.vue`, `MarketRelease.vue`, `QuoteProcess.vue`, `QuoteTemplateManage.vue`, and `UserManage.vue` now use shared ERP page/table/action/dialog patterns where appropriate, with obsolete local card/header/table shells removed.
-- The staged ERP UI redesign is structurally complete. Next recommended follow-up is a browser walkthrough plus optional updated screenshots in `docs/erp-ui-redesign/screenshots/`; defer bundle splitting, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
+- Post Stage 7 workflow polish is complete for `QuoteProcess.vue` and `MarketRelease.vue`: dense market workflow pages now use shared `workflow-*` workbench classes and quieter neutral secondary actions while preserving business behavior.
+- The staged ERP UI redesign is structurally complete. Next recommended follow-up is a browser walkthrough plus optional updated screenshots for `QuoteProcess.vue` and `MarketRelease.vue` in `docs/erp-ui-redesign/screenshots/`; defer bundle splitting, API/Pinia changes, pricing changes, and component decomposition to separate tasks.
 - Stage 0 screenshots are now captured in `docs/erp-ui-redesign/screenshots/` using local Microsoft Edge plus a temporary Playwright package from npm cache. Do not add screenshot tooling to project dependencies unless the user explicitly asks.
 
 ## Work Cadence For ERP UI Stages

@@ -1,5 +1,5 @@
 <template>
-  <div class="erp-page release-page">
+  <div class="erp-page release-page workflow-page">
     <header class="erp-page-header release-page-header">
           <div>
             <h2>市场部：议价确认与提单生成</h2>
@@ -9,16 +9,16 @@
 
     </header>
 
-    <section class="erp-surface release-workspace">
+    <section class="erp-surface workflow-workspace release-workspace">
       <el-row :gutter="20">
         <el-col :span="7">
-          <div class="erp-surface release-panel">
+          <div class="erp-surface workflow-side-panel release-panel">
             <div class="panel-title">询价单</div>
             <div class="order-picker-row">
               <div class="selected-order-text">
                 {{ orderInfo.id ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
               </div>
-              <el-button type="primary" @click="openOrderPicker" :loading="loading">选择订单</el-button>
+              <el-button plain class="workflow-soft-button" @click="openOrderPicker" :loading="loading">选择订单</el-button>
             </div>
 
             <el-descriptions v-if="orderInfo.id" :column="1" border class="order-desc">
@@ -48,7 +48,7 @@
               </el-form-item>
             </el-form>
 
-            <div class="internal-lead-panel">
+            <div class="workflow-batch-panel internal-lead-panel">
               <div class="panel-title compact">内部目标交期调整</div>
               <el-input-number
                 v-model="internalShiftDays"
@@ -58,9 +58,10 @@
                 controls-position="right"
                 class="full-width"
               />
-              <div class="erp-table-actions lead-actions">
+              <div class="erp-table-actions workflow-muted-actions lead-actions">
                 <el-button
-                  type="success"
+                  plain
+                  class="workflow-soft-button"
                   :disabled="selectedRows.length === 0"
                   :loading="adjustingInternalLeadTime"
                   @click="adjustInternalLeadTime(1)"
@@ -68,8 +69,8 @@
                   增加
                 </el-button>
                 <el-button
-                  type="warning"
                   plain
+                  class="workflow-soft-button"
                   :disabled="selectedRows.length === 0"
                   :loading="adjustingInternalLeadTime"
                   @click="adjustInternalLeadTime(-1)"
@@ -87,9 +88,8 @@
                 class="full-width manual-date-picker"
               />
               <el-button
-                type="primary"
                 plain
-                class="set-date-btn"
+                class="workflow-soft-button set-date-btn"
                 :disabled="selectedRows.length === 0 || !manualInternalTargetDate"
                 :loading="settingInternalTargetLeadTime"
                 @click="setInternalTargetLeadTime"
@@ -99,7 +99,7 @@
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
-            <div class="internal-project-panel">
+            <div class="workflow-batch-panel internal-project-panel">
               <div class="panel-title compact">内部项目号</div>
               <el-input
                 v-model="releaseForm.internalProjectNo"
@@ -123,10 +123,11 @@
               />
             </div>
 
-            <div class="erp-dialog-footer main-actions">
+            <div class="erp-dialog-footer workflow-action-stack main-actions">
               <el-button
-                type="success"
+                type="primary"
                 size="large"
+                class="workflow-primary-action"
                 :loading="submitting"
                 :disabled="selectedRows.length === 0 || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim()"
                 @click="submitTicket"
@@ -138,8 +139,8 @@
         </el-col>
 
         <el-col :span="17">
-          <div class="erp-table-surface release-table-panel">
-            <div class="erp-table-header panel-title-row">
+          <div class="erp-table-surface workflow-main-panel release-table-panel">
+            <div class="erp-table-header workflow-table-header panel-title-row">
               <div class="panel-title">通过零件选择</div>
               <el-upload
                 ref="selectionUploadRef"
@@ -152,8 +153,8 @@
                 <template #trigger>
                   <el-button
                     size="small"
-                    type="primary"
                     plain
+                    class="workflow-soft-button"
                     :disabled="!selectedRfqId || itemList.length === 0"
                     :loading="importSelecting"
                   >
@@ -242,10 +243,10 @@
             </el-table>
           </div>
 
-          <div class="erp-table-surface release-table-panel ticket-panel">
-            <div class="erp-table-header panel-title-row">
+          <div class="erp-table-surface workflow-main-panel release-table-panel ticket-panel">
+            <div class="erp-table-header workflow-table-header panel-title-row">
               <div class="panel-title">已生成提单行</div>
-              <el-button size="small" type="primary" plain :disabled="ticketList.length === 0" @click="exportExcel('tickets')">
+              <el-button size="small" plain class="workflow-soft-button" :disabled="ticketList.length === 0" @click="exportExcel('tickets')">
                 导出提单 Excel
               </el-button>
             </div>
@@ -273,10 +274,10 @@
             </el-table>
           </div>
 
-          <div class="erp-table-surface release-table-panel ticket-panel">
-            <div class="erp-table-header panel-title-row">
+          <div class="erp-table-surface workflow-main-panel release-table-panel ticket-panel">
+            <div class="erp-table-header workflow-table-header panel-title-row">
               <div class="panel-title">已生成工艺表行</div>
-              <el-button size="small" type="primary" plain :disabled="processSheetList.length === 0" @click="exportExcel('process')">
+              <el-button size="small" plain class="workflow-soft-button" :disabled="processSheetList.length === 0" @click="exportExcel('process')">
                 导出工艺表 Excel
               </el-button>
             </div>
@@ -841,14 +842,10 @@ const exportExcel = async (type) => {
 
 .internal-lead-panel {
   margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--erp-border-soft);
 }
 
 .internal-project-panel {
   margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--erp-border-soft);
 }
 
 .release-meta-input {

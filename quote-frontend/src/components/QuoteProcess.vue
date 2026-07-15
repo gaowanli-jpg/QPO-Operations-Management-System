@@ -1,5 +1,5 @@
 <template>
-  <div class="erp-page quote-process-page">
+  <div class="erp-page quote-process-page workflow-page">
     <header class="erp-page-header quote-process-page-header">
           <div>
             <h2>市场部：报价单处理生成</h2>
@@ -10,10 +10,10 @@
 
     </header>
 
-    <section class="erp-surface quote-process-workspace">
+    <section class="erp-surface workflow-workspace quote-process-workspace">
       <el-row :gutter="16">
         <el-col :span="6">
-          <div class="erp-surface quote-side-panel">
+          <div class="erp-surface workflow-side-panel quote-side-panel">
             <div class="panel-title">RFQ 订单</div>
             <div class="selected-order-text">
               {{ orderInfo.id ? `${orderInfo.rfqNo || orderInfo.id} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
@@ -26,7 +26,7 @@
               </el-descriptions-item>
             </el-descriptions>
 
-            <div class="batch-box">
+            <div class="workflow-batch-panel batch-box">
               <div class="panel-title compact">交期调整</div>
               <el-input-number
                 v-model="shiftDays"
@@ -36,11 +36,25 @@
                 controls-position="right"
                 class="days-input"
               />
-              <div class="erp-table-actions batch-actions">
-                <el-button :icon="Plus" type="success" :disabled="selectedRows.length === 0" :loading="adjusting" @click="applyShift(1)">
+              <div class="erp-table-actions workflow-muted-actions batch-actions">
+                <el-button
+                  :icon="Plus"
+                  plain
+                  class="workflow-soft-button"
+                  :disabled="selectedRows.length === 0"
+                  :loading="adjusting"
+                  @click="applyShift(1)"
+                >
                   增加
                 </el-button>
-                <el-button :icon="Minus" type="warning" plain :disabled="selectedRows.length === 0" :loading="adjusting" @click="applyShift(-1)">
+                <el-button
+                  :icon="Minus"
+                  plain
+                  class="workflow-soft-button"
+                  :disabled="selectedRows.length === 0"
+                  :loading="adjusting"
+                  @click="applyShift(-1)"
+                >
                   减少
                 </el-button>
               </div>
@@ -54,9 +68,8 @@
                 class="date-input batch-date-input"
               />
               <el-button
-                type="primary"
                 plain
-                class="set-date-btn"
+                class="workflow-soft-button set-date-btn"
                 :disabled="selectedRows.length === 0 || !manualQuoteDate"
                 :loading="settingQuoteDate"
                 @click="setQuoteLeadTime"
@@ -66,54 +79,54 @@
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
-            <el-button
-              :icon="Download"
-              type="primary"
-              size="large"
-              class="download-btn"
-              :disabled="!selectedRfqId"
-              @click="exportQuote"
-            >
-              生成详细报价单
-            </el-button>
-            <el-button
-              :icon="Download"
-              type="success"
-              size="large"
-              class="download-btn secondary"
-              :disabled="!selectedRfqId"
-              @click="exportSimpleQuote"
-            >
-              生成简化报价单
-            </el-button>
-            <el-button
-              :icon="Download"
-              type="primary"
-              plain
-              size="large"
-              class="download-btn secondary"
-              :disabled="!selectedRfqId"
-              @click="exportTemplateQuote"
-            >
-              生成客户模板详细报价单
-            </el-button>
-            <el-button
-              :icon="Download"
-              type="success"
-              plain
-              size="large"
-              class="download-btn secondary"
-              :disabled="!selectedRfqId"
-              @click="exportTemplateSimpleQuote"
-            >
-              生成客户模板简化报价单
-            </el-button>
+            <div class="workflow-action-stack quote-export-actions">
+              <el-button
+                :icon="Download"
+                type="primary"
+                size="large"
+                class="workflow-primary-action download-btn"
+                :disabled="!selectedRfqId"
+                @click="exportQuote"
+              >
+                生成详细报价单
+              </el-button>
+              <el-button
+                :icon="Download"
+                plain
+                size="large"
+                class="workflow-soft-button download-btn secondary"
+                :disabled="!selectedRfqId"
+                @click="exportSimpleQuote"
+              >
+                生成简化报价单
+              </el-button>
+              <el-button
+                :icon="Download"
+                plain
+                size="large"
+                class="workflow-soft-button download-btn secondary"
+                :disabled="!selectedRfqId"
+                @click="exportTemplateQuote"
+              >
+                生成客户模板详细报价单
+              </el-button>
+              <el-button
+                :icon="Download"
+                plain
+                size="large"
+                class="workflow-soft-button download-btn secondary"
+                :disabled="!selectedRfqId"
+                @click="exportTemplateSimpleQuote"
+              >
+                生成客户模板简化报价单
+              </el-button>
+            </div>
           </div>
         </el-col>
 
         <el-col :span="18">
-          <div class="erp-table-surface quote-process-table-panel">
-            <div class="erp-table-header panel-title-row">
+          <div class="erp-table-surface workflow-main-panel quote-process-table-panel">
+            <div class="erp-table-header workflow-table-header panel-title-row">
               <div class="panel-title">零件交期</div>
               <el-tag v-if="itemList.length" type="info">{{ itemList.length }} 项</el-tag>
             </div>
@@ -461,9 +474,7 @@ const exportTemplateSimpleQuote = async () => {
 }
 
 .batch-box {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--erp-border-soft);
+  margin-top: 0;
 }
 
 .days-input {
@@ -501,14 +512,16 @@ const exportTemplateSimpleQuote = async () => {
   margin-left: 0;
 }
 
+.quote-export-actions {
+  margin-top: 2px;
+}
+
 .download-btn {
   width: 100%;
-  margin-top: 16px;
   margin-left: 0;
 }
 
 .download-btn.secondary {
-  margin-top: 10px;
   margin-left: 0;
 }
 
