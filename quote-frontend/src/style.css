@@ -410,11 +410,68 @@ a:hover {
   border-radius: var(--erp-radius-lg);
 }
 
+.erp-dialog-form {
+  max-width: 100%;
+}
+
+.erp-dialog-form .el-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.erp-dialog-section {
+  padding: var(--erp-space-3);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface-muted);
+}
+
 .erp-dialog-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--erp-space-2);
+}
+
+.erp-table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--erp-space-2);
+}
+
+.erp-table-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.erp-danger-action {
+  --el-button-text-color: var(--erp-danger);
+  --el-button-border-color: rgba(180, 35, 24, 0.28);
+  --el-button-bg-color: var(--erp-danger-soft);
+  --el-button-hover-text-color: var(--erp-text-inverse);
+  --el-button-hover-border-color: var(--erp-danger);
+  --el-button-hover-bg-color: var(--erp-danger);
+  --el-button-active-border-color: #8f1d14;
+  --el-button-active-bg-color: #8f1d14;
+}
+
+.erp-upload-surface {
+  padding: var(--erp-space-3);
+  border: 1px dashed var(--erp-border-strong);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface-muted);
+}
+
+.erp-upload-surface .el-upload,
+.erp-upload-surface .el-upload-dragger {
+  width: 100%;
+}
+
+.erp-upload-surface .el-upload-dragger {
+  border-color: var(--erp-border-strong);
+  border-radius: var(--erp-radius-lg);
+  background: var(--erp-surface);
 }
 
 .erp-muted {

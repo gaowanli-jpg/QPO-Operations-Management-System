@@ -77,8 +77,18 @@
           <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
           <el-table-column label="操作" width="280" align="center" fixed="right">
             <template #default="scope">
-              <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
-              <el-button size="small" type="warning" plain @click="resetProduction(scope.row)">重置提单/工艺</el-button>
+              <div class="erp-table-actions">
+                <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  plain
+                  class="erp-danger-action"
+                  @click="resetProduction(scope.row)"
+                >
+                  重置提单/工艺
+                </el-button>
+              </div>
             </template>
           </el-table-column>
           </el-table>
@@ -177,14 +187,14 @@
       :close-on-click-modal="false"
     >
       <div v-if="orderDetail" class="supplement-dialog">
-        <el-descriptions :column="1" border size="small" class="supplement-descriptions">
+        <el-descriptions :column="1" border size="small" class="erp-dialog-section supplement-descriptions">
           <el-descriptions-item label="订单">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">
             {{ orderDetail.orderInfo?.customerName || '-' }}
           </el-descriptions-item>
         </el-descriptions>
 
-        <div class="missing-list">
+        <div class="erp-dialog-section missing-list">
           <div class="section-subtitle">待补图零件</div>
           <el-table :data="missingDrawingItems" border stripe height="180">
             <el-table-column prop="partNo" label="图号" min-width="140" />
@@ -194,7 +204,7 @@
           </el-table>
         </div>
 
-        <div class="upload-area">
+        <div class="erp-upload-surface upload-area">
           <el-upload
             ref="supplementUploadRef"
             drag
@@ -238,10 +248,12 @@
       </div>
 
       <template #footer>
-        <el-button @click="supplementVisible = false">关闭</el-button>
-        <el-button type="primary" :loading="supplementUploading" :disabled="supplementFiles.length === 0" @click="submitSupplementDrawings">
-          上传并匹配
-        </el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="supplementVisible = false">关闭</el-button>
+          <el-button type="primary" :loading="supplementUploading" :disabled="supplementFiles.length === 0" @click="submitSupplementDrawings">
+            上传并匹配
+          </el-button>
+        </div>
       </template>
     </el-dialog>
   </div>

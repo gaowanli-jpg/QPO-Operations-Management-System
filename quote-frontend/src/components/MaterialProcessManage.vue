@@ -45,8 +45,10 @@
             </el-table-column>
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
-                <el-button type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
-                <el-button type="danger" size="small" plain @click="deleteMaterial(scope.row)">删除</el-button>
+                <div class="erp-table-actions">
+                  <el-button type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
+                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteMaterial(scope.row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -67,8 +69,10 @@
             <el-table-column prop="price3000Plus" label=">3000" width="90" align="right" />
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
-                <el-button type="primary" size="small" @click="openProcessDialog(scope.row)">编辑</el-button>
-                <el-button type="danger" size="small" plain @click="deleteProcess(scope.row)">删除</el-button>
+                <div class="erp-table-actions">
+                  <el-button type="primary" size="small" @click="openProcessDialog(scope.row)">编辑</el-button>
+                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteProcess(scope.row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -90,8 +94,10 @@
             </el-table-column>
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
-                <el-button type="primary" size="small" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
-                <el-button type="danger" size="small" plain @click="deleteMarkupFee(scope.row)">删除</el-button>
+                <div class="erp-table-actions">
+                  <el-button type="primary" size="small" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
+                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteMarkupFee(scope.row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -111,8 +117,10 @@
             </el-table-column>
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
-                <el-button type="primary" size="small" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
-                <el-button type="danger" size="small" plain @click="deleteExtraFee(scope.row)">删除</el-button>
+                <div class="erp-table-actions">
+                  <el-button type="primary" size="small" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
+                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteExtraFee(scope.row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -122,7 +130,7 @@
     </section>
 
     <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="760px">
-      <el-form :model="materialForm" label-width="140px">
+      <el-form :model="materialForm" label-width="140px" class="erp-dialog-form">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="材料" required>
@@ -194,13 +202,15 @@
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="materialDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveMaterial">保存</el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="materialDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveMaterial">保存</el-button>
+        </div>
       </template>
     </el-dialog>
 
     <el-dialog v-model="processDialogVisible" :title="processForm.id ? '编辑工艺' : '新增工艺'" width="860px">
-      <el-form :model="processForm" label-width="110px">
+      <el-form :model="processForm" label-width="110px" class="erp-dialog-form">
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="序号">
@@ -227,13 +237,15 @@
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="processDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveProcess">保存</el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="processDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveProcess">保存</el-button>
+        </div>
       </template>
     </el-dialog>
 
     <el-dialog v-model="markupFeeDialogVisible" :title="markupFeeForm.id ? '编辑费用类' : '新增费用类'" width="520px">
-      <el-form :model="markupFeeForm" label-width="100px">
+      <el-form :model="markupFeeForm" label-width="100px" class="erp-dialog-form">
         <el-form-item label="序号">
           <el-input-number v-model="markupFeeForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
         </el-form-item>
@@ -248,13 +260,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="markupFeeDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveMarkupFee">保存</el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="markupFeeDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveMarkupFee">保存</el-button>
+        </div>
       </template>
     </el-dialog>
 
     <el-dialog v-model="extraFeeDialogVisible" :title="extraFeeForm.id ? '编辑非工时费用工艺' : '新增非工时费用工艺'" width="560px">
-      <el-form :model="extraFeeForm" label-width="120px">
+      <el-form :model="extraFeeForm" label-width="120px" class="erp-dialog-form">
         <el-form-item label="序号">
           <el-input-number v-model="extraFeeForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
         </el-form-item>
@@ -269,8 +283,10 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="extraFeeDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveExtraFee">保存</el-button>
+        <div class="erp-dialog-footer">
+          <el-button @click="extraFeeDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveExtraFee">保存</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
