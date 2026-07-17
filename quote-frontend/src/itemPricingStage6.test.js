@@ -66,4 +66,13 @@ describe('QPO Stage 6 item pricing workbench redesign', () => {
     expect(source).toContain('fetchQuoteData')
     expect(source).toContain('globalConfigStore')
   })
+
+  test('returns to the current order global setup deterministically', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('@click="returnToGlobalSetup"')
+    expect(source).toContain("path: '/engineering'")
+    expect(source).toContain('query: { rfqId: rfqId.value }')
+    expect(source).not.toContain('$router.back()')
+  })
 })

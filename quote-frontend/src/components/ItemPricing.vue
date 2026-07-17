@@ -45,7 +45,7 @@
         <small>先处理有图纸零件，再生成报价单并提交。</small>
       </div>
       <div class="erp-toolbar-group pricing-toolbar-actions">
-        <el-button @click="$router.back()">返回修改全局设定</el-button>
+        <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
         <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
           生成报价单
         </el-button>
@@ -562,7 +562,7 @@
 import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import {
   completeOrderQuote as completeOrderQuoteRequest,
@@ -589,6 +589,7 @@ import {
 } from '../utils/clientPagination'
 
 const route = useRoute()
+const router = useRouter()
 const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
@@ -682,6 +683,17 @@ const canRefreshQuotes = computed(() => {
     && !!quoteData.value
     && items.some(item => item.finalUnitPrice != null || isAssemblyItem(item))
 })
+
+const returnToGlobalSetup = () => {
+  if (!rfqId.value) {
+    router.push({ path: '/engineering' })
+    return
+  }
+  router.push({
+    path: '/engineering',
+    query: { rfqId: rfqId.value }
+  })
+}
 
 watch(
   () => [quoteData.value?.itemList?.length || 0, pricingListPagination.page, pricingListPagination.pageSize],

@@ -245,7 +245,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { applyRepeatQuotes, getRepeatAnalysis, saveOrderConfig } from '../services/engineerApi'
@@ -260,10 +260,17 @@ import {
 } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 
 const testRfqId = ref(null)
+
+const resolveRouteRfqId = () => {
+  const value = Array.isArray(route.query.rfqId) ? route.query.rfqId[0] : route.query.rfqId
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
 
 // 数据存放区
 const isLoading = ref(false)
@@ -634,6 +641,11 @@ const applyRecommendedConfig = (recommendedConfig) => {
 
 onMounted(async () => {
   await fetchDicts()
+  const initialRfqId = resolveRouteRfqId()
+  if (initialRfqId) {
+    testRfqId.value = initialRfqId
+    await fetchOrderData()
+  }
 })
 </script>
 

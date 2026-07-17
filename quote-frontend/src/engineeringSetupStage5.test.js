@@ -47,4 +47,13 @@ describe('QPO Stage 5 engineering setup redesign', () => {
     expect(source).not.toContain('engineering-save-panel')
     expect(source).not.toContain('engineering-workspace')
   })
+
+  test('can preload the current order from the route query', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
+
+    expect(source).toContain("import { useRouter, useRoute } from 'vue-router'")
+    expect(source).toContain('const route = useRoute()')
+    expect(source).toContain('const initialRfqId = resolveRouteRfqId()')
+    expect(source).toContain('await fetchOrderData()')
+  })
 })
