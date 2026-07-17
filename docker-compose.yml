@@ -68,6 +68,11 @@ services:
       FLYWAY_ENABLED: true
       SQL_INIT_MODE: never
       MYBATIS_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+      LOG_FILE_DIR: ${LOG_FILE_DIR:-/data/backups/logs/backend}
+      LOG_FILE_MAX_SIZE: ${LOG_FILE_MAX_SIZE:-50MB}
+      LOG_FILE_MAX_HISTORY: ${LOG_FILE_MAX_HISTORY:-30}
+      LOG_LEVEL_ROOT: ${LOG_LEVEL_ROOT:-INFO}
+      LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
       TZ: Asia/Shanghai
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai
     volumes:
