@@ -81,12 +81,13 @@
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-wrap">
+        <div class="erp-pagination">
           <el-pagination
             v-model:current-page="page"
             v-model:page-size="pageSize"
             :page-sizes="[20, 50, 100]"
-            layout="total, sizes, prev, pager, next"
+            layout="total, sizes, prev, pager, next, jumper"
+            :pager-count="7"
             :total="total"
             background
           />
@@ -279,11 +280,6 @@ const formatDateTime = (value) => {
 .step-title { font-weight: 700; color: #303133; margin-bottom: 10px; }
 .full-width { width: 100%; }
 .keyword-input { width: 260px; margin-bottom: 10px; }
-.pagination-wrap {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
-}
 .order-table :deep(.selected-order-row > td.el-table__cell) {
   background: #d9ecff !important;
 }

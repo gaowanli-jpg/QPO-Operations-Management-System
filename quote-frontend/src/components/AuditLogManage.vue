@@ -98,6 +98,8 @@
           :total="pagination.total"
           :page-sizes="[20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
+          :pager-count="7"
+          background
           @size-change="loadLogs"
           @current-change="loadLogs"
         />

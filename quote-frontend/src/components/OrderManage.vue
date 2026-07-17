@@ -98,7 +98,8 @@
             v-model:current-page="page"
             v-model:page-size="pageSize"
             :page-sizes="[20, 50, 100]"
-            layout="total, sizes, prev, pager, next"
+            layout="total, sizes, prev, pager, next, jumper"
+            :pager-count="7"
             :total="total"
             background
           />
