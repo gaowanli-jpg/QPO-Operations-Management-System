@@ -14,6 +14,18 @@ services:
     image: postgres:15
     container_name: quote-postgres
     restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION_STATEMENT_MS:-500}"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "deadlock_timeout=${POSTGRES_DEADLOCK_TIMEOUT:-1s}"
+      - "-c"
+      - "log_timezone=Asia/Shanghai"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
