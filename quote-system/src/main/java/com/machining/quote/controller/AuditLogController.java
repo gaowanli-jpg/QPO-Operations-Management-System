@@ -5,6 +5,7 @@ import com.machining.quote.dto.AuditLogDTO;
 import com.machining.quote.dto.AuditLogQueryReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.AuditLogQueryService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -24,6 +26,16 @@ public class AuditLogController {
     @GetMapping
     public PageResult<AuditLogDTO> listLogs(@ModelAttribute AuditLogQueryReq req) {
         return auditLogQueryService.listLogs(req);
+    }
+
+    @GetMapping("/export")
+    public void export(@ModelAttribute AuditLogQueryReq req, HttpServletResponse response) throws IOException {
+        byte[] csvBytes = auditLogQueryService.exportCsv(req);
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''audit-logs.csv");
+        response.setHeader("X-Export-Limit", String.valueOf(AuditLogQueryService.EXPORT_LIMIT));
+        response.getOutputStream().write(csvBytes);
     }
 
     @GetMapping("/{id}")

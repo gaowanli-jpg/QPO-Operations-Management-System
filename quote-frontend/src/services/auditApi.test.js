@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { request } from '../api'
+import { downloadFile, request } from '../api'
 import * as auditApi from './auditApi'
 
 vi.mock('../api', () => ({
+  downloadFile: vi.fn(),
   request: vi.fn()
 }))
 
 beforeEach(() => {
+  downloadFile.mockReset()
   request.mockReset()
 })
 
@@ -29,5 +31,16 @@ describe('auditApi', () => {
     await auditApi.getAuditLogOptions()
 
     expect(request).toHaveBeenCalledWith('/api/admin/audit-logs/options')
+  })
+
+  test('exportAuditLogs downloads CSV with encoded filters', async () => {
+    const params = { username: '张三', module: 'ENGINEER', keyword: 'P-001', empty: '' }
+
+    await auditApi.exportAuditLogs(params)
+
+    expect(downloadFile).toHaveBeenCalledWith(
+      '/api/admin/audit-logs/export?username=%E5%BC%A0%E4%B8%89&module=ENGINEER&keyword=P-001',
+      'audit-logs.csv'
+    )
   })
 })

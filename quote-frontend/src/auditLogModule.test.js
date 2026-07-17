@@ -29,7 +29,7 @@ describe('QPO audit log module shell', () => {
     expect(routerSource).not.toContain("import AuditLogManage from '../components/AuditLogManage.vue'")
   })
 
-  test('uses QPO shared surfaces, overflow tooltips and raw JSON detail areas', () => {
+  test('uses QPO shared surfaces, overflow tooltips and readable JSON detail areas', () => {
     expect(auditLogManage).toContain('erp-page audit-log-page')
     expect(auditLogManage).toContain('erp-page-header')
     expect(auditLogManage).toContain('erp-toolbar')
@@ -38,6 +38,12 @@ describe('QPO audit log module shell', () => {
     expect(auditLogManage).toContain('show-overflow-tooltip')
     expect(auditLogManage).toContain('beforeData')
     expect(auditLogManage).toContain('afterData')
+    expect(auditLogManage).toContain('audit-json-table')
+    expect(auditLogManage).toContain('localizedAuditRows')
+    expect(auditLogManage).toContain('copyJson')
+    expect(auditLogManage).toContain('导出 CSV')
+    expect(auditLogManage).toContain('exportAuditLogs')
+    expect(auditLogManage).toContain('formatAuditJson')
     expect(auditLogManage).toContain('el-drawer')
   })
 })

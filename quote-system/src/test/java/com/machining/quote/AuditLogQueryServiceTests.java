@@ -1,14 +1,19 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.AuditLogQueryReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.service.AuditLogQueryService;
+import com.machining.quote.controller.AuditLogController;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.mapper.AuditLogMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +117,60 @@ class AuditLogQueryServiceTests {
         assertThat(asStringList(map.get("modules"))).contains("SYSTEM", "DICT", "MARKET");
         assertThat(asStringList(map.get("roles"))).contains("ADMIN", "MARKET", "ENGINEER", "SYSTEM");
         assertThat((List<?>) map.get("actions")).hasSizeGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void exportCsvCapsRowsAndEmitsUtf8BomForExcel() throws Exception {
+        AuditLogMapper mapper = mock(AuditLogMapper.class);
+        AuditLog log = new AuditLog();
+        log.setId(12);
+        log.setUsername("engineer");
+        log.setRole("ENGINEER");
+        log.setModule("ENGINEER");
+        log.setAction("ITEM_QUOTE_SAVE");
+        log.setTargetType("item_quote_version");
+        log.setTargetId("55");
+        log.setResult("SUCCESS");
+        log.setMessage("保存核价 P-001");
+        log.setBeforeData("{\"partNo\":\"P-001\",\"qty\":1}");
+        log.setAfterData("{\"partNo\":\"P-001\",\"qty\":2}");
+        log.setIpAddress("127.0.0.1");
+        log.setRequestPath("/api/engineer/submit-quote");
+        log.setCreatedAt(LocalDateTime.of(2026, 7, 17, 18, 30, 0));
+        when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(log));
+
+        AuditLogQueryService service = (AuditLogQueryService) queryService(mapper);
+        AuditLogQueryReq req = new AuditLogQueryReq();
+        req.setKeyword("P-001");
+        byte[] csvBytes = service.exportCsv(req);
+
+        assertThat(csvBytes).startsWith(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+        String csv = new String(csvBytes, StandardCharsets.UTF_8);
+        assertThat(csv)
+                .startsWith("\uFEFF日志ID,时间,操作人,角色,模块,动作,结果")
+                .contains("保存逐件核价")
+                .contains("\"{\"\"partNo\"\":\"\"P-001\"\",\"\"qty\"\":2}\"");
+
+        ArgumentCaptor<QueryWrapper<AuditLog>> captor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(mapper).selectList(captor.capture());
+        assertThat(captor.getValue().getSqlSegment()).contains("LIMIT 5000");
+    }
+
+    @Test
+    void controllerExportCsvWritesAttachmentHeaders() throws Exception {
+        AuditLogQueryService service = mock(AuditLogQueryService.class);
+        byte[] csvBytes = "\uFEFF日志ID,时间\n1,2026-07-17".getBytes(StandardCharsets.UTF_8);
+        when(service.exportCsv(any(AuditLogQueryReq.class))).thenReturn(csvBytes);
+        AuditLogController controller = new AuditLogController();
+        ReflectionTestUtils.setField(controller, "auditLogQueryService", service);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        controller.export(new AuditLogQueryReq(), response);
+
+        assertThat(response.getContentType()).isEqualTo("text/csv;charset=UTF-8");
+        assertThat(response.getHeader("Content-Disposition")).contains("audit-logs.csv");
+        assertThat(response.getContentAsByteArray()).isEqualTo(csvBytes);
+        verify(service).exportCsv(any(AuditLogQueryReq.class));
     }
 
     private Object queryService(AuditLogMapper mapper) throws Exception {

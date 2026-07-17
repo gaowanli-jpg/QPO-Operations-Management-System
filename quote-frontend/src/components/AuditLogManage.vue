@@ -6,6 +6,7 @@
         <p class="erp-page-description">查询系统关键操作、账号安全事件和数据变更记录，用于追溯问题和审计。</p>
       </div>
       <div class="erp-page-actions">
+        <el-button :loading="exporting" @click="exportLogs">导出 CSV</el-button>
         <el-button :loading="loading" @click="loadLogs">刷新</el-button>
       </div>
     </header>
@@ -133,15 +134,37 @@
         <section class="erp-surface audit-json-section">
           <div class="audit-json-header">
             <h2 class="erp-section-title">操作前数据</h2>
+            <el-button size="small" @click="copyJson(formatAuditJson(currentLog.beforeData))">复制</el-button>
           </div>
-          <pre class="audit-json-block">{{ formatJson(currentLog.beforeData) }}</pre>
+          <el-table
+            v-if="localizedAuditRows(currentLog.beforeData).length"
+            :data="localizedAuditRows(currentLog.beforeData)"
+            border
+            size="small"
+            class="audit-json-table"
+          >
+            <el-table-column prop="label" label="字段" width="150" show-overflow-tooltip />
+            <el-table-column prop="value" label="内容" show-overflow-tooltip />
+          </el-table>
+          <pre class="audit-json-block">{{ formatAuditJson(currentLog.beforeData) }}</pre>
         </section>
 
         <section class="erp-surface audit-json-section">
           <div class="audit-json-header">
             <h2 class="erp-section-title">操作后数据</h2>
+            <el-button size="small" @click="copyJson(formatAuditJson(currentLog.afterData))">复制</el-button>
           </div>
-          <pre class="audit-json-block">{{ formatJson(currentLog.afterData) }}</pre>
+          <el-table
+            v-if="localizedAuditRows(currentLog.afterData).length"
+            :data="localizedAuditRows(currentLog.afterData)"
+            border
+            size="small"
+            class="audit-json-table"
+          >
+            <el-table-column prop="label" label="字段" width="150" show-overflow-tooltip />
+            <el-table-column prop="value" label="内容" show-overflow-tooltip />
+          </el-table>
+          <pre class="audit-json-block">{{ formatAuditJson(currentLog.afterData) }}</pre>
         </section>
       </div>
     </el-drawer>
@@ -151,7 +174,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAuditLog, getAuditLogOptions, listAuditLogs } from '../services/auditApi'
+import { exportAuditLogs, getAuditLog, getAuditLogOptions, listAuditLogs } from '../services/auditApi'
+import { auditDataRows, formatAuditJson } from '../utils/auditLogFormat'
 
 const MODULE_LABELS = {
   AUTH: '认证',
@@ -171,6 +195,7 @@ const ROLE_LABELS = {
 }
 
 const loading = ref(false)
+const exporting = ref(false)
 const detailVisible = ref(false)
 const currentLog = ref(null)
 const logs = ref([])
@@ -229,6 +254,20 @@ const loadLogs = async () => {
   }
 }
 
+
+const exportLogs = async () => {
+  exporting.value = true
+  try {
+    const result = await exportAuditLogs(buildExportParams())
+    if (result?.success === false) {
+      ElMessage.error(result.message || '操作日志导出失败。')
+      return
+    }
+    ElMessage.success('操作日志 CSV 已开始下载。')
+  } finally {
+    exporting.value = false
+  }
+}
 const searchLogs = () => {
   pagination.page = 1
   loadLogs()
@@ -270,6 +309,24 @@ const buildParams = () => {
   return params
 }
 
+
+const buildExportParams = () => {
+  const params = { ...buildParams() }
+  delete params.page
+  delete params.pageSize
+  return params
+}
+
+const localizedAuditRows = (value) => auditDataRows(value)
+
+const copyJson = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text || '')
+    ElMessage.success('已复制到剪贴板。')
+  } catch {
+    ElMessage.error('复制失败，请手动选中内容复制。')
+  }
+}
 const normalizeActions = (actions) => actions.map((action) => (
   typeof action === 'string'
     ? { value: action, label: action, module: '' }
@@ -281,17 +338,6 @@ const formatDateTime = (value) => {
   return String(value).replace('T', ' ').slice(0, 19)
 }
 
-const formatJson = (value) => {
-  if (!value) return '-'
-  if (typeof value !== 'string') {
-    return JSON.stringify(value, null, 2)
-  }
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2)
-  } catch {
-    return value
-  }
-}
 
 const targetLabel = (row) => {
   const targetType = row?.targetType || '-'
@@ -381,6 +427,23 @@ onMounted(async () => {
 .audit-detail-section .erp-section-title,
 .audit-json-section .erp-section-title {
   margin-bottom: var(--erp-space-3);
+}
+
+.audit-json-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--erp-space-3);
+  margin-bottom: var(--erp-space-3);
+}
+
+.audit-json-table {
+  margin-bottom: var(--erp-space-3);
+}
+
+.audit-json-table :deep(.cell) {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .audit-json-block {

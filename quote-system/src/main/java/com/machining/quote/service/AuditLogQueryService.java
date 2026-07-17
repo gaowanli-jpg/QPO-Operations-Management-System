@@ -9,6 +9,7 @@ import com.machining.quote.mapper.AuditLogMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -44,6 +45,7 @@ public class AuditLogQueryService {
             "ORDER", List.of("ORDER_"),
             "DELIVERY", List.of("DELIVERY_", "PROCESS_SHEET_")
     );
+    public static final int EXPORT_LIMIT = 5000;
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Autowired
@@ -77,6 +79,62 @@ public class AuditLogQueryService {
         return toDTO(log);
     }
 
+
+    public byte[] exportCsv(AuditLogQueryReq req) {
+        AuditLogQueryReq safeReq = req == null ? new AuditLogQueryReq() : req;
+        QueryWrapper<AuditLog> exportQuery = buildQuery(safeReq);
+        exportQuery.orderByDesc("created_at").orderByDesc("id");
+        exportQuery.last("LIMIT " + EXPORT_LIMIT);
+
+        StringBuilder csv = new StringBuilder("\uFEFF");
+        appendCsvRow(csv, List.of(
+                "日志ID",
+                "时间",
+                "操作人",
+                "角色",
+                "模块",
+                "动作",
+                "结果",
+                "对象类型",
+                "对象ID",
+                "摘要",
+                "错误信息",
+                "Request ID",
+                "IP",
+                "方法",
+                "路径",
+                "User-Agent",
+                "操作前数据",
+                "操作后数据"
+        ));
+
+        List<AuditLogDTO> records = auditLogMapper.selectList(exportQuery).stream()
+                .map(this::toDTO)
+                .toList();
+        for (AuditLogDTO record : records) {
+            appendCsvRow(csv, List.of(
+                    text(record.getId()),
+                    formatDateTime(record.getCreatedAt()),
+                    text(record.getUsername()),
+                    text(record.getRole()),
+                    text(record.getModule()),
+                    text(record.getActionLabel()),
+                    text(record.getResult()),
+                    text(record.getTargetType()),
+                    text(record.getTargetId()),
+                    text(record.getMessage()),
+                    text(record.getErrorMessage()),
+                    text(record.getRequestId()),
+                    text(record.getIpAddress()),
+                    text(record.getRequestMethod()),
+                    text(record.getRequestPath()),
+                    text(record.getUserAgent()),
+                    text(record.getBeforeData()),
+                    text(record.getAfterData())
+            ));
+        }
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
     public Map<String, Object> options() {
         QueryWrapper<AuditLog> actionQuery = new QueryWrapper<>();
         actionQuery.select("DISTINCT action");
@@ -221,6 +279,33 @@ public class AuditLogQueryService {
         return option;
     }
 
+
+    private void appendCsvRow(StringBuilder csv, List<String> values) {
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                csv.append(',');
+            }
+            csv.append(csvCell(values.get(i)));
+        }
+        csv.append('\n');
+    }
+
+    private String csvCell(String value) {
+        String text = value == null ? "" : value;
+        String escaped = text.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") || escaped.contains("\r")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
+    }
+
+    private String formatDateTime(LocalDateTime value) {
+        return value == null ? "" : DATE_TIME.format(value);
+    }
+
+    private String text(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
     private int normalizePage(Integer page) {
         return page == null || page < 1 ? 1 : page;
     }
