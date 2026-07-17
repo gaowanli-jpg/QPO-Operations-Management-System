@@ -134,15 +134,17 @@
             </div>
             <el-empty v-if="!selectedRfqId" description="请选择已报价订单" />
             <el-table
+              ref="quoteProcessTableRef"
               v-else
-              :data="itemList"
+              :data="pagedQuoteProcessItems"
+              row-key="id"
               border
               stripe
               height="640"
               v-loading="loadingItems"
               @selection-change="handleSelectionChange"
             >
-              <el-table-column type="selection" width="46" fixed />
+              <el-table-column type="selection" width="46" fixed :reserve-selection="true" />
               <el-table-column prop="partNo" label="图号" width="140" fixed show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="72" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
@@ -206,6 +208,18 @@
                 </template>
               </el-table-column>
             </el-table>
+            <div v-if="selectedRfqId && itemList.length" class="erp-pagination">
+              <el-pagination
+                v-model:current-page="quoteProcessPagination.page"
+                v-model:page-size="quoteProcessPagination.pageSize"
+                :page-sizes="CLIENT_PAGE_SIZES"
+                :pager-count="7"
+                :total="itemList.length"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="quoteProcessPagination.page = 1"
+              />
+            </div>
           </div>
         </el-col>
       </el-row>
@@ -221,7 +235,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
@@ -235,11 +249,19 @@ import {
   shiftQuoteProcessLeadTime,
   updateQuoteProcessLeadTime
 } from '../services/marketApi'
+import {
+  CLIENT_PAGE_SIZES,
+  DEFAULT_CLIENT_PAGE_SIZE,
+  clampPage,
+  paginateRows
+} from '../utils/clientPagination'
 
 const selectedRfqId = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])
 const selectedRows = ref([])
+const quoteProcessTableRef = ref(null)
+const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const orderPickerVisible = ref(false)
 const shiftDays = ref(0)
 const manualQuoteDate = ref('')
@@ -248,12 +270,38 @@ const savingRowMap = reactive({})
 const loadingItems = ref(false)
 const adjusting = ref(false)
 const settingQuoteDate = ref(false)
+let syncingQuoteProcessSelection = false
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.id
     ? `${orderInfo.value.rfqNo || orderInfo.value.id} / ${orderInfo.value.customerName || '-'}`
     : '未选择订单'
 ))
+
+const pagedQuoteProcessItems = computed(() => paginateRows(itemList.value, quoteProcessPagination))
+
+const selectedQuoteProcessIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
+
+const syncQuoteProcessPageSelection = async () => {
+  syncingQuoteProcessSelection = true
+  await nextTick()
+  quoteProcessTableRef.value?.clearSelection()
+  pagedQuoteProcessItems.value.forEach(row => {
+    if (selectedQuoteProcessIds.value.has(row.id)) {
+      quoteProcessTableRef.value?.toggleRowSelection(row, true)
+    }
+  })
+  await nextTick()
+  syncingQuoteProcessSelection = false
+}
+
+watch(
+  () => [itemList.value.length, quoteProcessPagination.page, quoteProcessPagination.pageSize],
+  () => {
+    quoteProcessPagination.page = clampPage(quoteProcessPagination, itemList.value.length)
+    syncQuoteProcessPageSelection()
+  }
+)
 
 const openOrderPicker = () => {
   orderPickerVisible.value = true
@@ -271,6 +319,9 @@ const loadQuoteProcess = async (rfqId) => {
     orderInfo.value = response.orderInfo || {}
     itemList.value = normalizeRows(response.itemList || [])
     selectedRows.value = []
+    quoteProcessPagination.page = 1
+    await nextTick()
+    quoteProcessTableRef.value?.clearSelection()
   } catch (error) {
     console.error(error)
     ElMessage.error(error.response?.data?.message || '报价单处理数据加载失败。')
@@ -287,7 +338,10 @@ const normalizeRows = (rows) => rows.map(row => ({
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
 const handleSelectionChange = (rows) => {
-  selectedRows.value = rows
+  if (syncingQuoteProcessSelection) return
+  const currentPageIds = new Set(pagedQuoteProcessItems.value.map(row => row.id))
+  const preservedRows = selectedRows.value.filter(row => !currentPageIds.has(row.id))
+  selectedRows.value = [...preservedRows, ...rows]
 }
 
 const applyShift = async (direction) => {
@@ -305,6 +359,8 @@ const applyShift = async (direction) => {
     })
     itemList.value = normalizeRows(response.itemList || [])
     selectedRows.value = []
+    await nextTick()
+    quoteProcessTableRef.value?.clearSelection()
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -334,6 +390,8 @@ const setQuoteLeadTime = async () => {
     })
     itemList.value = normalizeRows(response.itemList || [])
     selectedRows.value = []
+    await nextTick()
+    quoteProcessTableRef.value?.clearSelection()
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {

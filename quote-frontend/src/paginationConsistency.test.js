@@ -33,4 +33,25 @@ describe('pagination consistency', () => {
       expect(block, file).toContain(':pager-count="7"')
     }
   })
+
+  test('large workflow tables use client-side paged data', () => {
+    const quoteProcess = readFileSync(join(srcDir, 'components', 'QuoteProcess.vue'), 'utf8')
+    const marketRelease = readFileSync(join(srcDir, 'components', 'MarketRelease.vue'), 'utf8')
+    const itemPricing = readFileSync(join(srcDir, 'components', 'ItemPricing.vue'), 'utf8')
+
+    expect(quoteProcess).toContain(':data="pagedQuoteProcessItems"')
+    expect(quoteProcess).toContain('quoteProcessPagination')
+
+    expect(marketRelease).toContain(':data="pagedReleaseItems"')
+    expect(marketRelease).toContain(':data="pagedTicketList"')
+    expect(marketRelease).toContain(':data="pagedProcessSheetList"')
+    expect(marketRelease).toContain('releaseItemPagination')
+    expect(marketRelease).toContain('ticketPagination')
+    expect(marketRelease).toContain('processSheetPagination')
+
+    expect(itemPricing).toContain(':data="pagedPricingItems"')
+    expect(itemPricing).toContain(':data="pagedAssemblyChildOptions"')
+    expect(itemPricing).toContain('pricingListPagination')
+    expect(itemPricing).toContain('assemblyPickerPagination')
+  })
 })

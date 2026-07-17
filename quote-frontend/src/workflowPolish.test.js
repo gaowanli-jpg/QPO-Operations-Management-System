@@ -91,7 +91,7 @@ describe('QPO workflow page polish', () => {
     expectIncludes(source, 'MarketRelease.vue', [
       'class="release-selection-table"',
       'scrollbar-always-on',
-      '<el-table-column type="selection" width="45" :selectable="canSelectItem" />',
+      '<el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />',
       '<el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />'
     ])
     expectExcludes(source, 'MarketRelease.vue', [

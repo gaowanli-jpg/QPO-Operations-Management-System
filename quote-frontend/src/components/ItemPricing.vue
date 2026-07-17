@@ -67,7 +67,7 @@
       <div v-else class="erp-table-body pricing-table-body">
         <el-table
           ref="pricingTableRef"
-          :data="quoteData.itemList"
+          :data="pagedPricingItems"
           row-key="id"
           border
           stripe
@@ -142,6 +142,18 @@
             </template>
           </el-table-column>
         </el-table>
+        <div v-if="quoteData.itemList?.length" class="erp-pagination">
+          <el-pagination
+            v-model:current-page="pricingListPagination.page"
+            v-model:page-size="pricingListPagination.pageSize"
+            :page-sizes="CLIENT_PAGE_SIZES"
+            :pager-count="7"
+            :total="quoteData.itemList.length"
+            layout="total, sizes, prev, pager, next, jumper"
+            background
+            @size-change="pricingListPagination.page = 1"
+          />
+        </div>
       </div>
     </section>
 
@@ -440,14 +452,14 @@
       </div>
       <el-table
         ref="assemblyPickerTableRef"
-        :data="assemblyChildOptions"
+        :data="pagedAssemblyChildOptions"
         row-key="id"
         border
         stripe
         height="560"
         @selection-change="handleAssemblyPickerSelection"
       >
-        <el-table-column type="selection" width="48" :selectable="isAssemblyPickerRowSelectable" />
+        <el-table-column type="selection" width="48" :selectable="isAssemblyPickerRowSelectable" :reserve-selection="true" />
         <el-table-column prop="partNo" label="图号" width="150" fixed show-overflow-tooltip />
         <el-table-column prop="version" label="版本" width="80" align="center" />
         <el-table-column prop="description" label="名称/描述" min-width="180" show-overflow-tooltip />
@@ -482,6 +494,18 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="assemblyChildOptions.length" class="erp-pagination assembly-picker-pagination">
+        <el-pagination
+          v-model:current-page="assemblyPickerPagination.page"
+          v-model:page-size="assemblyPickerPagination.pageSize"
+          :page-sizes="CLIENT_PAGE_SIZES"
+          :pager-count="7"
+          :total="assemblyChildOptions.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="assemblyPickerPagination.page = 1"
+        />
+      </div>
       <template #footer>
         <div class="erp-dialog-footer pricing-dialog-footer assembly-picker-footer">
           <el-button @click="assemblyPickerVisible = false">取消</el-button>
@@ -557,6 +581,12 @@ import {
   readFileErrorMessage,
   revokeObjectUrl
 } from '../api'
+import {
+  CLIENT_PAGE_SIZES,
+  DEFAULT_CLIENT_PAGE_SIZE,
+  clampPage,
+  paginateRows
+} from '../utils/clientPagination'
 
 const route = useRoute()
 const dictionaryStore = useDictionaryStore()
@@ -569,6 +599,7 @@ const loading = ref(false)
 const completeLoading = ref(false)
 const refreshLoading = ref(false)
 const pricingTableRef = ref(null)
+const pricingListPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
@@ -626,6 +657,8 @@ const repeatItemMap = computed(() => {
   return map
 })
 
+const pagedPricingItems = computed(() => paginateRows(quoteData.value?.itemList || [], pricingListPagination))
+
 const canExportQuote = computed(() => {
   const items = quoteData.value?.itemList || []
   const drawableItems = items.filter(item => item.drawingUrl)
@@ -649,6 +682,13 @@ const canRefreshQuotes = computed(() => {
     && !!quoteData.value
     && items.some(item => item.finalUnitPrice != null || isAssemblyItem(item))
 })
+
+watch(
+  () => [quoteData.value?.itemList?.length || 0, pricingListPagination.page, pricingListPagination.pageSize],
+  () => {
+    pricingListPagination.page = clampPage(pricingListPagination, quoteData.value?.itemList?.length || 0)
+  }
+)
 
 // 页面加载时自动拉取数据
 onMounted(async () => {
@@ -697,6 +737,9 @@ const fetchQuoteData = async (options = {}) => {
   try {
     // 动态加载真实的 rfqId
     quoteData.value = await getMarketSummary(rfqId.value)
+    if (!options.keepScroll) {
+      pricingListPagination.page = 1
+    }
     if (quoteData.value?.orderInfo?.engineerConfig) {
       globalConfig.value = globalConfigStore.applyEngineerConfig(rfqId.value, quoteData.value.orderInfo.engineerConfig)
     }
@@ -855,8 +898,10 @@ const assemblyChildren = ref([])
 const assemblyPickerVisible = ref(false)
 const assemblyPickerSelection = ref([])
 const assemblyPickerTableRef = ref(null)
+const assemblyPickerPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 let assemblyChildSeq = 0
 let currentDrawingRequestSeq = 0
+let syncingAssemblyPickerSelection = false
 
 const cleanupCurrentDrawingSrc = () => {
   revokeObjectUrl(currentDrawingSrc.value)
@@ -987,11 +1032,37 @@ const assemblyChildOptions = computed(() => {
   return (quoteData.value?.itemList || []).filter(item => item.id !== currentId)
 })
 
+const pagedAssemblyChildOptions = computed(() => paginateRows(assemblyChildOptions.value, assemblyPickerPagination))
+
 const selectedAssemblyChildIds = computed(() => new Set(
   assemblyChildren.value
     .map(child => child.childItemId)
     .filter(Boolean)
 ))
+
+const selectedAssemblyPickerIds = computed(() => new Set(assemblyPickerSelection.value.map(row => row.id)))
+
+const syncAssemblyPickerTableSelection = async () => {
+  if (!assemblyPickerVisible.value) return
+  syncingAssemblyPickerSelection = true
+  await nextTick()
+  assemblyPickerTableRef.value?.clearSelection()
+  pagedAssemblyChildOptions.value.forEach(row => {
+    if (selectedAssemblyPickerIds.value.has(row.id)) {
+      assemblyPickerTableRef.value?.toggleRowSelection(row, true)
+    }
+  })
+  await nextTick()
+  syncingAssemblyPickerSelection = false
+}
+
+watch(
+  () => [assemblyChildOptions.value.length, assemblyPickerPagination.page, assemblyPickerPagination.pageSize, assemblyPickerVisible.value],
+  () => {
+    assemblyPickerPagination.page = clampPage(assemblyPickerPagination, assemblyChildOptions.value.length)
+    syncAssemblyPickerTableSelection()
+  }
+)
 
 const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum, child) => {
   const unitPrice = Number(child.finalUnitPrice)
@@ -1057,13 +1128,17 @@ const removeAssemblyChild = (index) => {
 
 const openAssemblyChildPicker = async () => {
   assemblyPickerSelection.value = []
+  assemblyPickerPagination.page = 1
   assemblyPickerVisible.value = true
   await nextTick()
   assemblyPickerTableRef.value?.clearSelection()
 }
 
 const handleAssemblyPickerSelection = (rows) => {
-  assemblyPickerSelection.value = rows
+  if (syncingAssemblyPickerSelection) return
+  const currentPageIds = new Set(pagedAssemblyChildOptions.value.map(row => row.id))
+  const preservedRows = assemblyPickerSelection.value.filter(row => !currentPageIds.has(row.id))
+  assemblyPickerSelection.value = [...preservedRows, ...rows]
 }
 
 const isAssemblyPickerRowSelectable = (row) => !selectedAssemblyChildIds.value.has(row.id)

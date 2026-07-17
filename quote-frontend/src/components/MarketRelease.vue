@@ -168,7 +168,8 @@
             <el-table
               ref="itemTableRef"
               class="release-selection-table"
-              :data="itemList"
+              :data="pagedReleaseItems"
+              row-key="id"
               border
               stripe
               height="360"
@@ -176,7 +177,7 @@
               v-loading="loading"
               @selection-change="handleSelectionChange"
             >
-              <el-table-column type="selection" width="45" :selectable="canSelectItem" />
+              <el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />
               <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
@@ -245,6 +246,18 @@
               </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
             </el-table>
+            <div v-if="itemList.length" class="erp-pagination">
+              <el-pagination
+                v-model:current-page="releaseItemPagination.page"
+                v-model:page-size="releaseItemPagination.pageSize"
+                :page-sizes="CLIENT_PAGE_SIZES"
+                :pager-count="7"
+                :total="itemList.length"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="releaseItemPagination.page = 1"
+              />
+            </div>
           </div>
 
           <div class="erp-table-surface release-table-panel ticket-panel">
@@ -254,7 +267,7 @@
                 导出提单 Excel
               </el-button>
             </div>
-            <el-table :data="ticketList" border stripe height="280" v-loading="loadingTickets || deleting">
+            <el-table :data="pagedTicketList" border stripe height="280" v-loading="loadingTickets || deleting">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
@@ -276,6 +289,18 @@
                 </template>
               </el-table-column>
             </el-table>
+            <div v-if="ticketList.length" class="erp-pagination">
+              <el-pagination
+                v-model:current-page="ticketPagination.page"
+                v-model:page-size="ticketPagination.pageSize"
+                :page-sizes="CLIENT_PAGE_SIZES"
+                :pager-count="7"
+                :total="ticketList.length"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="ticketPagination.page = 1"
+              />
+            </div>
           </div>
 
           <div class="erp-table-surface release-table-panel ticket-panel">
@@ -285,7 +310,7 @@
                 导出工艺表 Excel
               </el-button>
             </div>
-            <el-table :data="processSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
+            <el-table :data="pagedProcessSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
@@ -312,6 +337,18 @@
                 </template>
               </el-table-column>
             </el-table>
+            <div v-if="processSheetList.length" class="erp-pagination">
+              <el-pagination
+                v-model:current-page="processSheetPagination.page"
+                v-model:page-size="processSheetPagination.pageSize"
+                :page-sizes="CLIENT_PAGE_SIZES"
+                :pager-count="7"
+                :total="processSheetList.length"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="processSheetPagination.page = 1"
+              />
+            </div>
           </div>
         </el-col>
       </el-row>
@@ -326,7 +363,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
@@ -343,6 +380,12 @@ import {
   shiftInternalTargetLeadTime,
   updateInternalTargetLeadTime
 } from '../services/marketApi'
+import {
+  CLIENT_PAGE_SIZES,
+  DEFAULT_CLIENT_PAGE_SIZE,
+  clampPage,
+  paginateRows
+} from '../utils/clientPagination'
 
 const selectedRfqId = ref(null)
 const orderPickerVisible = ref(false)
@@ -353,6 +396,9 @@ const processSheetList = ref([])
 const selectedRows = ref([])
 const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
+const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const ticketPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const processSheetPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
@@ -366,6 +412,7 @@ const deleting = ref(false)
 const adjustingInternalLeadTime = ref(false)
 const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
+let syncingReleaseItemSelection = false
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.id
@@ -383,6 +430,52 @@ const releaseForm = reactive({
   arrangeType: '计划'
 })
 
+const pagedReleaseItems = computed(() => paginateRows(itemList.value, releaseItemPagination))
+const pagedTicketList = computed(() => paginateRows(ticketList.value, ticketPagination))
+const pagedProcessSheetList = computed(() => paginateRows(processSheetList.value, processSheetPagination))
+const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
+
+const resetReleasePagination = () => {
+  releaseItemPagination.page = 1
+  ticketPagination.page = 1
+  processSheetPagination.page = 1
+}
+
+const syncReleaseItemTableSelection = async () => {
+  syncingReleaseItemSelection = true
+  await nextTick()
+  itemTableRef.value?.clearSelection()
+  pagedReleaseItems.value.forEach(row => {
+    if (selectedReleaseItemIds.value.has(row.id)) {
+      itemTableRef.value?.toggleRowSelection(row, true)
+    }
+  })
+  await nextTick()
+  syncingReleaseItemSelection = false
+}
+
+watch(
+  () => [itemList.value.length, releaseItemPagination.page, releaseItemPagination.pageSize],
+  () => {
+    releaseItemPagination.page = clampPage(releaseItemPagination, itemList.value.length)
+    syncReleaseItemTableSelection()
+  }
+)
+
+watch(
+  () => [ticketList.value.length, ticketPagination.page, ticketPagination.pageSize],
+  () => {
+    ticketPagination.page = clampPage(ticketPagination, ticketList.value.length)
+  }
+)
+
+watch(
+  () => [processSheetList.value.length, processSheetPagination.page, processSheetPagination.pageSize],
+  () => {
+    processSheetPagination.page = clampPage(processSheetPagination, processSheetList.value.length)
+  }
+)
+
 const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
@@ -394,6 +487,7 @@ const handleOrderSelected = async (order) => {
 
 const loadOrder = async (rfqId) => {
   if (!rfqId) return
+  resetReleasePagination()
   loading.value = true
   try {
     const response = await getMarketSummary(rfqId)
@@ -404,6 +498,8 @@ const loadOrder = async (rfqId) => {
     releaseForm.customerOrderNo = ''
     releaseForm.customerProjectNo = ''
     selectedRows.value = []
+    await nextTick()
+    itemTableRef.value?.clearSelection()
     await loadTickets(rfqId)
     await loadProcessSheets(rfqId)
   } catch (error) {
@@ -464,7 +560,10 @@ const canSelectItem = (row) => {
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
 const handleSelectionChange = (rows) => {
-  selectedRows.value = rows
+  if (syncingReleaseItemSelection) return
+  const currentPageIds = new Set(pagedReleaseItems.value.map(row => row.id))
+  const preservedRows = selectedRows.value.filter(row => !currentPageIds.has(row.id))
+  selectedRows.value = [...preservedRows, ...rows]
 }
 
 const selectedRowsInItemOrder = () => {
@@ -502,22 +601,24 @@ const handleSelectionExcelChange = async (uploadFile) => {
         .filter(key => !key.startsWith('||'))
     )
 
-    itemTableRef.value?.clearSelection()
     let matchedCount = 0
     let selectedCount = 0
     let skippedCount = 0
+    const importedSelection = []
     itemList.value.forEach(row => {
       if (!importedKeys.has(itemIdentityKey(row))) {
         return
       }
       matchedCount++
       if (canSelectItem(row)) {
-        itemTableRef.value?.toggleRowSelection(row, true)
+        importedSelection.push(row)
         selectedCount++
       } else {
         skippedCount++
       }
     })
+    selectedRows.value = importedSelection
+    await syncReleaseItemTableSelection()
 
     if (importedKeys.size === 0) {
       ElMessage.warning('表格中未读取到有效的图号+版本。')
@@ -550,6 +651,7 @@ const adjustInternalLeadTime = async (direction) => {
     })
     setItemList(response.itemList || [])
     selectedRows.value = []
+    await syncReleaseItemTableSelection()
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -579,6 +681,7 @@ const setInternalTargetLeadTime = async () => {
     })
     setItemList(response.itemList || [])
     selectedRows.value = []
+    await syncReleaseItemTableSelection()
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
