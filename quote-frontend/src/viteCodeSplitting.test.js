@@ -6,7 +6,7 @@ import { dirname, resolve } from 'node:path'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const viteConfigSource = readFileSync(resolve(currentDir, '..', 'vite.config.js'), 'utf8')
 
-describe('ERP Vite production chunking config', () => {
+describe('QPO Vite production chunking config', () => {
   test('avoids fragile third-party manual vendor splitting', () => {
     expect(viteConfigSource).not.toContain('rolldownOptions')
     expect(viteConfigSource).not.toContain('codeSplitting')

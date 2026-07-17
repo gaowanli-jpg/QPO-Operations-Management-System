@@ -9,8 +9,8 @@ const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments
 
 const countOccurrences = (source, text) => source.split(text).length - 1
 
-describe('ERP Stage 5 engineering setup redesign', () => {
-  test('moves GlobalSetup onto the shared ERP page shell', () => {
+describe('QPO Stage 5 engineering setup redesign', () => {
+  test('moves GlobalSetup onto the shared QPO page shell', () => {
     const source = readSource('components', 'GlobalSetup.vue')
 
     for (const className of [

@@ -19,7 +19,7 @@ const businessRouteComponents = [
   'QuoteTemplateManage'
 ]
 
-describe('ERP router code splitting', () => {
+describe('QPO router code splitting', () => {
   test('lazy-loads business route components instead of pulling them into the main bundle', () => {
     for (const componentName of businessRouteComponents) {
       expect(routerSource).toContain(`const ${componentName} = () => import('../components/${componentName}.vue')`)

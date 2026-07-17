@@ -9,7 +9,7 @@ const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments
 
 const countOccurrences = (source, text) => source.split(text).length - 1
 
-describe('ERP Stage 6 item pricing workbench redesign', () => {
+describe('QPO Stage 6 item pricing workbench redesign', () => {
   test('moves ItemPricing onto the shared workbench page shell', () => {
     const source = readSource('components', 'ItemPricing.vue')
 

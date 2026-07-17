@@ -7,7 +7,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
-describe('ERP final UI punch-list polish', () => {
+describe('QPO final UI punch-list polish', () => {
   test('keeps dense table and workflow action buttons readable', () => {
     const css = readSource('style.css')
 

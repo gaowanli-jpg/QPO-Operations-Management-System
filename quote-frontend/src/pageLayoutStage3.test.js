@@ -13,7 +13,7 @@ const expectClasses = (source, classes) => {
   }
 }
 
-describe('ERP Stage 3 shared page layout migration', () => {
+describe('QPO Stage 3 shared page layout migration', () => {
   test('migrates the market import page to shared page and surface classes', () => {
     const source = readComponent('MarketDashboard.vue')
 

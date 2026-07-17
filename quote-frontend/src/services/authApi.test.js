@@ -11,7 +11,7 @@ beforeEach(() => {
 })
 
 describe('authApi', () => {
-  test('login posts credentials to ERP auth endpoint', async () => {
+  test('login posts credentials to QPO auth endpoint', async () => {
     await authApi.login({ username: 'admin', password: 'secret' })
 
     expect(request).toHaveBeenCalledWith('/api/auth/login', {

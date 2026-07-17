@@ -4,7 +4,7 @@
     <div v-else class="erp-layout">
       <el-aside width="240px" class="sidebar">
         <div class="logo-box">
-          <span class="logo-icon">ERP</span>
+          <span class="logo-icon">QPO</span>
           <span class="logo-text">智能运营管理</span>
         </div>
 

@@ -1,6 +1,6 @@
 name: quote-system
 
-# ERP uses a dedicated environment file now:
+# QPO uses the existing dedicated ERP environment file for compatibility:
 # docker compose --env-file erp.env up -d --build
 
 x-logging: &default-logging

@@ -21,7 +21,7 @@ const expectExcludes = (source, fileName, classNames) => {
   }
 }
 
-describe('ERP Stage 7 final consistency pass', () => {
+describe('QPO Stage 7 final consistency pass', () => {
   test('moves remaining market workflow pages off local card shells', () => {
     const pages = [
       ['MarketRelease.vue', 'release-page'],

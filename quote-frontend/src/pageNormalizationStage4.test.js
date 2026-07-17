@@ -9,8 +9,8 @@ const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments
 
 const countOccurrences = (source, text) => source.split(text).length - 1
 
-describe('ERP Stage 4 dialog, form, and table action normalization', () => {
-  test('defines shared normalization classes in the ERP style foundation', () => {
+describe('QPO Stage 4 dialog, form, and table action normalization', () => {
+  test('defines shared normalization classes in the QPO style foundation', () => {
     const source = readSource('style.css')
 
     for (const className of [

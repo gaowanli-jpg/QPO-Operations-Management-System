@@ -12,8 +12,8 @@ const expectCssIncludes = (values) => {
   }
 }
 
-describe('ERP style foundation', () => {
-  test('defines visual design tokens for the ERP foundation', () => {
+describe('QPO style foundation', () => {
+  test('defines visual design tokens for the QPO foundation', () => {
     expectCssIncludes([
       '--erp-font-sans',
       '--erp-space-4',
@@ -25,7 +25,7 @@ describe('ERP style foundation', () => {
     ])
   })
 
-  test('maps Element Plus basics to ERP tokens', () => {
+  test('maps Element Plus basics to QPO-compatible tokens', () => {
     expectCssIncludes([
       '--el-color-primary: var(--erp-primary)',
       '--el-border-color: var(--erp-border)',

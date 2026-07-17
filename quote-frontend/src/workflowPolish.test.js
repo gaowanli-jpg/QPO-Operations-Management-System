@@ -25,7 +25,7 @@ const countNoisySemanticButtons = (source) => {
   return [...source.matchAll(/<el-button\b[^>]*\btype="(?:success|warning)"/g)].length
 }
 
-describe('ERP workflow page polish', () => {
+describe('QPO workflow page polish', () => {
   test('keeps quote process as a focused workflow workbench', () => {
     const source = readComponent('QuoteProcess.vue')
 

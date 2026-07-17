@@ -5,8 +5,18 @@ import { dirname, resolve } from 'node:path'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const appVue = readFileSync(resolve(currentDir, 'App.vue'), 'utf8')
+const loginView = readFileSync(resolve(currentDir, 'components', 'LoginView.vue'), 'utf8')
+const indexHtml = readFileSync(resolve(currentDir, '..', 'index.html'), 'utf8')
 
-describe('ERP app shell polish', () => {
+describe('QPO app shell polish', () => {
+  test('uses QPO as the visible product brand', () => {
+    expect(appVue).toContain('<span class="logo-icon">QPO</span>')
+    expect(loginView).toContain('<div class="brand-mark">QPO</div>')
+    expect(indexHtml).toContain('<title>QPO</title>')
+    expect(appVue).not.toContain('<span class="logo-icon">ERP</span>')
+    expect(loginView).not.toContain('<div class="brand-mark">ERP</div>')
+  })
+
   test('uses short grouped sidebar labels for the Stage 2 shell', () => {
     expect(appVue).toContain('menu-section')
     expect(appVue).toContain('市场')
