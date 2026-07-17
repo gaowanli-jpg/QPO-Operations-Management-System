@@ -43,4 +43,21 @@ describe('auditApi', () => {
       'audit-logs.csv'
     )
   })
+
+  test('loads, updates and runs audit log retention policy', async () => {
+    const payload = { enabled: true, retentionDays: 180, archiveBeforeCleanup: true, cleanupTime: '02:00' }
+
+    await auditApi.getAuditLogRetentionSetting()
+    await auditApi.updateAuditLogRetentionSetting(payload)
+    await auditApi.runAuditLogRetentionCleanup()
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/admin/audit-logs/retention')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/audit-logs/retention', {
+      method: 'PUT',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/admin/audit-logs/retention/run', {
+      method: 'POST'
+    })
+  })
 })

@@ -38,7 +38,7 @@ public class AuditLogQueryService {
     );
     private static final Map<String, List<String>> MODULE_ACTION_PREFIXES = Map.of(
             "AUTH", List.of("AUTH_"),
-            "SYSTEM", List.of("USER_", "QUOTE_TEMPLATE_"),
+            "SYSTEM", List.of("USER_", "QUOTE_TEMPLATE_", "AUDIT_"),
             "DICT", List.of("DICT_"),
             "ENGINEER", List.of("ITEM_", "REPEAT_", "QUOTE_REFRESH_TASK_SUBMIT"),
             "MARKET", List.of("QUOTE_", "INTERNAL_TARGET_", "RFQ_"),

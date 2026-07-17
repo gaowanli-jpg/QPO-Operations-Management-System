@@ -6,6 +6,7 @@
         <p class="erp-page-description">查询系统关键操作、账号安全事件和数据变更记录，用于追溯问题和审计。</p>
       </div>
       <div class="erp-page-actions">
+        <el-button @click="openRetentionSetting">日志保留策略</el-button>
         <el-button :loading="exporting" @click="exportLogs">导出 CSV</el-button>
         <el-button :loading="loading" @click="loadLogs">刷新</el-button>
       </div>
@@ -168,13 +169,83 @@
         </section>
       </div>
     </el-drawer>
+
+    <el-drawer v-model="retentionVisible" title="日志保留策略" size="520px" class="audit-retention-drawer">
+      <div v-loading="retentionLoading" class="audit-retention">
+        <section class="erp-surface audit-detail-section">
+          <h2 class="erp-section-title">自动清理设置</h2>
+          <el-alert
+            title="开启后，系统会按设置的执行时间自动归档并清理超过保留天数的操作日志。关闭后不会自动删除日志。"
+            type="info"
+            :closable="false"
+            show-icon
+            class="retention-alert"
+          />
+          <el-form label-width="132px" class="retention-form">
+            <el-form-item label="自动清理">
+              <el-switch
+                v-model="retentionForm.enabled"
+                active-text="开启"
+                inactive-text="关闭"
+              />
+            </el-form-item>
+            <el-form-item label="保留天数">
+              <el-input-number
+                v-model="retentionForm.retentionDays"
+                :min="1"
+                :max="3650"
+                :step="30"
+                controls-position="right"
+              />
+              <span class="retention-form-tip">超过该天数的日志会进入清理范围。</span>
+            </el-form-item>
+            <el-form-item label="清理前归档">
+              <el-switch
+                v-model="retentionForm.archiveBeforeCleanup"
+                active-text="导出 CSV 后删除"
+                inactive-text="直接删除"
+              />
+            </el-form-item>
+            <el-form-item label="执行时间">
+              <el-input v-model.trim="retentionForm.cleanupTime" placeholder="02:00" class="retention-time-input" />
+              <span class="retention-form-tip">使用 24 小时 HH:mm 格式。</span>
+            </el-form-item>
+          </el-form>
+        </section>
+
+        <section class="erp-surface audit-detail-section">
+          <h2 class="erp-section-title">最近一次执行</h2>
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="状态">{{ retentionStatusLabel(retentionForm.lastRunStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="时间">{{ formatDateTime(retentionForm.lastRunAt) }}</el-descriptions-item>
+            <el-descriptions-item label="清理数量">{{ retentionForm.lastRunDeletedCount ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="说明">{{ emptyText(retentionForm.lastRunMessage) }}</el-descriptions-item>
+            <el-descriptions-item label="归档文件">{{ emptyText(retentionForm.lastArchiveFile) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <div class="retention-footer">
+          <el-button @click="retentionVisible = false">取消</el-button>
+          <el-button :loading="cleanupRunning" @click="runRetentionCleanup">立即执行一次</el-button>
+          <el-button type="primary" :loading="retentionSaving" @click="saveRetentionSetting">保存设置</el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { exportAuditLogs, getAuditLog, getAuditLogOptions, listAuditLogs } from '../services/auditApi'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  exportAuditLogs,
+  getAuditLog,
+  getAuditLogOptions,
+  getAuditLogRetentionSetting,
+  listAuditLogs,
+  runAuditLogRetentionCleanup,
+  updateAuditLogRetentionSetting
+} from '../services/auditApi'
 import { auditDataRows, formatAuditJson } from '../utils/auditLogFormat'
 
 const MODULE_LABELS = {
@@ -196,6 +267,10 @@ const ROLE_LABELS = {
 
 const loading = ref(false)
 const exporting = ref(false)
+const retentionVisible = ref(false)
+const retentionLoading = ref(false)
+const retentionSaving = ref(false)
+const cleanupRunning = ref(false)
 const detailVisible = ref(false)
 const currentLog = ref(null)
 const logs = ref([])
@@ -220,6 +295,17 @@ const filters = reactive({
   targetId: '',
   result: '',
   keyword: ''
+})
+const retentionForm = reactive({
+  enabled: false,
+  retentionDays: 180,
+  archiveBeforeCleanup: true,
+  cleanupTime: '02:00',
+  lastRunAt: '',
+  lastRunDeletedCount: 0,
+  lastRunStatus: 'NEVER',
+  lastRunMessage: '',
+  lastArchiveFile: ''
 })
 
 const actionOptions = computed(() => {
@@ -254,6 +340,21 @@ const loadLogs = async () => {
   }
 }
 
+const openRetentionSetting = async () => {
+  retentionVisible.value = true
+  await loadRetentionSetting()
+}
+
+const loadRetentionSetting = async () => {
+  retentionLoading.value = true
+  try {
+    applyRetentionSetting(await getAuditLogRetentionSetting())
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message || '日志保留策略加载失败。')
+  } finally {
+    retentionLoading.value = false
+  }
+}
 
 const exportLogs = async () => {
   exporting.value = true
@@ -266,6 +367,47 @@ const exportLogs = async () => {
     ElMessage.success('操作日志 CSV 已开始下载。')
   } finally {
     exporting.value = false
+  }
+}
+
+const saveRetentionSetting = async () => {
+  retentionSaving.value = true
+  try {
+    const response = await updateAuditLogRetentionSetting(buildRetentionPayload())
+    applyRetentionSetting(response?.data || response)
+    ElMessage.success(response?.message || '操作日志保留策略已更新。')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message || '操作日志保留策略保存失败。')
+  } finally {
+    retentionSaving.value = false
+  }
+}
+
+const runRetentionCleanup = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '系统会按当前策略归档并清理到期操作日志。是否立即执行一次？',
+      '立即执行日志清理',
+      { type: 'warning', confirmButtonText: '执行', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  cleanupRunning.value = true
+  try {
+    const response = await runAuditLogRetentionCleanup()
+    const result = response?.data || response
+    retentionForm.lastRunAt = result?.runAt || ''
+    retentionForm.lastRunDeletedCount = result?.deletedCount || 0
+    retentionForm.lastRunStatus = result?.status || retentionForm.lastRunStatus
+    retentionForm.lastRunMessage = result?.message || response?.message || ''
+    retentionForm.lastArchiveFile = result?.archiveFile || ''
+    ElMessage.success(response?.message || result?.message || '操作日志清理已执行。')
+    await loadLogs()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message || '操作日志清理执行失败。')
+  } finally {
+    cleanupRunning.value = false
   }
 }
 const searchLogs = () => {
@@ -317,6 +459,25 @@ const buildExportParams = () => {
   return params
 }
 
+const buildRetentionPayload = () => ({
+  enabled: retentionForm.enabled,
+  retentionDays: retentionForm.retentionDays,
+  archiveBeforeCleanup: retentionForm.archiveBeforeCleanup,
+  cleanupTime: retentionForm.cleanupTime
+})
+
+const applyRetentionSetting = (setting = {}) => {
+  retentionForm.enabled = !!setting.enabled
+  retentionForm.retentionDays = setting.retentionDays || 180
+  retentionForm.archiveBeforeCleanup = setting.archiveBeforeCleanup !== false
+  retentionForm.cleanupTime = setting.cleanupTime || '02:00'
+  retentionForm.lastRunAt = setting.lastRunAt || ''
+  retentionForm.lastRunDeletedCount = setting.lastRunDeletedCount || 0
+  retentionForm.lastRunStatus = setting.lastRunStatus || 'NEVER'
+  retentionForm.lastRunMessage = setting.lastRunMessage || ''
+  retentionForm.lastArchiveFile = setting.lastArchiveFile || ''
+}
+
 const localizedAuditRows = (value) => auditDataRows(value)
 
 const copyJson = async (text) => {
@@ -351,6 +512,13 @@ const resultLabel = (result) => ({
 }[result] || result || '成功')
 
 const resultTagType = (result) => result === 'FAILED' ? 'danger' : 'success'
+
+const retentionStatusLabel = (status) => ({
+  NEVER: '未执行',
+  SUCCESS: '成功',
+  FAILED: '失败',
+  DISABLED: '未开启'
+}[status] || status || '未执行')
 
 const moduleLabel = (module) => MODULE_LABELS[module] || module || '-'
 
@@ -417,6 +585,37 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--erp-space-4);
+}
+
+.audit-retention {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-4);
+}
+
+.retention-alert {
+  margin-bottom: var(--erp-space-4);
+}
+
+.retention-form {
+  margin-top: var(--erp-space-3);
+}
+
+.retention-time-input {
+  width: 160px;
+}
+
+.retention-form-tip {
+  margin-left: var(--erp-space-3);
+  color: var(--erp-text-muted);
+  font-size: var(--erp-font-size-sm);
+}
+
+.retention-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--erp-space-2);
+  padding: var(--erp-space-3) 0 0;
 }
 
 .audit-detail-section,

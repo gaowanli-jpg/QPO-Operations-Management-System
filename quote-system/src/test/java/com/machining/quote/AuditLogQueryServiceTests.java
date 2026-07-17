@@ -2,9 +2,13 @@ package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.AuditLogQueryReq;
+import com.machining.quote.dto.AuditLogRetentionConfigDTO;
+import com.machining.quote.dto.AuditLogRetentionConfigReq;
+import com.machining.quote.dto.AuditLogRetentionRunDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.AuditLogQueryService;
 import com.machining.quote.controller.AuditLogController;
+import com.machining.quote.service.AuditLogRetentionService;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.mapper.AuditLogMapper;
 import org.junit.jupiter.api.Test;
@@ -171,6 +175,33 @@ class AuditLogQueryServiceTests {
         assertThat(response.getHeader("Content-Disposition")).contains("audit-logs.csv");
         assertThat(response.getContentAsByteArray()).isEqualTo(csvBytes);
         verify(service).exportCsv(any(AuditLogQueryReq.class));
+    }
+
+    @Test
+    void controllerExposesRetentionSettingUpdateAndManualCleanup() {
+        AuditLogQueryService queryService = mock(AuditLogQueryService.class);
+        AuditLogRetentionService retentionService = mock(AuditLogRetentionService.class);
+        AuditLogRetentionConfigDTO setting = new AuditLogRetentionConfigDTO();
+        setting.setEnabled(true);
+        setting.setRetentionDays(180);
+        setting.setCleanupTime("02:00");
+        AuditLogRetentionRunDTO run = new AuditLogRetentionRunDTO();
+        run.setStatus("SUCCESS");
+        run.setDeletedCount(3);
+        when(retentionService.getSetting()).thenReturn(setting);
+        when(retentionService.updateSetting(any(AuditLogRetentionConfigReq.class))).thenReturn(setting);
+        when(retentionService.runCleanupNow()).thenReturn(run);
+        AuditLogController controller = new AuditLogController();
+        ReflectionTestUtils.setField(controller, "auditLogQueryService", queryService);
+        ReflectionTestUtils.setField(controller, "auditLogRetentionService", retentionService);
+
+        assertThat(controller.retentionSetting()).isSameAs(setting);
+        assertThat(controller.updateRetentionSetting(new AuditLogRetentionConfigReq()).get("data")).isSameAs(setting);
+        assertThat(controller.runRetentionCleanup().get("data")).isSameAs(run);
+
+        verify(retentionService).getSetting();
+        verify(retentionService).updateSetting(any(AuditLogRetentionConfigReq.class));
+        verify(retentionService).runCleanupNow();
     }
 
     private Object queryService(AuditLogMapper mapper) throws Exception {

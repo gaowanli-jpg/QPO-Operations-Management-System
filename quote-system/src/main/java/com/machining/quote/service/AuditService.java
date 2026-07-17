@@ -165,6 +165,7 @@ public class AuditService {
     }
 
     public static String inferModule(String action) {
+        if (startsWith(action, "AUDIT_")) return "SYSTEM";
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
@@ -194,6 +195,9 @@ public class AuditService {
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";
             case "QUOTE_REFRESH_TASK_SUBMIT" -> "提交一键刷新核价任务";
+            case "AUDIT_RETENTION_CONFIG_UPDATE" -> "更新操作日志保留策略";
+            case "AUDIT_LOG_CLEANUP_RUN" -> "执行操作日志自动清理";
+            case "AUDIT_LOG_CLEANUP_FAILED" -> "操作日志自动清理失败";
             case "DICT_MATERIAL_CREATE" -> "新增材料";
             case "DICT_MATERIAL_UPDATE" -> "更新材料";
             case "DICT_MATERIAL_DELETE" -> "删除材料";
