@@ -12,6 +12,7 @@ const OrderManage = () => import('../components/OrderManage.vue')
 const HistoryOrderManage = () => import('../components/HistoryOrderManage.vue')
 const UserManage = () => import('../components/UserManage.vue')
 const QuoteTemplateManage = () => import('../components/QuoteTemplateManage.vue')
+const AuditLogManage = () => import('../components/AuditLogManage.vue')
 
 const routes = [
   { path: '/login', component: LoginView },
@@ -24,6 +25,7 @@ const routes = [
   { path: '/orders', component: OrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/history-orders', component: HistoryOrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
   { path: '/users', component: UserManage, meta: { roles: ['ADMIN'] } },
+  { path: '/audit-logs', component: AuditLogManage, meta: { roles: ['ADMIN'] } },
   { path: '/quote-template', component: QuoteTemplateManage, meta: { roles: ['ADMIN'] } },
   { path: '/pricing', component: ItemPricing, meta: { roles: ['ENGINEER', 'ADMIN'] } }
 ]

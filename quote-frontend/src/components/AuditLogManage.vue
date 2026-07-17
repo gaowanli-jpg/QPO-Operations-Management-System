@@ -1,0 +1,420 @@
+<template>
+  <div class="erp-page audit-log-page">
+    <header class="erp-page-header audit-log-page-header">
+      <div>
+        <h1 class="erp-page-title">操作日志</h1>
+        <p class="erp-page-description">查询系统关键操作、账号安全事件和数据变更记录，用于追溯问题和审计。</p>
+      </div>
+      <div class="erp-page-actions">
+        <el-button :loading="loading" @click="loadLogs">刷新</el-button>
+      </div>
+    </header>
+
+    <section class="erp-toolbar audit-toolbar">
+      <div class="erp-toolbar-group audit-filter-grid">
+        <el-date-picker
+          v-model="filters.timeRange"
+          type="datetimerange"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          range-separator="至"
+          class="audit-time-range"
+        />
+        <el-input v-model.trim="filters.username" placeholder="操作人" clearable class="audit-filter-control" />
+        <el-select v-model="filters.role" placeholder="角色" clearable class="audit-filter-control">
+          <el-option v-for="role in optionData.roles" :key="role" :label="roleLabel(role)" :value="role" />
+        </el-select>
+        <el-select v-model="filters.module" placeholder="模块" clearable class="audit-filter-control">
+          <el-option v-for="module in optionData.modules" :key="module" :label="moduleLabel(module)" :value="module" />
+        </el-select>
+        <el-select v-model="filters.result" placeholder="结果" clearable class="audit-filter-control">
+          <el-option label="成功" value="SUCCESS" />
+          <el-option label="失败" value="FAILED" />
+        </el-select>
+        <el-select v-model="filters.action" placeholder="动作" clearable filterable class="audit-filter-control">
+          <el-option
+            v-for="action in actionOptions"
+            :key="action.value"
+            :label="action.label"
+            :value="action.value"
+          />
+        </el-select>
+        <el-select v-model="filters.targetType" placeholder="对象类型" clearable filterable class="audit-filter-control">
+          <el-option v-for="targetType in optionData.targetTypes" :key="targetType" :label="targetType" :value="targetType" />
+        </el-select>
+        <el-input v-model.trim="filters.targetId" placeholder="对象 ID" clearable class="audit-filter-control" />
+        <el-input v-model.trim="filters.keyword" placeholder="关键词" clearable class="audit-keyword-control" @keyup.enter="searchLogs" />
+      </div>
+      <div class="erp-toolbar-group audit-actions">
+        <el-button type="primary" :loading="loading" @click="searchLogs">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface audit-table-surface">
+      <div class="erp-table-body">
+        <el-table :data="logs" border v-loading="loading">
+          <el-table-column prop="createdAt" label="时间" width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column prop="username" label="操作人" width="130" show-overflow-tooltip />
+          <el-table-column label="角色" width="110">
+            <template #default="{ row }">
+              <el-tag size="small" type="info">{{ roleLabel(row.role) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="模块" width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ moduleLabel(row.module) }}</template>
+          </el-table-column>
+          <el-table-column prop="actionLabel" label="动作" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.actionLabel || row.action }}</template>
+          </el-table-column>
+          <el-table-column label="对象" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ targetLabel(row) }}</template>
+          </el-table-column>
+          <el-table-column label="结果" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" :type="resultTagType(row.result)">{{ resultLabel(row.result) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="message" label="摘要" min-width="260" show-overflow-tooltip />
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="{ row }">
+              <div class="erp-table-actions">
+                <el-button size="small" @click="openDetail(row)">查看详情</el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div class="erp-pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="loadLogs"
+          @current-change="loadLogs"
+        />
+      </div>
+    </section>
+
+    <el-drawer v-model="detailVisible" title="操作日志详情" size="620px" class="audit-detail-drawer">
+      <div v-if="currentLog" class="audit-detail">
+        <section class="erp-surface audit-detail-section">
+          <h2 class="erp-section-title">基础信息</h2>
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="日志 ID">{{ currentLog.id }}</el-descriptions-item>
+            <el-descriptions-item label="时间">{{ formatDateTime(currentLog.createdAt) }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">{{ emptyText(currentLog.username) }}</el-descriptions-item>
+            <el-descriptions-item label="角色">{{ roleLabel(currentLog.role) }}</el-descriptions-item>
+            <el-descriptions-item label="模块">{{ moduleLabel(currentLog.module) }}</el-descriptions-item>
+            <el-descriptions-item label="动作">{{ currentLog.actionLabel || currentLog.action }}</el-descriptions-item>
+            <el-descriptions-item label="结果">{{ resultLabel(currentLog.result) }}</el-descriptions-item>
+            <el-descriptions-item label="对象">{{ targetLabel(currentLog) }}</el-descriptions-item>
+            <el-descriptions-item label="摘要">{{ emptyText(currentLog.message) }}</el-descriptions-item>
+            <el-descriptions-item v-if="currentLog.errorMessage" label="错误">{{ currentLog.errorMessage }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="erp-surface audit-detail-section">
+          <h2 class="erp-section-title">请求信息</h2>
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="Request ID">{{ emptyText(currentLog.requestId) }}</el-descriptions-item>
+            <el-descriptions-item label="IP">{{ emptyText(currentLog.ipAddress) }}</el-descriptions-item>
+            <el-descriptions-item label="方法">{{ emptyText(currentLog.requestMethod) }}</el-descriptions-item>
+            <el-descriptions-item label="路径">{{ emptyText(currentLog.requestPath) }}</el-descriptions-item>
+            <el-descriptions-item label="User-Agent">{{ emptyText(currentLog.userAgent) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="erp-surface audit-json-section">
+          <div class="audit-json-header">
+            <h2 class="erp-section-title">操作前数据</h2>
+          </div>
+          <pre class="audit-json-block">{{ formatJson(currentLog.beforeData) }}</pre>
+        </section>
+
+        <section class="erp-surface audit-json-section">
+          <div class="audit-json-header">
+            <h2 class="erp-section-title">操作后数据</h2>
+          </div>
+          <pre class="audit-json-block">{{ formatJson(currentLog.afterData) }}</pre>
+        </section>
+      </div>
+    </el-drawer>
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getAuditLog, getAuditLogOptions, listAuditLogs } from '../services/auditApi'
+
+const MODULE_LABELS = {
+  AUTH: '认证',
+  SYSTEM: '系统',
+  DICT: '字典',
+  ENGINEER: '工程',
+  MARKET: '市场',
+  ORDER: '订单',
+  DELIVERY: '交付'
+}
+
+const ROLE_LABELS = {
+  ADMIN: '管理员',
+  MARKET: '市场',
+  ENGINEER: '工程',
+  SYSTEM: '系统'
+}
+
+const loading = ref(false)
+const detailVisible = ref(false)
+const currentLog = ref(null)
+const logs = ref([])
+const pagination = reactive({
+  page: 1,
+  pageSize: 20,
+  total: 0
+})
+const optionData = reactive({
+  roles: ['ADMIN', 'MARKET', 'ENGINEER', 'SYSTEM'],
+  modules: ['AUTH', 'SYSTEM', 'DICT', 'ENGINEER', 'MARKET', 'ORDER', 'DELIVERY'],
+  actions: [],
+  targetTypes: []
+})
+const filters = reactive({
+  timeRange: defaultTimeRange(),
+  username: '',
+  role: '',
+  module: '',
+  action: '',
+  targetType: '',
+  targetId: '',
+  result: '',
+  keyword: ''
+})
+
+const actionOptions = computed(() => {
+  if (!filters.module) return optionData.actions
+  return optionData.actions.filter((action) => action.module === filters.module)
+})
+
+const loadOptions = async () => {
+  try {
+    const response = await getAuditLogOptions()
+    optionData.roles = response?.roles?.length ? response.roles : optionData.roles
+    optionData.modules = response?.modules?.length ? response.modules : optionData.modules
+    optionData.actions = normalizeActions(response?.actions || [])
+    optionData.targetTypes = response?.targetTypes || []
+  } catch (error) {
+    ElMessage.warning(error.response?.data?.message || '操作日志筛选项加载失败。')
+  }
+}
+
+const loadLogs = async () => {
+  loading.value = true
+  try {
+    const response = await listAuditLogs(buildParams())
+    logs.value = response?.records || []
+    pagination.total = response?.total || 0
+    pagination.page = response?.page || pagination.page
+    pagination.pageSize = response?.pageSize || pagination.pageSize
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || '操作日志加载失败。')
+  } finally {
+    loading.value = false
+  }
+}
+
+const searchLogs = () => {
+  pagination.page = 1
+  loadLogs()
+}
+
+const resetFilters = () => {
+  filters.timeRange = defaultTimeRange()
+  filters.username = ''
+  filters.role = ''
+  filters.module = ''
+  filters.action = ''
+  filters.targetType = ''
+  filters.targetId = ''
+  filters.result = ''
+  filters.keyword = ''
+  searchLogs()
+}
+
+const openDetail = async (row) => {
+  currentLog.value = row
+  detailVisible.value = true
+  try {
+    currentLog.value = await getAuditLog(row.id)
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || '操作日志详情加载失败。')
+  }
+}
+
+const buildParams = () => {
+  const params = {
+    page: pagination.page,
+    pageSize: pagination.pageSize
+  }
+  if (filters.timeRange?.[0]) params.startTime = filters.timeRange[0]
+  if (filters.timeRange?.[1]) params.endTime = filters.timeRange[1]
+  for (const key of ['username', 'role', 'module', 'action', 'targetType', 'targetId', 'result', 'keyword']) {
+    if (filters[key]) params[key] = filters[key]
+  }
+  return params
+}
+
+const normalizeActions = (actions) => actions.map((action) => (
+  typeof action === 'string'
+    ? { value: action, label: action, module: '' }
+    : { value: action.value, label: action.label || action.value, module: action.module || '' }
+)).filter((action) => action.value)
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').slice(0, 19)
+}
+
+const formatJson = (value) => {
+  if (!value) return '-'
+  if (typeof value !== 'string') {
+    return JSON.stringify(value, null, 2)
+  }
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+const targetLabel = (row) => {
+  const targetType = row?.targetType || '-'
+  const targetId = row?.targetId || '-'
+  return `${targetType} / ${targetId}`
+}
+
+const resultLabel = (result) => ({
+  SUCCESS: '成功',
+  FAILED: '失败'
+}[result] || result || '成功')
+
+const resultTagType = (result) => result === 'FAILED' ? 'danger' : 'success'
+
+const moduleLabel = (module) => MODULE_LABELS[module] || module || '-'
+
+const roleLabel = (role) => ROLE_LABELS[role] || role || '-'
+
+const emptyText = (value) => value || '-'
+
+function defaultTimeRange() {
+  const end = new Date()
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000)
+  return [formatDateForQuery(start), formatDateForQuery(end)]
+}
+
+function formatDateForQuery(date) {
+  const pad = (value) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate())
+  ].join('-') + ' ' + [
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds())
+  ].join(':')
+}
+
+onMounted(async () => {
+  await loadOptions()
+  await loadLogs()
+})
+</script>
+
+<style scoped>
+.audit-toolbar {
+  align-items: flex-start;
+}
+
+.audit-filter-grid {
+  flex: 1;
+  align-items: flex-start;
+}
+
+.audit-time-range {
+  width: 360px;
+}
+
+.audit-filter-control {
+  width: 140px;
+}
+
+.audit-keyword-control {
+  width: 180px;
+}
+
+.audit-actions {
+  flex: 0 0 auto;
+}
+
+.audit-table-surface .erp-table-body {
+  padding: var(--erp-space-3);
+}
+
+.audit-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-4);
+}
+
+.audit-detail-section,
+.audit-json-section {
+  padding: var(--erp-space-4);
+}
+
+.audit-detail-section .erp-section-title,
+.audit-json-section .erp-section-title {
+  margin-bottom: var(--erp-space-3);
+}
+
+.audit-json-block {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--erp-space-3);
+  color: var(--erp-text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: var(--erp-font-size-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--erp-bg-subtle);
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-lg);
+}
+
+@media (max-width: 1180px) {
+  .audit-time-range,
+  .audit-filter-control,
+  .audit-keyword-control {
+    width: 100%;
+  }
+
+  .audit-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .audit-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

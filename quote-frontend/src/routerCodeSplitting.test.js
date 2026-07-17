@@ -16,7 +16,8 @@ const businessRouteComponents = [
   'OrderManage',
   'HistoryOrderManage',
   'UserManage',
-  'QuoteTemplateManage'
+  'QuoteTemplateManage',
+  'AuditLogManage'
 ]
 
 describe('QPO router code splitting', () => {

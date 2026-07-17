@@ -58,6 +58,10 @@
             <el-icon><User /></el-icon>
             <span>用户权限</span>
           </el-menu-item>
+          <el-menu-item v-if="canSee(['ADMIN'])" index="/audit-logs">
+            <el-icon><Document /></el-icon>
+            <span>操作日志</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
 
@@ -193,6 +197,10 @@ const shellMetaByPath = {
   '/users': {
     title: '用户权限',
     description: '维护账号状态、角色和密码安全。'
+  },
+  '/audit-logs': {
+    title: '操作日志',
+    description: '追踪账号、报价、订单、字典和系统配置的关键变更。'
   },
   '/quote-template': {
     title: '报价模板',

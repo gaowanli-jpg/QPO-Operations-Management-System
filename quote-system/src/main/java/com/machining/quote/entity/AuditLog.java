@@ -16,9 +16,18 @@ public class AuditLog {
     private String username;
     private String role;
     private String action;
+    private String module;
+    private String result;
+    private String message;
     private String targetType;
     private String targetId;
     private String beforeData;
     private String afterData;
+    private String ipAddress;
+    private String userAgent;
+    private String requestMethod;
+    private String requestPath;
+    private String requestId;
+    private String errorMessage;
     private LocalDateTime createdAt;
 }
