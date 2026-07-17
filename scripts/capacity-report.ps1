@@ -169,7 +169,6 @@ if ($LASTEXITCODE -eq 0 -and $backendDu) {
 
 $disk = Get-DriveUsage -RootPath $ProjectRoot
 $backupsPath = Join-Path $ProjectRoot "backups"
-$archivesPath = Join-Path $ProjectRoot "archives"
 $report = [ordered]@{
     generatedAt = (Get-Date).ToString("o")
     projectRoot = $ProjectRoot
@@ -179,8 +178,6 @@ $report = [ordered]@{
     disk = $disk
     localBackupsBytes = Get-DirectorySizeBytes $backupsPath
     localBackupsText = Convert-BytesToText (Get-DirectorySizeBytes $backupsPath)
-    localArchivesBytes = Get-DirectorySizeBytes $archivesPath
-    localArchivesText = Convert-BytesToText (Get-DirectorySizeBytes $archivesPath)
     containerUsage = $containerUsage
 }
 
@@ -197,7 +194,6 @@ if ($disk) {
 $lines.Add("Database: $($dbInfo.database) size $($dbInfo.databaseSize)")
 $lines.Add("Postgres relation sum: $($report.postgresRelationText)")
 $lines.Add("Local backups: $($report.localBackupsText)")
-$lines.Add("Local archives: $($report.localArchivesText)")
 $lines.Add("")
 $lines.Add("Top tables:")
 foreach ($table in $dbInfo.topTables) {

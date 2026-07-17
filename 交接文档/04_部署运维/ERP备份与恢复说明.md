@@ -24,8 +24,6 @@ ERP 相关脚本：
 | `install-backup-task.ps1` | 安装 Windows 每日自动备份任务 |
 | `restore.ps1` | 将指定备份恢复到 ERP 当前环境，破坏性操作，必须带 `-Force` |
 | `restore-drill.ps1` | 启动临时 PostgreSQL 容器做恢复演练，不覆盖当前 ERP |
-| `archive-monthly.ps1` | 月度归档脚本，导出旧审计日志和旧订单候选清单 |
-| `install-archive-task.ps1` | 安装月度归档 Windows 任务 |
 
 本次交接前已修正两个恢复相关问题：
 
@@ -393,40 +391,24 @@ docker compose down -v
 | --- | --- |
 | 每日备份 | 本机保留 14 到 30 天 |
 | 每周备份 | 异机或 NAS 保留 2 到 3 个月 |
-| 每月归档 | 按企业要求保留 1 年以上 |
+| 操作日志 | 在系统页面配置在线保留、归档和自动清理策略 |
 | 关键上线前备份 | 永久或长期保留 |
 
 注意：本机备份不能替代异机备份。服务器硬盘损坏时，本机备份也可能一起丢失。
 
-## 10. 月度归档
+## 10. 日志保留与运行日志
 
-月度归档脚本：
-
-```text
-D:\Code\scripts\archive-monthly.ps1
-```
-
-作用：
-
-1. 导出超过指定天数的审计日志到 CSV。
-2. 导出超过指定天数的旧订单候选清单到 CSV。
-3. 默认会删除超过保留期的审计日志。
-4. 旧订单只导出候选清单，不自动删除订单。
-
-安装月度归档任务：
-
-```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\install-archive-task.ps1 -ProjectRoot D:\Code -DayOfMonth 1 -MonthlyAt 03:00
-```
-
-归档目录：
+操作日志保留策略已经迁移到系统页面：
 
 ```text
-D:\Code\archives\yyyyMMdd_HHmmss
+系统 > 操作日志 > 日志保留策略
 ```
 
-正式上线前，月度归档策略应由业务负责人确认，特别是审计日志保留天数和订单保留策略。
+后端运行日志、Postgres 慢 SQL、Docker 容器日志和操作日志保留策略详见：
+
+```text
+docs/QPO日志模块/03-日志运维说明.md
+```
 
 ## 11. 灾难恢复建议流程
 
@@ -451,4 +433,3 @@ D:\Code\archives\yyyyMMdd_HHmmss
 6. `erp.env` 不在普通备份范围内，应单独安全保管。
 7. 不要随意执行 `docker compose down -v`。
 8. 备份目录应定期复制到异机或 NAS。
-

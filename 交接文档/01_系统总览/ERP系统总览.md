@@ -868,8 +868,6 @@ http://localhost:8080/api/health
 | `scripts\restore-drill.ps1` | 不影响业务库的恢复演练 |
 | `scripts\install-backup-task.ps1` | 安装每日定时备份任务 |
 | `scripts\capacity-report.ps1` | 容量报告 |
-| `scripts\archive-monthly.ps1` | 月度归档 |
-| `scripts\install-archive-task.ps1` | 安装月度归档计划任务 |
 
 备份内容：
 
@@ -877,11 +875,10 @@ http://localhost:8080/api/health
 - 上传文件和图纸。
 - 备份元数据。
 
-归档内容：
+日志保留：
 
-- 180 天以前的审计日志导出 CSV 后从在线库删除。
-- 730 天以前的旧订单候选记录导出 CSV。
-- 月度归档默认不删除历史订单业务数据。
+- 操作日志保留、归档和清理由系统页面 **系统 > 操作日志 > 日志保留策略** 配置。
+- 后端运行日志、Postgres 慢 SQL 和 Docker 容器日志查看方式见 `docs/QPO日志模块/03-日志运维说明.md`。
 
 ## 16. 安全设计
 
