@@ -81,6 +81,24 @@ class AuditLogQueryServiceTests {
     }
 
     @Test
+    void marketModuleFilterExcludesEngineerRefreshTaskSubmitAction() throws Exception {
+        AuditLogMapper mapper = mock(AuditLogMapper.class);
+        when(mapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        Object service = queryService(mapper);
+        Object req = Class.forName("com.machining.quote.dto.AuditLogQueryReq").getConstructor().newInstance();
+        writeProperty(req, "module", "MARKET");
+
+        Method listLogs = service.getClass().getMethod("listLogs", req.getClass());
+        listLogs.invoke(service, req);
+
+        ArgumentCaptor<QueryWrapper<AuditLog>> captor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(mapper).selectCount(captor.capture());
+        QueryWrapper<AuditLog> query = captor.getValue();
+        assertThat(query.getSqlSegment()).contains("<>");
+    }
+
+    @Test
     void optionsReturnsActionsModulesRolesAndTargetTypes() throws Exception {
         AuditLogMapper mapper = mock(AuditLogMapper.class);
         when(mapper.selectObjs(any(QueryWrapper.class))).thenReturn(List.of("DICT_MATERIAL_UPDATE", "USER_CREATE"));

@@ -34,6 +34,8 @@ public class SystemTaskService {
     @Autowired
     @Qualifier("systemTaskExecutor")
     private ThreadPoolTaskExecutor taskExecutor;
+    @Autowired
+    private AuditService auditService;
     @Value("${erp.task.output-dir}")
     private String taskOutputDir;
 
@@ -44,6 +46,7 @@ public class SystemTaskService {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("rfqId", rfqId);
         SystemTask task = createTask("REFRESH_ORDER_QUOTES", request);
+        recordTaskSubmitAudit("QUOTE_REFRESH_TASK_SUBMIT", "ENGINEER", task, request);
         taskExecutor.execute(() -> runTask(task.getId(), () -> engineerService.refreshOrderQuotes(rfqId)));
         return taskMapper.selectById(task.getId());
     }
@@ -57,6 +60,7 @@ public class SystemTaskService {
         request.put("rfqId", rfqId);
         request.put("exportType", safeExportType);
         SystemTask task = createTask("EXPORT_QUOTE", request);
+        recordTaskSubmitAudit("QUOTE_EXPORT_TASK_SUBMIT", "MARKET", task, request);
         taskExecutor.execute(() -> runTask(task.getId(), () -> {
             Path file;
             try {
@@ -118,6 +122,28 @@ public class SystemTaskService {
         task.setCreatedAt(LocalDateTime.now());
         taskMapper.insert(task);
         return task;
+    }
+
+    private void recordTaskSubmitAudit(String action, String module, SystemTask task, Map<String, Object> request) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("taskId", task.getId());
+        summary.put("taskType", task.getTaskType());
+        summary.put("status", task.getStatus());
+        summary.put("request", request);
+        auditService.record(
+                action,
+                "system_task",
+                task.getId(),
+                null,
+                summary,
+                module,
+                "SUCCESS",
+                action + " taskId=" + task.getId(),
+                null
+        );
     }
 
     private void runTask(Long taskId, Supplier<Object> work) {

@@ -39,8 +39,8 @@ public class AuditLogQueryService {
             "AUTH", List.of("AUTH_"),
             "SYSTEM", List.of("USER_", "QUOTE_TEMPLATE_"),
             "DICT", List.of("DICT_"),
-            "ENGINEER", List.of("ITEM_", "REPEAT_"),
-            "MARKET", List.of("QUOTE_", "INTERNAL_TARGET_"),
+            "ENGINEER", List.of("ITEM_", "REPEAT_", "QUOTE_REFRESH_TASK_SUBMIT"),
+            "MARKET", List.of("QUOTE_", "INTERNAL_TARGET_", "RFQ_"),
             "ORDER", List.of("ORDER_"),
             "DELIVERY", List.of("DELIVERY_", "PROCESS_SHEET_")
     );
@@ -149,13 +149,17 @@ public class AuditLogQueryService {
             wrapper.eq("module", module);
             for (String prefix : prefixes) {
                 if ("MARKET".equals(module) && "QUOTE_".equals(prefix)) {
-                    wrapper.or(nested -> nested.likeRight("action", prefix).notLikeRight("action", "QUOTE_TEMPLATE_"));
+                    wrapper.or(nested -> nested
+                            .likeRight("action", prefix)
+                            .notLikeRight("action", "QUOTE_TEMPLATE_")
+                            .ne("action", "QUOTE_REFRESH_TASK_SUBMIT"));
                 } else {
                     wrapper.or().likeRight("action", prefix);
                 }
             }
             if ("ENGINEER".equals(module)) {
                 wrapper.or().eq("action", "ORDER_QUOTE_COMPLETE");
+                wrapper.or().eq("action", "QUOTE_REFRESH_TASK_SUBMIT");
             }
         });
     }

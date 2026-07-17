@@ -6,6 +6,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.Cell;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +40,9 @@ public class QuoteTemplateService {
 
     @Value("${erp.upload-dir}")
     private String uploadDir;
+
+    @Autowired
+    private AuditService auditService;
 
     public Path templatePath() {
         return templateDir().resolve(TEMPLATE_FILENAME).normalize();
@@ -80,7 +84,9 @@ public class QuoteTemplateService {
             Files.write(tmpPath, bytes);
             moveTemplateFile(tmpPath, templatePath());
             saveMeta(originalFilename);
-            return status();
+            Map<String, Object> templateStatus = status();
+            recordTemplateUploadAudit(originalFilename, templateStatus);
+            return templateStatus;
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -144,6 +150,25 @@ public class QuoteTemplateService {
         try (OutputStream outputStream = Files.newOutputStream(metaPath())) {
             properties.store(outputStream, "quote template metadata");
         }
+    }
+
+    private void recordTemplateUploadAudit(String originalFilename, Map<String, Object> templateStatus) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>(templateStatus);
+        summary.put("fileName", originalFilename);
+        auditService.record(
+                "QUOTE_TEMPLATE_UPLOAD",
+                "quote_template",
+                originalFilename,
+                null,
+                summary,
+                "SYSTEM",
+                "SUCCESS",
+                "QUOTE_TEMPLATE_UPLOAD " + originalFilename,
+                null
+        );
     }
 
     private void moveTemplateFile(Path tmpPath, Path targetPath) throws IOException {

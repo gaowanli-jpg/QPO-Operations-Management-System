@@ -12,6 +12,7 @@ import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.OrderFilePathService;
@@ -65,6 +66,9 @@ public class MarketController {
 
     @Autowired
     private RfqNumberService rfqNumberService;
+
+    @Autowired
+    private AuditService auditService;
 
     @GetMapping("/orders")
     @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
@@ -373,6 +377,7 @@ public class MarketController {
             result.put("success", true);
             result.put("message", "已成功为您生成询价单！<br><b>单号：</b><span style='color:#409EFF'>" + autoRfqNo + "</span>");
             result.put("drawingReport", drawingReport);
+            recordRfqImportAudit(customerName, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
             return result;
 
         } catch (Exception e) {
@@ -382,6 +387,37 @@ public class MarketController {
 
     private String normalizePartNo(String partNo) {
         return DrawingPartNoResolver.normalizePartNo(partNo);
+    }
+
+    private void recordRfqImportAudit(
+            String customerName,
+            String rfqNo,
+            Integer rfqId,
+            int itemCount,
+            Map<String, Object> drawingReport) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("customerName", customerName);
+        summary.put("rfqNo", rfqNo);
+        summary.put("rfqId", rfqId);
+        summary.put("itemCount", itemCount);
+        summary.put("uploadedDrawingCount", drawingReport.get("uploadedDrawingCount"));
+        summary.put("matchedItemCount", drawingReport.get("matchedItemCount"));
+        summary.put("missingDrawingCount", drawingReport.get("missingDrawingCount"));
+        summary.put("unmatchedDrawingCount", drawingReport.get("unmatchedDrawingCount"));
+        auditService.record(
+                "RFQ_IMPORT",
+                "order_rfq",
+                rfqId,
+                null,
+                summary,
+                "MARKET",
+                "SUCCESS",
+                "RFQ_IMPORT " + customerName + " " + rfqNo + " itemCount=" + itemCount,
+                null
+        );
     }
 
     private String normalizeHeader(String value) {

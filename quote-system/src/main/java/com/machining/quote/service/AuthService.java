@@ -27,22 +27,48 @@ public class AuthService {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private AuditService auditService;
+
     @Transactional
     public Map<String, Object> login(String username, String password) {
         String safeUsername = username == null ? "" : username.trim();
         if (safeUsername.isEmpty() || password == null || password.isEmpty()) {
+            recordAuthAudit(
+                    "AUTH_LOGIN_FAILED",
+                    "auth",
+                    safeUsername.isEmpty() ? null : safeUsername,
+                    null,
+                    Map.of("username", safeUsername, "reason", "missing_credentials"),
+                    "FAILED",
+                    "AUTH_LOGIN_FAILED " + (safeUsername.isEmpty() ? "unknown" : safeUsername)
+            );
             throw new RuntimeException("请输入用户名和密码");
         }
 
         ErpUser user = userMapper.selectByUsernameForUpdate(safeUsername);
         if (user == null || Boolean.FALSE.equals(user.getEnabled())) {
+            recordAuthAudit(
+                    "AUTH_LOGIN_FAILED",
+                    "auth",
+                    safeUsername,
+                    null,
+                    Map.of("username", safeUsername, "reason", user == null ? "user_not_found" : "user_disabled"),
+                    "FAILED",
+                    "AUTH_LOGIN_FAILED " + safeUsername
+            );
             throw new RuntimeException("用户名或密码错误");
         }
         if (isLocked(user)) {
+            recordAccountLocked(user, "already_locked");
             throw new RuntimeException("登录失败次数过多，请稍后再试");
         }
         if (!matchesPassword(password, user.getPasswordHash())) {
             recordFailedLogin(user);
+            recordLoginFailed(user);
+            if (isLockedNow(user)) {
+                recordAccountLocked(user, "max_failed_attempts");
+            }
             throw new RuntimeException("用户名或密码错误");
         }
 
@@ -59,6 +85,15 @@ public class AuthService {
                 user.getRole()
         );
         String token = jwtService.createToken(sessionUser);
+        recordAuthAudit(
+                "AUTH_LOGIN_SUCCESS",
+                "erp_user",
+                user.getId(),
+                null,
+                publicUser(user),
+                "SUCCESS",
+                "AUTH_LOGIN_SUCCESS " + safeUsername
+        );
         return Map.of(
                 "success", true,
                 "message", "登录成功",
@@ -85,6 +120,33 @@ public class AuthService {
     }
 
     public void logout(String token) {
+        AuthContext.SessionUser current = AuthContext.get();
+        boolean temporaryContext = false;
+        if (current == null) {
+            current = jwtService.parseToken(token);
+            if (current != null) {
+                AuthContext.set(current);
+                temporaryContext = true;
+            }
+        }
+        try {
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("username", current == null ? null : current.username());
+            payload.put("role", current == null ? null : current.role());
+            recordAuthAudit(
+                    "AUTH_LOGOUT",
+                    current == null ? "auth" : "erp_user",
+                    current == null ? null : current.id(),
+                    null,
+                    payload,
+                    "SUCCESS",
+                    "AUTH_LOGOUT " + (current == null ? "unknown" : current.username())
+            );
+        } finally {
+            if (temporaryContext) {
+                AuthContext.clear();
+            }
+        }
         // JWT 无状态，不需要服务端注销
     }
 
@@ -132,6 +194,67 @@ public class AuthService {
         user.setFailedLoginAttempts(0);
         userMapper.updateById(user);
         return false;
+    }
+
+    private boolean isLockedNow(ErpUser user) {
+        LocalDateTime lockedUntil = user == null ? null : user.getLockedUntil();
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
+    }
+
+    private void recordLoginFailed(ErpUser user) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("username", user.getUsername());
+        payload.put("failedLoginAttempts", user.getFailedLoginAttempts());
+        payload.put("lockedUntil", user.getLockedUntil());
+        recordAuthAudit(
+                "AUTH_LOGIN_FAILED",
+                "erp_user",
+                user.getId(),
+                null,
+                payload,
+                "FAILED",
+                "AUTH_LOGIN_FAILED " + user.getUsername()
+        );
+    }
+
+    private void recordAccountLocked(ErpUser user, String reason) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("username", user.getUsername());
+        payload.put("failedLoginAttempts", user.getFailedLoginAttempts());
+        payload.put("lockedUntil", user.getLockedUntil());
+        payload.put("reason", reason);
+        recordAuthAudit(
+                "AUTH_ACCOUNT_LOCKED",
+                "erp_user",
+                user.getId(),
+                null,
+                payload,
+                "FAILED",
+                "AUTH_ACCOUNT_LOCKED " + user.getUsername()
+        );
+    }
+
+    private Map<String, Object> publicUser(ErpUser user) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("id", user.getId());
+        payload.put("username", user.getUsername());
+        payload.put("displayName", user.getDisplayName());
+        payload.put("role", user.getRole());
+        payload.put("forcePasswordChange", user.getForcePasswordChange());
+        return payload;
+    }
+
+    private void recordAuthAudit(
+            String action,
+            String targetType,
+            Object targetId,
+            Object beforeData,
+            Object afterData,
+            String result,
+            String message) {
+        if (auditService != null) {
+            auditService.record(action, targetType, targetId, beforeData, afterData, "AUTH", result, message, null);
+        }
     }
 
     private boolean isBcryptHash(String passwordHash) {

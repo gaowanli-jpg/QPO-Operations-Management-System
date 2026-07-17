@@ -166,6 +166,8 @@ public class AuditService {
 
     public static String inferModule(String action) {
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
+        if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
+        if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
         if (startsWith(action, "DICT_")) return "DICT";
         if (startsWith(action, "USER_")) return "SYSTEM";
@@ -182,12 +184,16 @@ public class AuditService {
         return switch (action) {
             case "AUTH_LOGIN_SUCCESS" -> "登录成功";
             case "AUTH_LOGIN_FAILED" -> "登录失败";
+            case "AUTH_ACCOUNT_LOCKED" -> "账号锁定";
             case "AUTH_LOGOUT" -> "登出";
             case "USER_CREATE" -> "新增用户";
             case "USER_UPDATE" -> "编辑用户";
             case "USER_CHANGE_PASSWORD" -> "修改密码";
             case "USER_DELETE" -> "删除用户";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
+            case "RFQ_IMPORT" -> "导入 RFQ";
+            case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";
+            case "QUOTE_REFRESH_TASK_SUBMIT" -> "提交一键刷新核价任务";
             case "DICT_MATERIAL_CREATE" -> "新增材料";
             case "DICT_MATERIAL_UPDATE" -> "更新材料";
             case "DICT_MATERIAL_DELETE" -> "删除材料";
