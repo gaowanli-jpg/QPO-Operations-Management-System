@@ -5,7 +5,7 @@
       <el-aside width="240px" class="sidebar">
         <div class="logo-box">
           <span class="logo-icon">QPO</span>
-          <span class="logo-text">智能运营管理</span>
+          <span class="logo-text">QPO运营管理</span>
         </div>
 
         <el-menu
@@ -30,7 +30,7 @@
           <div v-if="canSee(['ENGINEER', 'ADMIN'])" class="menu-section">工程</div>
           <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/engineering">
             <el-icon><Setting /></el-icon>
-            <span>工程设置</span>
+            <span>零件核价</span>
           </el-menu-item>
           <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/material-process">
             <el-icon><Tools /></el-icon>
@@ -66,16 +66,16 @@
               <el-icon><Fold /></el-icon>
             </span>
             <div class="header-copy">
-              <div class="shell-title">{{ shellMeta.title }}</div>
-              <div class="shell-subtitle">{{ shellMeta.description }}</div>
+              <div class="shell-title" :title="shellMeta.title">{{ shellMeta.title }}</div>
+              <div class="shell-subtitle" :title="shellMeta.description">{{ shellMeta.description }}</div>
             </div>
           </div>
           <div class="header-right">
             <div class="user-card">
               <el-avatar size="small" class="user-avatar">{{ userInitial }}</el-avatar>
               <div class="user-copy">
-                <span class="username">{{ displayName }}</span>
-                <span class="role-pill">{{ roleName }}</span>
+                <span class="username" :title="displayName">{{ displayName }}</span>
+                <span class="role-pill" :title="roleName">{{ roleName }}</span>
               </div>
             </div>
             <div class="header-actions">
@@ -161,8 +161,8 @@ const shellMetaByPath = {
     description: '处理议价结果并生成生产交付资料。'
   },
   '/engineering': {
-    title: '工程设置',
-    description: '选择订单并配置默认材料、形态和工艺路线。'
+    title: '零件核价',
+    description: '选择订单并配置零件默认材料、形态和工艺路线。'
   },
   '/pricing': {
     title: '逐件核价',
@@ -191,7 +191,7 @@ const shellMetaByPath = {
 }
 
 const shellMeta = computed(() => shellMetaByPath[route.path] || {
-  title: '智能运营管理',
+  title: 'QPO运营管理',
   description: '当前系统状态：正常运行'
 })
 
@@ -431,20 +431,27 @@ html, body, #app {
 
 .header-copy {
   min-width: 0;
+  overflow: hidden;
 }
 
 .shell-title {
+  overflow: hidden;
   color: var(--erp-text);
   font-size: var(--erp-font-size-lg);
   font-weight: var(--erp-font-weight-bold);
   line-height: var(--erp-line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shell-subtitle {
+  overflow: hidden;
   margin-top: 2px;
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-xs);
   line-height: var(--erp-line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-card {
@@ -452,6 +459,7 @@ html, body, #app {
   align-items: center;
   gap: var(--erp-space-2);
   min-width: 0;
+  max-width: 300px;
   padding: var(--erp-space-1) var(--erp-space-2);
   background: var(--erp-surface-muted);
   border: 1px solid var(--erp-border-soft);
@@ -472,19 +480,25 @@ html, body, #app {
 }
 
 .username {
+  max-width: 150px;
+  overflow: hidden;
   color: var(--erp-text);
   font-size: var(--erp-font-size-sm);
   font-weight: var(--erp-font-weight-bold);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .role-pill {
+  max-width: 110px;
+  overflow: hidden;
   padding: 2px var(--erp-space-2);
   color: var(--erp-primary);
   font-size: var(--erp-font-size-xs);
   font-weight: var(--erp-font-weight-bold);
   background: var(--erp-primary-soft);
   border-radius: var(--erp-radius-full);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

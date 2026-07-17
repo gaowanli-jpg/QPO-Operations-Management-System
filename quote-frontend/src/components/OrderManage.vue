@@ -130,7 +130,7 @@
         <el-tabs class="detail-tabs">
           <el-tab-pane label="零件明细">
             <el-table :data="orderDetail.itemList || []" border stripe height="360">
-              <el-table-column prop="partNo" label="图号" min-width="140" fixed />
+              <el-table-column prop="partNo" label="图号" min-width="140" fixed show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -153,7 +153,7 @@
           <el-tab-pane label="提单行">
             <el-table :data="orderDetail.ticketList || []" border stripe height="320">
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="130" show-overflow-tooltip />
-              <el-table-column prop="partNo" label="图号" min-width="140" />
+              <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="arrangeType" label="安排类型" width="110" />
@@ -166,7 +166,7 @@
           <el-tab-pane label="工艺表行">
             <el-table :data="orderDetail.processSheetList || []" border stripe height="320">
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="130" show-overflow-tooltip />
-              <el-table-column prop="partNo" label="图号" min-width="140" />
+              <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -197,7 +197,7 @@
         <div class="erp-dialog-section missing-list">
           <div class="section-subtitle">待补图零件</div>
           <el-table :data="missingDrawingItems" border stripe height="180">
-            <el-table-column prop="partNo" label="图号" min-width="140" />
+            <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
             <el-table-column prop="version" label="版本" width="80" align="center" />
             <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
             <el-table-column prop="qty" label="数量" width="70" align="center" />

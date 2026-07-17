@@ -4,7 +4,7 @@
       <div class="brand">
         <div class="brand-mark">QPO</div>
         <div>
-          <h1>智能运营管理系统</h1>
+          <h1>QPO运营管理系统</h1>
           <p>按部门账号登录后进入对应业务模块</p>
         </div>
       </div>

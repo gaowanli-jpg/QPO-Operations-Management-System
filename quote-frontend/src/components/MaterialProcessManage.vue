@@ -22,8 +22,8 @@
         <el-tabs v-model="activeTab">
         <el-tab-pane label="材料费用" name="materials">
           <el-table :data="materials" border stripe height="560" v-loading="loading">
-            <el-table-column prop="materialName" label="材料" width="120" fixed />
-            <el-table-column prop="materialType" label="材质" width="110" />
+            <el-table-column prop="materialName" label="材料" width="120" fixed show-overflow-tooltip />
+            <el-table-column prop="materialType" label="材质" width="110" show-overflow-tooltip />
             <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
             <el-table-column label="板材密度" width="150" align="right">
               <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
@@ -57,7 +57,7 @@
         <el-tab-pane label="工艺费用" name="processes">
           <el-table :data="processes" border stripe height="560" v-loading="loading">
             <el-table-column prop="sortNo" label="序号" width="70" align="center" fixed />
-            <el-table-column prop="processName" label="工序" width="120" fixed />
+            <el-table-column prop="processName" label="工序" width="120" fixed show-overflow-tooltip />
             <el-table-column prop="calcType" label="类型" width="100" />
             <el-table-column prop="price1To5" label="1-5" width="90" align="right" />
             <el-table-column prop="price5To10" label="5-10" width="90" align="right" />
@@ -81,7 +81,7 @@
         <el-tab-pane label="百分比费用类" name="markupFees">
           <el-table :data="markupFees" border stripe height="560" v-loading="loading">
             <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-            <el-table-column prop="feeName" label="费用名称" min-width="150" fixed />
+            <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
             <el-table-column label="费率" width="120" align="right">
               <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
             </el-table-column>
@@ -106,7 +106,7 @@
         <el-tab-pane label="非工时费用工艺" name="extraFees">
           <el-table :data="extraFeeItems" border stripe height="560" v-loading="loading">
             <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-            <el-table-column prop="feeName" label="工艺名称" min-width="180" fixed />
+            <el-table-column prop="feeName" label="工艺名称" min-width="180" fixed show-overflow-tooltip />
             <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
             <el-table-column label="启用" width="90" align="center">
               <template #default="scope">

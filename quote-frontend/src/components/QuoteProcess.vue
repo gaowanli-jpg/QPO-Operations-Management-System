@@ -15,8 +15,8 @@
         <el-col :span="6">
           <div class="erp-surface workflow-side-panel quote-side-panel">
             <div class="panel-title">RFQ 订单</div>
-            <div class="selected-order-text">
-              {{ orderInfo.id ? `${orderInfo.rfqNo || orderInfo.id} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
+            <div class="selected-order-text" :title="selectedOrderLabel">
+              {{ selectedOrderLabel }}
             </div>
             <el-descriptions v-if="orderInfo.id" :column="1" border class="order-desc">
               <el-descriptions-item label="客户">{{ orderInfo.customerName || '-' }}</el-descriptions-item>
@@ -221,7 +221,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
@@ -248,6 +248,12 @@ const savingRowMap = reactive({})
 const loadingItems = ref(false)
 const adjusting = ref(false)
 const settingQuoteDate = ref(false)
+
+const selectedOrderLabel = computed(() => (
+  orderInfo.value.id
+    ? `${orderInfo.value.rfqNo || orderInfo.value.id} / ${orderInfo.value.customerName || '-'}`
+    : '未选择订单'
+))
 
 const openOrderPicker = () => {
   orderPickerVisible.value = true

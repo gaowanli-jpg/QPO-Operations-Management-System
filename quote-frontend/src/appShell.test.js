@@ -25,7 +25,7 @@ describe('QPO app shell polish', () => {
     expect(appVue).toContain('系统')
     expect(appVue).toContain('新单导入')
     expect(appVue).toContain('报价处理')
-    expect(appVue).toContain('工程设置')
+    expect(appVue).toContain('零件核价')
     expect(appVue).toContain('材料工艺')
     expect(appVue).not.toContain('市场部订单处理')
     expect(appVue).not.toContain('系统管理：')

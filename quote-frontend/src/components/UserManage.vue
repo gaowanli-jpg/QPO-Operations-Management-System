@@ -21,8 +21,8 @@
       <div class="erp-table-body">
         <el-table :data="users" border v-loading="loading">
           <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="username" label="账号" min-width="130" />
-          <el-table-column prop="displayName" label="显示名称" min-width="150" />
+          <el-table-column prop="username" label="账号" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="displayName" label="显示名称" min-width="150" show-overflow-tooltip />
           <el-table-column label="角色" width="130">
             <template #default="{ row }">{{ roleLabel(row.role) }}</template>
           </el-table-column>

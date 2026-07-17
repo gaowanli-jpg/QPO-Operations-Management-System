@@ -130,7 +130,7 @@ public class DeliveryService {
         if (rfqId != null) {
             qw.eq("rfq_id", rfqId);
         }
-        qw.orderByDesc("id");
+        qw.orderByAsc("id");
         return ticketMapper.selectList(qw);
     }
 
@@ -139,7 +139,7 @@ public class DeliveryService {
         if (rfqId != null) {
             qw.eq("rfq_id", rfqId);
         }
-        qw.orderByDesc("id");
+        qw.orderByAsc("id");
         return processSheetMapper.selectList(qw);
     }
 

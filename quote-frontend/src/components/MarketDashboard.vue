@@ -8,83 +8,108 @@
     </header>
 
     <section class="erp-surface import-workflow">
-
-      <!-- 第一步：客户与主单信息 -->
-      <div class="section-title">步骤 1：客户基础信息</div>
-      <el-form :model="rfqForm" label-width="120px" class="form-box">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="客户名称/代码" required>
-              <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-
-      <!-- 第二步：上传 Excel BOM 表 -->
-      <div class="section-title">步骤 2：上传客户询价表（Excel）</div>
-      <div class="upload-box">
-        <el-upload
-          ref="excelUploadRef"
-          action="#"
-          :auto-upload="false"
-          :limit="1"
-          accept=".xlsx, .xls"
-          :on-change="handleExcelChange"
-          :on-remove="handleExcelRemove"
-        >
-          <template #trigger>
-            <el-button type="primary" plain>选取 客户询价表.xlsx</el-button>
-          </template>
-          <template #tip>
-            <div class="el-upload__tip">只能上传 1 份标准格式的 Excel 文件</div>
-          </template>
-        </el-upload>
+      <div class="import-step import-step-customer">
+        <div class="section-title">
+          <span class="step-index">01</span>
+          <span>步骤 1：客户基础信息</span>
+        </div>
+        <div class="form-box step-panel">
+          <el-form :model="rfqForm" label-width="120px" class="customer-form">
+            <el-row :gutter="20" justify="center">
+              <el-col :xs="24" :sm="20" :md="16" :lg="14">
+                <el-form-item label="客户名称/代码" required>
+                  <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+        </div>
       </div>
 
-      <!-- 第三步：文件夹图纸拖拽区 -->
-      <div class="section-title">步骤 3：上传关联图纸（PDF）</div>
-      <div class="upload-box">
-        <el-alert 
-          title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。" 
-          type="success" 
-          show-icon 
-          class="upload-alert"
-        />
-        
-        <!-- 覆盖原生拖拽事件，接管控制权 -->
-        <div 
-          class="custom-dropzone" 
-          @dragover.prevent 
-          @drop.prevent="handleFolderDrop"
-        >
-          <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
-          <div class="el-upload__text dropzone-text">
-            将 <em>图纸文件夹</em> 或多个图纸直接拖拽至此处
+      <div class="import-step import-step-excel">
+        <div class="section-title">
+          <span class="step-index">02</span>
+          <span>步骤 2：上传客户询价表（Excel）</span>
+        </div>
+        <div class="upload-box step-panel">
+          <el-alert
+            title="客户询价表需包含表头：图号、物料描述、材料名称、表面处理、版本、数量、单位、交货周期、备注；交货周期支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8）、天数周期（如 7天）或 Excel 日期序列号（如 46089）。"
+            type="info"
+            show-icon
+            :closable="false"
+            class="upload-alert"
+          />
+
+          <div class="import-action-row">
+            <el-upload
+              ref="excelUploadRef"
+              action="#"
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx, .xls"
+              :on-change="handleExcelChange"
+              :on-remove="handleExcelRemove"
+              class="centered-upload"
+            >
+              <template #trigger>
+                <el-button type="primary" plain class="workflow-primary-action import-axis-button">选取 客户询价表.xlsx</el-button>
+              </template>
+              <template #tip>
+                <div class="el-upload__tip">只能上传 1 份标准格式的 Excel 文件</div>
+              </template>
+            </el-upload>
           </div>
+        </div>
+      </div>
+
+      <div class="import-step import-step-drawings">
+        <div class="section-title">
+          <span class="step-index">03</span>
+          <span>步骤 3：上传关联图纸（PDF）</span>
+        </div>
+        <div class="upload-box step-panel">
+          <el-alert
+            title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
+            type="info"
+            show-icon
+            :closable="false"
+            class="upload-alert"
+          />
           
-          <!-- 备用的点击选文件夹按钮 -->
-          <div class="folder-select-row">
-             或点击 <el-button plain class="workflow-soft-button folder-select-button" @click="triggerFolderSelect">选择文件夹</el-button>
-             <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
-          </div>
-        </div>
+          <!-- 覆盖原生拖拽事件，接管控制权 -->
+          <div
+            class="custom-dropzone"
+            @dragover.prevent
+            @drop.prevent="handleFolderDrop"
+          >
+            <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
+            <div class="el-upload__text dropzone-text">
+              将 <em>图纸文件夹</em> 或多个图纸直接拖拽至此处
+            </div>
 
-        <!-- 展示挖出来的 PDF 文件列表 -->
-        <div v-if="drawingFiles.length > 0" class="file-stats">
-          <h4>已成功提取待提交图纸（{{ drawingFiles.length }} 份）</h4>
-          <ul class="pdf-list">
-            <li v-for="(file, index) in drawingFiles" :key="index">
-              <span>{{ file.name }}</span>
-              <el-button link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
-            </li>
-          </ul>
+            <!-- 备用的点击选文件夹按钮 -->
+            <div class="folder-select-row">或点击下方按钮选择图纸文件夹</div>
+            <div class="import-action-row">
+              <el-button plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerFolderSelect">选择文件夹</el-button>
+            </div>
+            <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
+          </div>
+
+          <!-- 展示挖出来的 PDF 文件列表 -->
+          <div v-if="drawingFiles.length > 0" class="file-stats">
+            <h4>已成功提取待提交图纸（{{ drawingFiles.length }} 份）</h4>
+            <ul class="pdf-list">
+              <li v-for="(file, index) in drawingFiles" :key="index">
+                <span>{{ file.name }}</span>
+                <el-button link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
-      <!-- 底部提交按钮 -->
       <div class="erp-toolbar submit-footer">
-        <el-button type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn">
+        <el-button type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn import-axis-button">
           确认无误，提交工程部评估
         </el-button>
       </div>
@@ -305,40 +330,98 @@ const submitRfqPackage = async () => {
 
 <style scoped>
 .import-workflow {
+  display: grid;
+  gap: var(--erp-space-5);
   padding: var(--erp-space-5);
+  background: linear-gradient(180deg, var(--erp-surface), var(--erp-bg-subtle));
 }
 
 .section-title {
-  margin: 20px 0 10px;
-  padding-left: 10px;
-  border-left: 3px solid var(--erp-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-3);
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  background: var(--erp-surface-soft);
   color: var(--erp-text);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.2;
 }
 
+.step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  border-radius: var(--erp-radius-full);
+  background: var(--erp-primary);
+  color: var(--erp-text-inverse);
+  font-size: var(--erp-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.import-step {
+  overflow: hidden;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-xl);
+  background: var(--erp-surface);
+  box-shadow: var(--erp-shadow-sm);
+}
+
 .form-box,
 .upload-box {
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-.form-box {
-  padding: 16px 18px 2px;
+.step-panel {
+  padding: 18px 20px;
 }
 
-.upload-box {
-  padding: 16px 18px;
+.customer-form :deep(.el-form-item) {
+  margin-bottom: 0;
 }
 
 .upload-alert {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .upload-box :deep(.el-upload) {
   width: 100%;
+}
+
+.centered-upload {
+  width: 100%;
+  text-align: center;
+}
+
+.centered-upload :deep(.el-upload) {
+  display: flex;
+  justify-content: center;
+}
+
+.centered-upload :deep(.el-upload__tip) {
+  margin-top: 10px;
+  color: var(--erp-text-muted);
+  text-align: center;
+}
+
+.import-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.import-axis-button {
+  justify-content: center;
+  min-width: 240px;
 }
 
 .upload-box :deep(.el-upload-dragger) {
@@ -374,15 +457,13 @@ const submitRfqPackage = async () => {
 }
 
 .folder-select-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
   margin-top: 14px;
   color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+  text-align: center;
 }
 
-.folder-select-row :deep(.workflow-soft-button) {
+.folder-select-button {
   min-height: 32px;
   padding-inline: 14px;
 }
@@ -404,10 +485,10 @@ const submitRfqPackage = async () => {
 .pdf-list li:last-child { border-bottom: none; }
 
 .submit-footer {
-  justify-content: flex-end;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--erp-border-soft);
+  justify-content: center;
+  margin-top: 0;
+  border-style: dashed;
+  background: var(--erp-surface);
 }
 .submit-btn { width: auto; min-width: 260px; font-size: 14px; font-weight: 700; }
 

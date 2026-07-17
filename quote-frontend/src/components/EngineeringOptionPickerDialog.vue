@@ -82,7 +82,7 @@
 
     <template #footer>
       <div class="picker-footer">
-        <span class="selected-hint">当前选择：{{ selectedLabel }}</span>
+        <span class="selected-hint" :title="selectedLabel">当前选择：{{ selectedLabel }}</span>
         <div class="footer-actions">
           <el-button @click="visible = false">取消</el-button>
           <el-button type="primary" :disabled="!selectedItem" @click="confirmSelection">

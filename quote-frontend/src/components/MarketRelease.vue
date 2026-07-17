@@ -15,8 +15,8 @@
           <div class="erp-surface release-panel">
             <div class="panel-title">询价单</div>
             <div class="order-picker-row">
-              <div class="selected-order-text">
-                {{ orderInfo.id ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
+              <div class="selected-order-text" :title="selectedOrderLabel">
+                {{ selectedOrderLabel }}
               </div>
               <el-button plain class="workflow-soft-button" @click="openOrderPicker" :loading="loading">选择订单</el-button>
             </div>
@@ -167,15 +167,17 @@
             </div>
             <el-table
               ref="itemTableRef"
+              class="release-selection-table"
               :data="itemList"
               border
               stripe
               height="360"
+              scrollbar-always-on
               v-loading="loading"
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" />
-              <el-table-column prop="partNo" label="图号" width="130" fixed />
+              <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
@@ -255,7 +257,7 @@
             <el-table :data="ticketList" border stripe height="280" v-loading="loadingTickets || deleting">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
-              <el-table-column prop="partNo" label="图号" width="130" />
+              <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
@@ -286,7 +288,7 @@
             <el-table :data="processSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
-              <el-table-column prop="partNo" label="图号" width="130" />
+              <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -324,7 +326,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
@@ -364,6 +366,12 @@ const deleting = ref(false)
 const adjustingInternalLeadTime = ref(false)
 const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
+
+const selectedOrderLabel = computed(() => (
+  orderInfo.value.id
+    ? `${orderInfo.value.rfqNo || orderInfo.value.id} / ${orderInfo.value.customerName || '-'}`
+    : '未选择订单'
+))
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
@@ -457,6 +465,11 @@ const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === '
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows
+}
+
+const selectedRowsInItemOrder = () => {
+  const selectedIds = new Set(selectedRows.value.map(row => row.id))
+  return itemList.value.filter(row => selectedIds.has(row.id))
 }
 
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
@@ -615,14 +628,15 @@ const submitTicket = async () => {
   const customerOrderNo = releaseForm.customerOrderNo.trim()
   if (!customerOrderNo) return ElMessage.warning('请填写客户订单号后再生成正式提单。')
   const customerProjectNo = releaseForm.customerProjectNo.trim()
+  const orderedSelectedRows = selectedRowsInItemOrder()
 
-  const unquoted = selectedRows.value.filter(row => row.finalUnitPrice == null)
+  const unquoted = orderedSelectedRows.filter(row => row.finalUnitPrice == null)
   if (unquoted.length > 0) {
     return ElMessage.warning(`仍有 ${unquoted.length} 个零件未报价，暂不生成提单。`)
   }
 
   await ElMessageBox.confirm(
-    `确认生成 ${selectedRows.value.length} 个零件的正式提单？同一零件不能重复生成。`,
+    `确认生成 ${orderedSelectedRows.length} 个零件的正式提单？同一零件不能重复生成。`,
     '生成提单确认',
     { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
   )
@@ -637,7 +651,7 @@ const submitTicket = async () => {
       customerProjectNo,
       startDate: releaseForm.startDate,
       arrangeType: releaseForm.arrangeType,
-      items: selectedRows.value.map(row => ({
+      items: orderedSelectedRows.map(row => ({
         itemId: row.id,
         acceptedQty: acceptedQtyMap[row.id] || row.qty
       }))

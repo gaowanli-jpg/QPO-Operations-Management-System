@@ -74,7 +74,7 @@
           class="pricing-table"
           height="450"
         >
-          <el-table-column prop="partNo" label="图号" width="140" fixed />
+          <el-table-column prop="partNo" label="图号" width="140" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center" />
           <el-table-column prop="description" label="名称/描述" min-width="150" show-overflow-tooltip />
           <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -195,8 +195,8 @@
               <el-row :gutter="20">
                 <el-col :span="12">
                   <el-form-item label="材质选择">
-                    <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
-                      <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
+                    <el-button class="picker-trigger full-width" :title="selectedMaterialLabel" @click="materialPickerVisible = true">
+                      <span class="picker-trigger-text" :title="selectedMaterialLabel">{{ selectedMaterialLabel }}</span>
                       <span class="picker-trigger-action">选择</span>
                     </el-button>
                   </el-form-item>
@@ -239,9 +239,24 @@
                   </el-form-item>
                 </el-col>
               </el-row>
-              <p class="pricing-workbench-summary material-summary">
-                毛坯体积：{{ calculatedVolume.toFixed(6) }} m³，毛坯重量：{{ calculatedWeight.toFixed(3) }} kg，材料单价：{{ currentUnitPrice.toFixed(2) }} 元/kg，预测本件材料费：¥ {{ calculatedMaterialCost.toFixed(2) }}
-              </p>
+              <div class="pricing-workbench-summary material-summary">
+                <table class="material-summary-table" aria-label="材料成本核算汇总">
+                  <tbody>
+                    <tr>
+                      <th scope="row" title="毛坯体积">毛坯体积</th>
+                      <td :title="`${calculatedVolume.toFixed(6)} m³`">{{ calculatedVolume.toFixed(6) }} m³</td>
+                      <th scope="row" title="毛坯重量">毛坯重量</th>
+                      <td :title="`${calculatedWeight.toFixed(3)} kg`">{{ calculatedWeight.toFixed(3) }} kg</td>
+                    </tr>
+                    <tr>
+                      <th scope="row" title="材料单价">材料单价</th>
+                      <td :title="`${currentUnitPrice.toFixed(2)} 元/kg`">{{ currentUnitPrice.toFixed(2) }} 元/kg</td>
+                      <th scope="row" title="预测本件材料费">预测本件材料费</th>
+                      <td :title="`¥ ${calculatedMaterialCost.toFixed(2)}`">¥ {{ calculatedMaterialCost.toFixed(2) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </el-form>
           </section>
 
@@ -259,8 +274,8 @@
               </el-empty>
               <el-row :gutter="10" v-for="(proc, index) in processRoute" :key="proc.rowKey || index" class="process-row">
                 <el-col :span="7">
-                  <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
-                    <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
+                  <el-button class="picker-trigger full-width" :title="formatProcessLabel(proc, '选择工序')" @click="openProcessPicker(index)">
+                    <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'" :title="formatProcessLabel(proc, '选择工序')">
                       {{ formatProcessLabel(proc, '选择工序') }}
                     </span>
                     <span class="picker-trigger-action">选择</span>
@@ -315,8 +330,8 @@
             >
               <el-col :span="10">
                 <div class="assembly-child-info">
-                  <div class="assembly-child-title">{{ child.partNo || '-' }} / {{ child.version || '-' }}</div>
-                  <div class="assembly-child-desc">{{ child.description || '-' }}</div>
+                  <div class="assembly-child-title" :title="formatAssemblyChildTitle(child)">{{ formatAssemblyChildTitle(child) }}</div>
+                  <div class="assembly-child-desc" :title="child.description || '-'">{{ child.description || '-' }}</div>
                 </div>
               </el-col>
               <el-col :span="4">
@@ -596,6 +611,7 @@ const formatWeight = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue.toFixed(3) : '-'
 }
+const formatAssemblyChildTitle = (child) => `${child?.partNo || '-'} / ${child?.version || '-'}`
 const toMetricDimension = (value, unit = 'm') => {
   if (value === null || value === undefined || value === '') return null
   const numericValue = numberOrZero(value)
@@ -1539,6 +1555,15 @@ const submitCurrentQuote = async () => {
   color: var(--erp-text);
 }
 
+.picker-trigger :deep(> span) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
 .picker-trigger:hover,
 .picker-trigger:focus {
   border-color: var(--erp-primary);
@@ -1630,6 +1655,55 @@ const submitCurrentQuote = async () => {
   color: var(--erp-danger);
   font-weight: 700;
   text-align: right;
+}
+
+.material-summary {
+  margin-right: -10px;
+  margin-left: -10px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--erp-text);
+  text-align: left;
+}
+
+.material-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.material-summary-table th,
+.material-summary-table td {
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--erp-border-soft);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.material-summary-table tr:last-child th,
+.material-summary-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.material-summary-table th {
+  width: 24%;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-xs);
+  font-weight: 600;
+  text-align: left;
+  background: var(--erp-surface-soft);
+}
+
+.material-summary-table td {
+  width: 26%;
+  color: var(--erp-danger);
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .process-title-row {

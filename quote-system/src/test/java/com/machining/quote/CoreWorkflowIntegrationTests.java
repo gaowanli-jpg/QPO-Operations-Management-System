@@ -322,6 +322,38 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    void generatedTicketAndProcessSheetListsKeepImportedItemOrder() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("ORDER-SEQUENCE-" + System.nanoTime());
+        order.setCustomerName("ORDER-SEQUENCE-CUSTOMER");
+        order.setStatus("QUOTED");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion first = quotedItem(order, "SEQ-A");
+        ItemQuoteVersion second = quotedItem(order, "SEQ-B");
+        ItemQuoteVersion third = quotedItem(order, "SEQ-C");
+
+        DeliveryGenerateReq req = new DeliveryGenerateReq();
+        req.setRfqId(order.getId());
+        req.setInternalProjectNo("IP-SEQUENCE");
+        req.setCustomerOrderNo("CO-SEQUENCE");
+        req.setItems(List.of(
+                deliveryLine(first),
+                deliveryLine(second),
+                deliveryLine(third)
+        ));
+
+        deliveryService.generateTickets(req);
+
+        assertThat(deliveryService.listTickets(order.getId()))
+                .extracting(OrderDeliveryTicket::getPartNo)
+                .containsExactly("SEQ-A", "SEQ-B", "SEQ-C");
+        assertThat(deliveryService.listProcessSheets(order.getId()))
+                .extracting(OrderProcessSheet::getPartNo)
+                .containsExactly("SEQ-A", "SEQ-B", "SEQ-C");
+    }
+
+    @Test
     void deliveryGenerationUsesEngineeringMaterialForTicketProcessSheetAndApsSource() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("APS-MAT-" + System.nanoTime());
@@ -587,6 +619,13 @@ class CoreWorkflowIntegrationTests {
         item.setStatus("已报价");
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    private DeliveryGenerateReq.DeliveryItemReq deliveryLine(ItemQuoteVersion item) {
+        DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
+        line.setItemId(item.getId());
+        line.setAcceptedQty(item.getQty());
+        return line;
     }
 
     private OrderRfq orderWithItemsTicketsAndSheets(

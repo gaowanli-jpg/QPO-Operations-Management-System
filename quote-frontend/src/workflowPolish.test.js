@@ -85,6 +85,24 @@ describe('QPO workflow page polish', () => {
     ])
   })
 
+  test('keeps market release selection table free from right-edge scrollbar drift', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      'class="release-selection-table"',
+      'scrollbar-always-on',
+      '<el-table-column type="selection" width="45" :selectable="canSelectItem" />',
+      '<el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />'
+    ])
+    expectExcludes(source, 'MarketRelease.vue', [
+      'native-scrollbar',
+      '--el-table-fixed-left-column',
+      '.el-table-fixed-column--left',
+      '<el-table-column type="selection" width="45" fixed :selectable="canSelectItem" />',
+      '<el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />'
+    ])
+  })
+
   test('keeps batch and export actions visually quiet', () => {
     const pages = ['QuoteProcess.vue', 'MarketRelease.vue']
 
@@ -126,5 +144,18 @@ describe('QPO workflow page polish', () => {
       '@click="exportExcel(\'tickets\')"',
       '@click="exportExcel(\'process\')"'
     ])
+  })
+
+  test('submits market release tickets in table item order instead of click order', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      'const selectedRowsInItemOrder = () =>',
+      'const selectedIds = new Set(selectedRows.value.map(row => row.id))',
+      'return itemList.value.filter(row => selectedIds.has(row.id))',
+      'const orderedSelectedRows = selectedRowsInItemOrder()',
+      'items: orderedSelectedRows.map(row => ({'
+    ])
+    expect(source).not.toContain('items: selectedRows.value.map(row => ({')
   })
 })

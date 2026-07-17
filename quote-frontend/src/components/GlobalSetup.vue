@@ -2,7 +2,7 @@
   <div class="erp-page engineering-setup-page">
     <header class="erp-page-header engineering-page-header">
       <div>
-        <h1 class="erp-page-title">工程部工艺与核价</h1>
+        <h1 class="erp-page-title">零件核价</h1>
         <p class="erp-page-description">
           先选择待核价订单，核对图纸和零件清单，再设置整单默认材料、形态和通用工艺路线。
         </p>
@@ -20,8 +20,8 @@
     <section class="erp-surface engineering-context-card">
       <div class="engineering-context-main">
         <span class="selected-order-label">当前订单</span>
-        <strong class="selected-order-value">
-          {{ orderInfo.rfqNo ? `${orderInfo.rfqNo} / ${orderInfo.customerName || '-'}` : '未选择订单' }}
+        <strong class="selected-order-value" :title="selectedOrderLabel">
+          {{ selectedOrderLabel }}
         </strong>
       </div>
       <div class="engineering-metric-grid">
@@ -67,12 +67,12 @@
           />
 
           <div v-if="!orderInfo.id" class="erp-empty-state engineering-order-empty">
-            <strong>请先选择工程核价订单</strong>
+            <strong>请先选择零件核价订单</strong>
             <span>选择订单后，这里会显示零件清单、重复件识别和图纸预览入口。</span>
           </div>
 
           <el-table v-else :data="itemList" border stripe height="520" v-loading="isLoading">
-            <el-table-column prop="partNo" label="图号" width="140" />
+            <el-table-column prop="partNo" label="图号" width="140" show-overflow-tooltip />
             <el-table-column prop="version" label="版本" width="80" align="center" />
             <el-table-column prop="description" label="物料描述" min-width="120" show-overflow-tooltip />
             <el-table-column prop="qty" label="数量" width="70" align="center" />
@@ -133,8 +133,8 @@
               <el-row :gutter="20">
                 <el-col :span="12">
                   <el-form-item label="默认材质">
-                    <el-button class="picker-trigger full-width" @click="materialPickerVisible = true">
-                      <span class="picker-trigger-text">{{ selectedMaterialLabel }}</span>
+                    <el-button class="picker-trigger full-width" :title="selectedMaterialLabel" @click="materialPickerVisible = true">
+                      <span class="picker-trigger-text" :title="selectedMaterialLabel">{{ selectedMaterialLabel }}</span>
                       <span class="picker-trigger-action">选择</span>
                     </el-button>
                   </el-form-item>
@@ -157,8 +157,8 @@
                 <el-row :gutter="10" v-for="(proc, index) in config.processRoute" :key="index" class="process-row">
                   <el-col :span="4"><el-tag type="info">第{{ index + 1 }}道</el-tag></el-col>
                   <el-col :span="14">
-                    <el-button class="picker-trigger full-width" @click="openProcessPicker(index)">
-                      <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'">
+                    <el-button class="picker-trigger full-width" :title="formatProcessLabel(proc, '选择全局默认工序')" @click="openProcessPicker(index)">
+                      <span :class="proc.processName ? 'picker-trigger-text' : 'picker-trigger-placeholder'" :title="formatProcessLabel(proc, '选择全局默认工序')">
                         {{ formatProcessLabel(proc, '选择全局默认工序') }}
                       </span>
                       <span class="picker-trigger-action">选择</span>
@@ -215,7 +215,7 @@
 
     <OrderPickerDialog
       v-model="orderPickerVisible"
-      title="选择工程核价订单"
+      title="选择零件核价订单"
       @select="handleOrderSelected"
     />
 
@@ -277,6 +277,12 @@ const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
 const repeatAnalysis = ref(null)
+
+const selectedOrderLabel = computed(() => (
+  orderInfo.value.rfqNo
+    ? `${orderInfo.value.rfqNo} / ${orderInfo.value.customerName || '-'}`
+    : '未选择订单'
+))
 
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
 const normalizeVersion = (value) => {
@@ -803,6 +809,15 @@ onMounted(async () => {
   border-color: var(--erp-border);
   background: var(--erp-surface);
   color: var(--erp-text);
+}
+
+.picker-trigger :deep(> span) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 }
 
 .picker-trigger:hover,

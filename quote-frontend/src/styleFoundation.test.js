@@ -12,6 +12,10 @@ const expectCssIncludes = (values) => {
   }
 }
 
+const expectCssMatches = (pattern, message) => {
+  expect(css, message).toMatch(pattern)
+}
+
 describe('QPO style foundation', () => {
   test('defines visual design tokens for the QPO foundation', () => {
     expectCssIncludes([
@@ -47,5 +51,30 @@ describe('QPO style foundation', () => {
       '.erp-empty-state',
       '.erp-dialog-footer'
     ])
+  })
+
+  test('uses an attached light module header pattern for page shells', () => {
+    expectCssIncludes([
+      '--erp-page-gap: var(--erp-space-4)',
+      'gap: var(--erp-page-gap)',
+      'margin-bottom: calc(-1 * var(--erp-page-gap))',
+      'border-radius: var(--erp-radius-xl) var(--erp-radius-xl) 0 0',
+      '--erp-page-gap: var(--erp-space-5)',
+      '.erp-page-header + .erp-surface',
+      'border-top-left-radius: 0',
+      'border-top-right-radius: 0'
+    ])
+    expectCssMatches(
+      /\.erp-page-header\s*\{[^}]*background: var\(--erp-surface-soft\);[^}]*color: var\(--erp-text\);[^}]*\}/,
+      'Expected .erp-page-header to use the light step-section header background and text color'
+    )
+    expectCssMatches(
+      /\.erp-page-header h1,[^{]*\.erp-page-header h2,[^{]*\.erp-page-title\s*\{[^}]*color: var\(--erp-text\);[^}]*\}/,
+      'Expected page header titles to use normal dark text on the light header'
+    )
+    expectCssMatches(
+      /\.erp-page-header p,[^{]*\.erp-page-description\s*\{[^}]*color: var\(--erp-text-secondary\);[^}]*\}/,
+      'Expected page header descriptions to use secondary text on the light header'
+    )
   })
 })
