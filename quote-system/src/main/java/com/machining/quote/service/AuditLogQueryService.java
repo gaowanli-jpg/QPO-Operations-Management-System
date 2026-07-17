@@ -178,6 +178,9 @@ public class AuditLogQueryService {
         if (!isBlank(req.getTargetId())) {
             qw.eq("target_id", req.getTargetId().trim());
         }
+        if (!isBlank(req.getRequestId())) {
+            qw.eq("request_id", req.getRequestId().trim());
+        }
         if (!isBlank(req.getResult())) {
             String result = req.getResult().trim().toUpperCase(Locale.ROOT);
             if ("SUCCESS".equals(result)) {

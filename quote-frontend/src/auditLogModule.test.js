@@ -51,4 +51,10 @@ describe('QPO audit log module shell', () => {
     expect(auditLogManage).toContain('formatAuditJson')
     expect(auditLogManage).toContain('el-drawer')
   })
+
+  test('exposes request id as a dedicated filter for log correlation', () => {
+    expect(auditLogManage).toContain('placeholder="Request ID"')
+    expect(auditLogManage).toContain("requestId: ''")
+    expect(auditLogManage).toContain("'requestId'")
+  })
 })

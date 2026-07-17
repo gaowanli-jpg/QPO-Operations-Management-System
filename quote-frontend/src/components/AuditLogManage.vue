@@ -46,6 +46,7 @@
           <el-option v-for="targetType in optionData.targetTypes" :key="targetType" :label="targetType" :value="targetType" />
         </el-select>
         <el-input v-model.trim="filters.targetId" placeholder="对象 ID" clearable class="audit-filter-control" />
+        <el-input v-model.trim="filters.requestId" placeholder="Request ID" clearable class="audit-request-id-control" @keyup.enter="searchLogs" />
         <el-input v-model.trim="filters.keyword" placeholder="关键词" clearable class="audit-keyword-control" @keyup.enter="searchLogs" />
       </div>
       <div class="erp-toolbar-group audit-actions">
@@ -293,6 +294,7 @@ const filters = reactive({
   action: '',
   targetType: '',
   targetId: '',
+  requestId: '',
   result: '',
   keyword: ''
 })
@@ -423,6 +425,7 @@ const resetFilters = () => {
   filters.action = ''
   filters.targetType = ''
   filters.targetId = ''
+  filters.requestId = ''
   filters.result = ''
   filters.keyword = ''
   searchLogs()
@@ -445,7 +448,7 @@ const buildParams = () => {
   }
   if (filters.timeRange?.[0]) params.startTime = filters.timeRange[0]
   if (filters.timeRange?.[1]) params.endTime = filters.timeRange[1]
-  for (const key of ['username', 'role', 'module', 'action', 'targetType', 'targetId', 'result', 'keyword']) {
+  for (const key of ['username', 'role', 'module', 'action', 'targetType', 'targetId', 'requestId', 'result', 'keyword']) {
     if (filters[key]) params[key] = filters[key]
   }
   return params
@@ -573,6 +576,10 @@ onMounted(async () => {
   width: 180px;
 }
 
+.audit-request-id-control {
+  width: 220px;
+}
+
 .audit-actions {
   flex: 0 0 auto;
 }
@@ -664,6 +671,7 @@ onMounted(async () => {
 @media (max-width: 1180px) {
   .audit-time-range,
   .audit-filter-control,
+  .audit-request-id-control,
   .audit-keyword-control {
     width: 100%;
   }

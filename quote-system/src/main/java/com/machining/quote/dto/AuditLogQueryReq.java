@@ -14,6 +14,7 @@ public class AuditLogQueryReq {
     private String action;
     private String targetType;
     private String targetId;
+    private String requestId;
     private String result;
     private String keyword;
 }

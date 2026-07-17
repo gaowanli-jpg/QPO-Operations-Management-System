@@ -108,6 +108,25 @@ class AuditLogQueryServiceTests {
     }
 
     @Test
+    void listLogsAppliesRequestIdFilter() throws Exception {
+        AuditLogMapper mapper = mock(AuditLogMapper.class);
+        when(mapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        Object service = queryService(mapper);
+        Object req = Class.forName("com.machining.quote.dto.AuditLogQueryReq").getConstructor().newInstance();
+        writeProperty(req, "requestId", "stage-6-1-error");
+
+        Method listLogs = service.getClass().getMethod("listLogs", req.getClass());
+        listLogs.invoke(service, req);
+
+        ArgumentCaptor<QueryWrapper<AuditLog>> captor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(mapper).selectCount(captor.capture());
+        QueryWrapper<AuditLog> query = captor.getValue();
+        assertThat(query.getSqlSegment()).contains("request_id");
+        assertThat(query.getParamNameValuePairs().values()).contains("stage-6-1-error");
+    }
+
+    @Test
     void optionsReturnsActionsModulesRolesAndTargetTypes() throws Exception {
         AuditLogMapper mapper = mock(AuditLogMapper.class);
         when(mapper.selectObjs(any(QueryWrapper.class))).thenReturn(List.of("DICT_MATERIAL_UPDATE", "USER_CREATE"));
