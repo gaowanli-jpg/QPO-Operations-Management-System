@@ -2,7 +2,7 @@
   <el-config-provider>
     <router-view v-if="isLoginPage" />
     <div v-else class="erp-layout">
-      <el-aside width="240px" class="sidebar">
+      <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
         <div class="logo-box">
           <span class="logo-icon">QPO</span>
           <span class="logo-text">QPO运营管理</span>
@@ -11,6 +11,8 @@
         <el-menu
           :default-active="activeMenu"
           class="el-menu-vertical"
+          :collapse="isSidebarCollapsed"
+          :collapse-transition="false"
           router
         >
           <div v-if="canSee(['MARKET', 'ADMIN'])" class="menu-section">市场</div>
@@ -25,6 +27,10 @@
           <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/release">
             <el-icon><Files /></el-icon>
             <span>议价提单</span>
+          </el-menu-item>
+          <el-menu-item v-if="canSee(['ADMIN'])" index="/quote-template">
+            <el-icon><Files /></el-icon>
+            <span>报价模板</span>
           </el-menu-item>
 
           <div v-if="canSee(['ENGINEER', 'ADMIN'])" class="menu-section">工程</div>
@@ -52,19 +58,21 @@
             <el-icon><User /></el-icon>
             <span>用户权限</span>
           </el-menu-item>
-          <el-menu-item v-if="canSee(['ADMIN'])" index="/quote-template">
-            <el-icon><Files /></el-icon>
-            <span>报价模板</span>
-          </el-menu-item>
         </el-menu>
       </el-aside>
 
       <el-container class="main-container">
         <el-header class="header">
           <div class="header-left">
-            <span class="shell-icon-button" aria-hidden="true">
-              <el-icon><Fold /></el-icon>
-            </span>
+            <button
+              type="button"
+              class="shell-icon-button"
+              :aria-label="isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              :title="isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              @click="toggleSidebar"
+            >
+              <el-icon><component :is="isSidebarCollapsed ? Expand : Fold" /></el-icon>
+            </button>
             <div class="header-copy">
               <div class="shell-title" :title="shellMeta.title">{{ shellMeta.title }}</div>
               <div class="shell-subtitle" :title="shellMeta.description">{{ shellMeta.description }}</div>
@@ -130,7 +138,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataBoard, Document, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
+import { DataBoard, Document, Expand, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
 import { useAuthStore } from './stores/authStore'
 
 const route = useRoute()
@@ -142,6 +150,8 @@ const activeMenu = computed(() => {
   return route.path
 })
 const isLoginPage = computed(() => route.path === '/login')
+const isSidebarCollapsed = ref(false)
+const sidebarWidth = computed(() => isSidebarCollapsed.value ? '72px' : '200px')
 const displayName = computed(() => authStore.displayName)
 const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const roleName = computed(() => authStore.roleName)
@@ -227,6 +237,10 @@ const passwordRules = {
 
 const canSee = (roles) => authStore.hasRole(roles)
 
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
+
 const resetPasswordForm = () => {
   passwordForm.oldPassword = ''
   passwordForm.newPassword = ''
@@ -291,8 +305,10 @@ html, body, #app {
   z-index: var(--erp-z-sticky);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--erp-rail);
   box-shadow: none;
+  transition: width var(--erp-duration-base) var(--erp-ease-standard);
 }
 
 .logo-box {
@@ -303,6 +319,9 @@ html, body, #app {
   padding: 0 var(--erp-space-4);
   color: var(--erp-rail-text);
   border-bottom: 1px solid var(--erp-rail-border);
+  transition:
+    gap var(--erp-duration-base) var(--erp-ease-standard),
+    padding var(--erp-duration-base) var(--erp-ease-standard);
 }
 
 .logo-icon {
@@ -328,12 +347,29 @@ html, body, #app {
   line-height: var(--erp-line-height-tight);
 }
 
+.sidebar-collapsed .logo-box {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.sidebar-collapsed .logo-text,
+.sidebar-collapsed .menu-section {
+  display: none;
+}
+
 .el-menu-vertical {
   flex: 1;
   padding: var(--erp-space-3) var(--erp-space-3) var(--erp-space-4);
   border-right: none !important;
   overflow-y: auto;
   background: var(--erp-rail) !important;
+  transition: padding var(--erp-duration-base) var(--erp-ease-standard);
+}
+
+.sidebar-collapsed .el-menu-vertical {
+  width: 100% !important;
+  padding: var(--erp-space-3) var(--erp-space-2) var(--erp-space-4);
 }
 
 .menu-section {
@@ -349,6 +385,7 @@ html, body, #app {
 }
 
 .sidebar .el-menu-item {
+  position: relative;
   height: 40px;
   min-height: 40px;
   margin: var(--erp-space-1) 0;
@@ -359,6 +396,12 @@ html, body, #app {
   transition:
     background-color var(--erp-duration-fast) var(--erp-ease-standard),
     color var(--erp-duration-fast) var(--erp-ease-standard);
+}
+
+.sidebar-collapsed .el-menu-item,
+.sidebar-collapsed .el-menu-tooltip__trigger {
+  justify-content: center;
+  padding: 0 !important;
 }
 
 .sidebar .el-menu-item:hover {
@@ -384,6 +427,20 @@ html, body, #app {
 .sidebar .el-menu-item .el-icon {
   margin-right: var(--erp-space-2);
   color: inherit;
+}
+
+.sidebar-collapsed .el-menu-item.is-active::before {
+  position: absolute;
+  left: 0;
+  margin-right: 0;
+}
+
+.sidebar-collapsed .el-menu-item .el-icon {
+  margin-right: 0;
+}
+
+.sidebar-collapsed .el-menu-item span {
+  display: none;
 }
 
 .main-container {
@@ -426,7 +483,23 @@ html, body, #app {
   height: 36px;
   flex: 0 0 36px;
   color: var(--erp-text-secondary);
+  background: transparent;
+  border: 0;
   border-radius: var(--erp-radius-lg);
+  cursor: pointer;
+  transition:
+    background-color var(--erp-duration-fast) var(--erp-ease-standard),
+    color var(--erp-duration-fast) var(--erp-ease-standard);
+}
+
+.shell-icon-button:hover {
+  color: var(--erp-primary);
+  background: var(--erp-primary-soft);
+}
+
+.shell-icon-button:focus-visible {
+  outline: 2px solid var(--erp-primary);
+  outline-offset: 2px;
 }
 
 .header-copy {

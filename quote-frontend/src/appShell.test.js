@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const appVue = readFileSync(resolve(currentDir, 'App.vue'), 'utf8')
 const loginView = readFileSync(resolve(currentDir, 'components', 'LoginView.vue'), 'utf8')
+const quoteTemplateManage = readFileSync(resolve(currentDir, 'components', 'QuoteTemplateManage.vue'), 'utf8')
 const indexHtml = readFileSync(resolve(currentDir, '..', 'index.html'), 'utf8')
 
 describe('QPO app shell polish', () => {
@@ -15,6 +16,15 @@ describe('QPO app shell polish', () => {
     expect(indexHtml).toContain('<title>QPO</title>')
     expect(appVue).not.toContain('<span class="logo-icon">ERP</span>')
     expect(loginView).not.toContain('<div class="brand-mark">ERP</div>')
+  })
+
+  test('uses a compact sidebar width for dense workflow pages', () => {
+    expect(appVue).toContain('const sidebarWidth = computed(() => isSidebarCollapsed.value ? \'72px\' : \'200px\')')
+    expect(appVue).toContain(':width="sidebarWidth"')
+    expect(appVue).toContain(':collapse="isSidebarCollapsed"')
+    expect(appVue).not.toContain('width="208px"')
+    expect(appVue).not.toContain('width="216px"')
+    expect(appVue).not.toContain('width="240px"')
   })
 
   test('uses short grouped sidebar labels for the Stage 2 shell', () => {
@@ -31,6 +41,20 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain('系统管理：')
   })
 
+  test('places quote template under market release instead of the system group', () => {
+    const releaseMenuIndex = appVue.indexOf('index="/release"')
+    const templateMenuIndex = appVue.indexOf('index="/quote-template"')
+    const engineeringSectionIndex = appVue.indexOf('class="menu-section">工程')
+    const systemSectionIndex = appVue.indexOf('class="menu-section">系统')
+
+    expect(releaseMenuIndex).toBeGreaterThan(-1)
+    expect(templateMenuIndex).toBeGreaterThan(releaseMenuIndex)
+    expect(templateMenuIndex).toBeLessThan(engineeringSectionIndex)
+    expect(templateMenuIndex).toBeLessThan(systemSectionIndex)
+    expect(quoteTemplateManage).toContain('<h1 class="erp-page-title">报价模板</h1>')
+    expect(quoteTemplateManage).not.toContain('系统管理：报价单模板')
+  })
+
   test('maps related workbench routes to an obvious active navigation item', () => {
     expect(appVue).toContain("route.path === '/pricing'")
     expect(appVue).toContain("return '/engineering'")
@@ -45,8 +69,11 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain('active-text-color="#ffffff"')
   })
 
-  test('keeps the header shell icon decorative rather than an inert action', () => {
-    expect(appVue).toContain('<span class="shell-icon-button" aria-hidden="true">')
-    expect(appVue).not.toContain('<el-button class="shell-icon-button"')
+  test('turns the header shell icon into an accessible sidebar toggle', () => {
+    expect(appVue).toContain('<button')
+    expect(appVue).toContain('@click="toggleSidebar"')
+    expect(appVue).toContain(':aria-label="isSidebarCollapsed ? \'展开侧边栏\' : \'收起侧边栏\'"')
+    expect(appVue).toContain('<component :is="isSidebarCollapsed ? Expand : Fold" />')
+    expect(appVue).not.toContain('<span class="shell-icon-button" aria-hidden="true">')
   })
 })

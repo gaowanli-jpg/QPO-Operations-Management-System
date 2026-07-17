@@ -2,7 +2,7 @@
   <div class="erp-page template-page">
     <header class="erp-page-header template-page-header">
       <div>
-        <h1 class="erp-page-title">系统管理：报价单模板</h1>
+        <h1 class="erp-page-title">报价模板</h1>
         <p class="erp-page-description">维护市场部客户模板报价单，全系统共用一份 .xlsx 模板。</p>
       </div>
       <div class="erp-page-actions template-page-actions">

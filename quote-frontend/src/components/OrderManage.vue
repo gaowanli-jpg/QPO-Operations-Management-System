@@ -35,7 +35,7 @@
           @clear="handleSearch"
         />
         <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
-        <el-button type="primary" :loading="loading" @click="refreshOrders">刷新</el-button>
+        <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
       </div>
     </section>
 
@@ -502,6 +502,14 @@ onMounted(loadCustomers)
 
 .order-table-surface {
   overflow: hidden;
+}
+
+.order-table-surface .erp-table-body {
+  padding: var(--erp-space-3);
+}
+
+.order-table-surface .erp-empty-state {
+  margin: var(--erp-space-4);
 }
 
 .detail-wrap {

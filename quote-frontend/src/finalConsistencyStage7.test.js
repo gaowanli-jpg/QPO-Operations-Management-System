@@ -90,4 +90,28 @@ describe('QPO Stage 7 final consistency pass', () => {
     expect(historySource).toContain('erp-table-actions')
     expect(historySource).toContain('erp-empty-state')
   })
+
+  test('aligns order and history order list chrome while keeping history functions distinct', () => {
+    const orderSource = readComponent('OrderManage.vue')
+    const historySource = readComponent('HistoryOrderManage.vue')
+    const disabledRefreshButton = ':loading="loading" :disabled="!selectedCustomer" @click="refreshOrders"'
+
+    expect(historySource).toContain('<header class="erp-page-header">')
+    expect(historySource).not.toContain('history-page-actions')
+
+    const historyToolbarIndex = historySource.indexOf('class="erp-toolbar-group history-filter-group"')
+    const historyRefreshIndex = historySource.indexOf(disabledRefreshButton)
+    expect(historyToolbarIndex).toBeGreaterThan(-1)
+    expect(historyRefreshIndex).toBeGreaterThan(historyToolbarIndex)
+    expect(orderSource).toContain(disabledRefreshButton)
+
+    expect(historySource).toContain('彻底删除')
+    expect(historySource).toContain('查看订单')
+    expect(historySource).not.toContain('重置提单/工艺')
+
+    expect(orderSource).toContain('.order-table-surface .erp-table-body')
+    expect(historySource).toContain('.history-table-surface .erp-table-body')
+    expect(orderSource).toContain('padding: var(--erp-space-3);')
+    expect(historySource).toContain('padding: var(--erp-space-3);')
+  })
 })

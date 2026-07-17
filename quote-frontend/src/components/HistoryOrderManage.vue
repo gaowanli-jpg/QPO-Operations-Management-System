@@ -1,16 +1,13 @@
 <template>
   <div class="erp-page history-page">
-    <header class="erp-page-header history-page-header">
+    <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">历史订单管理</h1>
         <p class="erp-page-description">先选择客户，再查看该客户下的历史订单；彻底删除后不可恢复。</p>
       </div>
-      <div class="erp-page-actions history-page-actions">
-        <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
-      </div>
     </header>
 
-    <section class="erp-toolbar history-toolbar">
+    <section class="erp-toolbar">
       <div class="erp-toolbar-group history-filter-group">
         <el-select
           v-model="selectedCustomer"
@@ -38,6 +35,7 @@
           @clear="handleSearch"
         />
         <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
+        <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
       </div>
     </section>
 
@@ -325,14 +323,17 @@ onMounted(loadCustomers)
 <style scoped>
 .history-filter-group {
   width: 100%;
+  justify-content: flex-end;
 }
 
 .customer-select {
   width: 220px;
+  flex: 0 0 220px;
 }
 
 .search-input {
   width: 260px;
+  flex: 0 0 260px;
 }
 
 .history-table-surface .erp-table-body {
@@ -362,6 +363,12 @@ onMounted(loadCustomers)
 
 .delete-alert {
   margin: 14px 0;
+}
+
+@media (max-width: 1200px) {
+  .history-filter-group {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 760px) {
