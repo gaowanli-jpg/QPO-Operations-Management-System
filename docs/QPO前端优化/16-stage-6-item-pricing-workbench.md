@@ -13,7 +13,7 @@ Stage 6 focuses on `ItemPricing.vue`. It improves the visual hierarchy of the de
 | `quote-frontend/src/components/ItemPricing.vue` | Moves the pricing page onto the shared QPO shell, adds order/workbench context metrics, normalizes the toolbar/table actions, and separates pricing dialog sections. |
 | `quote-frontend/src/itemPricingStage6.test.js` | Guards the Stage 6 structure and confirms the pricing workflow remains in place rather than being split or rewritten. |
 | `docs/QPO前端优化/16-stage-6-item-pricing-workbench.md` | Records Stage 6 scope, behavior preservation, verification, and next-step recommendation. |
-| `AGENTS.md` | Updates long-term memory with Stage 6 completion and Stage 7 as the next UI stage. |
+| `../../AGENTS.md` | Root project memory carries long-term stage cadence and guardrails. |
 
 ## What Changed
 

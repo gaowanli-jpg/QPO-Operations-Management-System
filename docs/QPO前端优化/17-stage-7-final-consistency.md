@@ -17,7 +17,7 @@ Stage 7 focuses on cleaning remaining local card/header/table/dialog patterns af
 | `quote-frontend/src/components/UserManage.vue` | Replaces the old user card shell with shared page/table/dialog patterns and shared table action/footer classes. |
 | `quote-frontend/src/finalConsistencyStage7.test.js` | Guards the remaining page shell, table/action, and dialog consistency expectations. |
 | `docs/QPO前端优化/17-stage-7-final-consistency.md` | Records Stage 7 scope, behavior preservation, verification, and follow-up recommendations. |
-| `AGENTS.md` | Updates long-term memory with Stage 7 completion and post-redesign follow-up guidance. |
+| `../../AGENTS.md` | Root project memory carries long-term stage cadence and guardrails. |
 
 ## What Changed
 

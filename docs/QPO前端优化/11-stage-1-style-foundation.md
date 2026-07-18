@@ -10,7 +10,7 @@ Stage 1 changes only the global visual foundation and supporting documentation. 
 
 | File | Purpose |
 | --- | --- |
-| `AGENTS.md` | Adds long-term agent memory for the QPO UI redesign docs, cadence, guardrails, and next-step rules. |
+| `../../AGENTS.md` | Root project memory now carries long-term QPO/APS boundaries, cadence, guardrails, and next-step rules. |
 | `quote-frontend/src/style.css` | Expands QPO design tokens, maps Element Plus base variables, and introduces shared QPO layout/component classes. |
 | `quote-frontend/src/styleFoundation.test.js` | Guards that the Stage 1 style foundation keeps required tokens, Element Plus mappings, and shared classes. |
 | `docs/QPO前端优化/11-stage-1-style-foundation.md` | Records what Stage 1 changed and what Stage 2 should do next. |

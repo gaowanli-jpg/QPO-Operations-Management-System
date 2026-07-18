@@ -35,7 +35,7 @@ Use a **clean manufacturing QPO workbench** style:
 
 ## Folder Map
 
-- `AGENTS.md` - QPO frontend optimization memory, working cadence, guardrails, and stable maintenance rules.
+- `../../AGENTS.md` - root project memory for QPO/APS boundaries, QPO UI maintenance, permission/log cross-checks, and development guardrails.
 - `01-current-ui-audit.md` - what is messy today and why.
 - `02-open-source-reference.md` - open-source QPO/admin projects to borrow from.
 - `03-design-direction.md` - chosen product design direction.
