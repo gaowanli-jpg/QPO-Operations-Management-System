@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.PermissionTreeNodeDTO;
 import com.machining.quote.dto.RoleDataScopeAssignReq;
 import com.machining.quote.dto.RolePermissionAssignReq;
 import com.machining.quote.dto.SystemPermissionDTO;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,6 +31,12 @@ import java.util.Set;
 @Service
 public class SystemRoleService {
     private static final Set<String> DATA_SCOPES = Set.of("ALL", "DEPT", "DEPT_AND_CHILD", "SELF", "CUSTOMER", "CUSTOM", "NONE");
+    private static final List<PermissionGroup> PERMISSION_GROUPS = List.of(
+            new PermissionGroup("market", "市场", 100),
+            new PermissionGroup("orders", "订单", 200),
+            new PermissionGroup("engineer", "工程", 300),
+            new PermissionGroup("system", "系统", 800)
+    );
 
     @Autowired
     private SystemRoleMapper roleMapper;
@@ -54,6 +62,55 @@ public class SystemRoleService {
         query.and(wrapper -> wrapper.eq("assignable", true).or().isNull("assignable"));
         query.orderByAsc("sort_order").orderByAsc("id");
         return permissionMapper.selectList(query).stream().map(this::toPermissionDto).toList();
+    }
+
+    public List<PermissionTreeNodeDTO> listPermissionTree() {
+        QueryWrapper<SystemPermission> query = new QueryWrapper<>();
+        query.and(wrapper -> wrapper.eq("assignable", true).or().isNull("assignable"));
+        query.and(wrapper -> wrapper.eq("enabled", true).or().isNull("enabled"));
+        query.orderByAsc("sort_order").orderByAsc("id");
+
+        List<SystemPermission> permissions = safeList(permissionMapper.selectList(query)).stream()
+                .filter(this::isTreePermission)
+                .sorted(permissionComparator())
+                .toList();
+
+        Map<Long, PermissionTreeNodeDTO> nodesById = new LinkedHashMap<>();
+        for (SystemPermission permission : permissions) {
+            nodesById.put(permission.getId(), toPermissionTreeNode(permission));
+        }
+
+        Map<String, PermissionTreeNodeDTO> groupNodes = new LinkedHashMap<>();
+        for (PermissionGroup group : PERMISSION_GROUPS) {
+            PermissionTreeNodeDTO node = new PermissionTreeNodeDTO();
+            node.setKey("group:" + group.key());
+            node.setLabel(group.label());
+            node.setGroupKey(group.key());
+            node.setGroupName(group.label());
+            node.setSortOrder(group.sortOrder());
+            groupNodes.put(group.key(), node);
+        }
+
+        for (SystemPermission permission : permissions) {
+            PermissionTreeNodeDTO node = nodesById.get(permission.getId());
+            Long parentId = permission.getParentId();
+            if (parentId != null && parentId > 0 && nodesById.containsKey(parentId)) {
+                nodesById.get(parentId).getChildren().add(node);
+                continue;
+            }
+            String groupKey = resolveGroupKey(permission.getPermissionCode());
+            PermissionTreeNodeDTO groupNode = groupNodes.get(groupKey);
+            if (groupNode != null) {
+                groupNode.getChildren().add(node);
+            }
+        }
+
+        for (PermissionTreeNodeDTO node : groupNodes.values()) {
+            sortTree(node.getChildren());
+        }
+        return groupNodes.values().stream()
+                .filter(node -> !node.getChildren().isEmpty())
+                .toList();
     }
 
     @Transactional
@@ -115,47 +172,47 @@ public class SystemRoleService {
     public List<String> assignPermissions(Long roleId, RolePermissionAssignReq req) {
         SystemRole role = requireRole(roleId);
         List<String> beforeCodes = getRolePermissionCodes(roleId);
-        List<String> requestedCodes = normalizeCodes(req == null ? List.of() : req.getPermissionCodes());
+        List<String> requestedCodes = filterAssignableRequestCodes(normalizeCodes(req == null ? List.of() : req.getPermissionCodes()));
         List<SystemPermission> requestedPermissions = requestedCodes.isEmpty()
                 ? List.of()
-                : permissionMapper.selectByPermissionCodes(requestedCodes);
+                : safeList(permissionMapper.selectByPermissionCodes(requestedCodes));
         if (requestedPermissions.size() != requestedCodes.size()) {
             throw new RuntimeException("Some permission codes do not exist");
         }
-        Set<String> assignableCodes = new LinkedHashSet<>();
+        Map<String, SystemPermission> nextPermissionsByCode = new LinkedHashMap<>();
         for (SystemPermission permission : requestedPermissions) {
             if (isAssignable(permission)) {
-                assignableCodes.add(permission.getPermissionCode());
+                addPermissionWithParents(nextPermissionsByCode, permission);
             }
         }
 
         List<SystemPermission> beforePermissions = beforeCodes.isEmpty()
                 ? List.of()
-                : permissionMapper.selectByPermissionCodes(beforeCodes);
+                : safeList(permissionMapper.selectByPermissionCodes(beforeCodes));
         for (SystemPermission permission : beforePermissions) {
             if (!isAssignable(permission)) {
-                assignableCodes.add(permission.getPermissionCode());
+                nextPermissionsByCode.put(permission.getPermissionCode(), permission);
             }
         }
 
-        List<String> nextCodes = new ArrayList<>(assignableCodes);
-        List<SystemPermission> permissions = nextCodes.isEmpty()
-                ? List.of()
-                : permissionMapper.selectByPermissionCodes(nextCodes);
+        List<SystemPermission> permissions = nextPermissionsByCode.values().stream()
+                .sorted(permissionComparator())
+                .toList();
+        List<String> nextCodes = permissions.stream()
+                .map(SystemPermission::getPermissionCode)
+                .toList();
 
         rolePermissionMapper.deleteByRoleId(roleId);
         for (SystemPermission permission : permissions) {
             rolePermissionMapper.insertIgnore(roleId, permission.getId());
         }
 
-        Map<String, Object> before = new LinkedHashMap<>();
-        before.put("roleCode", role.getRoleCode());
-        before.put("permissionCodes", beforeCodes);
-        before.put("permissionCount", beforeCodes.size());
-        Map<String, Object> after = new LinkedHashMap<>();
-        after.put("roleCode", role.getRoleCode());
-        after.put("permissionCodes", nextCodes);
-        after.put("permissionCount", nextCodes.size());
+        Set<String> beforeAssignableCodes = assignablePermissionCodes(beforePermissions);
+        Set<String> nextAssignableCodes = assignablePermissionCodes(permissions);
+        List<String> addedCodes = difference(nextAssignableCodes, beforeAssignableCodes);
+        List<String> removedCodes = difference(beforeAssignableCodes, nextAssignableCodes);
+        Map<String, Object> before = permissionAssignmentSnapshot(role.getRoleCode(), beforeCodes, List.of(), List.of(), beforePermissions);
+        Map<String, Object> after = permissionAssignmentSnapshot(role.getRoleCode(), nextCodes, addedCodes, removedCodes, permissions);
         auditService.record("SYSTEM_ROLE_ASSIGN_PERMISSION", "system_role", roleId, before, after);
         return nextCodes;
     }
@@ -239,6 +296,26 @@ public class SystemRoleService {
         return dto;
     }
 
+    private PermissionTreeNodeDTO toPermissionTreeNode(SystemPermission permission) {
+        PermissionTreeNodeDTO dto = new PermissionTreeNodeDTO();
+        dto.setKey(permission.getPermissionCode());
+        dto.setLabel(permission.getPermissionName());
+        dto.setId(permission.getId());
+        dto.setParentId(permission.getParentId());
+        dto.setPermissionType(permission.getPermissionType());
+        dto.setPermissionCode(permission.getPermissionCode());
+        dto.setPermissionName(permission.getPermissionName());
+        dto.setRoutePath(permission.getRoutePath());
+        dto.setComponentKey(permission.getComponentKey());
+        dto.setIcon(permission.getIcon());
+        dto.setSortOrder(permission.getSortOrder());
+        dto.setVisible(permission.getVisible());
+        dto.setEnabled(permission.getEnabled());
+        dto.setAssignable(permission.getAssignable());
+        dto.setDisabled(Boolean.FALSE);
+        return dto;
+    }
+
     private Map<String, Object> roleSnapshot(SystemRole role) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", role.getId());
@@ -278,6 +355,12 @@ public class SystemRoleService {
         return new ArrayList<>(result);
     }
 
+    private List<String> filterAssignableRequestCodes(List<String> values) {
+        return values.stream()
+                .filter(code -> !code.startsWith("group:"))
+                .toList();
+    }
+
     private List<Long> distinctLongs(List<Long> values) {
         LinkedHashSet<Long> result = new LinkedHashSet<>();
         for (Long value : values) {
@@ -302,5 +385,109 @@ public class SystemRoleService {
 
     private boolean isAssignable(SystemPermission permission) {
         return permission == null || permission.getAssignable() == null || Boolean.TRUE.equals(permission.getAssignable());
+    }
+
+    private boolean isTreePermission(SystemPermission permission) {
+        return permission != null
+                && isAssignable(permission)
+                && (permission.getEnabled() == null || Boolean.TRUE.equals(permission.getEnabled()))
+                && permission.getPermissionCode() != null
+                && !permission.getPermissionCode().startsWith("common:");
+    }
+
+    private void addPermissionWithParents(Map<String, SystemPermission> permissionsByCode, SystemPermission permission) {
+        if (permission == null || permission.getPermissionCode() == null) {
+            return;
+        }
+        Long parentId = permission.getParentId();
+        if (parentId != null && parentId > 0) {
+            SystemPermission parent = permissionMapper.selectById(parentId);
+            if (parent == null) {
+                throw new RuntimeException("Parent permission does not exist");
+            }
+            if (isAssignable(parent)) {
+                addPermissionWithParents(permissionsByCode, parent);
+            }
+        }
+        permissionsByCode.put(permission.getPermissionCode(), permission);
+    }
+
+    private Map<String, Object> permissionAssignmentSnapshot(
+            String roleCode,
+            List<String> permissionCodes,
+            List<String> addedCodes,
+            List<String> removedCodes,
+            List<SystemPermission> permissions) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("roleCode", roleCode);
+        row.put("permissionCodes", permissionCodes);
+        row.put("addedPermissionCodes", addedCodes);
+        row.put("removedPermissionCodes", removedCodes);
+        row.put("addedCount", addedCodes.size());
+        row.put("removedCount", removedCodes.size());
+        row.put("moduleCount", (int) permissions.stream().filter(this::isMenuPermission).count());
+        row.put("permissionCount", permissionCodes.size());
+        return row;
+    }
+
+    private Set<String> assignablePermissionCodes(List<SystemPermission> permissions) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (SystemPermission permission : safeList(permissions)) {
+            if (isAssignable(permission) && permission.getPermissionCode() != null) {
+                result.add(permission.getPermissionCode());
+            }
+        }
+        return result;
+    }
+
+    private List<String> difference(Set<String> left, Set<String> right) {
+        List<String> result = new ArrayList<>();
+        for (String code : left) {
+            if (!right.contains(code)) {
+                result.add(code);
+            }
+        }
+        return result;
+    }
+
+    private boolean isMenuPermission(SystemPermission permission) {
+        return isAssignable(permission) && "MENU".equals(permission.getPermissionType());
+    }
+
+    private Comparator<SystemPermission> permissionComparator() {
+        return Comparator
+                .comparing((SystemPermission permission) -> permission.getSortOrder() == null ? Integer.MAX_VALUE : permission.getSortOrder())
+                .thenComparing(permission -> permission.getId() == null ? Long.MAX_VALUE : permission.getId());
+    }
+
+    private void sortTree(List<PermissionTreeNodeDTO> nodes) {
+        nodes.sort(Comparator
+                .comparing((PermissionTreeNodeDTO node) -> node.getSortOrder() == null ? Integer.MAX_VALUE : node.getSortOrder())
+                .thenComparing(node -> node.getId() == null ? Long.MAX_VALUE : node.getId()));
+        for (PermissionTreeNodeDTO node : nodes) {
+            sortTree(node.getChildren());
+        }
+    }
+
+    private String resolveGroupKey(String permissionCode) {
+        if (permissionCode == null) {
+            return null;
+        }
+        if (permissionCode.startsWith("market:order:") || permissionCode.startsWith("market:history-order:")) {
+            return "orders";
+        }
+        if (permissionCode.startsWith("market:")) {
+            return "market";
+        }
+        if (permissionCode.startsWith("engineer:")) {
+            return "engineer";
+        }
+        if (permissionCode.startsWith("system:")) {
+            return "system";
+        }
+        return null;
+    }
+
+    private record PermissionGroup(String key, String label, Integer sortOrder) {
     }
 }

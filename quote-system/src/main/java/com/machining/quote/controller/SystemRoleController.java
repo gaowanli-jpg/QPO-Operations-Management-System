@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.PermissionTreeNodeDTO;
 import com.machining.quote.dto.RoleDataScopeAssignReq;
 import com.machining.quote.dto.RolePermissionAssignReq;
 import com.machining.quote.dto.SystemPermissionDTO;
@@ -80,5 +81,11 @@ public class SystemRoleController {
     @RequirePermission("system:role:view")
     public List<SystemPermissionDTO> listPermissions() {
         return systemRoleService.listPermissions();
+    }
+
+    @GetMapping("/permissions/tree")
+    @RequirePermission("system:role:view")
+    public List<PermissionTreeNodeDTO> listPermissionTree() {
+        return systemRoleService.listPermissionTree();
     }
 }
