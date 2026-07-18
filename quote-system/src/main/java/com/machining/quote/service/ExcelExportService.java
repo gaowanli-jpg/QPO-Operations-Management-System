@@ -41,6 +41,8 @@ public class ExcelExportService {
     private OrderProcessSheetMapper processSheetMapper;
     @Autowired
     private LeadTimeService leadTimeService;
+    @Autowired
+    private QuoteProcessService quoteProcessService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -150,16 +152,19 @@ public class ExcelExportService {
     }
 
     public void exportQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         exportQuoteSheet(rfqId, response, true);
     }
 
     public void exportCustomerLeadTimeQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         exportQuoteSheet(rfqId, response, false);
     }
 
     public void exportSimpleQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
@@ -174,6 +179,7 @@ public class ExcelExportService {
     }
 
     public Path exportQuoteSheetFile(Integer rfqId, Path outputDir, String exportType) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         Files.createDirectories(outputDir);
         String safeType = exportType == null ? "" : exportType.trim().toUpperCase();

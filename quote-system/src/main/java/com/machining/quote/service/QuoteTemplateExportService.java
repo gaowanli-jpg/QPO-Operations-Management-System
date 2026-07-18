@@ -53,6 +53,8 @@ public class QuoteTemplateExportService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private LeadTimeService leadTimeService;
+    @Autowired
+    private QuoteProcessService quoteProcessService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -60,6 +62,7 @@ public class QuoteTemplateExportService {
     private final DataFormatter dataFormatter = new DataFormatter();
 
     public void exportTemplateQuoteDetail(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         try (Workbook workbook = quoteTemplateService.openTemplateWorkbook()) {
             writeTemplateQuote(workbook, rfqId, false);
@@ -68,6 +71,7 @@ public class QuoteTemplateExportService {
     }
 
     public void exportTemplateQuoteSimple(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         try (Workbook workbook = quoteTemplateService.openTemplateWorkbook()) {
             simplifyTemplateSheet(workbook.getSheetAt(0));

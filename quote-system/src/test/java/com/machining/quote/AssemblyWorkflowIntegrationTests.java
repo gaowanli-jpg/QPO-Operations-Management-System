@@ -146,9 +146,9 @@ class AssemblyWorkflowIntegrationTests {
 
         ItemQuoteVersion invalidParent = itemMapper.selectById(parent.getId());
         ItemQuoteVersion invalidGrandParent = itemMapper.selectById(grandParent.getId());
-        assertThat(invalidParent.getStatus()).isEqualTo("待核价");
+        assertThat(invalidParent.getStatus()).isEqualTo("未核价");
         assertThat(invalidParent.getFinalUnitPrice()).isNull();
-        assertThat(invalidGrandParent.getStatus()).isEqualTo("待核价");
+        assertThat(invalidGrandParent.getStatus()).isEqualTo("未核价");
         assertThat(invalidGrandParent.getFinalUnitPrice()).isNull();
     }
 

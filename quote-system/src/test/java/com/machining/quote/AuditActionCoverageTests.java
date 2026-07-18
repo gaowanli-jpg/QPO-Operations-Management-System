@@ -15,6 +15,7 @@ import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.AuthService;
 import com.machining.quote.service.JwtService;
+import com.machining.quote.service.QuoteProcessService;
 import com.machining.quote.service.QuoteTemplateService;
 import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.service.SystemTaskService;
@@ -250,6 +251,8 @@ class AuditActionCoverageTests {
         SystemTask task = service.submitQuoteExportTask(44, "simple");
 
         assertThat(task.getId()).isEqualTo(99L);
+        QuoteProcessService quoteProcessService = (QuoteProcessService) ReflectionTestUtils.getField(service, "quoteProcessService");
+        verify(quoteProcessService).assertQuoteExportable(44);
         verify(auditService).record(
                 eq("QUOTE_EXPORT_TASK_SUBMIT"),
                 eq("system_task"),
@@ -317,6 +320,7 @@ class AuditActionCoverageTests {
         ReflectionTestUtils.setField(service, "taskMapper", taskMapper);
         ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "quoteProcessService", mock(QuoteProcessService.class));
         ReflectionTestUtils.setField(service, "taskOutputDir", tempDir.toString());
         return service;
     }

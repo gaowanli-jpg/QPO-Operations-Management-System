@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeShiftReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
@@ -162,6 +163,7 @@ public class InternalTargetLeadTimeService {
             throw new RuntimeException("RFQ 订单不存在");
         }
         assertOrderDataScope(order);
+        assertCanRelease(order);
         return order;
     }
 
@@ -174,6 +176,7 @@ public class InternalTargetLeadTimeService {
             throw new RuntimeException("RFQ 订单不存在");
         }
         assertOrderDataScope(order);
+        assertCanRelease(order);
         return order;
     }
 
@@ -181,6 +184,16 @@ public class InternalTargetLeadTimeService {
         if (dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(order);
         }
+    }
+
+    private void assertCanRelease(OrderRfq order) {
+        if (order == null || QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
+            return;
+        }
+        if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
+            throw new RuntimeException("请先在报价处理模块保存报价单后再进入议价提单");
+        }
+        throw new RuntimeException("只有已报价订单可以进入议价提单");
     }
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();

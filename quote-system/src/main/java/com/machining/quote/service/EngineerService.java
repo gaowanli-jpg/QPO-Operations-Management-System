@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
@@ -519,7 +520,7 @@ public class EngineerService {
             }
             UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
             update.eq("id", parent.getId())
-                    .set("status", "待核价")
+                    .set("status", QuoteStatusWorkflow.UNPRICED)
                     .set("base_cost", null)
                     .set("final_unit_price", null)
                     .set("final_total_price", null)
@@ -557,11 +558,11 @@ public class EngineerService {
             }
         }
 
-        order.setStatus("已报价");
+        order.setStatus(QuoteStatusWorkflow.nextAfterEngineerComplete(order.getStatus()));
         orderMapper.updateById(order);
         auditService.record("ORDER_QUOTE_COMPLETE", "order_rfq", order.getId(), null, order);
-        log.info("Order quote completed rfqId={} itemCount={} noDrawingCount={} durationMs={}",
-                rfqId, items.size(), noDrawingCount, System.currentTimeMillis() - startedAt);
+        log.info("Order quote completed rfqId={} itemCount={} noDrawingCount={} toStatus={} durationMs={}",
+                rfqId, items.size(), noDrawingCount, order.getStatus(), System.currentTimeMillis() - startedAt);
     }
 
     private boolean hasDrawing(ItemQuoteVersion item) {

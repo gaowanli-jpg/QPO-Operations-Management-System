@@ -112,7 +112,7 @@ import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listMarketOrders } from '../services/marketApi'
 
-const DEFAULT_STATUS_OPTIONS = ['待工程部评估', '已报价', '部分已提单', '已生成提单']
+const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单']
 
 const props = defineProps({
   modelValue: {
@@ -251,7 +251,9 @@ const resolveRowClassName = ({ row }) => {
 const statusTagType = (status) => {
   if (status === '已生成提单') return 'success'
   if (status === '已报价') return 'primary'
+  if (status === '已核价') return 'warning'
   if (status === '部分已提单') return 'warning'
+  if (status === '未核价') return 'info'
   return 'info'
 }
 

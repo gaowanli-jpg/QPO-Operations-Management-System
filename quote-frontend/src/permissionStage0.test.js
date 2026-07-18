@@ -71,7 +71,7 @@ describe('QPO permission stage 0 guardrails', () => {
       expect(doc, permission).toContain('`' + permission + '`')
     }
 
-    expect(doc).toContain('\u524d\u7aef\u8def\u7531\u6743\u9650\u8fc1\u79fb\u8868')
+    expect(doc).toContain('\u524d\u7aef\u8def\u7531\u6743\u9650\u8868')
     expect(doc).toContain('`market:rfq:view`')
     expect(doc).toContain('`engineer:pricing:view`')
     expect(doc).toContain('`system:audit:view`')

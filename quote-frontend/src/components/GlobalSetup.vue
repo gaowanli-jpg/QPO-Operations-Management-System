@@ -4,7 +4,7 @@
       <div>
         <h1 class="erp-page-title">零件核价</h1>
         <p class="erp-page-description">
-          先选择待核价订单，核对图纸和零件清单，再设置整单默认材料、形态和通用工艺路线。
+          先选择未核价订单，核对图纸和零件清单，再设置整单默认材料、形态和通用工艺路线。
         </p>
       </div>
       <div class="erp-page-actions engineering-header-actions">

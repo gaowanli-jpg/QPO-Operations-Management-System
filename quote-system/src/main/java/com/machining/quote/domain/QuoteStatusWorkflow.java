@@ -44,6 +44,10 @@ public final class QuoteStatusWorkflow {
         return QUOTED.equals(status);
     }
 
+    public static boolean canGenerateDeliveryTicket(String status) {
+        return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status);
+    }
+
     public static boolean isLegacyUnpricedStatus(String status) {
         return LEGACY_UNPRICED.contains(status);
     }

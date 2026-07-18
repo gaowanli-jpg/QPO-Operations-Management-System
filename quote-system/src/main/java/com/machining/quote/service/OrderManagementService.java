@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -210,7 +211,7 @@ public class OrderManagementService {
                     continue;
                 }
                 item.setDrawingUrl(fileUrl);
-                item.setStatus("待核价");
+                item.setStatus(QuoteStatusWorkflow.UNPRICED);
                 itemMapper.updateById(item);
                 boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
             }
@@ -449,19 +450,19 @@ public class OrderManagementService {
     private String resolveOrderStatusAfterReset(Integer rfqId) {
         List<ItemQuoteVersion> items = listItems(rfqId);
         if (items.isEmpty()) {
-            return "待工程部评估";
+            return QuoteStatusWorkflow.UNPRICED;
         }
         List<ItemQuoteVersion> drawableItems = items.stream()
                 .filter(item -> !isBlank(item.getDrawingUrl()))
                 .toList();
         if (drawableItems.isEmpty()) {
-            return "待工程部评估";
+            return QuoteStatusWorkflow.UNPRICED;
         }
         boolean allQuoted = drawableItems.stream().allMatch(item -> item.getFinalUnitPrice() != null);
         if (allQuoted) {
-            return "已报价";
+            return QuoteStatusWorkflow.QUOTED;
         }
-        return "待工程部评估";
+        return QuoteStatusWorkflow.UNPRICED;
     }
 
     private OrderRfq requireOrder(Integer rfqId) {

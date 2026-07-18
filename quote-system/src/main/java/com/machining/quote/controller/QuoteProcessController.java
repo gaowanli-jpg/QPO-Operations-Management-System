@@ -44,4 +44,10 @@ public class QuoteProcessController {
     public Map<String, Object> updateLeadTime(@RequestBody QuoteLeadTimeUpdateReq req) {
         return quoteProcessService.updateLeadTime(req);
     }
+
+    @PostMapping("/{rfqId}/save-quote")
+    @RequirePermission("market:quote-process:save-quote")
+    public Map<String, Object> saveQuoteSheet(@PathVariable Integer rfqId) {
+        return quoteProcessService.saveQuoteSheet(rfqId);
+    }
 }

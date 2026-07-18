@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
@@ -24,7 +25,6 @@ import java.util.Map;
 @Service
 public class QuoteProcessService {
     private static final Logger log = LoggerFactory.getLogger(QuoteProcessService.class);
-    private static final String QUOTED_STATUS = "已报价";
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -38,7 +38,7 @@ public class QuoteProcessService {
     private DataScopeService dataScopeService;
 
     public Map<String, Object> getQuoteProcess(Integer rfqId) {
-        OrderRfq order = requireQuotedOrder(rfqId);
+        OrderRfq order = requireQuoteProcessReadableOrder(rfqId);
         List<ItemQuoteVersion> items = listItems(rfqId);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -49,7 +49,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> shiftLeadTimes(QuoteLeadTimeShiftReq req) {
-        requireQuotedOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -96,7 +96,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> setLeadTimes(QuoteLeadTimeSetReq req) {
-        requireQuotedOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -135,7 +135,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> updateLeadTime(QuoteLeadTimeUpdateReq req) {
-        requireQuotedOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
         if (req.getItemId() == null) {
             throw new RuntimeException("零件 ID 不能为空");
         }
@@ -160,7 +160,69 @@ public class QuoteProcessService {
         return result;
     }
 
-    private OrderRfq requireQuotedOrder(Integer rfqId) {
+    @Transactional
+    public Map<String, Object> saveQuoteSheet(Integer rfqId) {
+        long startedAt = System.currentTimeMillis();
+        OrderRfq order = requireQuoteProcessSavableOrderForUpdate(rfqId);
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        if (items.isEmpty()) {
+            throw new RuntimeException("订单没有零件，不能保存报价单");
+        }
+
+        List<String> unpricedItems = items.stream()
+                .filter(this::hasDrawing)
+                .filter(item -> item.getFinalUnitPrice() == null)
+                .map(this::itemLabel)
+                .toList();
+        if (!unpricedItems.isEmpty()) {
+            throw new RuntimeException("订单存在未核价零件，不能保存报价单：" + String.join("、", unpricedItems));
+        }
+
+        List<String> missingLeadTimes = items.stream()
+                .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
+                .map(this::itemLabel)
+                .toList();
+        if (!missingLeadTimes.isEmpty()) {
+            throw new RuntimeException("以下零件缺少报价交期，不能保存报价单：" + String.join("、", missingLeadTimes));
+        }
+
+        Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size());
+        order.setStatus(QuoteStatusWorkflow.nextAfterMarketSaveQuote(order.getStatus()));
+        orderRfqMapper.updateById(order);
+        OrderRfq savedOrder = orderRfqMapper.selectById(order.getId());
+        Map<String, Object> after = quoteSheetSummary(savedOrder, items, 0);
+        auditService.record(
+                "QUOTE_PROCESS_SAVE_QUOTE",
+                "order_rfq",
+                order.getId(),
+                before,
+                after,
+                "QUOTE_PROCESS",
+                "SUCCESS",
+                "保存报价单：RFQ " + safe(savedOrder.getRfqNo()) + "，零件 " + items.size() + " 个",
+                null
+        );
+        log.info("Quote sheet save completed rfqId={} fromStatus={} toStatus={} itemCount={} durationMs={}",
+                rfqId, before.get("status"), savedOrder.getStatus(), items.size(), System.currentTimeMillis() - startedAt);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("orderInfo", savedOrder);
+        result.put("itemList", items.stream().map(this::buildItemRow).toList());
+        return result;
+    }
+
+    public void assertQuoteExportable(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        if (!QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())) {
+            if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
+                throw new RuntimeException("请先在报价处理模块保存报价单后再导出");
+            }
+            throw new RuntimeException("只有已报价订单可以导出报价单");
+        }
+    }
+
+    private OrderRfq requireOrder(Integer rfqId) {
         if (rfqId == null) {
             throw new RuntimeException("RFQ ID 不能为空");
         }
@@ -169,13 +231,10 @@ public class QuoteProcessService {
             throw new RuntimeException("RFQ 订单不存在");
         }
         assertOrderDataScope(order);
-        if (!QUOTED_STATUS.equals(order.getStatus())) {
-            throw new RuntimeException("只有已报价订单可以处理报价单");
-        }
         return order;
     }
 
-    private OrderRfq requireQuotedOrderForUpdate(Integer rfqId) {
+    private OrderRfq requireOrderForUpdate(Integer rfqId) {
         if (rfqId == null) {
             throw new RuntimeException("RFQ ID 不能为空");
         }
@@ -184,8 +243,43 @@ public class QuoteProcessService {
             throw new RuntimeException("RFQ 订单不存在");
         }
         assertOrderDataScope(order);
-        if (!QUOTED_STATUS.equals(order.getStatus())) {
-            throw new RuntimeException("只有已报价订单可以处理报价单");
+        return order;
+    }
+
+    private OrderRfq requireQuoteProcessReadableOrder(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        if (!QuoteStatusWorkflow.canReadQuoteProcess(order.getStatus())) {
+            throw new RuntimeException("只有已核价或已报价订单可以处理报价单");
+        }
+        return order;
+    }
+
+    private OrderRfq requireQuoteProcessEditableOrderForUpdate(Integer rfqId) {
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
+            if (QuoteStatusWorkflow.QUOTED.equals(order.getStatus())) {
+                throw new RuntimeException("已报价订单交期已锁定，不能修改报价交期");
+            }
+            throw new RuntimeException("只有已核价订单可以维护报价交期");
+        }
+        return order;
+    }
+
+    private OrderRfq requireQuoteProcessSavableOrderForUpdate(Integer rfqId) {
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        if (!QuoteStatusWorkflow.canSaveQuoteSheet(order.getStatus())) {
+            if (QuoteStatusWorkflow.QUOTED.equals(order.getStatus())) {
+                throw new RuntimeException("该订单已保存报价单，不能重复保存");
+            }
+            if (QuoteStatusWorkflow.UNPRICED.equals(order.getStatus())
+                    || QuoteStatusWorkflow.isLegacyUnpricedStatus(order.getStatus())) {
+                throw new RuntimeException("订单尚未完成核价，不能保存报价单");
+            }
+            if (QuoteStatusWorkflow.PARTIALLY_RELEASED.equals(order.getStatus())
+                    || QuoteStatusWorkflow.RELEASED.equals(order.getStatus())) {
+                throw new RuntimeException("订单已进入提单流程，不能保存报价单");
+            }
+            throw new RuntimeException("只有已核价订单可以保存报价单");
         }
         return order;
     }
@@ -199,6 +293,15 @@ public class QuoteProcessService {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         return itemMapper.selectList(qw);
+    }
+
+    private Map<String, Object> quoteSheetSummary(OrderRfq order, List<ItemQuoteVersion> items, int missingLeadTimeCount) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("status", order == null ? null : order.getStatus());
+        summary.put("rfqNo", order == null ? null : order.getRfqNo());
+        summary.put("itemCount", items == null ? 0 : items.size());
+        summary.put("missingLeadTimeCount", missingLeadTimeCount);
+        return summary;
     }
 
     private Map<String, Object> buildItemRow(ItemQuoteVersion item) {
@@ -235,5 +338,24 @@ public class QuoteProcessService {
         row.put("version", version);
         row.put("reason", reason);
         return row;
+    }
+
+    private boolean hasDrawing(ItemQuoteVersion item) {
+        return item != null && !isBlank(item.getDrawingUrl());
+    }
+
+    private String itemLabel(ItemQuoteVersion item) {
+        if (item == null) {
+            return "-";
+        }
+        return safe(item.getPartNo()) + " / " + safe(item.getVersion());
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

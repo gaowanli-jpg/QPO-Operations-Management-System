@@ -3,6 +3,7 @@ package com.machining.quote.controller;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.RfqExcelDTO;
@@ -332,7 +333,7 @@ public class MarketController {
             OrderRfq newOrder = new OrderRfq();
             newOrder.setRfqNo(autoRfqNo);
             newOrder.setCustomerName(customerName);
-            newOrder.setStatus("待工程部评估");
+            newOrder.setStatus(QuoteStatusWorkflow.UNPRICED);
             if (dataScopeService != null) {
                 dataScopeService.assignCurrentOwnership(newOrder);
             }
@@ -366,7 +367,7 @@ public class MarketController {
                 dbItem.setUnit(item.getUnit());
                 dbItem.setLeadTime(item.getLeadTime());
                 dbItem.setRemark(item.getRemark());
-                dbItem.setStatus("待核价");
+                dbItem.setStatus(QuoteStatusWorkflow.UNPRICED);
 
                 if (matchedDrawingUrl != null) {
                     dbItem.setDrawingUrl(matchedDrawingUrl);

@@ -35,6 +35,8 @@ public class SystemTaskService {
     @Autowired
     private ExcelExportService excelExportService;
     @Autowired
+    private QuoteProcessService quoteProcessService;
+    @Autowired
     @Qualifier("systemTaskExecutor")
     private ThreadPoolTaskExecutor taskExecutor;
     @Autowired
@@ -63,6 +65,7 @@ public class SystemTaskService {
         }
         String safeExportType = exportType == null || exportType.trim().isEmpty() ? "DETAIL" : exportType.trim().toUpperCase();
         assertOrderDataScope(rfqId);
+        quoteProcessService.assertQuoteExportable(rfqId);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("rfqId", rfqId);
         request.put("exportType", safeExportType);

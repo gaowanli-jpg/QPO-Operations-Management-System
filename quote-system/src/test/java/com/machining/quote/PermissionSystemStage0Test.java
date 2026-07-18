@@ -39,7 +39,7 @@ class PermissionSystemStage0Test {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java");
     private static final Path CONTROLLER_DIR = MAIN_JAVA.resolve(Path.of("com", "machining", "quote", "controller"));
     private static final Path MAPPING_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
-    private static final Pattern PERMISSION_CODE = Pattern.compile("`([a-z]+:[a-z0-9-]+:[a-z0-9-]+)`");
+    private static final Pattern PERMISSION_CATALOG_ROW = Pattern.compile("^\\| `([a-z]+:[a-z0-9-]+:[a-z0-9-]+)` \\|");
     private static final Pattern REQUIRE_ROLE = Pattern.compile("@RequireRole\\(\\{([^}]*)}\\)");
 
     @AfterEach
@@ -50,10 +50,12 @@ class PermissionSystemStage0Test {
     @Test
     void permissionCatalogFreezesUniquePermissionCodes() throws IOException {
         String doc = readMappingDoc();
-        Matcher matcher = PERMISSION_CODE.matcher(doc);
         List<String> codes = new ArrayList<>();
-        while (matcher.find()) {
-            codes.add(matcher.group(1));
+        for (String line : doc.split("\\R")) {
+            Matcher matcher = PERMISSION_CATALOG_ROW.matcher(line);
+            if (matcher.find()) {
+                codes.add(matcher.group(1));
+            }
         }
 
         Set<String> seen = new HashSet<>();
@@ -64,7 +66,7 @@ class PermissionSystemStage0Test {
             }
         }
 
-        assertThat(doc).contains("权限清单冻结版本：Stage 0");
+        assertThat(doc).contains("权限清单冻结版本：Stage 8.6 授权树收口版");
         assertThat(codes)
                 .as("Stage 0 must freeze the target permission catalog before RBAC migrations start")
                 .contains(

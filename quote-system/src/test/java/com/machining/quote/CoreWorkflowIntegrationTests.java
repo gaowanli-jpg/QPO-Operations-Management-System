@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
@@ -156,7 +157,7 @@ class CoreWorkflowIntegrationTests {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("QUOTE-DATE-" + System.nanoTime());
         order.setCustomerName("报价交期客户");
-        order.setStatus("已报价");
+        order.setStatus(QuoteStatusWorkflow.PRICED);
         orderMapper.insert(order);
 
         ItemQuoteVersion item = quotedItem(order, "QD-100");
@@ -190,7 +191,7 @@ class CoreWorkflowIntegrationTests {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("QUOTE-BAD-DATE-" + System.nanoTime());
         order.setCustomerName("报价非法日期客户");
-        order.setStatus("已报价");
+        order.setStatus(QuoteStatusWorkflow.PRICED);
         orderMapper.insert(order);
 
         ItemQuoteVersion item = quotedItem(order, "QBAD-100");
@@ -326,7 +327,7 @@ class CoreWorkflowIntegrationTests {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("ORDER-SEQUENCE-" + System.nanoTime());
         order.setCustomerName("ORDER-SEQUENCE-CUSTOMER");
-        order.setStatus("QUOTED");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);
 
         ItemQuoteVersion first = quotedItem(order, "SEQ-A");
@@ -358,7 +359,7 @@ class CoreWorkflowIntegrationTests {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("APS-MAT-" + System.nanoTime());
         order.setCustomerName("APS-MAT-CUSTOMER");
-        order.setStatus("QUOTED");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);
 
         String engineeringMaterial = "ENG-MATERIAL-" + System.nanoTime();
@@ -603,7 +604,7 @@ class CoreWorkflowIntegrationTests {
         assertThat(savedOrder.getStatus()).isEqualTo("待工程部评估");
 
         engineerService.completeOrderQuote(currentOrder.getId());
-        assertThat(orderMapper.selectById(currentOrder.getId()).getStatus()).isEqualTo("已报价");
+        assertThat(orderMapper.selectById(currentOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
     }
 
     private ItemQuoteVersion quotedItem(OrderRfq order, String partNo) {

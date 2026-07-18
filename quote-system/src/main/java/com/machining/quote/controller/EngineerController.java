@@ -63,7 +63,7 @@ public class EngineerController {
     @RequirePermission("engineer:pricing:complete-order")
     public Map<String, Object> completeOrderQuote(@PathVariable Integer rfqId) {
         engineerService.completeOrderQuote(rfqId);
-        return Map.of("success", true, "message", "订单报价已完成，状态已更新为已报价");
+        return Map.of("success", true, "message", "订单核价已完成，已进入报价处理");
     }
 
     @PostMapping("/refresh-quotes/{rfqId}")

@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -64,6 +65,12 @@ public class DeliveryService {
         }
 
         assertOrderDataScope(order);
+        if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
+            if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
+                throw new RuntimeException("请先在报价处理模块保存报价单后再生成提单");
+            }
+            throw new RuntimeException("只有已报价订单可以生成提单");
+        }
         LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
         String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
         String internalProjectNo = req.getInternalProjectNo() == null ? "" : req.getInternalProjectNo().trim();
@@ -308,7 +315,7 @@ public class DeliveryService {
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(qw);
         int generatedQty = tickets.stream().mapToInt(ticket -> safeInt(ticket.getQty())).sum();
         if (generatedQty <= 0) {
-            item.setStatus(item.getFinalUnitPrice() == null ? "待核价" : "已报价");
+            item.setStatus(item.getFinalUnitPrice() == null ? QuoteStatusWorkflow.UNPRICED : QuoteStatusWorkflow.QUOTED);
         } else if (generatedQty < safeInt(item.getQty())) {
             item.setStatus("已部分提单");
         } else {
@@ -330,7 +337,7 @@ public class DeliveryService {
         itemQw.eq("rfq_id", rfqId).orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(itemQw);
         if (items.isEmpty()) {
-            order.setStatus("待工程部评估");
+            order.setStatus(QuoteStatusWorkflow.UNPRICED);
             orderRfqMapper.updateById(order);
             return;
         }
@@ -379,13 +386,13 @@ public class DeliveryService {
                 .filter(item -> !isBlank(item.getDrawingUrl()))
                 .toList();
         if (drawableItems.isEmpty()) {
-            return "待工程部评估";
+            return QuoteStatusWorkflow.UNPRICED;
         }
         boolean allQuoted = drawableItems.stream().allMatch(item -> item.getFinalUnitPrice() != null);
         if (allQuoted) {
-            return "已报价";
+            return QuoteStatusWorkflow.QUOTED;
         }
-        return "待工程部评估";
+        return QuoteStatusWorkflow.UNPRICED;
     }
 
     private void insertProcessSheet(ItemQuoteVersion item, int acceptedQty, LocalDate deliveryDate, String internalProjectNo) {
