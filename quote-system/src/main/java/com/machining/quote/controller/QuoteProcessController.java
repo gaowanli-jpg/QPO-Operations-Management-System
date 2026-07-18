@@ -1,6 +1,6 @@
 package com.machining.quote.controller;
 
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
@@ -16,28 +16,31 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequireRole({"MARKET", "ADMIN"})
 @RequestMapping("/api/market/quote-process")
 public class QuoteProcessController {
     @Autowired
     private QuoteProcessService quoteProcessService;
 
     @GetMapping("/{rfqId}")
+    @RequirePermission("market:quote-process:view")
     public Map<String, Object> getQuoteProcess(@PathVariable Integer rfqId) {
         return quoteProcessService.getQuoteProcess(rfqId);
     }
 
     @PostMapping("/lead-time/shift")
+    @RequirePermission("market:quote-process:update-lead-time")
     public Map<String, Object> shiftLeadTimes(@RequestBody QuoteLeadTimeShiftReq req) {
         return quoteProcessService.shiftLeadTimes(req);
     }
 
     @PostMapping("/lead-time/set")
+    @RequirePermission("market:quote-process:update-lead-time")
     public Map<String, Object> setLeadTimes(@RequestBody QuoteLeadTimeSetReq req) {
         return quoteProcessService.setLeadTimes(req);
     }
 
     @PostMapping("/lead-time/update")
+    @RequirePermission("market:quote-process:update-lead-time")
     public Map<String, Object> updateLeadTime(@RequestBody QuoteLeadTimeUpdateReq req) {
         return quoteProcessService.updateLeadTime(req);
     }

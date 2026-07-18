@@ -2,7 +2,7 @@ package com.machining.quote.controller;
 
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.RfqExcelDTO;
@@ -41,7 +41,6 @@ import java.util.Set;
 import java.util.UUID;
 
 @RestController
-@RequireRole({"MARKET", "ADMIN"})
 @RequestMapping("/api/market")
 public class MarketController {
     private static final Logger log = LoggerFactory.getLogger(MarketController.class);
@@ -74,7 +73,7 @@ public class MarketController {
     private AuditService auditService;
 
     @GetMapping("/orders")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("common:order:select")
     public PageResult<OrderRfq> listOrders(
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
@@ -85,68 +84,75 @@ public class MarketController {
     }
 
     @GetMapping("/tickets/{rfqId}")
+    @RequirePermission("market:release:view")
     public List<OrderDeliveryTicket> listDeliveryTickets(@PathVariable Integer rfqId) {
         return deliveryService.listTickets(rfqId);
     }
 
     @GetMapping("/process-sheets/{rfqId}")
+    @RequirePermission("market:release:view")
     public List<OrderProcessSheet> listProcessSheets(@PathVariable Integer rfqId) {
         return deliveryService.listProcessSheets(rfqId);
     }
 
     @DeleteMapping("/tickets/{ticketId}")
+    @RequirePermission("market:release:reset")
     public Map<String, Object> deleteDeliveryTicket(@PathVariable Integer ticketId) {
         deliveryService.deleteTicket(ticketId);
         return Map.of("success", true, "message", "提单行已删除");
     }
 
     @DeleteMapping("/process-sheets/{sheetId}")
+    @RequirePermission("market:release:reset")
     public Map<String, Object> deleteProcessSheet(@PathVariable Integer sheetId) {
         deliveryService.deleteProcessSheet(sheetId);
         return Map.of("success", true, "message", "工艺表行已删除");
     }
 
     @GetMapping("/export/tickets/{rfqId}")
+    @RequirePermission("market:release:view")
     public void exportDeliveryTickets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         excelExportService.exportDeliveryTickets(rfqId, response);
     }
 
     @GetMapping("/export/process-sheets/{rfqId}")
+    @RequirePermission("market:release:view")
     public void exportProcessSheets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         excelExportService.exportProcessSheets(rfqId, response);
     }
 
     @GetMapping("/export/quote/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("market:quote-process:export")
     public void exportQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         excelExportService.exportQuoteSheet(rfqId, response);
     }
 
     @GetMapping("/export/quote/simple/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("market:quote-process:export")
     public void exportSimpleQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         excelExportService.exportSimpleQuoteSheet(rfqId, response);
     }
 
     @GetMapping("/export/quote/template/detail/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("market:quote-process:export")
     public void exportTemplateQuoteDetail(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         quoteTemplateExportService.exportTemplateQuoteDetail(rfqId, response);
     }
 
     @GetMapping("/export/quote/template/simple/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("market:quote-process:export")
     public void exportTemplateQuoteSimple(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         quoteTemplateExportService.exportTemplateQuoteSimple(rfqId, response);
     }
 
     @GetMapping("/export/quote/customer-lead-time/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("market:quote-process:export")
     public void exportCustomerLeadTimeQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         excelExportService.exportCustomerLeadTimeQuoteSheet(rfqId, response);
     }
 
     @PostMapping("/generate-ticket")
+    @RequirePermission("market:release:create")
     public Map<String, Object> generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {
         Map<String, Object> result = new HashMap<>();
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
@@ -157,7 +163,7 @@ public class MarketController {
     }
 
     @GetMapping("/summary/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("common:order:select")
     public Map<String, Object> getQuoteSummary(@PathVariable Integer rfqId) {
         OrderRfq order = orderRfqMapper.selectById(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
@@ -171,6 +177,7 @@ public class MarketController {
     }
 
     @PostMapping("/parse-part-selection")
+    @RequirePermission("market:release:create")
     public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
         try {
             List<Map<Integer, String>> rows = EasyExcel.read(excelFile.getInputStream())
@@ -243,6 +250,7 @@ public class MarketController {
     }
 
     @PostMapping("/import-rfq")
+    @RequirePermission("market:rfq:import")
     @Transactional
     public Map<String, Object> importRfq(
             @RequestParam("customerName") String customerName,

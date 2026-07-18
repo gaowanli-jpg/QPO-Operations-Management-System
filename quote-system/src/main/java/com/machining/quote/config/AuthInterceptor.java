@@ -1,7 +1,9 @@
 package com.machining.quote.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.dto.PermissionInfoDTO;
 import com.machining.quote.service.AuthService;
+import com.machining.quote.service.PermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Autowired
     private AuthService authService;
 
+    @Autowired(required = false)
+    private PermissionService permissionService;
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         AuthContext.clear();
@@ -57,6 +62,13 @@ public class AuthInterceptor implements HandlerInterceptor {
 
         if (authService.mustChangePassword(user.id()) && !isPasswordChangeAllowedPath(request.getRequestURI())) {
             writeError(response, 428, "请先修改初始密码");
+            return false;
+        }
+
+        RequirePermission requirePermission = resolveRequirePermission(handler);
+        if (requirePermission != null && !hasPermission(user, requirePermission.value())) {
+            AuthContext.clear();
+            writeError(response, HttpServletResponse.SC_FORBIDDEN, "当前账号没有该操作权限");
             return false;
         }
 
@@ -113,6 +125,17 @@ public class AuthInterceptor implements HandlerInterceptor {
         return request.getHeader("X-Auth-Token");
     }
 
+    private RequirePermission resolveRequirePermission(Object handler) {
+        if (!(handler instanceof HandlerMethod handlerMethod)) {
+            return null;
+        }
+        RequirePermission methodPermission = handlerMethod.getMethodAnnotation(RequirePermission.class);
+        if (methodPermission != null) {
+            return methodPermission;
+        }
+        return handlerMethod.getBeanType().getAnnotation(RequirePermission.class);
+    }
+
     private RequireRole resolveRequireRole(Object handler) {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return null;
@@ -122,6 +145,20 @@ public class AuthInterceptor implements HandlerInterceptor {
             return methodRole;
         }
         return handlerMethod.getBeanType().getAnnotation(RequireRole.class);
+    }
+
+    private boolean hasPermission(AuthContext.SessionUser user, String[] permissions) {
+        PermissionInfoDTO info = permissionService == null ? null : permissionService.getPermissionInfo(user.id(), user.role());
+        if (info != null && info.isSuperAdmin()) {
+            return true;
+        }
+        if ("ADMIN".equalsIgnoreCase(user.role())) {
+            return true;
+        }
+        if (info == null || info.getPermissions() == null) {
+            return false;
+        }
+        return Arrays.stream(permissions).anyMatch(info.getPermissions()::contains);
     }
 
     private boolean hasRole(AuthContext.SessionUser user, String[] roles) {

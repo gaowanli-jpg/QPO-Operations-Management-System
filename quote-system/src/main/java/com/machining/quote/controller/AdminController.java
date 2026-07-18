@@ -1,6 +1,6 @@
 package com.machining.quote.controller;
 
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PasswordChangeReq;
 import com.machining.quote.dto.UserSaveReq;
 import com.machining.quote.service.QuoteTemplateService;
@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequireRole({"ADMIN"})
 @RequestMapping("/api/admin")
 public class AdminController {
     @Autowired
@@ -30,39 +29,44 @@ public class AdminController {
     private QuoteTemplateService quoteTemplateService;
 
     @GetMapping("/users")
+    @RequirePermission("system:user:view")
     public List<Map<String, Object>> listUsers() {
         return userAdminService.listUsers();
     }
 
     @PostMapping("/users")
+    @RequirePermission("system:user:create")
     public Map<String, Object> createUser(@RequestBody UserSaveReq req) {
         return Map.of("success", true, "message", "用户已创建", "data", userAdminService.createUser(req));
     }
 
     @PutMapping("/users/{id}")
+    @RequirePermission("system:user:update")
     public Map<String, Object> updateUser(@PathVariable Integer id, @RequestBody UserSaveReq req) {
         return Map.of("success", true, "message", "用户已更新", "data", userAdminService.updateUser(id, req));
     }
 
     @PutMapping("/users/me/password")
-    @RequireRole({"ADMIN", "MARKET", "ENGINEER"})
     public Map<String, Object> changeMyPassword(@RequestBody PasswordChangeReq req) {
         userAdminService.changeMyPassword(req);
         return Map.of("success", true, "message", "密码已修改");
     }
 
     @DeleteMapping("/users/{id}")
+    @RequirePermission("system:user:delete")
     public Map<String, Object> deleteUser(@PathVariable Integer id) {
         userAdminService.deleteUser(id);
         return Map.of("success", true, "message", "用户已删除");
     }
 
     @GetMapping("/quote-template")
+    @RequirePermission("market:template:view")
     public Map<String, Object> quoteTemplateStatus() {
         return quoteTemplateService.status();
     }
 
     @PostMapping("/quote-template")
+    @RequirePermission("market:template:upload")
     public Map<String, Object> uploadQuoteTemplate(@RequestParam("templateFile") MultipartFile templateFile) {
         return Map.of("success", true, "message", "报价单模板已更新", "data", quoteTemplateService.uploadTemplate(templateFile));
     }

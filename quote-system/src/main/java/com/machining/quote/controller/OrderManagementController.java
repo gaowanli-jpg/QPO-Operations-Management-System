@@ -1,6 +1,6 @@
 package com.machining.quote.controller;
 
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.OrderManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,13 +12,13 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequireRole({"MARKET", "ADMIN"})
 @RequestMapping("/api/order-management")
 public class OrderManagementController {
     @Autowired
     private OrderManagementService orderManagementService;
 
     @GetMapping("/orders")
+    @RequirePermission("market:order:view")
     public PageResult<Map<String, Object>> listOrders(
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
@@ -29,23 +29,26 @@ public class OrderManagementController {
     }
 
     @GetMapping("/orders/{rfqId}")
+    @RequirePermission("market:order:view")
     public Map<String, Object> getOrderDetail(@PathVariable Integer rfqId) {
         return orderManagementService.getOrderDetail(rfqId);
     }
 
     @GetMapping("/customers")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("common:customer:select")
     public List<String> listCustomers() {
         return orderManagementService.listCustomers();
     }
 
     @PostMapping("/orders/{rfqId}/reset-production")
+    @RequirePermission("market:order:delete")
     public Map<String, Object> resetProductionData(@PathVariable Integer rfqId) {
         orderManagementService.resetProductionData(rfqId);
         return Map.of("success", true, "message", "订单提单和工艺表已重置");
     }
 
     @PostMapping(value = "/orders/{rfqId}/supplement-drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:order:supplement-drawing")
     public Map<String, Object> supplementDrawings(
             @PathVariable Integer rfqId,
             @RequestParam("drawings") List<MultipartFile> drawings) {
@@ -53,7 +56,7 @@ public class OrderManagementController {
     }
 
     @DeleteMapping("/orders/{rfqId}")
-    @RequireRole({"MARKET", "ADMIN"})
+    @RequirePermission("market:order:delete")
     public Map<String, Object> deleteOrder(
             @PathVariable Integer rfqId,
             @RequestParam(value = "deleteFiles", defaultValue = "true") boolean deleteFiles) {

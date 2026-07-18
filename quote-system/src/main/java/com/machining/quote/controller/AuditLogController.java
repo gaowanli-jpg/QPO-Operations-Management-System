@@ -1,6 +1,6 @@
 package com.machining.quote.controller;
 
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.AuditLogDTO;
 import com.machining.quote.dto.AuditLogQueryReq;
 import com.machining.quote.dto.AuditLogRetentionConfigDTO;
@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
-@RequireRole({"ADMIN"})
 @RequestMapping("/api/admin/audit-logs")
 public class AuditLogController {
     @Autowired
@@ -35,11 +34,13 @@ public class AuditLogController {
     private AuditLogRetentionService auditLogRetentionService;
 
     @GetMapping
+    @RequirePermission("system:audit:view")
     public PageResult<AuditLogDTO> listLogs(@ModelAttribute AuditLogQueryReq req) {
         return auditLogQueryService.listLogs(req);
     }
 
     @GetMapping("/export")
+    @RequirePermission("system:audit:export")
     public void export(@ModelAttribute AuditLogQueryReq req, HttpServletResponse response) throws IOException {
         byte[] csvBytes = auditLogQueryService.exportCsv(req);
         response.setContentType("text/csv;charset=UTF-8");
@@ -50,16 +51,19 @@ public class AuditLogController {
     }
 
     @GetMapping("/retention")
+    @RequirePermission("system:audit:retention")
     public AuditLogRetentionConfigDTO retentionSetting() {
         return auditLogRetentionService.getSetting();
     }
 
     @PutMapping("/retention")
+    @RequirePermission("system:audit:retention")
     public Map<String, Object> updateRetentionSetting(@RequestBody AuditLogRetentionConfigReq req) {
         return Map.of("success", true, "message", "操作日志保留策略已更新", "data", auditLogRetentionService.updateSetting(req));
     }
 
     @PostMapping("/retention/run")
+    @RequirePermission("system:audit:retention")
     public Map<String, Object> runRetentionCleanup() {
         AuditLogRetentionRunDTO result = auditLogRetentionService.runCleanupNow();
         Map<String, Object> response = new LinkedHashMap<>();
@@ -70,11 +74,13 @@ public class AuditLogController {
     }
 
     @GetMapping("/{id}")
+    @RequirePermission("system:audit:view")
     public AuditLogDTO detail(@PathVariable Integer id) {
         return auditLogQueryService.detail(id);
     }
 
     @GetMapping("/options")
+    @RequirePermission("system:audit:view")
     public Map<String, Object> options() {
         return auditLogQueryService.options();
     }

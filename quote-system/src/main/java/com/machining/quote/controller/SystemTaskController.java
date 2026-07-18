@@ -1,6 +1,6 @@
 package com.machining.quote.controller;
 
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.SystemTaskService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,7 +28,7 @@ public class SystemTaskController {
     private SystemTaskService systemTaskService;
 
     @PostMapping("/engineer/refresh-quotes/{rfqId}")
-    @RequireRole({"ENGINEER", "ADMIN"})
+    @RequirePermission("engineer:pricing:refresh")
     public Map<String, Object> refreshQuotesAsync(@PathVariable Integer rfqId) {
         SystemTask task = systemTaskService.submitRefreshQuotesTask(rfqId);
         return Map.of(
@@ -39,7 +39,7 @@ public class SystemTaskController {
     }
 
     @PostMapping("/market/export-quote/{rfqId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("market:quote-process:export")
     public Map<String, Object> exportQuoteAsync(
             @PathVariable Integer rfqId,
             @RequestParam(value = "exportType", defaultValue = "DETAIL") String exportType) {
@@ -52,13 +52,13 @@ public class SystemTaskController {
     }
 
     @GetMapping("/{taskId}")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("common:task:view")
     public SystemTask getTask(@PathVariable Long taskId) {
         return systemTaskService.getTask(taskId);
     }
 
     @GetMapping("/{taskId}/download")
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("common:task:view")
     public void downloadTaskFile(@PathVariable Long taskId, HttpServletResponse response) throws IOException {
         Path file = systemTaskService.getTaskFile(taskId);
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
@@ -69,7 +69,7 @@ public class SystemTaskController {
     }
 
     @GetMapping
-    @RequireRole({"MARKET", "ENGINEER", "ADMIN"})
+    @RequirePermission("common:task:view")
     public List<SystemTask> recentTasks(
             @RequestParam(value = "taskType", required = false) String taskType,
             @RequestParam(value = "limit", required = false) Integer limit) {

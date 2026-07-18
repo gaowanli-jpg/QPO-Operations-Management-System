@@ -1,7 +1,7 @@
 package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequireRole({"ENGINEER", "ADMIN"})
 @RequestMapping("/api/dict")
 public class DictController {
     @Autowired
@@ -33,6 +32,7 @@ public class DictController {
     private AuditService auditService;
 
     @GetMapping("/materials")
+    @RequirePermission("engineer:dict:view")
     public List<DictMaterial> listMaterials() {
         QueryWrapper<DictMaterial> qw = new QueryWrapper<>();
         qw.orderByAsc("material_name");
@@ -40,6 +40,7 @@ public class DictController {
     }
 
     @PostMapping("/materials")
+    @RequirePermission("engineer:dict:material-manage")
     public Map<String, Object> createMaterial(@RequestBody DictMaterial material) {
         normalizeMaterial(material);
         materialMapper.insert(material);
@@ -48,6 +49,7 @@ public class DictController {
     }
 
     @PutMapping("/materials/{id}")
+    @RequirePermission("engineer:dict:material-manage")
     public Map<String, Object> updateMaterial(@PathVariable Integer id, @RequestBody DictMaterial material) {
         DictMaterial before = materialMapper.selectById(id);
         material.setId(id);
@@ -58,6 +60,7 @@ public class DictController {
     }
 
     @DeleteMapping("/materials/{id}")
+    @RequirePermission("engineer:dict:material-manage")
     public Map<String, Object> deleteMaterial(@PathVariable Integer id) {
         DictMaterial before = materialMapper.selectById(id);
         materialMapper.deleteById(id);
@@ -66,6 +69,7 @@ public class DictController {
     }
 
     @GetMapping("/processes")
+    @RequirePermission("engineer:dict:view")
     public List<DictProcess> listProcesses() {
         QueryWrapper<DictProcess> qw = new QueryWrapper<>();
         qw.orderByAsc("sort_no").orderByAsc("id");
@@ -73,6 +77,7 @@ public class DictController {
     }
 
     @PostMapping("/processes")
+    @RequirePermission("engineer:dict:process-manage")
     public Map<String, Object> createProcess(@RequestBody DictProcess process) {
         normalizeProcess(process);
         processMapper.insert(process);
@@ -81,6 +86,7 @@ public class DictController {
     }
 
     @PutMapping("/processes/{id}")
+    @RequirePermission("engineer:dict:process-manage")
     public Map<String, Object> updateProcess(@PathVariable Integer id, @RequestBody DictProcess process) {
         DictProcess before = processMapper.selectById(id);
         process.setId(id);
@@ -91,6 +97,7 @@ public class DictController {
     }
 
     @DeleteMapping("/processes/{id}")
+    @RequirePermission("engineer:dict:process-manage")
     public Map<String, Object> deleteProcess(@PathVariable Integer id) {
         DictProcess before = processMapper.selectById(id);
         processMapper.deleteById(id);
@@ -99,6 +106,7 @@ public class DictController {
     }
 
     @GetMapping("/markup-fees")
+    @RequirePermission("engineer:dict:view")
     public List<DictMarkupFee> listMarkupFees() {
         QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
         qw.orderByAsc("sort_no").orderByAsc("id");
@@ -106,6 +114,7 @@ public class DictController {
     }
 
     @PostMapping("/markup-fees")
+    @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> createMarkupFee(@RequestBody DictMarkupFee fee) {
         normalizeMarkupFee(fee);
         markupFeeMapper.insert(fee);
@@ -114,6 +123,7 @@ public class DictController {
     }
 
     @PutMapping("/markup-fees/{id}")
+    @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> updateMarkupFee(@PathVariable Integer id, @RequestBody DictMarkupFee fee) {
         DictMarkupFee before = markupFeeMapper.selectById(id);
         fee.setId(id);
@@ -124,6 +134,7 @@ public class DictController {
     }
 
     @DeleteMapping("/markup-fees/{id}")
+    @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> deleteMarkupFee(@PathVariable Integer id) {
         DictMarkupFee before = markupFeeMapper.selectById(id);
         markupFeeMapper.deleteById(id);
@@ -132,6 +143,7 @@ public class DictController {
     }
 
     @GetMapping("/extra-fee-items")
+    @RequirePermission("engineer:dict:view")
     public List<DictExtraFeeItem> listExtraFeeItems() {
         QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
         qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
@@ -139,6 +151,7 @@ public class DictController {
     }
 
     @GetMapping("/extra-fee-items/all")
+    @RequirePermission("engineer:dict:view")
     public List<DictExtraFeeItem> listAllExtraFeeItems() {
         QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
         qw.orderByAsc("sort_no").orderByAsc("id");
@@ -146,6 +159,7 @@ public class DictController {
     }
 
     @PostMapping("/extra-fee-items")
+    @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> createExtraFeeItem(@RequestBody DictExtraFeeItem item) {
         normalizeExtraFeeItem(item);
         extraFeeItemMapper.insert(item);
@@ -154,6 +168,7 @@ public class DictController {
     }
 
     @PutMapping("/extra-fee-items/{id}")
+    @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> updateExtraFeeItem(@PathVariable Integer id, @RequestBody DictExtraFeeItem item) {
         DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
         item.setId(id);
@@ -164,6 +179,7 @@ public class DictController {
     }
 
     @DeleteMapping("/extra-fee-items/{id}")
+    @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> deleteExtraFeeItem(@PathVariable Integer id) {
         DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
         extraFeeItemMapper.deleteById(id);

@@ -1,6 +1,6 @@
 package com.machining.quote.controller;
 
-import com.machining.quote.config.RequireRole;
+import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.aps.ApsDeliveryItemBatchDTO;
 import com.machining.quote.dto.aps.ApsProcessDTO;
 import com.machining.quote.service.ApsSourceService;
@@ -14,7 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/aps/source")
-@RequireRole({"ADMIN", "MARKET", "ENGINEER"})
+@RequirePermission("common:task:view")
 public class ApsSourceController {
     @Autowired
     private ApsSourceService apsSourceService;
