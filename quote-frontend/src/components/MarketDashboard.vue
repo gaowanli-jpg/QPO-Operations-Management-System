@@ -16,7 +16,7 @@
         <div class="form-box step-panel">
           <el-form :model="rfqForm" label-width="120px" class="customer-form">
             <el-row :gutter="20" justify="center">
-              <el-col :xs="24" :sm="20" :md="16" :lg="14">
+              <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
                 <el-form-item label="客户名称/代码" required>
                   <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为">
                     <template #append>
@@ -404,6 +404,10 @@ const submitRfqPackage = async () => {
   margin-bottom: 0;
 }
 
+.customer-input-col {
+  max-width: 560px;
+}
+
 .existing-customer-button {
   min-width: 112px;
 }
@@ -514,6 +518,10 @@ const submitRfqPackage = async () => {
 .submit-btn { width: auto; min-width: 260px; font-size: 14px; font-weight: 700; }
 
 @media (max-width: 900px) {
+  .customer-input-col {
+    max-width: 100%;
+  }
+
   .submit-footer {
     flex-direction: column;
     align-items: stretch;

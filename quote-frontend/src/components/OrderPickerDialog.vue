@@ -3,13 +3,15 @@
     <div class="picker-step">
       <div class="step-title">1. 选择客户</div>
       <el-button class="customer-picker-trigger full-width" @click="customerPickerVisible = true">
-        <span
-          :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
-          :title="selectedCustomer || '请选择客户名称'"
-        >
-          {{ selectedCustomer || '请选择客户名称' }}
+        <span class="customer-picker-content">
+          <span
+            :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
+            :title="selectedCustomer || '请选择客户名称'"
+          >
+            {{ selectedCustomer || '请选择客户名称' }}
+          </span>
+          <span class="customer-picker-action">选择客户</span>
         </span>
-        <span class="customer-picker-action">选择客户</span>
       </el-button>
     </div>
 
@@ -265,8 +267,20 @@ const formatDateTime = (value) => {
 .full-width { width: 100%; }
 .keyword-input { width: 260px; margin-bottom: 10px; }
 .customer-picker-trigger {
-  justify-content: space-between;
   min-height: 40px;
+  padding: 0 12px;
+  text-align: left;
+}
+.customer-picker-trigger :deep(> span) {
+  display: block;
+  width: 100%;
+}
+.customer-picker-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 }
 .customer-picker-text,
 .customer-picker-placeholder {
@@ -282,6 +296,11 @@ const formatDateTime = (value) => {
 }
 .customer-picker-action {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding-left: 12px;
+  border-left: 1px solid var(--erp-border-soft);
   color: var(--erp-primary);
   font-size: 12px;
   font-weight: 700;

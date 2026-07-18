@@ -178,7 +178,7 @@
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />
-              <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
+              <el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
