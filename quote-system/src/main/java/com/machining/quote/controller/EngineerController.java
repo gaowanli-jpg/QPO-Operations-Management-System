@@ -5,6 +5,7 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.service.EngineerService;
+import com.machining.quote.service.DataScopeService;
 import com.machining.quote.dto.QuoteSubmitReq;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +24,9 @@ public class EngineerController {
     @Autowired
     private EngineerService engineerService;
 
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
+
     // ---------------------------------------------
 
     /**
@@ -35,6 +39,9 @@ public class EngineerController {
         // 创建一个查询条件构造器
         QueryWrapper<ItemQuoteVersion> queryWrapper = new QueryWrapper<>();
         // 按照 ID 倒序排列，让最新导入的零件排在最前面
+        if (dataScopeService != null) {
+            dataScopeService.applyRfqScope(queryWrapper, "rfq_id");
+        }
         queryWrapper.orderByDesc("id");
 
         // 去数据库里把符合条件的零件全部查出来并返回

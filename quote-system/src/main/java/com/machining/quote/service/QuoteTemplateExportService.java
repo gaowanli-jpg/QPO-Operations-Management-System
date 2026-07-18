@@ -53,11 +53,14 @@ public class QuoteTemplateExportService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private LeadTimeService leadTimeService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DataFormatter dataFormatter = new DataFormatter();
 
     public void exportTemplateQuoteDetail(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         try (Workbook workbook = quoteTemplateService.openTemplateWorkbook()) {
             writeTemplateQuote(workbook, rfqId, false);
             write(response, workbook, buildFileName(rfqId, "客户模板详细报价单"));
@@ -65,6 +68,7 @@ public class QuoteTemplateExportService {
     }
 
     public void exportTemplateQuoteSimple(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         try (Workbook workbook = quoteTemplateService.openTemplateWorkbook()) {
             simplifyTemplateSheet(workbook.getSheetAt(0));
             writeTemplateQuote(workbook, rfqId, true);
@@ -72,6 +76,11 @@ public class QuoteTemplateExportService {
         }
     }
 
+    private void assertOrderDataScope(Integer rfqId) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
+        }
+    }
     private void writeTemplateQuote(Workbook workbook, Integer rfqId, boolean simpleMode) {
         Sheet sheet = workbook.getSheetAt(0);
         OrderRfq order = orderRfqMapper.selectById(rfqId);

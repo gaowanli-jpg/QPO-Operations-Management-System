@@ -71,13 +71,6 @@ public class AuthInterceptor implements HandlerInterceptor {
             writeError(response, HttpServletResponse.SC_FORBIDDEN, "当前账号没有该操作权限");
             return false;
         }
-
-        RequireRole requireRole = resolveRequireRole(handler);
-        if (requireRole != null && !hasRole(user, requireRole.value())) {
-            AuthContext.clear();
-            writeError(response, HttpServletResponse.SC_FORBIDDEN, "当前账号没有该操作权限");
-            return false;
-        }
         return true;
     }
 
@@ -135,24 +128,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         return handlerMethod.getBeanType().getAnnotation(RequirePermission.class);
     }
-
-    private RequireRole resolveRequireRole(Object handler) {
-        if (!(handler instanceof HandlerMethod handlerMethod)) {
-            return null;
-        }
-        RequireRole methodRole = handlerMethod.getMethodAnnotation(RequireRole.class);
-        if (methodRole != null) {
-            return methodRole;
-        }
-        return handlerMethod.getBeanType().getAnnotation(RequireRole.class);
-    }
-
     private boolean hasPermission(AuthContext.SessionUser user, String[] permissions) {
         PermissionInfoDTO info = permissionService == null ? null : permissionService.getPermissionInfo(user.id(), user.role());
         if (info != null && info.isSuperAdmin()) {
-            return true;
-        }
-        if ("ADMIN".equalsIgnoreCase(user.role())) {
             return true;
         }
         if (info == null || info.getPermissions() == null) {
@@ -160,14 +138,6 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         return Arrays.stream(permissions).anyMatch(info.getPermissions()::contains);
     }
-
-    private boolean hasRole(AuthContext.SessionUser user, String[] roles) {
-        if ("ADMIN".equalsIgnoreCase(user.role())) {
-            return true;
-        }
-        return Arrays.stream(roles).anyMatch(role -> role.equalsIgnoreCase(user.role()));
-    }
-
     private void writeError(HttpServletResponse response, int status, String message) throws IOException {
         response.setStatus(status);
         response.setCharacterEncoding("UTF-8");

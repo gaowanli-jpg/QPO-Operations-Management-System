@@ -23,5 +23,9 @@ public class OrderRfq {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private Object engineerConfig;  // 工程部订单全局默认设定
 
+    private Integer createdBy;
+    private Integer ownerUserId;
+    private Long ownerDeptId;
+
     private LocalDateTime createdAt;
 }

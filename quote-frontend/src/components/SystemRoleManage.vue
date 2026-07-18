@@ -101,7 +101,7 @@
       </template>
     </el-drawer>
 
-    <el-drawer v-model="dataScopeDrawerVisible" title="数据范围" size="480px">
+    <el-drawer v-model="dataScopeDrawerVisible" title="数据范围" size="560px">
       <div class="role-drawer-body">
         <el-form label-width="96px" class="erp-dialog-form">
           <el-form-item label="范围类型">
@@ -109,11 +109,32 @@
               <el-option v-for="item in dataScopeOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
-          <el-form-item label="部门 ID">
-            <el-input v-model.trim="dataScopeForm.deptIdsText" placeholder="多个部门 ID 用英文逗号分隔" />
+          <el-form-item label="指定部门">
+            <el-tree
+              ref="dataScopeDeptTreeRef"
+              class="data-scope-dept-tree"
+              :data="departmentTree"
+              node-key="id"
+              show-checkbox
+              default-expand-all
+              :props="{ label: 'label', children: 'children' }"
+              :default-checked-keys="dataScopeForm.deptIds"
+              @check="handleDeptTreeCheck"
+            />
           </el-form-item>
-          <el-form-item label="客户名称">
-            <el-input v-model.trim="dataScopeForm.customerNamesText" placeholder="多个客户用英文逗号分隔" />
+          <el-form-item label="指定客户">
+            <el-select
+              v-model="dataScopeForm.customerNames"
+              multiple
+              filterable
+              clearable
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="请选择客户"
+              style="width: 100%"
+            >
+              <el-option v-for="customer in customerOptions" :key="customer" :label="customer" :value="customer" />
+            </el-select>
           </el-form-item>
         </el-form>
       </div>
@@ -128,7 +149,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   assignRoleDataScope,
@@ -136,6 +157,8 @@ import {
   deleteRole,
   getRoleDataScope,
   getRolePermissions,
+  listDataScopeCustomers,
+  listDataScopeDepartments,
   listPermissions,
   listRoles,
   saveRole
@@ -150,6 +173,9 @@ const permissionDrawerVisible = ref(false)
 const dataScopeDrawerVisible = ref(false)
 const currentRole = ref(null)
 const permissionCodes = ref([])
+const departmentTree = ref([])
+const customerOptions = ref([])
+const dataScopeDeptTreeRef = ref(null)
 
 const form = reactive({
   id: null,
@@ -162,8 +188,8 @@ const form = reactive({
 
 const dataScopeForm = reactive({
   dataScope: 'ALL',
-  deptIdsText: '',
-  customerNamesText: ''
+  deptIds: [],
+  customerNames: []
 })
 
 const dataScopeOptions = [
@@ -260,32 +286,40 @@ const savePermissions = async () => {
   }
 }
 
-const openDataScopeDrawer = async (row) => {
-  currentRole.value = row
-  const response = await getRoleDataScope(row.id)
-  dataScopeForm.dataScope = response?.dataScope || row.dataScope || 'ALL'
-  dataScopeForm.deptIdsText = (response?.deptIds || []).join(',')
-  dataScopeForm.customerNamesText = (response?.customerNames || []).join(',')
-  dataScopeDrawerVisible.value = true
+const loadDataScopeOptions = async () => {
+  const [departments, customers] = await Promise.all([
+    listDataScopeDepartments(),
+    listDataScopeCustomers()
+  ])
+  departmentTree.value = departments || []
+  customerOptions.value = customers || []
 }
 
-const parseDeptIds = (value) => String(value || '')
-  .split(',')
-  .map(item => Number(item.trim()))
-  .filter(Number.isFinite)
+const handleDeptTreeCheck = (_node, checkedState) => {
+  dataScopeForm.deptIds = checkedState?.checkedKeys || []
+}
 
-const parseNames = (value) => String(value || '')
-  .split(',')
-  .map(item => item.trim())
-  .filter(Boolean)
+const openDataScopeDrawer = async (row) => {
+  currentRole.value = row
+  const [response] = await Promise.all([
+    getRoleDataScope(row.id),
+    loadDataScopeOptions()
+  ])
+  dataScopeForm.dataScope = response?.dataScope || row.dataScope || 'ALL'
+  dataScopeForm.deptIds = (response?.deptIds || []).map(Number).filter(Number.isFinite)
+  dataScopeForm.customerNames = response?.customerNames || []
+  dataScopeDrawerVisible.value = true
+  await nextTick()
+  dataScopeDeptTreeRef.value?.setCheckedKeys(dataScopeForm.deptIds)
+}
 
 const saveDataScope = async () => {
   saving.value = true
   try {
     await assignRoleDataScope(currentRole.value.id, {
       dataScope: dataScopeForm.dataScope,
-      deptIds: parseDeptIds(dataScopeForm.deptIdsText),
-      customerNames: parseNames(dataScopeForm.customerNamesText)
+      deptIds: dataScopeForm.deptIds,
+      customerNames: dataScopeForm.customerNames
     })
     ElMessage.success('数据范围已更新')
     dataScopeDrawerVisible.value = false
@@ -318,6 +352,15 @@ onMounted(loadAll)
 .permission-list {
   display: grid;
   gap: var(--erp-space-2);
+}
+
+.data-scope-dept-tree {
+  width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--erp-border-subtle);
+  border-radius: var(--erp-radius-md);
+  padding: var(--erp-space-2);
 }
 
 .permission-code {

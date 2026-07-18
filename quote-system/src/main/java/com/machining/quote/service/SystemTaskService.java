@@ -39,6 +39,8 @@ public class SystemTaskService {
     private ThreadPoolTaskExecutor taskExecutor;
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
     @Value("${erp.task.output-dir}")
     private String taskOutputDir;
 
@@ -46,6 +48,7 @@ public class SystemTaskService {
         if (rfqId == null) {
             throw new RuntimeException("订单 ID 不能为空");
         }
+        assertOrderDataScope(rfqId);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("rfqId", rfqId);
         SystemTask task = createTask("REFRESH_ORDER_QUOTES", request);
@@ -59,6 +62,7 @@ public class SystemTaskService {
             throw new RuntimeException("订单 ID 不能为空");
         }
         String safeExportType = exportType == null || exportType.trim().isEmpty() ? "DETAIL" : exportType.trim().toUpperCase();
+        assertOrderDataScope(rfqId);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("rfqId", rfqId);
         request.put("exportType", safeExportType);
@@ -113,6 +117,11 @@ public class SystemTaskService {
         return taskMapper.selectList(qw);
     }
 
+    private void assertOrderDataScope(Integer rfqId) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(rfqId, null);
+        }
+    }
     private SystemTask createTask(String taskType, Object requestJson) {
         AuthContext.SessionUser current = AuthContext.get();
         SystemTask task = new SystemTask();

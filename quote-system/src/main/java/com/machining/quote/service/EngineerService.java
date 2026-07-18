@@ -56,6 +56,8 @@ public class EngineerService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     @Transactional
     public void calculateAndSaveQuote(QuoteSubmitReq req) {
@@ -313,6 +315,7 @@ public class EngineerService {
         if (parent == null) {
             throw new RuntimeException("父件不存在");
         }
+        assertOrderDataScope(parent.getRfqId());
         return listRelationsByParent(parentItemId).stream()
                 .map(relation -> {
                     ItemQuoteVersion child = itemMapper.selectById(relation.getChildItemId());
@@ -721,6 +724,7 @@ public class EngineerService {
         if (order == null) {
             throw new RuntimeException("订单不存在");
         }
+        assertOrderDataScope(order);
         return order;
     }
 
@@ -732,6 +736,7 @@ public class EngineerService {
         if (order == null) {
             throw new RuntimeException("订单不存在");
         }
+        assertOrderDataScope(order);
         return order;
     }
 
@@ -751,6 +756,23 @@ public class EngineerService {
         return lockedItem;
     }
 
+    private void applyOrderDataScope(QueryWrapper<OrderRfq> qw) {
+        if (dataScopeService != null) {
+            dataScopeService.applyOrderScope(qw);
+        }
+    }
+
+    private void assertOrderDataScope(OrderRfq order) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+    }
+
+    private void assertOrderDataScope(Integer rfqId) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(rfqId, orderMapper);
+        }
+    }
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");

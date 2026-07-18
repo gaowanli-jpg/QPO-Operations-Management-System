@@ -34,6 +34,8 @@ public class QuoteProcessService {
     private LeadTimeService leadTimeService;
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     public Map<String, Object> getQuoteProcess(Integer rfqId) {
         OrderRfq order = requireQuotedOrder(rfqId);
@@ -166,6 +168,7 @@ public class QuoteProcessService {
         if (order == null) {
             throw new RuntimeException("RFQ 订单不存在");
         }
+        assertOrderDataScope(order);
         if (!QUOTED_STATUS.equals(order.getStatus())) {
             throw new RuntimeException("只有已报价订单可以处理报价单");
         }
@@ -180,12 +183,18 @@ public class QuoteProcessService {
         if (order == null) {
             throw new RuntimeException("RFQ 订单不存在");
         }
+        assertOrderDataScope(order);
         if (!QUOTED_STATUS.equals(order.getStatus())) {
             throw new RuntimeException("只有已报价订单可以处理报价单");
         }
         return order;
     }
 
+    private void assertOrderDataScope(OrderRfq order) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+    }
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");

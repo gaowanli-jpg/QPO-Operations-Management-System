@@ -41,6 +41,8 @@ public class DeliveryService {
     private AuditService auditService;
     @Autowired
     private LeadTimeService leadTimeService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     @Transactional
     public List<OrderDeliveryTicket> generateTickets(DeliveryGenerateReq req) {
@@ -61,6 +63,7 @@ public class DeliveryService {
             throw new RuntimeException("询价单不存在");
         }
 
+        assertOrderDataScope(order);
         LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
         String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
         String internalProjectNo = req.getInternalProjectNo() == null ? "" : req.getInternalProjectNo().trim();
@@ -147,6 +150,7 @@ public class DeliveryService {
     }
 
     public List<OrderDeliveryTicket> listTickets(Integer rfqId) {
+        assertOrderDataScope(rfqId);
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
         if (rfqId != null) {
             qw.eq("rfq_id", rfqId);
@@ -156,6 +160,7 @@ public class DeliveryService {
     }
 
     public List<OrderProcessSheet> listProcessSheets(Integer rfqId) {
+        assertOrderDataScope(rfqId);
         QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
         if (rfqId != null) {
             qw.eq("rfq_id", rfqId);
@@ -175,6 +180,7 @@ public class DeliveryService {
             if (lockedOrder == null) {
                 throw new RuntimeException("提单所属订单已被删除");
             }
+            assertOrderDataScope(lockedOrder);
             ticket = ticketMapper.selectById(ticketId);
             if (ticket == null) {
                 throw new RuntimeException("提单行已被删除");
@@ -202,6 +208,7 @@ public class DeliveryService {
             if (lockedOrder == null) {
                 throw new RuntimeException("工艺表所属订单已被删除");
             }
+            assertOrderDataScope(lockedOrder);
             sheet = processSheetMapper.selectById(sheetId);
             if (sheet == null) {
                 throw new RuntimeException("工艺表行已被删除");
@@ -211,6 +218,17 @@ public class DeliveryService {
         auditService.record("PROCESS_SHEET_DELETE", "order_process_sheet", sheetId, sheet, null);
     }
 
+    private void assertOrderDataScope(Integer rfqId) {
+        if (rfqId != null && dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
+        }
+    }
+
+    private void assertOrderDataScope(OrderRfq order) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+    }
     private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String internalProjectNo,
                                              String customerOrderNo, String customerProjectNo, String projectNo,
                                              LocalDate startDate, int qty, String remark, String arrangeType) {

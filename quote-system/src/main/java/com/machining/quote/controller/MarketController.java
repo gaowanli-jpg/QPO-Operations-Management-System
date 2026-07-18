@@ -13,6 +13,7 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.OrderFilePathService;
@@ -71,6 +72,8 @@ public class MarketController {
 
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     @GetMapping("/orders")
     @RequirePermission("common:order:select")
@@ -166,6 +169,9 @@ public class MarketController {
     @RequirePermission("common:order:select")
     public Map<String, Object> getQuoteSummary(@PathVariable Integer rfqId) {
         OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<ItemQuoteVersion> items = itemQuoteVersionMapper.selectList(qw);
@@ -327,6 +333,9 @@ public class MarketController {
             newOrder.setRfqNo(autoRfqNo);
             newOrder.setCustomerName(customerName);
             newOrder.setStatus("待工程部评估");
+            if (dataScopeService != null) {
+                dataScopeService.assignCurrentOwnership(newOrder);
+            }
             orderRfqMapper.insert(newOrder);
             generatedRfqId = newOrder.getId();
             log.info("RFQ import order saved rfqId={} rfqNo={} customerName={}",

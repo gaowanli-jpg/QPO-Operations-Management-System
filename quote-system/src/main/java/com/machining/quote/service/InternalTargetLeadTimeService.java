@@ -33,6 +33,8 @@ public class InternalTargetLeadTimeService {
     private LeadTimeService leadTimeService;
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     @Transactional
     public Map<String, Object> shiftLeadTimes(InternalTargetLeadTimeShiftReq req) {
@@ -159,6 +161,7 @@ public class InternalTargetLeadTimeService {
         if (order == null) {
             throw new RuntimeException("RFQ 订单不存在");
         }
+        assertOrderDataScope(order);
         return order;
     }
 
@@ -170,9 +173,15 @@ public class InternalTargetLeadTimeService {
         if (order == null) {
             throw new RuntimeException("RFQ 订单不存在");
         }
+        assertOrderDataScope(order);
         return order;
     }
 
+    private void assertOrderDataScope(OrderRfq order) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+    }
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");

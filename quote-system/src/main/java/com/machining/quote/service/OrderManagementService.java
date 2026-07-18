@@ -53,9 +53,12 @@ public class OrderManagementService {
     private OrderFilePathService orderFilePathService;
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     public List<Map<String, Object>> listOrderSummaries(String customerName) {
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderDataScope(qw);
         if (!isBlank(customerName)) {
             qw.eq("customer_name", customerName.trim());
         }
@@ -72,6 +75,7 @@ public class OrderManagementService {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderDataScope(qw);
         applyOrderFilters(qw, customerName, keyword, status);
         Long total = orderMapper.selectCount(qw);
         if (total == null || total == 0) {
@@ -87,6 +91,7 @@ public class OrderManagementService {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderDataScope(qw);
         applyOrderFilters(qw, customerName, keyword, status);
         Long total = orderMapper.selectCount(qw);
         if (total == null || total == 0) {
@@ -99,6 +104,7 @@ public class OrderManagementService {
 
     public List<String> listCustomers() {
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderDataScope(qw);
         qw.select("DISTINCT customer_name");
         qw.isNotNull("customer_name");
         qw.ne("customer_name", "");
@@ -466,6 +472,7 @@ public class OrderManagementService {
         if (order == null) {
             throw new RuntimeException("订单不存在");
         }
+        assertOrderDataScope(order);
         return order;
     }
 
@@ -477,9 +484,21 @@ public class OrderManagementService {
         if (order == null) {
             throw new RuntimeException("订单不存在");
         }
+        assertOrderDataScope(order);
         return order;
     }
 
+    private void applyOrderDataScope(QueryWrapper<OrderRfq> qw) {
+        if (dataScopeService != null) {
+            dataScopeService.applyOrderScope(qw);
+        }
+    }
+
+    private void assertOrderDataScope(OrderRfq order) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+    }
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");

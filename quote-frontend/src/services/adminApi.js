@@ -54,6 +54,10 @@ export const assignRoleDataScope = (roleId, payload) => request(`/api/system/rol
   data: payload
 })
 
+export const listDataScopeDepartments = () => request('/api/system/data-scope/departments')
+
+export const listDataScopeCustomers = () => request('/api/system/data-scope/customers')
+
 export const getQuoteTemplate = () => request('/api/admin/quote-template')
 
 export const saveQuoteTemplate = (formData) => request('/api/admin/quote-template', {

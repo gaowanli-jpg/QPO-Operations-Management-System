@@ -41,10 +41,13 @@ public class ExcelExportService {
     private OrderProcessSheetMapper processSheetMapper;
     @Autowired
     private LeadTimeService leadTimeService;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void exportDeliveryTickets(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(qw);
@@ -91,6 +94,7 @@ public class ExcelExportService {
     }
 
     public void exportProcessSheets(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<OrderProcessSheet> sheets = processSheetMapper.selectList(qw);
@@ -146,14 +150,17 @@ public class ExcelExportService {
     }
 
     public void exportQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         exportQuoteSheet(rfqId, response, true);
     }
 
     public void exportCustomerLeadTimeQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         exportQuoteSheet(rfqId, response, false);
     }
 
     public void exportSimpleQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
@@ -167,6 +174,7 @@ public class ExcelExportService {
     }
 
     public Path exportQuoteSheetFile(Integer rfqId, Path outputDir, String exportType) throws IOException {
+        assertOrderDataScope(rfqId);
         Files.createDirectories(outputDir);
         String safeType = exportType == null ? "" : exportType.trim().toUpperCase();
         boolean simple = "SIMPLE".equals(safeType);
@@ -200,6 +208,7 @@ public class ExcelExportService {
     }
 
     private void exportQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime) throws IOException {
+        assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
@@ -215,6 +224,11 @@ public class ExcelExportService {
         write(response, buildFileName(rfqId, "报价单"), "报价单", head, rows);
     }
 
+    private void assertOrderDataScope(Integer rfqId) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
+        }
+    }
     private List<List<String>> buildSimpleQuoteHead() {
         List<List<String>> head = new ArrayList<>();
         for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位")) {

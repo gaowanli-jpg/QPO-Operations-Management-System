@@ -50,6 +50,8 @@ public class AuditLogQueryService {
 
     @Autowired
     private AuditLogMapper auditLogMapper;
+    @Autowired(required = false)
+    private DataScopeService dataScopeService;
 
     public PageResult<AuditLogDTO> listLogs(AuditLogQueryReq req) {
         AuditLogQueryReq safeReq = req == null ? new AuditLogQueryReq() : req;
@@ -72,7 +74,10 @@ public class AuditLogQueryService {
     }
 
     public AuditLogDTO detail(Integer id) {
-        AuditLog log = auditLogMapper.selectById(id);
+        QueryWrapper<AuditLog> detailQuery = new QueryWrapper<>();
+        detailQuery.eq("id", id);
+        applyAuditDataScope(detailQuery);
+        AuditLog log = auditLogMapper.selectOne(detailQuery);
         if (log == null) {
             throw new RuntimeException("操作日志不存在");
         }
@@ -139,6 +144,7 @@ public class AuditLogQueryService {
         QueryWrapper<AuditLog> actionQuery = new QueryWrapper<>();
         actionQuery.select("DISTINCT action");
         actionQuery.isNotNull("action");
+        applyAuditDataScope(actionQuery);
         actionQuery.orderByAsc("action");
         List<Map<String, String>> actions = auditLogMapper.selectObjs(actionQuery).stream()
                 .map(String::valueOf)
@@ -201,9 +207,15 @@ public class AuditLogQueryService {
                     .or().like("before_data", keyword)
                     .or().like("after_data", keyword));
         }
+        applyAuditDataScope(qw);
         return qw;
     }
 
+    private void applyAuditDataScope(QueryWrapper<AuditLog> qw) {
+        if (dataScopeService != null) {
+            dataScopeService.applyAuditScope(qw);
+        }
+    }
     private void applyModuleFilter(QueryWrapper<AuditLog> qw, String module) {
         List<String> prefixes = MODULE_ACTION_PREFIXES.getOrDefault(module, List.of());
         qw.and(wrapper -> {
