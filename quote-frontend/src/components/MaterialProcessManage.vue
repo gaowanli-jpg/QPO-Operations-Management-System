@@ -10,10 +10,10 @@
     <section class="erp-toolbar">
       <div class="erp-toolbar-group material-toolbar">
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
-        <el-button v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
-        <el-button v-else-if="activeTab === 'processes'" type="primary" @click="openProcessDialog()">新增工艺</el-button>
-        <el-button v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
-        <el-button v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
+        <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processes'" type="primary" @click="openProcessDialog()">新增工艺</el-button>
+        <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
+        <el-button v-permission="'engineer:dict:fee-manage'" v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
       </div>
     </section>
 
@@ -46,8 +46,8 @@
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
-                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteMaterial(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteMaterial(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -70,8 +70,8 @@
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button type="primary" size="small" @click="openProcessDialog(scope.row)">编辑</el-button>
-                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteProcess(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" @click="openProcessDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:process-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteProcess(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -95,8 +95,8 @@
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button type="primary" size="small" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
-                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteMarkupFee(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteMarkupFee(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -118,8 +118,8 @@
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button type="primary" size="small" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
-                  <el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteExtraFee(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteExtraFee(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -204,7 +204,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="materialDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveMaterial">保存</el-button>
+          <el-button v-permission="'engineer:dict:material-manage'" type="primary" :loading="saving" @click="saveMaterial">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -239,7 +239,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="processDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveProcess">保存</el-button>
+          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="saving" @click="saveProcess">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -262,7 +262,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="markupFeeDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveMarkupFee">保存</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="saving" @click="saveMarkupFee">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -285,7 +285,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="extraFeeDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveExtraFee">保存</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="saving" @click="saveExtraFee">保存</el-button>
         </div>
       </template>
     </el-dialog>

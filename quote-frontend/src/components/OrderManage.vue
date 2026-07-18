@@ -73,7 +73,7 @@
             <template #default="scope">
               <div class="erp-table-actions">
                 <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
-                <el-button
+                <el-button v-permission="'market:order:delete'"
                   size="small"
                   type="danger"
                   plain
@@ -117,7 +117,7 @@
             :closable="false"
             show-icon
           />
-          <el-button type="primary" plain :disabled="missingDrawingItems.length === 0" @click="openSupplementDialog">
+          <el-button v-permission="'market:order:supplement-drawing'" type="primary" plain :disabled="missingDrawingItems.length === 0" @click="openSupplementDialog">
             补传图纸
           </el-button>
         </div>
@@ -200,7 +200,7 @@
         </div>
 
         <div class="erp-upload-surface upload-area">
-          <el-upload
+          <el-upload v-permission="'market:order:supplement-drawing'"
             ref="supplementUploadRef"
             drag
             multiple
@@ -245,7 +245,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="supplementVisible = false">关闭</el-button>
-          <el-button type="primary" :loading="supplementUploading" :disabled="supplementFiles.length === 0" @click="submitSupplementDrawings">
+          <el-button v-permission="'market:order:supplement-drawing'" type="primary" :loading="supplementUploading" :disabled="supplementFiles.length === 0" @click="submitSupplementDrawings">
             上传并匹配
           </el-button>
         </div>

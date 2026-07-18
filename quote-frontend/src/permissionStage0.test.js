@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+﻿import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,81 +9,68 @@ const readDoc = (...segments) => readFileSync(resolve(currentDir, '..', '..', 'd
 
 const routerSource = readSource('router', 'index.js')
 const appVue = readSource('App.vue')
-const mappingDoc = () => readDoc('QPO权限用户体系', '02-权限点清单与现有角色映射.md')
+const mappingDoc = () => readDoc('QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb', '02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md')
 
-const parseRoles = (raw) => raw
-  .split(',')
-  .map(role => role.replaceAll("'", '').trim())
-  .filter(Boolean)
-
-const routeRoleEntries = () => {
-  const routeRegex = /\{ path: '([^']+)', component: (\w+), meta: \{ roles: \[([^\]]+)] } }/g
-  return [...routerSource.matchAll(routeRegex)].map(match => ({
-    path: match[1],
-    component: match[2],
-    roles: parseRoles(match[3])
-  }))
+const protectedRoutePermissions = {
+  '/market': 'market:rfq:view',
+  '/quote-process': 'market:quote-process:view',
+  '/release': 'market:release:view',
+  '/engineering': 'engineer:setup:view',
+  '/material-process': 'engineer:dict:view',
+  '/orders': 'market:order:view',
+  '/history-orders': 'market:order:view',
+  '/users': 'system:user:view',
+  '/roles': 'system:role:view',
+  '/audit-logs': 'system:audit:view',
+  '/quote-template': 'market:template:view',
+  '/pricing': 'engineer:pricing:view'
 }
 
-const menuRoleEntries = () => {
-  const menuRegex = /<el-menu-item v-if="canSee\(\[([^\]]+)]\)" index="([^"]+)">/g
-  return [...appVue.matchAll(menuRegex)].map(match => ({
-    path: match[2],
-    roles: parseRoles(match[1])
-  }))
+const visibleMenuPermissions = {
+  '/market': 'market:rfq:view',
+  '/quote-process': 'market:quote-process:view',
+  '/release': 'market:release:view',
+  '/quote-template': 'market:template:view',
+  '/engineering': 'engineer:setup:view',
+  '/material-process': 'engineer:dict:view',
+  '/orders': 'market:order:view',
+  '/history-orders': 'market:order:view',
+  '/users': 'system:user:view',
+  '/roles': 'system:role:view',
+  '/audit-logs': 'system:audit:view'
+}
+
+const routePermissionEntries = () => {
+  const routeRegex = /\{ path: '([^']+)', component: (\w+), meta: \{ permission: '([^']+)' } }/g
+  return Object.fromEntries([...routerSource.matchAll(routeRegex)].map(match => [match[1], match[3]]))
+}
+
+const menuPermissionEntries = () => {
+  const menuRegex = /'([^']+)': \{ title: '[^']+', permission: '([^']+)'/g
+  return Object.fromEntries([...appVue.matchAll(menuRegex)].map(match => [match[1], match[2]]))
 }
 
 describe('QPO permission stage 0 guardrails', () => {
-  test('freezes current protected route role configuration', () => {
-    const routes = Object.fromEntries(routeRoleEntries().map(route => [route.path, route.roles]))
-
-    expect(routes).toEqual({
-      '/market': ['MARKET', 'ADMIN'],
-      '/quote-process': ['MARKET', 'ADMIN'],
-      '/release': ['MARKET', 'ADMIN'],
-      '/engineering': ['ENGINEER', 'ADMIN'],
-      '/material-process': ['ENGINEER', 'ADMIN'],
-      '/orders': ['MARKET', 'ADMIN'],
-      '/history-orders': ['MARKET', 'ADMIN'],
-      '/users': ['ADMIN'],
-      '/roles': ['ADMIN'],
-      '/audit-logs': ['ADMIN'],
-      '/quote-template': ['ADMIN'],
-      '/pricing': ['ENGINEER', 'ADMIN']
-    })
-
-    for (const [path, roles] of Object.entries(routes)) {
-      expect(roles, path).toContain('ADMIN')
-      expect(roles.every(role => ['ADMIN', 'MARKET', 'ENGINEER'].includes(role)), path).toBe(true)
-    }
+  test('freezes protected route permission configuration', () => {
+    expect(routerSource).not.toContain('meta: { roles:')
+    expect(routePermissionEntries()).toEqual(protectedRoutePermissions)
   })
 
-  test('freezes current sidebar menu visibility snapshot', () => {
-    const menuEntries = Object.fromEntries(menuRoleEntries().map(entry => [entry.path, entry.roles]))
-
-    expect(menuEntries).toEqual({
-      '/market': ['MARKET', 'ADMIN'],
-      '/quote-process': ['MARKET', 'ADMIN'],
-      '/release': ['MARKET', 'ADMIN'],
-      '/quote-template': ['ADMIN'],
-      '/engineering': ['ENGINEER', 'ADMIN'],
-      '/material-process': ['ENGINEER', 'ADMIN'],
-      '/orders': ['MARKET', 'ADMIN'],
-      '/history-orders': ['MARKET', 'ADMIN'],
-      '/users': ['ADMIN'],
-      '/roles': ['ADMIN'],
-      '/audit-logs': ['ADMIN']
-    })
+  test('freezes sidebar menu permission snapshot', () => {
+    expect(appVue).not.toContain('canSee([')
+    expect(appVue).toContain('visibleMenuGroups')
+    expect(menuPermissionEntries()).toEqual(visibleMenuPermissions)
   })
 
   test('maps every protected frontend route to a target permission code', () => {
     const doc = mappingDoc()
 
-    for (const route of routeRoleEntries()) {
-      expect(doc, route.path).toContain(`| \`${route.path}\` |`)
+    for (const [path, permission] of Object.entries(protectedRoutePermissions)) {
+      expect(doc, path).toContain('| `' + path + '` |')
+      expect(doc, permission).toContain('`' + permission + '`')
     }
 
-    expect(doc).toContain('前端路由权限迁移表')
+    expect(doc).toContain('\u524d\u7aef\u8def\u7531\u6743\u9650\u8fc1\u79fb\u8868')
     expect(doc).toContain('`market:rfq:view`')
     expect(doc).toContain('`engineer:pricing:view`')
     expect(doc).toContain('`system:audit:view`')

@@ -6,8 +6,8 @@
         <p class="erp-page-description">查询系统关键操作、账号安全事件和数据变更记录，用于追溯问题和审计。</p>
       </div>
       <div class="erp-page-actions">
-        <el-button @click="openRetentionSetting">日志保留策略</el-button>
-        <el-button :loading="exporting" @click="exportLogs">导出 CSV</el-button>
+        <el-button v-permission="'system:audit:retention'" @click="openRetentionSetting">日志保留策略</el-button>
+        <el-button v-permission="'system:audit:export'" :loading="exporting" @click="exportLogs">导出 CSV</el-button>
         <el-button :loading="loading" @click="loadLogs">刷新</el-button>
       </div>
     </header>
@@ -229,8 +229,8 @@
 
         <div class="retention-footer">
           <el-button @click="retentionVisible = false">取消</el-button>
-          <el-button :loading="cleanupRunning" @click="runRetentionCleanup">立即执行一次</el-button>
-          <el-button type="primary" :loading="retentionSaving" @click="saveRetentionSetting">保存设置</el-button>
+          <el-button v-permission="'system:audit:retention'" :loading="cleanupRunning" @click="runRetentionCleanup">立即执行一次</el-button>
+          <el-button v-permission="'system:audit:retention'" type="primary" :loading="retentionSaving" @click="saveRetentionSetting">保存设置</el-button>
         </div>
       </div>
     </el-drawer>

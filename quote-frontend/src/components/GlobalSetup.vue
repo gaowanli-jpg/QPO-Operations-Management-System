@@ -179,7 +179,7 @@
                 <strong>保存整单默认设定</strong>
                 <span>保存后进入逐件核价中心，逐个零件仍可覆盖材料、工艺和费用。</span>
               </div>
-              <el-button type="primary" size="large" @click="handleNext" class="submit-btn">
+              <el-button v-permission="'engineer:setup:save-config'" type="primary" size="large" @click="handleNext" class="submit-btn">
                 保存设定，进入逐件核价
               </el-button>
             </div>

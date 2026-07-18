@@ -71,7 +71,7 @@
               <template #default="{ row }">
                 <div class="erp-table-actions history-row-actions">
                   <el-button size="small" @click="openDetail(row)">查看订单</el-button>
-                  <el-button
+                  <el-button v-permission="'market:order:delete'"
                     v-if="canDeleteHistoryOrders"
                     size="small"
                     type="danger"
@@ -196,7 +196,7 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const customerPickerVisible = ref(false)
-const canDeleteHistoryOrders = computed(() => authStore.hasRole(['MARKET', 'ADMIN']))
+const canDeleteHistoryOrders = computed(() => authStore.hasPermission('market:order:delete'))
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {

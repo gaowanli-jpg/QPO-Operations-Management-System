@@ -11,11 +11,11 @@ const routerSource = readSource('router', 'index.js')
 const userManage = readSource('components', 'UserManage.vue')
 
 describe('QPO permission stage 3 role management shell', () => {
-  test('adds admin-only role management route and sidebar entry', () => {
+  test('adds permission-protected role management route and sidebar entry', () => {
     expect(routerSource).toContain("const SystemRoleManage = () => import('../components/SystemRoleManage.vue')")
-    expect(routerSource).toContain("{ path: '/roles', component: SystemRoleManage, meta: { roles: ['ADMIN'] } }")
-    expect(appVue).toContain('index="/roles"')
+    expect(routerSource).toContain("{ path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } }")
     expect(appVue).toContain("'/roles':")
+    expect(appVue).toContain("permission: 'system:role:view'")
   })
 
   test('user management supports assigning multiple enterprise roles', () => {

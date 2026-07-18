@@ -47,7 +47,7 @@
           />
 
           <div class="import-action-row">
-            <el-upload
+            <el-upload v-permission="'market:rfq:import'"
               ref="excelUploadRef"
               action="#"
               :auto-upload="false"
@@ -83,7 +83,7 @@
           />
           
           <!-- 覆盖原生拖拽事件，接管控制权 -->
-          <div
+          <div v-permission="'market:rfq:upload-drawing'"
             class="custom-dropzone"
             @dragover.prevent
             @drop.prevent="handleFolderDrop"
@@ -96,7 +96,7 @@
             <!-- 备用的点击选文件夹按钮 -->
             <div class="folder-select-row">或点击下方按钮选择图纸文件夹</div>
             <div class="import-action-row">
-              <el-button plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerFolderSelect">选择文件夹</el-button>
+              <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerFolderSelect">选择文件夹</el-button>
             </div>
             <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
           </div>
@@ -107,7 +107,7 @@
             <ul class="pdf-list">
               <li v-for="(file, index) in drawingFiles" :key="index">
                 <span>{{ file.name }}</span>
-                <el-button link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
+                <el-button v-permission="'market:rfq:upload-drawing'" link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
               </li>
             </ul>
           </div>
@@ -115,7 +115,7 @@
       </div>
 
       <div class="erp-toolbar submit-footer">
-        <el-button type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn import-axis-button">
+        <el-button v-permission="'market:rfq:import'" type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn import-axis-button">
           确认无误，提交工程部评估
         </el-button>
       </div>

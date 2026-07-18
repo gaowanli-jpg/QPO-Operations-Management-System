@@ -12,20 +12,18 @@ const auditLogManage = readSource('components', 'AuditLogManage.vue')
 
 describe('QPO audit log module shell', () => {
   test('adds admin-only operation logs under the system menu', () => {
-    expect(appVue).toContain('index="/audit-logs"')
-    expect(appVue).toContain('<span>操作日志</span>')
     expect(appVue).toContain("'/audit-logs':")
-    expect(appVue).toContain("title: '操作日志'")
-    expect(appVue).toContain("description: '追踪账号、报价、订单、字典和系统配置的关键变更。'")
+    expect(appVue).toContain("permission: 'system:audit:view'")
+    expect(appVue).toContain('visibleMenuGroups')
 
-    const usersMenuIndex = appVue.indexOf('index="/users"')
-    const auditMenuIndex = appVue.indexOf('index="/audit-logs"')
+    const usersMenuIndex = appVue.indexOf("'/users':")
+    const auditMenuIndex = appVue.indexOf("'/audit-logs':")
     expect(auditMenuIndex).toBeGreaterThan(usersMenuIndex)
   })
 
-  test('lazy-loads audit logs route and protects it for ADMIN', () => {
+  test('lazy-loads audit logs route and protects it with audit permission', () => {
     expect(routerSource).toContain("const AuditLogManage = () => import('../components/AuditLogManage.vue')")
-    expect(routerSource).toContain("{ path: '/audit-logs', component: AuditLogManage, meta: { roles: ['ADMIN'] } }")
+    expect(routerSource).toContain("{ path: '/audit-logs', component: AuditLogManage, meta: { permission: 'system:audit:view' } }")
     expect(routerSource).not.toContain("import AuditLogManage from '../components/AuditLogManage.vue'")
   })
 

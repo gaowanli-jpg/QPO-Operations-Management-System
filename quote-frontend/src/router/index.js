@@ -18,18 +18,18 @@ const AuditLogManage = () => import('../components/AuditLogManage.vue')
 const routes = [
   { path: '/login', component: LoginView },
   { path: '/', redirect: '/market' },
-  { path: '/market', component: MarketDashboard, meta: { roles: ['MARKET', 'ADMIN'] } },
-  { path: '/quote-process', component: QuoteProcess, meta: { roles: ['MARKET', 'ADMIN'] } },
-  { path: '/release', component: MarketRelease, meta: { roles: ['MARKET', 'ADMIN'] } },
-  { path: '/engineering', component: GlobalSetup, meta: { roles: ['ENGINEER', 'ADMIN'] } },
-  { path: '/material-process', component: MaterialProcessManage, meta: { roles: ['ENGINEER', 'ADMIN'] } },
-  { path: '/orders', component: OrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
-  { path: '/history-orders', component: HistoryOrderManage, meta: { roles: ['MARKET', 'ADMIN'] } },
-  { path: '/users', component: UserManage, meta: { roles: ['ADMIN'] } },
-  { path: '/roles', component: SystemRoleManage, meta: { roles: ['ADMIN'] } },
-  { path: '/audit-logs', component: AuditLogManage, meta: { roles: ['ADMIN'] } },
-  { path: '/quote-template', component: QuoteTemplateManage, meta: { roles: ['ADMIN'] } },
-  { path: '/pricing', component: ItemPricing, meta: { roles: ['ENGINEER', 'ADMIN'] } }
+  { path: '/market', component: MarketDashboard, meta: { permission: 'market:rfq:view' } },
+  { path: '/quote-process', component: QuoteProcess, meta: { permission: 'market:quote-process:view' } },
+  { path: '/release', component: MarketRelease, meta: { permission: 'market:release:view' } },
+  { path: '/engineering', component: GlobalSetup, meta: { permission: 'engineer:setup:view' } },
+  { path: '/material-process', component: MaterialProcessManage, meta: { permission: 'engineer:dict:view' } },
+  { path: '/orders', component: OrderManage, meta: { permission: 'market:order:view' } },
+  { path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:order:view' } },
+  { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },
+  { path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } },
+  { path: '/audit-logs', component: AuditLogManage, meta: { permission: 'system:audit:view' } },
+  { path: '/quote-template', component: QuoteTemplateManage, meta: { permission: 'market:template:view' } },
+  { path: '/pricing', component: ItemPricing, meta: { permission: 'engineer:pricing:view' } }
 ]
 
 const router = createRouter({
@@ -37,10 +37,27 @@ const router = createRouter({
   routes
 })
 
-const roleHome = {
-  ADMIN: '/market',
-  MARKET: '/market',
-  ENGINEER: '/engineering'
+const flattenMenus = (menus = []) => menus.flatMap((menu) => [
+  menu,
+  ...flattenMenus(menu.children || [])
+])
+
+const firstPermittedPath = (authStore) => {
+  const menuPath = flattenMenus(authStore.menus)
+    .map((menu) => menu.path)
+    .find(Boolean)
+  if (menuPath) {
+    return menuPath
+  }
+
+  const route = routes.find((item) => {
+    const permission = item.meta?.permission
+    const anyPermissions = item.meta?.anyPermissions
+    return (permission && authStore.hasPermission(permission)) ||
+      (anyPermissions?.length && authStore.hasAnyPermission(anyPermissions))
+  })
+
+  return route?.path || '/login'
 }
 
 router.beforeEach(async (to) => {
@@ -55,9 +72,16 @@ router.beforeEach(async (to) => {
   if (!valid) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
-  const roles = to.meta?.roles
-  if (roles?.length && !authStore.hasRole(roles)) {
-    return roleHome[authStore.user?.role] || '/login'
+  if (authStore.permissions.length === 0 || authStore.menus.length === 0) {
+    await authStore.loadPermissionInfo()
+  }
+  const permission = to.meta?.permission
+  const anyPermissions = to.meta?.anyPermissions
+  if (permission && !authStore.hasPermission(permission)) {
+    return firstPermittedPath(authStore)
+  }
+  if (anyPermissions?.length && !authStore.hasAnyPermission(anyPermissions)) {
+    return firstPermittedPath(authStore)
   }
   return true
 })

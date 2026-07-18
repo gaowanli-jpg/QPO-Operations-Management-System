@@ -6,7 +6,7 @@
         <p class="erp-page-description">配置角色启停、权限授权和数据范围入口。</p>
       </div>
       <div class="erp-page-actions">
-        <el-button type="primary" @click="openCreate">新增角色</el-button>
+        <el-button v-permission="'system:role:create'" type="primary" @click="openCreate">新增角色</el-button>
       </div>
     </header>
 
@@ -34,13 +34,13 @@
           <el-table-column label="操作" width="340" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions">
-                <el-button size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button size="small" @click="openPermissionDrawer(row)">授权</el-button>
-                <el-button size="small" @click="openDataScopeDrawer(row)">数据范围</el-button>
-                <el-button size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleRole(row)">
+                <el-button v-permission="'system:role:update'" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button v-permission="'system:role:assign-permission'" size="small" @click="openPermissionDrawer(row)">授权</el-button>
+                <el-button v-permission="'system:role:assign-data-scope'" size="small" @click="openDataScopeDrawer(row)">数据范围</el-button>
+                <el-button v-permission="'system:role:update'" size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleRole(row)">
                   {{ row.enabled ? '禁用' : '启用' }}
                 </el-button>
-                <el-button size="small" type="danger" plain class="erp-danger-action" :disabled="row.superAdmin" @click="removeRole(row)">
+                <el-button v-permission="'system:role:delete'" size="small" type="danger" plain class="erp-danger-action" :disabled="row.superAdmin" @click="removeRole(row)">
                   删除
                 </el-button>
               </div>
@@ -73,7 +73,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveRoleForm">保存</el-button>
+          <el-button v-permission="['system:role:create', 'system:role:update']" type="primary" :loading="saving" @click="saveRoleForm">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -96,7 +96,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="permissionDrawerVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="savePermissions">保存授权</el-button>
+          <el-button v-permission="'system:role:assign-permission'" type="primary" :loading="saving" @click="savePermissions">保存授权</el-button>
         </div>
       </template>
     </el-drawer>
@@ -120,7 +120,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="dataScopeDrawerVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveDataScope">保存数据范围</el-button>
+          <el-button v-permission="'system:role:assign-data-scope'" type="primary" :loading="saving" @click="saveDataScope">保存数据范围</el-button>
         </div>
       </template>
     </el-drawer>

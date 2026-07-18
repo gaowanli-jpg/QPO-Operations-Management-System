@@ -49,10 +49,10 @@
         <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
           生成报价单
         </el-button>
-        <el-button type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
+        <el-button v-permission="'engineer:pricing:refresh'" type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
           一键刷新核价
         </el-button>
-        <el-button type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
+        <el-button v-permission="'engineer:pricing:complete-order'" type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
           完成报价提交
         </el-button>
       </div>
@@ -129,7 +129,7 @@
           <el-table-column label="操作" width="120" align="center" fixed="right">
             <template #default="scope">
               <div class="erp-table-actions pricing-row-actions">
-                <el-button
+                <el-button v-permission="'engineer:pricing:save-item'"
                   v-if="scope.row.drawingUrl"
                   type="primary"
                   size="small"
@@ -430,7 +430,7 @@
       <template #footer>
         <div class="erp-dialog-footer pricing-dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="success" @click="submitCurrentQuote" :loading="submitLoading">确认提交</el-button>
+          <el-button v-permission="'engineer:pricing:save-item'" type="success" @click="submitCurrentQuote" :loading="submitLoading">确认提交</el-button>
         </div>
       </template>
     </el-dialog>

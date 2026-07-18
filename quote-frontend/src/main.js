@@ -32,6 +32,27 @@ configureApiAuth({
   onPasswordChangeRequired: () => authStore.updateUser({ forcePasswordChange: true })
 })
 
+
+const applyPermissionVisibility = (el, binding) => {
+  const value = binding.value
+  const allowed = Array.isArray(value)
+    ? authStore.hasAnyPermission(value)
+    : authStore.hasPermission(value)
+
+  if (!el.dataset.permissionDisplay) {
+    el.dataset.permissionDisplay = el.style.display || '__empty__'
+  }
+
+  el.style.display = allowed
+    ? (el.dataset.permissionDisplay === '__empty__' ? '' : el.dataset.permissionDisplay)
+    : 'none'
+}
+
+app.directive('permission', {
+  mounted: applyPermissionVisibility,
+  updated: applyPermissionVisibility
+})
+
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 

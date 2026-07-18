@@ -15,57 +15,13 @@
           :collapse-transition="false"
           router
         >
-          <div v-if="canSee(['MARKET', 'ADMIN'])" class="menu-section">市场</div>
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/market">
-            <el-icon><DataBoard /></el-icon>
-            <span>新单导入</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/quote-process">
-            <el-icon><Document /></el-icon>
-            <span>报价处理</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/release">
-            <el-icon><Files /></el-icon>
-            <span>议价提单</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['ADMIN'])" index="/quote-template">
-            <el-icon><Files /></el-icon>
-            <span>报价模板</span>
-          </el-menu-item>
-
-          <div v-if="canSee(['ENGINEER', 'ADMIN'])" class="menu-section">工程</div>
-          <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/engineering">
-            <el-icon><Setting /></el-icon>
-            <span>零件核价</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['ENGINEER', 'ADMIN'])" index="/material-process">
-            <el-icon><Tools /></el-icon>
-            <span>材料工艺</span>
-          </el-menu-item>
-
-          <div v-if="canSee(['MARKET', 'ADMIN'])" class="menu-section">订单</div>
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/orders">
-            <el-icon><Document /></el-icon>
-            <span>订单管理</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['MARKET', 'ADMIN'])" index="/history-orders">
-            <el-icon><Files /></el-icon>
-            <span>历史订单</span>
-          </el-menu-item>
-
-          <div v-if="canSee(['ADMIN'])" class="menu-section">系统</div>
-          <el-menu-item v-if="canSee(['ADMIN'])" index="/users">
-            <el-icon><User /></el-icon>
-            <span>用户权限</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['ADMIN'])" index="/roles">
-            <el-icon><User /></el-icon>
-            <span>角色管理</span>
-          </el-menu-item>
-          <el-menu-item v-if="canSee(['ADMIN'])" index="/audit-logs">
-            <el-icon><Document /></el-icon>
-            <span>操作日志</span>
-          </el-menu-item>
+          <template v-for="group in visibleMenuGroups" :key="group.key">
+            <div class="menu-section">{{ group.title }}</div>
+            <el-menu-item v-for="item in group.items" :key="item.path" :index="item.path">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
 
@@ -165,6 +121,63 @@ const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const roleName = computed(() => authStore.roleName)
 const mustChangePassword = computed(() => authStore.mustChangePassword)
 
+
+const menuGroups = [
+  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/quote-template'] },
+  { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
+  { key: 'orders', title: '订单', paths: ['/orders', '/history-orders'] },
+  { key: 'system', title: '系统', paths: ['/users', '/roles', '/audit-logs'] }
+]
+
+const menuMetaByPath = {
+  '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
+  '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
+  '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
+  '/quote-template': { title: '报价模板', permission: 'market:template:view', icon: Files },
+  '/engineering': { title: '零件核价', permission: 'engineer:setup:view', icon: Setting },
+  '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
+  '/orders': { title: '订单管理', permission: 'market:order:view', icon: Document },
+  '/history-orders': { title: '历史订单', permission: 'market:order:view', icon: Files },
+  '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
+  '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
+  '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document }
+}
+
+const flattenMenus = (menus = []) => menus.flatMap((menu) => [
+  menu,
+  ...flattenMenus(menu.children || [])
+])
+
+const backendMenuByPath = computed(() => Object.fromEntries(
+  flattenMenus(authStore.menus).filter((menu) => menu.path).map((menu) => [menu.path, menu])
+))
+
+const visibleMenuGroups = computed(() => {
+  const backendPaths = new Set(Object.keys(backendMenuByPath.value))
+  const hasBackendMenus = backendPaths.size > 0
+
+  return menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.paths
+        .filter((path) => {
+          if (hasBackendMenus) return backendPaths.has(path)
+          const permission = menuMetaByPath[path]?.permission
+          return authStore.hasPermission(permission)
+        })
+        .map((path) => {
+          const meta = menuMetaByPath[path]
+          const backendMenu = backendMenuByPath.value[path]
+          return {
+            path,
+            title: backendMenu?.title || meta.title,
+            icon: meta.icon
+          }
+        })
+    }))
+    .filter((group) => group.items.length > 0)
+})
+
 const shellMetaByPath = {
   '/market': {
     title: '新单导入',
@@ -251,7 +264,6 @@ const passwordRules = {
   ]
 }
 
-const canSee = (roles) => authStore.hasRole(roles)
 
 const toggleSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value

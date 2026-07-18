@@ -126,7 +126,7 @@
             </div>
 
             <div class="erp-dialog-footer main-actions">
-              <el-button
+              <el-button v-permission="'market:release:create'"
                 type="primary"
                 size="large"
                 class="workflow-primary-action"
@@ -285,7 +285,7 @@
               </el-table-column>
               <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
-                  <div class="erp-table-actions"><el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteTicket(scope.row)">删除</el-button></div>
+                  <div class="erp-table-actions"><el-button v-permission="'market:release:reset'" type="danger" size="small" plain class="erp-danger-action" @click="deleteTicket(scope.row)">删除</el-button></div>
                 </template>
               </el-table-column>
             </el-table>
@@ -333,7 +333,7 @@
               </el-table-column>
               <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
-                  <div class="erp-table-actions"><el-button type="danger" size="small" plain class="erp-danger-action" @click="deleteProcessSheet(scope.row)">删除</el-button></div>
+                  <div class="erp-table-actions"><el-button v-permission="'market:release:reset'" type="danger" size="small" plain class="erp-danger-action" @click="deleteProcessSheet(scope.row)">删除</el-button></div>
                 </template>
               </el-table-column>
             </el-table>

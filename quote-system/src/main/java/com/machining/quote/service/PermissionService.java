@@ -160,11 +160,11 @@ public class PermissionService {
     private List<SystemPermission> fallbackPermissions(List<SystemRole> roles) {
         Set<String> roleCodes = new LinkedHashSet<>(roleCodes(roles));
         if (roleCodes.contains("SUPER_ADMIN")) {
-            return FALLBACK_CATALOG;
+            return fallbackCatalog();
         }
         LinkedHashSet<SystemPermission> result = new LinkedHashSet<>();
-        for (SystemPermission permission : FALLBACK_CATALOG) {
-            Set<String> allowed = FALLBACK_ROLE_PERMISSIONS.get(permission.getPermissionCode());
+        for (SystemPermission permission : fallbackCatalog()) {
+            Set<String> allowed = allowedRolesFor(permission.getPermissionCode());
             if (allowed != null && allowed.stream().anyMatch(roleCodes::contains)) {
                 result.add(permission);
             }
@@ -174,6 +174,20 @@ public class PermissionService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static List<SystemPermission> fallbackCatalog() {
+        List<SystemPermission> permissions = new ArrayList<>(FALLBACK_CATALOG);
+        permissions.addAll(FALLBACK_STAGE4_CATALOG);
+        return permissions;
+    }
+
+    private static Set<String> allowedRolesFor(String permissionCode) {
+        Set<String> roles = FALLBACK_ROLE_PERMISSIONS.get(permissionCode);
+        if (roles != null) {
+            return roles;
+        }
+        return FALLBACK_STAGE4_ROLE_PERMISSIONS.get(permissionCode);
     }
 
     private static final List<SystemPermission> FALLBACK_CATALOG = List.of(
@@ -208,6 +222,70 @@ public class PermissionService {
             Map.entry("common:customer:select", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY")),
             Map.entry("common:file:preview", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY")),
             Map.entry("common:task:view", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY"))
+    );
+
+    private static final List<SystemPermission> FALLBACK_STAGE4_CATALOG = List.of(
+            permission(101L, "BUTTON", "market:rfq:upload-drawing", "上传图纸", null, null, false, 112),
+            permission(102L, "BUTTON", "market:order:supplement-drawing", "补传图纸", null, null, false, 121),
+            permission(103L, "BUTTON", "market:order:delete", "删除订单", null, null, false, 122),
+            permission(104L, "BUTTON", "market:quote-process:update-lead-time", "维护报价交期", null, null, false, 131),
+            permission(105L, "BUTTON", "market:quote-process:export", "导出报价单", null, null, false, 132),
+            permission(106L, "BUTTON", "market:release:create", "生成提单", null, null, false, 141),
+            permission(107L, "BUTTON", "market:release:reset", "重置提单工艺", null, null, false, 142),
+            permission(108L, "MENU", "market:template:view", "报价模板", "/quote-template", "QuoteTemplateManage", true, 150),
+            permission(109L, "BUTTON", "market:template:upload", "上传报价模板", null, null, false, 151),
+            permission(110L, "BUTTON", "engineer:setup:save-config", "保存全局设定", null, null, false, 211),
+            permission(111L, "BUTTON", "engineer:pricing:save-item", "保存单件核价", null, null, false, 221),
+            permission(112L, "BUTTON", "engineer:pricing:refresh", "一键刷新核价", null, null, false, 222),
+            permission(113L, "BUTTON", "engineer:pricing:complete-order", "完成整单报价", null, null, false, 223),
+            permission(114L, "BUTTON", "engineer:dict:material-manage", "维护材料", null, null, false, 231),
+            permission(115L, "BUTTON", "engineer:dict:process-manage", "维护工艺", null, null, false, 232),
+            permission(116L, "BUTTON", "engineer:dict:fee-manage", "维护费用", null, null, false, 233),
+            permission(117L, "BUTTON", "system:user:create", "新增用户", null, null, false, 811),
+            permission(118L, "BUTTON", "system:user:update", "编辑用户", null, null, false, 812),
+            permission(119L, "BUTTON", "system:user:disable", "启停用户", null, null, false, 813),
+            permission(120L, "BUTTON", "system:user:reset-password", "重置密码", null, null, false, 814),
+            permission(121L, "BUTTON", "system:user:delete", "删除用户", null, null, false, 815),
+            permission(122L, "MENU", "system:role:view", "角色管理", "/roles", "SystemRoleManage", true, 820),
+            permission(123L, "BUTTON", "system:role:create", "新增角色", null, null, false, 821),
+            permission(124L, "BUTTON", "system:role:update", "编辑角色", null, null, false, 822),
+            permission(125L, "BUTTON", "system:role:delete", "删除角色", null, null, false, 823),
+            permission(126L, "BUTTON", "system:role:assign-permission", "分配角色权限", null, null, false, 824),
+            permission(127L, "BUTTON", "system:role:assign-data-scope", "分配数据权限", null, null, false, 825),
+            permission(128L, "BUTTON", "system:audit:export", "导出操作日志", null, null, false, 851),
+            permission(129L, "BUTTON", "system:audit:retention", "配置日志保留策略", null, null, false, 852)
+    );
+
+    private static final Map<String, Set<String>> FALLBACK_STAGE4_ROLE_PERMISSIONS = Map.ofEntries(
+            Map.entry("market:rfq:upload-drawing", Set.of("MARKET_USER", "MARKET_MANAGER")),
+            Map.entry("market:order:supplement-drawing", Set.of("MARKET_USER", "MARKET_MANAGER")),
+            Map.entry("market:order:delete", Set.of("MARKET_MANAGER")),
+            Map.entry("market:quote-process:update-lead-time", Set.of("MARKET_USER", "MARKET_MANAGER")),
+            Map.entry("market:quote-process:export", Set.of("MARKET_USER", "MARKET_MANAGER")),
+            Map.entry("market:release:create", Set.of("MARKET_USER", "MARKET_MANAGER")),
+            Map.entry("market:release:reset", Set.of("MARKET_MANAGER")),
+            Map.entry("market:template:view", Set.of("MARKET_MANAGER")),
+            Map.entry("market:template:upload", Set.of("MARKET_MANAGER")),
+            Map.entry("engineer:setup:save-config", Set.of("ENGINEER_USER", "ENGINEER_MANAGER")),
+            Map.entry("engineer:pricing:save-item", Set.of("ENGINEER_USER", "ENGINEER_MANAGER")),
+            Map.entry("engineer:pricing:refresh", Set.of("ENGINEER_USER", "ENGINEER_MANAGER")),
+            Map.entry("engineer:pricing:complete-order", Set.of("ENGINEER_USER", "ENGINEER_MANAGER")),
+            Map.entry("engineer:dict:material-manage", Set.of("ENGINEER_MANAGER")),
+            Map.entry("engineer:dict:process-manage", Set.of("ENGINEER_MANAGER")),
+            Map.entry("engineer:dict:fee-manage", Set.of("ENGINEER_MANAGER")),
+            Map.entry("system:user:create", Set.of()),
+            Map.entry("system:user:update", Set.of()),
+            Map.entry("system:user:disable", Set.of()),
+            Map.entry("system:user:reset-password", Set.of()),
+            Map.entry("system:user:delete", Set.of()),
+            Map.entry("system:role:view", Set.of()),
+            Map.entry("system:role:create", Set.of()),
+            Map.entry("system:role:update", Set.of()),
+            Map.entry("system:role:delete", Set.of()),
+            Map.entry("system:role:assign-permission", Set.of()),
+            Map.entry("system:role:assign-data-scope", Set.of()),
+            Map.entry("system:audit:export", Set.of("AUDITOR")),
+            Map.entry("system:audit:retention", Set.of())
     );
 
     private static SystemPermission permission(

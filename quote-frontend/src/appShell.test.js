@@ -42,15 +42,13 @@ describe('QPO app shell polish', () => {
   })
 
   test('places quote template under market release instead of the system group', () => {
-    const releaseMenuIndex = appVue.indexOf('index="/release"')
-    const templateMenuIndex = appVue.indexOf('index="/quote-template"')
-    const engineeringSectionIndex = appVue.indexOf('class="menu-section">工程')
-    const systemSectionIndex = appVue.indexOf('class="menu-section">系统')
+    const releaseMenuIndex = appVue.indexOf("'/release'")
+    const templateMenuIndex = appVue.indexOf("'/quote-template'")
 
     expect(releaseMenuIndex).toBeGreaterThan(-1)
     expect(templateMenuIndex).toBeGreaterThan(releaseMenuIndex)
-    expect(templateMenuIndex).toBeLessThan(engineeringSectionIndex)
-    expect(templateMenuIndex).toBeLessThan(systemSectionIndex)
+    expect(templateMenuIndex).toBeLessThan(appVue.indexOf("{ key: 'engineer'"))
+    expect(templateMenuIndex).toBeLessThan(appVue.indexOf("{ key: 'system'"))
     expect(quoteTemplateManage).toContain('<h1 class="erp-page-title">报价模板</h1>')
     expect(quoteTemplateManage).not.toContain('系统管理：报价单模板')
   })

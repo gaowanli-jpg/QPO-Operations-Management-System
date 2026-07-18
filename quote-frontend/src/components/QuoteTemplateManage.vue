@@ -53,7 +53,7 @@
                 class="template-alert"
               />
               <div class="erp-upload-surface template-upload-surface">
-                <el-upload
+                <el-upload v-permission="'market:template:upload'"
                   ref="uploadRef"
                   drag
                   :auto-upload="false"
@@ -71,7 +71,7 @@
                 </el-upload>
               </div>
               <div class="erp-dialog-footer template-actions">
-                <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadTemplate">
+                <el-button v-permission="'market:template:upload'" type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadTemplate">
                   上传并替换模板
                 </el-button>
               </div>

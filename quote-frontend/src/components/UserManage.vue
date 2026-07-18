@@ -6,7 +6,7 @@
         <p class="erp-page-description">维护登录账号、部门角色和启用状态。</p>
       </div>
       <div class="erp-page-actions user-page-actions">
-        <el-button type="primary" @click="openCreate">新增用户</el-button>
+        <el-button v-permission="'system:user:create'" type="primary" @click="openCreate">新增用户</el-button>
       </div>
     </header>
 
@@ -54,12 +54,12 @@
           <el-table-column label="操作" width="330" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions user-row-actions">
-                <el-button size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button size="small" @click="openPassword(row)">重置密码</el-button>
-                <el-button size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleEnabled(row)">
+                <el-button v-permission="'system:user:update'" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button v-permission="'system:user:reset-password'" size="small" @click="openPassword(row)">重置密码</el-button>
+                <el-button v-permission="'system:user:disable'" size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleEnabled(row)">
                   {{ row.enabled ? '禁用' : '启用' }}
                 </el-button>
-                <el-button size="small" type="danger" plain class="erp-danger-action" :disabled="isProtectedUser(row)" @click="deleteUser(row)">
+                <el-button v-permission="'system:user:delete'" size="small" type="danger" plain class="erp-danger-action" :disabled="isProtectedUser(row)" @click="deleteUser(row)">
                   删除
                 </el-button>
               </div>
@@ -98,7 +98,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
+          <el-button v-permission="['system:user:create', 'system:user:update']" type="primary" :loading="saving" @click="saveUser">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -115,7 +115,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="passwordVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="resetPassword">确定</el-button>
+          <el-button v-permission="'system:user:reset-password'" type="primary" :loading="saving" @click="resetPassword">确定</el-button>
         </div>
       </template>
     </el-dialog>

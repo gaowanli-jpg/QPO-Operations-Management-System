@@ -37,7 +37,7 @@
                 class="days-input"
               />
               <div class="erp-table-actions workflow-muted-actions batch-actions">
-                <el-button
+                <el-button v-permission="'market:quote-process:update-lead-time'"
                   :icon="Plus"
                   plain
                   class="workflow-soft-button"
@@ -47,7 +47,7 @@
                 >
                   增加
                 </el-button>
-                <el-button
+                <el-button v-permission="'market:quote-process:update-lead-time'"
                   :icon="Minus"
                   plain
                   class="workflow-soft-button"
@@ -68,7 +68,7 @@
                   clearable
                   class="date-input batch-date-input quote-manual-date-input"
                 />
-                <el-button
+                <el-button v-permission="'market:quote-process:update-lead-time'"
                   plain
                   class="workflow-soft-button quote-manual-date-button"
                   :disabled="selectedRows.length === 0 || !manualQuoteDate"
@@ -82,7 +82,7 @@
             </div>
 
             <div class="workflow-action-stack quote-export-actions">
-              <el-button
+              <el-button v-permission="'market:quote-process:export'"
                 :icon="Download"
                 type="primary"
                 size="large"
@@ -92,7 +92,7 @@
               >
                 生成详细报价单
               </el-button>
-              <el-button
+              <el-button v-permission="'market:quote-process:export'"
                 :icon="Download"
                 plain
                 size="large"
@@ -102,7 +102,7 @@
               >
                 生成简化报价单
               </el-button>
-              <el-button
+              <el-button v-permission="'market:quote-process:export'"
                 :icon="Download"
                 plain
                 size="large"
@@ -112,7 +112,7 @@
               >
                 生成客户模板详细报价单
               </el-button>
-              <el-button
+              <el-button v-permission="'market:quote-process:export'"
                 :icon="Download"
                 plain
                 size="large"
@@ -195,7 +195,7 @@
               </el-table-column>
               <el-table-column label="操作" width="96" align="center" fixed="right">
                 <template #default="{ row }">
-                  <el-button
+                  <el-button v-permission="'market:quote-process:update-lead-time'"
                     :icon="Check"
                     type="primary"
                     size="small"
