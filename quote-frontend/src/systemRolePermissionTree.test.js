@@ -17,6 +17,13 @@ describe('QPO role permission tree guardrails', () => {
     expect(roleManage).toContain('permissionTreeRef')
     expect(roleManage).toContain('permissionTree')
     expect(roleManage).toContain('collectPermissionCodes')
+    expect(roleManage).toContain('listPermissionTree')
+    expect(roleManage).toContain('size="720px"')
+    expect(roleManage).toContain('permissionTreeSearch')
+    expect(roleManage).toContain('showSelectedOnly')
+    expect(roleManage).toContain('expandPermissionTree')
+    expect(roleManage).toContain('collapsePermissionTree')
+    expect(roleManage).toContain('<el-tooltip')
     expect(roleManage).not.toContain('<el-checkbox-group')
   })
 

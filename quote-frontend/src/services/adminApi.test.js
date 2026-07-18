@@ -70,9 +70,11 @@ describe('adminApi', () => {
   test('loads roles and permissions for role management', async () => {
     await adminApi.listRoles()
     await adminApi.listPermissions()
+    await adminApi.listPermissionTree()
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/system/roles')
     expect(request).toHaveBeenNthCalledWith(2, '/api/system/permissions')
+    expect(request).toHaveBeenNthCalledWith(3, '/api/system/permissions/tree')
   })
 
   test('saves role and role authorization settings', async () => {

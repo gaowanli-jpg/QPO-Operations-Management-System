@@ -40,6 +40,8 @@ export const deleteRole = (roleId) => request(`/api/system/roles/${roleId}`, {
 
 export const listPermissions = () => request('/api/system/permissions')
 
+export const listPermissionTree = () => request('/api/system/permissions/tree')
+
 export const getRolePermissions = (roleId) => request(`/api/system/roles/${roleId}/permissions`)
 
 export const assignRolePermissions = (roleId, permissionCodes = []) => request(`/api/system/roles/${roleId}/permissions`, {

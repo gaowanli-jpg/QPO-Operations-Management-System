@@ -78,20 +78,43 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="permissionDrawerVisible" title="角色授权" size="520px">
+    <el-drawer v-model="permissionDrawerVisible" title="角色授权" size="720px">
       <div class="role-drawer-body">
         <p class="role-drawer-help">勾选该角色拥有的菜单、按钮和接口权限。</p>
-        <el-checkbox-group v-model="permissionCodes" class="permission-list">
-          <el-checkbox
-            v-for="permission in permissions"
-            :key="permission.permissionCode"
-            :label="permission.permissionCode"
-            :disabled="permission.enabled === false"
-          >
-            {{ permission.permissionName || permission.permissionCode }}
-            <span class="permission-code">{{ permission.permissionCode }}</span>
-          </el-checkbox>
-        </el-checkbox-group>
+        <div class="permission-tree-toolbar">
+          <el-input
+            v-model.trim="permissionTreeSearch"
+            clearable
+            placeholder="搜索权限名称或编码"
+            class="permission-tree-search"
+          />
+          <el-switch v-model="showSelectedOnly" active-text="只看已选" />
+          <div class="permission-tree-actions">
+            <el-button size="small" @click="expandPermissionTree">展开全部</el-button>
+            <el-button size="small" @click="collapsePermissionTree">收起全部</el-button>
+          </div>
+        </div>
+        <el-tree
+          ref="permissionTreeRef"
+          class="permission-tree"
+          :data="permissionTree"
+          node-key="key"
+          show-checkbox
+          default-expand-all
+          :props="permissionTreeProps"
+          :filter-node-method="filterPermissionNode"
+          @check="handlePermissionTreeCheck"
+        >
+          <template #default="{ data }">
+            <div class="permission-tree-node" :class="{ 'permission-tree-group': isPermissionGroup(data) }">
+              <span class="permission-tree-name">{{ data.label || data.permissionName || data.permissionCode }}</span>
+              <el-tag v-if="data.permissionType" size="small" effect="plain">{{ permissionTypeLabel(data.permissionType) }}</el-tag>
+              <el-tooltip v-if="data.permissionCode" :content="data.permissionCode" placement="top">
+                <span class="permission-code">{{ data.permissionCode }}</span>
+              </el-tooltip>
+            </div>
+          </template>
+        </el-tree>
       </div>
       <template #footer>
         <div class="erp-dialog-footer">
@@ -149,7 +172,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   assignRoleDataScope,
@@ -159,13 +182,13 @@ import {
   getRolePermissions,
   listDataScopeCustomers,
   listDataScopeDepartments,
-  listPermissions,
+  listPermissionTree,
   listRoles,
   saveRole
 } from '../services/adminApi'
 
 const roles = ref([])
-const permissions = ref([])
+const permissionTree = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -173,9 +196,13 @@ const permissionDrawerVisible = ref(false)
 const dataScopeDrawerVisible = ref(false)
 const currentRole = ref(null)
 const permissionCodes = ref([])
+const permissionTreeSearch = ref('')
+const showSelectedOnly = ref(false)
 const departmentTree = ref([])
 const customerOptions = ref([])
+const permissionTreeRef = ref(null)
 const dataScopeDeptTreeRef = ref(null)
+const permissionTreeProps = { label: 'label', children: 'children', disabled: 'disabled' }
 
 const form = reactive({
   id: null,
@@ -207,9 +234,9 @@ const dataScopeLabel = (value) => dataScopeOptions.find(item => item.value === v
 const loadAll = async () => {
   loading.value = true
   try {
-    const [roleRows, permissionRows] = await Promise.all([listRoles(), listPermissions()])
+    const [roleRows, permissionRows] = await Promise.all([listRoles(), listPermissionTree()])
     roles.value = roleRows || []
-    permissions.value = permissionRows || []
+    permissionTree.value = permissionRows || []
   } finally {
     loading.value = false
   }
@@ -271,19 +298,112 @@ const removeRole = async (row) => {
 
 const openPermissionDrawer = async (row) => {
   currentRole.value = row
+  permissionTreeSearch.value = ''
+  showSelectedOnly.value = false
   permissionCodes.value = await getRolePermissions(row.id) || []
   permissionDrawerVisible.value = true
+  await syncPermissionTreeChecked()
 }
 
 const savePermissions = async () => {
   saving.value = true
   try {
+    const checkedKeys = permissionTreeRef.value?.getCheckedKeys(false) || []
+    const halfCheckedKeys = permissionTreeRef.value?.getHalfCheckedKeys() || []
+    permissionCodes.value = collectPermissionCodes([...checkedKeys, ...halfCheckedKeys])
     await assignRolePermissions(currentRole.value.id, permissionCodes.value)
     ElMessage.success('角色权限已更新')
     permissionDrawerVisible.value = false
   } finally {
     saving.value = false
   }
+}
+
+const collectPermissionCodes = (keys = []) => {
+  const permissionByKey = new Map()
+  walkPermissionTree(permissionTree.value, (node) => {
+    if (node?.key && node?.permissionCode) {
+      permissionByKey.set(node.key, node.permissionCode)
+    }
+  })
+  return [...new Set(keys.map(key => permissionByKey.get(key)).filter(Boolean))]
+}
+
+const walkPermissionTree = (nodes = [], visitor) => {
+  for (const node of nodes || []) {
+    visitor(node)
+    if (node.children?.length) {
+      walkPermissionTree(node.children, visitor)
+    }
+  }
+}
+
+const handlePermissionTreeCheck = (_node, checkedState) => {
+  const checkedKeys = checkedState?.checkedKeys || []
+  const halfCheckedKeys = checkedState?.halfCheckedKeys || []
+  permissionCodes.value = collectPermissionCodes([...checkedKeys, ...halfCheckedKeys])
+}
+
+const syncPermissionTreeChecked = async () => {
+  await nextTick()
+  const tree = permissionTreeRef.value
+  if (!tree) return
+  tree.setCheckedKeys([], false)
+  permissionCodes.value.forEach(code => tree.setChecked(code, true, false))
+  applyPermissionTreeFilter()
+}
+
+const applyPermissionTreeFilter = () => {
+  permissionTreeRef.value?.filter(`${permissionTreeSearch.value}|${showSelectedOnly.value}|${permissionCodes.value.join(',')}`)
+}
+
+const filterPermissionNode = (_filterValue, data) => {
+  const keyword = permissionTreeSearch.value.trim().toLowerCase()
+  const matchesSearch = !keyword || isPermissionNodeMatchingSearch(data, keyword)
+  const matchesSelected = !showSelectedOnly.value || isPermissionNodeSelected(data)
+  return matchesSearch && matchesSelected
+}
+
+const isPermissionNodeMatchingSearch = (node, keyword) => {
+  if (!node) return false
+  const text = [
+    node.label,
+    node.permissionName,
+    node.permissionCode,
+    node.groupName,
+    node.permissionType
+  ].filter(Boolean).join(' ').toLowerCase()
+  return text.includes(keyword) || (node.children || []).some(child => isPermissionNodeMatchingSearch(child, keyword))
+}
+
+const isPermissionNodeSelected = (node) => {
+  if (!node) return false
+  if (node.permissionCode && permissionCodes.value.includes(node.permissionCode)) {
+    return true
+  }
+  return (node.children || []).some(child => isPermissionNodeSelected(child))
+}
+
+const setPermissionTreeExpanded = (expanded) => {
+  const nodesMap = permissionTreeRef.value?.store?.nodesMap || {}
+  Object.values(nodesMap).forEach(node => {
+    node.expanded = expanded
+  })
+}
+
+const expandPermissionTree = () => setPermissionTreeExpanded(true)
+
+const collapsePermissionTree = () => setPermissionTreeExpanded(false)
+
+const isPermissionGroup = (node) => node?.key?.startsWith('group:')
+
+const permissionTypeLabel = (type) => {
+  const labels = {
+    MENU: '菜单',
+    BUTTON: '按钮',
+    API: '接口'
+  }
+  return labels[type] || type
 }
 
 const loadDataScopeOptions = async () => {
@@ -329,6 +449,12 @@ const saveDataScope = async () => {
   }
 }
 
+watch([permissionTreeSearch, showSelectedOnly, permissionCodes], () => {
+  if (permissionDrawerVisible.value) {
+    applyPermissionTreeFilter()
+  }
+})
+
 onMounted(loadAll)
 </script>
 
@@ -349,9 +475,69 @@ onMounted(loadAll)
   gap: var(--erp-space-4);
 }
 
-.permission-list {
-  display: grid;
+.permission-tree-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-3);
+  border: 1px solid var(--erp-border-subtle);
+  border-radius: var(--erp-radius-md);
+  background: var(--erp-surface-muted);
+}
+
+.permission-tree-search {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.permission-tree-actions {
+  display: flex;
   gap: var(--erp-space-2);
+}
+
+.permission-tree {
+  width: 100%;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  border: 1px solid var(--erp-border-subtle);
+  border-radius: var(--erp-radius-md);
+  padding: var(--erp-space-2);
+  background: var(--erp-surface);
+}
+
+.permission-tree :deep(.el-tree-node__content) {
+  min-height: 36px;
+  padding-right: var(--erp-space-2);
+}
+
+.permission-tree-node {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-2);
+  min-width: 0;
+  width: 100%;
+}
+
+.permission-tree-name {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.permission-tree-group .permission-tree-name {
+  font-weight: 700;
+}
+
+.permission-tree-node .permission-code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .data-scope-dept-tree {
