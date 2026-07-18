@@ -256,6 +256,9 @@ import {
   paginateRows
 } from '../utils/clientPagination'
 
+const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价']
+const QUOTE_PROCESS_SAVE_QUOTE_PERMISSION = 'market:quote-process:save-quote'
+
 const selectedRfqId = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])

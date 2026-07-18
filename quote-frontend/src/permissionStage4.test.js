@@ -63,7 +63,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
   test('wires critical business actions to permission points', () => {
     const expectations = [
       ['MarketDashboard', ['market:rfq:import', 'market:rfq:upload-drawing']],
-      ['QuoteProcess', ['market:quote-process:update-lead-time', 'market:quote-process:export']],
+      ['QuoteProcess', ['market:quote-process:update-lead-time', 'market:quote-process:save-quote', 'market:quote-process:export']],
       ['MarketRelease', ['market:release:create', 'market:release:reset']],
       ['OrderManage', ['market:order:supplement-drawing', 'market:order:delete']],
       ['HistoryOrderManage', ['market:order:delete']],
@@ -82,5 +82,18 @@ describe('QPO permission stage 4 menu and button permissions', () => {
         expect(source, `${component} should reference ${permission}`).toContain(permission)
       }
     }
+  })
+
+  test('freezes quote process save quote API and allowed status source anchors', () => {
+    const quoteProcess = componentSource('QuoteProcess')
+    const marketApi = readSource('services', 'marketApi.js')
+
+    expect(marketApi).toContain('saveQuoteSheet')
+    expect(marketApi).toContain('/api/market/quote-process/${rfqId}/save-quote')
+    expect(quoteProcess).toContain('QUOTE_PROCESS_ALLOWED_STATUSES')
+    expect(quoteProcess).toContain("'已核价'")
+    expect(quoteProcess).toContain("'已报价'")
+    expect(quoteProcess).toContain('QUOTE_PROCESS_SAVE_QUOTE_PERMISSION')
+    expect(quoteProcess).toContain('market:quote-process:save-quote')
   })
 })

@@ -40,6 +40,7 @@ class PermissionSystemStage4Test {
                 "market:rfq:import",
                 "market:rfq:upload-drawing",
                 "market:quote-process:update-lead-time",
+                "market:quote-process:save-quote",
                 "market:quote-process:export",
                 "market:release:create",
                 "market:release:reset",

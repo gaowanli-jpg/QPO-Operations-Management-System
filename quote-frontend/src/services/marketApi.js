@@ -59,6 +59,8 @@ export const setQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-
 
 export const updateQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/update', payload)
 
+export const saveQuoteSheet = (rfqId) => postJson(`/api/market/quote-process/${rfqId}/save-quote`)
+
 export const downloadCustomerLeadTimeQuote = (rfqId, fallbackName = `quote-${rfqId}.xlsx`) => downloadFile(
   `/api/market/export/quote/customer-lead-time/${rfqId}`,
   fallbackName

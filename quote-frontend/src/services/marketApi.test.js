@@ -159,6 +159,15 @@ describe('marketApi', () => {
     })
   })
 
+  test('saveQuoteSheet posts quote confirmation by rfq id', async () => {
+    await marketApi.saveQuoteSheet(18)
+
+    expect(request).toHaveBeenCalledWith('/api/market/quote-process/18/save-quote', {
+      method: 'POST',
+      data: undefined
+    })
+  })
+
   test('download helpers preserve export paths and fallback names', async () => {
     await marketApi.downloadCustomerLeadTimeQuote(18)
     await marketApi.downloadMarketExport('ticket', 18, 'ticket-18.xlsx')

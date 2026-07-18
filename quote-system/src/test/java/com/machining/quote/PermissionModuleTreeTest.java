@@ -98,6 +98,21 @@ class PermissionModuleTreeTest {
                 );
     }
 
+    @Test
+    void quoteProcessSaveQuotePermissionBelongsToQuoteProcessModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Saving a quote sheet is a distinct market confirmation action")
+                .contains("market:quote-process:save-quote");
+        assertThat(source)
+                .as("Save quote permission must sit under the quote process MENU permission parent id")
+                .contains("permission(146L, \"BUTTON\", \"market:quote-process:save-quote\", \"保存报价单\", null, null, false, 136, 4L)");
+        assertThat(source)
+                .as("Market roles can save quote sheets; read-only users cannot")
+                .contains("Map.entry(\"market:quote-process:save-quote\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))");
+    }
+
     private List<PermissionRow> fallbackPermissions() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
         Matcher matcher = FALLBACK_PERMISSION.matcher(source);
