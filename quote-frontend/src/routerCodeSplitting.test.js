@@ -16,6 +16,7 @@ const businessRouteComponents = [
   'OrderManage',
   'HistoryOrderManage',
   'UserManage',
+  'SystemRoleManage',
   'QuoteTemplateManage',
   'AuditLogManage'
 ]

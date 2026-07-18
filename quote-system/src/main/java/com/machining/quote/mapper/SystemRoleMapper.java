@@ -22,4 +22,18 @@ public interface SystemRoleMapper extends BaseMapper<SystemRole> {
             ORDER BY r.sort_order ASC, r.id ASC
             """)
     List<SystemRole> selectActiveRolesByLegacyUserId(@Param("legacyUserId") Integer legacyUserId);
+
+    @Select("""
+            <script>
+            SELECT *
+            FROM system_role
+            WHERE COALESCE(deleted, FALSE) = FALSE
+              AND role_code IN
+              <foreach collection="codes" item="code" open="(" separator="," close=")">
+                #{code}
+              </foreach>
+            ORDER BY sort_order ASC, id ASC
+            </script>
+            """)
+    List<SystemRole> selectByRoleCodes(@Param("codes") List<String> codes);
 }

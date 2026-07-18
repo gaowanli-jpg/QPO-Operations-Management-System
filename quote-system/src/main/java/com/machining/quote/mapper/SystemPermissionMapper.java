@@ -25,4 +25,17 @@ public interface SystemPermissionMapper extends BaseMapper<SystemPermission> {
             ORDER BY p.sort_order ASC, p.id ASC
             """)
     List<SystemPermission> selectEnabledPermissionsByLegacyUserId(@Param("legacyUserId") Integer legacyUserId);
+
+    @Select("""
+            <script>
+            SELECT *
+            FROM system_permission
+            WHERE permission_code IN
+              <foreach collection="codes" item="code" open="(" separator="," close=")">
+                #{code}
+              </foreach>
+            ORDER BY sort_order ASC, id ASC
+            </script>
+            """)
+    List<SystemPermission> selectByPermissionCodes(@Param("codes") List<String> codes);
 }

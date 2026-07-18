@@ -46,6 +46,7 @@ describe('QPO permission stage 0 guardrails', () => {
       '/orders': ['MARKET', 'ADMIN'],
       '/history-orders': ['MARKET', 'ADMIN'],
       '/users': ['ADMIN'],
+      '/roles': ['ADMIN'],
       '/audit-logs': ['ADMIN'],
       '/quote-template': ['ADMIN'],
       '/pricing': ['ENGINEER', 'ADMIN']
@@ -70,6 +71,7 @@ describe('QPO permission stage 0 guardrails', () => {
       '/orders': ['MARKET', 'ADMIN'],
       '/history-orders': ['MARKET', 'ADMIN'],
       '/users': ['ADMIN'],
+      '/roles': ['ADMIN'],
       '/audit-logs': ['ADMIN']
     })
   })

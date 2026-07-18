@@ -181,7 +181,7 @@ public class AuditService {
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
         if (startsWith(action, "DICT_")) return "DICT";
-        if (startsWith(action, "USER_")) return "SYSTEM";
+        if (startsWith(action, "USER_") || startsWith(action, "SYSTEM_USER_") || startsWith(action, "SYSTEM_ROLE_")) return "SYSTEM";
         if (startsWith(action, "ORDER_")) return "ORDER";
         if (startsWith(action, "DELIVERY_") || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
         if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_")) return "MARKET";
@@ -201,6 +201,17 @@ public class AuditService {
             case "USER_UPDATE" -> "编辑用户";
             case "USER_CHANGE_PASSWORD" -> "修改密码";
             case "USER_DELETE" -> "删除用户";
+            case "SYSTEM_USER_CREATE" -> "新增用户";
+            case "SYSTEM_USER_UPDATE" -> "编辑用户";
+            case "SYSTEM_USER_DISABLE" -> "禁用用户";
+            case "SYSTEM_USER_ENABLE" -> "启用用户";
+            case "SYSTEM_USER_DELETE" -> "删除用户";
+            case "SYSTEM_USER_ASSIGN_ROLE" -> "用户分配角色";
+            case "SYSTEM_ROLE_CREATE" -> "新增角色";
+            case "SYSTEM_ROLE_UPDATE" -> "编辑角色";
+            case "SYSTEM_ROLE_DELETE" -> "删除角色";
+            case "SYSTEM_ROLE_ASSIGN_PERMISSION" -> "角色分配权限";
+            case "SYSTEM_ROLE_ASSIGN_DATA_SCOPE" -> "角色分配数据范围";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";

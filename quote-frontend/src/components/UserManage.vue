@@ -23,8 +23,19 @@
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="username" label="账号" min-width="130" show-overflow-tooltip />
           <el-table-column prop="displayName" label="显示名称" min-width="150" show-overflow-tooltip />
-          <el-table-column label="角色" width="130">
-            <template #default="{ row }">{{ roleLabel(row.role) }}</template>
+          <el-table-column label="角色" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="user-role-tags">
+                <el-tag
+                  v-for="role in roleTags(row)"
+                  :key="role.code"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ role.label }}
+                </el-tag>
+              </div>
+            </template>
           </el-table-column>
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
@@ -67,10 +78,14 @@
           <el-input v-model.trim="form.displayName" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="form.role" style="width: 100%">
-            <el-option label="管理员" value="ADMIN" />
-            <el-option label="市场部" value="MARKET" />
-            <el-option label="工程部" value="ENGINEER" />
+          <el-select v-model="form.roleCodes" multiple collapse-tags collapse-tags-tooltip style="width: 100%">
+            <el-option
+              v-for="role in roleOptions"
+              :key="role.roleCode"
+              :label="role.roleName || role.roleCode"
+              :value="role.roleCode"
+              :disabled="role.enabled === false"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -112,12 +127,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   changeUserPassword,
   deleteUser as deleteUserRequest,
+  listRoles,
   listUsers,
   saveUser as saveUserRequest,
   updateUserStatus
 } from '../services/adminApi'
 
 const users = ref([])
+const roleOptions = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -130,15 +147,40 @@ const form = reactive({
   username: '',
   password: '',
   displayName: '',
-  role: 'MARKET',
+  roleCodes: ['MARKET_USER'],
   enabled: true
 })
 
-const roleLabel = (role) => ({
+const fallbackRoleLabels = {
   ADMIN: '管理员',
   MARKET: '市场部',
-  ENGINEER: '工程部'
+  ENGINEER: '工程部',
+  SUPER_ADMIN: '超级管理员',
+  MARKET_USER: '市场专员',
+  MARKET_MANAGER: '市场主管',
+  ENGINEER_USER: '工程核价员',
+  ENGINEER_MANAGER: '工程主管',
+  AUDITOR: '审计员',
+  READONLY: '只读查看员'
+}
+
+const legacyRoleCode = (role) => ({
+  ADMIN: 'SUPER_ADMIN',
+  MARKET: 'MARKET_USER',
+  ENGINEER: 'ENGINEER_USER'
 }[role] || role)
+
+const roleLabel = (role) => {
+  const option = roleOptions.value.find(item => item.roleCode === role)
+  return option?.roleName || fallbackRoleLabels[role] || role
+}
+
+const roleTags = (row) => {
+  const codes = Array.isArray(row.roleCodes) && row.roleCodes.length
+    ? row.roleCodes
+    : [legacyRoleCode(row.role)]
+  return codes.filter(Boolean).map(code => ({ code, label: roleLabel(code) }))
+}
 
 const protectedUsernames = new Set(['admin', 'market', 'engineer'])
 
@@ -154,12 +196,17 @@ const loadUsers = async () => {
   }
 }
 
+const loadRoles = async () => {
+  const response = await listRoles()
+  roleOptions.value = (response || []).filter(role => role.deleted !== true)
+}
+
 const resetForm = () => {
   editingId.value = null
   form.username = ''
   form.password = ''
   form.displayName = ''
-  form.role = 'MARKET'
+  form.roleCodes = ['MARKET_USER']
   form.enabled = true
 }
 
@@ -173,7 +220,9 @@ const openEdit = (row) => {
   form.username = row.username
   form.password = ''
   form.displayName = row.displayName
-  form.role = row.role
+  form.roleCodes = Array.isArray(row.roleCodes) && row.roleCodes.length
+    ? [...row.roleCodes]
+    : [legacyRoleCode(row.role)]
   form.enabled = row.enabled
   dialogVisible.value = true
 }
@@ -187,12 +236,16 @@ const saveUser = async () => {
     ElMessage.warning('初始密码至少 8 位')
     return
   }
+  if (!form.roleCodes.length) {
+    ElMessage.warning('请至少选择一个角色')
+    return
+  }
   saving.value = true
   try {
     const payload = {
       username: form.username,
       displayName: form.displayName,
-      role: form.role,
+      roleCodes: form.roleCodes,
       enabled: form.enabled
     }
     if (form.password) payload.password = form.password
@@ -257,7 +310,10 @@ const deleteUser = async (row) => {
 
 const isLocked = (row) => row.lockedUntil && new Date(row.lockedUntil).getTime() > Date.now()
 
-onMounted(loadUsers)
+onMounted(async () => {
+  await loadRoles()
+  await loadUsers()
+})
 </script>
 
 <style scoped>
@@ -272,5 +328,11 @@ onMounted(loadUsers)
 
 .user-row-actions {
   justify-content: flex-start;
+}
+
+.user-role-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--erp-space-1);
 }
 </style>

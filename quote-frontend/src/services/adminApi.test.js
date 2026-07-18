@@ -14,7 +14,7 @@ describe('adminApi', () => {
   test('listUsers loads admin users', async () => {
     await adminApi.listUsers()
 
-    expect(request).toHaveBeenCalledWith('/api/admin/users')
+    expect(request).toHaveBeenCalledWith('/api/system/users')
   })
 
   test('saveUser creates a user without id', async () => {
@@ -22,7 +22,7 @@ describe('adminApi', () => {
 
     await adminApi.saveUser(payload)
 
-    expect(request).toHaveBeenCalledWith('/api/admin/users', {
+    expect(request).toHaveBeenCalledWith('/api/system/users', {
       method: 'POST',
       data: payload
     })
@@ -33,7 +33,7 @@ describe('adminApi', () => {
 
     await adminApi.saveUser(payload)
 
-    expect(request).toHaveBeenCalledWith('/api/admin/users/7', {
+    expect(request).toHaveBeenCalledWith('/api/system/users/7', {
       method: 'PUT',
       data: payload
     })
@@ -44,7 +44,7 @@ describe('adminApi', () => {
 
     await adminApi.changeUserPassword(7, payload)
 
-    expect(request).toHaveBeenCalledWith('/api/admin/users/7', {
+    expect(request).toHaveBeenCalledWith('/api/system/users/7/reset-password', {
       method: 'PUT',
       data: payload
     })
@@ -53,7 +53,7 @@ describe('adminApi', () => {
   test('updateUserStatus puts enabled status by user id', async () => {
     await adminApi.updateUserStatus(7, false)
 
-    expect(request).toHaveBeenCalledWith('/api/admin/users/7', {
+    expect(request).toHaveBeenCalledWith('/api/system/users/7/status', {
       method: 'PUT',
       data: { enabled: false }
     })
@@ -62,8 +62,35 @@ describe('adminApi', () => {
   test('deleteUser deletes by user id', async () => {
     await adminApi.deleteUser(7)
 
-    expect(request).toHaveBeenCalledWith('/api/admin/users/7', {
+    expect(request).toHaveBeenCalledWith('/api/system/users/7', {
       method: 'DELETE'
+    })
+  })
+
+  test('loads roles and permissions for role management', async () => {
+    await adminApi.listRoles()
+    await adminApi.listPermissions()
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/system/roles')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/system/permissions')
+  })
+
+  test('saves role and role authorization settings', async () => {
+    await adminApi.saveRole({ id: 8, roleName: 'Manager' })
+    await adminApi.assignRolePermissions(8, ['market:rfq:view'])
+    await adminApi.assignRoleDataScope(8, { dataScope: 'CUSTOM', deptIds: [1] })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/system/roles/8', {
+      method: 'PUT',
+      data: { id: 8, roleName: 'Manager' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/system/roles/8/permissions', {
+      method: 'POST',
+      data: { permissionCodes: ['market:rfq:view'] }
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/system/roles/8/data-scope', {
+      method: 'POST',
+      data: { dataScope: 'CUSTOM', deptIds: [1] }
     })
   })
 
