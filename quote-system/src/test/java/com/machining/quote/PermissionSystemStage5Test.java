@@ -79,7 +79,8 @@ class PermissionSystemStage5Test {
                 .contains("@RequirePermission(\"engineer:dict:fee-manage\")");
         assertThat(quoteProcess)
                 .contains("@RequirePermission(\"market:quote-process:view\")")
-                .contains("@RequirePermission(\"market:quote-process:update-lead-time\")");
+                .contains("@RequirePermission(\"market:quote-process:update-lead-time\")")
+                .contains("@RequirePermission(\"market:quote-process:save-quote\")");
         assertThat(order)
                 .contains("@RequirePermission(\"market:order:view\")")
                 .contains("@RequirePermission(\"common:customer:select\")")

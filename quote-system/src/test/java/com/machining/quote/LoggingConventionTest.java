@@ -103,7 +103,12 @@ class LoggingConventionTest {
 
         assertThat(source("service/QuoteProcessService.java"))
                 .contains("Quote lead time shifted")
-                .contains("Quote lead time set");
+                .contains("Quote lead time set")
+                .contains("Quote sheet save started")
+                .contains("Quote sheet save completed")
+                .contains("Quote sheet save rejected")
+                .contains("Quote sheet save failed")
+                .contains("log.error(\"Quote sheet save failed");
 
         assertThat(source("service/InternalTargetLeadTimeService.java"))
                 .contains("Internal target lead time shifted")

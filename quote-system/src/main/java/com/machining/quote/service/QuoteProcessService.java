@@ -165,53 +165,65 @@ public class QuoteProcessService {
     @Transactional
     public Map<String, Object> saveQuoteSheet(Integer rfqId) {
         long startedAt = System.currentTimeMillis();
-        OrderRfq order = requireQuoteProcessSavableOrderForUpdate(rfqId);
-        List<ItemQuoteVersion> items = listItems(rfqId);
-        if (items.isEmpty()) {
-            throw new RuntimeException("订单没有零件，不能保存报价单");
+        log.info("Quote sheet save started rfqId={}", rfqId);
+        try {
+            OrderRfq order = requireQuoteProcessSavableOrderForUpdate(rfqId);
+            List<ItemQuoteVersion> items = listItems(rfqId);
+            if (items.isEmpty()) {
+                throw new RuntimeException("订单没有零件，不能保存报价单");
+            }
+
+            List<String> unpricedItems = items.stream()
+                    .filter(this::hasDrawing)
+                    .filter(item -> item.getFinalUnitPrice() == null)
+                    .map(this::itemLabel)
+                    .toList();
+            if (!unpricedItems.isEmpty()) {
+                throw new RuntimeException("订单存在未核价零件，不能保存报价单：" + String.join("、", unpricedItems));
+            }
+
+            List<String> missingLeadTimes = items.stream()
+                    .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
+                    .map(this::itemLabel)
+                    .toList();
+            if (!missingLeadTimes.isEmpty()) {
+                throw new RuntimeException("以下零件缺少报价交期，不能保存报价单：" + String.join("、", missingLeadTimes));
+            }
+
+            Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size());
+            order.setStatus(QuoteStatusWorkflow.nextAfterMarketSaveQuote(order.getStatus()));
+            orderRfqMapper.updateById(order);
+            OrderRfq savedOrder = orderRfqMapper.selectById(order.getId());
+            Map<String, Object> after = quoteSheetSummary(savedOrder, items, 0);
+            auditService.record(
+                    "QUOTE_PROCESS_SAVE_QUOTE",
+                    "order_rfq",
+                    order.getId(),
+                    before,
+                    after,
+                    "QUOTE_PROCESS",
+                    "SUCCESS",
+                    "保存报价单：RFQ " + safe(savedOrder.getRfqNo()) + "，零件 " + items.size() + " 个",
+                    null
+            );
+            log.info("Quote sheet save completed rfqId={} fromStatus={} toStatus={} itemCount={} durationMs={}",
+                    rfqId, before.get("status"), savedOrder.getStatus(), items.size(), System.currentTimeMillis() - startedAt);
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", true);
+            result.put("orderInfo", savedOrder);
+            result.put("itemList", items.stream().map(this::buildItemRow).toList());
+            return result;
+        } catch (RuntimeException e) {
+            long durationMs = System.currentTimeMillis() - startedAt;
+            if (isBusinessRejection(e)) {
+                log.warn("Quote sheet save rejected rfqId={} reason={} durationMs={}",
+                        rfqId, safeLogMessage(e), durationMs);
+            } else {
+                log.error("Quote sheet save failed rfqId={} durationMs={}", rfqId, durationMs, e);
+            }
+            throw e;
         }
-
-        List<String> unpricedItems = items.stream()
-                .filter(this::hasDrawing)
-                .filter(item -> item.getFinalUnitPrice() == null)
-                .map(this::itemLabel)
-                .toList();
-        if (!unpricedItems.isEmpty()) {
-            throw new RuntimeException("订单存在未核价零件，不能保存报价单：" + String.join("、", unpricedItems));
-        }
-
-        List<String> missingLeadTimes = items.stream()
-                .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
-                .map(this::itemLabel)
-                .toList();
-        if (!missingLeadTimes.isEmpty()) {
-            throw new RuntimeException("以下零件缺少报价交期，不能保存报价单：" + String.join("、", missingLeadTimes));
-        }
-
-        Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size());
-        order.setStatus(QuoteStatusWorkflow.nextAfterMarketSaveQuote(order.getStatus()));
-        orderRfqMapper.updateById(order);
-        OrderRfq savedOrder = orderRfqMapper.selectById(order.getId());
-        Map<String, Object> after = quoteSheetSummary(savedOrder, items, 0);
-        auditService.record(
-                "QUOTE_PROCESS_SAVE_QUOTE",
-                "order_rfq",
-                order.getId(),
-                before,
-                after,
-                "QUOTE_PROCESS",
-                "SUCCESS",
-                "保存报价单：RFQ " + safe(savedOrder.getRfqNo()) + "，零件 " + items.size() + " 个",
-                null
-        );
-        log.info("Quote sheet save completed rfqId={} fromStatus={} toStatus={} itemCount={} durationMs={}",
-                rfqId, before.get("status"), savedOrder.getStatus(), items.size(), System.currentTimeMillis() - startedAt);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("success", true);
-        result.put("orderInfo", savedOrder);
-        result.put("itemList", items.stream().map(this::buildItemRow).toList());
-        return result;
     }
 
     public void assertQuoteExportable(Integer rfqId) {
@@ -362,6 +374,21 @@ public class QuoteProcessService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private boolean isBusinessRejection(RuntimeException e) {
+        return e != null
+                && e.getClass().equals(RuntimeException.class)
+                && e.getCause() == null
+                && !isBlank(e.getMessage());
+    }
+
+    private String safeLogMessage(RuntimeException e) {
+        String message = e == null ? null : e.getMessage();
+        if (isBlank(message)) {
+            return e == null ? "unknown" : e.getClass().getSimpleName();
+        }
+        return message.replace('\n', ' ').replace('\r', ' ');
     }
 
     private boolean isBlank(String value) {

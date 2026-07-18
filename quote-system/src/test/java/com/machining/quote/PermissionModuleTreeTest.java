@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PermissionModuleTreeTest {
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
+    private static final Path QUOTE_SAVE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V33__quote_process_save_quote_permission.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -111,6 +112,20 @@ class PermissionModuleTreeTest {
         assertThat(source)
                 .as("Market roles can save quote sheets; read-only users cannot")
                 .contains("Map.entry(\"market:quote-process:save-quote\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))");
+    }
+
+    @Test
+    void quoteProcessSaveQuotePermissionMigrationKeepsDatabaseCatalogAligned() throws IOException {
+        String migration = Files.readString(QUOTE_SAVE_PERMISSION_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("market:quote-process:view")
+                .contains("market:quote-process:save-quote")
+                .contains("保存报价单")
+                .contains("MARKET_USER")
+                .contains("MARKET_MANAGER")
+                .contains("SUPER_ADMIN")
+                .doesNotContain("READONLY");
     }
 
     private List<PermissionRow> fallbackPermissions() throws IOException {

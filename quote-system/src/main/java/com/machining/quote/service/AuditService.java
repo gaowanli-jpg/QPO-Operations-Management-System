@@ -233,6 +233,7 @@ public class AuditService {
             case "DICT_EXTRA_FEE_DELETE" -> "删除非工时费用";
             case "ITEM_QUOTE_SAVE" -> "保存逐件核价";
             case "ORDER_QUOTE_COMPLETE" -> "完成工程报价";
+            case "QUOTE_PROCESS_SAVE_QUOTE" -> "保存报价单";
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "INTERNAL_TARGET_LEAD_TIME_UPDATE" -> "更新内部目标交期";
             case "DELIVERY_TICKET_GENERATE" -> "生成提单";
