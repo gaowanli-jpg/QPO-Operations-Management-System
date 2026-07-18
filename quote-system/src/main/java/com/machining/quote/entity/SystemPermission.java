@@ -23,6 +23,7 @@ public class SystemPermission {
     private Integer sortOrder;
     private Boolean visible;
     private Boolean enabled;
+    private Boolean assignable;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

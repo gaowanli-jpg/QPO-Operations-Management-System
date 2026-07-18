@@ -24,7 +24,7 @@ const routes = [
   { path: '/engineering', component: GlobalSetup, meta: { permission: 'engineer:setup:view' } },
   { path: '/material-process', component: MaterialProcessManage, meta: { permission: 'engineer:dict:view' } },
   { path: '/orders', component: OrderManage, meta: { permission: 'market:order:view' } },
-  { path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:order:view' } },
+  { path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:history-order:view' } },
   { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },
   { path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } },
   { path: '/audit-logs', component: AuditLogManage, meta: { permission: 'system:audit:view' } },

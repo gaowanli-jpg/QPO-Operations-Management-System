@@ -57,7 +57,7 @@ describe('QPO app shell polish', () => {
   test('allows local companion menu entries that share a backend-visible permission', () => {
     expect(appVue).toContain('const backendVisiblePermissions')
     expect(appVue).toContain('backendVisiblePermissions.value.has(permission)')
-    expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:order:view'")
+    expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:history-order:view'")
   })
 
   test('places quote template under market release instead of the system group', () => {

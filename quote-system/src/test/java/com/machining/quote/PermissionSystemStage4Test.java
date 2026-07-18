@@ -18,6 +18,7 @@ class PermissionSystemStage4Test {
                 .containsExactly(
                         "/market",
                         "/orders",
+                        "/history-orders",
                         "/quote-process",
                         "/release",
                         "/quote-template",

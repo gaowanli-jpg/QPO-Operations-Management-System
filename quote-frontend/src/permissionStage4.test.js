@@ -17,7 +17,7 @@ const protectedRoutePermissions = {
   '/engineering': 'engineer:setup:view',
   '/material-process': 'engineer:dict:view',
   '/orders': 'market:order:view',
-  '/history-orders': 'market:order:view',
+  '/history-orders': 'market:history-order:view',
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/audit-logs': 'system:audit:view',

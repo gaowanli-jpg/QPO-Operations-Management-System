@@ -137,7 +137,7 @@ const menuMetaByPath = {
   '/engineering': { title: '零件核价', permission: 'engineer:setup:view', icon: Setting },
   '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
   '/orders': { title: '订单管理', permission: 'market:order:view', icon: Document },
-  '/history-orders': { title: '历史订单', permission: 'market:order:view', icon: Files },
+  '/history-orders': { title: '历史订单', permission: 'market:history-order:view', icon: Files },
   '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
   '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document }

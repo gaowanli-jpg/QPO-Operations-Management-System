@@ -15,4 +15,5 @@ public class SystemPermissionDTO {
     private Integer sortOrder;
     private Boolean visible;
     private Boolean enabled;
+    private Boolean assignable;
 }

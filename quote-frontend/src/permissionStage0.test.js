@@ -1,4 +1,4 @@
-﻿import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +18,7 @@ const protectedRoutePermissions = {
   '/engineering': 'engineer:setup:view',
   '/material-process': 'engineer:dict:view',
   '/orders': 'market:order:view',
-  '/history-orders': 'market:order:view',
+  '/history-orders': 'market:history-order:view',
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/audit-logs': 'system:audit:view',
@@ -34,7 +34,7 @@ const visibleMenuPermissions = {
   '/engineering': 'engineer:setup:view',
   '/material-process': 'engineer:dict:view',
   '/orders': 'market:order:view',
-  '/history-orders': 'market:order:view',
+  '/history-orders': 'market:history-order:view',
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/audit-logs': 'system:audit:view'

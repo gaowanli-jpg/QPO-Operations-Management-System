@@ -51,6 +51,7 @@ public class SystemRoleService {
 
     public List<SystemPermissionDTO> listPermissions() {
         QueryWrapper<SystemPermission> query = new QueryWrapper<>();
+        query.and(wrapper -> wrapper.eq("assignable", true).or().isNull("assignable"));
         query.orderByAsc("sort_order").orderByAsc("id");
         return permissionMapper.selectList(query).stream().map(this::toPermissionDto).toList();
     }
@@ -114,13 +115,33 @@ public class SystemRoleService {
     public List<String> assignPermissions(Long roleId, RolePermissionAssignReq req) {
         SystemRole role = requireRole(roleId);
         List<String> beforeCodes = getRolePermissionCodes(roleId);
-        List<String> nextCodes = normalizeCodes(req == null ? List.of() : req.getPermissionCodes());
+        List<String> requestedCodes = normalizeCodes(req == null ? List.of() : req.getPermissionCodes());
+        List<SystemPermission> requestedPermissions = requestedCodes.isEmpty()
+                ? List.of()
+                : permissionMapper.selectByPermissionCodes(requestedCodes);
+        if (requestedPermissions.size() != requestedCodes.size()) {
+            throw new RuntimeException("Some permission codes do not exist");
+        }
+        Set<String> assignableCodes = new LinkedHashSet<>();
+        for (SystemPermission permission : requestedPermissions) {
+            if (isAssignable(permission)) {
+                assignableCodes.add(permission.getPermissionCode());
+            }
+        }
+
+        List<SystemPermission> beforePermissions = beforeCodes.isEmpty()
+                ? List.of()
+                : permissionMapper.selectByPermissionCodes(beforeCodes);
+        for (SystemPermission permission : beforePermissions) {
+            if (!isAssignable(permission)) {
+                assignableCodes.add(permission.getPermissionCode());
+            }
+        }
+
+        List<String> nextCodes = new ArrayList<>(assignableCodes);
         List<SystemPermission> permissions = nextCodes.isEmpty()
                 ? List.of()
                 : permissionMapper.selectByPermissionCodes(nextCodes);
-        if (permissions.size() != nextCodes.size()) {
-            throw new RuntimeException("Some permission codes do not exist");
-        }
 
         rolePermissionMapper.deleteByRoleId(roleId);
         for (SystemPermission permission : permissions) {
@@ -214,6 +235,7 @@ public class SystemRoleService {
         dto.setSortOrder(permission.getSortOrder());
         dto.setVisible(permission.getVisible());
         dto.setEnabled(permission.getEnabled());
+        dto.setAssignable(permission.getAssignable());
         return dto;
     }
 
@@ -276,5 +298,9 @@ public class SystemRoleService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private boolean isAssignable(SystemPermission permission) {
+        return permission == null || permission.getAssignable() == null || Boolean.TRUE.equals(permission.getAssignable());
     }
 }
