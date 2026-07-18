@@ -29,9 +29,8 @@ public class JwtService {
         long exp = now + ttlMinutes * 60;
         String payloadJson = toJson(Map.of(
                 "sub", user.username(),
-                "displayName", user.displayName() == null ? "" : user.displayName(),
-                "role", user.role(),
                 "uid", user.id(),
+                "tokenVersion", 1,
                 "iat", now,
                 "exp", exp
         ));
@@ -67,8 +66,8 @@ public class JwtService {
             return new AuthContext.SessionUser(
                     Integer.valueOf(String.valueOf(map.get("uid"))),
                     String.valueOf(map.get("sub")),
-                    emptyToNull(String.valueOf(map.get("displayName"))),
-                    String.valueOf(map.get("role"))
+                    null,
+                    null
             );
         } catch (RuntimeException e) {
             log.warn("JWT parse failed reason={}", "malformed_payload");
@@ -153,7 +152,5 @@ public class JwtService {
         return Long.parseLong(String.valueOf(value));
     }
 
-    private String emptyToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
+
 }

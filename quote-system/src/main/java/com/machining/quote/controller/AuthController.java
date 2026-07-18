@@ -53,6 +53,18 @@ public class AuthController {
         ));
     }
 
+    @GetMapping("/permission-info")
+    public Map<String, Object> permissionInfo(@RequestHeader(value = "Authorization", required = false) String authorization) {
+        String token = authorization != null && authorization.startsWith("Bearer ")
+                ? authorization.substring("Bearer ".length())
+                : authorization;
+        var user = authService.findByToken(token);
+        if (user == null) {
+            return Map.of("success", false, "message", "未登录");
+        }
+        return Map.of("success", true, "data", authService.permissionInfo(user));
+    }
+
     @PostMapping("/change-password")
     public Map<String, Object> changePassword(@RequestBody PasswordChangeReq req) {
         userAdminService.changeMyPassword(req);

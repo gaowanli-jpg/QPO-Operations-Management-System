@@ -7,6 +7,8 @@ export const login = (credentials) => request('/api/auth/login', {
 
 export const getCurrentUser = () => request('/api/auth/me')
 
+export const getPermissionInfo = () => request('/api/auth/permission-info')
+
 export const changePassword = (payload) => request('/api/auth/change-password', {
   method: 'POST',
   data: payload

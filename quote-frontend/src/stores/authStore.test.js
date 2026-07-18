@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { changePassword, getCurrentUser, login, logout } from '../services/authApi'
+import { changePassword, getCurrentUser, getPermissionInfo, login, logout } from '../services/authApi'
 import { useAuthStore } from './authStore'
 
 vi.mock('../services/authApi', () => ({
   login: vi.fn(),
   getCurrentUser: vi.fn(),
+  getPermissionInfo: vi.fn(),
   changePassword: vi.fn(),
   logout: vi.fn()
 }))
@@ -34,7 +35,10 @@ describe('authStore', () => {
     login.mockResolvedValue({
       success: true,
       token: 'token-1',
-      user: { username: 'admin', role: 'ADMIN' }
+      user: { username: 'admin', role: 'ADMIN' },
+      roles: ['SUPER_ADMIN'],
+      permissions: ['system:user:view', 'system:audit:view'],
+      menus: [{ path: '/users', title: '用户管理', permission: 'system:user:view' }]
     })
     const authStore = useAuthStore()
 
@@ -43,14 +47,33 @@ describe('authStore', () => {
     expect(result.user.role).toBe('ADMIN')
     expect(authStore.token).toBe('token-1')
     expect(authStore.user).toEqual({ username: 'admin', role: 'ADMIN' })
+    expect(authStore.roles).toEqual(['SUPER_ADMIN'])
+    expect(authStore.permissions).toEqual(['system:user:view', 'system:audit:view'])
+    expect(authStore.menus).toEqual([{ path: '/users', title: '用户管理', permission: 'system:user:view' }])
+    expect(authStore.hasPermission('system:user:view')).toBe(true)
+    expect(authStore.hasAnyPermission(['missing:permission', 'system:audit:view'])).toBe(true)
     expect(localStorage.setItem).toHaveBeenCalledWith('erp_token', 'token-1')
     expect(localStorage.setItem).toHaveBeenCalledWith('erp_user', JSON.stringify({ username: 'admin', role: 'ADMIN' }))
+    expect(localStorage.setItem).toHaveBeenCalledWith('erp_roles', JSON.stringify(['SUPER_ADMIN']))
+    expect(localStorage.setItem).toHaveBeenCalledWith('erp_permissions', JSON.stringify(['system:user:view', 'system:audit:view']))
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'erp_menus',
+      JSON.stringify([{ path: '/users', title: '用户管理', permission: 'system:user:view' }])
+    )
   })
 
-  test('verifyAuth refreshes current user through authApi', async () => {
+  test('verifyAuth refreshes current user and permission info through authApi', async () => {
     getCurrentUser.mockResolvedValue({
       success: true,
       data: { username: 'market', role: 'MARKET' }
+    })
+    getPermissionInfo.mockResolvedValue({
+      success: true,
+      data: {
+        roles: ['MARKET_USER'],
+        permissions: ['market:rfq:view', 'common:order:select'],
+        menus: [{ path: '/market', title: '新单导入', permission: 'market:rfq:view' }]
+      }
     })
     const authStore = useAuthStore()
     authStore.setAuth('token-2', { username: 'market', role: 'MARKET' })
@@ -59,8 +82,11 @@ describe('authStore', () => {
     await expect(authStore.verifyAuth()).resolves.toBe(true)
 
     expect(getCurrentUser).toHaveBeenCalledTimes(1)
+    expect(getPermissionInfo).toHaveBeenCalledTimes(1)
     expect(authStore.verified).toBe(true)
     expect(authStore.user).toEqual({ username: 'market', role: 'MARKET' })
+    expect(authStore.roles).toEqual(['MARKET_USER'])
+    expect(authStore.permissions).toEqual(['market:rfq:view', 'common:order:select'])
   })
 
   test('verifyAuth clears auth when current user response is invalid', async () => {
@@ -73,8 +99,14 @@ describe('authStore', () => {
 
     expect(authStore.token).toBe('')
     expect(authStore.user).toBeNull()
+    expect(authStore.roles).toEqual([])
+    expect(authStore.permissions).toEqual([])
+    expect(authStore.menus).toEqual([])
     expect(localStorage.removeItem).toHaveBeenCalledWith('erp_token')
     expect(localStorage.removeItem).toHaveBeenCalledWith('erp_user')
+    expect(localStorage.removeItem).toHaveBeenCalledWith('erp_roles')
+    expect(localStorage.removeItem).toHaveBeenCalledWith('erp_permissions')
+    expect(localStorage.removeItem).toHaveBeenCalledWith('erp_menus')
   })
 
   test('hasRole lets ADMIN access every protected role', () => {

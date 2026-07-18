@@ -24,7 +24,8 @@ public class AuthInterceptor implements HandlerInterceptor {
             "/api/admin/users/me/password",
             "/api/auth/change-password",
             "/api/auth/logout",
-            "/api/auth/me"
+            "/api/auth/me",
+            "/api/auth/permission-info"
     );
 
     @Value("${erp.auth.enabled:true}")

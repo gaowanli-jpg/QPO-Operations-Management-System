@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.machining.quote.config.AuthContext;
+import com.machining.quote.dto.PermissionInfoDTO;
 import com.machining.quote.entity.ErpUser;
 import com.machining.quote.mapper.ErpUserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ public class AuthService {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired(required = false)
+    private PermissionService permissionService;
 
     @Autowired
     private AuditService auditService;
@@ -94,21 +98,52 @@ public class AuthService {
                 "SUCCESS",
                 "AUTH_LOGIN_SUCCESS " + safeUsername
         );
-        return Map.of(
-                "success", true,
-                "message", "登录成功",
-                "token", token,
-                "user", Map.of(
-                        "username", sessionUser.username(),
-                        "displayName", sessionUser.displayName() == null ? sessionUser.username() : sessionUser.displayName(),
-                        "role", sessionUser.role(),
-                        "forcePasswordChange", Boolean.TRUE.equals(user.getForcePasswordChange())
-                )
-        );
+        PermissionInfoDTO permissionInfo = permissionInfo(sessionUser);
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        Map<String, Object> userPayload = new java.util.LinkedHashMap<>();
+        userPayload.put("username", sessionUser.username());
+        userPayload.put("displayName", sessionUser.displayName() == null ? sessionUser.username() : sessionUser.displayName());
+        userPayload.put("role", sessionUser.role());
+        userPayload.put("forcePasswordChange", Boolean.TRUE.equals(user.getForcePasswordChange()));
+
+        result.put("success", true);
+        result.put("message", "登录成功");
+        result.put("token", token);
+        result.put("user", userPayload);
+        result.put("roles", permissionInfo.getRoles());
+        result.put("permissions", permissionInfo.getPermissions());
+        result.put("menus", permissionInfo.getMenus());
+        return result;
+    }
+
+    public PermissionInfoDTO permissionInfo(AuthContext.SessionUser user) {
+        if (user == null || permissionService == null) {
+            return new PermissionInfoDTO();
+        }
+        return permissionService.getPermissionInfo(user.id(), user.role());
     }
 
     public AuthContext.SessionUser findByToken(String token) {
-        return jwtService.parseToken(token);
+        AuthContext.SessionUser tokenUser = jwtService.parseToken(token);
+        if (tokenUser == null) {
+            return null;
+        }
+        if (userMapper == null || tokenUser.id() == null) {
+            return tokenUser;
+        }
+        ErpUser user = userMapper.selectById(tokenUser.id());
+        if (user == null) {
+            return tokenUser.role() == null ? null : tokenUser;
+        }
+        if (Boolean.FALSE.equals(user.getEnabled())) {
+            return null;
+        }
+        return new AuthContext.SessionUser(
+                user.getId(),
+                user.getUsername(),
+                user.getDisplayName(),
+                user.getRole()
+        );
     }
 
     public boolean mustChangePassword(Integer userId) {
@@ -123,7 +158,7 @@ public class AuthService {
         AuthContext.SessionUser current = AuthContext.get();
         boolean temporaryContext = false;
         if (current == null) {
-            current = jwtService.parseToken(token);
+            current = findByToken(token);
             if (current != null) {
                 AuthContext.set(current);
                 temporaryContext = true;
