@@ -92,14 +92,13 @@ describe('QPO workflow page polish', () => {
       'class="release-selection-table"',
       'scrollbar-always-on',
       '<el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />',
-      '<el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />'
+      '<el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />'
     ])
     expectExcludes(source, 'MarketRelease.vue', [
       'native-scrollbar',
       '--el-table-fixed-left-column',
       '.el-table-fixed-column--left',
-      '<el-table-column type="selection" width="45" fixed :selectable="canSelectItem" />',
-      '<el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />'
+      '<el-table-column type="selection" width="45" fixed :selectable="canSelectItem" />'
     ])
   })
 
