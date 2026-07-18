@@ -7,6 +7,8 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequestTraceContext;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.mapper.AuditLogMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +23,7 @@ import java.util.Set;
 
 @Service
 public class AuditService {
+    private static final Logger log = LoggerFactory.getLogger(AuditService.class);
     private static final String MASKED = "[已脱敏]";
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             "password",
@@ -68,27 +71,34 @@ public class AuditService {
             String errorMessage) {
         AuthContext.SessionUser user = AuthContext.get();
         RequestTraceContext.RequestTrace trace = RequestTraceContext.get();
-        AuditLog log = new AuditLog();
-        log.setUsername(user == null ? "system" : user.username());
-        log.setRole(user == null ? "SYSTEM" : user.role());
-        log.setAction(action);
-        log.setModule(isBlank(module) ? inferModule(action) : module.trim().toUpperCase(Locale.ROOT));
-        log.setResult(isBlank(result) ? "SUCCESS" : result.trim().toUpperCase(Locale.ROOT));
-        log.setMessage(isBlank(message) ? fallbackMessage(action, targetType, targetId) : message.trim());
-        log.setTargetType(targetType);
-        log.setTargetId(targetId == null ? null : String.valueOf(targetId));
-        log.setBeforeData(toText(beforeData));
-        log.setAfterData(toText(afterData));
+        AuditLog auditLog = new AuditLog();
+        auditLog.setUsername(user == null ? "system" : user.username());
+        auditLog.setRole(user == null ? "SYSTEM" : user.role());
+        auditLog.setAction(action);
+        auditLog.setModule(isBlank(module) ? inferModule(action) : module.trim().toUpperCase(Locale.ROOT));
+        auditLog.setResult(isBlank(result) ? "SUCCESS" : result.trim().toUpperCase(Locale.ROOT));
+        auditLog.setMessage(isBlank(message) ? fallbackMessage(action, targetType, targetId) : message.trim());
+        auditLog.setTargetType(targetType);
+        auditLog.setTargetId(targetId == null ? null : String.valueOf(targetId));
+        auditLog.setBeforeData(toText(beforeData));
+        auditLog.setAfterData(toText(afterData));
         if (trace != null) {
-            log.setRequestId(trace.requestId());
-            log.setIpAddress(trace.ipAddress());
-            log.setUserAgent(trace.userAgent());
-            log.setRequestMethod(trace.method());
-            log.setRequestPath(trace.path());
+            auditLog.setRequestId(trace.requestId());
+            auditLog.setIpAddress(trace.ipAddress());
+            auditLog.setUserAgent(trace.userAgent());
+            auditLog.setRequestMethod(trace.method());
+            auditLog.setRequestPath(trace.path());
         }
-        log.setErrorMessage(isBlank(errorMessage) ? null : errorMessage.trim());
-        log.setCreatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
+        auditLog.setErrorMessage(isBlank(errorMessage) ? null : errorMessage.trim());
+        auditLog.setCreatedAt(LocalDateTime.now());
+        try {
+            auditLogMapper.insert(auditLog);
+        } catch (RuntimeException e) {
+            log.error("Audit log record failed action={} module={} objectType={} objectId={} requestId={}",
+                    auditLog.getAction(), auditLog.getModule(), auditLog.getTargetType(), auditLog.getTargetId(),
+                    auditLog.getRequestId(), e);
+            throw e;
+        }
     }
 
     private String toText(Object value) {

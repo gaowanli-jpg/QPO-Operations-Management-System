@@ -33,14 +33,19 @@ class LoggingConventionTest {
     @Test
     void keyMainFlowClassesUseSlf4jLoggers() throws IOException {
         assertHasLogger("controller/MarketController.java", "MarketController");
+        assertHasLogger("controller/UploadFileController.java", "UploadFileController");
         assertHasLogger("service/EngineerService.java", "EngineerService");
         assertHasLogger("service/SystemTaskService.java", "SystemTaskService");
         assertHasLogger("service/QuoteTemplateService.java", "QuoteTemplateService");
         assertHasLogger("service/AuditLogRetentionService.java", "AuditLogRetentionService");
+        assertHasLogger("service/AuditService.java", "AuditService");
+        assertHasLogger("service/JwtService.java", "JwtService");
+        assertHasLogger("service/LeadTimeService.java", "LeadTimeService");
         assertHasLogger("service/OrderManagementService.java", "OrderManagementService");
         assertHasLogger("service/DeliveryService.java", "DeliveryService");
         assertHasLogger("service/QuoteProcessService.java", "QuoteProcessService");
         assertHasLogger("service/InternalTargetLeadTimeService.java", "InternalTargetLeadTimeService");
+        assertHasLogger("service/StorageInitializer.java", "StorageInitializer");
     }
 
     @Test
@@ -103,6 +108,62 @@ class LoggingConventionTest {
         assertThat(source("service/InternalTargetLeadTimeService.java"))
                 .contains("Internal target lead time shifted")
                 .contains("Internal target lead time set");
+    }
+
+    @Test
+    void retentionAndSupportServicesKeepLowNoiseLogEvents() throws IOException {
+        assertThat(source("service/AuditLogRetentionService.java"))
+                .contains("Audit log cleanup started")
+                .contains("Audit log cleanup completed")
+                .contains("Audit log cleanup failed")
+                .contains("log.error(\"Audit log cleanup failed");
+
+        assertThat(source("controller/UploadFileController.java"))
+                .contains("Upload file access rejected")
+                .contains("Upload file missing")
+                .contains("Upload file read failed")
+                .contains("log.error(\"Upload file read failed");
+
+        assertThat(source("service/AuditService.java"))
+                .contains("Audit log record failed")
+                .contains("log.error(\"Audit log record failed");
+
+        assertThat(source("service/JwtService.java"))
+                .contains("JWT parse failed")
+                .doesNotContain("token={}");
+
+        assertThat(source("service/LeadTimeService.java"))
+                .contains("Lead time parse failed");
+
+        assertThat(source("service/StorageInitializer.java"))
+                .contains("Storage directories initialized")
+                .contains("Storage directory initialization failed")
+                .contains("log.error(\"Storage directory initialization failed");
+    }
+
+    @Test
+    void healthCheckControllerDoesNotAddBusinessLogs() throws IOException {
+        String source = source("controller/HealthController.java");
+
+        assertThat(source)
+                .doesNotContain("LoggerFactory.getLogger")
+                .doesNotContain("log.info")
+                .doesNotContain("log.warn")
+                .doesNotContain("log.error");
+    }
+
+    @Test
+    void operationsGuideDocumentsMainFlowLogTroubleshooting() throws IOException {
+        String guide = Files.readString(
+                Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md"),
+                StandardCharsets.UTF_8
+        );
+
+        assertThat(guide)
+                .contains("主流程文件日志事件命名")
+                .contains("grep -R 'RFQ import")
+                .contains("grep -R 'taskId=")
+                .contains("requestId + taskId + audit_log");
     }
 
     private void assertHasLogger(String relativePath, String className) throws IOException {

@@ -1,6 +1,8 @@
 package com.machining.quote.service;
 
 import com.machining.quote.entity.ItemQuoteVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.DateTimeException;
@@ -11,6 +13,7 @@ import java.util.regex.Pattern;
 
 @Service
 public class LeadTimeService {
+    private static final Logger log = LoggerFactory.getLogger(LeadTimeService.class);
     private static final Pattern FIRST_NUMBER = Pattern.compile("(\\d+)");
     private static final Pattern DELIVERY_DATE = Pattern.compile("(\\d{4})\\s*[.\\-/年]\\s*(\\d{1,2})\\s*[.\\-/月]\\s*(\\d{1,2})\\s*日?");
     private static final Pattern EXCEL_SERIAL_DATE = Pattern.compile("\\d{5}(?:\\.0+)?");
@@ -55,6 +58,7 @@ public class LeadTimeService {
             date = parseExcelSerialDate(leadTime);
         }
         if (date == null) {
+            log.warn("Lead time parse failed rawValue={} reason={}", safe(leadTime), "required_date_unrecognized");
             throw new RuntimeException("日期格式不正确，请输入类似 2026-03-20 的日期");
         }
         return DATE_FORMAT.format(date);
@@ -77,6 +81,7 @@ public class LeadTimeService {
 
         Matcher matcher = FIRST_NUMBER.matcher(leadTime);
         if (!matcher.find()) {
+            log.warn("Lead time parse failed rawValue={} reason={}", safe(leadTime), "date_or_days_unrecognized");
             throw new RuntimeException("交货周期没有可识别的日期或天数");
         }
         int currentDays = Integer.parseInt(matcher.group(1));

@@ -99,12 +99,19 @@ public class AuditLogRetentionService {
     private AuditLogRetentionRunDTO runCleanup(boolean manual) {
         AuditLogRetentionConfig config = loadConfigOrDefault();
         LocalDateTime runAt = now();
+        long startedAt = System.currentTimeMillis();
+        log.info("Audit log cleanup started manual={} enabled={} retentionDays={} archiveBeforeCleanup={}",
+                manual, Boolean.TRUE.equals(config.getEnabled()), config.getRetentionDays(),
+                Boolean.TRUE.equals(config.getArchiveBeforeCleanup()));
         if (!Boolean.TRUE.equals(config.getEnabled())) {
             AuditLogRetentionRunDTO skipped = runResult("DISABLED", 0, "自动清理未开启", null, runAt);
             updateLastRun(config, skipped);
             if (manual) {
                 recordCleanupAudit(skipped, config, "SUCCESS", null);
             }
+            log.info("Audit log cleanup completed manual={} status={} deletedCount={} archiveFile={} durationMs={}",
+                    manual, skipped.getStatus(), skipped.getDeletedCount(), skipped.getArchiveFile(),
+                    System.currentTimeMillis() - startedAt);
             return skipped;
         }
 
@@ -117,6 +124,9 @@ public class AuditLogRetentionService {
                 if (manual) {
                     recordCleanupAudit(result, config, "SUCCESS", null);
                 }
+                log.info("Audit log cleanup completed manual={} status={} deletedCount={} archiveFile={} durationMs={}",
+                        manual, result.getStatus(), result.getDeletedCount(), result.getArchiveFile(),
+                        System.currentTimeMillis() - startedAt);
                 return result;
             }
 
@@ -128,8 +138,14 @@ public class AuditLogRetentionService {
             AuditLogRetentionRunDTO result = runResult("SUCCESS", deleted, "已清理到期操作日志", archiveFile, runAt);
             updateLastRun(config, result);
             recordCleanupAudit(result, config, "SUCCESS", null);
+            log.info("Audit log cleanup completed manual={} status={} deletedCount={} archiveFile={} durationMs={}",
+                    manual, result.getStatus(), result.getDeletedCount(), result.getArchiveFile(),
+                    System.currentTimeMillis() - startedAt);
             return result;
         } catch (Exception e) {
+            log.error("Audit log cleanup failed manual={} retentionDays={} archiveBeforeCleanup={} durationMs={}",
+                    manual, config.getRetentionDays(), Boolean.TRUE.equals(config.getArchiveBeforeCleanup()),
+                    System.currentTimeMillis() - startedAt, e);
             AuditLogRetentionRunDTO result = runResult("FAILED", 0, "操作日志清理失败：" + e.getMessage(), null, runAt);
             updateLastRun(config, result);
             recordCleanupAudit(result, config, "FAILED", e.getMessage());

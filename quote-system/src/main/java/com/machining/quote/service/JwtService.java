@@ -1,6 +1,8 @@
 package com.machining.quote.service;
 
 import com.machining.quote.config.AuthContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +16,8 @@ import java.util.Map;
 
 @Service
 public class JwtService {
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+
     @Value("${erp.auth.jwt-secret}")
     private String secret;
 
@@ -43,25 +47,33 @@ public class JwtService {
         }
         String[] parts = token.split("\\.");
         if (parts.length != 3) {
+            log.warn("JWT parse failed reason={}", "invalid_format");
             return null;
         }
         String signingInput = parts[0] + "." + parts[1];
         String expected = base64Url(hmacSha256(signingInput));
         if (!expected.equals(parts[2])) {
+            log.warn("JWT parse failed reason={}", "signature_mismatch");
             return null;
         }
-        String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
-        Map<String, Object> map = parseJson(payload);
-        long exp = longValue(map.get("exp"));
-        if (Instant.now().getEpochSecond() > exp) {
+        try {
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+            Map<String, Object> map = parseJson(payload);
+            long exp = longValue(map.get("exp"));
+            if (Instant.now().getEpochSecond() > exp) {
+                log.warn("JWT parse failed reason={}", "expired");
+                return null;
+            }
+            return new AuthContext.SessionUser(
+                    Integer.valueOf(String.valueOf(map.get("uid"))),
+                    String.valueOf(map.get("sub")),
+                    emptyToNull(String.valueOf(map.get("displayName"))),
+                    String.valueOf(map.get("role"))
+            );
+        } catch (RuntimeException e) {
+            log.warn("JWT parse failed reason={}", "malformed_payload");
             return null;
         }
-        return new AuthContext.SessionUser(
-                Integer.valueOf(String.valueOf(map.get("uid"))),
-                String.valueOf(map.get("sub")),
-                emptyToNull(String.valueOf(map.get("displayName"))),
-                String.valueOf(map.get("role"))
-        );
     }
 
     private byte[] hmacSha256(String value) {
