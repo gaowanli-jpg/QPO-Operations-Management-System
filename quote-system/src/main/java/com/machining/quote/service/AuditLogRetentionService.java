@@ -8,6 +8,8 @@ import com.machining.quote.entity.AuditLog;
 import com.machining.quote.entity.AuditLogRetentionConfig;
 import com.machining.quote.mapper.AuditLogMapper;
 import com.machining.quote.mapper.AuditLogRetentionConfigMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,6 +31,7 @@ import java.util.Map;
 
 @Service
 public class AuditLogRetentionService {
+    private static final Logger log = LoggerFactory.getLogger(AuditLogRetentionService.class);
     private static final int CONFIG_ID = 1;
     private static final int DEFAULT_RETENTION_DAYS = 180;
     private static final int CLEANUP_BATCH_LIMIT = 5000;

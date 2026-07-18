@@ -21,6 +21,8 @@ import com.machining.quote.service.QuoteTemplateExportService;
 import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.util.DrawingPartNoResolver;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -42,6 +44,7 @@ import java.util.UUID;
 @RequireRole({"MARKET", "ADMIN"})
 @RequestMapping("/api/market")
 public class MarketController {
+    private static final Logger log = LoggerFactory.getLogger(MarketController.class);
 
     @Autowired
     private DeliveryService deliveryService;
@@ -247,12 +250,17 @@ public class MarketController {
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
 
         Map<String, Object> result = new HashMap<>();
+        long startedAt = System.currentTimeMillis();
+        String autoRfqNo = null;
+        Integer generatedRfqId = null;
 
         try {
-            System.out.println("\n====== 🚀 市场部新单导入开始 ======");
-
-            String autoRfqNo = rfqNumberService.nextRfqNo();
-            System.out.println("客户名称: " + customerName + " | RFQ: " + autoRfqNo);
+            autoRfqNo = rfqNumberService.nextRfqNo();
+            log.info("RFQ import started customerName={} rfqNo={} excelFileName={} drawingFileCount={}",
+                    customerName,
+                    autoRfqNo,
+                    excelFile == null ? "" : excelFile.getOriginalFilename(),
+                    drawings == null ? 0 : drawings.size());
 
             List<RfqExcelDTO> excelDataList = EasyExcel.read(excelFile.getInputStream())
                     .head(RfqExcelDTO.class)
@@ -265,7 +273,7 @@ public class MarketController {
                     excelPartNos.add(safePartNo);
                 }
             }
-            System.out.println("✅ 成功解析 Excel，共找到 " + excelDataList.size() + " 个零件明细！");
+            log.info("RFQ import parsed excel rfqNo={} itemCount={}", autoRfqNo, excelDataList.size());
 
             Map<String, DrawingFileInfo> drawingMap = new LinkedHashMap<>();
             List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
@@ -285,7 +293,8 @@ public class MarketController {
 
                         String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos);
 
-                        System.out.println("📡 硬盘图纸脱水成功，拿到纯图号 -> [" + partNoFromFileName + "]");
+                        log.debug("RFQ import drawing parsed rfqNo={} fileName={} partNo={}",
+                                autoRfqNo, cleanFileName, partNoFromFileName);
 
                         String newFilename = UUID.randomUUID().toString() + ".pdf";
 
@@ -303,15 +312,17 @@ public class MarketController {
                 }
             }
 
-            System.out.println("====== ⚙️ 开始智能匹配与数据落库 ======");
+            log.info("RFQ import matching started rfqNo={} itemCount={} uploadedDrawingCount={}",
+                    autoRfqNo, excelDataList.size(), uploadedDrawings.size());
 
             OrderRfq newOrder = new OrderRfq();
             newOrder.setRfqNo(autoRfqNo);
             newOrder.setCustomerName(customerName);
             newOrder.setStatus("待工程部评估");
             orderRfqMapper.insert(newOrder);
-            Integer generatedRfqId = newOrder.getId();
-            System.out.println("📄 已生成主单，单号 ID: " + generatedRfqId);
+            generatedRfqId = newOrder.getId();
+            log.info("RFQ import order saved rfqId={} rfqNo={} customerName={}",
+                    generatedRfqId, autoRfqNo, customerName);
 
             Set<String> matchedDrawingPartNos = new HashSet<>();
             List<Map<String, Object>> missingDrawingItems = new ArrayList<>();
@@ -344,10 +355,12 @@ public class MarketController {
                     dbItem.setDrawingUrl(matchedDrawingUrl);
                     matchedItemCount++;
                     matchedDrawingPartNos.add(safePartNo);
-                    System.out.println("🔗 [" + safePartNo + "] 绑定图纸: " + matchedDrawingUrl);
+                    log.debug("RFQ import item drawing matched rfqId={} partNo={} drawingUrl={}",
+                            generatedRfqId, safePartNo, matchedDrawingUrl);
                 } else {
                     missingDrawingItems.add(buildMissingDrawingItem(item, safePartNo));
-                    System.out.println("⚠️ [" + safePartNo + "] 无图纸导入");
+                    log.debug("RFQ import item drawing missing rfqId={} partNo={}",
+                            generatedRfqId, safePartNo);
                 }
 
                 itemQuoteVersionMapper.insert(dbItem);
@@ -372,15 +385,35 @@ public class MarketController {
             drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
             drawingReport.put("missingItems", missingDrawingItems);
             drawingReport.put("unmatchedDrawings", unmatchedDrawings);
-            System.out.println("========================================\n");
+            log.info("RFQ import matching completed rfqId={} rfqNo={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={}",
+                    generatedRfqId,
+                    autoRfqNo,
+                    matchedDrawingPartNos.size(),
+                    missingDrawingItems.size(),
+                    unmatchedDrawings.size());
+            if (!missingDrawingItems.isEmpty() || !unmatchedDrawings.isEmpty()) {
+                log.warn("RFQ import completed with drawing warnings rfqId={} rfqNo={} missingDrawingCount={} unmatchedDrawingCount={}",
+                        generatedRfqId, autoRfqNo, missingDrawingItems.size(), unmatchedDrawings.size());
+            }
 
             result.put("success", true);
             result.put("message", "已成功为您生成询价单！<br><b>单号：</b><span style='color:#409EFF'>" + autoRfqNo + "</span>");
             result.put("drawingReport", drawingReport);
             recordRfqImportAudit(customerName, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
+            log.info("RFQ import completed rfqId={} rfqNo={} customerName={} itemCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
+                    generatedRfqId,
+                    autoRfqNo,
+                    customerName,
+                    excelDataList.size(),
+                    matchedDrawingPartNos.size(),
+                    missingDrawingItems.size(),
+                    unmatchedDrawings.size(),
+                    System.currentTimeMillis() - startedAt);
             return result;
 
         } catch (Exception e) {
+            log.error("RFQ import failed customerName={} rfqNo={} rfqId={} durationMs={}",
+                    customerName, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
             throw new RuntimeException("服务器处理失败：" + e.getMessage(), e);
         }
     }

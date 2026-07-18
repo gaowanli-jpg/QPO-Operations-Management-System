@@ -6,6 +6,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.Cell;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ import java.util.Set;
 
 @Service
 public class QuoteTemplateService {
+    private static final Logger log = LoggerFactory.getLogger(QuoteTemplateService.class);
     private static final String TEMPLATE_FILENAME = "quote-template.xlsx";
     private static final String META_FILENAME = "quote-template.properties";
     private static final int HEADER_ROW_INDEX = 7;

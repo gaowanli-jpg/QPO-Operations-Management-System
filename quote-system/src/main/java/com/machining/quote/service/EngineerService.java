@@ -19,6 +19,8 @@ import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,7 @@ import java.util.Set;
 
 @Service
 public class EngineerService {
+    private static final Logger log = LoggerFactory.getLogger(EngineerService.class);
     private static final String QUOTE_MODE_NORMAL = "NORMAL";
     private static final String QUOTE_MODE_ASSEMBLY = "ASSEMBLY";
 
@@ -162,7 +165,8 @@ public class EngineerService {
 
                 DictProcess dictInfo = findProcess(process.getProcessName());
                 if (dictInfo == null) {
-                    System.out.println("===> 警告：在数据库 dict_process 表中没有找到名为 [" + process.getProcessName() + "] 的工序！");
+                    log.warn("Process dictionary missing itemId={} processName={}",
+                            item.getId(), process.getProcessName());
                     continue;
                 }
 
@@ -172,7 +176,8 @@ public class EngineerService {
                 process.setUnitRate(rate);
                 process.setLineCost(lineCost);
                 totalProcessCost += lineCost;
-                System.out.println("===> 成功查到工序: [" + process.getProcessName() + "], 数量: " + qty + ", 匹配单价: " + rate + " 元");
+                log.debug("Process rate matched itemId={} processName={} qty={} rate={}",
+                        item.getId(), process.getProcessName(), qty, rate);
             }
         }
 
@@ -199,7 +204,8 @@ public class EngineerService {
 
         deleteAssemblyRelations(item.getId());
         itemMapper.updateById(item);
-        System.out.println("===> 零件 ID " + item.getId() + " 核价完毕！总成本(不含税): " + baseCost + ", 最终单价(含税): " + finalUnitPrice);
+        log.info("Item quote saved rfqId={} itemId={} partNo={} quoteMode={} baseCost={} finalUnitPrice={}",
+                item.getRfqId(), item.getId(), item.getPartNo(), QUOTE_MODE_NORMAL, baseCost, finalUnitPrice);
     }
 
     private void saveAssemblyQuote(ItemQuoteVersion parent, Double assemblyFee,
@@ -283,7 +289,9 @@ public class EngineerService {
         parent.setFinalTotalPrice(finalUnitPrice * parentQty);
         parent.setStatus("已报价");
         itemMapper.updateById(parent);
-        System.out.println("===> 组合件 ID " + parent.getId() + " 核价完毕！子件汇总: " + childrenTotal + ", 组装费: " + safeAssemblyFee + ", 组装费附加费用: " + assemblyFeeMarkupCost + ", 最终单价: " + finalUnitPrice);
+        log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} finalUnitPrice={}",
+                parent.getRfqId(), parent.getId(), parent.getPartNo(), childrenTotal, safeAssemblyFee,
+                assemblyFeeMarkupCost, finalUnitPrice);
     }
 
     public List<Map<String, Object>> listAssemblyRelations(Integer parentItemId) {
