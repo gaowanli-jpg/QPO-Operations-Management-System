@@ -73,8 +73,11 @@ public class EngineerService {
 
     @Transactional
     public Map<String, Object> refreshOrderQuotes(Integer rfqId) {
+        long startedAt = System.currentTimeMillis();
         OrderRfq order = requireOrderForUpdate(rfqId);
         List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
+        log.info("Order quote refresh started rfqId={} itemCount={}", rfqId, items.size());
+
         Map<Integer, ItemQuoteVersion> itemMap = new LinkedHashMap<>();
         for (ItemQuoteVersion item : items) {
             itemMap.put(item.getId(), item);
@@ -102,6 +105,8 @@ public class EngineerService {
                 normalCount++;
             } catch (RuntimeException ex) {
                 skippedItems.add(buildSkipInfo(item, ex.getMessage()));
+                log.warn("Order quote refresh skipped item rfqId={} itemId={} partNo={} reason={}",
+                        rfqId, item.getId(), item.getPartNo(), ex.getMessage());
             }
         }
 
@@ -114,6 +119,8 @@ public class EngineerService {
                 assemblyCount += refreshAssemblyQuoteRecursive(item, itemMap, refreshedAssemblies, new HashSet<>());
             } catch (RuntimeException ex) {
                 skippedItems.add(buildSkipInfo(item, ex.getMessage()));
+                log.warn("Order quote refresh skipped assembly rfqId={} itemId={} partNo={} reason={}",
+                        rfqId, item.getId(), item.getPartNo(), ex.getMessage());
             }
         }
 
@@ -127,6 +134,9 @@ public class EngineerService {
         result.put("skippedCount", skippedItems.size());
         result.put("skippedItems", skippedItems);
         auditService.record("ORDER_QUOTE_REFRESH", "order_rfq", order.getId(), null, result);
+        log.info("Order quote refresh completed rfqId={} refreshedCount={} normalCount={} assemblyCount={} skippedCount={} durationMs={}",
+                rfqId, refreshedCount, normalCount, assemblyCount, skippedItems.size(),
+                System.currentTimeMillis() - startedAt);
         return result;
     }
 
@@ -171,6 +181,10 @@ public class EngineerService {
                 }
 
                 double rate = getTieredRate(dictInfo, qty);
+                if (rate <= 0) {
+                    log.warn("Process rate missing itemId={} processName={} qty={}",
+                            item.getId(), process.getProcessName(), qty);
+                }
                 double lineCost = process.getInputVal() * rate;
                 process.setCalcType("工时");
                 process.setUnitRate(rate);
@@ -514,6 +528,7 @@ public class EngineerService {
 
     @Transactional
     public void completeOrderQuote(Integer rfqId) {
+        long startedAt = System.currentTimeMillis();
         OrderRfq order = requireOrderForUpdate(rfqId);
 
         List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
@@ -530,16 +545,20 @@ public class EngineerService {
             throw new RuntimeException("仍有未报价的有图零件：" + String.join("、", unquotedItems));
         }
 
+        int noDrawingCount = 0;
         for (ItemQuoteVersion item : items) {
             if (!hasDrawing(item) && item.getFinalUnitPrice() == null) {
                 item.setStatus("无图");
                 itemMapper.updateById(item);
+                noDrawingCount++;
             }
         }
 
         order.setStatus("已报价");
         orderMapper.updateById(order);
         auditService.record("ORDER_QUOTE_COMPLETE", "order_rfq", order.getId(), null, order);
+        log.info("Order quote completed rfqId={} itemCount={} noDrawingCount={} durationMs={}",
+                rfqId, items.size(), noDrawingCount, System.currentTimeMillis() - startedAt);
     }
 
     private boolean hasDrawing(ItemQuoteVersion item) {
@@ -659,6 +678,8 @@ public class EngineerService {
         order.setEngineerConfig(config == null ? Map.of() : config);
         orderMapper.updateById(order);
         auditService.record("ORDER_ENGINEER_CONFIG_SAVE", "order_rfq", rfqId, before, order.getEngineerConfig());
+        log.info("Order engineer config saved rfqId={} configKeys={}",
+                rfqId, config == null ? Set.of() : config.keySet());
     }
 
     private ItemQuoteVersion copyItem(ItemQuoteVersion source) {

@@ -124,6 +124,8 @@ public class SystemTaskService {
         task.setCreatedBy(current == null ? null : current.username());
         task.setCreatedAt(LocalDateTime.now());
         taskMapper.insert(task);
+        log.info("System task submitted taskId={} taskType={} request={}",
+                task.getId(), task.getTaskType(), safeRequestSummary(requestJson));
         return task;
     }
 
@@ -150,15 +152,25 @@ public class SystemTaskService {
     }
 
     private void runTask(Long taskId, Supplier<Object> work) {
-        markRunning(taskId);
+        SystemTask task = taskMapper.selectById(taskId);
+        String taskType = task == null ? "" : task.getTaskType();
+        long startedAt = System.currentTimeMillis();
+        log.info("System task started taskId={} taskType={}", taskId, taskType);
         try {
+            markRunning(taskId);
             Object result = work.get();
+            String filePath = null;
             if (result instanceof TaskRunResult taskResult) {
-                markSuccess(taskId, taskResult.resultJson(), taskResult.filePath());
+                filePath = taskResult.filePath();
+                markSuccess(taskId, taskResult.resultJson(), filePath);
             } else {
                 markSuccess(taskId, result, null);
             }
+            log.info("System task completed taskId={} taskType={} durationMs={} filePath={}",
+                    taskId, taskType, System.currentTimeMillis() - startedAt, filePath);
         } catch (Throwable error) {
+            log.error("System task failed taskId={} taskType={} durationMs={}",
+                    taskId, taskType, System.currentTimeMillis() - startedAt, error);
             markFailed(taskId, error);
         }
     }
@@ -194,6 +206,23 @@ public class SystemTaskService {
 
     private Path taskOutputDirectory() {
         return Path.of(taskOutputDir).toAbsolutePath().normalize();
+    }
+
+    private Object safeRequestSummary(Object requestJson) {
+        if (requestJson instanceof Map<?, ?> rawMap) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            rawMap.forEach((key, value) -> summary.put(String.valueOf(key), safeValue(value)));
+            return summary;
+        }
+        return safeValue(requestJson);
+    }
+
+    private Object safeValue(Object value) {
+        if (value == null || value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        String text = String.valueOf(value);
+        return text.length() <= 120 ? text : text.substring(0, 120) + "...";
     }
 
     private record TaskRunResult(Object resultJson, String filePath) {

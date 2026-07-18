@@ -46,13 +46,42 @@ class LoggingConventionTest {
         assertThat(logback).contains("requestId=%X{requestId:-none}");
     }
 
+    @Test
+    void engineerServiceKeepsMainFlowLogEvents() throws IOException {
+        String source = source("service/EngineerService.java");
+
+        assertThat(source)
+                .contains("Item quote saved")
+                .contains("Process rate matched")
+                .contains("Process dictionary missing")
+                .contains("Process rate missing")
+                .contains("Order quote refresh started")
+                .contains("Order quote refresh completed")
+                .contains("Order quote completed")
+                .contains("Order engineer config saved");
+    }
+
+    @Test
+    void systemTaskServiceKeepsTaskLifecycleLogEvents() throws IOException {
+        String source = source("service/SystemTaskService.java");
+
+        assertThat(source)
+                .contains("System task submitted")
+                .contains("System task started")
+                .contains("System task completed")
+                .contains("System task failed")
+                .contains("log.error(\"System task failed");
+    }
+
     private void assertHasLogger(String relativePath, String className) throws IOException {
-        String source = Files.readString(
+        assertThat(source(relativePath)).contains("LoggerFactory.getLogger(" + className + ".class)");
+    }
+
+    private String source(String relativePath) throws IOException {
+        return Files.readString(
                 MAIN_JAVA.resolve(Path.of("com", "machining", "quote")).resolve(relativePath),
                 StandardCharsets.UTF_8
         );
-
-        assertThat(source).contains("LoggerFactory.getLogger(" + className + ".class)");
     }
 
     private boolean containsAny(Path path, String... needles) {
