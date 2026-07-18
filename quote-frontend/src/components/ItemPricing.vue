@@ -672,6 +672,7 @@ const canCompleteQuote = computed(() => {
   const items = quoteData.value?.itemList || []
   const drawableItems = items.filter(item => item.drawingUrl)
   return !!rfqId.value
+    && !refreshLoading.value
     && quoteData.value?.orderInfo?.status !== '已报价'
     && items.length > 0
     && drawableItems.every(item => item.finalUnitPrice != null)

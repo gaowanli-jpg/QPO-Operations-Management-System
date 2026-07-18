@@ -36,6 +36,8 @@ public class QuoteProcessService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private SystemTaskGuardService taskGuardService;
 
     public Map<String, Object> getQuoteProcess(Integer rfqId) {
         OrderRfq order = requireQuoteProcessReadableOrder(rfqId);
@@ -267,6 +269,7 @@ public class QuoteProcessService {
 
     private OrderRfq requireQuoteProcessSavableOrderForUpdate(Integer rfqId) {
         OrderRfq order = requireOrderForUpdate(rfqId);
+        assertNoActiveRefreshQuotesTask(rfqId);
         if (!QuoteStatusWorkflow.canSaveQuoteSheet(order.getStatus())) {
             if (QuoteStatusWorkflow.QUOTED.equals(order.getStatus())) {
                 throw new RuntimeException("该订单已保存报价单，不能重复保存");
@@ -282,6 +285,12 @@ public class QuoteProcessService {
             throw new RuntimeException("只有已核价订单可以保存报价单");
         }
         return order;
+    }
+
+    private void assertNoActiveRefreshQuotesTask(Integer rfqId) {
+        if (taskGuardService != null) {
+            taskGuardService.assertNoActiveRefreshQuotesTask(rfqId);
+        }
     }
 
     private void assertOrderDataScope(OrderRfq order) {

@@ -23,4 +23,10 @@ describe('quote status stage 1 frontend copy', () => {
     expect(source).not.toContain('待核价订单')
     expect(source).not.toContain('待工程部评估')
   })
+
+  test('prevents completing engineering quote while refresh task is running', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toMatch(/const canCompleteQuote = computed\(\(\) => \{[\s\S]*&& !refreshLoading\.value[\s\S]*\}\)/)
+  })
 })

@@ -59,6 +59,8 @@ public class EngineerService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private SystemTaskGuardService taskGuardService;
 
     @Transactional
     public void calculateAndSaveQuote(QuoteSubmitReq req) {
@@ -78,6 +80,10 @@ public class EngineerService {
     public Map<String, Object> refreshOrderQuotes(Integer rfqId) {
         long startedAt = System.currentTimeMillis();
         OrderRfq order = requireOrderForUpdate(rfqId);
+        if (!QuoteStatusWorkflow.UNPRICED.equals(order.getStatus())
+                && !QuoteStatusWorkflow.isLegacyUnpricedStatus(order.getStatus())) {
+            throw new RuntimeException("只有未核价订单可以刷新核价，当前订单状态已推进，请刷新页面后再操作");
+        }
         List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
         log.info("Order quote refresh started rfqId={} itemCount={}", rfqId, items.size());
 
@@ -534,6 +540,7 @@ public class EngineerService {
     public void completeOrderQuote(Integer rfqId) {
         long startedAt = System.currentTimeMillis();
         OrderRfq order = requireOrderForUpdate(rfqId);
+        assertNoActiveRefreshQuotesTask(rfqId);
 
         List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
         if (items.isEmpty()) {
@@ -774,6 +781,13 @@ public class EngineerService {
             dataScopeService.assertCanAccessOrder(rfqId, orderMapper);
         }
     }
+
+    private void assertNoActiveRefreshQuotesTask(Integer rfqId) {
+        if (taskGuardService != null) {
+            taskGuardService.assertNoActiveRefreshQuotesTask(rfqId);
+        }
+    }
+
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");

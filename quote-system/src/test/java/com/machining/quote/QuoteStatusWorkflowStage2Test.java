@@ -5,8 +5,10 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.ExcelExportService;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +37,8 @@ class QuoteStatusWorkflowStage2Test {
     private OrderRfqMapper orderMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
+    @Autowired
+    private SystemTaskMapper taskMapper;
     @Autowired
     private EngineerService engineerService;
     @Autowired
@@ -93,6 +98,40 @@ class QuoteStatusWorkflowStage2Test {
                 .hasMessageContaining("报价交期");
     }
 
+    @Test
+    void activeRefreshTaskBlocksEngineeringCompletion() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.UNPRICED);
+        createQuotedItem(order, "S2-D", "2026-03-20");
+        createRefreshTask(order.getId(), "PENDING");
+
+        assertThatThrownBy(() -> engineerService.completeOrderQuote(order.getId()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("刷新核价任务");
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+    }
+
+    @Test
+    void activeRefreshTaskBlocksMarketSaveQuote() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.PRICED);
+        createQuotedItem(order, "S2-E", "2026-03-20");
+        createRefreshTask(order.getId(), "RUNNING");
+
+        assertThatThrownBy(() -> quoteProcessService.saveQuoteSheet(order.getId()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("刷新核价任务");
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+    }
+
+    @Test
+    void refreshOrderQuotesRejectsOrdersAlreadyAdvancedPastEngineering() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.PRICED);
+        createQuotedItem(order, "S2-F", "2026-03-20");
+
+        assertThatThrownBy(() -> engineerService.refreshOrderQuotes(order.getId()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("未核价");
+    }
+
     private void updateQuoteLeadTime(Integer rfqId, Integer itemId, String leadTime) {
         QuoteLeadTimeUpdateReq req = new QuoteLeadTimeUpdateReq();
         req.setRfqId(rfqId);
@@ -113,6 +152,16 @@ class QuoteStatusWorkflowStage2Test {
         line.setAcceptedQty(1);
         req.setItems(List.of(line));
         return req;
+    }
+
+    private void createRefreshTask(Integer rfqId, String status) {
+        SystemTask task = new SystemTask();
+        task.setTaskType("REFRESH_ORDER_QUOTES");
+        task.setStatus(status);
+        task.setProgress(0);
+        task.setTotal(1);
+        task.setRequestJson(Map.of("rfqId", rfqId));
+        taskMapper.insert(task);
     }
 
     private OrderRfq createOrder(String status) {
