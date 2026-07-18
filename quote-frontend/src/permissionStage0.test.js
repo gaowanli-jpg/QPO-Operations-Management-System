@@ -59,6 +59,7 @@ describe('QPO permission stage 0 guardrails', () => {
   test('freezes sidebar menu permission snapshot', () => {
     expect(appVue).not.toContain('canSee([')
     expect(appVue).toContain('visibleMenuGroups')
+    expect(appVue).not.toContain('backendVisiblePermissions')
     expect(menuPermissionEntries()).toEqual(visibleMenuPermissions)
   })
 

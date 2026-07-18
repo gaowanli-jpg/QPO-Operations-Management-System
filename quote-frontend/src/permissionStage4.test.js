@@ -37,10 +37,10 @@ describe('QPO permission stage 4 menu and button permissions', () => {
     expect(routerSource).not.toContain('meta: { roles:')
     expect(routerSource).not.toContain('meta?.roles')
     expect(routerSource).not.toContain('authStore.hasRole(roles)')
+    expect(routerSource).not.toContain('anyPermissions')
 
     expect(routePermissionEntries()).toEqual(protectedRoutePermissions)
     expect(routerSource).toContain('authStore.hasPermission(permission)')
-    expect(routerSource).toContain('authStore.hasAnyPermission(anyPermissions)')
   })
 
   test('renders the shell menu from permission menus instead of hard-coded role checks', () => {
@@ -50,6 +50,8 @@ describe('QPO permission stage 4 menu and button permissions', () => {
     expect(appVue).toContain('authStore.menus')
     expect(appVue).toContain('v-for="group in visibleMenuGroups"')
     expect(appVue).toContain('v-for="item in group.items"')
+    expect(appVue).not.toContain('backendVisiblePermissions')
+    expect(appVue).toContain('return backendPaths.has(path)')
   })
 
   test('registers a reusable v-permission directive for button-level permission control', () => {

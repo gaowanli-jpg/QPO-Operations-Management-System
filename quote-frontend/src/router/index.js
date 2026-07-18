@@ -52,9 +52,7 @@ const firstPermittedPath = (authStore) => {
 
   const route = routes.find((item) => {
     const permission = item.meta?.permission
-    const anyPermissions = item.meta?.anyPermissions
-    return (permission && authStore.hasPermission(permission)) ||
-      (anyPermissions?.length && authStore.hasAnyPermission(anyPermissions))
+    return permission && authStore.hasPermission(permission)
   })
 
   return route?.path || '/login'
@@ -76,11 +74,7 @@ router.beforeEach(async (to) => {
     await authStore.loadPermissionInfo()
   }
   const permission = to.meta?.permission
-  const anyPermissions = to.meta?.anyPermissions
   if (permission && !authStore.hasPermission(permission)) {
-    return firstPermittedPath(authStore)
-  }
-  if (anyPermissions?.length && !authStore.hasAnyPermission(anyPermissions)) {
     return firstPermittedPath(authStore)
   }
   return true

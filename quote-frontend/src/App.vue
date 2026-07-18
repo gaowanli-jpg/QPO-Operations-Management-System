@@ -152,10 +152,6 @@ const backendMenuByPath = computed(() => Object.fromEntries(
   flattenMenus(authStore.menus).filter((menu) => menu.path).map((menu) => [menu.path, menu])
 ))
 
-const backendVisiblePermissions = computed(() => new Set(
-  Object.values(backendMenuByPath.value).map((menu) => menu.permission).filter(Boolean)
-))
-
 const visibleMenuGroups = computed(() => {
   const backendPaths = new Set(Object.keys(backendMenuByPath.value))
   const hasBackendMenus = backendPaths.size > 0
@@ -165,11 +161,10 @@ const visibleMenuGroups = computed(() => {
       ...group,
        items: group.paths
          .filter((path) => {
-          const permission = menuMetaByPath[path]?.permission
           if (hasBackendMenus) {
-            return backendPaths.has(path) || backendVisiblePermissions.value.has(permission)
+            return backendPaths.has(path)
           }
-          return authStore.hasPermission(permission)
+          return authStore.hasPermission(menuMetaByPath[path]?.permission)
         })
         .map((path) => {
           const meta = menuMetaByPath[path]

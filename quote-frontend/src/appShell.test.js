@@ -54,10 +54,12 @@ describe('QPO app shell polish', () => {
     }
   })
 
-  test('allows local companion menu entries that share a backend-visible permission', () => {
-    expect(appVue).toContain('const backendVisiblePermissions')
-    expect(appVue).toContain('backendVisiblePermissions.value.has(permission)')
+  test('requires each sidebar entry to be authorized by its own backend menu path', () => {
+    expect(appVue).not.toContain('const backendVisiblePermissions')
+    expect(appVue).not.toContain('backendVisiblePermissions.value.has(permission)')
+    expect(appVue).toContain('return backendPaths.has(path)')
     expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:history-order:view'")
+    expect(appVue).not.toContain("permission: 'market:order:view', icon: Files")
   })
 
   test('places quote template under market release instead of the system group', () => {
