@@ -1,0 +1,42 @@
+import { describe, expect, test } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+
+describe('quote status stage 4 quote process frontend flow', () => {
+  test('allows selecting priced and quoted orders in quote process', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+
+    expect(source).toContain("const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价']")
+    expect(source).toContain(':allowed-statuses="QUOTE_PROCESS_ALLOWED_STATUSES"')
+    expect(source).toContain('选择已核价 / 已报价 RFQ 订单')
+    expect(source).toContain('请选择已核价或已报价订单')
+  })
+
+  test('locks edit save and export actions by quote status', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+
+    expect(source).toContain('const canEditQuoteLeadTime = computed(() => orderInfo.value.status === \'已核价\')')
+    expect(source).toContain('const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)')
+    expect(source).toContain('const canExportQuoteSheet = computed(() => orderInfo.value.status === \'已报价\')')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedRows.length === 0"')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedRows.length === 0 || !manualQuoteDate"')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime"')
+    expect(source).toContain(':disabled="!canExportQuoteSheet"')
+  })
+
+  test('calls save quote API and refreshes status after market confirmation', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+
+    expect(source).toContain("saveQuoteSheet as saveQuoteSheetApi")
+    expect(source).toContain('v-permission="QUOTE_PROCESS_SAVE_QUOTE_PERMISSION"')
+    expect(source).toContain('@click="saveMarketQuoteSheet"')
+    expect(source).toContain('const saveMarketQuoteSheet = async () =>')
+    expect(source).toContain('const response = await saveQuoteSheetApi(selectedRfqId.value)')
+    expect(source).toContain('orderInfo.value = response.orderInfo || orderInfo.value')
+    expect(source).toContain("ElMessage.success('报价单已保存，可导出。')")
+  })
+})
