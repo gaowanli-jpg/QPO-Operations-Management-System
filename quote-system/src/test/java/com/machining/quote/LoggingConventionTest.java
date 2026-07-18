@@ -37,6 +37,10 @@ class LoggingConventionTest {
         assertHasLogger("service/SystemTaskService.java", "SystemTaskService");
         assertHasLogger("service/QuoteTemplateService.java", "QuoteTemplateService");
         assertHasLogger("service/AuditLogRetentionService.java", "AuditLogRetentionService");
+        assertHasLogger("service/OrderManagementService.java", "OrderManagementService");
+        assertHasLogger("service/DeliveryService.java", "DeliveryService");
+        assertHasLogger("service/QuoteProcessService.java", "QuoteProcessService");
+        assertHasLogger("service/InternalTargetLeadTimeService.java", "InternalTargetLeadTimeService");
     }
 
     @Test
@@ -71,6 +75,34 @@ class LoggingConventionTest {
                 .contains("System task completed")
                 .contains("System task failed")
                 .contains("log.error(\"System task failed");
+    }
+
+    @Test
+    void remainingBusinessServicesKeepMainFlowLogEvents() throws IOException {
+        assertThat(source("service/QuoteTemplateService.java"))
+                .contains("Quote template upload started")
+                .contains("Quote template validation failed")
+                .contains("Quote template upload completed")
+                .contains("log.error(\"Quote template upload failed");
+
+        assertThat(source("service/OrderManagementService.java"))
+                .contains("Order production reset completed")
+                .contains("Order supplement drawings completed")
+                .contains("Order delete completed");
+
+        assertThat(source("service/DeliveryService.java"))
+                .contains("Delivery ticket generation started")
+                .contains("Delivery ticket generation completed")
+                .contains("Delivery ticket generation failed")
+                .contains("log.error(\"Delivery ticket generation failed");
+
+        assertThat(source("service/QuoteProcessService.java"))
+                .contains("Quote lead time shifted")
+                .contains("Quote lead time set");
+
+        assertThat(source("service/InternalTargetLeadTimeService.java"))
+                .contains("Internal target lead time shifted")
+                .contains("Internal target lead time set");
     }
 
     private void assertHasLogger(String relativePath, String className) throws IOException {

@@ -10,6 +10,8 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.MaterialDataResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,8 @@ import java.util.Map;
 
 @Service
 public class InternalTargetLeadTimeService {
+    private static final Logger log = LoggerFactory.getLogger(InternalTargetLeadTimeService.class);
+
     @Autowired
     private OrderRfqMapper orderRfqMapper;
     @Autowired
@@ -68,6 +72,12 @@ public class InternalTargetLeadTimeService {
         result.put("skippedCount", skipped.size());
         result.put("skippedItems", skipped);
         result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        log.info("Internal target lead time shifted rfqId={} itemCount={} adjustedCount={} skippedCount={} days={}",
+                req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), days);
+        if (!skipped.isEmpty()) {
+            log.warn("Internal target lead time shifted with warnings rfqId={} skippedCount={}",
+                    req.getRfqId(), skipped.size());
+        }
         return result;
     }
 
@@ -101,6 +111,12 @@ public class InternalTargetLeadTimeService {
         result.put("skippedCount", skipped.size());
         result.put("skippedItems", skipped);
         result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        log.info("Internal target lead time set rfqId={} itemCount={} adjustedCount={} skippedCount={} targetLeadTime={}",
+                req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), normalizedDate);
+        if (!skipped.isEmpty()) {
+            log.warn("Internal target lead time set with warnings rfqId={} skippedCount={}",
+                    req.getRfqId(), skipped.size());
+        }
         return result;
     }
 

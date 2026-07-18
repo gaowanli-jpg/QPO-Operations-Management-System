@@ -11,6 +11,8 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.MaterialDataResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,8 @@ import java.util.Map;
 
 @Service
 public class DeliveryService {
+    private static final Logger log = LoggerFactory.getLogger(DeliveryService.class);
+
     @Autowired
     private OrderRfqMapper orderRfqMapper;
     @Autowired
@@ -40,6 +44,11 @@ public class DeliveryService {
 
     @Transactional
     public List<OrderDeliveryTicket> generateTickets(DeliveryGenerateReq req) {
+        Integer rfqId = req == null ? null : req.getRfqId();
+        int selectedItemCount = req == null || req.getItems() == null ? 0 : req.getItems().size();
+        long startedAt = System.currentTimeMillis();
+        log.info("Delivery ticket generation started rfqId={} selectedItemCount={}", rfqId, selectedItemCount);
+        try {
         if (req.getRfqId() == null) {
             throw new RuntimeException("询价单 ID 不能为空");
         }
@@ -122,7 +131,19 @@ public class DeliveryService {
         }
         refreshOrderTicketStatus(order.getId());
         auditService.record("DELIVERY_TICKET_GENERATE", "order_rfq", order.getId(), null, createdTickets);
+        log.info("Delivery ticket generation completed rfqId={} ticketCount={} processSheetCount={} durationMs={}",
+                order.getId(), createdTickets.size(), createdTickets.size(), System.currentTimeMillis() - startedAt);
         return createdTickets;
+        } catch (RuntimeException e) {
+            if (isBusinessFailure(e)) {
+                log.warn("Delivery ticket generation failed rfqId={} selectedItemCount={} durationMs={} reason={}",
+                        rfqId, selectedItemCount, System.currentTimeMillis() - startedAt, e.getMessage());
+            } else {
+                log.error("Delivery ticket generation failed rfqId={} selectedItemCount={} durationMs={}",
+                        rfqId, selectedItemCount, System.currentTimeMillis() - startedAt, e);
+            }
+            throw e;
+        }
     }
 
     public List<OrderDeliveryTicket> listTickets(Integer rfqId) {
@@ -416,6 +437,10 @@ public class DeliveryService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private boolean isBusinessFailure(RuntimeException e) {
+        return e.getClass().equals(RuntimeException.class) && e.getCause() == null && !isBlank(e.getMessage());
     }
 
     private int safeInt(Integer value) {

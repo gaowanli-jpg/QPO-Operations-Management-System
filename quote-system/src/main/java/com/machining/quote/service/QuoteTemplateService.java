@@ -71,17 +71,30 @@ public class QuoteTemplateService {
     }
 
     public Map<String, Object> uploadTemplate(MultipartFile file) {
+        String originalFilename = file == null || file.getOriginalFilename() == null ? "" : file.getOriginalFilename().trim();
+        long fileSize = file == null ? 0L : file.getSize();
+        long startedAt = System.currentTimeMillis();
+        log.info("Quote template upload started fileName={} fileSize={}", originalFilename, fileSize);
         if (file == null || file.isEmpty()) {
+            log.warn("Quote template validation failed fileName={} fileSize={} reason={}",
+                    originalFilename, fileSize, "empty_file");
             throw new RuntimeException("请上传报价单模板文件");
         }
-        String originalFilename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().trim();
         if (!originalFilename.toLowerCase().endsWith(".xlsx")) {
+            log.warn("Quote template validation failed fileName={} fileSize={} reason={}",
+                    originalFilename, fileSize, "invalid_extension");
             throw new RuntimeException("报价单模板必须是 .xlsx 文件");
         }
 
         try {
             byte[] bytes = file.getBytes();
-            validateTemplate(new ByteArrayInputStream(bytes));
+            try {
+                validateTemplate(new ByteArrayInputStream(bytes));
+            } catch (RuntimeException e) {
+                log.warn("Quote template validation failed fileName={} fileSize={} reason={}",
+                        originalFilename, fileSize, e.getMessage());
+                throw e;
+            }
             Files.createDirectories(templateDir());
             Path tmpPath = templateDir().resolve(TEMPLATE_FILENAME + ".tmp");
             Files.write(tmpPath, bytes);
@@ -89,10 +102,14 @@ public class QuoteTemplateService {
             saveMeta(originalFilename);
             Map<String, Object> templateStatus = status();
             recordTemplateUploadAudit(originalFilename, templateStatus);
+            log.info("Quote template upload completed fileName={} fileSize={} targetPath={} durationMs={}",
+                    originalFilename, fileSize, templatePath(), System.currentTimeMillis() - startedAt);
             return templateStatus;
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
+            log.error("Quote template upload failed fileName={} fileSize={} durationMs={}",
+                    originalFilename, fileSize, System.currentTimeMillis() - startedAt, e);
             throw new RuntimeException("报价单模板上传失败：" + e.getMessage(), e);
         }
     }

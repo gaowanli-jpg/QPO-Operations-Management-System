@@ -11,6 +11,8 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.DrawingPartNoResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderManagementService {
+    private static final Logger log = LoggerFactory.getLogger(OrderManagementService.class);
+
     @Autowired
     private OrderRfqMapper orderMapper;
     @Autowired
@@ -122,15 +126,20 @@ public class OrderManagementService {
     public void resetProductionData(Integer rfqId) {
         OrderRfq order = requireOrderForUpdate(rfqId);
 
-        for (OrderDeliveryTicket ticket : listTickets(rfqId)) {
+        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
+        List<OrderProcessSheet> processSheets = listProcessSheets(rfqId);
+        for (OrderDeliveryTicket ticket : tickets) {
             deliveryService.deleteTicket(ticket.getId());
         }
-        for (OrderProcessSheet sheet : listProcessSheets(rfqId)) {
+        for (OrderProcessSheet sheet : processSheets) {
             processSheetMapper.deleteById(sheet.getId());
         }
 
-        order.setStatus(resolveOrderStatusAfterReset(rfqId));
+        String status = resolveOrderStatusAfterReset(rfqId);
+        order.setStatus(status);
         orderMapper.updateById(order);
+        log.info("Order production reset completed rfqId={} ticketCount={} processSheetCount={} status={}",
+                rfqId, tickets.size(), processSheets.size(), status);
     }
 
     @Transactional
@@ -218,6 +227,12 @@ public class OrderManagementService {
         result.put("alreadyBoundItems", alreadyBoundItems);
         result.put("unmatchedDrawings", unmatchedDrawings);
         result.put("skippedFiles", skippedFiles);
+        log.info("Order supplement drawings completed rfqId={} uploadCount={} boundCount={} alreadyBoundCount={} unmatchedCount={} skippedCount={}",
+                rfqId, drawings.size(), boundItems.size(), alreadyBoundItems.size(), unmatchedDrawings.size(), skippedFiles.size());
+        if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty()) {
+            log.warn("Order supplement drawings completed with warnings rfqId={} unmatchedCount={} skippedCount={}",
+                    rfqId, unmatchedDrawings.size(), skippedFiles.size());
+        }
         return result;
     }
 
@@ -226,6 +241,8 @@ public class OrderManagementService {
         OrderRfq order = requireOrderForUpdate(rfqId);
 
         List<ItemQuoteVersion> items = listItems(rfqId);
+        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
+        List<OrderProcessSheet> processSheets = listProcessSheets(rfqId);
 
         QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
         sheetQw.eq("rfq_id", rfqId);
@@ -247,6 +264,8 @@ public class OrderManagementService {
                 "itemCount", items.size(),
                 "deleteFiles", deleteFiles
         ));
+        log.info("Order delete completed rfqId={} deleteFiles={} itemCount={} ticketCount={} processSheetCount={}",
+                rfqId, deleteFiles, items.size(), tickets.size(), processSheets.size());
     }
 
     private Map<String, Object> buildSummary(OrderRfq order) {
@@ -535,8 +554,8 @@ public class OrderManagementService {
             if (isInsideUploadRoot(file) && Files.isRegularFile(file)) {
                 Files.deleteIfExists(file);
             }
-        } catch (Exception ignored) {
-            // 文件删除失败不能影响数据库清理事务。
+        } catch (Exception e) {
+            log.warn("Order drawing delete skipped drawingUrl={} reason={}", drawingUrl, e.getMessage());
         }
     }
 
@@ -551,11 +570,12 @@ public class OrderManagementService {
                     .forEach(path -> {
                         try {
                             Files.deleteIfExists(path);
-                        } catch (IOException ignored) {
-                            // 保留无法删除的文件，避免管理操作被单个占用文件阻断。
+                        } catch (IOException e) {
+                            log.warn("Order directory file delete skipped path={} reason={}", path, e.getMessage());
                         }
                     });
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            log.warn("Order directory delete skipped path={} reason={}", normalized, e.getMessage());
         }
     }
 
