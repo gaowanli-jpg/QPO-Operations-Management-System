@@ -41,6 +41,25 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain('系统管理：')
   })
 
+  test('keeps sidebar item labels local and four characters long', () => {
+    expect(appVue).not.toContain('title: backendMenu?.title || meta.title')
+    expect(appVue).toContain('title: meta.title')
+
+    const menuMetaBlock = appVue.slice(appVue.indexOf('const menuMetaByPath'), appVue.indexOf('const flattenMenus'))
+    const titles = [...menuMetaBlock.matchAll(/title: '([^']+)'/g)].map((match) => match[1])
+
+    expect(titles.length).toBeGreaterThan(0)
+    for (const title of titles) {
+      expect([...title].length).toBe(4)
+    }
+  })
+
+  test('allows local companion menu entries that share a backend-visible permission', () => {
+    expect(appVue).toContain('const backendVisiblePermissions')
+    expect(appVue).toContain('backendVisiblePermissions.value.has(permission)')
+    expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:order:view'")
+  })
+
   test('places quote template under market release instead of the system group', () => {
     const releaseMenuIndex = appVue.indexOf("'/release'")
     const templateMenuIndex = appVue.indexOf("'/quote-template'")
