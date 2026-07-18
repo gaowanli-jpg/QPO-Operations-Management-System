@@ -9,22 +9,16 @@
 
     <section class="erp-toolbar">
       <div class="erp-toolbar-group order-filter-group">
-        <el-select
-          v-model="selectedCustomer"
-          filterable
-          clearable
-          placeholder="先选择客户"
-          class="customer-select"
-          @change="handleCustomerChange"
-          @clear="handleCustomerClear"
-        >
-          <el-option
-            v-for="customer in customers"
-            :key="customer"
-            :label="customer"
-            :value="customer"
-          />
-        </el-select>
+        <el-button class="customer-picker-trigger" @click="customerPickerVisible = true">
+          <span
+            :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
+            :title="selectedCustomer || '先选择客户'"
+          >
+            {{ selectedCustomer || '先选择客户' }}
+          </span>
+          <span class="customer-picker-action">选择客户</span>
+        </el-button>
+        <el-button v-if="selectedCustomer" plain @click="handleCustomerClear">清除客户</el-button>
         <el-input
           v-model="keyword"
           clearable
@@ -257,23 +251,28 @@
         </div>
       </template>
     </el-dialog>
+
+    <CustomerPickerDialog
+      v-model="customerPickerVisible"
+      :current-customer="selectedCustomer"
+      @select="handleCustomerSelected"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, defineComponent, h, ref, onMounted, watch } from 'vue'
+import { computed, defineComponent, h, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
   getOrder,
-  listCustomers,
   listOrders,
   resetProduction as resetProductionRequest,
   supplementDrawings
 } from '../services/orderApi'
 
 const orders = ref([])
-const customers = ref([])
 const selectedCustomer = ref('')
 const keyword = ref('')
 const page = ref(1)
@@ -288,6 +287,7 @@ const supplementUploading = ref(false)
 const supplementFiles = ref([])
 const supplementResult = ref(null)
 const supplementUploadRef = ref(null)
+const customerPickerVisible = ref(false)
 
 const ResultList = defineComponent({
   props: {
@@ -316,16 +316,6 @@ watch([page, pageSize], () => {
   }
 })
 
-const loadCustomers = async () => {
-  try {
-    const response = await listCustomers()
-    customers.value = response || []
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('客户列表加载失败。')
-  }
-}
-
 const loadOrders = async () => {
   if (!selectedCustomer.value) {
     orders.value = []
@@ -350,7 +340,6 @@ const loadOrders = async () => {
 }
 
 const refreshOrders = async () => {
-  await loadCustomers()
   await loadOrders()
 }
 
@@ -365,6 +354,11 @@ const handleCustomerChange = async () => {
   orderDetail.value = null
   detailVisible.value = false
   await loadOrders()
+}
+
+const handleCustomerSelected = async (customer) => {
+  selectedCustomer.value = customer
+  await handleCustomerChange()
 }
 
 const handleCustomerClear = () => {
@@ -481,8 +475,6 @@ const formatRoute = (route) => {
     .filter(Boolean)
     .join(' / ')
 }
-
-onMounted(loadCustomers)
 </script>
 
 <style scoped>
@@ -491,9 +483,32 @@ onMounted(loadCustomers)
   justify-content: flex-end;
 }
 
-.customer-select {
+.customer-picker-trigger {
+  justify-content: space-between;
   width: 220px;
   flex: 0 0 220px;
+  min-height: 32px;
+}
+
+.customer-picker-text,
+.customer-picker-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-picker-placeholder {
+  color: var(--erp-text-secondary);
+}
+
+.customer-picker-action {
+  flex: none;
+  color: var(--erp-primary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .search-input {
@@ -611,7 +626,7 @@ onMounted(loadCustomers)
 }
 
 @media (max-width: 760px) {
-  .customer-select,
+  .customer-picker-trigger,
   .search-input {
     width: 100%;
   }

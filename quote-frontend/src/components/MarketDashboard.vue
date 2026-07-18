@@ -18,7 +18,13 @@
             <el-row :gutter="20" justify="center">
               <el-col :xs="24" :sm="20" :md="16" :lg="14">
                 <el-form-item label="客户名称/代码" required>
-                  <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为" />
+                  <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为">
+                    <template #append>
+                      <el-button class="existing-customer-button" @click="customerPickerVisible = true">
+                        选择已有客户
+                      </el-button>
+                    </template>
+                  </el-input>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -114,6 +120,11 @@
         </el-button>
       </div>
     </section>
+    <CustomerPickerDialog
+      v-model="customerPickerVisible"
+      :current-customer="rfqForm.customerName"
+      @select="selectExistingCustomer"
+    />
   </div>
 </template>
 
@@ -121,6 +132,7 @@
 import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { importRfq } from '../services/marketApi'
 
 const rfqForm = reactive({ customerName: '' })
@@ -129,9 +141,14 @@ const drawingFiles = ref([])
 const isSubmitting = ref(false)
 const folderInput = ref(null)
 const excelUploadRef = ref(null)
+const customerPickerVisible = ref(false)
 
 const handleExcelChange = (uploadFile) => { excelFile.value = uploadFile.raw }
 const handleExcelRemove = () => { excelFile.value = null }
+
+const selectExistingCustomer = (customer) => {
+  rfqForm.customerName = customer
+}
 
 // 递归扫描文件夹中的 PDF 文件
 const scanFiles = async (item) => {
@@ -385,6 +402,10 @@ const submitRfqPackage = async () => {
 
 .customer-form :deep(.el-form-item) {
   margin-bottom: 0;
+}
+
+.existing-customer-button {
+  min-width: 112px;
 }
 
 .upload-alert {

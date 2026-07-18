@@ -2,21 +2,15 @@
   <el-dialog v-model="visible" :title="title" width="900px" @closed="resetPicker">
     <div class="picker-step">
       <div class="step-title">1. 选择客户</div>
-      <el-select
-        v-model="selectedCustomer"
-        filterable
-        clearable
-        placeholder="请选择客户名称"
-        class="full-width"
-        :loading="loadingCustomers"
-      >
-        <el-option
-          v-for="customer in customerOptions"
-          :key="customer"
-          :label="customer"
-          :value="customer"
-        />
-      </el-select>
+      <el-button class="customer-picker-trigger full-width" @click="customerPickerVisible = true">
+        <span
+          :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
+          :title="selectedCustomer || '请选择客户名称'"
+        >
+          {{ selectedCustomer || '请选择客户名称' }}
+        </span>
+        <span class="customer-picker-action">选择客户</span>
+      </el-button>
     </div>
 
     <div class="picker-step">
@@ -95,6 +89,12 @@
       </template>
     </div>
 
+    <CustomerPickerDialog
+      v-model="customerPickerVisible"
+      :current-customer="selectedCustomer"
+      @select="handleCustomerSelected"
+    />
+
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
       <el-button type="primary" :disabled="!selectedOrderId" @click="submitOrder">
@@ -107,8 +107,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listMarketOrders } from '../services/marketApi'
-import { listCustomers } from '../services/orderApi'
 
 const DEFAULT_STATUS_OPTIONS = ['待工程部评估', '已报价', '部分已提单', '已生成提单']
 
@@ -142,14 +142,13 @@ const selectedCustomer = ref('')
 const selectedStatus = ref('')
 const selectedOrderId = ref(null)
 const keyword = ref('')
-const customerOptions = ref([])
 const orders = ref([])
 const selectedOrder = ref(null)
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const loadingCustomers = ref(false)
 const loadingOrders = ref(false)
+const customerPickerVisible = ref(false)
 let keywordTimer = null
 
 const statusOptions = computed(() => {
@@ -187,12 +186,6 @@ watch([page, pageSize], () => {
   }
 })
 
-watch(visible, value => {
-  if (value) {
-    loadCustomers()
-  }
-})
-
 const submitOrder = () => {
   const order = selectedOrder.value || orders.value.find(item => item.id === selectedOrderId.value)
   if (!order) return
@@ -220,17 +213,8 @@ const resetPageAndRows = () => {
   orders.value = []
 }
 
-const loadCustomers = async () => {
-  loadingCustomers.value = true
-  try {
-    const response = await listCustomers()
-    customerOptions.value = response || []
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('客户列表加载失败。')
-  } finally {
-    loadingCustomers.value = false
-  }
+const handleCustomerSelected = (customer) => {
+  selectedCustomer.value = customer
 }
 
 const loadOrders = async () => {
@@ -280,6 +264,28 @@ const formatDateTime = (value) => {
 .step-title { font-weight: 700; color: #303133; margin-bottom: 10px; }
 .full-width { width: 100%; }
 .keyword-input { width: 260px; margin-bottom: 10px; }
+.customer-picker-trigger {
+  justify-content: space-between;
+  min-height: 40px;
+}
+.customer-picker-text,
+.customer-picker-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.customer-picker-placeholder {
+  color: var(--erp-text-secondary);
+}
+.customer-picker-action {
+  flex: none;
+  color: var(--erp-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
 .order-table :deep(.selected-order-row > td.el-table__cell) {
   background: #d9ecff !important;
 }
