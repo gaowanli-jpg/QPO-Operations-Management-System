@@ -82,8 +82,9 @@ describe('QPO app shell polish', () => {
   test('uses tokenized shell classes instead of hard-coded menu colors', () => {
     expect(appVue).toContain('shell-title')
     expect(appVue).toContain('shell-subtitle')
-    expect(appVue).toContain('user-card')
-    expect(appVue).toContain('role-pill')
+    expect(appVue).toContain('UserProfilePopover')
+    expect(appVue).not.toContain('<div class="user-card">')
+    expect(appVue).not.toContain('<div class="header-actions">')
     expect(appVue).not.toContain('background-color="#172331"')
     expect(appVue).not.toContain('active-text-color="#ffffff"')
   })

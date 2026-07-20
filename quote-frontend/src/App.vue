@@ -43,17 +43,10 @@
             </div>
           </div>
           <div class="header-right">
-            <div class="user-card">
-              <el-avatar size="small" class="user-avatar">{{ userInitial }}</el-avatar>
-              <div class="user-copy">
-                <span class="username" :title="displayName">{{ displayName }}</span>
-                <span class="role-pill" :title="roleName">{{ roleName }}</span>
-              </div>
-            </div>
-            <div class="header-actions">
-              <el-button text type="primary" @click="openPasswordDialog(false)">修改密码</el-button>
-              <el-button text type="danger" @click="logout">退出</el-button>
-            </div>
+            <UserProfilePopover
+              @change-password="openPasswordDialog(false)"
+              @logout="logout"
+            />
           </div>
         </el-header>
 
@@ -104,6 +97,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataBoard, Document, Expand, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
 import { useAuthStore } from './stores/authStore'
+import UserProfilePopover from './components/UserProfilePopover.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -116,9 +110,6 @@ const activeMenu = computed(() => {
 const isLoginPage = computed(() => route.path === '/login')
 const isSidebarCollapsed = ref(false)
 const sidebarWidth = computed(() => isSidebarCollapsed.value ? '72px' : '200px')
-const displayName = computed(() => authStore.displayName)
-const userInitial = computed(() => displayName.value.slice(0, 1).toUpperCase())
-const roleName = computed(() => authStore.roleName)
 const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
@@ -506,6 +497,7 @@ html, body, #app {
 
 .header-right {
   gap: var(--erp-space-3);
+  justify-content: flex-end;
 }
 
 .shell-icon-button {
@@ -558,60 +550,6 @@ html, body, #app {
   line-height: var(--erp-line-height-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.user-card {
-  display: flex;
-  align-items: center;
-  gap: var(--erp-space-2);
-  min-width: 0;
-  max-width: 300px;
-  padding: var(--erp-space-1) var(--erp-space-2);
-  background: var(--erp-surface-muted);
-  border: 1px solid var(--erp-border-soft);
-  border-radius: var(--erp-radius-full);
-}
-
-.user-avatar {
-  flex: 0 0 auto;
-  color: var(--erp-text-inverse);
-  background: var(--erp-primary);
-}
-
-.user-copy {
-  display: flex;
-  align-items: center;
-  gap: var(--erp-space-2);
-  min-width: 0;
-}
-
-.username {
-  max-width: 150px;
-  overflow: hidden;
-  color: var(--erp-text);
-  font-size: var(--erp-font-size-sm);
-  font-weight: var(--erp-font-weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.role-pill {
-  max-width: 110px;
-  overflow: hidden;
-  padding: 2px var(--erp-space-2);
-  color: var(--erp-primary);
-  font-size: var(--erp-font-size-xs);
-  font-weight: var(--erp-font-weight-bold);
-  background: var(--erp-primary-soft);
-  border-radius: var(--erp-radius-full);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--erp-space-1);
 }
 
 .app-main {

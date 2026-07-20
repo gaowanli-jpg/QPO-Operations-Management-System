@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const appVue = readFileSync(resolve(currentDir, 'App.vue'), 'utf8')
+const userProfilePopoverPath = resolve(currentDir, 'components', 'UserProfilePopover.vue')
+const userProfilePopover = existsSync(userProfilePopoverPath)
+  ? readFileSync(userProfilePopoverPath, 'utf8')
+  : ''
 const profilePlan = readFileSync(
   resolve(currentDir, '..', '..', 'docs', 'QPO权限用户体系', '07-个人入口与我的资料优化开发文档.md'),
   'utf8'
@@ -22,5 +26,27 @@ describe('personal profile entry target contract', () => {
     expect(appVue).toContain('watch(mustChangePassword')
     expect(appVue).toContain('openPasswordDialog(true)')
     expect(appVue).toContain('changePassword')
+  })
+
+  test('App shell delegates the compact account entry to UserProfilePopover', () => {
+    expect(appVue).toContain("import UserProfilePopover from './components/UserProfilePopover.vue'")
+    expect(appVue).toContain('<UserProfilePopover')
+    expect(appVue).toContain('@change-password="openPasswordDialog(false)"')
+    expect(appVue).toContain('@logout="logout"')
+    expect(appVue).not.toContain('<div class="user-card">')
+    expect(appVue).not.toContain('<div class="header-actions">')
+  })
+
+  test('UserProfilePopover displays complete read-only identity fields', () => {
+    expect(existsSync(userProfilePopoverPath)).toBe(true)
+    expect(userProfilePopover).toContain('profile-trigger')
+    expect(userProfilePopover).toContain('profile-panel')
+    expect(userProfilePopover).toContain('roleNames')
+    expect(userProfilePopover).toContain('deptName')
+    expect(userProfilePopover).toContain('postName')
+    expect(userProfilePopover).toContain('phone')
+    expect(userProfilePopover).toContain('email')
+    expect(userProfilePopover).toContain("emit('change-password')")
+    expect(userProfilePopover).toContain("emit('logout')")
   })
 })
