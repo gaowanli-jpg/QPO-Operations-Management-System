@@ -129,7 +129,7 @@
     <el-drawer v-model="dataScopeDrawerVisible" title="数据范围" size="560px">
       <div class="role-drawer-body">
         <el-alert
-          title="QPO 订单跨市场、工程流转，默认不建议按部门隔离。推荐使用全部数据或指定客户。"
+          title="QPO 数据范围只保留全部数据、指定客户、仅本人、无数据；推荐使用全部数据或指定客户。"
           type="info"
           show-icon
           :closable="false"
@@ -137,9 +137,7 @@
         <el-form label-width="96px" class="erp-dialog-form">
           <el-form-item label="范围类型">
             <el-select v-model="dataScopeForm.dataScope" style="width: 100%">
-              <el-option-group v-for="group in dataScopeOptionGroups" :key="group.label" :label="group.label">
-                <el-option v-for="item in group.options" :key="item.value" :label="item.label" :value="item.value" />
-              </el-option-group>
+              <el-option v-for="item in dataScopeOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
           <el-alert
@@ -149,26 +147,6 @@
             show-icon
             :closable="false"
           />
-          <el-alert
-            v-if="isDepartmentCompatibilityScope"
-            title="部门范围为高级兼容能力，不推荐用于 QPO 订单主流程，可能导致跨部门处理订单不可见。"
-            type="warning"
-            show-icon
-            :closable="false"
-          />
-          <el-form-item v-if="isCustomDepartmentScope" label="指定部门">
-            <el-tree
-              ref="dataScopeDeptTreeRef"
-              class="data-scope-dept-tree"
-              :data="departmentTree"
-              node-key="id"
-              show-checkbox
-              default-expand-all
-              :props="{ label: 'label', children: 'children' }"
-              :default-checked-keys="dataScopeForm.deptIds"
-              @check="handleDeptTreeCheck"
-            />
-          </el-form-item>
           <el-form-item v-if="isCustomerDataScope" label="指定客户">
             <p class="data-scope-help">指定客户数据范围只按订单客户名称匹配。</p>
             <el-select
@@ -206,7 +184,6 @@ import {
   getRoleDataScope,
   getRolePermissions,
   listDataScopeCustomers,
-  listDataScopeDepartments,
   listPermissionTree,
   listRoles,
   saveRole
@@ -223,10 +200,8 @@ const currentRole = ref(null)
 const permissionCodes = ref([])
 const permissionTreeSearch = ref('')
 const showSelectedOnly = ref(false)
-const departmentTree = ref([])
 const customerOptions = ref([])
 const permissionTreeRef = ref(null)
-const dataScopeDeptTreeRef = ref(null)
 const permissionTreeProps = { label: 'label', children: 'children', disabled: 'disabled' }
 
 const form = reactive({
@@ -253,22 +228,14 @@ const dataScopeOptionGroups = [
       { value: 'SELF', label: '仅本人' },
       { value: 'NONE', label: '无数据' }
     ]
-  },
-  {
-    label: '高级/兼容配置',
-    options: [
-      { value: 'DEPT', label: '本部门' },
-      { value: 'DEPT_AND_CHILD', label: '本部门及子部门' },
-      { value: 'CUSTOM', label: '指定部门' }
-    ]
   }
 ]
 
 const dataScopeOptions = dataScopeOptionGroups.flatMap(group => group.options)
+const dataScopeOptionValues = new Set(dataScopeOptions.map(item => item.value))
 const isCustomerDataScope = computed(() => dataScopeForm.dataScope === 'CUSTOMER')
-const isCustomDepartmentScope = computed(() => dataScopeForm.dataScope === 'CUSTOM')
-const isDepartmentCompatibilityScope = computed(() => ['DEPT', 'DEPT_AND_CHILD', 'CUSTOM'].includes(dataScopeForm.dataScope))
-const dataScopeLabel = (value) => dataScopeOptions.find(item => item.value === value)?.label || value || '-'
+const editableDataScope = (value) => dataScopeOptionValues.has(value) ? value : 'ALL'
+const dataScopeLabel = (value) => dataScopeOptions.find(item => item.value === editableDataScope(value))?.label || '-'
 
 const loadAll = async () => {
   loading.value = true
@@ -300,7 +267,7 @@ const openEdit = (row) => {
   form.roleCode = row.roleCode
   form.roleName = row.roleName
   form.description = row.description || ''
-  form.dataScope = row.dataScope || 'ALL'
+  form.dataScope = editableDataScope(row.dataScope)
   form.enabled = row.enabled !== false
   dialogVisible.value = true
 }
@@ -446,16 +413,7 @@ const permissionTypeLabel = (type) => {
 }
 
 const loadDataScopeOptions = async () => {
-  const [departments, customers] = await Promise.all([
-    listDataScopeDepartments(),
-    listDataScopeCustomers()
-  ])
-  departmentTree.value = departments || []
-  customerOptions.value = customers || []
-}
-
-const handleDeptTreeCheck = (_node, checkedState) => {
-  dataScopeForm.deptIds = checkedState?.checkedKeys || []
+  customerOptions.value = await listDataScopeCustomers() || []
 }
 
 const openDataScopeDrawer = async (row) => {
@@ -464,28 +422,20 @@ const openDataScopeDrawer = async (row) => {
     getRoleDataScope(row.id),
     loadDataScopeOptions()
   ])
-  dataScopeForm.dataScope = response?.dataScope || row.dataScope || 'ALL'
-  dataScopeForm.deptIds = (response?.deptIds || []).map(Number).filter(Number.isFinite)
+  dataScopeForm.dataScope = editableDataScope(response?.dataScope || row.dataScope)
+  dataScopeForm.deptIds = []
   dataScopeForm.customerNames = response?.customerNames || []
   dataScopeDrawerVisible.value = true
-  await nextTick()
-  dataScopeDeptTreeRef.value?.setCheckedKeys(dataScopeForm.deptIds)
 }
 
 const buildDataScopePayload = (formState) => {
-  const dataScope = formState.dataScope || 'ALL'
+  const dataScope = editableDataScope(formState.dataScope)
   switch (dataScope) {
     case 'CUSTOMER':
       return {
         dataScope,
         deptIds: [],
         customerNames: [...formState.customerNames]
-      }
-    case 'CUSTOM':
-      return {
-        dataScope,
-        deptIds: [...formState.deptIds],
-        customerNames: []
       }
     default:
       return {
@@ -598,15 +548,6 @@ onMounted(loadAll)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.data-scope-dept-tree {
-  width: 100%;
-  max-height: 260px;
-  overflow: auto;
-  border: 1px solid var(--erp-border-subtle);
-  border-radius: var(--erp-radius-md);
-  padding: var(--erp-space-2);
 }
 
 .data-scope-help {

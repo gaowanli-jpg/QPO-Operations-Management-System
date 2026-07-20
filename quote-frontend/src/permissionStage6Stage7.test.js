@@ -7,25 +7,23 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 describe('QPO permission stage 6 and 7 data scope cleanup', () => {
-  test('role data-scope drawer uses department tree and customer selector', () => {
+  test('role data-scope drawer uses only QPO recommended customer selector', () => {
     const roleManage = readSource('components', 'SystemRoleManage.vue')
 
-    expect(roleManage).toContain('listDataScopeDepartments')
     expect(roleManage).toContain('listDataScopeCustomers')
-    expect(roleManage).toContain('<el-tree')
-    expect(roleManage).toContain('show-checkbox')
     expect(roleManage).toContain('customerOptions')
+    expect(roleManage).not.toContain('listDataScopeDepartments')
+    expect(roleManage).not.toContain('dataScopeDeptTreeRef')
     expect(roleManage).not.toContain('deptIdsText')
     expect(roleManage).not.toContain('customerNamesText')
   })
 
-  test('admin api exposes data-scope option endpoints', () => {
+  test('admin api exposes only customer data-scope option endpoint for role management', () => {
     const adminApi = readSource('services', 'adminApi.js')
 
-    expect(adminApi).toContain("listDataScopeDepartments")
-    expect(adminApi).toContain("request('/api/system/data-scope/departments')")
     expect(adminApi).toContain("listDataScopeCustomers")
     expect(adminApi).toContain("request('/api/system/data-scope/customers')")
+    expect(adminApi).not.toContain("listDataScopeDepartments")
   })
 
   test('frontend business routes do not depend on legacy role metadata', () => {

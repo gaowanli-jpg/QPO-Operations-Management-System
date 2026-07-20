@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -161,18 +162,18 @@ class PermissionSystemStage6Test {
     }
 
     @Test
-    void roleDataScopeAssignmentOnlyPersistsDepartmentsForCustomDepartmentScope() {
+    void roleDataScopeAssignmentRejectsRetiredDepartmentScopes() {
         SystemRoleDataScopeDeptMapper deptMapper = mock(SystemRoleDataScopeDeptMapper.class);
         SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
         SystemRoleService service = roleServiceForAssignment(role(21L, "DEPT_OWNER", "ALL", false), deptMapper, customerMapper);
         RoleDataScopeAssignReq req = dataScopeReq("CUSTOM", List.of(10L, 10L, 11L), List.of("ACME", "Globex"));
 
-        service.assignDataScope(21L, req);
-
-        verify(deptMapper).deleteByRoleId(21L);
-        verify(customerMapper).deleteByRoleId(21L);
-        verify(deptMapper).insertIgnore(21L, 10L);
-        verify(deptMapper).insertIgnore(21L, 11L);
+        assertThatThrownBy(() -> service.assignDataScope(21L, req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Invalid data scope");
+        verify(deptMapper, never()).deleteByRoleId(21L);
+        verify(customerMapper, never()).deleteByRoleId(21L);
+        verify(deptMapper, never()).insertIgnore(eq(21L), anyLong());
         verify(customerMapper, never()).insertIgnore(eq(21L), anyString());
     }
 
@@ -203,17 +204,12 @@ class PermissionSystemStage6Test {
         SystemRoleMapper roleMapper = mock(SystemRoleMapper.class);
         when(roleMapper.selectActiveRolesByLegacyUserId(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(roles));
 
-        SystemRoleDataScopeDeptMapper deptMapper = mock(SystemRoleDataScopeDeptMapper.class);
-        for (SystemRole role : roles) {
-            when(deptMapper.selectDeptIdsByRoleId(role.getId())).thenReturn(List.of(20L, 21L));
-        }
 
         SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
 
         DataScopeService service = new DataScopeService();
         ReflectionTestUtils.setField(service, "systemUserMapper", userMapper);
         ReflectionTestUtils.setField(service, "roleMapper", roleMapper);
-        ReflectionTestUtils.setField(service, "dataScopeDeptMapper", deptMapper);
         ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
         return service;
     }

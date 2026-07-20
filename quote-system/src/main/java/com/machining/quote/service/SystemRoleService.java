@@ -30,7 +30,7 @@ import java.util.Set;
 
 @Service
 public class SystemRoleService {
-    private static final Set<String> DATA_SCOPES = Set.of("ALL", "DEPT", "DEPT_AND_CHILD", "SELF", "CUSTOMER", "CUSTOM", "NONE");
+    private static final Set<String> DATA_SCOPES = Set.of("ALL", "SELF", "CUSTOMER", "NONE");
     private static final List<PermissionGroup> PERMISSION_GROUPS = List.of(
             new PermissionGroup("market", "市场", 100),
             new PermissionGroup("orders", "订单", 200),
@@ -222,7 +222,7 @@ public class SystemRoleService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("roleId", roleId);
         result.put("dataScope", role.getDataScope());
-        result.put("deptIds", safeList(dataScopeDeptMapper.selectDeptIdsByRoleId(roleId)));
+        result.put("deptIds", List.of());
         result.put("customerNames", safeList(dataScopeCustomerMapper.selectCustomerNamesByRoleId(roleId)));
         return result;
     }
@@ -232,13 +232,9 @@ public class SystemRoleService {
         SystemRole role = requireRole(roleId);
         Map<String, Object> before = getDataScope(roleId);
         String dataScope = normalizeDataScope(req == null ? null : req.getDataScope());
-        List<Long> deptIds = req == null || req.getDeptIds() == null ? List.of() : distinctLongs(req.getDeptIds());
         List<String> customerNames = req == null || req.getCustomerNames() == null
                 ? List.of()
                 : normalizeCodes(req.getCustomerNames());
-        if (!"CUSTOM".equals(dataScope)) {
-            deptIds = List.of();
-        }
         if (!"CUSTOMER".equals(dataScope)) {
             customerNames = List.of();
         }
@@ -248,9 +244,6 @@ public class SystemRoleService {
         roleMapper.updateById(role);
 
         dataScopeDeptMapper.deleteByRoleId(roleId);
-        for (Long deptId : deptIds) {
-            dataScopeDeptMapper.insertIgnore(roleId, deptId);
-        }
         dataScopeCustomerMapper.deleteByRoleId(roleId);
         for (String customerName : customerNames) {
             dataScopeCustomerMapper.insertIgnore(roleId, customerName);

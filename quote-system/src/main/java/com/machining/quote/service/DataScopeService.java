@@ -4,25 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.entity.OrderRfq;
-import com.machining.quote.entity.SystemDept;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
 import com.machining.quote.mapper.OrderRfqMapper;
-import com.machining.quote.mapper.SystemDeptMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
-import com.machining.quote.mapper.SystemRoleDataScopeDeptMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
 import com.machining.quote.mapper.SystemUserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -33,11 +27,7 @@ public class DataScopeService {
     @Autowired(required = false)
     private SystemRoleMapper roleMapper;
     @Autowired(required = false)
-    private SystemRoleDataScopeDeptMapper dataScopeDeptMapper;
-    @Autowired(required = false)
     private SystemRoleDataScopeCustomerMapper dataScopeCustomerMapper;
-    @Autowired(required = false)
-    private SystemDeptMapper systemDeptMapper;
     @Autowired(required = false)
     private OrderRfqMapper orderRfqMapper;
 
@@ -123,15 +113,6 @@ public class DataScopeService {
         }
     }
 
-    public List<Map<String, Object>> listDepartmentTree() {
-        if (systemDeptMapper == null) {
-            return List.of();
-        }
-        QueryWrapper<SystemDept> query = new QueryWrapper<>();
-        query.eq("deleted", false).eq("enabled", true).orderByAsc("sort_order").orderByAsc("id");
-        return buildDeptTree(systemDeptMapper.selectList(query));
-    }
-
     public List<String> listCustomerOptions() {
         if (orderRfqMapper == null) {
             return List.of();
@@ -175,9 +156,6 @@ public class DataScopeService {
             params.add(snapshot.legacyUserId());
             clauses.add("(" + column(alias, "created_by") + " = {" + index + "} OR " + column(alias, "owner_user_id") + " = {" + index + "})");
         }
-        if (!snapshot.deptIds().isEmpty()) {
-            clauses.add(column(alias, "owner_dept_id") + " IN (" + placeholders(params, snapshot.deptIds()) + ")");
-        }
         if (!snapshot.customerNames().isEmpty()) {
             clauses.add(column(alias, "customer_name") + " IN (" + placeholders(params, snapshot.customerNames()) + ")");
         }
@@ -192,7 +170,6 @@ public class DataScopeService {
         if (current == null) {
             return DataScopeSnapshot.withoutContext();
         }
-        SystemUser systemUser = loadSystemUser(current.id());
         List<SystemRole> roles = loadRoles(current.id());
         if (roles.isEmpty()) {
             return DataScopeSnapshot.none(current.id(), current.username());
@@ -200,7 +177,6 @@ public class DataScopeService {
         boolean superAdmin = false;
         boolean allAccess = false;
         boolean selfOnly = false;
-        Set<Long> deptIds = new LinkedHashSet<>();
         Set<String> customerNames = new LinkedHashSet<>();
         for (SystemRole role : roles) {
             if (role == null) {
@@ -214,9 +190,6 @@ public class DataScopeService {
             switch (normalize(role.getDataScope())) {
                 case "ALL" -> allAccess = true;
                 case "SELF" -> selfOnly = true;
-                case "DEPT" -> addIfPresent(deptIds, systemUser == null ? null : systemUser.getDeptId());
-                case "DEPT_AND_CHILD" -> deptIds.addAll(loadDeptAndChildren(systemUser == null ? null : systemUser.getDeptId()));
-                case "CUSTOM" -> deptIds.addAll(loadConfiguredDeptIds(role.getId()));
                 case "CUSTOMER" -> customerNames.addAll(loadConfiguredCustomerNames(role.getId()));
                 default -> {
                 }
@@ -225,9 +198,9 @@ public class DataScopeService {
         if (allAccess) {
             return DataScopeSnapshot.all(current.id(), current.username(), superAdmin);
         }
-        boolean noAccess = !selfOnly && deptIds.isEmpty() && customerNames.isEmpty();
+        boolean noAccess = !selfOnly && customerNames.isEmpty();
         return new DataScopeSnapshot(false, current.id(), current.username(), superAdmin, false, noAccess,
-                selfOnly, List.copyOf(deptIds), List.copyOf(customerNames));
+                selfOnly, List.copyOf(customerNames));
     }
 
     private boolean matchesOrder(DataScopeSnapshot snapshot, OrderRfq order) {
@@ -237,9 +210,6 @@ public class DataScopeService {
         if (snapshot.selfOnly()
                 && (Objects.equals(order.getCreatedBy(), snapshot.legacyUserId())
                 || Objects.equals(order.getOwnerUserId(), snapshot.legacyUserId()))) {
-            return true;
-        }
-        if (order.getOwnerDeptId() != null && snapshot.deptIds().contains(order.getOwnerDeptId())) {
             return true;
         }
         return !isBlank(order.getCustomerName()) && snapshot.customerNames().contains(order.getCustomerName());
@@ -268,76 +238,12 @@ public class DataScopeService {
         }
     }
 
-    private List<Long> loadConfiguredDeptIds(Long roleId) {
-        if (roleId == null || dataScopeDeptMapper == null) {
-            return List.of();
-        }
-        List<Long> ids = dataScopeDeptMapper.selectDeptIdsByRoleId(roleId);
-        return ids == null ? List.of() : ids.stream().filter(Objects::nonNull).toList();
-    }
-
     private List<String> loadConfiguredCustomerNames(Long roleId) {
         if (roleId == null || dataScopeCustomerMapper == null) {
             return List.of();
         }
         List<String> names = dataScopeCustomerMapper.selectCustomerNamesByRoleId(roleId);
         return names == null ? List.of() : names.stream().filter(value -> !isBlank(value)).toList();
-    }
-
-    private List<Long> loadDeptAndChildren(Long deptId) {
-        if (deptId == null) {
-            return List.of();
-        }
-        if (systemDeptMapper == null) {
-            return List.of(deptId);
-        }
-        QueryWrapper<SystemDept> query = new QueryWrapper<>();
-        query.eq("deleted", false).eq("enabled", true);
-        List<SystemDept> all = systemDeptMapper.selectList(query);
-        Map<Long, List<Long>> childrenByParent = new LinkedHashMap<>();
-        for (SystemDept dept : all) {
-            if (dept.getId() == null || dept.getParentId() == null) {
-                continue;
-            }
-            childrenByParent.computeIfAbsent(dept.getParentId(), ignored -> new ArrayList<>()).add(dept.getId());
-        }
-        LinkedHashSet<Long> result = new LinkedHashSet<>();
-        ArrayDeque<Long> queue = new ArrayDeque<>();
-        queue.add(deptId);
-        while (!queue.isEmpty()) {
-            Long current = queue.removeFirst();
-            if (!result.add(current)) {
-                continue;
-            }
-            queue.addAll(childrenByParent.getOrDefault(current, List.of()));
-        }
-        return List.copyOf(result);
-    }
-
-    private List<Map<String, Object>> buildDeptTree(List<SystemDept> departments) {
-        Map<Long, Map<String, Object>> byId = new LinkedHashMap<>();
-        Map<Long, List<Map<String, Object>>> childrenByParent = new LinkedHashMap<>();
-        for (SystemDept dept : departments == null ? List.<SystemDept>of() : departments) {
-            if (dept.getId() == null) {
-                continue;
-            }
-            Map<String, Object> node = new LinkedHashMap<>();
-            node.put("id", dept.getId());
-            node.put("label", dept.getDeptName());
-            node.put("deptCode", dept.getDeptCode());
-            node.put("children", new ArrayList<Map<String, Object>>());
-            byId.put(dept.getId(), node);
-            childrenByParent.computeIfAbsent(dept.getParentId() == null ? 0L : dept.getParentId(), ignored -> new ArrayList<>()).add(node);
-        }
-        for (Map.Entry<Long, List<Map<String, Object>>> entry : childrenByParent.entrySet()) {
-            Map<String, Object> parent = byId.get(entry.getKey());
-            if (parent != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> children = (List<Map<String, Object>>) parent.get("children");
-                children.addAll(entry.getValue());
-            }
-        }
-        return childrenByParent.getOrDefault(0L, List.of());
     }
 
     private String placeholders(List<Object> params, List<?> values) {
@@ -351,12 +257,6 @@ public class DataScopeService {
 
     private String column(String alias, String column) {
         return isBlank(alias) ? column : alias + "." + column;
-    }
-
-    private void addIfPresent(Set<Long> values, Long value) {
-        if (value != null) {
-            values.add(value);
-        }
     }
 
     private String normalize(String value) {
@@ -385,18 +285,17 @@ public class DataScopeService {
             boolean allAccess,
             boolean noAccess,
             boolean selfOnly,
-            List<Long> deptIds,
             List<String> customerNames) {
         private static DataScopeSnapshot withoutContext() {
-            return new DataScopeSnapshot(true, null, null, false, true, false, false, List.of(), List.of());
+            return new DataScopeSnapshot(true, null, null, false, true, false, false, List.of());
         }
 
         private static DataScopeSnapshot all(Integer legacyUserId, String username, boolean superAdmin) {
-            return new DataScopeSnapshot(false, legacyUserId, username, superAdmin, true, false, false, List.of(), List.of());
+            return new DataScopeSnapshot(false, legacyUserId, username, superAdmin, true, false, false, List.of());
         }
 
         private static DataScopeSnapshot none(Integer legacyUserId, String username) {
-            return new DataScopeSnapshot(false, legacyUserId, username, false, false, true, false, List.of(), List.of());
+            return new DataScopeSnapshot(false, legacyUserId, username, false, false, true, false, List.of());
         }
     }
 }
