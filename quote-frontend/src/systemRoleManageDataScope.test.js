@@ -17,9 +17,8 @@ describe('QPO role management data scope guardrails', () => {
     expect(roleManage).toContain('高级/兼容配置')
   })
 
-  test('explains self scope as imported or created orders without exposing owner assignment', () => {
-    expect(roleManage).toContain('导入/创建')
-    expect(roleManage).not.toContain('订单负责人分派')
+  test('explains self scope as imported or created orders without full owner assignment', () => {
+    expect(roleManage).toContain('仅查看当前用户导入/创建的订单；不包含完整订单负责人分派能力。')
   })
 
   test('shows customer configuration only for customer data scope', () => {

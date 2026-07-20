@@ -144,7 +144,7 @@
           </el-form-item>
           <el-alert
             v-if="dataScopeForm.dataScope === 'SELF'"
-            title="仅查看当前用户导入/创建的订单；不涉及完整负责人机制。"
+            title="仅查看当前用户导入/创建的订单；不包含完整订单负责人分派能力。"
             type="info"
             show-icon
             :closable="false"
