@@ -55,15 +55,55 @@
       </div>
 
       <footer class="profile-actions">
+        <el-button text type="primary" @click="openProfileDialog">编辑联系方式</el-button>
         <el-button text type="primary" @click="emit('change-password')">修改密码</el-button>
         <el-button text type="danger" @click="emit('logout')">退出登录</el-button>
       </footer>
     </section>
   </el-popover>
+
+  <el-dialog
+    v-model="profileDialogVisible"
+    title="编辑联系方式"
+    width="420px"
+    destroy-on-close
+  >
+    <el-form
+      ref="profileFormRef"
+      :model="profileForm"
+      :rules="profileRules"
+      label-width="72px"
+      class="profile-form"
+    >
+      <el-form-item label="手机" prop="phone">
+        <el-input
+          v-model.trim="profileForm.phone"
+          clearable
+          maxlength="30"
+          placeholder="可留空"
+          autocomplete="tel"
+        />
+      </el-form-item>
+      <el-form-item label="邮箱" prop="email">
+        <el-input
+          v-model.trim="profileForm.email"
+          clearable
+          maxlength="120"
+          placeholder="可留空"
+          autocomplete="email"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="profileDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="profileSaving" @click="saveProfile">保存</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/authStore'
 
@@ -79,6 +119,64 @@ const roleNames = computed(() => {
   }
   return authStore.roleName
 })
+const profileDialogVisible = ref(false)
+const profileSaving = ref(false)
+const profileFormRef = ref()
+const profileForm = reactive({
+  phone: '',
+  email: ''
+})
+
+const phonePattern = /^[0-9+\-\s()]{6,30}$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const validatePhone = (_rule, value, callback) => {
+  if (!value || phonePattern.test(value)) {
+    callback()
+    return
+  }
+  callback(new Error('手机号格式不正确'))
+}
+
+const validateEmail = (_rule, value, callback) => {
+  if (!value || emailPattern.test(value)) {
+    callback()
+    return
+  }
+  callback(new Error('邮箱格式不正确'))
+}
+
+const profileRules = {
+  phone: [{ validator: validatePhone, trigger: 'blur' }],
+  email: [{ validator: validateEmail, trigger: 'blur' }]
+}
+
+const openProfileDialog = () => {
+  profileForm.phone = profile.value.phone || ''
+  profileForm.email = profile.value.email || ''
+  profileDialogVisible.value = true
+  profileFormRef.value?.clearValidate()
+}
+
+const saveProfile = async () => {
+  await profileFormRef.value?.validate()
+  profileSaving.value = true
+  try {
+    const response = await authStore.updateMyProfile({
+      phone: profileForm.phone.trim(),
+      email: profileForm.email.trim()
+    })
+    if (!response?.success) {
+      throw new Error(response?.message || '联系方式保存失败')
+    }
+    ElMessage.success('联系方式已更新')
+    profileDialogVisible.value = false
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message || '联系方式保存失败')
+  } finally {
+    profileSaving.value = false
+  }
+}
 
 const valueOrDash = (value) => {
   const text = Array.isArray(value) ? value.join(' / ') : value
@@ -211,10 +309,15 @@ const valueOrDash = (value) => {
 
 .profile-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--erp-space-2);
   padding-top: var(--erp-space-3);
   border-top: 1px solid var(--erp-border-soft);
+}
+
+.profile-form {
+  padding-top: var(--erp-space-2);
 }
 
 @media (max-width: 640px) {

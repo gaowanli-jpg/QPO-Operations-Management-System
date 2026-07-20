@@ -49,4 +49,14 @@ describe('personal profile entry target contract', () => {
     expect(userProfilePopover).toContain("emit('change-password')")
     expect(userProfilePopover).toContain("emit('logout')")
   })
+
+  test('UserProfilePopover lets the current user edit contact fields and refresh cached state', () => {
+    expect(userProfilePopover).toContain('profileDialogVisible')
+    expect(userProfilePopover).toContain('编辑联系方式')
+    expect(userProfilePopover).toContain('profileForm.phone')
+    expect(userProfilePopover).toContain('profileForm.email')
+    expect(userProfilePopover).toContain('authStore.updateMyProfile')
+    expect(userProfilePopover).toContain('ElMessage.success')
+    expect(userProfilePopover).toContain('未填写')
+  })
 })
