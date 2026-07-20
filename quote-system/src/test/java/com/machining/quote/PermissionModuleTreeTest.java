@@ -22,6 +22,7 @@ class PermissionModuleTreeTest {
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path QUOTE_SAVE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V33__quote_process_save_quote_permission.sql");
     private static final Path RETIRE_COMMON_SELECTION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V38__retire_common_selection_permissions.sql");
+    private static final Path ORGANIZATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V40__organization_identity_permissions.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -150,6 +151,41 @@ class PermissionModuleTreeTest {
         assertThat(source)
                 .as("Default role mapping must not grant the retired release reset ability")
                 .doesNotContain("Map.entry(\"market:release:reset\"");
+    }
+
+    @Test
+    void organizationPermissionsFormAssignableModuleTree() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(source)
+                .as("Organization archive must be a visible left-sidebar MENU module")
+                .contains("permission(147L, \"MENU\", \"system:org:view\"")
+                .contains("\"/organization\"")
+                .contains("\"SystemOrgManage\"");
+        assertThat(source)
+                .as("Department and post permissions must hang under the organization archive module")
+                .contains("permission(148L, \"MENU\", \"system:dept:view\"")
+                .contains("831, 147L")
+                .contains("permission(149L, \"BUTTON\", \"system:dept:manage\"")
+                .contains("832, 148L")
+                .contains("permission(150L, \"MENU\", \"system:post:view\"")
+                .contains("840, 147L")
+                .contains("permission(151L, \"BUTTON\", \"system:post:manage\"")
+                .contains("841, 150L");
+    }
+
+    @Test
+    void organizationPermissionMigrationAlignsTreeAndDefaultRoleGrants() throws IOException {
+        String migration = Files.readString(ORGANIZATION_PERMISSION_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("system:org:view")
+                .contains("system:dept:view")
+                .contains("system:dept:manage")
+                .contains("system:post:view")
+                .contains("system:post:manage")
+                .contains("system_role_permission")
+                .contains("SUPER_ADMIN");
     }
 
     private List<PermissionRow> fallbackPermissions() throws IOException {
