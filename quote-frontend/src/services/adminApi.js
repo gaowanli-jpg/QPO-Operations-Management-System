@@ -58,6 +58,48 @@ export const assignRoleDataScope = (roleId, payload) => request(`/api/system/rol
 
 export const listDataScopeCustomers = () => request('/api/system/data-scope/customers')
 
+export const listDepartmentsTree = () => request('/api/system/departments/tree')
+
+export const listDepartmentOptions = () => request('/api/system/departments/options')
+
+export const saveDepartment = (payload) => {
+  const id = payload?.id
+  return request(id ? `/api/system/departments/${id}` : '/api/system/departments', {
+    method: id ? 'PUT' : 'POST',
+    data: payload
+  })
+}
+
+export const updateDepartmentStatus = (id, enabled) => request(`/api/system/departments/${id}/status`, {
+  method: 'PUT',
+  data: { enabled }
+})
+
+export const deleteDepartment = (id) => request(`/api/system/departments/${id}`, {
+  method: 'DELETE'
+})
+
+export const listPosts = () => request('/api/system/posts')
+
+export const listPostOptions = () => request('/api/system/posts/options')
+
+export const savePost = (payload) => {
+  const id = payload?.id
+  return request(id ? `/api/system/posts/${id}` : '/api/system/posts', {
+    method: id ? 'PUT' : 'POST',
+    data: payload
+  })
+}
+
+export const updatePostStatus = (id, enabled) => request(`/api/system/posts/${id}/status`, {
+  method: 'PUT',
+  data: { enabled }
+})
+
+export const deletePost = (id) => request(`/api/system/posts/${id}`, {
+  method: 'DELETE'
+})
+
 export const getQuoteTemplate = () => request('/api/admin/quote-template')
 
 export const saveQuoteTemplate = (formData) => request('/api/admin/quote-template', {

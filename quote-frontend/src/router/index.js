@@ -12,6 +12,7 @@ const OrderManage = () => import('../components/OrderManage.vue')
 const HistoryOrderManage = () => import('../components/HistoryOrderManage.vue')
 const UserManage = () => import('../components/UserManage.vue')
 const SystemRoleManage = () => import('../components/SystemRoleManage.vue')
+const SystemOrgManage = () => import('../components/SystemOrgManage.vue')
 const QuoteTemplateManage = () => import('../components/QuoteTemplateManage.vue')
 const AuditLogManage = () => import('../components/AuditLogManage.vue')
 
@@ -27,6 +28,7 @@ const routes = [
   { path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:history-order:view' } },
   { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },
   { path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } },
+  { path: '/organization', component: SystemOrgManage, meta: { permission: 'system:org:view' } },
   { path: '/audit-logs', component: AuditLogManage, meta: { permission: 'system:audit:view' } },
   { path: '/quote-template', component: QuoteTemplateManage, meta: { permission: 'market:template:view' } },
   { path: '/pricing', component: ItemPricing, meta: { permission: 'engineer:pricing:view' } }

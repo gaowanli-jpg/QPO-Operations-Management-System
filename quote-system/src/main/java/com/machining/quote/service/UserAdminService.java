@@ -5,12 +5,18 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.PasswordChangeReq;
 import com.machining.quote.dto.UserSaveReq;
 import com.machining.quote.entity.ErpUser;
+import com.machining.quote.entity.SystemDept;
+import com.machining.quote.entity.SystemPost;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
 import com.machining.quote.mapper.ErpUserMapper;
+import com.machining.quote.mapper.SystemDeptMapper;
+import com.machining.quote.mapper.SystemPostMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
 import com.machining.quote.mapper.SystemUserMapper;
 import com.machining.quote.mapper.SystemUserRoleMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,10 +28,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
 public class UserAdminService {
+    private static final Logger log = LoggerFactory.getLogger(UserAdminService.class);
     private static final Set<String> LEGACY_ROLES = Set.of("ADMIN", "MARKET", "ENGINEER");
     private static final Set<String> PROTECTED_USERNAMES = Set.of("admin", "market", "engineer");
 
@@ -41,6 +49,10 @@ public class UserAdminService {
     private SystemRoleMapper systemRoleMapper;
     @Autowired(required = false)
     private SystemUserRoleMapper systemUserRoleMapper;
+    @Autowired(required = false)
+    private SystemDeptMapper deptMapper;
+    @Autowired(required = false)
+    private SystemPostMapper postMapper;
 
     public List<Map<String, Object>> listUsers() {
         QueryWrapper<ErpUser> qw = new QueryWrapper<>();
@@ -67,6 +79,7 @@ public class UserAdminService {
         if (userMapper.selectCount(qw) > 0) {
             throw new RuntimeException("用户名已存在");
         }
+        validateOrganizationReferences(req, true);
 
         ErpUser user = new ErpUser();
         user.setUsername(username);
@@ -90,8 +103,12 @@ public class UserAdminService {
 
     @Transactional
     public Map<String, Object> updateUser(Integer id, UserSaveReq req) {
+        if (req == null) {
+            req = new UserSaveReq();
+        }
         ErpUser user = requireUserForUpdate(id);
         Map<String, Object> before = publicUser(user);
+        validateOrganizationReferences(req, false);
 
         List<String> roleCodes = requestedRoleCodes(req, false);
         if (!roleCodes.isEmpty() || !isBlank(req.getRole())) {
@@ -123,6 +140,7 @@ public class UserAdminService {
             after.put("roles", roleCodes);
         }
         auditService.record("SYSTEM_USER_UPDATE", "system_user", systemUser == null ? id : systemUser.getId(), before, after);
+        recordOrganizationChangeIfNeeded(systemUser == null ? id : systemUser.getId(), before, after);
         return after;
     }
 
@@ -222,12 +240,12 @@ public class UserAdminService {
         systemUser.setPasswordChangedAt(user.getPasswordChangedAt());
         systemUser.setDeleted(false);
         systemUser.setUpdatedAt(LocalDateTime.now());
-        if (req != null) {
-            if (!isBlank(req.getRealName())) systemUser.setRealName(req.getRealName().trim());
-            if (!isBlank(req.getPhone())) systemUser.setPhone(req.getPhone().trim());
-            if (!isBlank(req.getEmail())) systemUser.setEmail(req.getEmail().trim());
-            if (req.getDeptId() != null) systemUser.setDeptId(req.getDeptId());
-            if (req.getPostId() != null) systemUser.setPostId(req.getPostId());
+        if (shouldApplyProfileFields(req, creating)) {
+            systemUser.setRealName(trimToNull(req.getRealName()));
+            systemUser.setPhone(trimToNull(req.getPhone()));
+            systemUser.setEmail(trimToNull(req.getEmail()));
+            systemUser.setDeptId(req.getDeptId());
+            systemUser.setPostId(req.getPostId());
         }
         if (insert) {
             systemUserMapper.insert(systemUser);
@@ -274,6 +292,8 @@ public class UserAdminService {
         List<String> roleNames = systemUser == null
                 ? roleCodes
                 : safeList(systemUserRoleMapper == null ? null : systemUserRoleMapper.selectRoleNamesByUserId(systemUser.getId()));
+        SystemDept dept = systemUser == null ? null : findDept(systemUser.getDeptId());
+        SystemPost post = systemUser == null ? null : findPost(systemUser.getPostId());
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", user.getId());
         row.put("systemUserId", systemUser == null ? null : systemUser.getId());
@@ -283,7 +303,9 @@ public class UserAdminService {
         row.put("phone", systemUser == null ? null : systemUser.getPhone());
         row.put("email", systemUser == null ? null : systemUser.getEmail());
         row.put("deptId", systemUser == null ? null : systemUser.getDeptId());
+        row.put("deptName", dept == null ? null : dept.getDeptName());
         row.put("postId", systemUser == null ? null : systemUser.getPostId());
+        row.put("postName", post == null ? null : post.getPostName());
         row.put("role", user.getRole());
         row.put("roleCodes", roleCodes);
         row.put("roles", roleCodes);
@@ -303,6 +325,89 @@ public class UserAdminService {
             return null;
         }
         return systemUserMapper.selectByLegacyUserId(legacyUserId);
+    }
+
+    private void validateOrganizationReferences(UserSaveReq req, boolean creating) {
+        if (!shouldApplyProfileFields(req, creating)) {
+            return;
+        }
+        requireUsableDept(req.getDeptId());
+        requireUsablePost(req.getPostId());
+    }
+
+    private boolean shouldApplyProfileFields(UserSaveReq req, boolean creating) {
+        if (req == null) {
+            return false;
+        }
+        return creating
+                || req.getUsername() != null
+                || req.getDisplayName() != null
+                || req.getRealName() != null
+                || req.getPhone() != null
+                || req.getEmail() != null
+                || req.getDeptId() != null
+                || req.getPostId() != null;
+    }
+
+    private SystemDept requireUsableDept(Long deptId) {
+        if (deptId == null) {
+            return null;
+        }
+        SystemDept dept = findDept(deptId);
+        if (dept == null || Boolean.TRUE.equals(dept.getDeleted()) || Boolean.FALSE.equals(dept.getEnabled())) {
+            log.warn("User organization update rejected because department is unavailable deptId={}", deptId);
+            throw new RuntimeException("部门不存在或已禁用");
+        }
+        return dept;
+    }
+
+    private SystemPost requireUsablePost(Long postId) {
+        if (postId == null) {
+            return null;
+        }
+        SystemPost post = findPost(postId);
+        if (post == null || Boolean.TRUE.equals(post.getDeleted()) || Boolean.FALSE.equals(post.getEnabled())) {
+            log.warn("User organization update rejected because post is unavailable postId={}", postId);
+            throw new RuntimeException("岗位不存在或已禁用");
+        }
+        return post;
+    }
+
+    private SystemDept findDept(Long deptId) {
+        if (deptMapper == null || deptId == null) {
+            return null;
+        }
+        return deptMapper.selectById(deptId);
+    }
+
+    private SystemPost findPost(Long postId) {
+        if (postMapper == null || postId == null) {
+            return null;
+        }
+        return postMapper.selectById(postId);
+    }
+
+    private void recordOrganizationChangeIfNeeded(Object targetId, Map<String, Object> before, Map<String, Object> after) {
+        Map<String, Object> beforeOrg = organizationSnapshot(before);
+        Map<String, Object> afterOrg = organizationSnapshot(after);
+        if (Objects.equals(beforeOrg, afterOrg)) {
+            return;
+        }
+        auditService.record("SYSTEM_USER_ORG_UPDATE", "system_user", targetId, beforeOrg, afterOrg);
+        log.info("User organization updated userId={} deptId={} postId={}",
+                targetId, after.get("deptId"), after.get("postId"));
+    }
+
+    private Map<String, Object> organizationSnapshot(Map<String, Object> source) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("realName", source == null ? null : source.get("realName"));
+        row.put("phone", source == null ? null : source.get("phone"));
+        row.put("email", source == null ? null : source.get("email"));
+        row.put("deptId", source == null ? null : source.get("deptId"));
+        row.put("deptName", source == null ? null : source.get("deptName"));
+        row.put("postId", source == null ? null : source.get("postId"));
+        row.put("postName", source == null ? null : source.get("postName"));
+        return row;
     }
 
     private List<String> requestedRoleCodes(UserSaveReq req, boolean creating) {
@@ -374,6 +479,11 @@ public class UserAdminService {
 
     private String normalizeUsername(String username) {
         return username == null ? "" : username.trim();
+    }
+
+    private String trimToNull(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private boolean isBlank(String value) {

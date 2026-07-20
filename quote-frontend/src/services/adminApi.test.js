@@ -96,6 +96,56 @@ describe('adminApi', () => {
     })
   })
 
+  test('manages organization department and post dictionaries', async () => {
+    await adminApi.listDepartmentsTree()
+    await adminApi.listDepartmentOptions()
+    await adminApi.saveDepartment({ deptName: '市场部' })
+    await adminApi.saveDepartment({ id: 3, deptName: '工程部' })
+    await adminApi.updateDepartmentStatus(3, false)
+    await adminApi.deleteDepartment(3)
+    await adminApi.listPosts()
+    await adminApi.listPostOptions()
+    await adminApi.savePost({ postName: '核价员' })
+    await adminApi.savePost({ id: 5, postName: '主管' })
+    await adminApi.updatePostStatus(5, true)
+    await adminApi.deletePost(5)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/system/departments/tree')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/system/departments/options')
+    expect(request).toHaveBeenNthCalledWith(3, '/api/system/departments', {
+      method: 'POST',
+      data: { deptName: '市场部' }
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/system/departments/3', {
+      method: 'PUT',
+      data: { id: 3, deptName: '工程部' }
+    })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/system/departments/3/status', {
+      method: 'PUT',
+      data: { enabled: false }
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/system/departments/3', {
+      method: 'DELETE'
+    })
+    expect(request).toHaveBeenNthCalledWith(7, '/api/system/posts')
+    expect(request).toHaveBeenNthCalledWith(8, '/api/system/posts/options')
+    expect(request).toHaveBeenNthCalledWith(9, '/api/system/posts', {
+      method: 'POST',
+      data: { postName: '核价员' }
+    })
+    expect(request).toHaveBeenNthCalledWith(10, '/api/system/posts/5', {
+      method: 'PUT',
+      data: { id: 5, postName: '主管' }
+    })
+    expect(request).toHaveBeenNthCalledWith(11, '/api/system/posts/5/status', {
+      method: 'PUT',
+      data: { enabled: true }
+    })
+    expect(request).toHaveBeenNthCalledWith(12, '/api/system/posts/5', {
+      method: 'DELETE'
+    })
+  })
+
   test('getQuoteTemplate loads template config', async () => {
     await adminApi.getQuoteTemplate()
 

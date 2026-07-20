@@ -21,6 +21,7 @@ const protectedRoutePermissions = {
   '/history-orders': 'market:history-order:view',
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
+  '/organization': 'system:org:view',
   '/audit-logs': 'system:audit:view',
   '/quote-template': 'market:template:view',
   '/pricing': 'engineer:pricing:view'
@@ -37,6 +38,7 @@ const visibleMenuPermissions = {
   '/history-orders': 'market:history-order:view',
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
+  '/organization': 'system:org:view',
   '/audit-logs': 'system:audit:view'
 }
 

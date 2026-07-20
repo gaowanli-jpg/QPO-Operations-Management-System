@@ -63,6 +63,22 @@ class SystemOrganizationTest {
                 .contains("private Long postId;");
     }
 
+    @Test
+    void userAdminServiceResolvesAndAuditsOrganizationIdentityFields() throws IOException {
+        String userAdminService = Files.readString(
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "UserAdminService.java"),
+                StandardCharsets.UTF_8);
+
+        assertThat(userAdminService)
+                .contains("SystemDeptMapper")
+                .contains("SystemPostMapper")
+                .contains("requireUsableDept")
+                .contains("requireUsablePost")
+                .contains("row.put(\"deptName\"")
+                .contains("row.put(\"postName\"")
+                .contains("SYSTEM_USER_ORG_UPDATE");
+    }
+
     private Set<String> fallbackPermissionCodes() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
         Matcher matcher = FALLBACK_PERMISSION_CODE.matcher(source);

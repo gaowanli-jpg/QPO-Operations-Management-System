@@ -126,7 +126,7 @@ const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/history-orders'] },
-  { key: 'system', title: '系统', paths: ['/users', '/roles', '/audit-logs'] }
+  { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/audit-logs'] }
 ]
 
 const menuMetaByPath = {
@@ -140,6 +140,7 @@ const menuMetaByPath = {
   '/history-orders': { title: '历史订单', permission: 'market:history-order:view', icon: Files },
   '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
+  '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
   '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document }
 }
 
@@ -219,7 +220,11 @@ const shellMetaByPath = {
     title: '角色管理',
     description: '配置角色启停、权限授权和数据范围。'
   },
-    '/audit-logs': {
+  '/organization': {
+    title: '组织档案',
+    description: '维护部门和岗位这两类用户身份属性。'
+  },
+  '/audit-logs': {
     title: '操作日志',
     description: '追踪账号、报价、订单、字典和系统配置的关键变更。'
   },

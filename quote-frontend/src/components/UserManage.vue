@@ -3,7 +3,7 @@
     <header class="erp-page-header user-page-header">
       <div>
         <h1 class="erp-page-title">用户管理</h1>
-        <p class="erp-page-description">维护登录账号、部门角色和启用状态。</p>
+        <p class="erp-page-description">维护登录账号、组织身份、角色和启用状态。</p>
       </div>
       <div class="erp-page-actions user-page-actions">
         <el-button v-permission="'system:user:create'" type="primary" @click="openCreate">新增用户</el-button>
@@ -23,8 +23,11 @@
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="username" label="账号" min-width="130" show-overflow-tooltip />
           <el-table-column prop="displayName" label="显示名称" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="realName" label="真实姓名" min-width="130" show-overflow-tooltip />
           <el-table-column prop="deptName" label="部门" min-width="130" show-overflow-tooltip />
           <el-table-column prop="postName" label="岗位" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="phone" label="手机号" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
           <el-table-column label="角色" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="user-role-tags">
@@ -71,13 +74,42 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑用户' : '新增用户'" width="460px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑用户' : '新增用户'" width="560px">
       <el-form :model="form" label-width="90px" class="erp-dialog-form">
         <el-form-item label="账号">
           <el-input v-model.trim="form.username" :disabled="!!editingId" />
         </el-form-item>
         <el-form-item label="显示名称">
           <el-input v-model.trim="form.displayName" />
+        </el-form-item>
+        <el-form-item label="真实姓名">
+          <el-input v-model="form.realName" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="form.phone" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="form.email" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="所属部门">
+          <el-select v-model="form.deptId" filterable clearable placeholder="请选择启用部门" style="width: 100%">
+            <el-option
+              v-for="dept in departmentOptions"
+              :key="dept.id"
+              :label="dept.deptName || dept.deptCode"
+              :value="dept.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="岗位">
+          <el-select v-model="form.postId" filterable clearable placeholder="请选择启用岗位" style="width: 100%">
+            <el-option
+              v-for="post in postOptions"
+              :key="post.id"
+              :label="post.postName || post.postCode"
+              :value="post.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="角色">
           <el-select v-model="form.roleCodes" multiple collapse-tags collapse-tags-tooltip style="width: 100%">
@@ -129,6 +161,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   changeUserPassword,
   deleteUser as deleteUserRequest,
+  listDepartmentOptions,
+  listPostOptions,
   listRoles,
   listUsers,
   saveUser as saveUserRequest,
@@ -137,6 +171,8 @@ import {
 
 const users = ref([])
 const roleOptions = ref([])
+const departmentOptions = ref([])
+const postOptions = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -149,6 +185,9 @@ const form = reactive({
   username: '',
   password: '',
   displayName: '',
+  realName: '',
+  phone: '',
+  email: '',
   deptId: null,
   postId: null,
   roleCodes: ['MARKET_USER'],
@@ -205,11 +244,23 @@ const loadRoles = async () => {
   roleOptions.value = (response || []).filter(role => role.deleted !== true)
 }
 
+const loadOrganizationOptions = async () => {
+  const [departments, posts] = await Promise.all([
+    listDepartmentOptions(),
+    listPostOptions()
+  ])
+  departmentOptions.value = departments || []
+  postOptions.value = posts || []
+}
+
 const resetForm = () => {
   editingId.value = null
   form.username = ''
   form.password = ''
   form.displayName = ''
+  form.realName = ''
+  form.phone = ''
+  form.email = ''
   form.deptId = null
   form.postId = null
   form.roleCodes = ['MARKET_USER']
@@ -226,6 +277,9 @@ const openEdit = (row) => {
   form.username = row.username
   form.password = ''
   form.displayName = row.displayName
+  form.realName = row.realName || ''
+  form.phone = row.phone || ''
+  form.email = row.email || ''
   form.deptId = row.deptId || null
   form.postId = row.postId || null
   form.roleCodes = Array.isArray(row.roleCodes) && row.roleCodes.length
@@ -248,11 +302,22 @@ const saveUser = async () => {
     ElMessage.warning('请至少选择一个角色')
     return
   }
+  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    ElMessage.warning('邮箱格式不正确')
+    return
+  }
+  if (form.phone && !/^[0-9+\-\s()]{6,30}$/.test(form.phone)) {
+    ElMessage.warning('手机号格式不正确')
+    return
+  }
   saving.value = true
   try {
     const payload = {
       username: form.username,
       displayName: form.displayName,
+      realName: form.realName,
+      phone: form.phone,
+      email: form.email,
       deptId: form.deptId,
       postId: form.postId,
       roleCodes: form.roleCodes,
@@ -321,8 +386,11 @@ const deleteUser = async (row) => {
 const isLocked = (row) => row.lockedUntil && new Date(row.lockedUntil).getTime() > Date.now()
 
 onMounted(async () => {
-  await loadRoles()
-  await loadUsers()
+  await Promise.all([
+    loadRoles(),
+    loadOrganizationOptions(),
+    loadUsers()
+  ])
 })
 </script>
 
@@ -346,3 +414,4 @@ onMounted(async () => {
   gap: var(--erp-space-1);
 }
 </style>
+

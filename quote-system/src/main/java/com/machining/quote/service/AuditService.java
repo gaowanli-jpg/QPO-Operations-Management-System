@@ -211,6 +211,7 @@ public class AuditService {
             case "SYSTEM_USER_ENABLE" -> "启用用户";
             case "SYSTEM_USER_DELETE" -> "删除用户";
             case "SYSTEM_USER_ASSIGN_ROLE" -> "用户分配角色";
+            case "SYSTEM_USER_ORG_UPDATE" -> "更新用户组织身份";
             case "SYSTEM_ROLE_CREATE" -> "新增角色";
             case "SYSTEM_ROLE_UPDATE" -> "编辑角色";
             case "SYSTEM_ROLE_DELETE" -> "删除角色";

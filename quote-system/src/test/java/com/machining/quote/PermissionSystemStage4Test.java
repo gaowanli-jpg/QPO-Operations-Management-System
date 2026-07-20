@@ -26,6 +26,7 @@ class PermissionSystemStage4Test {
                         "/material-process",
                         "/users",
                         "/roles",
+                        "/organization",
                         "/audit-logs"
                 );
     }
@@ -61,6 +62,8 @@ class PermissionSystemStage4Test {
                 "system:role:delete",
                 "system:role:assign-permission",
                 "system:role:assign-data-scope",
+                "system:dept:manage",
+                "system:post:manage",
                 "system:audit:export",
                 "system:audit:retention"
         );

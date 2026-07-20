@@ -3,11 +3,15 @@ package com.machining.quote;
 import com.machining.quote.dto.RolePermissionAssignReq;
 import com.machining.quote.dto.SystemUserSaveReq;
 import com.machining.quote.entity.ErpUser;
+import com.machining.quote.entity.SystemDept;
 import com.machining.quote.entity.SystemPermission;
+import com.machining.quote.entity.SystemPost;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
 import com.machining.quote.mapper.ErpUserMapper;
+import com.machining.quote.mapper.SystemDeptMapper;
 import com.machining.quote.mapper.SystemPermissionMapper;
+import com.machining.quote.mapper.SystemPostMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
 import com.machining.quote.mapper.SystemRolePermissionMapper;
 import com.machining.quote.mapper.SystemUserMapper;
@@ -87,6 +91,63 @@ class PermissionSystemStage3Test {
     }
 
     @Test
+    void userAdminServiceUpdatesOrganizationAttributesAndAuditsTheChange() {
+        ErpUserMapper erpUserMapper = mock(ErpUserMapper.class);
+        SystemUserMapper systemUserMapper = mock(SystemUserMapper.class);
+        SystemUserRoleMapper systemUserRoleMapper = mock(SystemUserRoleMapper.class);
+        SystemDeptMapper deptMapper = mock(SystemDeptMapper.class);
+        SystemPostMapper postMapper = mock(SystemPostMapper.class);
+        AuditService auditService = mock(AuditService.class);
+
+        UserAdminService service = new UserAdminService();
+        ReflectionTestUtils.setField(service, "userMapper", erpUserMapper);
+        ReflectionTestUtils.setField(service, "authService", new AuthService());
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "systemUserMapper", systemUserMapper);
+        ReflectionTestUtils.setField(service, "systemUserRoleMapper", systemUserRoleMapper);
+        ReflectionTestUtils.setField(service, "deptMapper", deptMapper);
+        ReflectionTestUtils.setField(service, "postMapper", postMapper);
+
+        ErpUser legacyUser = new ErpUser();
+        legacyUser.setId(7);
+        legacyUser.setUsername("market-a");
+        legacyUser.setDisplayName("市场A");
+        legacyUser.setRole("MARKET");
+        legacyUser.setEnabled(true);
+        legacyUser.setForcePasswordChange(false);
+        legacyUser.setFailedLoginAttempts(0);
+        when(erpUserMapper.selectByIdForUpdate(7)).thenReturn(legacyUser);
+
+        SystemUser systemUser = new SystemUser();
+        systemUser.setId(107L);
+        systemUser.setLegacyUserId(7);
+        systemUser.setDeptId(1L);
+        systemUser.setPostId(2L);
+        systemUser.setEnabled(true);
+        systemUser.setDeleted(false);
+        when(systemUserMapper.selectByLegacyUserId(7)).thenReturn(systemUser);
+        when(deptMapper.selectById(1L)).thenReturn(dept(1L, "MARKET", "市场部"));
+        when(deptMapper.selectById(3L)).thenReturn(dept(3L, "ENGINEER", "工程部"));
+        when(postMapper.selectById(2L)).thenReturn(post(2L, "USER", "专员"));
+        when(postMapper.selectById(4L)).thenReturn(post(4L, "MANAGER", "主管"));
+
+        SystemUserSaveReq req = new SystemUserSaveReq();
+        req.setUsername("market-a");
+        req.setDisplayName("市场A");
+        req.setDeptId(3L);
+        req.setPostId(4L);
+        req.setRoleCodes(List.of("MARKET_USER"));
+        Map<String, Object> result = service.updateUser(7, req);
+
+        assertThat(result)
+                .containsEntry("deptId", 3L)
+                .containsEntry("deptName", "工程部")
+                .containsEntry("postId", 4L)
+                .containsEntry("postName", "主管");
+        verify(auditService).record(eq("SYSTEM_USER_ORG_UPDATE"), eq("system_user"), eq(107L), any(), any());
+    }
+
+    @Test
     void systemRoleServiceReplacesPermissionsAndAuditsTheChange() {
         SystemRoleMapper roleMapper = mock(SystemRoleMapper.class);
         SystemPermissionMapper permissionMapper = mock(SystemPermissionMapper.class);
@@ -149,5 +210,25 @@ class PermissionSystemStage3Test {
         permission.setPermissionName(code);
         permission.setEnabled(true);
         return permission;
+    }
+
+    private SystemDept dept(Long id, String code, String name) {
+        SystemDept dept = new SystemDept();
+        dept.setId(id);
+        dept.setDeptCode(code);
+        dept.setDeptName(name);
+        dept.setEnabled(true);
+        dept.setDeleted(false);
+        return dept;
+    }
+
+    private SystemPost post(Long id, String code, String name) {
+        SystemPost post = new SystemPost();
+        post.setId(id);
+        post.setPostCode(code);
+        post.setPostName(name);
+        post.setEnabled(true);
+        post.setDeleted(false);
+        return post;
     }
 }
