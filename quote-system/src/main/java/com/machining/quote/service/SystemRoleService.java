@@ -236,6 +236,12 @@ public class SystemRoleService {
         List<String> customerNames = req == null || req.getCustomerNames() == null
                 ? List.of()
                 : normalizeCodes(req.getCustomerNames());
+        if (!"CUSTOM".equals(dataScope)) {
+            deptIds = List.of();
+        }
+        if (!"CUSTOMER".equals(dataScope)) {
+            customerNames = List.of();
+        }
 
         role.setDataScope(dataScope);
         role.setUpdatedAt(LocalDateTime.now());

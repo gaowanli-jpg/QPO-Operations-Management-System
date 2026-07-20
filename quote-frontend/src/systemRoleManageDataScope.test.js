@@ -33,4 +33,13 @@ describe('QPO role management data scope guardrails', () => {
     expect(roleManage).toContain('v-if="isCustomDepartmentScope"')
     expect(roleManage).toContain('不推荐用于 QPO 订单主流程')
   })
+
+  test('normalizes hidden data scope fields before saving', () => {
+    expect(roleManage).toContain('buildDataScopePayload(dataScopeForm)')
+    expect(roleManage).toContain("case 'CUSTOMER'")
+    expect(roleManage).toContain('deptIds: []')
+    expect(roleManage).toContain("case 'CUSTOM'")
+    expect(roleManage).toContain('customerNames: []')
+    expect(roleManage).toContain('default:')
+  })
 })

@@ -472,14 +472,35 @@ const openDataScopeDrawer = async (row) => {
   dataScopeDeptTreeRef.value?.setCheckedKeys(dataScopeForm.deptIds)
 }
 
+const buildDataScopePayload = (formState) => {
+  const dataScope = formState.dataScope || 'ALL'
+  switch (dataScope) {
+    case 'CUSTOMER':
+      return {
+        dataScope,
+        deptIds: [],
+        customerNames: [...formState.customerNames]
+      }
+    case 'CUSTOM':
+      return {
+        dataScope,
+        deptIds: [...formState.deptIds],
+        customerNames: []
+      }
+    default:
+      return {
+        dataScope,
+        deptIds: [],
+        customerNames: []
+      }
+  }
+}
+
 const saveDataScope = async () => {
   saving.value = true
   try {
-    await assignRoleDataScope(currentRole.value.id, {
-      dataScope: dataScopeForm.dataScope,
-      deptIds: dataScopeForm.deptIds,
-      customerNames: dataScopeForm.customerNames
-    })
+    const payload = buildDataScopePayload(dataScopeForm)
+    await assignRoleDataScope(currentRole.value.id, payload)
     ElMessage.success('数据范围已更新')
     dataScopeDrawerVisible.value = false
     await loadAll()
