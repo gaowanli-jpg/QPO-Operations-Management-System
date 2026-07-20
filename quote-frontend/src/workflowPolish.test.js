@@ -138,10 +138,23 @@ describe('QPO workflow page polish', () => {
       '@click="adjustInternalLeadTime(-1)"',
       '@click="setInternalTargetLeadTime"',
       '@click="submitTicket"',
-      '@click="deleteTicket(scope.row)"',
-      '@click="deleteProcessSheet(scope.row)"',
       '@click="exportExcel(\'tickets\')"',
       '@click="exportExcel(\'process\')"'
+    ])
+    expectExcludes(releaseSource, 'MarketRelease.vue', [
+      '@click="deleteTicket(scope.row)"',
+      '@click="deleteProcessSheet(scope.row)"',
+      'deleteTicketRequest',
+      'deleteProcessSheetRequest'
+    ])
+  })
+
+  test('freezes batched release quantity columns for partial delivery', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      '已提单数量',
+      '剩余可提数量'
     ])
   })
 

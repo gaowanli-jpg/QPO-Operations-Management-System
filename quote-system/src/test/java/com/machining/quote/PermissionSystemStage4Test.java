@@ -43,7 +43,6 @@ class PermissionSystemStage4Test {
                 "market:quote-process:save-quote",
                 "market:quote-process:export",
                 "market:release:create",
-                "market:release:reset",
                 "market:template:upload",
                 "engineer:setup:save-config",
                 "engineer:pricing:save-item",
@@ -65,5 +64,6 @@ class PermissionSystemStage4Test {
                 "system:audit:export",
                 "system:audit:retention"
         );
+        assertThat(info.getPermissions()).doesNotContain("market:release:reset");
     }
 }

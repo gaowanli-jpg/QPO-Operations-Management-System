@@ -40,12 +40,8 @@ describe('orderApi', () => {
     })
   })
 
-  test('resetProduction posts reset action by order id', async () => {
-    await orderApi.resetProduction(12)
-
-    expect(request).toHaveBeenCalledWith('/api/order-management/orders/12/reset-production', {
-      method: 'POST'
-    })
+  test('does not expose production reset helper for immutable released records', () => {
+    expect('resetProduction' in orderApi).toBe(false)
   })
 
   test('supplementDrawings uploads multipart form data', async () => {

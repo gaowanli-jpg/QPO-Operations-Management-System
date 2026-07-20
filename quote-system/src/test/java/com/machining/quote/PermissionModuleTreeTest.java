@@ -128,6 +128,18 @@ class PermissionModuleTreeTest {
                 .doesNotContain("READONLY");
     }
 
+    @Test
+    void releaseResetPermissionIsRetiredFromAssignableCatalog() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Delivery tickets and process sheets are irreversible release records; reset must not be assignable")
+                .doesNotContain("market:release:reset");
+        assertThat(source)
+                .as("Default role mapping must not grant the retired release reset ability")
+                .doesNotContain("Map.entry(\"market:release:reset\"");
+    }
+
     private List<PermissionRow> fallbackPermissions() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
         Matcher matcher = FALLBACK_PERMISSION.matcher(source);

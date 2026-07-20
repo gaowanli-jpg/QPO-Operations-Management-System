@@ -443,40 +443,114 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
-    void deletingDeliveryTicketClearsGeneratedStatus() {
+    void itemStatusFlowsFromUnpricedToPricedQuotedAndReleased() {
         OrderRfq order = new OrderRfq();
-        order.setRfqNo("DELETE-NO-RESTORE-" + System.nanoTime());
-        order.setCustomerName("DELETE-NO-RESTORE");
-        order.setProjectName("DELETE-NO-RESTORE");
-        order.setStatus("已报价");
+        order.setRfqNo("ITEM-STATUS-" + System.nanoTime());
+        order.setCustomerName("零件状态客户");
+        order.setStatus(QuoteStatusWorkflow.UNPRICED);
         orderMapper.insert(order);
 
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setRfqId(order.getId());
-        item.setPartNo("DEL-NO-RESTORE");
-        item.setDescription("delete ticket status guard");
-        item.setQty(3);
+        item.setPartNo("ITEM-STATUS-100");
         item.setVersion("A");
+        item.setDescription("零件状态流测试件");
+        item.setQty(2);
         item.setLeadTime("2026-03-20");
-        item.setFinalUnitPrice(10.0);
-        item.setFinalTotalPrice(30.0);
-        item.setStatus("已报价");
+        item.setQuoteLeadTime("2026-03-25");
+        item.setDrawingUrl("/uploads/test/ITEM-STATUS-100.pdf");
+        item.setStatus(QuoteStatusWorkflow.UNPRICED);
         itemMapper.insert(item);
 
-        DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
-        req.setInternalProjectNo("IP-DELETE-NO-RESTORE");
-        req.setCustomerOrderNo("CO-DELETE-NO-RESTORE");
-        req.setArrangeType("计划");
-        DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
-        line.setItemId(item.getId());
-        line.setAcceptedQty(3);
-        req.setItems(List.of(line));
+        String materialName = "STATUS-MAT-" + System.nanoTime();
+        DictMaterial material = new DictMaterial();
+        material.setMaterialName(materialName);
+        material.setRemarks("");
+        material.setPlateDensity(7850.0);
+        material.setPlatePrice(7.1);
+        materialMapper.insert(material);
 
-        List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
-        deliveryService.deleteTicket(tickets.get(0).getId());
+        QuoteSubmitReq quoteReq = new QuoteSubmitReq();
+        quoteReq.setItemId(item.getId());
+        quoteReq.setPartNetWeight(1.0);
+        quoteReq.setMaterialData(Map.of(
+                "name", materialName,
+                "shape", "板材",
+                "dimensionUnit", "m",
+                "dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01)
+        ));
+        quoteReq.setProcessRoute(List.of());
 
-        assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo("已报价");
+        engineerService.calculateAndSaveQuote(quoteReq);
+        assertThat(itemMapper.selectById(item.getId()).getStatus())
+                .as("单件核价保存只代表工程已核价，不能提前进入市场已报价")
+                .isEqualTo(QuoteStatusWorkflow.PRICED);
+
+        engineerService.completeOrderQuote(order.getId());
+        quoteProcessService.saveQuoteSheet(order.getId());
+        assertThat(itemMapper.selectById(item.getId()).getStatus())
+                .as("市场保存报价单后，零件才进入已报价")
+                .isEqualTo(QuoteStatusWorkflow.QUOTED);
+
+        deliveryService.generateTickets(deliveryReq(order, item, 1));
+        assertThat(itemMapper.selectById(item.getId()).getStatus())
+                .as("部分提单时零件仍留在已报价池，并通过已提/剩余数量表达进度")
+                .isEqualTo(QuoteStatusWorkflow.QUOTED);
+
+        deliveryService.generateTickets(deliveryReq(order, item, 1));
+        assertThat(itemMapper.selectById(item.getId()).getStatus())
+                .as("累计提单数量达到原始数量后，零件才变为已提单")
+                .isEqualTo("已提单");
+    }
+
+    @Test
+    void batchedDeliveryUsesRemainingQuantityInsteadOfRejectingRepeatedItem() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("BATCH-DELIVERY-" + System.nanoTime());
+        order.setCustomerName("分批提单客户");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = quotedItem(order, "BATCH-100");
+        item.setQty(10);
+        item.setStatus(QuoteStatusWorkflow.QUOTED);
+        item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 2, "calcType", "工时")));
+        itemMapper.updateById(item);
+
+        List<OrderDeliveryTicket> firstBatch = deliveryService.generateTickets(deliveryReq(order, item, 4));
+        assertThat(firstBatch).hasSize(1);
+        assertThat(firstBatch.get(0).getQty()).isEqualTo(4);
+        assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PARTIALLY_RELEASED);
+
+        List<OrderDeliveryTicket> secondBatch = deliveryService.generateTickets(deliveryReq(order, item, 6));
+        assertThat(secondBatch).hasSize(1);
+        assertThat(secondBatch.get(0).getQty()).isEqualTo(6);
+
+        QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
+        ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId());
+        assertThat(ticketMapper.selectList(ticketQw)).extracting(OrderDeliveryTicket::getQty)
+                .containsExactly(4, 6);
+        assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo("已提单");
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+    }
+
+    @Test
+    void publishedDeliveryTicketsCannotBeDeleted() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("IMMUTABLE-TICKET-" + System.nanoTime());
+        order.setCustomerName("不可逆提单客户");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = quotedItem(order, "IMMUTABLE-100");
+        List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(deliveryReq(order, item, 1));
+
+        assertThatThrownBy(() -> deliveryService.deleteTicket(tickets.get(0).getId()))
+                .as("提单发布记录是 APS 同步来源，不允许删除回退")
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不可删除");
+        assertThat(ticketMapper.selectById(tickets.get(0).getId())).isNotNull();
     }
 
     @Test
@@ -627,6 +701,21 @@ class CoreWorkflowIntegrationTests {
         line.setItemId(item.getId());
         line.setAcceptedQty(item.getQty());
         return line;
+    }
+
+    private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item, int acceptedQty) {
+        DeliveryGenerateReq req = new DeliveryGenerateReq();
+        req.setRfqId(order.getId());
+        req.setInternalProjectNo("IP-" + order.getId() + "-" + acceptedQty);
+        req.setCustomerOrderNo("CO-" + order.getId() + "-" + acceptedQty);
+        req.setCustomerProjectNo("CP-" + order.getId());
+        req.setArrangeType("计划");
+        req.setStartDate(LocalDate.of(2026, 4, 1));
+        DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
+        line.setItemId(item.getId());
+        line.setAcceptedQty(acceptedQty);
+        req.setItems(List.of(line));
+        return req;
     }
 
     private OrderRfq orderWithItemsTicketsAndSheets(

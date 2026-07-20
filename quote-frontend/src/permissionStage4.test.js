@@ -64,7 +64,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
     const expectations = [
       ['MarketDashboard', ['market:rfq:import', 'market:rfq:upload-drawing']],
       ['QuoteProcess', ['market:quote-process:update-lead-time', 'market:quote-process:save-quote', 'market:quote-process:export']],
-      ['MarketRelease', ['market:release:create', 'market:release:reset']],
+      ['MarketRelease', ['market:release:create']],
       ['OrderManage', ['market:order:supplement-drawing', 'market:order:delete']],
       ['HistoryOrderManage', ['market:order:delete']],
       ['QuoteTemplateManage', ['market:template:upload']],
@@ -82,6 +82,10 @@ describe('QPO permission stage 4 menu and button permissions', () => {
         expect(source, `${component} should reference ${permission}`).toContain(permission)
       }
     }
+
+    expect(componentSource('MarketRelease')).not.toContain('market:release:reset')
+    expect(componentSource('OrderManage')).not.toContain('reset-production')
+    expect(componentSource('OrderManage')).not.toContain('重置提单/工艺')
   })
 
   test('freezes quote process save quote API and allowed status source anchors', () => {

@@ -116,20 +116,9 @@ describe('marketApi', () => {
     })
   })
 
-  test('deleteTicket deletes ticket by id', async () => {
-    await marketApi.deleteTicket(3)
-
-    expect(request).toHaveBeenCalledWith('/api/market/tickets/3', {
-      method: 'DELETE'
-    })
-  })
-
-  test('deleteProcessSheet deletes process sheet by id', async () => {
-    await marketApi.deleteProcessSheet(4)
-
-    expect(request).toHaveBeenCalledWith('/api/market/process-sheets/4', {
-      method: 'DELETE'
-    })
+  test('does not expose destructive release result delete helpers', () => {
+    expect('deleteTicket' in marketApi).toBe(false)
+    expect('deleteProcessSheet' in marketApi).toBe(false)
   })
 
   test('getQuoteProcess loads quote process data', async () => {
