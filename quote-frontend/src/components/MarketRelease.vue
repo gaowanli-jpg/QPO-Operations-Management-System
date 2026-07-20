@@ -182,6 +182,8 @@
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
+              <el-table-column prop="ticketedQty" label="已提单数量" width="105" align="center" />
+              <el-table-column prop="remainingQty" label="剩余可提数量" width="110" align="center" />
               <el-table-column label="类型" width="90" align="center">
                 <template #default="{ row }">
                   <el-tag :type="isAssemblyItem(row) ? 'warning' : 'info'" size="small">
@@ -228,8 +230,8 @@
                 <template #default="scope">
                   <el-input-number
                     v-model="acceptedQtyMap[scope.row.id]"
-                    :min="1"
-                    :max="scope.row.qty"
+                    :min="remainingQtyFor(scope.row) > 0 ? 1 : 0"
+                    :max="remainingQtyFor(scope.row)"
                     :disabled="!canSelectItem(scope.row)"
                     controls-position="right"
                     class="qty-input"
@@ -521,8 +523,9 @@ const setItemList = (rows) => {
     internalTargetLeadTimeDraft: row.internalTargetLeadTime || ''
   }))
   itemList.value.forEach(item => {
-    if (!acceptedQtyMap[item.id]) {
-      acceptedQtyMap[item.id] = item.qty || 1
+    const remainingQty = remainingQtyFor(item)
+    if (!acceptedQtyMap[item.id] || acceptedQtyMap[item.id] > remainingQty) {
+      acceptedQtyMap[item.id] = remainingQty > 0 ? remainingQty : 0
     }
   })
 }
@@ -553,8 +556,16 @@ const loadProcessSheets = async (rfqId) => {
   }
 }
 
+const remainingQtyFor = (row) => {
+  const qty = Number(row?.remainingQty ?? row?.qty ?? 0)
+  return Number.isFinite(qty) ? Math.max(0, qty) : 0
+}
+
 const canSelectItem = (row) => {
-  return row.status !== '已生成提单' && row.status !== '已部分提单'
+  return row.status !== '已生成提单'
+    && row.status !== '已提单'
+    && row.status !== '已部分提单'
+    && remainingQtyFor(row) > 0
 }
 
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
@@ -738,8 +749,13 @@ const submitTicket = async () => {
     return ElMessage.warning(`仍有 ${unquoted.length} 个零件未报价，暂不生成提单。`)
   }
 
+  const overRemaining = orderedSelectedRows.filter(row => Number(acceptedQtyMap[row.id] || 0) > remainingQtyFor(row))
+  if (overRemaining.length > 0) {
+    return ElMessage.warning(`有 ${overRemaining.length} 个零件的通过数量超过剩余可提数量。`)
+  }
+
   await ElMessageBox.confirm(
-    `确认生成 ${orderedSelectedRows.length} 个零件的正式提单？同一零件不能重复生成。`,
+    `确认生成 ${orderedSelectedRows.length} 个零件的正式提单？通过数量不能超过剩余可提数量。`,
     '生成提单确认',
     { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
   )
@@ -756,7 +772,7 @@ const submitTicket = async () => {
       arrangeType: releaseForm.arrangeType,
       items: orderedSelectedRows.map(row => ({
         itemId: row.id,
-        acceptedQty: acceptedQtyMap[row.id] || row.qty
+        acceptedQty: acceptedQtyMap[row.id] || remainingQtyFor(row)
       }))
     }
     const response = await generateTicket(payload)

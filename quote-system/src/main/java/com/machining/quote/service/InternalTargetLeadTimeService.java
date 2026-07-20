@@ -7,8 +7,10 @@ import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeShiftReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
@@ -30,6 +32,8 @@ public class InternalTargetLeadTimeService {
     private OrderRfqMapper orderRfqMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
+    @Autowired
+    private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private LeadTimeService leadTimeService;
     @Autowired
@@ -74,7 +78,7 @@ public class InternalTargetLeadTimeService {
         result.put("adjustedCount", adjustedCount);
         result.put("skippedCount", skipped.size());
         result.put("skippedItems", skipped);
-        result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        result.put("itemList", buildItemRows(req.getRfqId()));
         log.info("Internal target lead time shifted rfqId={} itemCount={} adjustedCount={} skippedCount={} days={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), days);
         if (!skipped.isEmpty()) {
@@ -113,7 +117,7 @@ public class InternalTargetLeadTimeService {
         result.put("adjustedCount", adjustedCount);
         result.put("skippedCount", skipped.size());
         result.put("skippedItems", skipped);
-        result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        result.put("itemList", buildItemRows(req.getRfqId()));
         log.info("Internal target lead time set rfqId={} itemCount={} adjustedCount={} skippedCount={} targetLeadTime={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), normalizedDate);
         if (!skipped.isEmpty()) {
@@ -151,7 +155,7 @@ public class InternalTargetLeadTimeService {
 
     public List<Map<String, Object>> listItemRows(Integer rfqId) {
         requireOrder(rfqId);
-        return listItems(rfqId).stream().map(this::buildItemRow).toList();
+        return buildItemRows(rfqId);
     }
 
     private OrderRfq requireOrder(Integer rfqId) {
@@ -195,21 +199,60 @@ public class InternalTargetLeadTimeService {
         }
         throw new RuntimeException("只有已报价订单可以进入议价提单");
     }
+
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         return itemMapper.selectList(qw);
     }
 
+    private List<Map<String, Object>> buildItemRows(Integer rfqId) {
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
+        return items.stream()
+                .map(item -> buildItemRow(item, ticketedQty(item, tickets)))
+                .toList();
+    }
+
+    private List<OrderDeliveryTicket> listTickets(Integer rfqId) {
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId);
+        return ticketMapper.selectList(qw);
+    }
+
+    private int ticketedQty(ItemQuoteVersion item, List<OrderDeliveryTicket> tickets) {
+        return tickets.stream()
+                .filter(ticket -> matchesTicketItem(item, ticket))
+                .mapToInt(ticket -> safeInt(ticket.getQty()))
+                .sum();
+    }
+
+    private boolean matchesTicketItem(ItemQuoteVersion item, OrderDeliveryTicket ticket) {
+        if (item.getId() != null && item.getId().equals(ticket.getItemId())) {
+            return true;
+        }
+        return ticket.getItemId() == null
+                && normalizePartNo(item.getPartNo()).equals(normalizePartNo(ticket.getPartNo()))
+                && normalizeVersion(item.getVersion()).equals(normalizeVersion(ticket.getVersion()));
+    }
+
     private Map<String, Object> buildItemRow(ItemQuoteVersion item) {
+        return buildItemRow(item, 0);
+    }
+
+    private Map<String, Object> buildItemRow(ItemQuoteVersion item, int ticketedQty) {
         Map<String, Object> row = new LinkedHashMap<>();
         String effectiveDeliveryLeadTime = leadTimeService.effectiveDeliveryLeadTime(item);
+        int sourceQty = safeInt(item.getQty());
+        int remainingQty = Math.max(0, sourceQty - ticketedQty);
         row.put("id", item.getId());
         row.put("rfqId", item.getRfqId());
         row.put("partNo", item.getPartNo());
         row.put("version", item.getVersion());
         row.put("description", item.getDescription());
         row.put("qty", item.getQty());
+        row.put("ticketedQty", ticketedQty);
+        row.put("remainingQty", remainingQty);
         row.put("unit", item.getUnit());
         row.put("materialName", item.getMaterialName());
         row.put("engineeringMaterialName", MaterialDataResolver.engineeringMaterialName(item));
@@ -227,6 +270,18 @@ public class InternalTargetLeadTimeService {
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
         return row;
+    }
+
+    private String normalizePartNo(String partNo) {
+        return partNo == null ? "" : partNo.trim().toUpperCase();
+    }
+
+    private String normalizeVersion(String version) {
+        return version == null ? "" : version.trim().toUpperCase();
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private Map<String, Object> skipRow(Integer itemId, String partNo, String version, String reason) {

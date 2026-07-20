@@ -541,8 +541,22 @@ class CoreWorkflowIntegrationTests {
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId());
-        assertThat(ticketMapper.selectList(ticketQw)).extracting(OrderDeliveryTicket::getQty)
+        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQw);
+        assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(4, 6);
+        assertThat(tickets).allSatisfy(ticket -> assertThat(ticket.getProcessRoute()).isNotNull());
+
+        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
+        sheetQw.eq("rfq_id", order.getId()).eq("item_id", item.getId()).orderByAsc("id");
+        List<OrderProcessSheet> sheets = processSheetMapper.selectList(sheetQw);
+        assertThat(sheets).extracting(OrderProcessSheet::getQty).containsExactly(4, 6);
+        assertThat(sheets).allSatisfy(sheet -> assertThat(sheet.getProcessRoute()).isNotNull());
+
+        List<ApsDeliveryItemDTO> apsRows = apsSourceService.listDeliveryItems(tickets.get(0).getId() - 1, 10).getRecords().stream()
+                .filter(row -> row.getTicketId().equals(tickets.get(0).getId()) || row.getTicketId().equals(tickets.get(1).getId()))
+                .toList();
+        assertThat(apsRows).extracting(ApsDeliveryItemDTO::getQty).containsExactly(4, 6);
+        assertThat(apsRows).allSatisfy(row -> assertThat(row.getProcessSnapshotSource()).isEqualTo("ORDER_DELIVERY_TICKET"));
         assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo("已提单");
         assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
     }

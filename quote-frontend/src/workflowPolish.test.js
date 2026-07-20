@@ -154,7 +154,9 @@ describe('QPO workflow page polish', () => {
 
     expectIncludes(source, 'MarketRelease.vue', [
       '已提单数量',
-      '剩余可提数量'
+      '剩余可提数量',
+      ':max="remainingQtyFor(scope.row)"',
+      'const remainingQtyFor = (row) =>'
     ])
   })
 

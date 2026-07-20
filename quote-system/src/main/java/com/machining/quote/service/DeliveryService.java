@@ -122,7 +122,17 @@ public class DeliveryService {
             if (demand.qty() > safeInt(item.getQty())) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty() + " 超过询价数量 " + safeInt(item.getQty()));
             }
-            assertNoDuplicateTicket(item);
+            int ticketedQty = ticketedQty(item);
+            int remainingQty = remainingQty(item, ticketedQty);
+            if (remainingQty <= 0) {
+                throw new RuntimeException("零件 " + itemLabel(item) + " 已全部提单，不能重复生成");
+            }
+            if (demand.qty() > remainingQty) {
+                log.warn("Delivery ticket quantity exceeds remaining rfqId={} itemId={} partNo={} requestedQty={} ticketedQty={} remainingQty={}",
+                        item.getRfqId(), item.getId(), item.getPartNo(), demand.qty(), ticketedQty, remainingQty);
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty()
+                        + " 超过剩余可提数量 " + remainingQty);
+            }
         }
 
         List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
@@ -130,10 +140,10 @@ public class DeliveryService {
             ItemQuoteVersion item = demand.item();
             int acceptedQty = demand.qty();
 
-            createdTickets.add(insertTicket(order, item, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
-                    item.getRemark(), arrangeType));
-
-            insertProcessSheet(item, acceptedQty, leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)), internalProjectNo);
+            OrderDeliveryTicket ticket = insertTicket(order, item, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
+                    item.getRemark(), arrangeType);
+            createdTickets.add(ticket);
+            insertProcessSheet(item, ticket);
         }
 
         for (DemandLine demand : demandByItemId.values()) {
@@ -321,9 +331,9 @@ public class DeliveryService {
         if (generatedQty <= 0) {
             item.setStatus(item.getFinalUnitPrice() == null ? QuoteStatusWorkflow.UNPRICED : QuoteStatusWorkflow.QUOTED);
         } else if (generatedQty < safeInt(item.getQty())) {
-            item.setStatus("已部分提单");
+            item.setStatus(QuoteStatusWorkflow.QUOTED);
         } else {
-            item.setStatus("已生成提单");
+            item.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         }
         itemMapper.updateById(item);
     }
@@ -399,41 +409,49 @@ public class DeliveryService {
         return QuoteStatusWorkflow.UNPRICED;
     }
 
-    private void insertProcessSheet(ItemQuoteVersion item, int acceptedQty, LocalDate deliveryDate, String internalProjectNo) {
-        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", item.getRfqId()).eq("item_id", item.getId());
-        if (processSheetMapper.selectCount(qw) > 0) {
-            return;
-        }
-
+    private void insertProcessSheet(ItemQuoteVersion item, OrderDeliveryTicket ticket) {
         OrderProcessSheet sheet = new OrderProcessSheet();
         sheet.setRfqId(item.getRfqId());
         sheet.setItemId(item.getId());
-        sheet.setInternalProjectNo(internalProjectNo);
-        sheet.setItemType(resolveItemType(item));
-        sheet.setPartNo(item.getPartNo());
-        sheet.setVersion(item.getVersion());
+        sheet.setInternalProjectNo(ticket.getInternalProjectNo());
+        sheet.setItemType(ticket.getItemType());
+        sheet.setPartNo(ticket.getPartNo());
+        sheet.setVersion(ticket.getVersion());
         sheet.setDescription(item.getDescription());
-        sheet.setQty(acceptedQty);
-        sheet.setMaterialName(item.getMaterialName());
-        sheet.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
-        sheet.setMaterialGrossWeight(item.getMaterialGrossWeight());
-        sheet.setPartNetWeight(item.getPartNetWeight() == null ? 0.0 : item.getPartNetWeight());
+        sheet.setQty(ticket.getQty());
+        sheet.setMaterialName(ticket.getMaterialName());
+        sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
+        sheet.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
+        sheet.setPartNetWeight(ticket.getPartNetWeight() == null ? 0.0 : ticket.getPartNetWeight());
         sheet.setSubstituteMaterial("");
-        sheet.setSurfaceTreatment(item.getSurfaceTreatment());
+        sheet.setSurfaceTreatment(ticket.getSurfaceTreatment());
         sheet.setHeatTreatment("");
-        sheet.setDeliveryDate(deliveryDate);
-        sheet.setRemark(item.getRemark());
-        sheet.setProcessRoute(item.getProcessRoute());
+        sheet.setDeliveryDate(ticket.getDeliveryDate());
+        sheet.setRemark(ticket.getRemark());
+        sheet.setProcessRoute(ticket.getProcessRoute());
         processSheetMapper.insert(sheet);
     }
 
-    private void assertNoDuplicateTicket(ItemQuoteVersion item) {
+    private int ticketedQty(ItemQuoteVersion item) {
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", item.getRfqId()).eq("item_id", item.getId());
-        if (ticketMapper.selectCount(qw) > 0) {
-            throw new RuntimeException("零件 " + itemLabel(item) + " 已生成过提单，请勿重复生成");
+        qw.eq("rfq_id", item.getRfqId());
+        return ticketMapper.selectList(qw).stream()
+                .filter(ticket -> matchesTicketItem(item, ticket))
+                .mapToInt(ticket -> safeInt(ticket.getQty()))
+                .sum();
+    }
+
+    private boolean matchesTicketItem(ItemQuoteVersion item, OrderDeliveryTicket ticket) {
+        if (item.getId() != null && item.getId().equals(ticket.getItemId())) {
+            return true;
         }
+        return ticket.getItemId() == null
+                && normalizePartNo(item.getPartNo()).equals(normalizePartNo(ticket.getPartNo()))
+                && normalizeVersion(item.getVersion()).equals(normalizeVersion(ticket.getVersion()));
+    }
+
+    private int remainingQty(ItemQuoteVersion item, int ticketedQty) {
+        return Math.max(0, safeInt(item.getQty()) - ticketedQty);
     }
 
     private String itemKey(String partNo, String version) {
