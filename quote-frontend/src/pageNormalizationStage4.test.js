@@ -31,10 +31,15 @@ describe('QPO Stage 4 dialog, form, and table action normalization', () => {
     expect(source).toContain('erp-dialog-section')
     expect(source).toContain('erp-dialog-footer')
     expect(source).toContain('erp-table-actions')
-    expect(source).toContain('erp-danger-action')
     expect(source).toContain('erp-upload-surface')
   })
 
+  test('keeps destructive historical order actions styled consistently', () => {
+    const source = readSource('components', 'HistoryOrderManage.vue')
+
+    expect(source).toContain('market:order:delete')
+    expect(source).toContain('erp-danger-action')
+  })
   test('normalizes material/process dialogs, forms, footers, and destructive table actions', () => {
     const source = readSource('components', 'MaterialProcessManage.vue')
 

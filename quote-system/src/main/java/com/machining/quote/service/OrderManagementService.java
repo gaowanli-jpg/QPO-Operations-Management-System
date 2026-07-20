@@ -48,6 +48,7 @@ public class OrderManagementService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderProcessSheetMapper processSheetMapper;
+    @Autowired
     private OrderFilePathService orderFilePathService;
     @Autowired
     private AuditService auditService;

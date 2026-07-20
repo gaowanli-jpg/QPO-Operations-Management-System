@@ -313,7 +313,7 @@ class CoreWorkflowIntegrationTests {
 
         QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
         itemQw.eq("id", item.getId());
-        assertThat(itemMapper.selectOne(itemQw).getStatus()).isEqualTo("已生成提单");
+        assertThat(itemMapper.selectOne(itemQw).getStatus()).isEqualTo("已提单");
 
         QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
         sheetQw.eq("item_id", item.getId());
