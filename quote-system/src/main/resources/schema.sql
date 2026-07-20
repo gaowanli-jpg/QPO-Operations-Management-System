@@ -119,44 +119,40 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     item_id INTEGER REFERENCES item_quote_version(id),
     order_type VARCHAR(20),
     internal_project_no VARCHAR(100),
+    customer_order_no VARCHAR(100),
+    customer_project_no VARCHAR(100),
     project_no VARCHAR(100),
+    item_type VARCHAR(20),
     part_no VARCHAR(100),
+    description TEXT,
     qty INTEGER,
     material_name VARCHAR(100),
+    engineering_material_name VARCHAR(255),
     surface_treatment VARCHAR(100),
     version VARCHAR(20),
     start_date DATE,
     delivery_date DATE,
     remark TEXT,
-    arrange_type VARCHAR(50)
+    arrange_type VARCHAR(50),
+    process_route JSONB DEFAULT '[]'::jsonb,
+    material_data JSONB DEFAULT '{}'::jsonb,
+    material_gross_weight NUMERIC(14, 4),
+    part_net_weight NUMERIC(14, 4)
 );
 
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES item_quote_version(id);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(100);
-
-CREATE TABLE IF NOT EXISTS order_process_sheet (
-    id SERIAL PRIMARY KEY,
-    rfq_id INTEGER REFERENCES order_rfq(id),
-    item_id INTEGER REFERENCES item_quote_version(id),
-    internal_project_no VARCHAR(100),
-    part_no VARCHAR(100),
-    version VARCHAR(20),
-    description TEXT,
-    qty INTEGER,
-    material_name VARCHAR(100),
-    substitute_material VARCHAR(100),
-    surface_treatment VARCHAR(100),
-    heat_treatment VARCHAR(100),
-    delivery_date DATE,
-    remark TEXT,
-    process_route JSONB
-);
-
-ALTER TABLE order_process_sheet
-    ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB;
-ALTER TABLE order_process_sheet ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(100);
-
-CREATE INDEX IF NOT EXISTS idx_order_process_sheet_rfq ON order_process_sheet(rfq_id);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS process_route JSONB;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_data JSONB;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4);
+ALTER TABLE order_delivery_ticket
+    ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
+    ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB;
+ALTER TABLE order_delivery_ticket
+    ALTER COLUMN process_route SET DEFAULT '[]'::jsonb,
+    ALTER COLUMN material_data SET DEFAULT '{}'::jsonb;
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,

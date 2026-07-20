@@ -13,12 +13,11 @@ import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.ApsSourceService;
 import com.machining.quote.service.DeliveryService;
@@ -59,8 +58,6 @@ class CoreWorkflowIntegrationTests {
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
-    private OrderProcessSheetMapper processSheetMapper;
-    @Autowired
     private DeliveryService deliveryService;
     @Autowired
     private EngineerService engineerService;
@@ -98,7 +95,7 @@ class CoreWorkflowIntegrationTests {
         assertThat(summary.get("missingDrawingCount")).isEqualTo(1);
         assertThat(summary.get("ticketCount")).isEqualTo(1);
         assertThat(summary.get("ticketQty")).isEqualTo(3);
-        assertThat(summary.get("processSheetCount")).isEqualTo(2);
+        assertThat(summary.get("processSheetCount")).isEqualTo(1);
 
         PageResult<Map<String, Object>> keywordFiltered = orderManagementService.listOrderSummaries(
                 customerName, "PAGE-A", null, 1, 20);
@@ -252,9 +249,7 @@ class CoreWorkflowIntegrationTests {
 
         assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
                 .containsOnly(LocalDate.of(2026, 4, 10));
-        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
-        sheetQw.eq("item_id", item.getId());
-        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getDeliveryDate)
+        assertThat(deliveryService.listProcessSheets(order.getId())).extracting(ProcessSheetDTO::getDeliveryDate)
                 .containsOnly(LocalDate.of(2026, 4, 10));
     }
 
@@ -315,13 +310,11 @@ class CoreWorkflowIntegrationTests {
         itemQw.eq("id", item.getId());
         assertThat(itemMapper.selectOne(itemQw).getStatus()).isEqualTo("已提单");
 
-        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
-        sheetQw.eq("item_id", item.getId());
-        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getDeliveryDate)
+        assertThat(deliveryService.listProcessSheets(order.getId())).extracting(ProcessSheetDTO::getDeliveryDate)
                 .containsOnly(LocalDate.of(2026, 3, 22));
-        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getInternalProjectNo)
+        assertThat(deliveryService.listProcessSheets(order.getId())).extracting(ProcessSheetDTO::getInternalProjectNo)
                 .containsOnly("IP-001");
-        assertThat(processSheetMapper.selectList(sheetQw)).extracting(OrderProcessSheet::getItemType)
+        assertThat(deliveryService.listProcessSheets(order.getId())).extracting(ProcessSheetDTO::getItemType)
                 .containsOnly("普通件");
     }
 
@@ -353,7 +346,7 @@ class CoreWorkflowIntegrationTests {
                 .extracting(OrderDeliveryTicket::getPartNo)
                 .containsExactly("SEQ-A", "SEQ-B", "SEQ-C");
         assertThat(deliveryService.listProcessSheets(order.getId()))
-                .extracting(OrderProcessSheet::getPartNo)
+                .extracting(ProcessSheetDTO::getPartNo)
                 .containsExactly("SEQ-A", "SEQ-B", "SEQ-C");
     }
 
@@ -429,9 +422,7 @@ class CoreWorkflowIntegrationTests {
         assertThat(ticket.getMaterialGrossWeight()).isEqualTo(2.5);
         assertThat(ticket.getPartNetWeight()).isEqualTo(1.2);
 
-        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
-        sheetQw.eq("item_id", item.getId());
-        OrderProcessSheet sheet = processSheetMapper.selectOne(sheetQw);
+        ProcessSheetDTO sheet = deliveryService.listProcessSheets(order.getId()).get(0);
         assertThat(sheet.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
         assertThat(sheet.getEngineeringMaterialName()).isEqualTo(engineeringMaterial);
         assertThat(sheet.getMaterialGrossWeight()).isEqualTo(2.5);
@@ -549,10 +540,8 @@ class CoreWorkflowIntegrationTests {
                 .containsExactly(4, 6);
         assertThat(tickets).allSatisfy(ticket -> assertThat(ticket.getProcessRoute()).isNotNull());
 
-        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
-        sheetQw.eq("rfq_id", order.getId()).eq("item_id", item.getId()).orderByAsc("id");
-        List<OrderProcessSheet> sheets = processSheetMapper.selectList(sheetQw);
-        assertThat(sheets).extracting(OrderProcessSheet::getQty).containsExactly(4, 6);
+        List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(order.getId());
+        assertThat(sheets).extracting(ProcessSheetDTO::getQty).containsExactly(4, 6);
         assertThat(sheets).allSatisfy(sheet -> assertThat(sheet.getProcessRoute()).isNotNull());
 
         List<ApsDeliveryItemDTO> apsRows = apsSourceService.listDeliveryItems(tickets.get(0).getId() - 1, 10).getRecords().stream()
@@ -804,13 +793,6 @@ class CoreWorkflowIntegrationTests {
             ticketMapper.insert(ticket);
         }
 
-        for (int i = 0; i < processSheetCount; i++) {
-            OrderProcessSheet sheet = new OrderProcessSheet();
-            sheet.setRfqId(order.getId());
-            sheet.setPartNo(rfqPrefix + "-S" + i);
-            sheet.setQty(1);
-            processSheetMapper.insert(sheet);
-        }
         return order;
     }
 

@@ -173,8 +173,7 @@ public class ApsSyncService {
         workItem.setErpTicketId(item.getTicketId());
         workItem.setErpRfqId(item.getRfqId());
         workItem.setErpItemId(item.getItemId());
-        workItem.setErpProcessSheetId(item.getSourceProcessSheetId());
-        workItem.setProcessSnapshotSource(text(item.getProcessSnapshotSource(), "ITEM_QUOTE_VERSION"));
+        workItem.setProcessSnapshotSource(text(item.getProcessSnapshotSource(), "ORDER_DELIVERY_TICKET"));
         workItem.setCustomerName(text(item.getCustomerName()));
         workItem.setOrderStatus(text(item.getOrderStatus()));
         workItem.setInternalProjectNo(text(item.getInternalProjectNo()));

@@ -10,13 +10,11 @@ import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictProcess;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictProcessMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,8 +40,6 @@ public class ApsSourceService {
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired
-    private OrderProcessSheetMapper processSheetMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
@@ -84,11 +80,9 @@ public class ApsSourceService {
 
         Map<Integer, OrderRfq> orderMap = loadOrders(tickets);
         Map<Integer, ItemQuoteVersion> itemMap = loadItems(tickets);
-        Map<Integer, OrderProcessSheet> processSheetMap = loadProcessSheets(tickets);
 
         List<ApsDeliveryItemDTO> records = tickets.stream()
-                .map(ticket -> buildRow(ticket, orderMap.get(ticket.getRfqId()), itemMap.get(ticket.getItemId()),
-                        processSheetMap.get(ticket.getItemId())))
+                .map(ticket -> buildRow(ticket, orderMap.get(ticket.getRfqId()), itemMap.get(ticket.getItemId())))
                 .toList();
 
         ApsDeliveryItemBatchDTO result = new ApsDeliveryItemBatchDTO();
@@ -133,13 +127,11 @@ public class ApsSourceService {
                 .toList();
     }
 
-    private ApsDeliveryItemDTO buildRow(OrderDeliveryTicket ticket, OrderRfq order, ItemQuoteVersion item,
-                                        OrderProcessSheet processSheet) {
+    private ApsDeliveryItemDTO buildRow(OrderDeliveryTicket ticket, OrderRfq order, ItemQuoteVersion item) {
         ApsDeliveryItemDTO row = new ApsDeliveryItemDTO();
         row.setTicketId(ticket.getId());
         row.setRfqId(ticket.getRfqId());
         row.setItemId(ticket.getItemId());
-        row.setSourceProcessSheetId(processSheet == null ? null : processSheet.getId());
 
         row.setRfqNo(order == null ? "" : order.getRfqNo());
         row.setCustomerName(order == null ? "" : order.getCustomerName());
@@ -153,17 +145,17 @@ public class ApsSourceService {
 
         row.setPartNo(ticket.getPartNo());
         row.setVersion(ticket.getVersion());
-        row.setDescription(item == null ? "" : item.getDescription());
+        row.setDescription(ticket.getDescription());
         row.setQty(ticket.getQty());
         row.setSourceItemQty(item == null ? null : item.getQty());
         row.setUnit(item == null ? "" : item.getUnit());
 
-        Object materialSource = ticket.getMaterialData() != null ? ticket.getMaterialData() : item == null ? null : item.getMaterialData();
-        row.setMaterialName(resolveEngineeringMaterialName(ticket, item));
+        Object materialSource = ticket.getMaterialData();
+        row.setMaterialName(ticket == null ? "" : ticket.getEngineeringMaterialName());
         row.setMaterialType(resolveMaterialType(materialSource));
-        row.setMaterialGrossWeight(firstNumber(ticket.getMaterialGrossWeight(), item == null ? null : item.getMaterialGrossWeight()));
+        row.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
         row.setMaterialDemandWeight(multiply(row.getMaterialGrossWeight(), ticket.getQty()));
-        row.setPartNetWeight(firstNumber(ticket.getPartNetWeight(), item == null ? null : item.getPartNetWeight()));
+        row.setPartNetWeight(ticket.getPartNetWeight());
         row.setSurfaceTreatment(firstText(ticket.getSurfaceTreatment(), item == null ? "" : item.getSurfaceTreatment()));
 
         row.setLeadTime(item == null ? "" : item.getLeadTime());
@@ -179,16 +171,8 @@ public class ApsSourceService {
         row.setDrawingViewUrl(toAbsoluteUrl(drawingUrl));
 
         row.setMaterialData(materialSource);
-        Object routeSource = ticket.getProcessRoute() != null
-                ? ticket.getProcessRoute()
-                : processSheet != null && processSheet.getProcessRoute() != null
-                ? processSheet.getProcessRoute()
-                : item == null ? null : item.getProcessRoute();
-        row.setProcessSnapshotSource(ticket.getProcessRoute() != null
-                ? "ORDER_DELIVERY_TICKET"
-                : processSheet != null && processSheet.getProcessRoute() != null
-                ? "ORDER_PROCESS_SHEET"
-                : "ITEM_QUOTE_VERSION");
+        Object routeSource = ticket.getProcessRoute();
+        row.setProcessSnapshotSource("ORDER_DELIVERY_TICKET");
         List<ApsDeliveryItemDTO.ProcessRow> processRows = normalizeProcessRows(routeSource);
         row.setProcessRows(processRows);
         double unitWorkHours = processRows.stream()
@@ -224,23 +208,6 @@ public class ApsSourceService {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.in("id", ids);
         return itemMapper.selectList(qw).stream().collect(Collectors.toMap(ItemQuoteVersion::getId, Function.identity()));
-    }
-
-    private Map<Integer, OrderProcessSheet> loadProcessSheets(List<OrderDeliveryTicket> tickets) {
-        Set<Integer> itemIds = tickets.stream()
-                .map(OrderDeliveryTicket::getItemId)
-                .filter(id -> id != null)
-                .collect(Collectors.toSet());
-        if (itemIds.isEmpty()) {
-            return Map.of();
-        }
-        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
-        qw.in("item_id", itemIds).orderByDesc("id");
-        Map<Integer, OrderProcessSheet> result = new LinkedHashMap<>();
-        for (OrderProcessSheet sheet : processSheetMapper.selectList(qw)) {
-            result.putIfAbsent(sheet.getItemId(), sheet);
-        }
-        return result;
     }
 
     private List<ApsDeliveryItemDTO.ProcessRow> normalizeProcessRows(Object routeObject) {
@@ -317,17 +284,6 @@ public class ApsSourceService {
     private String resolveMaterialType(Object materialSource) {
         Map<String, Object> materialData = normalizeMap(materialSource);
         return stringValue(materialData.get("shape"));
-    }
-
-    private Double firstNumber(Double primary, Double fallback) {
-        return primary != null ? primary : fallback;
-    }
-
-    private String resolveEngineeringMaterialName(OrderDeliveryTicket ticket, ItemQuoteVersion item) {
-        return firstText(
-                ticket == null ? "" : ticket.getEngineeringMaterialName(),
-                item == null ? "" : item.getEngineeringMaterialName()
-        );
     }
 
     private Map<String, Object> normalizeMap(Object value) {

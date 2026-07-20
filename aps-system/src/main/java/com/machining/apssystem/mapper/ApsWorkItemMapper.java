@@ -185,7 +185,7 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
 
     @Select("""
             INSERT INTO aps_work_item (
-                erp_sync_run_id, erp_ticket_id, erp_rfq_id, erp_item_id, erp_process_sheet_id,
+                erp_sync_run_id, erp_ticket_id, erp_rfq_id, erp_item_id,
                 process_snapshot_source, customer_name, order_status, internal_project_no,
                 customer_order_no, customer_project_no, project_no, order_type, item_type, part_no, version, description, qty, source_item_qty,
                 unit, material_name, material_type, material_gross_weight_kg, material_demand_weight_kg,
@@ -193,7 +193,7 @@ public interface ApsWorkItemMapper extends BaseMapper<ApsWorkItem> {
                 start_date, delivery_date, remark, arrange_type, drawing_url, drawing_view_url,
                 material_data, source_payload, total_work_hours, process_route_text, process_route_signature
             ) VALUES (
-                #{erpSyncRunId}, #{erpTicketId}, #{erpRfqId}, #{erpItemId}, #{erpProcessSheetId},
+                #{erpSyncRunId}, #{erpTicketId}, #{erpRfqId}, #{erpItemId},
                 #{processSnapshotSource}, #{customerName}, #{orderStatus}, #{internalProjectNo},
                 #{customerOrderNo}, #{customerProjectNo}, #{projectNo}, #{orderType}, #{itemType}, #{partNo}, #{version}, #{description}, #{qty}, #{sourceItemQty},
                 #{unit}, #{materialName}, #{materialType}, #{materialGrossWeightKg}, #{materialDemandWeightKg},

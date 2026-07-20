@@ -19,7 +19,6 @@ public class ApsWorkItem {
     private Integer erpTicketId;
     private Integer erpRfqId;
     private Integer erpItemId;
-    private Integer erpProcessSheetId;
     private String processSnapshotSource;
     private String customerName;
     private String orderStatus;

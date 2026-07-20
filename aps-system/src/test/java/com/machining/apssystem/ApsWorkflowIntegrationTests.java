@@ -748,7 +748,6 @@ class ApsWorkflowIntegrationTests {
         item.setTicketId(ticketId);
         item.setRfqId(2001);
         item.setItemId(3001);
-        item.setSourceProcessSheetId(4001);
         item.setCustomerName("ACME");
         item.setInternalProjectNo("PRJ-APS");
         item.setCustomerOrderNo("CO-APS");

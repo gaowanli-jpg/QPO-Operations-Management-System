@@ -33,8 +33,7 @@ public class AuditLogQueryService {
             "dict_extra_fee_item",
             "order_rfq",
             "item_quote_version",
-            "order_delivery_ticket",
-            "order_process_sheet"
+            "order_delivery_ticket"
     );
     private static final Map<String, List<String>> MODULE_ACTION_PREFIXES = Map.of(
             "AUTH", List.of("AUTH_"),

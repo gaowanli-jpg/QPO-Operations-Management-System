@@ -100,7 +100,7 @@ class QuoteStatusWorkflowStage1Test {
         assertThat(apsSourceService)
                 .contains("ticket.getProcessRoute()")
                 .contains("ORDER_DELIVERY_TICKET")
-                .contains("ITEM_QUOTE_VERSION");
+                .doesNotContain("ITEM_QUOTE_VERSION");
     }
 
     private boolean contains(Path path, String text) {

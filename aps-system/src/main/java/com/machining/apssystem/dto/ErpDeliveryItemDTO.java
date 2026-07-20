@@ -10,7 +10,6 @@ public class ErpDeliveryItemDTO {
     private Integer ticketId;
     private Integer rfqId;
     private Integer itemId;
-    private Integer sourceProcessSheetId;
 
     private String customerName;
     private String orderStatus;

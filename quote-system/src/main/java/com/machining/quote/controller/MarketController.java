@@ -6,10 +6,10 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -95,7 +95,7 @@ public class MarketController {
 
     @GetMapping("/process-sheets/{rfqId}")
     @RequirePermission("market:release:view")
-    public List<OrderProcessSheet> listProcessSheets(@PathVariable Integer rfqId) {
+    public List<ProcessSheetDTO> listProcessSheets(@PathVariable Integer rfqId) {
         return deliveryService.listProcessSheets(rfqId);
     }
 

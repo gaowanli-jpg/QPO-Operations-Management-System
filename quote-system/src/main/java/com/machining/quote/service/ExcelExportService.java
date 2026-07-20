@@ -4,13 +4,12 @@ import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,11 +37,11 @@ public class ExcelExportService {
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
-    private OrderProcessSheetMapper processSheetMapper;
-    @Autowired
     private LeadTimeService leadTimeService;
     @Autowired
     private QuoteProcessService quoteProcessService;
+    @Autowired
+    private DeliveryService deliveryService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -97,9 +96,7 @@ public class ExcelExportService {
 
     public void exportProcessSheets(Integer rfqId, HttpServletResponse response) throws IOException {
         assertOrderDataScope(rfqId);
-        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
-        List<OrderProcessSheet> sheets = processSheetMapper.selectList(qw);
+        List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(rfqId);
         String rfqNo = resolveRfqNo(rfqId);
 
         List<List<String>> head = new ArrayList<>();
@@ -115,7 +112,7 @@ public class ExcelExportService {
 
         List<List<Object>> rows = new ArrayList<>();
         for (int i = 0; i < sheets.size(); i++) {
-            OrderProcessSheet sheet = sheets.get(i);
+            ProcessSheetDTO sheet = sheets.get(i);
             List<Object> row = new ArrayList<>();
             row.add(i + 1);
             row.add(safe(sheet.getInternalProjectNo()));

@@ -3,13 +3,12 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
@@ -36,8 +35,6 @@ public class DeliveryService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired
-    private OrderProcessSheetMapper processSheetMapper;
     @Autowired
     private AuditService auditService;
     @Autowired
@@ -143,7 +140,6 @@ public class DeliveryService {
             OrderDeliveryTicket ticket = insertTicket(order, item, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
                     item.getRemark(), arrangeType);
             createdTickets.add(ticket);
-            insertProcessSheet(item, ticket);
         }
 
         for (DemandLine demand : demandByItemId.values()) {
@@ -151,7 +147,7 @@ public class DeliveryService {
         }
         refreshOrderTicketStatus(order.getId());
         auditService.record("DELIVERY_TICKET_GENERATE", "order_rfq", order.getId(), null, createdTickets);
-        log.info("Delivery ticket generation completed rfqId={} ticketCount={} processSheetCount={} durationMs={}",
+        log.info("Delivery ticket generation completed rfqId={} ticketCount={} dynamicProcessSheetCount={} durationMs={}",
                 order.getId(), createdTickets.size(), createdTickets.size(), System.currentTimeMillis() - startedAt);
         return createdTickets;
         } catch (RuntimeException e) {
@@ -176,14 +172,16 @@ public class DeliveryService {
         return ticketMapper.selectList(qw);
     }
 
-    public List<OrderProcessSheet> listProcessSheets(Integer rfqId) {
+    public List<ProcessSheetDTO> listProcessSheets(Integer rfqId) {
         assertOrderDataScope(rfqId);
-        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
         if (rfqId != null) {
             qw.eq("rfq_id", rfqId);
         }
         qw.orderByAsc("id");
-        return processSheetMapper.selectList(qw);
+        return ticketMapper.selectList(qw).stream()
+                .map(this::buildProcessSheet)
+                .toList();
     }
 
     private void assertOrderDataScope(Integer rfqId) {
@@ -210,6 +208,7 @@ public class DeliveryService {
         ticket.setProjectNo(projectNo);
         ticket.setItemType(resolveItemType(item));
         ticket.setPartNo(item.getPartNo());
+        ticket.setDescription(item.getDescription());
         ticket.setQty(qty);
         ticket.setMaterialName(item.getMaterialName());
         ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
@@ -344,15 +343,16 @@ public class DeliveryService {
         return QuoteStatusWorkflow.UNPRICED;
     }
 
-    private void insertProcessSheet(ItemQuoteVersion item, OrderDeliveryTicket ticket) {
-        OrderProcessSheet sheet = new OrderProcessSheet();
-        sheet.setRfqId(item.getRfqId());
-        sheet.setItemId(item.getId());
+    private ProcessSheetDTO buildProcessSheet(OrderDeliveryTicket ticket) {
+        ProcessSheetDTO sheet = new ProcessSheetDTO();
+        sheet.setId(ticket.getId());
+        sheet.setRfqId(ticket.getRfqId());
+        sheet.setItemId(ticket.getItemId());
         sheet.setInternalProjectNo(ticket.getInternalProjectNo());
         sheet.setItemType(ticket.getItemType());
         sheet.setPartNo(ticket.getPartNo());
         sheet.setVersion(ticket.getVersion());
-        sheet.setDescription(item.getDescription());
+        sheet.setDescription(ticket.getDescription());
         sheet.setQty(ticket.getQty());
         sheet.setMaterialName(ticket.getMaterialName());
         sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
@@ -364,7 +364,7 @@ public class DeliveryService {
         sheet.setDeliveryDate(ticket.getDeliveryDate());
         sheet.setRemark(ticket.getRemark());
         sheet.setProcessRoute(ticket.getProcessRoute());
-        processSheetMapper.insert(sheet);
+        return sheet;
     }
 
     private int ticketedQty(ItemQuoteVersion item) {

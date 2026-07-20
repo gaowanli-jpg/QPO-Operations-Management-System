@@ -8,13 +8,12 @@ import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
@@ -48,8 +47,6 @@ class AssemblyWorkflowIntegrationTests {
     private DictMarkupFeeMapper markupFeeMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired
-    private OrderProcessSheetMapper processSheetMapper;
     @Autowired
     private EngineerService engineerService;
     @Autowired
@@ -184,12 +181,10 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
                 .containsExactly("组合件", "普通件");
 
-        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
-        sheetQw.eq("rfq_id", order.getId()).orderByAsc("item_id");
-        List<OrderProcessSheet> sheets = processSheetMapper.selectList(sheetQw);
-        assertThat(sheets).extracting(OrderProcessSheet::getItemId)
+        List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(order.getId());
+        assertThat(sheets).extracting(ProcessSheetDTO::getItemId)
                 .contains(parent.getId(), child.getId());
-        assertThat(sheets).extracting(OrderProcessSheet::getItemType)
+        assertThat(sheets).extracting(ProcessSheetDTO::getItemType)
                 .contains("组合件", "普通件");
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();

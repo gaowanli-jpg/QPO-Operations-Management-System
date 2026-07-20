@@ -10,7 +10,6 @@ public class ApsDeliveryItemDTO {
     private Integer ticketId;
     private Integer rfqId;
     private Integer itemId;
-    private Integer sourceProcessSheetId;
 
     private String rfqNo;
     private String customerName;

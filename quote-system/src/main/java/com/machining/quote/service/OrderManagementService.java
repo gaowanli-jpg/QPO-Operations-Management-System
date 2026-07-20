@@ -3,13 +3,12 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderProcessSheet;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderProcessSheetMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.DrawingPartNoResolver;
 import org.slf4j.Logger;
@@ -47,11 +46,11 @@ public class OrderManagementService {
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
-    private OrderProcessSheetMapper processSheetMapper;
-    @Autowired
     private OrderFilePathService orderFilePathService;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private DeliveryService deliveryService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -227,11 +226,7 @@ public class OrderManagementService {
 
         List<ItemQuoteVersion> items = listItems(rfqId);
         List<OrderDeliveryTicket> tickets = listTickets(rfqId);
-        List<OrderProcessSheet> processSheets = listProcessSheets(rfqId);
-
-        QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
-        sheetQw.eq("rfq_id", rfqId);
-        processSheetMapper.delete(sheetQw);
+        List<ProcessSheetDTO> processSheets = listProcessSheets(rfqId);
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", rfqId);
@@ -249,7 +244,7 @@ public class OrderManagementService {
                 "itemCount", items.size(),
                 "deleteFiles", deleteFiles
         ));
-        log.info("Order delete completed rfqId={} deleteFiles={} itemCount={} ticketCount={} processSheetCount={}",
+        log.info("Order delete completed rfqId={} deleteFiles={} itemCount={} ticketCount={} dynamicProcessSheetCount={}",
                 rfqId, deleteFiles, items.size(), tickets.size(), processSheets.size());
     }
 
@@ -257,7 +252,7 @@ public class OrderManagementService {
         Integer rfqId = order.getId();
         List<ItemQuoteVersion> items = listItems(rfqId);
         List<OrderDeliveryTicket> tickets = listTickets(rfqId);
-        List<OrderProcessSheet> sheets = listProcessSheets(rfqId);
+        List<ProcessSheetDTO> sheets = listProcessSheets(rfqId);
 
         long quotedCount = items.stream().filter(item -> item.getFinalUnitPrice() != null).count();
         long missingDrawingCount = items.stream().filter(item -> isBlank(item.getDrawingUrl())).count();
@@ -290,17 +285,15 @@ public class OrderManagementService {
                 .toList();
         Map<Integer, ItemStats> itemStatsMap = loadItemStats(rfqIds);
         Map<Integer, TicketStats> ticketStatsMap = loadTicketStats(rfqIds);
-        Map<Integer, Integer> processSheetCountMap = loadProcessSheetCounts(rfqIds);
 
         return orders.stream()
                 .map(order -> buildSummary(order,
                         itemStatsMap.getOrDefault(order.getId(), new ItemStats()),
-                        ticketStatsMap.getOrDefault(order.getId(), new TicketStats()),
-                        processSheetCountMap.getOrDefault(order.getId(), 0)))
+                        ticketStatsMap.getOrDefault(order.getId(), new TicketStats())))
                 .toList();
     }
 
-    private Map<String, Object> buildSummary(OrderRfq order, ItemStats itemStats, TicketStats ticketStats, int processSheetCount) {
+    private Map<String, Object> buildSummary(OrderRfq order, ItemStats itemStats, TicketStats ticketStats) {
         Map<String, Object> summary = new HashMap<>();
         summary.put("id", order.getId());
         summary.put("rfqNo", order.getRfqNo());
@@ -313,7 +306,7 @@ public class OrderManagementService {
         summary.put("missingDrawingCount", itemStats.missingDrawingCount);
         summary.put("ticketCount", ticketStats.ticketCount);
         summary.put("ticketQty", ticketStats.ticketQty);
-        summary.put("processSheetCount", processSheetCount);
+        summary.put("processSheetCount", ticketStats.ticketCount);
         summary.put("fileRoot", buildOrderFileRoot(order));
         return summary;
     }
@@ -347,21 +340,6 @@ public class OrderManagementService {
         return ticketMapper.selectMaps(qw).stream()
                 .map(TicketStats::from)
                 .collect(Collectors.toMap(stats -> stats.rfqId, Function.identity()));
-    }
-
-    private Map<Integer, Integer> loadProcessSheetCounts(List<Integer> rfqIds) {
-        if (rfqIds.isEmpty()) {
-            return Map.of();
-        }
-        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
-        qw.select("rfq_id", "COUNT(*) AS process_sheet_count");
-        qw.in("rfq_id", rfqIds);
-        qw.groupBy("rfq_id");
-        return processSheetMapper.selectMaps(qw).stream()
-                .collect(Collectors.toMap(
-                        row -> numberValue(row.get("rfq_id")).intValue(),
-                        row -> numberValue(row.get("process_sheet_count")).intValue()
-                ));
     }
 
     private void applyOrderFilters(QueryWrapper<OrderRfq> qw, String customerName, String keyword, String status) {
@@ -490,10 +468,8 @@ public class OrderManagementService {
         return ticketMapper.selectList(qw);
     }
 
-    private List<OrderProcessSheet> listProcessSheets(Integer rfqId) {
-        QueryWrapper<OrderProcessSheet> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
-        return processSheetMapper.selectList(qw);
+    private List<ProcessSheetDTO> listProcessSheets(Integer rfqId) {
+        return deliveryService.listProcessSheets(rfqId);
     }
 
     private void deleteOrderFiles(OrderRfq order, List<ItemQuoteVersion> items) {
