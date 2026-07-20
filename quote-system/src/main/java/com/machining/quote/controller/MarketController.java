@@ -116,17 +116,6 @@ public class MarketController {
         return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
     }
 
-    @GetMapping("/orders")
-    @RequirePermission("common:order:select")
-    public PageResult<OrderRfq> listOrders(
-            @RequestParam(value = "customerName", required = false) String customerName,
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
-    }
-
     @GetMapping("/tickets/{rfqId}")
     @RequirePermission("market:release:view")
     public List<OrderDeliveryTicket> listDeliveryTickets(@PathVariable Integer rfqId) {
@@ -192,9 +181,9 @@ public class MarketController {
         return result;
     }
 
-    @GetMapping("/summary/{rfqId}")
-    @RequirePermission("common:order:select")
-    public Map<String, Object> getQuoteSummary(@PathVariable Integer rfqId) {
+    @GetMapping("/release/summary/{rfqId}")
+    @RequirePermission("market:release:view")
+    public Map<String, Object> getReleaseSummary(@PathVariable Integer rfqId) {
         OrderRfq order = orderRfqMapper.selectById(rfqId);
         if (dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(order);

@@ -107,7 +107,7 @@ class PermissionSystemStage1Stage2Test {
         when(jwtService.createToken(any(AuthContext.SessionUser.class))).thenReturn("token-market");
         when(permissionService.getPermissionInfo(7, "MARKET")).thenReturn(permissionInfo(
                 List.of("MARKET_USER"),
-                List.of("market:rfq:view", "common:order:select"),
+                List.of("market:rfq:view", "market:quote-process:order-select"),
                 List.of(menu("/market", "新单导入", "market:rfq:view"))
         ));
 
@@ -118,7 +118,7 @@ class PermissionSystemStage1Stage2Test {
                         .containsEntry("username", "market")
                         .containsEntry("role", "MARKET"));
         assertThat(result.get("roles")).isEqualTo(List.of("MARKET_USER"));
-        assertThat(result.get("permissions")).isEqualTo(List.of("market:rfq:view", "common:order:select"));
+        assertThat(result.get("permissions")).isEqualTo(List.of("market:rfq:view", "market:quote-process:order-select"));
         assertThat(result.get("menus"))
                 .isInstanceOfSatisfying(List.class, menus -> assertThat(menus).hasSize(1));
     }

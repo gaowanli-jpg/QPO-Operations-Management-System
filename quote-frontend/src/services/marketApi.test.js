@@ -13,10 +13,10 @@ beforeEach(() => {
 })
 
 describe('marketApi', () => {
-  test('getMarketSummary loads market summary by rfq id', async () => {
-    await marketApi.getMarketSummary(18)
+  test('getReleaseSummary loads release summary by rfq id', async () => {
+    await marketApi.getReleaseSummary(18)
 
-    expect(request).toHaveBeenCalledWith('/api/market/summary/18')
+    expect(request).toHaveBeenCalledWith('/api/market/release/summary/18')
   })
 
   test('importRfq uploads RFQ form data', async () => {
@@ -31,12 +31,15 @@ describe('marketApi', () => {
     })
   })
 
-  test('listMarketOrders forwards picker query params', async () => {
+  test('listMarketOrders requires a module-scoped order selection endpoint', () => {
     const params = { customerId: 3, keyword: 'RFQ' }
 
-    await marketApi.listMarketOrders(params)
+    expect(() => marketApi.listMarketOrders(params)).toThrow('module-scoped order selection scope')
+    expect(request).not.toHaveBeenCalled()
+  })
 
-    expect(request).toHaveBeenCalledWith('/api/market/orders', { params })
+  test('does not expose old common market summary helper', () => {
+    expect('getMarketSummary' in marketApi).toBe(false)
   })
 
   test('listMarketOrders uses module-scoped order selection endpoints', async () => {
@@ -58,7 +61,7 @@ describe('marketApi', () => {
 
     const result = await marketApi.loadReleaseWorkspace(18)
 
-    expect(request).toHaveBeenNthCalledWith(1, '/api/market/summary/18')
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/release/summary/18')
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/internal-target-lead-time/18/items')
     expect(request).toHaveBeenNthCalledWith(3, '/api/market/tickets/18')
     expect(request).toHaveBeenNthCalledWith(4, '/api/market/process-sheets/18')

@@ -71,11 +71,16 @@ class PermissionSystemStage5Test {
                 .contains("@RequirePermission(\"market:quote-process:order-select\")")
                 .contains("@RequirePermission(\"market:release:customer-select\")")
                 .contains("@RequirePermission(\"market:release:order-select\")")
+                .contains("@RequirePermission(\"market:release:view\")")
                 .contains("@RequirePermission(\"market:release:create\")")
-                .contains("@RequirePermission(\"market:quote-process:export\")");
+                .contains("@RequirePermission(\"market:quote-process:export\")")
+                .doesNotContain("common:order:select")
+                .doesNotContain("common:customer:select");
         assertThat(engineer)
                 .contains("@RequirePermission(\"engineer:setup:customer-select\")")
                 .contains("@RequirePermission(\"engineer:setup:order-select\")")
+                .contains("@RequirePermission(\"engineer:setup:view\")")
+                .contains("@RequirePermission(\"engineer:pricing:view\")")
                 .contains("@RequirePermission(\"engineer:pricing:save-item\")")
                 .contains("@RequirePermission(\"engineer:pricing:refresh\")")
                 .contains("@RequirePermission(\"engineer:setup:save-config\")");
@@ -93,7 +98,9 @@ class PermissionSystemStage5Test {
                 .contains("@RequirePermission(\"market:order:customer-select\")")
                 .contains("@RequirePermission(\"market:history-order:customer-select\")")
                 .contains("@RequirePermission(\"market:order:supplement-drawing\")")
-                .contains("@RequirePermission(\"market:order:delete\")");
+                .contains("@RequirePermission(\"market:order:delete\")")
+                .doesNotContain("common:order:select")
+                .doesNotContain("common:customer:select");
         assertThat(admin)
                 .contains("@RequirePermission(\"system:user:view\")")
                 .contains("@RequirePermission(\"market:template:view\")")

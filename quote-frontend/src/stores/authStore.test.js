@@ -71,7 +71,7 @@ describe('authStore', () => {
       success: true,
       data: {
         roles: ['MARKET_USER'],
-        permissions: ['market:rfq:view', 'common:order:select'],
+        permissions: ['market:rfq:view', 'market:quote-process:order-select'],
         menus: [{ path: '/market', title: '新单导入', permission: 'market:rfq:view' }]
       }
     })
@@ -86,7 +86,7 @@ describe('authStore', () => {
     expect(authStore.verified).toBe(true)
     expect(authStore.user).toEqual({ username: 'market', role: 'MARKET' })
     expect(authStore.roles).toEqual(['MARKET_USER'])
-    expect(authStore.permissions).toEqual(['market:rfq:view', 'common:order:select'])
+    expect(authStore.permissions).toEqual(['market:rfq:view', 'market:quote-process:order-select'])
   })
 
   test('verifyAuth clears auth when current user response is invalid', async () => {

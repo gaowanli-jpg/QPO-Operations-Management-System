@@ -246,8 +246,6 @@ public class PermissionService {
     );
 
     private static final List<SystemPermission> FALLBACK_STAGE4_CATALOG = List.of(
-            compatibilityPermission(901L, "common:order:select", "选择订单", 910),
-            compatibilityPermission(902L, "common:customer:select", "选择客户", 911),
             compatibilityPermission(903L, "common:file:preview", "预览文件", 912),
             compatibilityPermission(904L, "common:task:view", "查看异步任务", 913)
     );
@@ -309,8 +307,6 @@ public class PermissionService {
             Map.entry("system:audit:view", Set.of("AUDITOR")),
             Map.entry("system:audit:export", Set.of("AUDITOR")),
             Map.entry("system:audit:retention", Set.of()),
-            Map.entry("common:order:select", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY")),
-            Map.entry("common:customer:select", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY")),
             Map.entry("common:file:preview", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY")),
             Map.entry("common:task:view", Set.of("MARKET_USER", "MARKET_MANAGER", "ENGINEER_USER", "ENGINEER_MANAGER", "READONLY"))
     );

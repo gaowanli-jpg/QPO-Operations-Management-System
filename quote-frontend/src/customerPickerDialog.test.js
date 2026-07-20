@@ -87,4 +87,17 @@ describe('QPO customer picker dialog', () => {
     expect(orderManage).toContain('v-permission="\'market:order:customer-select\'"')
     expect(historyManage).toContain('v-permission="\'market:history-order:customer-select\'"')
   })
+
+  test('order workspaces use module-scoped summary APIs instead of common market summary', () => {
+    const globalSetup = readComponent('GlobalSetup.vue')
+    const itemPricing = readComponent('ItemPricing.vue')
+    const marketRelease = readComponent('MarketRelease.vue')
+
+    expect(globalSetup).toContain('getSetupSummary')
+    expect(itemPricing).toContain('getPricingSummary')
+    expect(marketRelease).toContain('getReleaseSummary')
+    expect(globalSetup).not.toContain('getMarketSummary')
+    expect(itemPricing).not.toContain('getMarketSummary')
+    expect(marketRelease).not.toContain('getMarketSummary')
+  })
 })

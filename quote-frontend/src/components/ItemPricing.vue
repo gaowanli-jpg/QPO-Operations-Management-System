@@ -566,12 +566,13 @@ import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import {
   completeOrderQuote as completeOrderQuoteRequest,
+  getPricingSummary,
   getRepeatAnalysis,
   listAssemblyRelations,
   saveOrderConfig,
   submitQuote
 } from '../services/engineerApi'
-import { downloadCustomerLeadTimeQuote, getMarketSummary } from '../services/marketApi'
+import { downloadCustomerLeadTimeQuote } from '../services/marketApi'
 import { getTask, refreshEngineerQuotes } from '../services/taskApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
@@ -750,7 +751,7 @@ const fetchQuoteData = async (options = {}) => {
   loading.value = true
   try {
     // 动态加载真实的 rfqId
-    quoteData.value = await getMarketSummary(rfqId.value)
+    quoteData.value = await getPricingSummary(rfqId.value)
     if (!options.keepScroll) {
       pricingListPagination.page = 1
     }

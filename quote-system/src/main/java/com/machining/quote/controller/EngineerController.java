@@ -6,6 +6,7 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.dto.QuoteSubmitReq;
@@ -13,6 +14,7 @@ import com.machining.quote.service.OrderManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +35,9 @@ public class EngineerController {
     @Autowired
     private OrderManagementService orderManagementService;
 
+    @Autowired
+    private OrderRfqMapper orderRfqMapper;
+
     // ---------------------------------------------
 
     @GetMapping("/setup/customers")
@@ -50,6 +55,18 @@ public class EngineerController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/setup/summary/{rfqId}")
+    @RequirePermission("engineer:setup:view")
+    public Map<String, Object> getSetupSummary(@PathVariable Integer rfqId) {
+        return getOrderSummary(rfqId);
+    }
+
+    @GetMapping("/pricing/summary/{rfqId}")
+    @RequirePermission("engineer:pricing:view")
+    public Map<String, Object> getPricingSummary(@PathVariable Integer rfqId) {
+        return getOrderSummary(rfqId);
     }
 
     /**
@@ -120,5 +137,20 @@ public class EngineerController {
             @RequestBody Map<String, Object> config) {
         engineerService.saveOrderEngineerConfig(rfqId, config);
         return Map.of("success", true, "message", "订单全局默认设定已保存");
+    }
+
+    private Map<String, Object> getOrderSummary(Integer rfqId) {
+        OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        List<ItemQuoteVersion> items = itemQuoteVersionMapper.selectList(qw);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("orderInfo", order);
+        result.put("itemList", items);
+        return result;
     }
 }

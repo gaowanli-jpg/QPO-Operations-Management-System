@@ -36,6 +36,18 @@ describe('engineerApi', () => {
     expect(request).toHaveBeenCalledWith('/api/engineer/setup/orders', { params })
   })
 
+  test('getSetupSummary loads engineer setup order summary by rfq id', async () => {
+    await engineerApi.getSetupSummary(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/setup/summary/12')
+  })
+
+  test('getPricingSummary loads pricing workspace summary by rfq id', async () => {
+    await engineerApi.getPricingSummary(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/summary/12')
+  })
+
   test('applyRepeatQuotes posts repeat quote application by order id', async () => {
     await engineerApi.applyRepeatQuotes(12)
 

@@ -2,6 +2,10 @@ import { request } from '../api'
 
 export const listSetupOrders = (params = {}) => request('/api/engineer/setup/orders', { params })
 
+export const getSetupSummary = (rfqId) => request(`/api/engineer/setup/summary/${rfqId}`)
+
+export const getPricingSummary = (rfqId) => request(`/api/engineer/pricing/summary/${rfqId}`)
+
 export const saveOrderConfig = (orderId, config) => request(`/api/engineer/order-config/${orderId}`, {
   method: 'POST',
   data: config

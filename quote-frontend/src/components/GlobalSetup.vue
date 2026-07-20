@@ -250,8 +250,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { applyRepeatQuotes, getRepeatAnalysis, saveOrderConfig } from '../services/engineerApi'
-import { getMarketSummary } from '../services/marketApi'
+import { applyRepeatQuotes, getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
@@ -526,7 +525,7 @@ const fetchOrderData = async () => {
   
   isLoading.value = true
   try {
-    const response = await getMarketSummary(testRfqId.value)
+    const response = await getSetupSummary(testRfqId.value)
     if (response && response.orderInfo) {
       orderInfo.value = response.orderInfo
       itemList.value = response.itemList

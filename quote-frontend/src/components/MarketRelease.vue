@@ -363,7 +363,7 @@ import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   downloadMarketExport,
   generateTicket,
-  getMarketSummary,
+  getReleaseSummary,
   listInternalTargetLeadTimeItems,
   listProcessSheets,
   listTickets,
@@ -481,7 +481,7 @@ const loadOrder = async (rfqId) => {
   resetReleasePagination()
   loading.value = true
   try {
-    const response = await getMarketSummary(rfqId)
+    const response = await getReleaseSummary(rfqId)
     orderInfo.value = response.orderInfo || {}
     await loadInternalTargetItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''

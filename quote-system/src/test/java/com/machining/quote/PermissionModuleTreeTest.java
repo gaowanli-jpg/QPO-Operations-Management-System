@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PermissionModuleTreeTest {
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path QUOTE_SAVE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V33__quote_process_save_quote_permission.sql");
+    private static final Path RETIRE_COMMON_SELECTION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V38__retire_common_selection_permissions.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -90,13 +91,24 @@ class PermissionModuleTreeTest {
                         "engineer:setup:order-select"
                 );
         assertThat(source)
-                .as("Old common permissions may remain only as hidden compatibility, not as assignable fallback entries")
-                .doesNotContain(
-                        "permission(11L, \"API\", \"common:order:select\"",
-                        "permission(12L, \"API\", \"common:customer:select\"",
-                        "permission(13L, \"API\", \"common:file:preview\"",
-                        "permission(14L, \"API\", \"common:task:view\""
-                );
+                .as("Old common customer/order selection permissions must be removed from fallback permissions")
+                .doesNotContain("common:order:select", "common:customer:select");
+        assertThat(source)
+                .as("Unrelated compatibility permissions can remain until their call sites are migrated")
+                .contains("common:file:preview", "common:task:view");
+    }
+
+    @Test
+    void commonSelectionPermissionMigrationRemovesDatabaseCatalogEntries() throws IOException {
+        String migration = Files.readString(RETIRE_COMMON_SELECTION_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("common:customer:select")
+                .contains("common:order:select")
+                .contains("DELETE FROM system_role_permission")
+                .contains("DELETE FROM system_permission")
+                .doesNotContain("common:file:preview")
+                .doesNotContain("common:task:view");
     }
 
     @Test

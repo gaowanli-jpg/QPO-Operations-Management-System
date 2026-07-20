@@ -1,6 +1,6 @@
 import { downloadFile, request } from '../api'
 
-export const getMarketSummary = (rfqId) => request(`/api/market/summary/${rfqId}`)
+export const getReleaseSummary = (rfqId) => request(`/api/market/release/summary/${rfqId}`)
 
 const multipartPost = (path, formData) => request(path, {
   method: 'POST',
@@ -16,15 +16,17 @@ const postJson = (path, payload) => request(path, {
 export const importRfq = (formData) => multipartPost('/api/market/import-rfq', formData)
 
 const MARKET_ORDER_ENDPOINTS = {
-  market: '/api/market/orders',
   'quote-process': '/api/market/quote-process/orders',
   release: '/api/market/release/orders'
 }
 
-export const listMarketOrders = (params = {}, scope = 'market') => request(
-  MARKET_ORDER_ENDPOINTS[scope] || MARKET_ORDER_ENDPOINTS.market,
-  { params }
-)
+export const listMarketOrders = (params = {}, scope) => {
+  const endpoint = MARKET_ORDER_ENDPOINTS[scope]
+  if (!endpoint) {
+    throw new Error('module-scoped order selection scope is required')
+  }
+  return request(endpoint, { params })
+}
 
 export const listInternalTargetLeadTimeItems = (rfqId) => request(`/api/market/internal-target-lead-time/${rfqId}/items`)
 
@@ -34,7 +36,7 @@ export const listProcessSheets = (rfqId) => request(`/api/market/process-sheets/
 
 export const loadReleaseWorkspace = async (rfqId) => {
   const [summary, internalTargetItems, tickets, processSheets] = await Promise.all([
-    getMarketSummary(rfqId),
+    getReleaseSummary(rfqId),
     listInternalTargetLeadTimeItems(rfqId),
     listTickets(rfqId),
     listProcessSheets(rfqId)
