@@ -114,6 +114,7 @@ class AuditServiceTests {
         assertThat(AuditService.labelForAction("SYSTEM_POST_UPDATE")).contains("岗位");
         assertThat(AuditService.labelForAction("SYSTEM_POST_DELETE")).contains("岗位");
         assertThat(AuditService.labelForAction("SYSTEM_USER_ORG_UPDATE")).contains("组织");
+        assertThat(AuditService.labelForAction("USER_PROFILE_UPDATE")).contains("个人资料");
     }
 
     @Test

@@ -204,6 +204,7 @@ public class AuditService {
             case "USER_CREATE" -> "新增用户";
             case "USER_UPDATE" -> "编辑用户";
             case "USER_CHANGE_PASSWORD" -> "修改密码";
+            case "USER_PROFILE_UPDATE" -> "更新个人资料";
             case "USER_DELETE" -> "删除用户";
             case "SYSTEM_USER_CREATE" -> "新增用户";
             case "SYSTEM_USER_UPDATE" -> "编辑用户";

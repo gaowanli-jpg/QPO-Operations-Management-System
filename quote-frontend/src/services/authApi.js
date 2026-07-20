@@ -14,6 +14,11 @@ export const changePassword = (payload) => request('/api/auth/change-password', 
   data: payload
 })
 
+export const updateMyProfile = (payload) => request('/api/auth/me/profile', {
+  method: 'PUT',
+  data: payload
+})
+
 export const logout = () => request('/api/auth/logout', {
   method: 'POST'
 })

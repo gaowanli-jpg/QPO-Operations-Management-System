@@ -4,7 +4,8 @@ import {
   getCurrentUser,
   getPermissionInfo,
   login as loginRequest,
-  logout as logoutRequest
+  logout as logoutRequest,
+  updateMyProfile as updateMyProfileRequest
 } from '../services/authApi'
 
 const TOKEN_KEY = 'erp_token'
@@ -183,6 +184,14 @@ export const useAuthStore = defineStore('auth', {
     async changePassword(payload) {
       const response = await changePasswordRequest(payload)
       this.updateUser({ forcePasswordChange: false })
+      return response
+    },
+
+    async updateMyProfile(payload) {
+      const response = await updateMyProfileRequest(payload)
+      if (response?.success && response?.data) {
+        this.updateUser(response.data)
+      }
       return response
     },
 

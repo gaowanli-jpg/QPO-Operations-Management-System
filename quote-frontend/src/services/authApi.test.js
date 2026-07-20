@@ -34,4 +34,18 @@ describe('authApi', () => {
       data: payload
     })
   })
+
+  test('updateMyProfile puts self-service contact fields only', async () => {
+    const payload = {
+      phone: '13800000000',
+      email: 'user@example.com'
+    }
+
+    await authApi.updateMyProfile(payload)
+
+    expect(request).toHaveBeenCalledWith('/api/auth/me/profile', {
+      method: 'PUT',
+      data: payload
+    })
+  })
 })

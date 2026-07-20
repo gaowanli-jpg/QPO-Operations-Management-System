@@ -95,4 +95,12 @@ describe('QPO app shell polish', () => {
     expect(appVue).toContain('<component :is="isSidebarCollapsed ? Expand : Fold" />')
     expect(appVue).not.toContain('<span class="shell-icon-button" aria-hidden="true">')
   })
+
+  test('keeps forced password dialog global while personal entry is redesigned', () => {
+    expect(appVue).toContain('const passwordVisible = ref(false)')
+    expect(appVue).toContain('const forcePasswordMode = ref(false)')
+    expect(appVue).toContain('openPasswordDialog(true)')
+    expect(appVue).toContain(':show-close="!forcePasswordMode"')
+    expect(appVue).toContain('当前账号使用初始密码或管理员重置密码')
+  })
 })

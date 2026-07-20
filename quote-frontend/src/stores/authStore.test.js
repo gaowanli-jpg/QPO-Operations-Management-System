@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { changePassword, getCurrentUser, getPermissionInfo, login, logout } from '../services/authApi'
+import { changePassword, getCurrentUser, getPermissionInfo, login, logout, updateMyProfile } from '../services/authApi'
 import { useAuthStore } from './authStore'
 
 vi.mock('../services/authApi', () => ({
@@ -8,6 +8,7 @@ vi.mock('../services/authApi', () => ({
   getCurrentUser: vi.fn(),
   getPermissionInfo: vi.fn(),
   changePassword: vi.fn(),
+  updateMyProfile: vi.fn(),
   logout: vi.fn()
 }))
 
@@ -129,6 +130,52 @@ describe('authStore', () => {
 
     expect(authStore.mustChangePassword).toBe(false)
     expect(authStore.user.forcePasswordChange).toBe(false)
+  })
+
+  test('updateMyProfile updates cached user contact fields without touching permissions', async () => {
+    updateMyProfile.mockResolvedValue({
+      success: true,
+      data: {
+        username: 'admin',
+        displayName: '管理员',
+        phone: '13800000000',
+        email: 'admin@example.com',
+        deptName: '系统管理',
+        postName: '管理员'
+      }
+    })
+    const authStore = useAuthStore()
+    authStore.setAuth('token-6', {
+      username: 'admin',
+      displayName: '管理员',
+      phone: '',
+      email: '',
+      deptName: '系统管理',
+      postName: '管理员'
+    }, {
+      roles: ['SUPER_ADMIN'],
+      permissions: ['system:user:view'],
+      menus: [{ path: '/users', title: '用户权限' }]
+    })
+
+    await authStore.updateMyProfile({
+      phone: '13800000000',
+      email: 'admin@example.com'
+    })
+
+    expect(updateMyProfile).toHaveBeenCalledWith({
+      phone: '13800000000',
+      email: 'admin@example.com'
+    })
+    expect(authStore.user.phone).toBe('13800000000')
+    expect(authStore.user.email).toBe('admin@example.com')
+    expect(authStore.roles).toEqual(['SUPER_ADMIN'])
+    expect(authStore.permissions).toEqual(['system:user:view'])
+    expect(JSON.parse(localStorage.getItem('erp_user'))).toEqual(expect.objectContaining({
+      username: 'admin',
+      phone: '13800000000',
+      email: 'admin@example.com'
+    }))
   })
 
   test('logout clears local auth even when server logout fails', async () => {
