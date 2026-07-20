@@ -181,7 +181,11 @@ public class AuditService {
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
         if (startsWith(action, "DICT_")) return "DICT";
-        if (startsWith(action, "USER_") || startsWith(action, "SYSTEM_USER_") || startsWith(action, "SYSTEM_ROLE_")) return "SYSTEM";
+        if (startsWith(action, "USER_")
+                || startsWith(action, "SYSTEM_USER_")
+                || startsWith(action, "SYSTEM_ROLE_")
+                || startsWith(action, "SYSTEM_DEPT_")
+                || startsWith(action, "SYSTEM_POST_")) return "SYSTEM";
         if (startsWith(action, "ORDER_")) return "ORDER";
         if (startsWith(action, "DELIVERY_") || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
         if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_")) return "MARKET";
@@ -212,6 +216,16 @@ public class AuditService {
             case "SYSTEM_ROLE_DELETE" -> "删除角色";
             case "SYSTEM_ROLE_ASSIGN_PERMISSION" -> "角色分配权限";
             case "SYSTEM_ROLE_ASSIGN_DATA_SCOPE" -> "角色分配数据范围";
+            case "SYSTEM_DEPT_CREATE" -> "新增部门";
+            case "SYSTEM_DEPT_UPDATE" -> "编辑部门";
+            case "SYSTEM_DEPT_ENABLE" -> "启用部门";
+            case "SYSTEM_DEPT_DISABLE" -> "禁用部门";
+            case "SYSTEM_DEPT_DELETE" -> "删除部门";
+            case "SYSTEM_POST_CREATE" -> "新增岗位";
+            case "SYSTEM_POST_UPDATE" -> "编辑岗位";
+            case "SYSTEM_POST_ENABLE" -> "启用岗位";
+            case "SYSTEM_POST_DISABLE" -> "禁用岗位";
+            case "SYSTEM_POST_DELETE" -> "删除岗位";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";
