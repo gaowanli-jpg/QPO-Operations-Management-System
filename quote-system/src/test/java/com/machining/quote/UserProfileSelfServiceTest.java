@@ -1,15 +1,31 @@
 package com.machining.quote;
 
+import com.machining.quote.entity.ErpUser;
+import com.machining.quote.entity.SystemDept;
+import com.machining.quote.entity.SystemPost;
+import com.machining.quote.entity.SystemUser;
+import com.machining.quote.mapper.ErpUserMapper;
+import com.machining.quote.mapper.SystemDeptMapper;
+import com.machining.quote.mapper.SystemPostMapper;
+import com.machining.quote.mapper.SystemUserMapper;
+import com.machining.quote.mapper.SystemUserRoleMapper;
+import com.machining.quote.service.UserAdminService;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.lang.reflect.Method;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class UserProfileSelfServiceTest {
     private static final Path AUTH_INTERCEPTOR = Path.of(
@@ -60,6 +76,119 @@ class UserProfileSelfServiceTest {
         assertThat(authController)
                 .contains("@GetMapping(\"/me\")")
                 .contains("@PostMapping(\"/change-password\")");
+    }
+
+    @Test
+    void authMeDelegatesToReusableCurrentUserProfileAssembler() throws IOException {
+        String authController = Files.readString(AUTH_CONTROLLER, StandardCharsets.UTF_8);
+
+        assertThat(authController)
+                .contains("userAdminService.currentUserProfile(user.id())")
+                .doesNotContain("\"forcePasswordChange\", authService.mustChangePassword(user.id())");
+    }
+
+    @Test
+    void currentUserProfileReturnsOrganizationAndRoleNames() throws Exception {
+        UserAdminService service = new UserAdminService();
+        ErpUserMapper userMapper = mock(ErpUserMapper.class);
+        SystemUserMapper systemUserMapper = mock(SystemUserMapper.class);
+        SystemUserRoleMapper systemUserRoleMapper = mock(SystemUserRoleMapper.class);
+        SystemDeptMapper deptMapper = mock(SystemDeptMapper.class);
+        SystemPostMapper postMapper = mock(SystemPostMapper.class);
+        ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "systemUserMapper", systemUserMapper);
+        ReflectionTestUtils.setField(service, "systemUserRoleMapper", systemUserRoleMapper);
+        ReflectionTestUtils.setField(service, "deptMapper", deptMapper);
+        ReflectionTestUtils.setField(service, "postMapper", postMapper);
+
+        ErpUser legacyUser = new ErpUser();
+        legacyUser.setId(7);
+        legacyUser.setUsername("market01");
+        legacyUser.setDisplayName("市场张三");
+        legacyUser.setRole("MARKET");
+        legacyUser.setForcePasswordChange(false);
+
+        SystemUser systemUser = new SystemUser();
+        systemUser.setId(70L);
+        systemUser.setLegacyUserId(7);
+        systemUser.setRealName("张三");
+        systemUser.setPhone("13800000000");
+        systemUser.setEmail("market01@example.com");
+        systemUser.setDeptId(2L);
+        systemUser.setPostId(3L);
+
+        SystemDept dept = new SystemDept();
+        dept.setId(2L);
+        dept.setDeptName("市场部");
+
+        SystemPost post = new SystemPost();
+        post.setId(3L);
+        post.setPostName("市场专员");
+
+        when(userMapper.selectById(7)).thenReturn(legacyUser);
+        when(systemUserMapper.selectByLegacyUserId(7)).thenReturn(systemUser);
+        when(systemUserRoleMapper.selectRoleCodesByUserId(70L)).thenReturn(List.of("MARKET_USER"));
+        when(systemUserRoleMapper.selectRoleNamesByUserId(70L)).thenReturn(List.of("市场专员"));
+        when(deptMapper.selectById(2L)).thenReturn(dept);
+        when(postMapper.selectById(3L)).thenReturn(post);
+
+        Map<String, Object> profile = invokeCurrentUserProfile(service, 7);
+
+        assertThat(profile)
+                .containsEntry("id", 7)
+                .containsEntry("systemUserId", 70L)
+                .containsEntry("username", "market01")
+                .containsEntry("displayName", "市场张三")
+                .containsEntry("realName", "张三")
+                .containsEntry("phone", "13800000000")
+                .containsEntry("email", "market01@example.com")
+                .containsEntry("deptName", "市场部")
+                .containsEntry("postName", "市场专员")
+                .containsEntry("forcePasswordChange", false);
+        assertThat(profile.get("roleCodes")).isEqualTo(List.of("MARKET_USER"));
+        assertThat(profile.get("roles")).isEqualTo(List.of("MARKET_USER"));
+        assertThat(profile.get("roleNames")).isEqualTo(List.of("市场专员"));
+    }
+
+    @Test
+    void currentUserProfileFallsBackToLegacyFieldsWithoutSystemUser() throws Exception {
+        UserAdminService service = new UserAdminService();
+        ErpUserMapper userMapper = mock(ErpUserMapper.class);
+        SystemUserMapper systemUserMapper = mock(SystemUserMapper.class);
+        ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "systemUserMapper", systemUserMapper);
+
+        ErpUser legacyUser = new ErpUser();
+        legacyUser.setId(1);
+        legacyUser.setUsername("admin");
+        legacyUser.setDisplayName("管理员");
+        legacyUser.setRole("ADMIN");
+        legacyUser.setForcePasswordChange(true);
+
+        when(userMapper.selectById(1)).thenReturn(legacyUser);
+        when(systemUserMapper.selectByLegacyUserId(1)).thenReturn(null);
+
+        Map<String, Object> profile = invokeCurrentUserProfile(service, 1);
+
+        assertThat(profile)
+                .containsEntry("id", 1)
+                .containsEntry("systemUserId", null)
+                .containsEntry("username", "admin")
+                .containsEntry("displayName", "管理员")
+                .containsEntry("role", "ADMIN")
+                .containsEntry("forcePasswordChange", true)
+                .containsEntry("phone", null)
+                .containsEntry("email", null)
+                .containsEntry("deptName", null)
+                .containsEntry("postName", null);
+        assertThat(profile.get("roleCodes")).isEqualTo(List.of("SUPER_ADMIN"));
+        assertThat(profile.get("roleNames")).isEqualTo(List.of("SUPER_ADMIN"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> invokeCurrentUserProfile(UserAdminService service, Integer legacyUserId) throws Exception {
+        Method method = UserAdminService.class.getMethod("currentUserProfile", Integer.class);
+        return (Map<String, Object>) method.invoke(service, legacyUserId);
     }
 
     private String extractPasswordChangeWhitelist(String source) {

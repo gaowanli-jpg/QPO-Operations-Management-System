@@ -60,6 +60,17 @@ public class UserAdminService {
         return userMapper.selectList(qw).stream().map(this::publicUser).toList();
     }
 
+    public Map<String, Object> currentUserProfile(Integer legacyUserId) {
+        if (legacyUserId == null) {
+            throw new RuntimeException("User ID is required");
+        }
+        ErpUser user = userMapper.selectById(legacyUserId);
+        if (user == null) {
+            throw new RuntimeException("User does not exist");
+        }
+        return publicUser(user);
+    }
+
     @Transactional
     public Map<String, Object> createUser(UserSaveReq req) {
         String username = normalizeUsername(req.getUsername());

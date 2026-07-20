@@ -45,12 +45,7 @@ public class AuthController {
         if (user == null) {
             return Map.of("success", false, "message", "未登录");
         }
-        return Map.of("success", true, "data", Map.of(
-                "username", user.username(),
-                "displayName", user.displayName(),
-                "role", user.role(),
-                "forcePasswordChange", authService.mustChangePassword(user.id())
-        ));
+        return Map.of("success", true, "data", userAdminService.currentUserProfile(user.id()));
     }
 
     @GetMapping("/permission-info")
