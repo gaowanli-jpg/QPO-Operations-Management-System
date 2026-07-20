@@ -17,6 +17,8 @@ describe('QPO customer picker dialog', () => {
     const source = readComponent('CustomerPickerDialog.vue')
 
     expect(source).toContain("import { listCustomers } from '../services/orderApi'")
+    expect(source).toContain('customerScope')
+    expect(source).toContain('listCustomers(props.customerScope)')
     expect(source).toContain('v-model="keyword"')
     expect(source).toContain('filteredCustomers')
     expect(source).toContain(':data="filteredCustomers"')
@@ -40,6 +42,11 @@ describe('QPO customer picker dialog', () => {
     expect(orderPicker).not.toContain('import { listCustomers }')
     expect(orderManage).not.toContain('listCustomers,')
     expect(historyManage).not.toContain('listCustomers,')
+    expect(orderPicker).toContain('customerScope')
+    expect(orderPicker).toContain('orderScope')
+    expect(orderPicker).toContain(':customer-scope="customerScope"')
+    expect(orderPicker).toContain('listMarketOrders(params, props.orderScope)')
+    expect(orderPicker).toContain('props.orderScope')
   })
 
   test('keeps manual customer entry on RFQ import while adding existing customer selection', () => {
@@ -50,5 +57,34 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain('选择已有客户')
     expect(source).toContain('@select="selectExistingCustomer"')
     expect(source).toContain('rfqForm.customerName = customer')
+    expect(source).toContain('customer-scope="market-rfq"')
+    expect(source).toContain('v-permission="\'market:rfq:customer-select\'"')
+  })
+
+  test('order picker consumers declare module selection scopes', () => {
+    const globalSetup = readComponent('GlobalSetup.vue')
+    const quoteProcess = readComponent('QuoteProcess.vue')
+    const marketRelease = readComponent('MarketRelease.vue')
+
+    expect(globalSetup).toContain('customer-scope="engineer-setup"')
+    expect(globalSetup).toContain('order-scope="engineer-setup"')
+    expect(globalSetup).toContain('v-permission="\'engineer:setup:order-select\'"')
+    expect(quoteProcess).toContain('customer-scope="quote-process"')
+    expect(quoteProcess).toContain('order-scope="quote-process"')
+    expect(quoteProcess).toContain('v-permission="\'market:quote-process:order-select\'"')
+    expect(marketRelease).toContain('customer-scope="release"')
+    expect(marketRelease).toContain('order-scope="release"')
+    expect(marketRelease).toContain('v-permission="\'market:release:order-select\'"')
+  })
+
+  test('customer selection buttons are gated by module-owned permissions', () => {
+    const orderPicker = readComponent('OrderPickerDialog.vue')
+    const orderManage = readComponent('OrderManage.vue')
+    const historyManage = readComponent('HistoryOrderManage.vue')
+
+    expect(orderPicker).toContain('customerSelectPermission')
+    expect(orderPicker).toContain('v-permission="customerSelectPermission"')
+    expect(orderManage).toContain('v-permission="\'market:order:customer-select\'"')
+    expect(historyManage).toContain('v-permission="\'market:history-order:customer-select\'"')
   })
 })

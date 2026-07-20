@@ -5,7 +5,7 @@
             <h2>市场部：报价单处理生成</h2>
           </div>
           <div class="erp-page-actions header-actions">
-            <el-button :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
+            <el-button v-permission="'market:quote-process:order-select'" :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
           </div>
 
     </header>
@@ -244,6 +244,8 @@
       v-model="orderPickerVisible"
       title="选择已核价 / 已报价 RFQ 订单"
       :allowed-statuses="QUOTE_PROCESS_ALLOWED_STATUSES"
+      customer-scope="quote-process"
+      order-scope="quote-process"
       @select="handleOrderSelected"
     />
   </div>

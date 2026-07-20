@@ -2,11 +2,14 @@ package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.service.OrderManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,7 +30,27 @@ public class EngineerController {
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
+    @Autowired
+    private OrderManagementService orderManagementService;
+
     // ---------------------------------------------
+
+    @GetMapping("/setup/customers")
+    @RequirePermission("engineer:setup:customer-select")
+    public List<String> listSetupCustomers() {
+        return orderManagementService.listCustomers();
+    }
+
+    @GetMapping("/setup/orders")
+    @RequirePermission("engineer:setup:order-select")
+    public PageResult<OrderRfq> listSetupOrders(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+    }
 
     /**
      * 获取待评估的零件任务列表

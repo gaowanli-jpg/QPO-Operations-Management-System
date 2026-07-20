@@ -17,6 +17,22 @@ describe('orderApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-management/customers')
   })
 
+  test('listCustomers uses module-scoped customer selection endpoints', async () => {
+    await orderApi.listCustomers('market-rfq')
+    await orderApi.listCustomers('quote-process')
+    await orderApi.listCustomers('release')
+    await orderApi.listCustomers('engineer-setup')
+    await orderApi.listCustomers('market-order')
+    await orderApi.listCustomers('history-order')
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/rfq/customers')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/customers')
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/release/customers')
+    expect(request).toHaveBeenNthCalledWith(4, '/api/engineer/setup/customers')
+    expect(request).toHaveBeenNthCalledWith(5, '/api/order-management/customers')
+    expect(request).toHaveBeenNthCalledWith(6, '/api/order-management/history-orders/customers')
+  })
+
   test('listOrders forwards query params', async () => {
     const params = { customerId: 3, keyword: 'RFQ' }
 

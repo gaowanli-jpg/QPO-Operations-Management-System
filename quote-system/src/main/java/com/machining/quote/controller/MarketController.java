@@ -76,6 +76,46 @@ public class MarketController {
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
+    @GetMapping("/rfq/customers")
+    @RequirePermission("market:rfq:customer-select")
+    public List<String> listRfqCustomers() {
+        return orderManagementService.listCustomers();
+    }
+
+    @GetMapping("/quote-process/customers")
+    @RequirePermission("market:quote-process:customer-select")
+    public List<String> listQuoteProcessCustomers() {
+        return orderManagementService.listCustomers();
+    }
+
+    @GetMapping("/quote-process/orders")
+    @RequirePermission("market:quote-process:order-select")
+    public PageResult<OrderRfq> listQuoteProcessOrders(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/release/customers")
+    @RequirePermission("market:release:customer-select")
+    public List<String> listReleaseCustomers() {
+        return orderManagementService.listCustomers();
+    }
+
+    @GetMapping("/release/orders")
+    @RequirePermission("market:release:order-select")
+    public PageResult<OrderRfq> listReleaseOrders(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+    }
+
     @GetMapping("/orders")
     @RequirePermission("common:order:select")
     public PageResult<OrderRfq> listOrders(

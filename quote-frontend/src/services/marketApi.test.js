@@ -39,6 +39,16 @@ describe('marketApi', () => {
     expect(request).toHaveBeenCalledWith('/api/market/orders', { params })
   })
 
+  test('listMarketOrders uses module-scoped order selection endpoints', async () => {
+    const params = { customerName: 'ACME', status: 'PRICED' }
+
+    await marketApi.listMarketOrders(params, 'quote-process')
+    await marketApi.listMarketOrders(params, 'release')
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/orders', { params })
+  })
+
   test('loadReleaseWorkspace requests all release data by rfq id', async () => {
     request
       .mockResolvedValueOnce({ orderInfo: { id: 18 } })

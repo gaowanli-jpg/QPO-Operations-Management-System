@@ -9,7 +9,7 @@
 
     <section class="erp-toolbar">
       <div class="erp-toolbar-group history-filter-group">
-        <el-button class="customer-picker-trigger" @click="customerPickerVisible = true">
+        <el-button v-permission="'market:history-order:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
           <span
             :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
             :title="selectedCustomer || '先选择客户'"
@@ -173,6 +173,7 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="selectedCustomer"
+      customer-scope="history-order"
       @select="handleCustomerSelected"
     />
   </div>

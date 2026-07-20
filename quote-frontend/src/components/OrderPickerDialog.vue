@@ -2,7 +2,7 @@
   <el-dialog v-model="visible" :title="title" width="900px" @closed="resetPicker">
     <div class="picker-step">
       <div class="step-title">1. 选择客户</div>
-      <el-button class="customer-picker-trigger full-width" @click="customerPickerVisible = true">
+      <el-button v-permission="customerSelectPermission" class="customer-picker-trigger full-width" @click="customerPickerVisible = true">
         <span class="customer-picker-content">
           <span
             :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
@@ -94,6 +94,7 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="selectedCustomer"
+      :customer-scope="customerScope"
       @select="handleCustomerSelected"
     />
 
@@ -111,6 +112,16 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listMarketOrders } from '../services/marketApi'
+import { listSetupOrders } from '../services/engineerApi'
+
+const CUSTOMER_PERMISSION_BY_SCOPE = {
+  'market-rfq': 'market:rfq:customer-select',
+  'quote-process': 'market:quote-process:customer-select',
+  release: 'market:release:customer-select',
+  'engineer-setup': 'engineer:setup:customer-select',
+  'market-order': 'market:order:customer-select',
+  'history-order': 'market:history-order:customer-select'
+}
 
 const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单']
 
@@ -130,6 +141,14 @@ const props = defineProps({
   allowedStatuses: {
     type: Array,
     default: () => []
+  },
+  customerScope: {
+    type: String,
+    default: 'quote-process'
+  },
+  orderScope: {
+    type: String,
+    default: 'quote-process'
   }
 })
 
@@ -157,6 +176,10 @@ const statusOptions = computed(() => {
   const allowed = props.allowedStatuses.filter(Boolean)
   return allowed.length > 0 ? allowed : DEFAULT_STATUS_OPTIONS
 })
+
+const customerSelectPermission = computed(() => (
+  CUSTOMER_PERMISSION_BY_SCOPE[props.customerScope] || CUSTOMER_PERMISSION_BY_SCOPE['quote-process']
+))
 
 watch(selectedCustomer, () => {
   selectedStatus.value = ''
@@ -227,13 +250,16 @@ const loadOrders = async () => {
   }
   loadingOrders.value = true
   try {
-    const response = await listMarketOrders({
+    const params = {
       customerName: selectedCustomer.value,
       status: selectedStatus.value,
       keyword: keyword.value.trim() || undefined,
       page: page.value,
       pageSize: pageSize.value
-    })
+    }
+    const response = props.orderScope === 'engineer-setup'
+      ? await listSetupOrders(params)
+      : await listMarketOrders(params, props.orderScope)
     orders.value = response.records || []
     total.value = response.total || 0
   } catch (error) {

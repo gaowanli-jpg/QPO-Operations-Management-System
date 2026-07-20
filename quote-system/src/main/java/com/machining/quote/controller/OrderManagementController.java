@@ -35,8 +35,14 @@ public class OrderManagementController {
     }
 
     @GetMapping("/customers")
-    @RequirePermission("common:customer:select")
+    @RequirePermission("market:order:customer-select")
     public List<String> listCustomers() {
+        return orderManagementService.listCustomers();
+    }
+
+    @GetMapping("/history-orders/customers")
+    @RequirePermission("market:history-order:customer-select")
+    public List<String> listHistoryCustomers() {
         return orderManagementService.listCustomers();
     }
 

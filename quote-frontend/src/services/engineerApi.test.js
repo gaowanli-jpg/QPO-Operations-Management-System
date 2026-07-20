@@ -28,6 +28,14 @@ describe('engineerApi', () => {
     expect(request).toHaveBeenCalledWith('/api/engineer/repeat-analysis/12')
   })
 
+  test('listSetupOrders forwards engineer setup order picker params', async () => {
+    const params = { customerName: 'ACME', status: 'UNPRICED' }
+
+    await engineerApi.listSetupOrders(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/setup/orders', { params })
+  })
+
   test('applyRepeatQuotes posts repeat quote application by order id', async () => {
     await engineerApi.applyRepeatQuotes(12)
 

@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="erp-page-actions engineering-header-actions">
-        <el-button type="primary" @click="openOrderPicker" :loading="isLoading">
+        <el-button v-permission="'engineer:setup:order-select'" type="primary" @click="openOrderPicker" :loading="isLoading">
           选择订单
         </el-button>
         <el-button @click="fetchOrderData" :disabled="!testRfqId" :loading="isLoading">
@@ -216,6 +216,8 @@
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择零件核价订单"
+      customer-scope="engineer-setup"
+      order-scope="engineer-setup"
       @select="handleOrderSelected"
     />
 

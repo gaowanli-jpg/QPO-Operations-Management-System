@@ -66,9 +66,16 @@ class PermissionSystemStage5Test {
 
         assertThat(market)
                 .contains("@RequirePermission(\"market:rfq:import\")")
+                .contains("@RequirePermission(\"market:rfq:customer-select\")")
+                .contains("@RequirePermission(\"market:quote-process:customer-select\")")
+                .contains("@RequirePermission(\"market:quote-process:order-select\")")
+                .contains("@RequirePermission(\"market:release:customer-select\")")
+                .contains("@RequirePermission(\"market:release:order-select\")")
                 .contains("@RequirePermission(\"market:release:create\")")
                 .contains("@RequirePermission(\"market:quote-process:export\")");
         assertThat(engineer)
+                .contains("@RequirePermission(\"engineer:setup:customer-select\")")
+                .contains("@RequirePermission(\"engineer:setup:order-select\")")
                 .contains("@RequirePermission(\"engineer:pricing:save-item\")")
                 .contains("@RequirePermission(\"engineer:pricing:refresh\")")
                 .contains("@RequirePermission(\"engineer:setup:save-config\")");
@@ -83,7 +90,8 @@ class PermissionSystemStage5Test {
                 .contains("@RequirePermission(\"market:quote-process:save-quote\")");
         assertThat(order)
                 .contains("@RequirePermission(\"market:order:view\")")
-                .contains("@RequirePermission(\"common:customer:select\")")
+                .contains("@RequirePermission(\"market:order:customer-select\")")
+                .contains("@RequirePermission(\"market:history-order:customer-select\")")
                 .contains("@RequirePermission(\"market:order:supplement-drawing\")")
                 .contains("@RequirePermission(\"market:order:delete\")");
         assertThat(admin)

@@ -1,5 +1,7 @@
 import { request } from '../api'
 
+export const listSetupOrders = (params = {}) => request('/api/engineer/setup/orders', { params })
+
 export const saveOrderConfig = (orderId, config) => request(`/api/engineer/order-config/${orderId}`, {
   method: 'POST',
   data: config

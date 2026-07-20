@@ -69,6 +69,10 @@ const props = defineProps({
   currentCustomer: {
     type: String,
     default: ''
+  },
+  customerScope: {
+    type: String,
+    default: 'market-order'
   }
 })
 
@@ -93,7 +97,7 @@ const filteredCustomers = computed(() => {
 const loadCustomers = async () => {
   loading.value = true
   try {
-    const response = await listCustomers()
+    const response = await listCustomers(props.customerScope)
     customers.value = response || []
   } catch (error) {
     console.error(error)

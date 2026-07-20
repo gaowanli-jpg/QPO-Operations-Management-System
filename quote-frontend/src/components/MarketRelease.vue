@@ -5,7 +5,7 @@
             <h2>市场部：议价确认与提单生成</h2>
             <p>选择客户最终通过的零件，生成正式提单和对应工艺表。</p>
           </div>
-          <div class="erp-page-actions release-page-actions"><el-button type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
+          <div class="erp-page-actions release-page-actions"><el-button v-permission="'market:release:order-select'" type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
 
     </header>
 
@@ -18,7 +18,7 @@
               <div class="selected-order-text" :title="selectedOrderLabel">
                 {{ selectedOrderLabel }}
               </div>
-              <el-button plain class="workflow-soft-button" @click="openOrderPicker" :loading="loading">选择订单</el-button>
+              <el-button v-permission="'market:release:order-select'" plain class="workflow-soft-button" @click="openOrderPicker" :loading="loading">选择订单</el-button>
             </div>
 
             <el-descriptions v-if="orderInfo.id" :column="1" border class="order-desc">
@@ -349,6 +349,8 @@
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择市场部议价订单"
+      customer-scope="release"
+      order-scope="release"
       @select="handleOrderSelected"
     />
   </div>

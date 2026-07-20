@@ -20,7 +20,7 @@
                 <el-form-item label="客户名称/代码" required>
                   <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为">
                     <template #append>
-                      <el-button class="existing-customer-button" @click="customerPickerVisible = true">
+                      <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="customerPickerVisible = true">
                         选择已有客户
                       </el-button>
                     </template>
@@ -123,6 +123,7 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="rfqForm.customerName"
+      customer-scope="market-rfq"
       @select="selectExistingCustomer"
     />
   </div>

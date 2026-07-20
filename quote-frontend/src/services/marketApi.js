@@ -15,7 +15,16 @@ const postJson = (path, payload) => request(path, {
 
 export const importRfq = (formData) => multipartPost('/api/market/import-rfq', formData)
 
-export const listMarketOrders = (params = {}) => request('/api/market/orders', { params })
+const MARKET_ORDER_ENDPOINTS = {
+  market: '/api/market/orders',
+  'quote-process': '/api/market/quote-process/orders',
+  release: '/api/market/release/orders'
+}
+
+export const listMarketOrders = (params = {}, scope = 'market') => request(
+  MARKET_ORDER_ENDPOINTS[scope] || MARKET_ORDER_ENDPOINTS.market,
+  { params }
+)
 
 export const listInternalTargetLeadTimeItems = (rfqId) => request(`/api/market/internal-target-lead-time/${rfqId}/items`)
 
