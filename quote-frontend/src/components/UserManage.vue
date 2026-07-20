@@ -23,6 +23,8 @@
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="username" label="账号" min-width="130" show-overflow-tooltip />
           <el-table-column prop="displayName" label="显示名称" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="deptName" label="部门" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="postName" label="岗位" min-width="130" show-overflow-tooltip />
           <el-table-column label="角色" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="user-role-tags">
@@ -147,6 +149,8 @@ const form = reactive({
   username: '',
   password: '',
   displayName: '',
+  deptId: null,
+  postId: null,
   roleCodes: ['MARKET_USER'],
   enabled: true
 })
@@ -206,6 +210,8 @@ const resetForm = () => {
   form.username = ''
   form.password = ''
   form.displayName = ''
+  form.deptId = null
+  form.postId = null
   form.roleCodes = ['MARKET_USER']
   form.enabled = true
 }
@@ -220,6 +226,8 @@ const openEdit = (row) => {
   form.username = row.username
   form.password = ''
   form.displayName = row.displayName
+  form.deptId = row.deptId || null
+  form.postId = row.postId || null
   form.roleCodes = Array.isArray(row.roleCodes) && row.roleCodes.length
     ? [...row.roleCodes]
     : [legacyRoleCode(row.role)]
@@ -245,6 +253,8 @@ const saveUser = async () => {
     const payload = {
       username: form.username,
       displayName: form.displayName,
+      deptId: form.deptId,
+      postId: form.postId,
       roleCodes: form.roleCodes,
       enabled: form.enabled
     }
