@@ -69,19 +69,10 @@
             <template #default="scope">{{ scope.row.processSheetCount || 0 }}</template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-          <el-table-column label="操作" width="280" align="center" fixed="right">
+          <el-table-column label="操作" width="100" align="center" fixed="right">
             <template #default="scope">
               <div class="erp-table-actions">
                 <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
-                <el-button v-permission="'market:order:delete'"
-                  size="small"
-                  type="danger"
-                  plain
-                  class="erp-danger-action"
-                  @click="resetProduction(scope.row)"
-                >
-                  重置提单/工艺
-                </el-button>
               </div>
             </template>
           </el-table-column>
@@ -262,13 +253,12 @@
 
 <script setup>
 import { computed, defineComponent, h, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
   getOrder,
   listOrders,
-  resetProduction as resetProductionRequest,
   supplementDrawings
 } from '../services/orderApi'
 
@@ -383,15 +373,6 @@ const openDetail = async (row) => {
   }
 }
 
-const resetProduction = async (row) => {
-  await ElMessageBox.confirm(
-    `确认重置订单「${row.rfqNo}」的提单行和工艺表行？零件可重新生成提单。`,
-    '重置提单和工艺表',
-    { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' }
-  )
-  await postAction(() => resetProductionRequest(row.id), '订单提单和工艺表已重置')
-}
-
 const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
@@ -439,23 +420,6 @@ const submitSupplementDrawings = async () => {
     ElMessage.error(error.response?.data?.message || '补传图纸失败。')
   } finally {
     supplementUploading.value = false
-  }
-}
-
-const postAction = async (action, fallbackMessage) => {
-  loading.value = true
-  try {
-    const response = await action()
-    ElMessage.success(response.message || fallbackMessage)
-    await loadOrders()
-    if (orderDetail.value?.orderInfo?.id) {
-      await refreshCurrentDetail()
-    }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('操作失败。')
-  } finally {
-    loading.value = false
   }
 }
 

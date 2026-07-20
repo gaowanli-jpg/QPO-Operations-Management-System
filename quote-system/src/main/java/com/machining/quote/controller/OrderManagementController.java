@@ -40,13 +40,6 @@ public class OrderManagementController {
         return orderManagementService.listCustomers();
     }
 
-    @PostMapping("/orders/{rfqId}/reset-production")
-    @RequirePermission("market:order:delete")
-    public Map<String, Object> resetProductionData(@PathVariable Integer rfqId) {
-        orderManagementService.resetProductionData(rfqId);
-        return Map.of("success", true, "message", "订单提单和工艺表已重置");
-    }
-
     @PostMapping(value = "/orders/{rfqId}/supplement-drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:order:supplement-drawing")
     public Map<String, Object> supplementDrawings(

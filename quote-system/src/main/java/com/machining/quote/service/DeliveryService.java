@@ -186,55 +186,6 @@ public class DeliveryService {
         return processSheetMapper.selectList(qw);
     }
 
-    @Transactional
-    public void deleteTicket(Integer ticketId) {
-        OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
-        if (ticket == null) {
-            throw new RuntimeException("提单行不存在");
-        }
-        if (ticket.getRfqId() != null) {
-            OrderRfq lockedOrder = orderRfqMapper.selectByIdForUpdate(ticket.getRfqId());
-            if (lockedOrder == null) {
-                throw new RuntimeException("提单所属订单已被删除");
-            }
-            assertOrderDataScope(lockedOrder);
-            ticket = ticketMapper.selectById(ticketId);
-            if (ticket == null) {
-                throw new RuntimeException("提单行已被删除");
-            }
-        }
-
-        ItemQuoteVersion item = findItemByTicket(ticket);
-        ticketMapper.deleteById(ticketId);
-
-        if (item != null) {
-            refreshItemTicketStatus(item);
-        }
-        refreshOrderTicketStatus(ticket.getRfqId());
-        auditService.record("DELIVERY_TICKET_DELETE", "order_delivery_ticket", ticketId, ticket, null);
-    }
-
-    @Transactional
-    public void deleteProcessSheet(Integer sheetId) {
-        OrderProcessSheet sheet = processSheetMapper.selectById(sheetId);
-        if (sheet == null) {
-            throw new RuntimeException("工艺表行不存在");
-        }
-        if (sheet.getRfqId() != null) {
-            OrderRfq lockedOrder = orderRfqMapper.selectByIdForUpdate(sheet.getRfqId());
-            if (lockedOrder == null) {
-                throw new RuntimeException("工艺表所属订单已被删除");
-            }
-            assertOrderDataScope(lockedOrder);
-            sheet = processSheetMapper.selectById(sheetId);
-            if (sheet == null) {
-                throw new RuntimeException("工艺表行已被删除");
-            }
-        }
-        processSheetMapper.deleteById(sheetId);
-        auditService.record("PROCESS_SHEET_DELETE", "order_process_sheet", sheetId, sheet, null);
-    }
-
     private void assertOrderDataScope(Integer rfqId) {
         if (rfqId != null && dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
@@ -299,22 +250,6 @@ public class DeliveryService {
             }
         }
         return result;
-    }
-
-    private ItemQuoteVersion findItemByTicket(OrderDeliveryTicket ticket) {
-        if (ticket.getItemId() != null) {
-            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(ticket.getItemId());
-            if (item != null) {
-                return item;
-            }
-        }
-        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", ticket.getRfqId()).eq("part_no", ticket.getPartNo());
-        if (!isBlank(ticket.getVersion())) {
-            qw.eq("version", normalizeVersion(ticket.getVersion()));
-        }
-        qw.last("LIMIT 1 FOR UPDATE");
-        return itemMapper.selectOne(qw);
     }
 
     private void refreshItemTicketStatus(ItemQuoteVersion item) {

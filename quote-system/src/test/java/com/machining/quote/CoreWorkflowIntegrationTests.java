@@ -32,6 +32,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -562,7 +565,7 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
-    void publishedDeliveryTicketsCannotBeDeleted() {
+    void publishedDeliveryTicketsCannotBeDeleted() throws Exception {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("IMMUTABLE-TICKET-" + System.nanoTime());
         order.setCustomerName("不可逆提单客户");
@@ -572,11 +575,24 @@ class CoreWorkflowIntegrationTests {
         ItemQuoteVersion item = quotedItem(order, "IMMUTABLE-100");
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(deliveryReq(order, item, 1));
 
-        assertThatThrownBy(() -> deliveryService.deleteTicket(tickets.get(0).getId()))
-                .as("提单发布记录是 APS 同步来源，不允许删除回退")
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("不可删除");
         assertThat(ticketMapper.selectById(tickets.get(0).getId())).isNotNull();
+        assertThat(source("src/main/java/com/machining/quote/controller/MarketController.java"))
+                .as("提单行和工艺表行不再暴露删除接口")
+                .doesNotContain("@DeleteMapping(\"/tickets/{ticketId}\")")
+                .doesNotContain("@DeleteMapping(\"/process-sheets/{sheetId}\")");
+        assertThat(source("src/main/java/com/machining/quote/service/DeliveryService.java"))
+                .as("提单发布记录是 APS 同步来源，不允许保留删除服务方法")
+                .doesNotContain("public void deleteTicket(")
+                .doesNotContain("public void deleteProcessSheet(")
+                .doesNotContain("DELIVERY_TICKET_DELETE")
+                .doesNotContain("PROCESS_SHEET_DELETE");
+        assertThat(source("src/main/java/com/machining/quote/controller/OrderManagementController.java"))
+                .as("订单管理不再暴露重置提单/工艺接口")
+                .doesNotContain("reset-production");
+        assertThat(source("src/main/java/com/machining/quote/service/OrderManagementService.java"))
+                .as("订单管理不再保留重置提单/工艺服务方法")
+                .doesNotContain("resetProductionData")
+                .doesNotContain("Order production reset completed");
     }
 
     @Test
@@ -796,5 +812,9 @@ class CoreWorkflowIntegrationTests {
             processSheetMapper.insert(sheet);
         }
         return order;
+    }
+
+    private String source(String relativePath) throws Exception {
+        return Files.readString(Path.of(relativePath), StandardCharsets.UTF_8);
     }
 }

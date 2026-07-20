@@ -269,7 +269,7 @@
                 导出提单 Excel
               </el-button>
             </div>
-            <el-table :data="pagedTicketList" border stripe height="280" v-loading="loadingTickets || deleting">
+            <el-table :data="pagedTicketList" border stripe height="280" v-loading="loadingTickets">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
@@ -284,11 +284,6 @@
               </el-table-column>
               <el-table-column label="备注" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">{{ displayTicketText(row.remark) }}</template>
-              </el-table-column>
-              <el-table-column label="操作" width="90" align="center" fixed="right">
-                <template #default="scope">
-                  <div class="erp-table-actions"><el-button v-permission="'market:release:reset'" type="danger" size="small" plain class="erp-danger-action" @click="deleteTicket(scope.row)">删除</el-button></div>
-                </template>
               </el-table-column>
             </el-table>
             <div v-if="ticketList.length" class="erp-pagination">
@@ -312,7 +307,7 @@
                 导出工艺表 Excel
               </el-button>
             </div>
-            <el-table :data="pagedProcessSheetList" border stripe height="260" v-loading="loadingProcessSheets || deleting">
+            <el-table :data="pagedProcessSheetList" border stripe height="260" v-loading="loadingProcessSheets">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
@@ -331,11 +326,6 @@
               <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
                 <template #default="scope">
                   {{ formatRoute(scope.row.processRoute) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="90" align="center" fixed="right">
-                <template #default="scope">
-                  <div class="erp-table-actions"><el-button v-permission="'market:release:reset'" type="danger" size="small" plain class="erp-danger-action" @click="deleteProcessSheet(scope.row)">删除</el-button></div>
                 </template>
               </el-table-column>
             </el-table>
@@ -369,8 +359,6 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
-  deleteProcessSheet as deleteProcessSheetRequest,
-  deleteTicket as deleteTicketRequest,
   downloadMarketExport,
   generateTicket,
   getMarketSummary,
@@ -410,7 +398,6 @@ const loading = ref(false)
 const loadingTickets = ref(false)
 const loadingProcessSheets = ref(false)
 const submitting = ref(false)
-const deleting = ref(false)
 const adjustingInternalLeadTime = ref(false)
 const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
@@ -796,46 +783,6 @@ const resolveDeliveryLeadTime = (row) => {
     || row.quoteLeadTime
     || row.leadTime
     || '-'
-}
-
-const deleteTicket = async (row) => {
-  await ElMessageBox.confirm(
-    `确认删除提单行「${row.partNo} / ${row.version || '-'}」数量 ${row.qty}？`,
-    '删除提单行',
-    { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
-  )
-
-  deleting.value = true
-  try {
-    const response = await deleteTicketRequest(row.id)
-    ElMessage.success(response.message || '提单行已删除')
-    await loadOrder(selectedRfqId.value)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('提单行删除失败。')
-  } finally {
-    deleting.value = false
-  }
-}
-
-const deleteProcessSheet = async (row) => {
-  await ElMessageBox.confirm(
-    `确认删除工艺表行「${row.partNo} / ${row.version || '-'}」？删除后可基于新的核价重新生成。`,
-    '删除工艺表行',
-    { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
-  )
-
-  deleting.value = true
-  try {
-    const response = await deleteProcessSheetRequest(row.id)
-    ElMessage.success(response.message || '工艺表行已删除')
-    await loadOrder(selectedRfqId.value)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('工艺表行删除失败。')
-  } finally {
-    deleting.value = false
-  }
 }
 
 const formatRoute = (route) => {

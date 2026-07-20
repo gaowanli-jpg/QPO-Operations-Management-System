@@ -91,9 +91,9 @@ class LoggingConventionTest {
                 .contains("log.error(\"Quote template upload failed");
 
         assertThat(source("service/OrderManagementService.java"))
-                .contains("Order production reset completed")
                 .contains("Order supplement drawings completed")
-                .contains("Order delete completed");
+                .contains("Order delete completed")
+                .doesNotContain("Order production reset completed");
 
         assertThat(source("service/DeliveryService.java"))
                 .contains("Delivery ticket generation started")

@@ -11,10 +11,6 @@ export const deleteOrder = (orderId, { deleteFiles = false } = {}) => request(`/
   params: { deleteFiles }
 })
 
-export const resetProduction = (orderId) => request(`/api/order-management/orders/${orderId}/reset-production`, {
-  method: 'POST'
-})
-
 export const supplementDrawings = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/supplement-drawings`, {
   method: 'POST',
   data: formData,

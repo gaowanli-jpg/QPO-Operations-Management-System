@@ -48,9 +48,6 @@ public class OrderManagementService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderProcessSheetMapper processSheetMapper;
-    @Autowired
-    private DeliveryService deliveryService;
-    @Autowired
     private OrderFilePathService orderFilePathService;
     @Autowired
     private AuditService auditService;
@@ -127,26 +124,6 @@ public class OrderManagementService {
         detail.put("fileRoot", buildOrderFileRoot(order));
         detail.put("missingDrawingFiles", listMissingDrawingFiles(listItems(rfqId)));
         return detail;
-    }
-
-    @Transactional
-    public void resetProductionData(Integer rfqId) {
-        OrderRfq order = requireOrderForUpdate(rfqId);
-
-        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
-        List<OrderProcessSheet> processSheets = listProcessSheets(rfqId);
-        for (OrderDeliveryTicket ticket : tickets) {
-            deliveryService.deleteTicket(ticket.getId());
-        }
-        for (OrderProcessSheet sheet : processSheets) {
-            processSheetMapper.deleteById(sheet.getId());
-        }
-
-        String status = resolveOrderStatusAfterReset(rfqId);
-        order.setStatus(status);
-        orderMapper.updateById(order);
-        log.info("Order production reset completed rfqId={} ticketCount={} processSheetCount={} status={}",
-                rfqId, tickets.size(), processSheets.size(), status);
     }
 
     @Transactional

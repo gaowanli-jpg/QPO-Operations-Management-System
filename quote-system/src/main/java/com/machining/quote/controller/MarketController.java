@@ -99,20 +99,6 @@ public class MarketController {
         return deliveryService.listProcessSheets(rfqId);
     }
 
-    @DeleteMapping("/tickets/{ticketId}")
-    @RequirePermission("market:release:reset")
-    public Map<String, Object> deleteDeliveryTicket(@PathVariable Integer ticketId) {
-        deliveryService.deleteTicket(ticketId);
-        return Map.of("success", true, "message", "提单行已删除");
-    }
-
-    @DeleteMapping("/process-sheets/{sheetId}")
-    @RequirePermission("market:release:reset")
-    public Map<String, Object> deleteProcessSheet(@PathVariable Integer sheetId) {
-        deliveryService.deleteProcessSheet(sheetId);
-        return Map.of("success", true, "message", "工艺表行已删除");
-    }
-
     @GetMapping("/export/tickets/{rfqId}")
     @RequirePermission("market:release:view")
     public void exportDeliveryTickets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {

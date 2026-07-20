@@ -43,14 +43,6 @@ export const updateInternalTargetLeadTime = (payload) => postJson('/api/market/i
 
 export const generateTicket = (payload) => postJson('/api/market/generate-ticket', payload)
 
-export const deleteTicket = (ticketId) => request(`/api/market/tickets/${ticketId}`, {
-  method: 'DELETE'
-})
-
-export const deleteProcessSheet = (sheetId) => request(`/api/market/process-sheets/${sheetId}`, {
-  method: 'DELETE'
-})
-
 export const getQuoteProcess = (rfqId) => request(`/api/market/quote-process/${rfqId}`)
 
 export const shiftQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/shift', payload)
