@@ -78,6 +78,28 @@ class PermissionSystemStage6Test {
     }
 
     @Test
+    void multipleRoleDataScopesAreUnionedForOrderQueries() {
+        DataScopeService service = serviceWithRoles(
+                role(5L, "SELF_MARKET", "SELF", false),
+                role(6L, "KEY_ACCOUNT", "CUSTOMER", false));
+        SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
+        when(customerMapper.selectCustomerNamesByRoleId(6L)).thenReturn(List.of("ACME"));
+        ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
+        AuthContext.set(new AuthContext.SessionUser(7, "market", "Market", "MARKET"));
+        QueryWrapper<OrderRfq> query = new QueryWrapper<>();
+
+        service.applyOrderScope(query);
+
+        String sql = query.getCustomSqlSegment().toLowerCase();
+        assertThat(sql)
+                .contains("created_by")
+                .contains("owner_user_id")
+                .contains("customer_name")
+                .contains(" or ");
+        assertThat(query.getParamNameValuePairs()).containsValue(7).containsValue("ACME");
+    }
+
+    @Test
     void noneDataScopeReturnsEmptyOrderListInsteadOfThrowing() {
         DataScopeService service = serviceWithRoles(role(3L, "READONLY", "NONE", false));
         AuthContext.set(new AuthContext.SessionUser(9, "readonly", "Read Only", "MARKET"));

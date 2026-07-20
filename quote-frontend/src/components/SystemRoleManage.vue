@@ -63,7 +63,9 @@
         </el-form-item>
         <el-form-item label="数据范围">
           <el-select v-model="form.dataScope" style="width: 100%">
-            <el-option v-for="item in dataScopeOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option-group v-for="group in dataScopeOptionGroups" :key="group.label" :label="group.label">
+              <el-option v-for="item in group.options" :key="item.value" :label="item.label" :value="item.value" />
+            </el-option-group>
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -126,13 +128,35 @@
 
     <el-drawer v-model="dataScopeDrawerVisible" title="数据范围" size="560px">
       <div class="role-drawer-body">
+        <el-alert
+          title="QPO 订单跨市场、工程流转，默认不建议按部门隔离。推荐使用全部数据或指定客户。"
+          type="info"
+          show-icon
+          :closable="false"
+        />
         <el-form label-width="96px" class="erp-dialog-form">
           <el-form-item label="范围类型">
             <el-select v-model="dataScopeForm.dataScope" style="width: 100%">
-              <el-option v-for="item in dataScopeOptions" :key="item.value" :label="item.label" :value="item.value" />
+              <el-option-group v-for="group in dataScopeOptionGroups" :key="group.label" :label="group.label">
+                <el-option v-for="item in group.options" :key="item.value" :label="item.label" :value="item.value" />
+              </el-option-group>
             </el-select>
           </el-form-item>
-          <el-form-item label="指定部门">
+          <el-alert
+            v-if="dataScopeForm.dataScope === 'SELF'"
+            title="仅查看当前用户导入/创建的订单；不涉及完整负责人机制。"
+            type="info"
+            show-icon
+            :closable="false"
+          />
+          <el-alert
+            v-if="isDepartmentCompatibilityScope"
+            title="部门范围为高级兼容能力，不推荐用于 QPO 订单主流程，可能导致跨部门处理订单不可见。"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
+          <el-form-item v-if="isCustomDepartmentScope" label="指定部门">
             <el-tree
               ref="dataScopeDeptTreeRef"
               class="data-scope-dept-tree"
@@ -145,7 +169,8 @@
               @check="handleDeptTreeCheck"
             />
           </el-form-item>
-          <el-form-item label="指定客户">
+          <el-form-item v-if="isCustomerDataScope" label="指定客户">
+            <p class="data-scope-help">指定客户数据范围只按订单客户名称匹配。</p>
             <el-select
               v-model="dataScopeForm.customerNames"
               multiple
@@ -172,7 +197,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   assignRoleDataScope,
@@ -219,16 +244,30 @@ const dataScopeForm = reactive({
   customerNames: []
 })
 
-const dataScopeOptions = [
-  { value: 'ALL', label: '全部数据' },
-  { value: 'DEPT', label: '本部门' },
-  { value: 'DEPT_AND_CHILD', label: '本部门及子部门' },
-  { value: 'SELF', label: '仅本人' },
-  { value: 'CUSTOMER', label: '指定客户' },
-  { value: 'CUSTOM', label: '指定部门' },
-  { value: 'NONE', label: '无业务数据' }
+const dataScopeOptionGroups = [
+  {
+    label: '常用范围',
+    options: [
+      { value: 'ALL', label: '全部数据' },
+      { value: 'CUSTOMER', label: '指定客户' },
+      { value: 'SELF', label: '仅本人' },
+      { value: 'NONE', label: '无数据' }
+    ]
+  },
+  {
+    label: '高级/兼容配置',
+    options: [
+      { value: 'DEPT', label: '本部门' },
+      { value: 'DEPT_AND_CHILD', label: '本部门及子部门' },
+      { value: 'CUSTOM', label: '指定部门' }
+    ]
+  }
 ]
 
+const dataScopeOptions = dataScopeOptionGroups.flatMap(group => group.options)
+const isCustomerDataScope = computed(() => dataScopeForm.dataScope === 'CUSTOMER')
+const isCustomDepartmentScope = computed(() => dataScopeForm.dataScope === 'CUSTOM')
+const isDepartmentCompatibilityScope = computed(() => ['DEPT', 'DEPT_AND_CHILD', 'CUSTOM'].includes(dataScopeForm.dataScope))
 const dataScopeLabel = (value) => dataScopeOptions.find(item => item.value === value)?.label || value || '-'
 
 const loadAll = async () => {
@@ -547,6 +586,13 @@ onMounted(loadAll)
   border: 1px solid var(--erp-border-subtle);
   border-radius: var(--erp-radius-md);
   padding: var(--erp-space-2);
+}
+
+.data-scope-help {
+  margin: 0 0 var(--erp-space-2);
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+  line-height: 1.6;
 }
 
 .permission-code {
