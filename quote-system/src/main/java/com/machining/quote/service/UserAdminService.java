@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
+import com.machining.quote.dto.MyProfileUpdateReq;
 import com.machining.quote.dto.PasswordChangeReq;
 import com.machining.quote.dto.UserSaveReq;
 import com.machining.quote.entity.ErpUser;
@@ -30,12 +31,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 public class UserAdminService {
     private static final Logger log = LoggerFactory.getLogger(UserAdminService.class);
     private static final Set<String> LEGACY_ROLES = Set.of("ADMIN", "MARKET", "ENGINEER");
     private static final Set<String> PROTECTED_USERNAMES = Set.of("admin", "market", "engineer");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^[0-9+\\-\\s()]{6,30}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     @Autowired
     private ErpUserMapper userMapper;
@@ -69,6 +73,39 @@ public class UserAdminService {
             throw new RuntimeException("User does not exist");
         }
         return publicUser(user);
+    }
+
+    @Transactional
+    public Map<String, Object> updateMyProfile(MyProfileUpdateReq req) {
+        AuthContext.SessionUser current = AuthContext.get();
+        if (current == null) {
+            throw new RuntimeException("Please login first");
+        }
+        String phone = normalizeProfilePhone(req == null ? null : req.getPhone());
+        String email = normalizeProfileEmail(req == null ? null : req.getEmail());
+
+        ErpUser user = requireUserForUpdate(current.id());
+        if (systemUserMapper == null) {
+            throw new IllegalStateException("System user storage is unavailable");
+        }
+        SystemUser systemUser = findSystemUser(user.getId());
+        if (systemUser == null) {
+            systemUser = syncSystemUser(user, null, false);
+        }
+
+        Map<String, Object> before = contactSnapshot(systemUser);
+        systemUser.setPhone(phone);
+        systemUser.setEmail(email);
+        systemUser.setUpdatedAt(LocalDateTime.now());
+        systemUserMapper.updateById(systemUser);
+
+        Map<String, Object> after = contactSnapshot(systemUser);
+        Object targetId = systemUser.getId() == null ? user.getId() : systemUser.getId();
+        if (auditService != null) {
+            auditService.record("USER_PROFILE_UPDATE", "system_user", targetId, before, after);
+        }
+        log.info("User profile updated userId={} systemUserId={}", user.getId(), systemUser.getId());
+        return publicUser(user, systemUser);
     }
 
     @Transactional
@@ -421,6 +458,13 @@ public class UserAdminService {
         return row;
     }
 
+    private Map<String, Object> contactSnapshot(SystemUser user) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("phone", user == null ? null : user.getPhone());
+        row.put("email", user == null ? null : user.getEmail());
+        return row;
+    }
+
     private List<String> requestedRoleCodes(UserSaveReq req, boolean creating) {
         List<String> codes = req == null ? null : req.getRoleCodes();
         if (codes != null) {
@@ -495,6 +539,26 @@ public class UserAdminService {
     private String trimToNull(String value) {
         String trimmed = value == null ? "" : value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeProfilePhone(String value) {
+        String phone = trimToNull(value);
+        if (phone != null && !PHONE_PATTERN.matcher(phone).matches()) {
+            log.warn("User profile update rejected userId={} reason=invalid_phone",
+                    AuthContext.get() == null ? null : AuthContext.get().id());
+            throw new IllegalArgumentException("Invalid phone number");
+        }
+        return phone;
+    }
+
+    private String normalizeProfileEmail(String value) {
+        String email = trimToNull(value);
+        if (email != null && (email.length() > 120 || !EMAIL_PATTERN.matcher(email).matches())) {
+            log.warn("User profile update rejected userId={} reason=invalid_email",
+                    AuthContext.get() == null ? null : AuthContext.get().id());
+            throw new IllegalArgumentException("Invalid email address");
+        }
+        return email;
     }
 
     private boolean isBlank(String value) {

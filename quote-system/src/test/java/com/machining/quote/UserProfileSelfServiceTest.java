@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.entity.ErpUser;
 import com.machining.quote.entity.SystemDept;
 import com.machining.quote.entity.SystemPost;
@@ -9,10 +10,14 @@ import com.machining.quote.mapper.SystemDeptMapper;
 import com.machining.quote.mapper.SystemPostMapper;
 import com.machining.quote.mapper.SystemUserMapper;
 import com.machining.quote.mapper.SystemUserRoleMapper;
+import com.machining.quote.service.AuditService;
 import com.machining.quote.service.UserAdminService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +29,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class UserProfileSelfServiceTest {
@@ -34,8 +42,15 @@ class UserProfileSelfServiceTest {
             "src", "main", "java", "com", "machining", "quote", "service", "UserAdminService.java");
     private static final Path AUTH_CONTROLLER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "controller", "AuthController.java");
+    private static final Path MY_PROFILE_UPDATE_REQ = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "dto", "MyProfileUpdateReq.java");
     private static final Path PROFILE_PLAN = Path.of(
             "..", "docs", "QPO权限用户体系", "07-个人入口与我的资料优化开发文档.md");
+
+    @AfterEach
+    void clearAuthContext() {
+        AuthContext.clear();
+    }
 
     @Test
     void profileUpdateIsNotAllowedBeforeForcedPasswordChange() throws IOException {
@@ -85,6 +100,31 @@ class UserProfileSelfServiceTest {
         assertThat(authController)
                 .contains("userAdminService.currentUserProfile(user.id())")
                 .doesNotContain("\"forcePasswordChange\", authService.mustChangePassword(user.id())");
+    }
+
+    @Test
+    void authControllerExposesSelfProfileUpdateEndpointWithoutAdminPermission() throws IOException {
+        String authController = Files.readString(AUTH_CONTROLLER, StandardCharsets.UTF_8);
+
+        assertThat(authController)
+                .contains("@PutMapping(\"/me/profile\")")
+                .contains("MyProfileUpdateReq")
+                .contains("userAdminService.updateMyProfile(req)")
+                .doesNotContain("@RequirePermission(\"system:user:update\")");
+    }
+
+    @Test
+    void myProfileUpdateRequestOnlyAllowsContactFields() throws IOException {
+        String source = Files.readString(MY_PROFILE_UPDATE_REQ, StandardCharsets.UTF_8);
+
+        assertThat(source)
+                .contains("phone")
+                .contains("email")
+                .doesNotContain("deptId")
+                .doesNotContain("postId")
+                .doesNotContain("role")
+                .doesNotContain("roleCodes")
+                .doesNotContain("enabled");
     }
 
     @Test
@@ -189,6 +229,136 @@ class UserProfileSelfServiceTest {
     private Map<String, Object> invokeCurrentUserProfile(UserAdminService service, Integer legacyUserId) throws Exception {
         Method method = UserAdminService.class.getMethod("currentUserProfile", Integer.class);
         return (Map<String, Object>) method.invoke(service, legacyUserId);
+    }
+
+    @Test
+    void updateMyProfileUpdatesOnlyContactFieldsAndRecordsAudit() throws Exception {
+        UserAdminService service = new UserAdminService();
+        ErpUserMapper userMapper = mock(ErpUserMapper.class);
+        SystemUserMapper systemUserMapper = mock(SystemUserMapper.class);
+        SystemUserRoleMapper systemUserRoleMapper = mock(SystemUserRoleMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "systemUserMapper", systemUserMapper);
+        ReflectionTestUtils.setField(service, "systemUserRoleMapper", systemUserRoleMapper);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+
+        AuthContext.set(new AuthContext.SessionUser(7, "market01", "market01", "MARKET"));
+        ErpUser legacyUser = legacyUser(7, "market01", "MARKET");
+        SystemUser systemUser = systemUser(70L, 7, "old-phone", "old@example.com");
+        systemUser.setDeptId(2L);
+        systemUser.setPostId(3L);
+        when(userMapper.selectByIdForUpdate(7)).thenReturn(legacyUser);
+        when(systemUserMapper.selectByLegacyUserId(7)).thenReturn(systemUser);
+        when(systemUserRoleMapper.selectRoleCodesByUserId(70L)).thenReturn(List.of("MARKET_USER"));
+        when(systemUserRoleMapper.selectRoleNamesByUserId(70L)).thenReturn(List.of("Market User"));
+
+        Map<String, Object> profile = invokeUpdateMyProfile(service, newProfileUpdateReq(" 13800000000 ", " new@example.com "));
+
+        assertThat(systemUser.getPhone()).isEqualTo("13800000000");
+        assertThat(systemUser.getEmail()).isEqualTo("new@example.com");
+        assertThat(systemUser.getDeptId()).isEqualTo(2L);
+        assertThat(systemUser.getPostId()).isEqualTo(3L);
+        assertThat(profile)
+                .containsEntry("phone", "13800000000")
+                .containsEntry("email", "new@example.com")
+                .containsEntry("deptId", 2L)
+                .containsEntry("postId", 3L);
+        verify(systemUserMapper).updateById(systemUser);
+        ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("USER_PROFILE_UPDATE"),
+                eq("system_user"),
+                eq(70L),
+                beforeCaptor.capture(),
+                afterCaptor.capture()
+        );
+        assertThat(beforeCaptor.getValue()).isEqualTo(Map.of("phone", "old-phone", "email", "old@example.com"));
+        assertThat(afterCaptor.getValue()).isEqualTo(Map.of("phone", "13800000000", "email", "new@example.com"));
+    }
+
+    @Test
+    void updateMyProfileCanClearPhoneAndEmail() throws Exception {
+        UserAdminService service = new UserAdminService();
+        ErpUserMapper userMapper = mock(ErpUserMapper.class);
+        SystemUserMapper systemUserMapper = mock(SystemUserMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "systemUserMapper", systemUserMapper);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+
+        AuthContext.set(new AuthContext.SessionUser(7, "market01", "market01", "MARKET"));
+        ErpUser legacyUser = legacyUser(7, "market01", "MARKET");
+        SystemUser systemUser = systemUser(70L, 7, "13800000000", "old@example.com");
+        when(userMapper.selectByIdForUpdate(7)).thenReturn(legacyUser);
+        when(systemUserMapper.selectByLegacyUserId(7)).thenReturn(systemUser);
+
+        Map<String, Object> profile = invokeUpdateMyProfile(service, newProfileUpdateReq(" ", ""));
+
+        assertThat(systemUser.getPhone()).isNull();
+        assertThat(systemUser.getEmail()).isNull();
+        assertThat(profile).containsEntry("phone", null).containsEntry("email", null);
+    }
+
+    @Test
+    void updateMyProfileRejectsInvalidContactFields() throws Exception {
+        UserAdminService service = new UserAdminService();
+        AuthContext.set(new AuthContext.SessionUser(7, "market01", "market01", "MARKET"));
+
+        assertThatThrownBy(() -> invokeUpdateMyProfile(service, newProfileUpdateReq("abc", "valid@example.com")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("phone");
+        assertThatThrownBy(() -> invokeUpdateMyProfile(service, newProfileUpdateReq("13800000000", "bad-email")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("email");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> invokeUpdateMyProfile(UserAdminService service, Object req) throws Exception {
+        Class<?> reqClass = Class.forName("com.machining.quote.dto.MyProfileUpdateReq");
+        Method method = UserAdminService.class.getMethod("updateMyProfile", reqClass);
+        try {
+            return (Map<String, Object>) method.invoke(service, req);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception exception) {
+                throw exception;
+            }
+            throw new RuntimeException(cause);
+        }
+    }
+
+    private Object newProfileUpdateReq(String phone, String email) throws Exception {
+        Class<?> reqClass = Class.forName("com.machining.quote.dto.MyProfileUpdateReq");
+        Object req = reqClass.getConstructor().newInstance();
+        reqClass.getMethod("setPhone", String.class).invoke(req, phone);
+        reqClass.getMethod("setEmail", String.class).invoke(req, email);
+        return req;
+    }
+
+    private ErpUser legacyUser(Integer id, String username, String role) {
+        ErpUser user = new ErpUser();
+        user.setId(id);
+        user.setUsername(username);
+        user.setDisplayName(username);
+        user.setRole(role);
+        user.setEnabled(true);
+        user.setForcePasswordChange(false);
+        return user;
+    }
+
+    private SystemUser systemUser(Long id, Integer legacyUserId, String phone, String email) {
+        SystemUser user = new SystemUser();
+        user.setId(id);
+        user.setLegacyUserId(legacyUserId);
+        user.setUsername("market01");
+        user.setDisplayName("market01");
+        user.setPhone(phone);
+        user.setEmail(email);
+        user.setEnabled(true);
+        user.setDeleted(false);
+        return user;
     }
 
     private String extractPasswordChangeWhitelist(String source) {

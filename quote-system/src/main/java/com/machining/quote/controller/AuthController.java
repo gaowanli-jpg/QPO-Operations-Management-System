@@ -1,12 +1,14 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.dto.LoginReq;
+import com.machining.quote.dto.MyProfileUpdateReq;
 import com.machining.quote.dto.PasswordChangeReq;
 import com.machining.quote.service.AuthService;
 import com.machining.quote.service.UserAdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,6 +48,11 @@ public class AuthController {
             return Map.of("success", false, "message", "未登录");
         }
         return Map.of("success", true, "data", userAdminService.currentUserProfile(user.id()));
+    }
+
+    @PutMapping("/me/profile")
+    public Map<String, Object> updateMyProfile(@RequestBody MyProfileUpdateReq req) {
+        return Map.of("success", true, "message", "Profile updated", "data", userAdminService.updateMyProfile(req));
     }
 
     @GetMapping("/permission-info")
