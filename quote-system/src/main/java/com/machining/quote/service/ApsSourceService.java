@@ -158,11 +158,12 @@ public class ApsSourceService {
         row.setSourceItemQty(item == null ? null : item.getQty());
         row.setUnit(item == null ? "" : item.getUnit());
 
+        Object materialSource = ticket.getMaterialData() != null ? ticket.getMaterialData() : item == null ? null : item.getMaterialData();
         row.setMaterialName(resolveEngineeringMaterialName(ticket, item));
-        row.setMaterialType(resolveMaterialType(item));
-        row.setMaterialGrossWeight(item == null ? null : item.getMaterialGrossWeight());
-        row.setMaterialDemandWeight(multiply(item == null ? null : item.getMaterialGrossWeight(), ticket.getQty()));
-        row.setPartNetWeight(item == null ? null : item.getPartNetWeight());
+        row.setMaterialType(resolveMaterialType(materialSource));
+        row.setMaterialGrossWeight(firstNumber(ticket.getMaterialGrossWeight(), item == null ? null : item.getMaterialGrossWeight()));
+        row.setMaterialDemandWeight(multiply(row.getMaterialGrossWeight(), ticket.getQty()));
+        row.setPartNetWeight(firstNumber(ticket.getPartNetWeight(), item == null ? null : item.getPartNetWeight()));
         row.setSurfaceTreatment(firstText(ticket.getSurfaceTreatment(), item == null ? "" : item.getSurfaceTreatment()));
 
         row.setLeadTime(item == null ? "" : item.getLeadTime());
@@ -177,11 +178,15 @@ public class ApsSourceService {
         row.setDrawingUrl(drawingUrl);
         row.setDrawingViewUrl(toAbsoluteUrl(drawingUrl));
 
-        row.setMaterialData(item == null ? null : item.getMaterialData());
-        Object routeSource = processSheet != null && processSheet.getProcessRoute() != null
+        row.setMaterialData(materialSource);
+        Object routeSource = ticket.getProcessRoute() != null
+                ? ticket.getProcessRoute()
+                : processSheet != null && processSheet.getProcessRoute() != null
                 ? processSheet.getProcessRoute()
                 : item == null ? null : item.getProcessRoute();
-        row.setProcessSnapshotSource(processSheet != null && processSheet.getProcessRoute() != null
+        row.setProcessSnapshotSource(ticket.getProcessRoute() != null
+                ? "ORDER_DELIVERY_TICKET"
+                : processSheet != null && processSheet.getProcessRoute() != null
                 ? "ORDER_PROCESS_SHEET"
                 : "ITEM_QUOTE_VERSION");
         List<ApsDeliveryItemDTO.ProcessRow> processRows = normalizeProcessRows(routeSource);
@@ -309,12 +314,13 @@ public class ApsSourceService {
         rows.forEach(row -> row.remove("__index"));
     }
 
-    private String resolveMaterialType(ItemQuoteVersion item) {
-        if (item == null) {
-            return "";
-        }
-        Map<String, Object> materialData = normalizeMap(item.getMaterialData());
+    private String resolveMaterialType(Object materialSource) {
+        Map<String, Object> materialData = normalizeMap(materialSource);
         return stringValue(materialData.get("shape"));
+    }
+
+    private Double firstNumber(Double primary, Double fallback) {
+        return primary != null ? primary : fallback;
     }
 
     private String resolveEngineeringMaterialName(OrderDeliveryTicket ticket, ItemQuoteVersion item) {

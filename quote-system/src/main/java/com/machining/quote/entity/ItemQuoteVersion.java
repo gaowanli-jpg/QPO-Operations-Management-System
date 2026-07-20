@@ -48,7 +48,7 @@ public class ItemQuoteVersion {
     private Double baseCost;
     private Double finalUnitPrice;
     private Double finalTotalPrice;
-    private String status; // 状态：未核价 / 已报价
+    private String status; // 状态：未核价 / 已核价 / 已报价 / 已提单 / 无图
 
     // MyBatis-Plus 会自动把驼峰命名 drawingUrl 映射到数据库的 drawing_url
     private String drawingUrl;

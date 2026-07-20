@@ -8,8 +8,11 @@ public final class QuoteStatusWorkflow {
     public static final String QUOTED = "已报价";
     public static final String PARTIALLY_RELEASED = "部分已提单";
     public static final String RELEASED = "已生成提单";
+    public static final String ITEM_RELEASED = "已提单";
+    public static final String NO_DRAWING = "无图";
 
     private static final Set<String> LEGACY_UNPRICED = Set.of("待工程部评估", "待核价");
+    private static final Set<String> LEGACY_ITEM_RELEASED = Set.of("已部分提单", "已生成提单");
 
     private QuoteStatusWorkflow() {
     }
@@ -54,5 +57,9 @@ public final class QuoteStatusWorkflow {
 
     public static String normalizeUnpricedStatus(String status) {
         return isLegacyUnpricedStatus(status) ? UNPRICED : status;
+    }
+
+    public static boolean isLegacyItemReleasedStatus(String status) {
+        return LEGACY_ITEM_RELEASED.contains(status);
     }
 }

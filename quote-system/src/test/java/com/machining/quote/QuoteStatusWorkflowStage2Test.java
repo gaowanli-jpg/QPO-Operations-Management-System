@@ -3,6 +3,7 @@ package com.machining.quote;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
+import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SystemTask;
@@ -47,6 +48,39 @@ class QuoteStatusWorkflowStage2Test {
     private ExcelExportService excelExportService;
     @Autowired
     private DeliveryService deliveryService;
+
+    @Test
+    void itemAndAssemblyQuoteSavesPricedStatusUntilMarketSavesQuoteSheet() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.UNPRICED);
+        ItemQuoteVersion normal = createUnpricedItem(order, "S2-STATE-NORMAL");
+        ItemQuoteVersion child = createQuotedItem(order, "S2-STATE-CHILD", "2026-03-20");
+        child.setStatus(QuoteStatusWorkflow.PRICED);
+        itemMapper.updateById(child);
+        ItemQuoteVersion assembly = createUnpricedItem(order, "S2-STATE-ASM");
+        assembly.setQuoteMode("ASSEMBLY");
+        itemMapper.updateById(assembly);
+
+        engineerService.calculateAndSaveQuote(normalQuoteReq(normal));
+        assertThat(itemMapper.selectById(normal.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+
+        QuoteSubmitReq assemblyReq = new QuoteSubmitReq();
+        assemblyReq.setItemId(assembly.getId());
+        assemblyReq.setQuoteMode("ASSEMBLY");
+        assemblyReq.setAssemblyFee(5.0);
+        QuoteSubmitReq.AssemblyChildDTO childLine = new QuoteSubmitReq.AssemblyChildDTO();
+        childLine.setChildItemId(child.getId());
+        childLine.setQtyPerParent(1.0);
+        assemblyReq.setAssemblyChildren(List.of(childLine));
+        engineerService.calculateAndSaveQuote(assemblyReq);
+        assertThat(itemMapper.selectById(assembly.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+
+        engineerService.completeOrderQuote(order.getId());
+        quoteProcessService.saveQuoteSheet(order.getId());
+
+        assertThat(itemMapper.selectById(normal.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(child.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(assembly.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+    }
 
     @Test
     void engineeringCompletionThenMarketSaveQuoteControlsQuoteExportAndLeadTimeEditing() throws Exception {
@@ -171,6 +205,31 @@ class QuoteStatusWorkflowStage2Test {
         order.setStatus(status);
         orderMapper.insert(order);
         return order;
+    }
+
+    private ItemQuoteVersion createUnpricedItem(OrderRfq order, String partNo) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo(partNo);
+        item.setVersion("A");
+        item.setDescription(partNo + " desc");
+        item.setQty(1);
+        item.setUnit("件");
+        item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
+        item.setLeadTime("2026-03-20");
+        item.setQuoteLeadTime("2026-03-20");
+        item.setStatus(QuoteStatusWorkflow.UNPRICED);
+        itemMapper.insert(item);
+        return itemMapper.selectById(item.getId());
+    }
+
+    private QuoteSubmitReq normalQuoteReq(ItemQuoteVersion item) {
+        QuoteSubmitReq req = new QuoteSubmitReq();
+        req.setItemId(item.getId());
+        req.setPartNetWeight(1.0);
+        req.setMaterialData(Map.of("cost", 10.0, "weight", 1.5));
+        req.setProcessRoute(List.of());
+        return req;
     }
 
     private ItemQuoteVersion createQuotedItem(OrderRfq order, String partNo, String quoteLeadTime) {

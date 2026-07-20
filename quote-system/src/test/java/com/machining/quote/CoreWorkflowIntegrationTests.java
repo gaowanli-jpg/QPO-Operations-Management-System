@@ -392,7 +392,12 @@ class CoreWorkflowIntegrationTests {
         quoteReq.setItemId(item.getId());
         quoteReq.setPartNetWeight(1.2);
         quoteReq.setMaterialData(materialData);
-        quoteReq.setProcessRoute(List.of());
+        QuoteSubmitReq.ProcessSubmitDTO process = new QuoteSubmitReq.ProcessSubmitDTO();
+        process.setSortNo(10);
+        process.setProcessName("APS-CNC");
+        process.setCalcType("工时");
+        process.setInputVal(2.0);
+        quoteReq.setProcessRoute(List.of(process));
         engineerService.calculateAndSaveQuote(quoteReq);
 
         ItemQuoteVersion savedItem = itemMapper.selectById(item.getId());
@@ -416,6 +421,10 @@ class CoreWorkflowIntegrationTests {
         OrderDeliveryTicket ticket = deliveryService.generateTickets(deliveryReq).get(0);
         assertThat(ticket.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
         assertThat(ticket.getEngineeringMaterialName()).isEqualTo(engineeringMaterial);
+        assertThat(ticket.getMaterialData()).isNotNull();
+        assertThat(ticket.getProcessRoute()).isNotNull();
+        assertThat(ticket.getMaterialGrossWeight()).isEqualTo(2.5);
+        assertThat(ticket.getPartNetWeight()).isEqualTo(1.2);
 
         QueryWrapper<OrderProcessSheet> sheetQw = new QueryWrapper<>();
         sheetQw.eq("item_id", item.getId());
@@ -437,6 +446,9 @@ class CoreWorkflowIntegrationTests {
         assertThat(row.getMaterialGrossWeight()).isEqualTo(2.5);
         assertThat(row.getMaterialDemandWeight()).isEqualTo(7.5);
         assertThat(row.getPartNetWeight()).isEqualTo(1.2);
+        assertThat(row.getProcessSnapshotSource()).isEqualTo("ORDER_DELIVERY_TICKET");
+        assertThat(row.getProcessRows()).extracting(ApsDeliveryItemDTO.ProcessRow::getProcessName)
+                .containsExactly("APS-CNC");
         assertThat(row.getDescription()).isEqualTo("imported material description");
         assertThat(row.getCustomerOrderNo()).isEqualTo("CO-APS-MAT");
         assertThat(row.getCustomerProjectNo()).isEqualTo("CP-APS-MAT");
@@ -674,8 +686,11 @@ class CoreWorkflowIntegrationTests {
         OrderRfq savedOrder = orderMapper.selectById(currentOrder.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
         assertThat(savedItem.getFinalUnitPrice()).isNotNull();
-        assertThat(savedItem.getStatus()).isEqualTo("已报价");
+        assertThat(savedItem.getStatus())
+                .as("重复历史核价只套用工程核价结果，仍需市场保存报价单后才进入已报价")
+                .isEqualTo(QuoteStatusWorkflow.PRICED);
         assertThat(savedOrder.getStatus()).isEqualTo("待工程部评估");
+        assertThat(result.get("message")).asString().contains("完成核价提交");
 
         engineerService.completeOrderQuote(currentOrder.getId());
         assertThat(orderMapper.selectById(currentOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);

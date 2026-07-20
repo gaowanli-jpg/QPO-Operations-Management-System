@@ -42,18 +42,18 @@
     <section class="erp-toolbar pricing-toolbar">
       <div class="erp-toolbar-group pricing-toolbar-copy">
         <span class="pricing-toolbar-title">逐件核价清单</span>
-        <small>先处理有图纸零件，再生成报价单并提交。</small>
+        <small>先处理有图纸零件，再提交到市场报价处理。</small>
       </div>
       <div class="erp-toolbar-group pricing-toolbar-actions">
         <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
         <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
-          生成报价单
+          导出正式报价单
         </el-button>
         <el-button v-permission="'engineer:pricing:refresh'" type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
           一键刷新核价
         </el-button>
         <el-button v-permission="'engineer:pricing:complete-order'" type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
-          完成报价提交
+          完成核价提交
         </el-button>
       </div>
     </section>
@@ -664,6 +664,7 @@ const canExportQuote = computed(() => {
   const items = quoteData.value?.itemList || []
   const drawableItems = items.filter(item => item.drawingUrl)
   return !!rfqId.value
+    && quoteData.value?.orderInfo?.status === '已报价'
     && items.length > 0
     && drawableItems.every(item => item.finalUnitPrice != null)
 })
@@ -673,7 +674,7 @@ const canCompleteQuote = computed(() => {
   const drawableItems = items.filter(item => item.drawingUrl)
   return !!rfqId.value
     && !refreshLoading.value
-    && quoteData.value?.orderInfo?.status !== '已报价'
+    && quoteData.value?.orderInfo?.status === '未核价'
     && items.length > 0
     && drawableItems.every(item => item.finalUnitPrice != null)
 })
@@ -781,22 +782,22 @@ const exportQuoteSheet = async () => {
   if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
   const result = await downloadCustomerLeadTimeQuote(rfqId.value)
   if (!result.success) {
-    ElMessage.error(result.message || '报价单导出失败。')
+    ElMessage.error(result.message || '正式报价单导出失败。')
   }
 }
 
 const completeOrderQuote = async () => {
   if (!canCompleteQuote.value) {
-    return ElMessage.warning('所有有图零件完成核价后才能提交订单报价。')
+    return ElMessage.warning('只有未核价订单在所有有图零件完成核价后，才能提交到市场报价处理。')
   }
   completeLoading.value = true
   try {
     const response = await completeOrderQuoteRequest(rfqId.value)
-    ElMessage.success(response.message || '订单报价已完成。')
+    ElMessage.success(response.message || '订单核价已完成，已进入市场报价处理。')
     await fetchQuoteData()
   } catch (error) {
     console.error(error)
-    ElMessage.error(error.response?.data?.message || '完成报价提交失败。')
+    ElMessage.error(error.response?.data?.message || '完成核价提交失败。')
   } finally {
     completeLoading.value = false
   }

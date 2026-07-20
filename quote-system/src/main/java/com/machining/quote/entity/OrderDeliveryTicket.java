@@ -1,14 +1,16 @@
 package com.machining.quote.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.machining.quote.config.JsonbTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDate;
 
 @Data
-@TableName("order_delivery_ticket")
+@TableName(value = "order_delivery_ticket", autoResultMap = true)
 public class OrderDeliveryTicket {
     @TableId(type = IdType.AUTO)
     private Integer id;
@@ -31,4 +33,10 @@ public class OrderDeliveryTicket {
     private LocalDate deliveryDate;
     private String remark;
     private String arrangeType;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object processRoute;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object materialData;
+    private Double materialGrossWeight;
+    private Double partNetWeight;
 }

@@ -190,11 +190,13 @@ public class QuoteProcessService {
                 throw new RuntimeException("以下零件缺少报价交期，不能保存报价单：" + String.join("、", missingLeadTimes));
             }
 
-            Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size());
+            Map<String, Object> before = quoteSheetSummary(order, items, missingLeadTimes.size(), 0);
             order.setStatus(QuoteStatusWorkflow.nextAfterMarketSaveQuote(order.getStatus()));
             orderRfqMapper.updateById(order);
+            int itemStatusUpdatedCount = markPricedItemsAsQuoted(items);
             OrderRfq savedOrder = orderRfqMapper.selectById(order.getId());
-            Map<String, Object> after = quoteSheetSummary(savedOrder, items, 0);
+            List<ItemQuoteVersion> savedItems = listItems(rfqId);
+            Map<String, Object> after = quoteSheetSummary(savedOrder, savedItems, 0, itemStatusUpdatedCount);
             auditService.record(
                     "QUOTE_PROCESS_SAVE_QUOTE",
                     "order_rfq",
@@ -203,16 +205,18 @@ public class QuoteProcessService {
                     after,
                     "QUOTE_PROCESS",
                     "SUCCESS",
-                    "保存报价单：RFQ " + safe(savedOrder.getRfqNo()) + "，零件 " + items.size() + " 个",
+                    "保存报价单：RFQ " + safe(savedOrder.getRfqNo()) + "，零件 " + items.size()
+                            + " 个，状态更新 " + itemStatusUpdatedCount + " 个",
                     null
             );
-            log.info("Quote sheet save completed rfqId={} fromStatus={} toStatus={} itemCount={} durationMs={}",
-                    rfqId, before.get("status"), savedOrder.getStatus(), items.size(), System.currentTimeMillis() - startedAt);
+            log.info("Quote sheet save completed rfqId={} fromStatus={} toStatus={} itemCount={} itemStatusUpdatedCount={} durationMs={}",
+                    rfqId, before.get("status"), savedOrder.getStatus(), items.size(), itemStatusUpdatedCount,
+                    System.currentTimeMillis() - startedAt);
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", true);
             result.put("orderInfo", savedOrder);
-            result.put("itemList", items.stream().map(this::buildItemRow).toList());
+            result.put("itemList", savedItems.stream().map(this::buildItemRow).toList());
             return result;
         } catch (RuntimeException e) {
             long durationMs = System.currentTimeMillis() - startedAt;
@@ -316,12 +320,35 @@ public class QuoteProcessService {
         return itemMapper.selectList(qw);
     }
 
-    private Map<String, Object> quoteSheetSummary(OrderRfq order, List<ItemQuoteVersion> items, int missingLeadTimeCount) {
+    private int markPricedItemsAsQuoted(List<ItemQuoteVersion> items) {
+        int updated = 0;
+        for (ItemQuoteVersion item : items) {
+            if (!hasDrawing(item) || item.getFinalUnitPrice() == null) {
+                continue;
+            }
+            if (QuoteStatusWorkflow.QUOTED.equals(item.getStatus())) {
+                continue;
+            }
+            if (QuoteStatusWorkflow.PRICED.equals(item.getStatus())
+                    || QuoteStatusWorkflow.UNPRICED.equals(item.getStatus())
+                    || QuoteStatusWorkflow.isLegacyUnpricedStatus(item.getStatus())
+                    || isBlank(item.getStatus())) {
+                item.setStatus(QuoteStatusWorkflow.QUOTED);
+                itemMapper.updateById(item);
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private Map<String, Object> quoteSheetSummary(OrderRfq order, List<ItemQuoteVersion> items, int missingLeadTimeCount,
+                                                  int itemStatusUpdatedCount) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("status", order == null ? null : order.getStatus());
         summary.put("rfqNo", order == null ? null : order.getRfqNo());
         summary.put("itemCount", items == null ? 0 : items.size());
         summary.put("missingLeadTimeCount", missingLeadTimeCount);
+        summary.put("itemStatusUpdatedCount", itemStatusUpdatedCount);
         return summary;
     }
 

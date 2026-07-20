@@ -258,6 +258,10 @@ public class DeliveryService {
         ticket.setDeliveryDate(leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)));
         ticket.setRemark(remark);
         ticket.setArrangeType(arrangeType);
+        ticket.setProcessRoute(item.getProcessRoute());
+        ticket.setMaterialData(item.getMaterialData());
+        ticket.setMaterialGrossWeight(item.getMaterialGrossWeight());
+        ticket.setPartNetWeight(item.getPartNetWeight());
         ticketMapper.insert(ticket);
         return ticket;
     }

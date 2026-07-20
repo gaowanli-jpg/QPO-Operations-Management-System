@@ -223,12 +223,13 @@ public class EngineerService {
         item.setBaseCost(baseCost);
         item.setFinalUnitPrice(finalUnitPrice);
         item.setFinalTotalPrice(finalTotalPrice);
-        item.setStatus("已报价");
+        item.setStatus(QuoteStatusWorkflow.PRICED);
 
         deleteAssemblyRelations(item.getId());
         itemMapper.updateById(item);
-        log.info("Item quote saved rfqId={} itemId={} partNo={} quoteMode={} baseCost={} finalUnitPrice={}",
-                item.getRfqId(), item.getId(), item.getPartNo(), QUOTE_MODE_NORMAL, baseCost, finalUnitPrice);
+        log.info("Item quote saved rfqId={} itemId={} partNo={} quoteMode={} baseCost={} finalUnitPrice={} toStatus={}",
+                item.getRfqId(), item.getId(), item.getPartNo(), QUOTE_MODE_NORMAL, baseCost, finalUnitPrice,
+                QuoteStatusWorkflow.PRICED);
     }
 
     private void saveAssemblyQuote(ItemQuoteVersion parent, Double assemblyFee,
@@ -310,11 +311,11 @@ public class EngineerService {
         parent.setBaseCost(baseCost);
         parent.setFinalUnitPrice(finalUnitPrice);
         parent.setFinalTotalPrice(finalUnitPrice * parentQty);
-        parent.setStatus("已报价");
+        parent.setStatus(QuoteStatusWorkflow.PRICED);
         itemMapper.updateById(parent);
-        log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} finalUnitPrice={}",
+        log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} finalUnitPrice={} toStatus={}",
                 parent.getRfqId(), parent.getId(), parent.getPartNo(), childrenTotal, safeAssemblyFee,
-                assemblyFeeMarkupCost, finalUnitPrice);
+                assemblyFeeMarkupCost, finalUnitPrice, QuoteStatusWorkflow.PRICED);
     }
 
     public List<Map<String, Object>> listAssemblyRelations(Integer parentItemId) {
@@ -559,7 +560,7 @@ public class EngineerService {
         int noDrawingCount = 0;
         for (ItemQuoteVersion item : items) {
             if (!hasDrawing(item) && item.getFinalUnitPrice() == null) {
-                item.setStatus("无图");
+                item.setStatus(QuoteStatusWorkflow.NO_DRAWING);
                 itemMapper.updateById(item);
                 noDrawingCount++;
             }
@@ -674,7 +675,7 @@ public class EngineerService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "重复订单自动核价完成，已套用 " + appliedItems.size() + " 个零件，请工程师审核后手动完成报价提交。");
+        result.put("message", "重复订单自动核价完成，已套用 " + appliedItems.size() + " 个零件，请工程师审核后手动完成核价提交。");
         result.put("appliedCount", appliedItems.size());
         result.put("skippedCount", skippedItems.size());
         result.put("appliedItems", appliedItems);
