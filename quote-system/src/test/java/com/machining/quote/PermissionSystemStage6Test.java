@@ -58,7 +58,7 @@ class PermissionSystemStage6Test {
     }
 
     @Test
-    void selfDataScopeFiltersOrdersByCreatorOrOwner() {
+    void selfDataScopeKeepsCreatorOrOwnerCompatibilityForSchemeA() {
         DataScopeService service = serviceWithRoles(role(1L, "MARKET_USER", "SELF", false));
         AuthContext.set(new AuthContext.SessionUser(7, "market", "Market", "MARKET"));
         QueryWrapper<OrderRfq> query = new QueryWrapper<>();
