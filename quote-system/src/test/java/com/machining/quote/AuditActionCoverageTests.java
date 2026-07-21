@@ -31,6 +31,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +52,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AuditActionCoverageTests {
+    private static final Path WMS_ALLOCATION_PLAN = Path.of(
+            "..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final List<String> VALID_TEMPLATE_HEADERS = List.of(
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "工艺名称", "类型", "工时/金额", "单价", "费用",
@@ -318,6 +322,25 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_SUCCESS");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_FAILED")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_FAILED");
+    }
+
+    @Test
+    void wmsAllocationAuditActionsAndFileLogEventsAreReserved() throws Exception {
+        String plan = Files.readString(WMS_ALLOCATION_PLAN, StandardCharsets.UTF_8);
+
+        assertThat(plan)
+                .as("WMS allocation must be auditable before implementation starts")
+                .contains(
+                        "DELIVERY_WMS_ALLOCATION_SUBMIT",
+                        "DELIVERY_WMS_ALLOCATION_SUCCESS",
+                        "DELIVERY_WMS_ALLOCATION_FAILED",
+                        "WMS allocation submitted",
+                        "WMS allocation started",
+                        "WMS allocation completed",
+                        "WMS allocation rejected",
+                        "WMS allocation failed",
+                        "qpo-error.log"
+                );
     }
 
     private AuthService authService(ErpUserMapper userMapper, JwtService jwtService, AuditService auditService) {

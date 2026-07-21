@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { request } from './api'
 import * as deliveredItemApi from './services/deliveredItemApi'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const wmsPlanSource = readFileSync(resolve(currentDir, '..', '..', 'docs', 'QPO-MES-WMS对接', '04-WMS锁库分配与锁库零件模块开发文档.md'), 'utf8')
 
 vi.mock('./api', () => ({
   request: vi.fn()
@@ -31,5 +37,14 @@ describe('deliveredItemApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/123/mes-material', {
       method: 'POST'
     })
+  })
+
+  test('freezes planned WMS allocation and locked item API endpoints', () => {
+    expect(wmsPlanSource).toContain('submitWmsAllocation')
+    expect(wmsPlanSource).toContain('/api/order-delivery/tickets/${ticketId}/wms-allocation')
+    expect(wmsPlanSource).toContain('listLockedItems')
+    expect(wmsPlanSource).toContain('/api/order-delivery/allocations')
+    expect(wmsPlanSource).toContain('listTicketAllocations')
+    expect(wmsPlanSource).toContain('/api/order-delivery/tickets/${ticketId}/allocations')
   })
 })

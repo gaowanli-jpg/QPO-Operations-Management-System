@@ -27,6 +27,7 @@ class PermissionModuleTreeTest {
     private static final Path RFQ_ORDER_TYPE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V44__rfq_order_type_select_permission.sql");
     private static final Path DELIVERED_ITEM_FOUNDATION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
     private static final Path DELIVERED_ITEM_MES_SYNC_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V46__delivery_ticket_mes_sync_permission.sql");
+    private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -138,6 +139,24 @@ class PermissionModuleTreeTest {
                         "MARKET_MANAGER"
                 )
                 .doesNotContain("WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER', 'READONLY')");
+    }
+
+    @Test
+    void wmsAllocationPermissionsAreReservedForDeliveredAndLockedItemModules() throws IOException {
+        String plan = Files.readString(WMS_ALLOCATION_PLAN, StandardCharsets.UTF_8);
+
+        assertThat(plan)
+                .as("WMS allocation must be module-owned, not a common permission")
+                .contains(
+                        "market:delivered-item:wms-allocate",
+                        "market:delivered-item:view",
+                        "market:locked-item:view",
+                        "BUTTON/API",
+                        "MENU",
+                        "/locked-items",
+                        "LockedItemManage"
+                )
+                .doesNotContain("common:wms", "common:locked-item");
     }
 
     @Test
