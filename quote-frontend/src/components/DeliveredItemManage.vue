@@ -64,6 +64,18 @@
               <div class="erp-table-actions delivered-row-actions">
                 <el-button size="small" @click="openDetail(row)">详情</el-button>
                 <el-button
+                  v-if="mesSyncAction(row)"
+                  v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"
+                  size="small"
+                  :type="mesSyncAction(row).type"
+                  :disabled="mesSyncAction(row).disabled"
+                  :loading="mesSyncLoadingId === row.id"
+                  plain
+                  @click="handleMesSync(row)"
+                >
+                  {{ mesSyncAction(row).label }}
+                </el-button>
+                <el-button
                   v-if="row.drawingUrl"
                   v-permission="DELIVERED_ITEM_FILE_PREVIEW_PERMISSION"
                   size="small"
@@ -116,12 +128,13 @@
 
 <script setup>
 import { onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { openAuthenticatedFileInNewWindow } from '../api'
-import { getDeliveredItem, listDeliveredItems } from '../services/deliveredItemApi'
+import { getDeliveredItem, listDeliveredItems, syncMesMaterial } from '../services/deliveredItemApi'
 
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 const DELIVERED_ITEM_FILE_PREVIEW_PERMISSION = 'market:delivered-item:file-preview'
+const DELIVERED_ITEM_MES_SYNC_PERMISSION = 'market:delivered-item:mes-sync'
 
 const filters = reactive({
   customerName: '',
@@ -142,6 +155,7 @@ const syncStatusOptions = [
 ]
 const items = ref([])
 const loading = ref(false)
+const mesSyncLoadingId = ref(null)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -199,6 +213,41 @@ const openDrawingPreview = async (row) => {
   const result = await openAuthenticatedFileInNewWindow(row.drawingUrl)
   if (!result.success) {
     ElMessage.warning(result.blocked ? '浏览器拦截了新窗口，请允许弹窗后重试。' : (result.message || '图纸打开失败。'))
+  }
+}
+
+const mesSyncAction = (row) => {
+  if (row.mesSyncStatus === 'SUCCESS' && row.materialNo) return null
+  if (row.mesSyncStatus === 'PROCESSING') {
+    return { label: '处理中', type: 'warning', disabled: true }
+  }
+  if (row.mesSyncStatus === 'FAILED') {
+    return { label: '重试', type: 'warning', disabled: false }
+  }
+  return { label: '获取物料号', type: 'success', disabled: false }
+}
+
+const handleMesSync = async (row) => {
+  try {
+    await ElMessageBox.confirm('确认向 MES 获取该零件的物料号？', '获取MES物料号', {
+      confirmButtonText: '确认提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  mesSyncLoadingId.value = row.id
+  try {
+    const task = await syncMesMaterial(row.id)
+    const taskId = task?.id || task?.taskId || task?.task?.id
+    ElMessage.success(taskId ? `MES 物料号任务已提交，任务ID：${taskId}` : 'MES 物料号任务已提交')
+    await loadItems()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || 'MES 物料号任务提交失败。')
+  } finally {
+    mesSyncLoadingId.value = null
   }
 }
 

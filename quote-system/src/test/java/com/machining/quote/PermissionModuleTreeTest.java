@@ -106,6 +106,22 @@ class PermissionModuleTreeTest {
     }
 
     @Test
+    void deliveredItemMesSyncPermissionBelongsToDeliveredItemModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Getting MES material numbers is a delivered-item action, not a common permission")
+                .contains("market:delivered-item:mes-sync");
+        assertThat(source)
+                .as("MES material sync must hang under the delivered-item MENU permission")
+                .contains("permission(160L, \"BUTTON\", \"market:delivered-item:mes-sync\", \"获取MES物料号\", null, null, false, 128, 158L)");
+        assertThat(source)
+                .as("Market users and managers can request MES material numbers; read-only users cannot")
+                .contains("Map.entry(\"market:delivered-item:mes-sync\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))")
+                .doesNotContain("Map.entry(\"market:delivered-item:mes-sync\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+    }
+
+    @Test
     void deliveredItemFoundationMigrationKeepsPermissionTreeAligned() throws IOException {
         String migration = Files.readString(DELIVERED_ITEM_FOUNDATION_MIGRATION, StandardCharsets.UTF_8);
 

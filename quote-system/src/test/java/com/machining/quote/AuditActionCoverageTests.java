@@ -307,11 +307,17 @@ class AuditActionCoverageTests {
         assertThat(AuditService.inferModule("RFQ_IMPORT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("QUOTE_EXPORT_TASK_SUBMIT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("QUOTE_REFRESH_TASK_SUBMIT")).isEqualTo("ENGINEER");
+        assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_SYNC_FAILED")).isEqualTo("DELIVERY");
 
         assertThat(AuditService.labelForAction("AUTH_ACCOUNT_LOCKED")).isNotEqualTo("AUTH_ACCOUNT_LOCKED");
         assertThat(AuditService.labelForAction("RFQ_IMPORT")).isNotEqualTo("RFQ_IMPORT");
         assertThat(AuditService.labelForAction("QUOTE_EXPORT_TASK_SUBMIT")).isNotEqualTo("QUOTE_EXPORT_TASK_SUBMIT");
         assertThat(AuditService.labelForAction("QUOTE_REFRESH_TASK_SUBMIT")).isNotEqualTo("QUOTE_REFRESH_TASK_SUBMIT");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_SUBMIT");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_SUCCESS");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_FAILED")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_FAILED");
     }
 
     private AuthService authService(ErpUserMapper userMapper, JwtService jwtService, AuditService auditService) {

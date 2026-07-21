@@ -17,9 +17,7 @@ describe('DeliveredItemManage foundation page', () => {
     }
   })
 
-  test('keeps MES and WMS operation buttons out of the foundation phase', () => {
-    expect(source).not.toContain('获取物料号')
-    expect(source).not.toContain('同步MES')
+  test('keeps WMS operation buttons out before the WMS allocation phase', () => {
     expect(source).not.toContain('提交锁库')
     expect(source).not.toContain('锁库分配')
   })
