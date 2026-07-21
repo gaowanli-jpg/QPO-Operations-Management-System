@@ -406,7 +406,7 @@ const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
 let syncingReleaseItemSelection = false
 
-const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']
+const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.id

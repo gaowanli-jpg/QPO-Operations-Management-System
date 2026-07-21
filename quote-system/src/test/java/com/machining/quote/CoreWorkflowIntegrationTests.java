@@ -574,6 +574,32 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    void releasedOrderCanOpenReleaseWorkspaceForExportsButCannotGenerateAgain() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("RELEASED-WORKSPACE-" + System.nanoTime());
+        order.setCustomerName("Released workspace customer");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = quotedItem(order, "RELEASED-WORKSPACE-100");
+        deliveryService.generateTickets(deliveryReq(order, item, 1));
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+
+        assertThat(internalTargetLeadTimeService.listItemRows(order.getId()))
+                .as("Fully released orders still need to open the release workspace so users can export tickets and process sheets")
+                .hasSize(1)
+                .first()
+                .extracting(row -> row.get("remainingQty"))
+                .isEqualTo(0);
+
+        assertThat(deliveryService.listTickets(order.getId())).hasSize(1);
+        assertThat(deliveryService.listProcessSheets(order.getId())).hasSize(1);
+        assertThatThrownBy(() -> deliveryService.generateTickets(deliveryReq(order, item, 1)))
+                .as("Opening the workspace for exports must not reopen ticket generation")
+                .hasMessageContaining("已报价");
+    }
+
+    @Test
     void publishedDeliveryTicketsCannotBeDeleted() throws Exception {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("IMMUTABLE-TICKET-" + System.nanoTime());

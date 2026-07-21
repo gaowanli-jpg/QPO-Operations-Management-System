@@ -57,6 +57,10 @@ public final class QuoteStatusWorkflow {
         return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status);
     }
 
+    public static boolean canReadReleaseWorkspace(String status) {
+        return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status) || RELEASED.equals(status);
+    }
+
     public static List<String> orderManagementStatuses() {
         return List.of(UNPRICED, PRICED, QUOTED, PARTIALLY_RELEASED, RELEASED, DISCARDED);
     }

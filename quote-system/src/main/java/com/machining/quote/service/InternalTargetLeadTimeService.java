@@ -167,7 +167,7 @@ public class InternalTargetLeadTimeService {
             throw new RuntimeException("RFQ 订单不存在");
         }
         assertOrderDataScope(order);
-        assertCanRelease(order);
+        assertCanReadReleaseWorkspace(order);
         return order;
     }
 
@@ -180,7 +180,7 @@ public class InternalTargetLeadTimeService {
             throw new RuntimeException("RFQ 订单不存在");
         }
         assertOrderDataScope(order);
-        assertCanRelease(order);
+        assertCanGenerateRelease(order);
         return order;
     }
 
@@ -190,7 +190,17 @@ public class InternalTargetLeadTimeService {
         }
     }
 
-    private void assertCanRelease(OrderRfq order) {
+    private void assertCanReadReleaseWorkspace(OrderRfq order) {
+        if (order == null || QuoteStatusWorkflow.canReadReleaseWorkspace(order.getStatus())) {
+            return;
+        }
+        if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
+            throw new RuntimeException("请先在报价处理模块保存报价单后再进入议价提单");
+        }
+        throw new RuntimeException("只有已报价、部分已提单或已生成提单订单可以进入议价提单");
+    }
+
+    private void assertCanGenerateRelease(OrderRfq order) {
         if (order == null || QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
             return;
         }

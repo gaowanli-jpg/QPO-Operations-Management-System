@@ -86,6 +86,20 @@ class QuoteStatusWorkflowTest {
     }
 
     @Test
+    void releasedOrdersCanOpenReleaseWorkspaceButCannotGenerateNewTickets() {
+        assertThat(QuoteStatusWorkflow.canReadReleaseWorkspace(QuoteStatusWorkflow.QUOTED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canReadReleaseWorkspace(QuoteStatusWorkflow.PARTIALLY_RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canReadReleaseWorkspace(QuoteStatusWorkflow.RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canReadReleaseWorkspace(QuoteStatusWorkflow.PRICED)).isFalse();
+
+        assertThat(QuoteStatusWorkflow.canGenerateDeliveryTicket(QuoteStatusWorkflow.QUOTED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canGenerateDeliveryTicket(QuoteStatusWorkflow.PARTIALLY_RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canGenerateDeliveryTicket(QuoteStatusWorkflow.RELEASED))
+                .as("Fully released orders can be opened for export, but must not generate another ticket")
+                .isFalse();
+    }
+
+    @Test
     void customerLeadTimeQuoteExportIsNotExposedAsASeparateExportPath() throws IOException {
         String marketController = source("controller/MarketController.java");
         String excelExportService = source("service/ExcelExportService.java");
