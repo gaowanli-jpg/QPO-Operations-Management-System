@@ -252,6 +252,10 @@ public class AuditService {
             case "ORDER_QUOTE_COMPLETE" -> "完成工程报价";
             case "PRICING_SHEET_EXPORT" -> "生成核价单";
             case "QUOTE_PROCESS_SAVE_QUOTE" -> "保存报价单";
+            case "ORDER_STATUS_ROLLBACK_QUOTED" -> "已报价退回已核价";
+            case "ORDER_STATUS_ROLLBACK_PRICED" -> "已核价退回未核价";
+            case "ORDER_DISCARD" -> "废弃订单";
+            case "ORDER_RESTORE" -> "恢复废弃订单";
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "INTERNAL_TARGET_LEAD_TIME_UPDATE" -> "更新内部目标交期";
             case "DELIVERY_TICKET_GENERATE" -> "生成提单";

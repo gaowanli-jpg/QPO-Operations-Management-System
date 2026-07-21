@@ -117,6 +117,10 @@ class AuditServiceTests {
         assertThat(AuditService.labelForAction("SYSTEM_USER_ORG_UPDATE")).contains("组织");
         assertThat(AuditService.labelForAction("USER_PROFILE_UPDATE")).contains("个人资料");
         assertThat(AuditService.labelForAction("PRICING_SHEET_EXPORT")).contains("核价单");
+        assertThat(AuditService.labelForAction("ORDER_STATUS_ROLLBACK_QUOTED")).contains("已报价");
+        assertThat(AuditService.labelForAction("ORDER_STATUS_ROLLBACK_PRICED")).contains("已核价");
+        assertThat(AuditService.labelForAction("ORDER_DISCARD")).contains("废弃");
+        assertThat(AuditService.labelForAction("ORDER_RESTORE")).contains("恢复");
     }
 
     @Test

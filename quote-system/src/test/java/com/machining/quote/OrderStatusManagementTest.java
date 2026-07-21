@@ -1,13 +1,30 @@
 package com.machining.quote;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.OrderStatusChangeReq;
+import com.machining.quote.dto.OrderStatusChangeResult;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.OrderStatusManagementService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -66,6 +83,108 @@ class OrderStatusManagementTest {
     }
 
     @Test
+    void rollbackQuotedUpdatesOnlyStatusesAndWritesAuditLog() {
+        Fixture fixture = fixture(order(10, QuoteStatusWorkflow.QUOTED), List.of(item(101, QuoteStatusWorkflow.QUOTED)), 0L);
+
+        OrderStatusChangeResult result = fixture.service.rollbackQuoted(10, req("重新确认报价交期"));
+
+        assertThat(result.getFromStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(result.getToStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(result.getUpdatedItemCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("已报价", "已核价");
+        verify(fixture.dataScopeService).assertCanAccessOrder(fixture.order);
+        verify(fixture.orderMapper).selectByIdForUpdate(10);
+        ArgumentCaptor<OrderRfq> orderCaptor = ArgumentCaptor.forClass(OrderRfq.class);
+        verify(fixture.orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+
+        ArgumentCaptor<ItemQuoteVersion> itemCaptor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper).updateById(itemCaptor.capture());
+        ItemQuoteVersion updated = itemCaptor.getValue();
+        assertThat(updated.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(updated.getQuoteLeadTime()).isEqualTo("2026-03-20");
+        assertThat(updated.getDrawingUrl()).isEqualTo("/uploads/drawing.pdf");
+        assertThat(updated.getFinalUnitPrice()).isEqualTo(12.3);
+        assertThat(updated.getProcessRoute()).isEqualTo(List.of(Map.of("processName", "表面处理")));
+        verify(fixture.auditService).record(
+                eq("ORDER_STATUS_ROLLBACK_QUOTED"),
+                eq("order_rfq"),
+                eq(10),
+                any(),
+                any(),
+                eq("ORDER"),
+                eq("SUCCESS"),
+                contains("已报价"),
+                isNull()
+        );
+    }
+
+    @Test
+    void rollbackPricedUpdatesOrderAndItemsToUnpriced() {
+        Fixture fixture = fixture(order(11, QuoteStatusWorkflow.PRICED), List.of(item(102, QuoteStatusWorkflow.PRICED)), 0L);
+
+        OrderStatusChangeResult result = fixture.service.rollbackPriced(11, req("工程重新核价"));
+
+        assertThat(result.getToStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        ArgumentCaptor<OrderRfq> orderCaptor = ArgumentCaptor.forClass(OrderRfq.class);
+        verify(fixture.orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        ArgumentCaptor<ItemQuoteVersion> itemCaptor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        verify(fixture.auditService).record(eq("ORDER_STATUS_ROLLBACK_PRICED"), eq("order_rfq"), eq(11), any(), any(), eq("ORDER"), eq("SUCCESS"), contains("未核价"), isNull());
+    }
+
+    @Test
+    void discardNonReleasedOrderUpdatesOrderAndItemsToDiscarded() {
+        Fixture fixture = fixture(order(12, QuoteStatusWorkflow.PRICED), List.of(item(103, QuoteStatusWorkflow.PRICED)), 0L);
+
+        OrderStatusChangeResult result = fixture.service.discard(12, req("客户取消"));
+
+        assertThat(result.getToStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+        ArgumentCaptor<OrderRfq> orderCaptor = ArgumentCaptor.forClass(OrderRfq.class);
+        verify(fixture.orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+        ArgumentCaptor<ItemQuoteVersion> itemCaptor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+        verify(fixture.auditService).record(eq("ORDER_DISCARD"), eq("order_rfq"), eq(12), any(), any(), eq("ORDER"), eq("SUCCESS"), contains("废弃"), isNull());
+    }
+
+    @Test
+    void restoreDiscardedOrderUpdatesOrderAndItemsToPriced() {
+        Fixture fixture = fixture(order(13, QuoteStatusWorkflow.DISCARDED), List.of(item(104, QuoteStatusWorkflow.DISCARDED)), 0L);
+
+        OrderStatusChangeResult result = fixture.service.restore(13, req("恢复处理"));
+
+        assertThat(result.getToStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        ArgumentCaptor<OrderRfq> orderCaptor = ArgumentCaptor.forClass(OrderRfq.class);
+        verify(fixture.orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        ArgumentCaptor<ItemQuoteVersion> itemCaptor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        verify(fixture.auditService).record(eq("ORDER_RESTORE"), eq("order_rfq"), eq(13), any(), any(), eq("ORDER"), eq("SUCCESS"), contains("恢复"), isNull());
+    }
+
+    @Test
+    void rejectsReleasedOrTicketedOrdersWithoutMutatingAnything() {
+        Fixture released = fixture(order(14, QuoteStatusWorkflow.PARTIALLY_RELEASED), List.of(item(105, QuoteStatusWorkflow.QUOTED)), 0L);
+        assertThatThrownBy(() -> released.service.discard(14, req("不能废弃")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("cannot be discarded");
+        verify(released.orderMapper, never()).updateById(any());
+        verify(released.itemMapper, never()).updateById(any());
+
+        Fixture ticketed = fixture(order(15, QuoteStatusWorkflow.QUOTED), List.of(item(106, QuoteStatusWorkflow.QUOTED)), 1L);
+        assertThatThrownBy(() -> ticketed.service.rollbackQuoted(15, req("已有提单")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("delivery tickets");
+        verify(ticketed.orderMapper, never()).updateById(any());
+        verify(ticketed.itemMapper, never()).updateById(any());
+    }
+
+    @Test
     void permissionMigrationAddsOrderStatusActionsUnderOrderManagement() throws IOException {
         assertThat(MIGRATION).exists();
         String sql = Files.readString(MIGRATION, StandardCharsets.UTF_8);
@@ -121,14 +240,79 @@ class OrderStatusManagementTest {
                 .contains("private String message");
         assertThat(service)
                 .contains("class OrderStatusManagementService")
+                .contains("@Transactional")
+                .contains("selectByIdForUpdate")
+                .contains("assertCanAccessOrder")
+                .contains("selectCount")
+                .contains("updateById")
+                .contains("auditService.record")
+                .contains("Order status change completed")
                 .contains("rollbackQuoted")
                 .contains("rollbackPriced")
                 .contains("discard")
-                .contains("restore")
-                .contains("阶段 2");
+                .contains("restore");
     }
 
     private String source(String relativePath) throws IOException {
         return Files.readString(MAIN_JAVA.resolve(relativePath), StandardCharsets.UTF_8);
+    }
+
+    private Fixture fixture(OrderRfq order, List<ItemQuoteVersion> items, Long ticketCount) {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        AuditService auditService = mock(AuditService.class);
+        when(orderMapper.selectByIdForUpdate(order.getId())).thenReturn(order);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(items);
+        when(ticketMapper.selectCount(any(QueryWrapper.class))).thenReturn(ticketCount);
+
+        OrderStatusManagementService service = new OrderStatusManagementService();
+        ReflectionTestUtils.setField(service, "orderMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        return new Fixture(service, orderMapper, itemMapper, ticketMapper, dataScopeService, auditService, order);
+    }
+
+    private OrderRfq order(Integer id, String status) {
+        OrderRfq order = new OrderRfq();
+        order.setId(id);
+        order.setRfqNo("RFQ-" + id);
+        order.setCustomerName("客户A");
+        order.setStatus(status);
+        return order;
+    }
+
+    private ItemQuoteVersion item(Integer id, String status) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setId(id);
+        item.setRfqId(10);
+        item.setPartNo("P-" + id);
+        item.setVersion("A");
+        item.setStatus(status);
+        item.setQuoteLeadTime("2026-03-20");
+        item.setDrawingUrl("/uploads/drawing.pdf");
+        item.setFinalUnitPrice(12.3);
+        item.setFinalTotalPrice(24.6);
+        item.setProcessRoute(List.of(Map.of("processName", "表面处理")));
+        return item;
+    }
+
+    private OrderStatusChangeReq req(String reason) {
+        OrderStatusChangeReq req = new OrderStatusChangeReq();
+        req.setReason(reason);
+        return req;
+    }
+
+    private record Fixture(
+            OrderStatusManagementService service,
+            OrderRfqMapper orderMapper,
+            ItemQuoteVersionMapper itemMapper,
+            OrderDeliveryTicketMapper ticketMapper,
+            DataScopeService dataScopeService,
+            AuditService auditService,
+            OrderRfq order) {
     }
 }
