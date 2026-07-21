@@ -1,13 +1,45 @@
 package com.machining.quote;
 
+import com.machining.quote.dto.WmsAllocationResp;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SystemTask;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SystemTaskMapper;
+import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SystemTaskService;
+import com.machining.quote.service.WmsAllocationClient;
+import com.machining.quote.service.WmsAllocationService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class WmsAllocationTest {
     private static final Path WMS_PLAN = Path.of(
@@ -18,6 +50,226 @@ class WmsAllocationTest {
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERY_ALLOCATION = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicketAllocation.java");
+    private static final Path ORDER_DELIVERY_CONTROLLER = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
+    private static final Path SYSTEM_TASK_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
+    private static final Path WMS_ALLOCATION_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "WmsAllocationService.java");
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void submitWmsAllocationTaskCreatesSystemTaskAndDispatchesAsyncWork() {
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setWmsAllocateStatus("PENDING");
+        SystemTaskService service = new SystemTaskService();
+        SystemTaskMapper taskMapper = mock(SystemTaskMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        ThreadPoolTaskExecutor taskExecutor = mock(ThreadPoolTaskExecutor.class);
+        WmsAllocationService allocationService = mock(WmsAllocationService.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        AtomicReference<SystemTask> inserted = new AtomicReference<>();
+        doAnswer(invocation -> {
+            SystemTask task = invocation.getArgument(0);
+            task.setId(701L);
+            inserted.set(task);
+            return 1;
+        }).when(taskMapper).insert(any(SystemTask.class));
+        when(taskMapper.selectById(701L)).thenAnswer(invocation -> inserted.get());
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        ReflectionTestUtils.setField(service, "taskMapper", taskMapper);
+        ReflectionTestUtils.setField(service, "orderDeliveryTicketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
+        ReflectionTestUtils.setField(service, "wmsAllocationService", allocationService);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
+
+        SystemTask task = service.submitWmsAllocationTask(123);
+
+        assertThat(task.getId()).isEqualTo(701L);
+        assertThat(task.getTaskType()).isEqualTo("WMS_ALLOCATION");
+        assertThat(task.getStatus()).isEqualTo("PENDING");
+        Map<String, Object> requestJson = new LinkedHashMap<>((Map<String, Object>) task.getRequestJson());
+        assertThat(requestJson)
+                .containsEntry("ticketId", 123)
+                .containsEntry("rfqId", 88)
+                .containsEntry("materialNo", "MAT-001")
+                .containsEntry("demandQty", 10);
+        verify(dataScopeService).assertCanAccessOrder(88, null);
+        verify(auditService).record(
+                eq("DELIVERY_WMS_ALLOCATION_SUBMIT"),
+                eq("system_task"),
+                eq(701L),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("SUCCESS"),
+                contains("taskId=701"),
+                isNull()
+        );
+        verify(taskExecutor).execute(any(Runnable.class));
+    }
+
+    @Test
+    void allocateWritesInventoryProductionAndRemainderRows() {
+        WmsAllocationService service = new WmsAllocationService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        WmsAllocationClient client = mock(WmsAllocationClient.class);
+        AuditService auditService = mock(AuditService.class);
+        when(ticketMapper.selectOne(any())).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(client.allocate(any())).thenReturn(successResponse(3, locks(lock("MO-001", 4), lock("MO-002", 2))));
+        wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
+
+        Map<String, Object> result = service.allocate(123, 9001L);
+
+        assertThat(result)
+                .containsEntry("ticketId", 123)
+                .containsEntry("taskId", 9001L)
+                .containsEntry("materialNo", "MAT-001")
+                .containsEntry("demandQty", 10)
+                .containsEntry("allocationCount", 4)
+                .containsEntry("inStockQty", 3)
+                .containsEntry("inProductionQty", 6)
+                .containsEntry("productionRequiredQty", 1);
+        ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(allocationMapper, times(4)).insert(allocationCaptor.capture());
+        assertThat(allocationCaptor.getAllValues())
+                .extracting(OrderDeliveryTicketAllocation::getAllocationType)
+                .containsExactly("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK", "IN_PRODUCTION_LOCK", "PRODUCTION_REQUIRED");
+        assertThat(allocationCaptor.getAllValues())
+                .extracting(OrderDeliveryTicketAllocation::getQty)
+                .containsExactly(3, 4, 2, 1);
+        assertThat(allocationCaptor.getAllValues())
+                .extracting(OrderDeliveryTicketAllocation::getWmsProductionOrderNo)
+                .containsExactly(null, "MO-001", "MO-002", null);
+        assertThat(allocationCaptor.getAllValues())
+                .allSatisfy(row -> {
+                    assertThat(row.getTicketId()).isEqualTo(123);
+                    assertThat(row.getRfqId()).isEqualTo(88);
+                    assertThat(row.getItemId()).isEqualTo(77);
+                    assertThat(row.getMaterialNo()).isEqualTo("MAT-001");
+                    assertThat(row.getPartNo()).isEqualTo("P-100");
+                    assertThat(row.getVersion()).isEqualTo("A");
+                    assertThat(row.getCustomerName()).isEqualTo("ACME");
+                    assertThat(row.getInternalProjectNo()).isEqualTo("IP-9");
+                    assertThat(row.getStatus()).isEqualTo("ACTIVE");
+                    assertThat(row.getSourcePayload()).isNotNull();
+                });
+        ArgumentCaptor<OrderDeliveryTicket> updates = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper, times(2)).updateById(updates.capture());
+        assertThat(updates.getAllValues().get(0).getWmsAllocateStatus()).isEqualTo("PROCESSING");
+        OrderDeliveryTicket success = updates.getAllValues().get(1);
+        assertThat(success.getWmsAllocateStatus()).isEqualTo("SUCCESS");
+        assertThat(success.getWmsAllocateMessage()).isEqualTo("allocated");
+        assertThat(success.getWmsAllocatedAt()).isNotNull();
+        verify(auditService).record(
+                eq("DELIVERY_WMS_ALLOCATION_SUCCESS"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("SUCCESS"),
+                contains("ticketId=123 taskId=9001"),
+                isNull()
+        );
+    }
+
+    @Test
+    void allocateFailsWithoutWritingRowsWhenWmsOverAllocates() {
+        WmsAllocationService service = new WmsAllocationService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        WmsAllocationClient client = mock(WmsAllocationClient.class);
+        AuditService auditService = mock(AuditService.class);
+        when(ticketMapper.selectOne(any())).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(client.allocate(any())).thenReturn(successResponse(9, locks(lock("MO-001", 2))));
+        wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
+
+        assertThatThrownBy(() -> service.allocate(123, 9002L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("WMS locked quantity exceeds demand");
+
+        verify(allocationMapper, never()).insert(any());
+        ArgumentCaptor<OrderDeliveryTicket> updates = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper, times(2)).updateById(updates.capture());
+        OrderDeliveryTicket failed = updates.getAllValues().get(1);
+        assertThat(failed.getWmsAllocateStatus()).isEqualTo("FAILED");
+        assertThat(failed.getWmsAllocateMessage()).contains("WMS locked quantity exceeds demand");
+        verify(auditService).record(
+                eq("DELIVERY_WMS_ALLOCATION_FAILED"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("FAILED"),
+                contains("ticketId=123 taskId=9002"),
+                contains("WMS locked quantity exceeds demand")
+        );
+    }
+
+    @Test
+    void wmsAllocationEndpointIsPermissionProtected() throws IOException {
+        String controller = read(ORDER_DELIVERY_CONTROLLER);
+
+        assertThat(controller)
+                .as("WMS allocation must be triggered from delivered-item module only")
+                .contains(
+                        "SystemTaskService",
+                        "@PostMapping(\"/tickets/{ticketId}/wms-allocation\")",
+                        "@RequirePermission(\"market:delivered-item:wms-allocate\")",
+                        "submitWmsAllocationTask(ticketId)"
+                );
+    }
+
+    @Test
+    void wmsAllocationTaskFlowFreezesStatusAuditAndFileLogNames() throws IOException {
+        String taskService = read(SYSTEM_TASK_SERVICE);
+        String allocationService = read(WMS_ALLOCATION_SERVICE);
+
+        assertThat(taskService)
+                .as("System tasks need a distinct WMS allocation task type")
+                .contains(
+                        "WMS_ALLOCATION",
+                        "submitWmsAllocationTask",
+                        "DELIVERY_WMS_ALLOCATION_SUBMIT",
+                        "dataScopeService.assertCanAccessOrder"
+                );
+        assertThat(allocationService)
+                .as("Ticket status transitions and audit actions must be stable")
+                .contains(
+                        "PROCESSING",
+                        "SUCCESS",
+                        "FAILED",
+                        "setWmsAllocateStatus",
+                        "DELIVERY_WMS_ALLOCATION_SUCCESS",
+                        "DELIVERY_WMS_ALLOCATION_FAILED",
+                        "WMS allocation started",
+                        "WMS allocation completed",
+                        "WMS allocation failed",
+                        "log.error(\"WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} durationMs={}\""
+                );
+    }
+
+    @Test
+    void wmsAllocationSuccessWritePathIsTransactionGuarded() throws IOException {
+        String allocationService = read(WMS_ALLOCATION_SERVICE);
+
+        assertThat(allocationService)
+                .as("Allocation inserts and ticket SUCCESS update must be guarded by one transaction")
+                .contains(
+                        "TransactionTemplate",
+                        "executeWithoutResult",
+                        "writeSuccessRows"
+                );
+    }
 
     @Test
     void allocationAlgorithmFreezesDynamicProductionLocksAndRemainderRows() throws IOException {
@@ -109,5 +361,64 @@ class WmsAllocationTest {
                 .as("%s should exist", path)
                 .isTrue();
         return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private void wireAllocationService(
+            WmsAllocationService service,
+            OrderDeliveryTicketMapper ticketMapper,
+            OrderDeliveryTicketAllocationMapper allocationMapper,
+            OrderRfqMapper orderMapper,
+            WmsAllocationClient client,
+            AuditService auditService) {
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "wmsAllocationClient", client);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+    }
+
+    private OrderDeliveryTicket ticket() {
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setId(123);
+        ticket.setRfqId(88);
+        ticket.setItemId(77);
+        ticket.setPartNo("P-100");
+        ticket.setVersion("A");
+        ticket.setQty(10);
+        ticket.setMaterialNo("MAT-001");
+        ticket.setInternalProjectNo("IP-9");
+        ticket.setWmsAllocateStatus("PENDING");
+        return ticket;
+    }
+
+    private OrderRfq order() {
+        OrderRfq order = new OrderRfq();
+        order.setId(88);
+        order.setRfqNo("RFQ-88");
+        order.setCustomerName("ACME");
+        return order;
+    }
+
+    private WmsAllocationResp successResponse(Integer inStockQty, List<WmsAllocationResp.InProductionLock> locks) {
+        WmsAllocationResp resp = new WmsAllocationResp();
+        resp.setSuccess(true);
+        resp.setMaterialNo("MAT-001");
+        resp.setInStockLockedQty(inStockQty);
+        resp.setInProductionLocks(locks);
+        resp.setMessage("allocated");
+        resp.setExternalTraceId("WMS-T-1");
+        return resp;
+    }
+
+    private WmsAllocationResp.InProductionLock lock(String productionOrderNo, Integer lockedQty) {
+        WmsAllocationResp.InProductionLock lock = new WmsAllocationResp.InProductionLock();
+        lock.setProductionOrderNo(productionOrderNo);
+        lock.setLockedQty(lockedQty);
+        return lock;
+    }
+
+    @SafeVarargs
+    private final List<WmsAllocationResp.InProductionLock> locks(WmsAllocationResp.InProductionLock... locks) {
+        return List.of(locks);
     }
 }

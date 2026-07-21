@@ -39,4 +39,10 @@ public class OrderDeliveryController {
     public SystemTask syncMesMaterial(@PathVariable Integer ticketId) {
         return systemTaskService.submitMesMaterialSyncTask(ticketId);
     }
+
+    @PostMapping("/tickets/{ticketId}/wms-allocation")
+    @RequirePermission("market:delivered-item:wms-allocate")
+    public SystemTask submitWmsAllocation(@PathVariable Integer ticketId) {
+        return systemTaskService.submitWmsAllocationTask(ticketId);
+    }
 }

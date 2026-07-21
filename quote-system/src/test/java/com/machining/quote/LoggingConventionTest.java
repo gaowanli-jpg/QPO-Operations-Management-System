@@ -43,6 +43,7 @@ class LoggingConventionTest {
         assertHasLogger("service/LeadTimeService.java", "LeadTimeService");
         assertHasLogger("service/OrderManagementService.java", "OrderManagementService");
         assertHasLogger("service/DeliveryService.java", "DeliveryService");
+        assertHasLogger("service/WmsAllocationService.java", "WmsAllocationService");
         assertHasLogger("service/QuoteProcessService.java", "QuoteProcessService");
         assertHasLogger("service/InternalTargetLeadTimeService.java", "InternalTargetLeadTimeService");
         assertHasLogger("service/StorageInitializer.java", "StorageInitializer");
@@ -100,6 +101,12 @@ class LoggingConventionTest {
                 .contains("Delivery ticket generation completed")
                 .contains("Delivery ticket generation failed")
                 .contains("log.error(\"Delivery ticket generation failed");
+
+        assertThat(source("service/WmsAllocationService.java"))
+                .contains("WMS allocation started")
+                .contains("WMS allocation completed")
+                .contains("WMS allocation failed")
+                .contains("log.error(\"WMS allocation failed");
 
         assertThat(source("service/QuoteProcessService.java"))
                 .contains("Quote lead time shifted")

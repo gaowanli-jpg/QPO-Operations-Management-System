@@ -41,6 +41,8 @@ public class SystemTaskService {
     @Autowired(required = false)
     private MesMaterialSyncService mesMaterialSyncService;
     @Autowired(required = false)
+    private WmsAllocationService wmsAllocationService;
+    @Autowired(required = false)
     private OrderDeliveryTicketMapper orderDeliveryTicketMapper;
     @Autowired
     @Qualifier("systemTaskExecutor")
@@ -123,6 +125,49 @@ public class SystemTaskService {
                 ticket.getId(), task.getId(), ticket.getRfqId(), ticket.getPartNo());
         if (mesMaterialSyncService != null) {
             taskExecutor.execute(() -> runTask(task.getId(), () -> mesMaterialSyncService.syncMaterialNo(ticketId, task.getId())));
+        }
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitWmsAllocationTask(Integer ticketId) {
+        if (ticketId == null) {
+            throw new RuntimeException("提单行 ID 不能为空");
+        }
+        if (orderDeliveryTicketMapper == null) {
+            throw new RuntimeException("提单行服务不可用");
+        }
+        OrderDeliveryTicket ticket = orderDeliveryTicketMapper.selectById(ticketId);
+        if (ticket == null) {
+            throw new RuntimeException("提单行不存在");
+        }
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(ticket.getRfqId(), null);
+        }
+        if (isBlank(ticket.getMaterialNo())) {
+            throw new RuntimeException("该提单行缺少物料号，请先获取 MES 物料号");
+        }
+        if ("SUCCESS".equalsIgnoreCase(ticket.getWmsAllocateStatus())) {
+            throw new RuntimeException("该提单行已完成 WMS 锁库，不能重复提交");
+        }
+        if ("PROCESSING".equalsIgnoreCase(ticket.getWmsAllocateStatus())) {
+            throw new RuntimeException("该提单行 WMS 锁库任务正在处理中");
+        }
+        if (ticket.getQty() == null || ticket.getQty() <= 0) {
+            throw new RuntimeException("提单数量必须大于 0");
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("ticketId", ticket.getId());
+        request.put("rfqId", ticket.getRfqId());
+        request.put("partNo", ticket.getPartNo());
+        request.put("version", ticket.getVersion());
+        request.put("materialNo", ticket.getMaterialNo());
+        request.put("demandQty", ticket.getQty());
+        SystemTask task = createTask("WMS_ALLOCATION", request);
+        recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
+        log.info("WMS allocation submitted ticketId={} taskId={} rfqId={} materialNo={} demandQty={}",
+                ticket.getId(), task.getId(), ticket.getRfqId(), ticket.getMaterialNo(), ticket.getQty());
+        if (wmsAllocationService != null) {
+            taskExecutor.execute(() -> runTask(task.getId(), () -> wmsAllocationService.allocate(ticketId, task.getId())));
         }
         return taskMapper.selectById(task.getId());
     }
