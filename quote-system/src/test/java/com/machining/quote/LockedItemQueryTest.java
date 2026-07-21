@@ -115,6 +115,17 @@ class LockedItemQueryTest {
                         "private String partNo;",
                         "private String version;",
                         "private String internalProjectNo;",
+                        "private String customerOrderNo;",
+                        "private String customerProjectNo;",
+                        "private String materialName;",
+                        "private String engineeringMaterialName;",
+                        "private String surfaceTreatment;",
+                        "private String description;",
+                        "private LocalDate deliveryDate;",
+                        "private Object processRoute;",
+                        "private Object materialData;",
+                        "private Double materialGrossWeight;",
+                        "private Double partNetWeight;",
                         "private String wmsProductionOrderNo;"
                 );
         assertThat(pageDto)
@@ -141,7 +152,26 @@ class LockedItemQueryTest {
                         "selectLockedItems",
                         "order_delivery_ticket_allocation alloc",
                         "LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id",
+                        "alloc.rfq_no",
+                        "alloc.customer_order_no",
+                        "alloc.customer_project_no",
+                        "alloc.process_route",
+                        "alloc.material_data",
+                        "alloc.material_gross_weight",
+                        "alloc.part_net_weight",
                         "ORDER BY alloc.id DESC"
+                );
+        assertThat(mapper)
+                .as("Locked-item list rows should read their own immutable allocation snapshot fields")
+                .doesNotContain(
+                        "ticket.customer_order_no",
+                        "ticket.customer_project_no",
+                        "ticket.rfq_no",
+                        "ticket.process_route",
+                        "ticket.material_data",
+                        "ticket.material_gross_weight",
+                        "ticket.part_net_weight",
+                        "LEFT JOIN item_quote_version item"
                 );
         assertThat(controller)
                 .contains(

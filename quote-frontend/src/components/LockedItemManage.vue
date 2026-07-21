@@ -41,9 +41,7 @@
       <div class="erp-table-body">
         <el-table :data="items" border stripe height="600" v-loading="loading">
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" />
-          <el-table-column prop="ticketId" label="提单ID" width="96" align="center" />
-          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
             <template #default="{ row }">{{ formatDash(row.version) }}</template>
@@ -58,15 +56,44 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="qty" label="数量" width="96" align="right" />
           <el-table-column prop="wmsProductionOrderNo" label="在产订单号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.wmsProductionOrderNo) }}</template>
           </el-table-column>
+          <el-table-column prop="qty" label="数量" width="96" align="right" />
+          <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
           <el-table-column prop="internalProjectNo" label="内部项目号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.internalProjectNo) }}</template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatDash(row.createdAt) }}</template>
+          <el-table-column prop="customerOrderNo" label="客户订单号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.customerOrderNo) }}</template>
+          </el-table-column>
+          <el-table-column prop="customerProjectNo" label="客户项目号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.customerProjectNo) }}</template>
+          </el-table-column>
+          <el-table-column label="材料" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialName(row) }}</template>
+          </el-table-column>
+          <el-table-column label="材料类型" width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialShape(row.materialData) }}</template>
+          </el-table-column>
+          <el-table-column prop="materialGrossWeight" label="毛重" width="100" align="right">
+            <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
+          </el-table-column>
+          <el-table-column prop="partNetWeight" label="净重" width="100" align="right">
+            <template #default="{ row }">{{ formatWeight(row.partNetWeight) }}</template>
+          </el-table-column>
+          <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatProcessRoute(row.processRoute) }}</template>
+          </el-table-column>
+          <el-table-column prop="deliveryDate" label="交货日期" width="120">
+            <template #default="{ row }">{{ formatDash(row.deliveryDate) }}</template>
+          </el-table-column>
+          <el-table-column prop="description" label="材料描述" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.description) }}</template>
+          </el-table-column>
+          <el-table-column prop="surfaceTreatment" label="表面处理" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.surfaceTreatment) }}</template>
           </el-table-column>
         </el-table>
       </div>
@@ -170,7 +197,52 @@ const allocationTypeMeta = (value) => allocationTypeOptions.find(option => optio
   type: 'info'
 }
 
-const formatDash = (value) => value || '-'
+const formatDash = (value) => (value === null || value === undefined || value === '') ? '-' : value
+
+const normalizeObject = (value) => {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+const formatMaterialName = (row) => row?.engineeringMaterialName || row?.materialName || '-'
+
+const formatMaterialShape = (materialData) => {
+  const data = normalizeObject(materialData)
+  return data.shape || data.materialShape || data.materialType || '-'
+}
+
+const formatWeight = (value) => {
+  if (value === null || value === undefined || value === '') return '-'
+  const numeric = Number(value)
+  if (Number.isNaN(numeric)) return String(value)
+  return numeric.toFixed(3).replace(/\.?0+$/, '')
+}
+
+const formatProcessRoute = (route) => {
+  if (!route) return '-'
+  let rows = Array.isArray(route) ? route : []
+  if (typeof route === 'string') {
+    try {
+      rows = JSON.parse(route)
+    } catch {
+      rows = []
+    }
+  }
+  if (!Array.isArray(rows) || rows.length === 0) return '-'
+  return rows
+    .map(row => `${row.processName || row.name || ''}${row.inputVal ? `(${row.inputVal})` : ''}`)
+    .filter(Boolean)
+    .join(' / ') || '-'
+}
 
 onMounted(() => loadItems())
 </script>

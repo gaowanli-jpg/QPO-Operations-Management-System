@@ -41,8 +41,6 @@
       <div class="erp-table-body">
         <el-table :data="items" border stripe height="600" v-loading="loading">
           <el-table-column prop="id" label="提单ID" width="96" fixed align="center" />
-          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
             <template #default="{ row }">{{ row.version || '-' }}</template>
@@ -50,15 +48,44 @@
           <el-table-column label="物料号" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ formatMaterialNo(row.materialNo) }}</template>
           </el-table-column>
-          <el-table-column prop="qty" label="提单数量" width="100" align="right" />
-          <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
           <el-table-column label="MES状态" width="110" align="center">
             <template #default="{ row }"><el-tag :type="statusTagType(row.mesSyncStatus)" size="small">{{ statusText(row.mesSyncStatus) }}</el-tag></template>
           </el-table-column>
           <el-table-column label="WMS状态" width="110" align="center">
             <template #default="{ row }"><el-tag :type="statusTagType(row.wmsAllocateStatus)" size="small">{{ statusText(row.wmsAllocateStatus) }}</el-tag></template>
           </el-table-column>
+          <el-table-column prop="qty" label="提单数量" width="100" align="right" />
+          <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.customerOrderNo || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.customerProjectNo || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="材料" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialName(row) }}</template>
+          </el-table-column>
+          <el-table-column label="材料类型" width="110" align="center">
+            <template #default="{ row }">{{ formatMaterialShape(row.materialData) }}</template>
+          </el-table-column>
+          <el-table-column label="毛重" width="100" align="right">
+            <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
+          </el-table-column>
+          <el-table-column label="净重" width="100" align="right">
+            <template #default="{ row }">{{ formatWeight(row.partNetWeight) }}</template>
+          </el-table-column>
+          <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatProcessRoute(row.processRoute) }}</template>
+          </el-table-column>
           <el-table-column prop="deliveryDate" label="交货日期" width="120" />
+          <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.description || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="surfaceTreatment" label="表面处理" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.surfaceTreatment || '-' }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="280" align="center" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions delivered-row-actions">
@@ -130,13 +157,24 @@
       <div v-if="selectedItem" class="detail-wrap">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="提单ID">{{ selectedItem.id }}</el-descriptions-item>
-          <el-descriptions-item label="RFQ号">{{ selectedItem.rfqNo || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户">{{ selectedItem.customerName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="图号">{{ selectedItem.partNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="版本">{{ selectedItem.version || '-' }}</el-descriptions-item>
           <el-descriptions-item label="物料号">{{ formatMaterialNo(selectedItem.materialNo) }}</el-descriptions-item>
           <el-descriptions-item label="MES状态">{{ statusText(selectedItem.mesSyncStatus) }}</el-descriptions-item>
           <el-descriptions-item label="WMS状态">{{ statusText(selectedItem.wmsAllocateStatus) }}</el-descriptions-item>
+          <el-descriptions-item label="提单数量">{{ selectedItem.qty ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="客户">{{ selectedItem.customerName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="RFQ号">{{ selectedItem.rfqNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="内部项目号">{{ selectedItem.internalProjectNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="客户订单号">{{ selectedItem.customerOrderNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="客户项目号">{{ selectedItem.customerProjectNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="材料">{{ formatMaterialName(selectedItem) }}</el-descriptions-item>
+          <el-descriptions-item label="材料类型">{{ formatMaterialShape(selectedItem.materialData) }}</el-descriptions-item>
+          <el-descriptions-item label="毛重">{{ formatWeight(selectedItem.materialGrossWeight) }}</el-descriptions-item>
+          <el-descriptions-item label="净重">{{ formatWeight(selectedItem.partNetWeight) }}</el-descriptions-item>
+          <el-descriptions-item label="交货日期">{{ selectedItem.deliveryDate || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="材料描述">{{ selectedItem.description || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="表面处理">{{ selectedItem.surfaceTreatment || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <section class="detail-section">
@@ -332,6 +370,34 @@ const openLockedItems = (row) => {
 
 
 const formatMaterialNo = (value) => value || '未获取'
+
+const normalizeObject = (value) => {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+const formatMaterialName = (row) => row?.engineeringMaterialName || row?.materialName || '-'
+
+const formatMaterialShape = (materialData) => {
+  const data = normalizeObject(materialData)
+  return data.shape || data.materialShape || data.materialType || '-'
+}
+
+const formatWeight = (value) => {
+  if (value === null || value === undefined || value === '') return '-'
+  const numeric = Number(value)
+  if (Number.isNaN(numeric)) return String(value)
+  return numeric.toFixed(3).replace(/\.?0+$/, '')
+}
 
 const statusText = (value) => syncStatusOptions.find(option => option.value === value)?.label || '未处理'
 

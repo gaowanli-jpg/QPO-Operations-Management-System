@@ -200,6 +200,8 @@ public class DeliveryService {
                                              LocalDate startDate, int qty, String remark, String arrangeType) {
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(order.getId());
+        ticket.setRfqNo(order.getRfqNo());
+        ticket.setCustomerName(order.getCustomerName());
         ticket.setItemId(item.getId());
         ticket.setOrderType(isBlank(item.getOrderType()) ? "正式订单" : item.getOrderType());
         ticket.setInternalProjectNo(internalProjectNo);

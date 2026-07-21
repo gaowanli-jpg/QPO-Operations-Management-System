@@ -22,8 +22,8 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.id,
                 alloc.ticket_id,
                 alloc.rfq_id,
-                rfq.rfq_no AS rfq_no,
-                COALESCE(alloc.customer_name, rfq.customer_name) AS customer_name,
+                alloc.rfq_no,
+                alloc.customer_name,
                 alloc.item_id,
                 alloc.allocation_type,
                 alloc.qty,
@@ -31,6 +31,17 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.part_no,
                 alloc.version,
                 alloc.internal_project_no,
+                alloc.customer_order_no,
+                alloc.customer_project_no,
+                alloc.material_name,
+                alloc.engineering_material_name,
+                alloc.surface_treatment,
+                alloc.description,
+                alloc.delivery_date,
+                alloc.process_route,
+                alloc.material_data,
+                alloc.material_gross_weight,
+                alloc.part_net_weight,
                 alloc.wms_production_order_no,
                 alloc.source_payload,
                 alloc.status,
@@ -38,7 +49,6 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.updated_at
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
-            LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
             ${ew.customSqlSegment}
             ORDER BY alloc.id DESC
             LIMIT #{limit} OFFSET #{offset}
@@ -46,6 +56,8 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             """)
     @Results(id = "lockedItemResultMap", value = {
             @Result(column = "id", property = "id", id = true),
+            @Result(column = "process_route", property = "processRoute", typeHandler = JsonbTypeHandler.class),
+            @Result(column = "material_data", property = "materialData", typeHandler = JsonbTypeHandler.class),
             @Result(column = "source_payload", property = "sourcePayload", typeHandler = JsonbTypeHandler.class)
     })
     List<LockedItemDTO> selectLockedItems(
@@ -58,7 +70,6 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             SELECT COUNT(*)
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
-            LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
             ${ew.customSqlSegment}
             </script>
             """)

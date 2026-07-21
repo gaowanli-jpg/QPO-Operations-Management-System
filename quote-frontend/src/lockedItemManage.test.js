@@ -47,6 +47,44 @@ describe('LockedItemManage guardrails', () => {
     }
   })
 
+  test('freezes locked item table column order for WMS allocation review', () => {
+    const expectedOrder = [
+      '分配ID',
+      '提单ID',
+      '图号',
+      '版本',
+      '物料号',
+      '分配类型',
+      '在产订单号',
+      '数量',
+      '客户',
+      'RFQ号',
+      '内部项目号',
+      '客户订单号',
+      '客户项目号',
+      '材料',
+      '材料类型',
+      '毛重',
+      '净重',
+      '工艺路线',
+      '交货日期',
+      '材料描述',
+      '表面处理'
+    ]
+
+    const labels = Array.from(pageSource.matchAll(/label="([^"]+)"/g)).map(match => match[1])
+    let cursor = -1
+    for (const label of expectedOrder) {
+      const nextIndex = labels.indexOf(label, cursor + 1)
+      expect(nextIndex, `${label} should appear after ${expectedOrder[Math.max(0, expectedOrder.indexOf(label) - 1)]}`).toBeGreaterThan(cursor)
+      cursor = nextIndex
+    }
+
+    for (const helper of ['formatMaterialName', 'formatMaterialShape', 'formatWeight', 'formatProcessRoute']) {
+      expect(pageSource).toContain(helper)
+    }
+  })
+
   test('localizes allocation types and uses stable tag types', () => {
     expect(pageSource).toContain('IN_STOCK_LOCK')
     expect(pageSource).toContain('IN_PRODUCTION_LOCK')

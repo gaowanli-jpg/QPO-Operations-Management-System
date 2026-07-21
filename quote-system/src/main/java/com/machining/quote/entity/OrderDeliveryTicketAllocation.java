@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.machining.quote.config.JsonbTypeHandler;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -23,9 +24,23 @@ public class OrderDeliveryTicketAllocation {
     private String materialNo;
     private String partNo;
     private String version;
+    private String rfqNo;
     private String customerName;
     private String internalProjectNo;
     private String wmsProductionOrderNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
+    private String materialName;
+    private String engineeringMaterialName;
+    private String surfaceTreatment;
+    private String description;
+    private LocalDate deliveryDate;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object processRoute;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object materialData;
+    private Double materialGrossWeight;
+    private Double partNetWeight;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private Object sourcePayload;
     private String status;

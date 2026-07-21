@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS dict_extra_fee_item (
 CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     id SERIAL PRIMARY KEY,
     rfq_id INTEGER REFERENCES order_rfq(id),
+    rfq_no VARCHAR(100),
+    customer_name VARCHAR(255),
     item_id INTEGER REFERENCES item_quote_version(id),
     order_type VARCHAR(20),
     internal_project_no VARCHAR(100),
@@ -150,6 +152,8 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
 );
 
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES item_quote_version(id);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS process_route JSONB;
@@ -180,8 +184,20 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     material_no VARCHAR(100),
     part_no VARCHAR(100),
     version VARCHAR(20),
+    rfq_no VARCHAR(100),
     customer_name VARCHAR(255),
     internal_project_no VARCHAR(100),
+    customer_order_no VARCHAR(100),
+    customer_project_no VARCHAR(100),
+    material_name VARCHAR(100),
+    engineering_material_name VARCHAR(255),
+    surface_treatment VARCHAR(100),
+    description TEXT,
+    delivery_date DATE,
+    process_route JSONB DEFAULT '[]'::jsonb,
+    material_data JSONB DEFAULT '{}'::jsonb,
+    material_gross_weight NUMERIC(14, 4),
+    part_net_weight NUMERIC(14, 4),
     wms_production_order_no VARCHAR(100),
     source_payload JSONB DEFAULT '{}'::jsonb,
     status VARCHAR(30) DEFAULT 'ACTIVE',
@@ -192,6 +208,25 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
         allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
     )
 );
+
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_name VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS engineering_material_name VARCHAR(255);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS surface_treatment VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS delivery_date DATE;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS process_route JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_data JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4);
+ALTER TABLE order_delivery_ticket_allocation
+    ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
+    ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB;
+ALTER TABLE order_delivery_ticket_allocation
+    ALTER COLUMN process_route SET DEFAULT '[]'::jsonb,
+    ALTER COLUMN material_data SET DEFAULT '{}'::jsonb;
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,

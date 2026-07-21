@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,6 +158,18 @@ class WmsAllocationTest {
                     assertThat(row.getVersion()).isEqualTo("A");
                     assertThat(row.getCustomerName()).isEqualTo("ACME");
                     assertThat(row.getInternalProjectNo()).isEqualTo("IP-9");
+                    assertSnapshot(row, "getRfqNo", "RFQ-88");
+                    assertSnapshot(row, "getCustomerOrderNo", "CO-9");
+                    assertSnapshot(row, "getCustomerProjectNo", "CP-9");
+                    assertSnapshot(row, "getMaterialName", "6061");
+                    assertSnapshot(row, "getEngineeringMaterialName", "7075");
+                    assertSnapshot(row, "getSurfaceTreatment", "Anodized");
+                    assertSnapshot(row, "getDescription", "Bracket");
+                    assertSnapshot(row, "getDeliveryDate", LocalDate.of(2026, 8, 12));
+                    assertSnapshot(row, "getProcessRoute", List.of(Map.of("processName", "CNC", "inputVal", "2h")));
+                    assertSnapshot(row, "getMaterialData", Map.of("shape", "板材", "name", "7075"));
+                    assertSnapshot(row, "getMaterialGrossWeight", 12.345);
+                    assertSnapshot(row, "getPartNetWeight", 10.2);
                     assertThat(row.getStatus()).isEqualTo("ACTIVE");
                     assertThat(row.getSourcePayload()).isNotNull();
                 });
@@ -383,7 +396,41 @@ class WmsAllocationTest {
                         "private String customerName;",
                         "private String internalProjectNo;",
                         "private String wmsProductionOrderNo;",
+                        "private String rfqNo;",
+                        "private String customerOrderNo;",
+                        "private String customerProjectNo;",
+                        "private String materialName;",
+                        "private String engineeringMaterialName;",
+                        "private String surfaceTreatment;",
+                        "private String description;",
+                        "private LocalDate deliveryDate;",
+                        "private Object processRoute;",
+                        "private Object materialData;",
+                        "private Double materialGrossWeight;",
+                        "private Double partNetWeight;",
                         "private Object sourcePayload;"
+                );
+    }
+
+    @Test
+    void wmsAllocationRowsMustCopyTicketSnapshotFields() throws IOException {
+        String allocationService = read(WMS_ALLOCATION_SERVICE);
+
+        assertThat(allocationService)
+                .as("Each WMS allocation split row must own its immutable display snapshot")
+                .contains(
+                        "row.setCustomerOrderNo(ticket.getCustomerOrderNo())",
+                        "row.setRfqNo(resolveRfqNo(ticket, order))",
+                        "row.setCustomerProjectNo(ticket.getCustomerProjectNo())",
+                        "row.setMaterialName(ticket.getMaterialName())",
+                        "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName())",
+                        "row.setSurfaceTreatment(ticket.getSurfaceTreatment())",
+                        "row.setDescription(ticket.getDescription())",
+                        "row.setDeliveryDate(ticket.getDeliveryDate())",
+                        "row.setProcessRoute(ticket.getProcessRoute())",
+                        "row.setMaterialData(ticket.getMaterialData())",
+                        "row.setMaterialGrossWeight(ticket.getMaterialGrossWeight())",
+                        "row.setPartNetWeight(ticket.getPartNetWeight())"
                 );
     }
 
@@ -418,6 +465,19 @@ class WmsAllocationTest {
         ticket.setQty(10);
         ticket.setMaterialNo("MAT-001");
         ticket.setInternalProjectNo("IP-9");
+        ticket.setRfqNo("RFQ-88");
+        ticket.setCustomerName("ACME");
+        ticket.setCustomerOrderNo("CO-9");
+        ticket.setCustomerProjectNo("CP-9");
+        ticket.setMaterialName("6061");
+        ticket.setEngineeringMaterialName("7075");
+        ticket.setSurfaceTreatment("Anodized");
+        ticket.setDescription("Bracket");
+        ticket.setDeliveryDate(LocalDate.of(2026, 8, 12));
+        ticket.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", "2h")));
+        ticket.setMaterialData(Map.of("shape", "板材", "name", "7075"));
+        ticket.setMaterialGrossWeight(12.345);
+        ticket.setPartNetWeight(10.2);
         ticket.setWmsAllocateStatus("PENDING");
         return ticket;
     }
@@ -451,5 +511,14 @@ class WmsAllocationTest {
     @SafeVarargs
     private final List<WmsAllocationResp.InProductionLock> locks(WmsAllocationResp.InProductionLock... locks) {
         return List.of(locks);
+    }
+
+    private void assertSnapshot(Object row, String getterName, Object expectedValue) {
+        try {
+            Object actual = row.getClass().getMethod(getterName).invoke(row);
+            assertThat(actual).isEqualTo(expectedValue);
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Allocation snapshot getter missing or inaccessible: " + getterName, error);
+        }
     }
 }

@@ -12,6 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DeliveredItemFoundationTest {
     private static final Path FOUNDATION_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
+    private static final Path ALLOCATION_SNAPSHOT_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V48__delivery_allocation_snapshot_fields.sql");
     private static final Path ORDER_DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path ORDER_DELIVERY_TICKET_ALLOCATION = Path.of(
@@ -55,12 +57,46 @@ class DeliveredItemFoundationTest {
     }
 
     @Test
+    void allocationSnapshotMigrationBackfillsLockedItemDisplayFields() throws IOException {
+        String migration = read(ALLOCATION_SNAPSHOT_MIGRATION);
+
+        assertThat(migration)
+                .as("Locked-item rows must physically own the display snapshot, not depend on ticket joins")
+                .contains(
+                        "ALTER TABLE order_delivery_ticket",
+                        "ADD COLUMN IF NOT EXISTS rfq_no",
+                        "ADD COLUMN IF NOT EXISTS customer_name",
+                        "ALTER TABLE order_delivery_ticket_allocation",
+                        "ADD COLUMN IF NOT EXISTS rfq_no",
+                        "ADD COLUMN IF NOT EXISTS customer_order_no",
+                        "ADD COLUMN IF NOT EXISTS customer_project_no",
+                        "ADD COLUMN IF NOT EXISTS material_name",
+                        "ADD COLUMN IF NOT EXISTS engineering_material_name",
+                        "ADD COLUMN IF NOT EXISTS surface_treatment",
+                        "ADD COLUMN IF NOT EXISTS description",
+                        "ADD COLUMN IF NOT EXISTS delivery_date",
+                        "ADD COLUMN IF NOT EXISTS process_route",
+                        "ADD COLUMN IF NOT EXISTS material_data",
+                        "ADD COLUMN IF NOT EXISTS material_gross_weight",
+                        "ADD COLUMN IF NOT EXISTS part_net_weight",
+                        "UPDATE order_delivery_ticket ticket",
+                        "UPDATE order_delivery_ticket_allocation alloc",
+                        "FROM order_delivery_ticket ticket",
+                        "rfq_no = COALESCE(alloc.rfq_no, ticket.rfq_no",
+                        "customer_order_no = COALESCE(alloc.customer_order_no, ticket.customer_order_no)",
+                        "process_route = COALESCE(alloc.process_route, ticket.process_route)"
+                );
+    }
+
+    @Test
     void deliveryTicketEntityCarriesMesWmsFields() throws IOException {
         String source = read(ORDER_DELIVERY_TICKET);
 
         assertThat(source)
                 .contains(
                         "private String materialNo;",
+                        "private String rfqNo;",
+                        "private String customerName;",
                         "private String mesSyncStatus;",
                         "private String mesSyncMessage;",
                         "private LocalDateTime mesSyncedAt;",
@@ -81,7 +117,25 @@ class DeliveredItemFoundationTest {
                         "private String allocationType;",
                         "private Integer qty;",
                         "private String materialNo;",
-                        "private String wmsProductionOrderNo;"
+                        "private String wmsProductionOrderNo;",
+                        "private String rfqNo;",
+                        "private String customerOrderNo;",
+                        "private String customerProjectNo;",
+                        "private String materialName;",
+                        "private String engineeringMaterialName;",
+                        "private String surfaceTreatment;",
+                        "private String description;",
+                        "private LocalDate deliveryDate;",
+                        "private Object processRoute;",
+                        "private Object materialData;",
+                        "private Double materialGrossWeight;",
+                        "private Double partNetWeight;"
+                );
+        assertThat(source)
+                .as("JSONB snapshot fields need explicit type handlers on the allocation entity")
+                .contains(
+                        "@TableField(typeHandler = JsonbTypeHandler.class)\n    private Object processRoute;",
+                        "@TableField(typeHandler = JsonbTypeHandler.class)\n    private Object materialData;"
                 );
     }
 

@@ -22,8 +22,8 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             SELECT
                 ticket.id,
                 ticket.rfq_id,
-                rfq.rfq_no AS rfq_no,
-                rfq.customer_name AS customer_name,
+                COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no,
+                COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name,
                 ticket.item_id,
                 ticket.part_no,
                 ticket.version,
@@ -85,8 +85,8 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             SELECT
                 ticket.id,
                 ticket.rfq_id,
-                rfq.rfq_no AS rfq_no,
-                rfq.customer_name AS customer_name,
+                COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no,
+                COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name,
                 ticket.item_id,
                 ticket.part_no,
                 ticket.version,

@@ -110,8 +110,8 @@ public class WmsAllocationService {
         WmsAllocationReq req = new WmsAllocationReq();
         req.setTicketId(ticket.getId());
         req.setRfqId(ticket.getRfqId());
-        req.setRfqNo(order == null ? null : order.getRfqNo());
-        req.setCustomerName(order == null ? null : order.getCustomerName());
+        req.setRfqNo(resolveRfqNo(ticket, order));
+        req.setCustomerName(resolveCustomerName(ticket, order));
         req.setMaterialNo(required(ticket.getMaterialNo(), "物料号不能为空"));
         req.setPartNo(required(ticket.getPartNo(), "图号不能为空"));
         req.setVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
@@ -214,8 +214,20 @@ public class WmsAllocationService {
         row.setMaterialNo(ticket.getMaterialNo());
         row.setPartNo(ticket.getPartNo());
         row.setVersion(ticket.getVersion());
-        row.setCustomerName(order == null ? null : order.getCustomerName());
+        row.setRfqNo(resolveRfqNo(ticket, order));
+        row.setCustomerName(resolveCustomerName(ticket, order));
         row.setInternalProjectNo(ticket.getInternalProjectNo());
+        row.setCustomerOrderNo(ticket.getCustomerOrderNo());
+        row.setCustomerProjectNo(ticket.getCustomerProjectNo());
+        row.setMaterialName(ticket.getMaterialName());
+        row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
+        row.setSurfaceTreatment(ticket.getSurfaceTreatment());
+        row.setDescription(ticket.getDescription());
+        row.setDeliveryDate(ticket.getDeliveryDate());
+        row.setProcessRoute(ticket.getProcessRoute());
+        row.setMaterialData(ticket.getMaterialData());
+        row.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
+        row.setPartNetWeight(ticket.getPartNetWeight());
         row.setWmsProductionOrderNo(productionOrderNo);
         row.setSourcePayload(rowPayload(type, qty, productionOrderNo, resp));
         row.setStatus(ALLOCATION_ACTIVE);
@@ -333,6 +345,20 @@ public class WmsAllocationService {
             throw new RuntimeException(message);
         }
         return value.trim();
+    }
+
+    private String resolveRfqNo(OrderDeliveryTicket ticket, OrderRfq order) {
+        if (!isBlank(ticket.getRfqNo())) {
+            return ticket.getRfqNo().trim();
+        }
+        return order == null ? null : order.getRfqNo();
+    }
+
+    private String resolveCustomerName(OrderDeliveryTicket ticket, OrderRfq order) {
+        if (!isBlank(ticket.getCustomerName())) {
+            return ticket.getCustomerName().trim();
+        }
+        return order == null ? null : order.getCustomerName();
     }
 
     private int valueOrZero(Integer value) {
