@@ -3,22 +3,31 @@ package com.machining.quote.controller;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.LockedItemDTO;
+import com.machining.quote.dto.LockedItemPageDTO;
+import com.machining.quote.dto.LockedItemQueryReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.DeliveredItemService;
+import com.machining.quote.service.LockedItemService;
 import com.machining.quote.service.SystemTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/order-delivery")
 public class OrderDeliveryController {
     @Autowired
     private DeliveredItemService deliveredItemService;
+    @Autowired
+    private LockedItemService lockedItemService;
     @Autowired
     private SystemTaskService systemTaskService;
 
@@ -44,5 +53,17 @@ public class OrderDeliveryController {
     @RequirePermission("market:delivered-item:wms-allocate")
     public SystemTask submitWmsAllocation(@PathVariable Integer ticketId) {
         return systemTaskService.submitWmsAllocationTask(ticketId);
+    }
+
+    @GetMapping("/allocations")
+    @RequirePermission("market:locked-item:view")
+    public LockedItemPageDTO listAllocations(@ModelAttribute LockedItemQueryReq req) {
+        return lockedItemService.listAllocations(req);
+    }
+
+    @GetMapping("/tickets/{ticketId}/allocations")
+    @RequirePermission("market:locked-item:view")
+    public List<LockedItemDTO> listTicketAllocations(@PathVariable Integer ticketId) {
+        return lockedItemService.listTicketAllocations(ticketId);
     }
 }
