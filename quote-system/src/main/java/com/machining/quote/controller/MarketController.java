@@ -164,12 +164,6 @@ public class MarketController {
         quoteTemplateExportService.exportTemplateQuoteSimple(rfqId, response);
     }
 
-    @GetMapping("/export/quote/customer-lead-time/{rfqId}")
-    @RequirePermission("market:quote-process:export")
-    public void exportCustomerLeadTimeQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
-        excelExportService.exportCustomerLeadTimeQuoteSheet(rfqId, response);
-    }
-
     @PostMapping("/generate-ticket")
     @RequirePermission("market:release:create")
     public Map<String, Object> generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {

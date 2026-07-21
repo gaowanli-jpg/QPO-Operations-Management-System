@@ -63,7 +63,7 @@ public class SystemTaskService {
         if (rfqId == null) {
             throw new RuntimeException("订单 ID 不能为空");
         }
-        String safeExportType = exportType == null || exportType.trim().isEmpty() ? "DETAIL" : exportType.trim().toUpperCase();
+        String safeExportType = normalizeQuoteExportType(exportType);
         assertOrderDataScope(rfqId);
         quoteProcessService.assertQuoteExportable(rfqId);
         Map<String, Object> request = new LinkedHashMap<>();
@@ -84,6 +84,14 @@ public class SystemTaskService {
             return new TaskRunResult(result, file.toAbsolutePath().normalize().toString());
         }));
         return taskMapper.selectById(task.getId());
+    }
+
+    private String normalizeQuoteExportType(String exportType) {
+        String safeType = exportType == null || exportType.trim().isEmpty() ? "DETAIL" : exportType.trim().toUpperCase();
+        if ("DETAIL".equals(safeType) || "SIMPLE".equals(safeType)) {
+            return safeType;
+        }
+        throw new RuntimeException("\u4e0d\u652f\u6301\u7684\u62a5\u4ef7\u5355\u5bfc\u51fa\u7c7b\u578b\uff1a" + safeType);
     }
 
     public SystemTask getTask(Long taskId) {

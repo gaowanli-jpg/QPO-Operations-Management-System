@@ -267,6 +267,16 @@ class AuditActionCoverageTests {
     }
 
     @Test
+    void quoteExportTaskRejectsRetiredCustomerLeadTimeExportType() {
+        AuditService auditService = mock(AuditService.class);
+        SystemTaskService service = systemTaskService(auditService);
+
+        assertThatThrownBy(() -> service.submitQuoteExportTask(44, "CUSTOMER_LEAD_TIME"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("\u4e0d\u652f\u6301\u7684\u62a5\u4ef7\u5355\u5bfc\u51fa\u7c7b\u578b");
+    }
+
+    @Test
     void criticalAuditActionsExposeExpectedModulesAndLabels() {
         assertThat(AuditService.inferModule("AUTH_LOGIN_SUCCESS")).isEqualTo("AUTH");
         assertThat(AuditService.inferModule("AUTH_LOGIN_FAILED")).isEqualTo("AUTH");

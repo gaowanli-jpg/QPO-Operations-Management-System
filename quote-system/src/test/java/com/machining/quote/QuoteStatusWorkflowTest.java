@@ -3,6 +3,10 @@ package com.machining.quote;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class QuoteStatusWorkflowTest {
@@ -51,6 +55,19 @@ class QuoteStatusWorkflowTest {
     }
 
     @Test
+    void customerLeadTimeQuoteExportIsNotExposedAsASeparateExportPath() throws IOException {
+        String marketController = source("controller/MarketController.java");
+        String excelExportService = source("service/ExcelExportService.java");
+        String systemTaskService = source("service/SystemTaskService.java");
+
+        assertThat(marketController).doesNotContain("customer-lead-time");
+        assertThat(marketController).doesNotContain("exportCustomerLeadTimeQuoteSheet");
+        assertThat(excelExportService).doesNotContain("exportCustomerLeadTimeQuoteSheet");
+        assertThat(excelExportService).doesNotContain("CUSTOMER_LEAD_TIME");
+        assertThat(systemTaskService).doesNotContain("CUSTOMER_LEAD_TIME");
+    }
+
+    @Test
     void recognizesLegacyUnpricedLabelsWithoutUsingThemAsNewWriteTargets() {
         assertThat(QuoteStatusWorkflow.isLegacyUnpricedStatus("待工程部评估")).isTrue();
         assertThat(QuoteStatusWorkflow.isLegacyUnpricedStatus("待核价")).isTrue();
@@ -58,5 +75,9 @@ class QuoteStatusWorkflowTest {
                 .isEqualTo(QuoteStatusWorkflow.UNPRICED);
         assertThat(QuoteStatusWorkflow.normalizeUnpricedStatus("待核价"))
                 .isEqualTo(QuoteStatusWorkflow.UNPRICED);
+    }
+
+    private String source(String relativePath) throws IOException {
+        return Files.readString(Path.of("src/main/java/com/machining/quote", relativePath));
     }
 }

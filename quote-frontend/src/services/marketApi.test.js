@@ -42,6 +42,10 @@ describe('marketApi', () => {
     expect('getMarketSummary' in marketApi).toBe(false)
   })
 
+  test('does not expose customer-lead-time quote export helper', () => {
+    expect('downloadCustomerLeadTimeQuote' in marketApi).toBe(false)
+  })
+
   test('listMarketOrders uses module-scoped order selection endpoints', async () => {
     const params = { customerName: 'ACME', status: 'PRICED' }
 
@@ -171,18 +175,16 @@ describe('marketApi', () => {
   })
 
   test('download helpers preserve export paths and fallback names', async () => {
-    await marketApi.downloadCustomerLeadTimeQuote(18)
     await marketApi.downloadMarketExport('ticket', 18, 'ticket-18.xlsx')
     await marketApi.downloadQuote(18)
     await marketApi.downloadSimpleQuote(18)
     await marketApi.downloadQuoteTemplateDetail(18)
     await marketApi.downloadQuoteTemplateSimple(18)
 
-    expect(downloadFile).toHaveBeenNthCalledWith(1, '/api/market/export/quote/customer-lead-time/18', 'quote-18.xlsx')
-    expect(downloadFile).toHaveBeenNthCalledWith(2, '/api/market/export/ticket/18', 'ticket-18.xlsx')
-    expect(downloadFile).toHaveBeenNthCalledWith(3, '/api/market/export/quote/18', 'quote-18.xlsx')
-    expect(downloadFile).toHaveBeenNthCalledWith(4, '/api/market/export/quote/simple/18', 'quote-simple-18.xlsx')
-    expect(downloadFile).toHaveBeenNthCalledWith(5, '/api/market/export/quote/template/detail/18', 'quote-template-detail-18.xlsx')
-    expect(downloadFile).toHaveBeenNthCalledWith(6, '/api/market/export/quote/template/simple/18', 'quote-template-simple-18.xlsx')
+    expect(downloadFile).toHaveBeenNthCalledWith(1, '/api/market/export/ticket/18', 'ticket-18.xlsx')
+    expect(downloadFile).toHaveBeenNthCalledWith(2, '/api/market/export/quote/18', 'quote-18.xlsx')
+    expect(downloadFile).toHaveBeenNthCalledWith(3, '/api/market/export/quote/simple/18', 'quote-simple-18.xlsx')
+    expect(downloadFile).toHaveBeenNthCalledWith(4, '/api/market/export/quote/template/detail/18', 'quote-template-detail-18.xlsx')
+    expect(downloadFile).toHaveBeenNthCalledWith(5, '/api/market/export/quote/template/simple/18', 'quote-template-simple-18.xlsx')
   })
 })

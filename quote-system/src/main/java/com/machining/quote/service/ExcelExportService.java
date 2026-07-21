@@ -160,12 +160,6 @@ public class ExcelExportService {
         exportQuoteSheet(rfqId, response, true);
     }
 
-    public void exportCustomerLeadTimeQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
-        quoteProcessService.assertQuoteExportable(rfqId);
-        assertOrderDataScope(rfqId);
-        exportQuoteSheet(rfqId, response, false);
-    }
-
     public void exportPricingSheet(Integer rfqId, HttpServletResponse response) throws IOException {
         long startedAt = System.currentTimeMillis();
         log.info("Pricing sheet export started rfqId={}", rfqId);
@@ -221,7 +215,6 @@ public class ExcelExportService {
         Files.createDirectories(outputDir);
         String safeType = exportType == null ? "" : exportType.trim().toUpperCase();
         boolean simple = "SIMPLE".equals(safeType);
-        boolean useQuoteLeadTime = !"CUSTOMER_LEAD_TIME".equals(safeType);
 
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
@@ -244,7 +237,7 @@ public class ExcelExportService {
         List<List<String>> head = buildQuoteHead(maxRouteSize, feeNames);
         List<List<Object>> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
-            rows.add(buildQuoteRow(items.get(i), i + 1, maxRouteSize, feeNames, useQuoteLeadTime));
+            rows.add(buildQuoteRow(items.get(i), i + 1, maxRouteSize, feeNames, true));
         }
         EasyExcel.write(file.toFile()).head(head).sheet(sheetName).doWrite(rows);
         return file;
