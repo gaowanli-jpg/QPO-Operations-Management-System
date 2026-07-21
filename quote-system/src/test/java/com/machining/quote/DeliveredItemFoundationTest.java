@@ -16,6 +16,8 @@ class DeliveredItemFoundationTest {
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path ORDER_DELIVERY_TICKET_ALLOCATION = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicketAllocation.java");
+    private static final Path ORDER_DELIVERY_TICKET_ALLOCATION_MAPPER = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "mapper", "OrderDeliveryTicketAllocationMapper.java");
     private static final Path ORDER_DELIVERY_CONTROLLER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
 
@@ -80,6 +82,18 @@ class DeliveredItemFoundationTest {
                         "private Integer qty;",
                         "private String materialNo;",
                         "private String wmsProductionOrderNo;"
+                );
+    }
+
+    @Test
+    void deliveryTicketAllocationMapperExistsForFutureWmsSplitRows() throws IOException {
+        String source = read(ORDER_DELIVERY_TICKET_ALLOCATION_MAPPER);
+
+        assertThat(source)
+                .contains(
+                        "interface OrderDeliveryTicketAllocationMapper",
+                        "extends BaseMapper<OrderDeliveryTicketAllocation>",
+                        "@Mapper"
                 );
     }
 
