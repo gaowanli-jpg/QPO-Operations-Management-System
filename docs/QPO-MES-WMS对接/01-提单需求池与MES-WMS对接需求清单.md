@@ -15,12 +15,13 @@ QPO 原规划中，`order_delivery_ticket` 作为已提单零件明细表向 APS
 ### 2.1 不再对接 APS
 
 - 后续新流程不再以 APS 为目标系统。
-- 旧 APS 数据源能力后续需要按阶段退役或改造，不作为本需求的新数据出口。
+- 旧 APS 数据源能力仅作为历史兼容出口，后续需要按阶段退役或改造；它不是新目标系统，也不作为本需求的新数据出口。
+- 新增 MES/WMS 能力不得复用 APS 数据源口径或把 APS 描述为后续目标系统。
 - `order_process_sheet` 已退役，工艺展示和导出继续以 `order_delivery_ticket.process_route` 快照为准。
 
 ### 2.2 `order_delivery_ticket` 作为需求池
 
-`order_delivery_ticket` 保持为原始提单需求池：
+`order_delivery_ticket` 保持为 MES/WMS 原始提单需求池：
 
 - 一次提单生成一条或多条需求行。
 - 同一个订单零件 `item_id` 可以因分批提单产生多条需求行。
@@ -33,8 +34,8 @@ QPO 原规划中，`order_delivery_ticket` 作为已提单零件明细表向 APS
 
 采用推荐方案：新增 `order_delivery_ticket_allocation` 子表保存拆分结果。
 
-- `order_delivery_ticket` 是需求源。
-- `order_delivery_ticket_allocation` 是库存/在产/待生产分配结果。
+- `order_delivery_ticket` 是 MES/WMS 需求源和需求池，不因 WMS 拆分而改变原始提单数量。
+- `order_delivery_ticket_allocation` 是 WMS 拆分结果表，保存库存锁定、在产锁定和待生产分配结果。
 - 页面可把 allocation 展示为“拆分后的锁库零件行”。
 - 原始需求行和拆分明细通过 `ticket_id` 关联，方便追溯。
 
@@ -53,8 +54,8 @@ MES/WMS 同步采用“页面按钮 + 可重试任务记录”的方式：
 
 | 模块名 | 数据来源 | 模块职责 |
 | --- | --- | --- |
-| 已提零件 | `order_delivery_ticket` | 展示提单后的原始需求池，维护 MES 物料号获取和 WMS 锁库提交入口。 |
-| 锁库零件 | `order_delivery_ticket_allocation` | 展示 WMS 返回后拆分出的库存锁定、在产锁定和待生产明细。 |
+| 已提零件 | `order_delivery_ticket` | 展示提单后的 MES/WMS 原始需求池，维护 MES 物料号获取和 WMS 锁库提交入口。 |
+| 锁库零件 | `order_delivery_ticket_allocation` | 展示 WMS 拆分结果，包括库存锁定、在产锁定和待生产明细。 |
 
 模块命名保持四字，和现有“订单管理”“历史订单”风格一致。
 
@@ -448,6 +449,7 @@ WMS 接口需要明确：
 ## 11. 数据一致性要求
 
 - `order_delivery_ticket.qty` 不因 allocation 生成而变化。
+- `order_delivery_ticket_allocation` 是 WMS 拆分结果，不改写 `order_delivery_ticket` 原始需求行。
 - `order_delivery_ticket_allocation.qty` 合计必须等于原始提单行 `qty`。
 - 同一 `ticket_id` 成功分配后，默认不允许再次成功写入另一套 allocation，避免重复锁库。
 - MES 物料号成功后应作为稳定快照保存，后续 WMS 使用 QPO 保存的 `material_no`。
@@ -464,7 +466,7 @@ WMS 接口需要明确：
 - WMS 锁库释放、撤销或反向回滚。
 - 已成功 WMS 分配后的重新拆分。
 - 把库存数量维护搬进 QPO。
-- 恢复 APS 对接。
+- 恢复 APS 对接；旧 APS 出口仅为历史兼容，不是新目标系统。
 - 删除旧 APS 代码的具体实施步骤。
 
 ## 13. 验收口径
@@ -478,6 +480,7 @@ WMS 接口需要明确：
 - WMS 覆盖不足时，QPO 自动生成待生产数量行。
 - 锁库零件页面能按分配类型、图号、物料号、在产订单号查询。
 - 原始提单需求行仍可追溯到订单、零件、工艺快照和图纸。
+- 文档和开发口径明确 `order_delivery_ticket` 是 MES/WMS 需求池，`order_delivery_ticket_allocation` 是 WMS 拆分结果，旧 APS 出口只是历史兼容。
 
 ### 13.2 权限验收
 
