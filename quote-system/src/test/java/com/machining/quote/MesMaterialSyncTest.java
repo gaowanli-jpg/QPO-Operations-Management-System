@@ -1,13 +1,44 @@
 package com.machining.quote;
 
+import com.machining.quote.dto.MesMaterialResolveResp;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SystemTask;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SystemTaskMapper;
+import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.MesMaterialClient;
+import com.machining.quote.service.MesMaterialSyncService;
+import com.machining.quote.service.SystemTaskService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class MesMaterialSyncTest {
     private static final Path ORDER_DELIVERY_CONTROLLER = Path.of(
@@ -20,6 +51,141 @@ class MesMaterialSyncTest {
             "src", "main", "java", "com", "machining", "quote", "dto", "MesMaterialResolveReq.java");
     private static final Path MES_RESP = Path.of(
             "src", "main", "java", "com", "machining", "quote", "dto", "MesMaterialResolveResp.java");
+
+    @Test
+    void submitMesMaterialSyncTaskCreatesSystemTaskAndDispatchesAsyncWork() {
+        OrderDeliveryTicket ticket = ticket();
+        SystemTaskService service = new SystemTaskService();
+        SystemTaskMapper taskMapper = mock(SystemTaskMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        ThreadPoolTaskExecutor taskExecutor = mock(ThreadPoolTaskExecutor.class);
+        MesMaterialSyncService syncService = mock(MesMaterialSyncService.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        AtomicReference<SystemTask> inserted = new AtomicReference<>();
+        doAnswer(invocation -> {
+            SystemTask task = invocation.getArgument(0);
+            task.setId(501L);
+            inserted.set(task);
+            return 1;
+        }).when(taskMapper).insert(any(SystemTask.class));
+        when(taskMapper.selectById(501L)).thenAnswer(invocation -> inserted.get());
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        ReflectionTestUtils.setField(service, "taskMapper", taskMapper);
+        ReflectionTestUtils.setField(service, "orderDeliveryTicketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
+        ReflectionTestUtils.setField(service, "mesMaterialSyncService", syncService);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
+
+        SystemTask task = service.submitMesMaterialSyncTask(123);
+
+        assertThat(task.getId()).isEqualTo(501L);
+        assertThat(task.getTaskType()).isEqualTo("MES_MATERIAL_SYNC");
+        assertThat(task.getStatus()).isEqualTo("PENDING");
+        Map<String, Object> requestJson = new LinkedHashMap<>((Map<String, Object>) task.getRequestJson());
+        assertThat(requestJson)
+                .containsEntry("ticketId", 123)
+                .containsEntry("rfqId", 88)
+                .containsEntry("partNo", "P-100");
+        verify(dataScopeService).assertCanAccessOrder(88, null);
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_SUBMIT"),
+                eq("system_task"),
+                eq(501L),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("SUCCESS"),
+                contains("taskId=501"),
+                isNull()
+        );
+        verify(taskExecutor).execute(any(Runnable.class));
+    }
+
+    @Test
+    void syncMaterialNoWritesMaterialNumberAndSuccessStatus() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        when(ticketMapper.selectById(123)).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(true);
+        response.setMaterialNo("  MES-7788  ");
+        response.setMessage("created");
+        when(client.resolveMaterial(any())).thenReturn(response);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+
+        Map<String, Object> result = service.syncMaterialNo(123, 9001L);
+
+        assertThat(result)
+                .containsEntry("ticketId", 123)
+                .containsEntry("taskId", 9001L)
+                .containsEntry("materialNo", "MES-7788");
+        ArgumentCaptor<OrderDeliveryTicket> updates = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper, times(2)).updateById(updates.capture());
+        assertThat(updates.getAllValues().get(0).getMesSyncStatus()).isEqualTo("PROCESSING");
+        OrderDeliveryTicket success = updates.getAllValues().get(1);
+        assertThat(success.getMaterialNo()).isEqualTo("MES-7788");
+        assertThat(success.getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(success.getMesSyncMessage()).isEqualTo("created");
+        assertThat(success.getMesSyncedAt()).isNotNull();
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_SUCCESS"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("SUCCESS"),
+                contains("ticketId=123 taskId=9001"),
+                isNull()
+        );
+    }
+
+    @Test
+    void syncMaterialNoMarksTicketFailedAndRethrowsWhenMesRejects() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        when(ticketMapper.selectById(123)).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item("http://qpo.local/p100.pdf"));
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(false);
+        response.setMessage("MES part missing");
+        when(client.resolveMaterial(any())).thenReturn(response);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+
+        assertThatThrownBy(() -> service.syncMaterialNo(123, 9002L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("MES part missing");
+
+        ArgumentCaptor<OrderDeliveryTicket> updates = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper, times(2)).updateById(updates.capture());
+        OrderDeliveryTicket failed = updates.getAllValues().get(1);
+        assertThat(failed.getMesSyncStatus()).isEqualTo("FAILED");
+        assertThat(failed.getMesSyncMessage()).isEqualTo("MES part missing");
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_FAILED"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("FAILED"),
+                contains("ticketId=123 taskId=9002"),
+                eq("MES part missing")
+        );
+    }
 
     @Test
     void deliveredItemMesSyncEndpointIsPermissionProtected() throws IOException {
@@ -59,7 +225,8 @@ class MesMaterialSyncTest {
                         "DELIVERY_MES_MATERIAL_SYNC_FAILED",
                         "MES material sync started",
                         "MES material sync completed",
-                        "MES material sync failed"
+                        "MES material sync failed",
+                        "log.error(\"MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}\""
                 );
     }
 
@@ -92,5 +259,52 @@ class MesMaterialSyncTest {
                 .as("%s should exist", path)
                 .isTrue();
         return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private MesMaterialSyncService syncService() {
+        MesMaterialSyncService service = new MesMaterialSyncService();
+        ReflectionTestUtils.setField(service, "publicBaseUrl", "http://qpo.local");
+        return service;
+    }
+
+    private void wireSyncService(
+            MesMaterialSyncService service,
+            OrderDeliveryTicketMapper ticketMapper,
+            OrderRfqMapper orderMapper,
+            ItemQuoteVersionMapper itemMapper,
+            MesMaterialClient client,
+            AuditService auditService) {
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "mesMaterialClient", client);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+    }
+
+    private OrderDeliveryTicket ticket() {
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setId(123);
+        ticket.setRfqId(88);
+        ticket.setItemId(77);
+        ticket.setPartNo("P-100");
+        ticket.setVersion("A");
+        ticket.setInternalProjectNo("IP-9");
+        ticket.setMesSyncStatus("PENDING");
+        return ticket;
+    }
+
+    private OrderRfq order() {
+        OrderRfq order = new OrderRfq();
+        order.setId(88);
+        order.setRfqNo("RFQ-88");
+        order.setCustomerName("ACME");
+        return order;
+    }
+
+    private ItemQuoteVersion item(String drawingUrl) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setId(77);
+        item.setDrawingUrl(drawingUrl);
+        return item;
     }
 }
