@@ -4,6 +4,7 @@ import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -12,6 +13,8 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +31,7 @@ import java.util.Map;
 
 @Service
 public class ExcelExportService {
+    private static final Logger log = LoggerFactory.getLogger(ExcelExportService.class);
     private static final int MAX_PROCESS_STEPS = 30;
 
     @Autowired
@@ -42,6 +46,8 @@ public class ExcelExportService {
     private QuoteProcessService quoteProcessService;
     @Autowired
     private DeliveryService deliveryService;
+    @Autowired
+    private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -160,6 +166,40 @@ public class ExcelExportService {
         exportQuoteSheet(rfqId, response, false);
     }
 
+    public void exportPricingSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        long startedAt = System.currentTimeMillis();
+        log.info("Pricing sheet export started rfqId={}", rfqId);
+        try {
+            OrderRfq order = requirePricingSheetExportable(rfqId);
+            int itemCount = exportDetailedQuoteSheet(rfqId, response, false, "核价单", "核价单");
+            Map<String, Object> after = new LinkedHashMap<>();
+            after.put("rfqNo", order.getRfqNo());
+            after.put("status", order.getStatus());
+            after.put("itemCount", itemCount);
+            auditService.record(
+                    "PRICING_SHEET_EXPORT",
+                    "order_rfq",
+                    rfqId,
+                    null,
+                    after,
+                    "ENGINEER",
+                    "SUCCESS",
+                    "生成核价单：RFQ " + safe(order.getRfqNo()) + "，零件 " + itemCount + " 个",
+                    null
+            );
+            log.info("Pricing sheet export completed rfqId={} status={} itemCount={} durationMs={}",
+                    rfqId, order.getStatus(), itemCount, System.currentTimeMillis() - startedAt);
+        } catch (RuntimeException e) {
+            log.warn("Pricing sheet export rejected rfqId={} reason={} durationMs={}",
+                    rfqId, safeLogMessage(e), System.currentTimeMillis() - startedAt);
+            throw e;
+        } catch (IOException e) {
+            log.error("Pricing sheet export failed rfqId={} durationMs={}",
+                    rfqId, System.currentTimeMillis() - startedAt, e);
+            throw e;
+        }
+    }
+
     public void exportSimpleQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
         quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
@@ -211,6 +251,11 @@ public class ExcelExportService {
     }
 
     private void exportQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime) throws IOException {
+        exportDetailedQuoteSheet(rfqId, response, useQuoteLeadTime, "报价单", "报价单");
+    }
+
+    private int exportDetailedQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime,
+                                         String fileSuffix, String sheetName) throws IOException {
         assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
@@ -224,7 +269,8 @@ public class ExcelExportService {
             ItemQuoteVersion item = items.get(i);
             rows.add(buildQuoteRow(item, i + 1, maxRouteSize, feeNames, useQuoteLeadTime));
         }
-        write(response, buildFileName(rfqId, "报价单"), "报价单", head, rows);
+        write(response, buildFileName(rfqId, fileSuffix), sheetName, head, rows);
+        return rows.size();
     }
 
     private void assertOrderDataScope(Integer rfqId) {
@@ -232,6 +278,30 @@ public class ExcelExportService {
             dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
         }
     }
+
+    private OrderRfq requirePricingSheetExportable(Integer rfqId) {
+        if (rfqId == null) {
+            throw new RuntimeException("RFQ ID 不能为空");
+        }
+        OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (order == null) {
+            throw new RuntimeException("RFQ 订单不存在");
+        }
+        assertOrderDataScope(rfqId);
+        if (!QuoteStatusWorkflow.canExportPricingSheet(order.getStatus())) {
+            throw new RuntimeException("只有已核价订单可以生成核价单");
+        }
+        return order;
+    }
+
+    private String safeLogMessage(RuntimeException e) {
+        String message = e == null ? "" : e.getMessage();
+        if (isBlank(message)) {
+            return e == null ? "unknown" : e.getClass().getSimpleName();
+        }
+        return message.replaceAll("[\\r\\n\\t]+", " ");
+    }
+
     private List<List<String>> buildSimpleQuoteHead() {
         List<List<String>> head = new ArrayList<>();
         for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位")) {

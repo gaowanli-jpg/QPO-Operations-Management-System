@@ -47,6 +47,10 @@ public final class QuoteStatusWorkflow {
         return QUOTED.equals(status);
     }
 
+    public static boolean canExportPricingSheet(String status) {
+        return PRICED.equals(status);
+    }
+
     public static boolean canGenerateDeliveryTicket(String status) {
         return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status);
     }

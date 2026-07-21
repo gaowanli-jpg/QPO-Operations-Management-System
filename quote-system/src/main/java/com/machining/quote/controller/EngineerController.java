@@ -9,11 +9,14 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.service.OrderManagementService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +40,9 @@ public class EngineerController {
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
+
+    @Autowired
+    private ExcelExportService excelExportService;
 
     // ---------------------------------------------
 
@@ -104,6 +110,12 @@ public class EngineerController {
     public Map<String, Object> completeOrderQuote(@PathVariable Integer rfqId) {
         engineerService.completeOrderQuote(rfqId);
         return Map.of("success", true, "message", "订单核价已完成，已进入报价处理");
+    }
+
+    @GetMapping("/pricing/export-sheet/{rfqId}")
+    @RequirePermission("engineer:pricing:export-sheet")
+    public void exportPricingSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportPricingSheet(rfqId, response);
     }
 
     @PostMapping("/refresh-quotes/{rfqId}")

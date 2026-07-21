@@ -39,4 +39,17 @@ describe('quote status stage 4 quote process frontend flow', () => {
     expect(source).toContain('orderInfo.value = response.orderInfo || orderInfo.value')
     expect(source).toContain("ElMessage.success('报价单已保存，可导出。')")
   })
+
+  test('locks engineering pricing sheet export to priced orders', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('生成核价单')
+    expect(source).not.toContain('导出正式报价单')
+    expect(source).toContain('v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION"')
+    expect(source).toContain('const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = \'engineer:pricing:export-sheet\'')
+    expect(source).toContain('downloadPricingSheet')
+    expect(source).toContain('const canExportPricingSheet = computed(() => {')
+    expect(source).toContain("quoteData.value?.orderInfo?.status === '已核价'")
+    expect(source).toContain("ElMessage.warning('只有已核价订单可以生成核价单。')")
+  })
 })

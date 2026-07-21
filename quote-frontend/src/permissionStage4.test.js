@@ -70,7 +70,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
       ['HistoryOrderManage', ['market:order:delete']],
       ['QuoteTemplateManage', ['market:template:upload']],
       ['GlobalSetup', ['engineer:setup:save-config']],
-      ['ItemPricing', ['engineer:pricing:save-item', 'engineer:pricing:refresh', 'engineer:pricing:complete-order']],
+      ['ItemPricing', ['engineer:pricing:save-item', 'engineer:pricing:refresh', 'engineer:pricing:export-sheet', 'engineer:pricing:complete-order']],
       ['MaterialProcessManage', ['engineer:dict:material-manage', 'engineer:dict:process-manage', 'engineer:dict:fee-manage']],
       ['UserManage', ['system:user:create', 'system:user:update', 'system:user:disable', 'system:user:reset-password', 'system:user:delete']],
       ['SystemRoleManage', ['system:role:create', 'system:role:update', 'system:role:delete', 'system:role:assign-permission', 'system:role:assign-data-scope']],

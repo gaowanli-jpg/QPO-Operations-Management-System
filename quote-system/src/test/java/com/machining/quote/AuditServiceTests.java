@@ -99,6 +99,7 @@ class AuditServiceTests {
     @Test
     void moduleInferenceKeepsLegacyBusinessActionsInExpectedModules() {
         assertThat(AuditService.inferModule("ORDER_QUOTE_COMPLETE")).isEqualTo("ENGINEER");
+        assertThat(AuditService.inferModule("PRICING_SHEET_EXPORT")).isEqualTo("ENGINEER");
         assertThat(AuditService.inferModule("QUOTE_TEMPLATE_UPLOAD")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("ORDER_DELETE_COMPLETELY")).isEqualTo("ORDER");
         assertThat(AuditService.inferModule("SYSTEM_DEPT_CREATE")).isEqualTo("SYSTEM");
@@ -115,6 +116,7 @@ class AuditServiceTests {
         assertThat(AuditService.labelForAction("SYSTEM_POST_DELETE")).contains("岗位");
         assertThat(AuditService.labelForAction("SYSTEM_USER_ORG_UPDATE")).contains("组织");
         assertThat(AuditService.labelForAction("USER_PROFILE_UPDATE")).contains("个人资料");
+        assertThat(AuditService.labelForAction("PRICING_SHEET_EXPORT")).contains("核价单");
     }
 
     @Test

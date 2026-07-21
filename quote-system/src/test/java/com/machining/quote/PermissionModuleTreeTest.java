@@ -23,6 +23,7 @@ class PermissionModuleTreeTest {
     private static final Path QUOTE_SAVE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V33__quote_process_save_quote_permission.sql");
     private static final Path RETIRE_COMMON_SELECTION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V38__retire_common_selection_permissions.sql");
     private static final Path ORGANIZATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V40__organization_identity_permissions.sql");
+    private static final Path PRICING_SHEET_EXPORT_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V41__engineer_pricing_sheet_export_permission.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -137,6 +138,35 @@ class PermissionModuleTreeTest {
                 .contains("保存报价单")
                 .contains("MARKET_USER")
                 .contains("MARKET_MANAGER")
+                .contains("SUPER_ADMIN")
+                .doesNotContain("READONLY");
+    }
+
+    @Test
+    void pricingSheetExportPermissionBelongsToEngineerPricingModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Generating a pricing sheet is an engineering-side action, not a market quote export")
+                .contains("engineer:pricing:export-sheet");
+        assertThat(source)
+                .as("Pricing sheet export permission must sit under the hidden engineer pricing module")
+                .contains("permission(152L, \"BUTTON\", \"engineer:pricing:export-sheet\", \"生成核价单\", null, null, false, 225, 7L)");
+        assertThat(source)
+                .as("Engineering roles can generate pricing sheets; read-only users cannot")
+                .contains("Map.entry(\"engineer:pricing:export-sheet\", Set.of(\"ENGINEER_USER\", \"ENGINEER_MANAGER\"))");
+    }
+
+    @Test
+    void pricingSheetExportPermissionMigrationKeepsDatabaseCatalogAligned() throws IOException {
+        String migration = Files.readString(PRICING_SHEET_EXPORT_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("engineer:pricing:view")
+                .contains("engineer:pricing:export-sheet")
+                .contains("生成核价单")
+                .contains("ENGINEER_USER")
+                .contains("ENGINEER_MANAGER")
                 .contains("SUPER_ADMIN")
                 .doesNotContain("READONLY");
     }

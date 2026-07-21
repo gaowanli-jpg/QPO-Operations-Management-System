@@ -83,6 +83,7 @@ class PermissionSystemStage5Test {
                 .contains("@RequirePermission(\"engineer:pricing:view\")")
                 .contains("@RequirePermission(\"engineer:pricing:save-item\")")
                 .contains("@RequirePermission(\"engineer:pricing:refresh\")")
+                .contains("@RequirePermission(\"engineer:pricing:export-sheet\")")
                 .contains("@RequirePermission(\"engineer:setup:save-config\")");
         assertThat(dict)
                 .contains("@RequirePermission(\"engineer:dict:view\")")

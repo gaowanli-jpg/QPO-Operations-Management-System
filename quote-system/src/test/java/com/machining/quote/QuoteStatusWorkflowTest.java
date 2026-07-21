@@ -40,6 +40,14 @@ class QuoteStatusWorkflowTest {
                 .as("已核价订单必须先保存报价单，不能直接导出")
                 .isFalse();
         assertThat(QuoteStatusWorkflow.canExportQuoteSheet(QuoteStatusWorkflow.QUOTED)).isTrue();
+
+        assertThat(QuoteStatusWorkflow.canExportPricingSheet(QuoteStatusWorkflow.PRICED))
+                .as("工程核价单只代表工程侧核价结果，应允许已核价订单生成")
+                .isTrue();
+        assertThat(QuoteStatusWorkflow.canExportPricingSheet(QuoteStatusWorkflow.UNPRICED)).isFalse();
+        assertThat(QuoteStatusWorkflow.canExportPricingSheet(QuoteStatusWorkflow.QUOTED))
+                .as("保存为正式报价单后，不再从工程侧生成核价单")
+                .isFalse();
     }
 
     @Test

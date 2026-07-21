@@ -180,6 +180,7 @@ public class AuditService {
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
+        if ("PRICING_SHEET_EXPORT".equalsIgnoreCase(action)) return "ENGINEER";
         if (startsWith(action, "DICT_")) return "DICT";
         if (startsWith(action, "USER_")
                 || startsWith(action, "SYSTEM_USER_")
@@ -249,6 +250,7 @@ public class AuditService {
             case "DICT_EXTRA_FEE_DELETE" -> "删除非工时费用";
             case "ITEM_QUOTE_SAVE" -> "保存逐件核价";
             case "ORDER_QUOTE_COMPLETE" -> "完成工程报价";
+            case "PRICING_SHEET_EXPORT" -> "生成核价单";
             case "QUOTE_PROCESS_SAVE_QUOTE" -> "保存报价单";
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "INTERNAL_TARGET_LEAD_TIME_UPDATE" -> "更新内部目标交期";

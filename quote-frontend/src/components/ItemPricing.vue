@@ -46,8 +46,8 @@
       </div>
       <div class="erp-toolbar-group pricing-toolbar-actions">
         <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
-        <el-button type="success" plain :disabled="!canExportQuote" @click="exportQuoteSheet">
-          导出正式报价单
+        <el-button v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION" type="success" plain :disabled="!canExportPricingSheet" @click="exportPricingSheet">
+          生成核价单
         </el-button>
         <el-button v-permission="'engineer:pricing:refresh'" type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
           一键刷新核价
@@ -569,10 +569,10 @@ import {
   getPricingSummary,
   getRepeatAnalysis,
   listAssemblyRelations,
+  downloadPricingSheet,
   saveOrderConfig,
   submitQuote
 } from '../services/engineerApi'
-import { downloadCustomerLeadTimeQuote } from '../services/marketApi'
 import { getTask, refreshEngineerQuotes } from '../services/taskApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
@@ -588,6 +588,8 @@ import {
   clampPage,
   paginateRows
 } from '../utils/clientPagination'
+
+const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
 
 const route = useRoute()
 const router = useRouter()
@@ -661,11 +663,11 @@ const repeatItemMap = computed(() => {
 
 const pagedPricingItems = computed(() => paginateRows(quoteData.value?.itemList || [], pricingListPagination))
 
-const canExportQuote = computed(() => {
+const canExportPricingSheet = computed(() => {
   const items = quoteData.value?.itemList || []
   const drawableItems = items.filter(item => item.drawingUrl)
   return !!rfqId.value
-    && quoteData.value?.orderInfo?.status === '已报价'
+    && quoteData.value?.orderInfo?.status === '已核价'
     && items.length > 0
     && drawableItems.every(item => item.finalUnitPrice != null)
 })
@@ -779,11 +781,13 @@ const loadRepeatAnalysis = async () => {
   }
 }
 
-const exportQuoteSheet = async () => {
+const exportPricingSheet = async () => {
   if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
-  const result = await downloadCustomerLeadTimeQuote(rfqId.value)
+  if (!canExportPricingSheet.value) return ElMessage.warning('只有已核价订单可以生成核价单。')
+  const fallbackName = `${quoteData.value?.orderInfo?.rfqNo || `pricing-sheet-${rfqId.value}`}-核价单.xlsx`
+  const result = await downloadPricingSheet(rfqId.value, fallbackName)
   if (!result.success) {
-    ElMessage.error(result.message || '正式报价单导出失败。')
+    ElMessage.error(result.message || '核价单生成失败。')
   }
 }
 

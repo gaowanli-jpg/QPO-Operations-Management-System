@@ -95,6 +95,9 @@ class QuoteStatusWorkflowStage2Test {
         assertThatThrownBy(() -> excelExportService.exportSimpleQuoteSheet(order.getId(), pricedExportResponse))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("保存报价单");
+        MockHttpServletResponse pricingSheetResponse = new MockHttpServletResponse();
+        excelExportService.exportPricingSheet(order.getId(), pricingSheetResponse);
+        assertThat(pricingSheetResponse.getContentAsByteArray()).isNotEmpty();
         assertThatThrownBy(() -> deliveryService.generateTickets(deliveryReq(order, item)))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("保存报价单");
@@ -113,6 +116,9 @@ class QuoteStatusWorkflowStage2Test {
         MockHttpServletResponse quotedExportResponse = new MockHttpServletResponse();
         excelExportService.exportSimpleQuoteSheet(order.getId(), quotedExportResponse);
         assertThat(quotedExportResponse.getContentAsByteArray()).isNotEmpty();
+        assertThatThrownBy(() -> excelExportService.exportPricingSheet(order.getId(), new MockHttpServletResponse()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("已核价");
     }
 
     @Test

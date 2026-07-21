@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { request } from '../api'
+import { downloadFile, request } from '../api'
 import * as engineerApi from './engineerApi'
 
 vi.mock('../api', () => ({
+  downloadFile: vi.fn(),
   request: vi.fn()
 }))
 
 beforeEach(() => {
+  downloadFile.mockReset()
   request.mockReset()
 })
 
@@ -79,5 +81,11 @@ describe('engineerApi', () => {
       method: 'POST',
       data: payload
     })
+  })
+
+  test('downloadPricingSheet downloads engineering pricing sheet by rfq id', async () => {
+    await engineerApi.downloadPricingSheet(12)
+
+    expect(downloadFile).toHaveBeenCalledWith('/api/engineer/pricing/export-sheet/12', 'pricing-sheet-12.xlsx')
   })
 })

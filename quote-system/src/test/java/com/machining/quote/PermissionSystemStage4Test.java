@@ -49,6 +49,7 @@ class PermissionSystemStage4Test {
                 "engineer:pricing:save-item",
                 "engineer:pricing:refresh",
                 "engineer:pricing:complete-order",
+                "engineer:pricing:export-sheet",
                 "engineer:dict:material-manage",
                 "engineer:dict:process-manage",
                 "engineer:dict:fee-manage",
