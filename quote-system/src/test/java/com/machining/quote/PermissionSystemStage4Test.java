@@ -19,6 +19,7 @@ class PermissionSystemStage4Test {
                         "/market",
                         "/orders",
                         "/history-orders",
+                        "/delivered-items",
                         "/quote-process",
                         "/release",
                         "/quote-template",
