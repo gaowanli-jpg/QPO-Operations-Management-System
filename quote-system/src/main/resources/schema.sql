@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS order_rfq (
     rfq_no VARCHAR(100) NOT NULL UNIQUE,
     customer_name VARCHAR(200),
     project_name VARCHAR(255),
+    order_type VARCHAR(20),
     status VARCHAR(50),
     engineer_config JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -15,6 +16,7 @@ CREATE TABLE IF NOT EXISTS rfq_no_sequence (
 );
 
 ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS engineer_config JSONB;
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS order_type VARCHAR(20);
 ALTER TABLE order_rfq
     ALTER COLUMN engineer_config TYPE JSONB USING NULLIF(engineer_config::TEXT, '')::JSONB;
 

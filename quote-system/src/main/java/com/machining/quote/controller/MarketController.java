@@ -46,6 +46,7 @@ import java.util.UUID;
 @RequestMapping("/api/market")
 public class MarketController {
     private static final Logger log = LoggerFactory.getLogger(MarketController.class);
+    private static final Set<String> ALLOWED_ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
 
     @Autowired
     private DeliveryService deliveryService;
@@ -96,7 +97,7 @@ public class MarketController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listReleaseCandidateOrders(customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/release/customers")
@@ -270,9 +271,11 @@ public class MarketController {
     @Transactional
     public Map<String, Object> importRfq(
             @RequestParam("customerName") String customerName,
+            @RequestParam("orderType") String orderType,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
 
+        String normalizedOrderType = normalizeOrderType(orderType);
         Map<String, Object> result = new HashMap<>();
         long startedAt = System.currentTimeMillis();
         String autoRfqNo = null;
@@ -280,8 +283,9 @@ public class MarketController {
 
         try {
             autoRfqNo = rfqNumberService.nextRfqNo();
-            log.info("RFQ import started customerName={} rfqNo={} excelFileName={} drawingFileCount={}",
+            log.info("RFQ import started customerName={} orderType={} rfqNo={} excelFileName={} drawingFileCount={}",
                     customerName,
+                    normalizedOrderType,
                     autoRfqNo,
                     excelFile == null ? "" : excelFile.getOriginalFilename(),
                     drawings == null ? 0 : drawings.size());
@@ -306,6 +310,7 @@ public class MarketController {
                 OrderRfq pathOrder = new OrderRfq();
                 pathOrder.setCustomerName(customerName);
                 pathOrder.setRfqNo(autoRfqNo);
+                pathOrder.setOrderType(normalizedOrderType);
                 projectDir = orderFilePathService.orderDrawingDirectory(pathOrder);
                 Files.createDirectories(projectDir);
 
@@ -342,14 +347,15 @@ public class MarketController {
             OrderRfq newOrder = new OrderRfq();
             newOrder.setRfqNo(autoRfqNo);
             newOrder.setCustomerName(customerName);
+            newOrder.setOrderType(normalizedOrderType);
             newOrder.setStatus(QuoteStatusWorkflow.UNPRICED);
             if (dataScopeService != null) {
                 dataScopeService.assignCurrentOwnership(newOrder);
             }
             orderRfqMapper.insert(newOrder);
             generatedRfqId = newOrder.getId();
-            log.info("RFQ import order saved rfqId={} rfqNo={} customerName={}",
-                    generatedRfqId, autoRfqNo, customerName);
+            log.info("RFQ import order saved rfqId={} rfqNo={} customerName={} orderType={}",
+                    generatedRfqId, autoRfqNo, customerName, normalizedOrderType);
 
             Set<String> matchedDrawingPartNos = new HashSet<>();
             List<Map<String, Object>> missingDrawingItems = new ArrayList<>();
@@ -376,6 +382,7 @@ public class MarketController {
                 dbItem.setUnit(item.getUnit());
                 dbItem.setLeadTime(item.getLeadTime());
                 dbItem.setRemark(item.getRemark());
+                dbItem.setOrderType(normalizedOrderType);
                 dbItem.setStatus(QuoteStatusWorkflow.UNPRICED);
 
                 if (matchedDrawingUrl != null) {
@@ -426,11 +433,12 @@ public class MarketController {
             result.put("success", true);
             result.put("message", "已成功为您生成询价单！<br><b>单号：</b><span style='color:#409EFF'>" + autoRfqNo + "</span>");
             result.put("drawingReport", drawingReport);
-            recordRfqImportAudit(customerName, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
-            log.info("RFQ import completed rfqId={} rfqNo={} customerName={} itemCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
+            recordRfqImportAudit(customerName, normalizedOrderType, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
+            log.info("RFQ import completed rfqId={} rfqNo={} customerName={} orderType={} itemCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
                     generatedRfqId,
                     autoRfqNo,
                     customerName,
+                    normalizedOrderType,
                     excelDataList.size(),
                     matchedDrawingPartNos.size(),
                     missingDrawingItems.size(),
@@ -439,10 +447,21 @@ public class MarketController {
             return result;
 
         } catch (Exception e) {
-            log.error("RFQ import failed customerName={} rfqNo={} rfqId={} durationMs={}",
-                    customerName, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
+            log.error("RFQ import failed customerName={} orderType={} rfqNo={} rfqId={} durationMs={}",
+                    customerName, normalizedOrderType, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
             throw new RuntimeException("服务器处理失败：" + e.getMessage(), e);
         }
+    }
+
+    private String normalizeOrderType(String orderType) {
+        String normalized = orderType == null ? "" : orderType.trim();
+        if (normalized.isEmpty()) {
+            throw new RuntimeException("请选择订单类型");
+        }
+        if (!ALLOWED_ORDER_TYPES.contains(normalized)) {
+            throw new RuntimeException("订单类型不合法：" + normalized);
+        }
+        return normalized;
     }
 
     private String normalizePartNo(String partNo) {
@@ -451,6 +470,7 @@ public class MarketController {
 
     private void recordRfqImportAudit(
             String customerName,
+            String orderType,
             String rfqNo,
             Integer rfqId,
             int itemCount,
@@ -460,6 +480,7 @@ public class MarketController {
         }
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("customerName", customerName);
+        summary.put("orderType", orderType);
         summary.put("rfqNo", rfqNo);
         summary.put("rfqId", rfqId);
         summary.put("itemCount", itemCount);
@@ -475,7 +496,7 @@ public class MarketController {
                 summary,
                 "MARKET",
                 "SUCCESS",
-                "RFQ_IMPORT " + customerName + " " + rfqNo + " itemCount=" + itemCount,
+                "RFQ_IMPORT " + customerName + " " + orderType + " " + rfqNo + " itemCount=" + itemCount,
                 null
         );
     }

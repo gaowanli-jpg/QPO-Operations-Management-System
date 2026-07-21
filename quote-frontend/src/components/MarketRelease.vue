@@ -351,6 +351,7 @@
       title="选择市场部议价订单"
       customer-scope="release"
       order-scope="release"
+      :allowed-statuses="RELEASE_ALLOWED_STATUSES"
       @select="handleOrderSelected"
     />
   </div>
@@ -404,6 +405,8 @@ const adjustingInternalLeadTime = ref(false)
 const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
 let syncingReleaseItemSelection = false
+
+const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.id

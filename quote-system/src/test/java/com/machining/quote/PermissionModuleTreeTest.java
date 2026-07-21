@@ -24,6 +24,7 @@ class PermissionModuleTreeTest {
     private static final Path RETIRE_COMMON_SELECTION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V38__retire_common_selection_permissions.sql");
     private static final Path ORGANIZATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V40__organization_identity_permissions.sql");
     private static final Path PRICING_SHEET_EXPORT_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V41__engineer_pricing_sheet_export_permission.sql");
+    private static final Path RFQ_ORDER_TYPE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V44__rfq_order_type_select_permission.sql");
     private static final Path DELIVERED_ITEM_FOUNDATION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
@@ -52,6 +53,35 @@ class PermissionModuleTreeTest {
         assertThat(duplicates)
                 .as("Permission codes must be unique in the fallback catalog")
                 .isEmpty();
+    }
+
+    @Test
+    void rfqOrderTypeSelectionPermissionBelongsToNewRfqImportModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Choosing RFQ order type should be visible as an assignable new-import permission")
+                .contains("market:rfq:order-type-select");
+        assertThat(source)
+                .as("Order type selection must hang under the new RFQ import MENU permission")
+                .contains("permission(157L, \"BUTTON\", \"market:rfq:order-type-select\", \"选择订单类型\", null, null, false, 113, 1L)");
+        assertThat(source)
+                .as("Market users and managers can select RFQ order type by default; read-only users cannot")
+                .contains("Map.entry(\"market:rfq:order-type-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))");
+    }
+
+    @Test
+    void rfqOrderTypeSelectionPermissionMigrationKeepsDatabaseCatalogAligned() throws IOException {
+        String migration = Files.readString(RFQ_ORDER_TYPE_PERMISSION_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("market:rfq:view")
+                .contains("market:rfq:order-type-select")
+                .contains("选择订单类型")
+                .contains("MARKET_USER")
+                .contains("MARKET_MANAGER")
+                .contains("SUPER_ADMIN")
+                .doesNotContain("READONLY");
     }
 
     @Test

@@ -75,6 +75,18 @@ describe('QPO workflow page polish', () => {
     ])
   })
 
+  test('limits market release order picker to actionable release statuses', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      ':allowed-statuses="RELEASE_ALLOWED_STATUSES"',
+      'const RELEASE_ALLOWED_STATUSES = [',
+      "'已报价'",
+      "'部分已提单'"
+    ])
+    expect(source).not.toMatch(/const RELEASE_ALLOWED_STATUSES = \[[^\]]*'已生成提单'[^\]]*\]/)
+  })
+
   test('lays out manual internal target date as one compact control row', () => {
     const source = readComponent('MarketRelease.vue')
 

@@ -36,14 +36,32 @@ describe('QPO final UI punch-list polish', () => {
     const marketDashboard = readSource('components', 'MarketDashboard.vue')
 
     expect(marketDashboard).toContain('class="import-step import-step-customer"')
+    expect(marketDashboard).toContain('class="import-step import-step-order-type"')
     expect(marketDashboard).toContain('class="import-step import-step-excel"')
     expect(marketDashboard).toContain('class="import-step import-step-drawings"')
     expect(marketDashboard).toContain('class="import-action-row"')
+    expect(marketDashboard).toContain('v-permission="\'market:rfq:order-type-select\'" class="order-type-form"')
     expect(marketDashboard).toContain('class="workflow-primary-action import-axis-button"')
     expect(marketDashboard).toContain('class="workflow-soft-button folder-select-button import-axis-button"')
     expect(marketDashboard).toContain('class="submit-btn import-axis-button"')
+    expect(marketDashboard).toContain('.order-type-form :deep(.el-form-item)')
+    expect(marketDashboard).toContain('.order-type-options')
     expect(marketDashboard).toContain('.import-axis-button')
     expect(marketDashboard).toContain('justify-content: center')
+  })
+
+  test('requires an explicit RFQ order type before market import submission', () => {
+    const marketDashboard = readSource('components', 'MarketDashboard.vue')
+
+    expect(marketDashboard).toContain('步骤 2：选择订单类型')
+    expect(marketDashboard).toContain('预测订单')
+    expect(marketDashboard).toContain('备货订单')
+    expect(marketDashboard).toContain('正式订单')
+    expect(marketDashboard).toContain("const rfqForm = reactive({ customerName: '', orderType: '' })")
+    expect(marketDashboard).toContain('market:rfq:order-type-select')
+    expect(marketDashboard).toContain("if (!rfqForm.orderType) return ElMessage.warning('请选择订单类型！')")
+    expect(marketDashboard).toContain("formData.append('orderType', rfqForm.orderType)")
+    expect(marketDashboard).toContain("rfqForm.orderType = ''")
   })
 
   test('explains customer inquiry spreadsheet headers and lead time formats before upload', () => {

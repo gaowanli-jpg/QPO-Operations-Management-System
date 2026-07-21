@@ -201,7 +201,7 @@ public class DeliveryService {
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(order.getId());
         ticket.setItemId(item.getId());
-        ticket.setOrderType(isBlank(item.getOrderType()) ? "新订单" : item.getOrderType());
+        ticket.setOrderType(isBlank(item.getOrderType()) ? "正式订单" : item.getOrderType());
         ticket.setInternalProjectNo(internalProjectNo);
         ticket.setCustomerOrderNo(customerOrderNo);
         ticket.setCustomerProjectNo(customerProjectNo);

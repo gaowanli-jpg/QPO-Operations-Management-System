@@ -27,5 +27,7 @@ public class OrderRfq {
     private Integer ownerUserId;
     private Long ownerDeptId;
 
+    private String orderType;
+
     private LocalDateTime createdAt;
 }

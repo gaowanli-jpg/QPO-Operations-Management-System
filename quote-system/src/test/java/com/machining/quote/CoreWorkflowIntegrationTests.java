@@ -109,6 +109,26 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    void releaseOrderSelectionOnlyReturnsOrdersThatCanStillGenerateTickets() {
+        String customerName = "提单候选客户-" + System.nanoTime();
+        OrderRfq quoted = orderWithItemsTicketsAndSheets(customerName, "REL-A", "已报价", 1, 1, 0, 0, 0);
+        OrderRfq partial = orderWithItemsTicketsAndSheets(customerName, "REL-B", "部分已提单", 1, 1, 0, 1, 1);
+        orderWithItemsTicketsAndSheets(customerName, "REL-C", "已生成提单", 1, 1, 0, 1, 1);
+
+        PageResult<OrderRfq> candidates = orderManagementService.listReleaseCandidateOrders(
+                customerName, null, null, 1, 20);
+
+        assertThat(candidates.getRecords())
+                .extracting(OrderRfq::getId)
+                .containsExactly(partial.getId(), quoted.getId());
+
+        PageResult<OrderRfq> fullyReleased = orderManagementService.listReleaseCandidateOrders(
+                customerName, null, "已生成提单", 1, 20);
+        assertThat(fullyReleased.getTotal()).isZero();
+        assertThat(fullyReleased.getRecords()).isEmpty();
+    }
+
+    @Test
     void quoteSavePersistsGrossAndNetWeights() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("WEIGHT-" + System.nanoTime());
