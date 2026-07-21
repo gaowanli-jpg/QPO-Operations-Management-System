@@ -17,9 +17,14 @@ describe('DeliveredItemManage foundation page', () => {
     }
   })
 
-  test('keeps WMS operation buttons out before the WMS allocation phase', () => {
-    expect(source).not.toContain('提交锁库')
-    expect(source).not.toContain('锁库分配')
+  test('wires WMS allocation action and locked-result entry after the WMS allocation phase', () => {
+    expect(source).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
+    expect(source).toContain('market:delivered-item:wms-allocate')
+    expect(source).toContain('submitWmsAllocation')
+    expect(source).toContain('wmsAllocationAction(row)')
+    expect(source).toContain('提交WMS锁库')
+    expect(source).toContain('重试WMS')
+    expect(source).toContain('查看锁库')
   })
 
   test('renders missing material numbers and malformed process routes safely', () => {

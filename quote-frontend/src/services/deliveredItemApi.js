@@ -7,3 +7,11 @@ export const getDeliveredItem = (ticketId) => request(`/api/order-delivery/ticke
 export const syncMesMaterial = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/mes-material`, {
   method: 'POST'
 })
+
+export const submitWmsAllocation = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/wms-allocation`, {
+  method: 'POST'
+})
+
+export const listLockedItems = (params = {}) => request('/api/order-delivery/allocations', { params })
+
+export const listTicketAllocations = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/allocations`)

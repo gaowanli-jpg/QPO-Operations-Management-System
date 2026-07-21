@@ -1,0 +1,213 @@
+﻿<template>
+  <div class="erp-page locked-item-page" v-permission="LOCKED_ITEM_VIEW_PERMISSION">
+    <header class="erp-page-header">
+      <div>
+        <h1 class="erp-page-title">锁库零件</h1>
+        <p class="erp-page-description">查看 WMS 返回后的库存锁定、在产锁定和待生产拆分结果。</p>
+      </div>
+    </header>
+
+    <section class="erp-toolbar locked-filter-toolbar">
+      <div class="erp-toolbar-group locked-filter-group">
+        <el-tag v-if="route.query.ticketId" type="info" effect="plain">提单ID：{{ route.query.ticketId }}</el-tag>
+        <el-input v-model="filters.customerName" clearable placeholder="客户" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.rfqNo" clearable placeholder="RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.materialNo" clearable placeholder="物料号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-select v-model="filters.allocationType" clearable placeholder="分配类型" class="filter-select" @change="handleSearch" @clear="handleSearch">
+          <el-option v-for="option in allocationTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
+        </el-select>
+        <el-input v-model="filters.wmsProductionOrderNo" clearable placeholder="在产订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-date-picker
+          v-model="filters.dateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="至"
+          start-placeholder="创建日期起"
+          end-placeholder="创建日期止"
+          class="filter-date-range"
+          @change="handleSearch"
+          @clear="handleSearch"
+        />
+        <el-button @click="handleSearch">搜索</el-button>
+        <el-button type="primary" :loading="loading" @click="loadItems">刷新</el-button>
+        <el-button v-if="route.query.ticketId" @click="showAllItems">查看全部</el-button>
+      </div>
+    </section>
+
+    <section class="erp-table-surface locked-table-surface">
+      <div class="erp-table-body">
+        <el-table :data="items" border stripe height="600" v-loading="loading">
+          <el-table-column prop="id" label="分配ID" width="96" fixed align="center" />
+          <el-table-column prop="ticketId" label="提单ID" width="96" align="center" />
+          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
+          <el-table-column prop="version" label="版本" width="80" align="center">
+            <template #default="{ row }">{{ formatDash(row.version) }}</template>
+          </el-table-column>
+          <el-table-column prop="materialNo" label="物料号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.materialNo) }}</template>
+          </el-table-column>
+          <el-table-column label="分配类型" width="150" align="center">
+            <template #default="{ row }">
+              <el-tag :type="allocationTypeMeta(row.allocationType).type" size="small">
+                {{ allocationTypeMeta(row.allocationType).label }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="qty" label="数量" width="96" align="right" />
+          <el-table-column prop="wmsProductionOrderNo" label="在产订单号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.wmsProductionOrderNo) }}</template>
+          </el-table-column>
+          <el-table-column prop="internalProjectNo" label="内部项目号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.internalProjectNo) }}</template>
+          </el-table-column>
+          <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.createdAt) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div class="erp-pagination">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          :pager-count="7"
+          :total="total"
+          background
+        />
+      </div>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { listLockedItems, listTicketAllocations } from '../services/deliveredItemApi'
+
+const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
+
+const route = useRoute()
+const router = useRouter()
+
+const filters = reactive({
+  customerName: '',
+  rfqNo: '',
+  partNo: '',
+  version: '',
+  materialNo: '',
+  internalProjectNo: '',
+  allocationType: '',
+  wmsProductionOrderNo: '',
+  dateRange: []
+})
+
+const allocationTypeOptions = [
+  { value: 'IN_STOCK_LOCK', label: '已入库库存锁定', type: 'success' },
+  { value: 'IN_PRODUCTION_LOCK', label: '在产库存锁定', type: 'warning' },
+  { value: 'PRODUCTION_REQUIRED', label: '待生产数量', type: 'danger' }
+]
+
+const items = ref([])
+const loading = ref(false)
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+
+watch([page, pageSize], () => loadItems())
+watch(() => route.query.ticketId, () => loadItems())
+
+const buildParams = () => {
+  const params = Object.fromEntries(Object.entries(filters)
+    .filter(([key, value]) => key !== 'dateRange' && String(value || '').trim()))
+  const [dateFrom, dateTo] = filters.dateRange || []
+  if (dateFrom) params.dateFrom = dateFrom
+  if (dateTo) params.dateTo = dateTo
+  return {
+    ...params,
+    page: page.value,
+    pageSize: pageSize.value
+  }
+}
+
+const loadItems = async () => {
+  loading.value = true
+  try {
+    if (route.query.ticketId) {
+      const records = await listTicketAllocations(route.query.ticketId)
+      items.value = Array.isArray(records) ? records : []
+      total.value = items.value.length
+      return
+    }
+    const response = await listLockedItems(buildParams())
+    items.value = response.records || []
+    total.value = response.total || 0
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '锁库零件列表加载失败。')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSearch = async () => {
+  page.value = 1
+  await loadItems()
+}
+
+const showAllItems = () => {
+  router.push({ path: '/locked-items' })
+}
+
+const allocationTypeMeta = (value) => allocationTypeOptions.find(option => option.value === value) || {
+  label: value || '-',
+  type: 'info'
+}
+
+const formatDash = (value) => value || '-'
+
+onMounted(() => loadItems())
+</script>
+
+<style scoped>
+.locked-filter-group {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.filter-input {
+  width: 150px;
+  flex: 0 0 150px;
+}
+
+.filter-input.small {
+  width: 92px;
+  flex-basis: 92px;
+}
+
+.filter-select {
+  width: 150px;
+  flex: 0 0 150px;
+}
+
+.filter-date-range {
+  width: 250px;
+  flex: 0 0 250px;
+}
+
+.locked-table-surface .erp-table-body {
+  padding: var(--erp-space-3);
+}
+
+@media (max-width: 1200px) {
+  .locked-filter-group {
+    justify-content: flex-start;
+  }
+}
+</style>

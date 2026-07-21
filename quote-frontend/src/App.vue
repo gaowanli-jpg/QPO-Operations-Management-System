@@ -116,7 +116,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
-  { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items'] },
+  { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/audit-logs'] }
 ]
 
@@ -130,6 +130,7 @@ const menuMetaByPath = {
   '/orders': { title: '订单管理', permission: 'market:order:view', icon: Document },
   '/history-orders': { title: '历史订单', permission: 'market:history-order:view', icon: Files },
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
+  '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
   '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
   '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
@@ -207,6 +208,10 @@ const shellMetaByPath = {
   '/delivered-items': {
     title: '已提零件',
     description: '查看已生成提单的零件需求池和外部系统处理状态。'
+  },
+  '/locked-items': {
+    title: '锁库零件',
+    description: '查看 WMS 返回后的库存锁定、在产锁定和待生产拆分明细。'
   },
   '/users': {
     title: '用户权限',

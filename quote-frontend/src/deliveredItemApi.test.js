@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { request } from './api'
 import * as deliveredItemApi from './services/deliveredItemApi'
-
-const currentDir = dirname(fileURLToPath(import.meta.url))
-const wmsPlanSource = readFileSync(resolve(currentDir, '..', '..', 'docs', 'QPO-MES-WMS对接', '04-WMS锁库分配与锁库零件模块开发文档.md'), 'utf8')
 
 vi.mock('./api', () => ({
   request: vi.fn()
@@ -39,12 +33,25 @@ describe('deliveredItemApi', () => {
     })
   })
 
-  test('freezes planned WMS allocation and locked item API endpoints', () => {
-    expect(wmsPlanSource).toContain('submitWmsAllocation')
-    expect(wmsPlanSource).toContain('/api/order-delivery/tickets/${ticketId}/wms-allocation')
-    expect(wmsPlanSource).toContain('listLockedItems')
-    expect(wmsPlanSource).toContain('/api/order-delivery/allocations')
-    expect(wmsPlanSource).toContain('listTicketAllocations')
-    expect(wmsPlanSource).toContain('/api/order-delivery/tickets/${ticketId}/allocations')
+  test('submitWmsAllocation posts WMS allocation task by ticket id', async () => {
+    await deliveredItemApi.submitWmsAllocation(123)
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/123/wms-allocation', {
+      method: 'POST'
+    })
+  })
+
+  test('listLockedItems calls locked item allocation endpoint with params', async () => {
+    const params = { allocationType: 'IN_PRODUCTION_LOCK', wmsProductionOrderNo: 'MO-001' }
+
+    await deliveredItemApi.listLockedItems(params)
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/allocations', { params })
+  })
+
+  test('listTicketAllocations loads allocation rows for a delivered ticket', async () => {
+    await deliveredItemApi.listTicketAllocations(123)
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/123/allocations')
   })
 })
