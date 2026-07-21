@@ -184,6 +184,36 @@ class PermissionModuleTreeTest {
     }
 
     @Test
+    void orderStatusManagementPermissionsBelongToOrderModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Order status management actions need independent order-module permissions")
+                .contains(
+                        "market:order:rollback-quoted",
+                        "market:order:rollback-priced",
+                        "market:order:discard",
+                        "market:order:restore"
+                );
+        assertThat(source)
+                .as("Status action permissions must hang under the order management MENU permission")
+                .contains(
+                        "permission(153L, \"BUTTON\", \"market:order:rollback-quoted\", \"已报价退回已核价\", null, null, false, 128, 3L)",
+                        "permission(154L, \"BUTTON\", \"market:order:rollback-priced\", \"已核价退回未核价\", null, null, false, 129, 3L)",
+                        "permission(155L, \"BUTTON\", \"market:order:discard\", \"废弃订单\", null, null, false, 130, 3L)",
+                        "permission(156L, \"BUTTON\", \"market:order:restore\", \"恢复废弃订单\", null, null, false, 131, 3L)"
+                );
+        assertThat(source)
+                .as("Order status management should be manager-controlled by default")
+                .contains(
+                        "Map.entry(\"market:order:rollback-quoted\", Set.of(\"MARKET_MANAGER\"))",
+                        "Map.entry(\"market:order:rollback-priced\", Set.of(\"MARKET_MANAGER\"))",
+                        "Map.entry(\"market:order:discard\", Set.of(\"MARKET_MANAGER\"))",
+                        "Map.entry(\"market:order:restore\", Set.of(\"MARKET_MANAGER\"))"
+                );
+    }
+
+    @Test
     void organizationPermissionsFormAssignableModuleTree() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
 

@@ -56,6 +56,30 @@ describe('orderApi', () => {
     })
   })
 
+  test('exposes order status management actions with dedicated endpoints', async () => {
+    await orderApi.rollbackQuotedOrder(12, { reason: '重新调整报价交期' })
+    await orderApi.rollbackPricedOrder(12, { reason: '工程重新核价' })
+    await orderApi.discardOrder(12, { reason: '客户取消' })
+    await orderApi.restoreOrder(12, { reason: '客户恢复询价' })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-management/orders/12/rollback-quoted', {
+      method: 'POST',
+      data: { reason: '重新调整报价交期' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-management/orders/12/rollback-priced', {
+      method: 'POST',
+      data: { reason: '工程重新核价' }
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/order-management/orders/12/discard', {
+      method: 'POST',
+      data: { reason: '客户取消' }
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/order-management/orders/12/restore', {
+      method: 'POST',
+      data: { reason: '客户恢复询价' }
+    })
+  })
+
   test('does not expose production reset helper for immutable released records', () => {
     expect('resetProduction' in orderApi).toBe(false)
   })

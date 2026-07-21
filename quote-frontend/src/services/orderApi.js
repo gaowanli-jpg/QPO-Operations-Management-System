@@ -22,6 +22,26 @@ export const deleteOrder = (orderId, { deleteFiles = false } = {}) => request(`/
   params: { deleteFiles }
 })
 
+export const rollbackQuotedOrder = (rfqId, payload = {}) => request(`/api/order-management/orders/${rfqId}/rollback-quoted`, {
+  method: 'POST',
+  data: payload
+})
+
+export const rollbackPricedOrder = (rfqId, payload = {}) => request(`/api/order-management/orders/${rfqId}/rollback-priced`, {
+  method: 'POST',
+  data: payload
+})
+
+export const discardOrder = (rfqId, payload = {}) => request(`/api/order-management/orders/${rfqId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreOrder = (rfqId, payload = {}) => request(`/api/order-management/orders/${rfqId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const supplementDrawings = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/supplement-drawings`, {
   method: 'POST',
   data: formData,

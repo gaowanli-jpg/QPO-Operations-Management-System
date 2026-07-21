@@ -66,7 +66,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
       ['MarketDashboard', ['market:rfq:import', 'market:rfq:upload-drawing']],
       ['QuoteProcess', ['market:quote-process:update-lead-time', 'market:quote-process:save-quote', 'market:quote-process:export']],
       ['MarketRelease', ['market:release:create']],
-      ['OrderManage', ['market:order:supplement-drawing']],
+      ['OrderManage', ['market:order:supplement-drawing', 'market:order:rollback-quoted', 'market:order:rollback-priced', 'market:order:discard', 'market:order:restore']],
       ['HistoryOrderManage', ['market:order:delete']],
       ['QuoteTemplateManage', ['market:template:upload']],
       ['GlobalSetup', ['engineer:setup:save-config']],

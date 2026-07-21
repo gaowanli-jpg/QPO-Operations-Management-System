@@ -280,6 +280,41 @@ const supplementResult = ref(null)
 const supplementUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 
+const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
+const ORDER_STATUS_ACTIONS = [
+  {
+    status: '已报价',
+    label: '退回已核价',
+    permission: 'market:order:rollback-quoted'
+  },
+  {
+    status: '已核价',
+    label: '退回未核价',
+    permission: 'market:order:rollback-priced'
+  },
+  {
+    status: '未核价',
+    label: '废弃',
+    permission: 'market:order:discard'
+  },
+  {
+    status: '已核价',
+    label: '废弃',
+    permission: 'market:order:discard'
+  },
+  {
+    status: '已报价',
+    label: '废弃',
+    permission: 'market:order:discard'
+  },
+  {
+    status: '废弃',
+    label: '恢复为已核价',
+    permission: 'market:order:restore'
+  }
+]
+const RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON = '订单已生成提单，不能废弃或回退'
+
 const ResultList = defineComponent({
   props: {
     items: {

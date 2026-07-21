@@ -15,6 +15,9 @@ class QuoteStatusWorkflowTest {
         assertThat(QuoteStatusWorkflow.UNPRICED).isEqualTo("未核价");
         assertThat(QuoteStatusWorkflow.PRICED).isEqualTo("已核价");
         assertThat(QuoteStatusWorkflow.QUOTED).isEqualTo("已报价");
+        assertThat(QuoteStatusWorkflow.PARTIALLY_RELEASED).isEqualTo("部分已提单");
+        assertThat(QuoteStatusWorkflow.RELEASED).isEqualTo("已生成提单");
+        assertThat(QuoteStatusWorkflow.DISCARDED).isEqualTo("废弃");
 
         assertThat(QuoteStatusWorkflow.nextAfterEngineerComplete(QuoteStatusWorkflow.UNPRICED))
                 .as("工程完成报价后只代表核价完成，不能直接变成已报价")
@@ -22,6 +25,34 @@ class QuoteStatusWorkflowTest {
         assertThat(QuoteStatusWorkflow.nextAfterMarketSaveQuote(QuoteStatusWorkflow.PRICED))
                 .as("市场保存报价单后，订单才进入已报价")
                 .isEqualTo(QuoteStatusWorkflow.QUOTED);
+    }
+
+    @Test
+    void freezesOrderManagementStatusSetAndDiscardBoundary() {
+        assertThat(QuoteStatusWorkflow.orderManagementStatuses())
+                .containsExactly(
+                        QuoteStatusWorkflow.UNPRICED,
+                        QuoteStatusWorkflow.PRICED,
+                        QuoteStatusWorkflow.QUOTED,
+                        QuoteStatusWorkflow.PARTIALLY_RELEASED,
+                        QuoteStatusWorkflow.RELEASED,
+                        QuoteStatusWorkflow.DISCARDED
+                );
+
+        assertThat(QuoteStatusWorkflow.isDiscardableOrderStatus(QuoteStatusWorkflow.UNPRICED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isDiscardableOrderStatus(QuoteStatusWorkflow.PRICED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isDiscardableOrderStatus(QuoteStatusWorkflow.QUOTED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isDiscardableOrderStatus(QuoteStatusWorkflow.PARTIALLY_RELEASED))
+                .as("部分已提单已有不可逆提单记录，不能废弃")
+                .isFalse();
+        assertThat(QuoteStatusWorkflow.isDiscardableOrderStatus(QuoteStatusWorkflow.RELEASED))
+                .as("已生成提单已有不可逆提单记录，不能废弃")
+                .isFalse();
+        assertThat(QuoteStatusWorkflow.isDiscardableOrderStatus(QuoteStatusWorkflow.DISCARDED)).isFalse();
+
+        assertThat(QuoteStatusWorkflow.isReleasedOrderStatus(QuoteStatusWorkflow.PARTIALLY_RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isReleasedOrderStatus(QuoteStatusWorkflow.RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isReleasedOrderStatus(QuoteStatusWorkflow.QUOTED)).isFalse();
     }
 
     @Test
