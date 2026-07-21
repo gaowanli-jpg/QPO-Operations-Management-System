@@ -217,7 +217,7 @@ const openDrawingPreview = async (row) => {
 }
 
 const mesSyncAction = (row) => {
-  if (row.mesSyncStatus === 'SUCCESS' && row.materialNo) return null
+  if (row.mesSyncStatus === 'SUCCESS') return null
   if (row.mesSyncStatus === 'PROCESSING') {
     return { label: '处理中', type: 'warning', disabled: true }
   }

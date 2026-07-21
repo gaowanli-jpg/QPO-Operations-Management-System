@@ -24,7 +24,8 @@ describe('DeliveredItemManage MES material sync guardrails', () => {
     expect(pageSource).toContain('处理中')
     expect(pageSource).toContain("row.mesSyncStatus === 'PROCESSING'")
     expect(pageSource).toContain("row.mesSyncStatus === 'FAILED'")
-    expect(pageSource).toContain("row.mesSyncStatus === 'SUCCESS' && row.materialNo")
+    expect(pageSource).toContain("row.mesSyncStatus === 'SUCCESS') return null")
+    expect(pageSource).not.toContain("row.mesSyncStatus === 'SUCCESS' && row.materialNo")
   })
 
   test('confirms submission and reports task id after MES sync task is created', () => {
