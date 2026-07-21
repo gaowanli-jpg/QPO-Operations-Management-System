@@ -61,6 +61,9 @@ describe('QPO app shell polish', () => {
     expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:history-order:view'")
     expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
     expect(appVue).toContain("'/locked-items': { title: '锁库零件', permission: 'market:locked-item:view'")
+    expect(appVue).not.toContain("'/delivered-items': { title: '已提零件', permission: 'market:order:view'")
+    expect(appVue).not.toContain("'/locked-items': { title: '锁库零件', permission: 'market:order:view'")
+    expect(appVue).not.toContain("'/locked-items': { title: '锁库零件', permission: 'market:delivered-item:view'")
     expect(appVue).not.toContain("permission: 'market:order:view', icon: Files")
   })
 

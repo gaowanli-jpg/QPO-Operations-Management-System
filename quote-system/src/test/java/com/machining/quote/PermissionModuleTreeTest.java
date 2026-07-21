@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +30,27 @@ class PermissionModuleTreeTest {
     private static final Path DELIVERED_ITEM_MES_SYNC_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V46__delivery_ticket_mes_sync_permission.sql");
     private static final Path WMS_ALLOCATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V47__delivery_ticket_wms_allocation_permissions.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
+    private static final Path DOCS_ROOT = Path.of("..", "docs");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
+    private static final List<String> APS_TARGET_SYSTEM_PHRASES = List.of(
+            "APS 同步工艺快照",
+            "本批次 APS",
+            "APS 需要的",
+            "APS 增量同步",
+            "APS 同步安全性",
+            "APS 继续从",
+            "APS 同步只从",
+            "APS 数据源对新",
+            "APS 数据源只读取",
+            "APS 同步能拉到",
+            "APS 同步新数据",
+            "APS 同步继续按",
+            "APS 端可继续",
+            "APS 会被迫",
+            "APS 可能已经",
+            "APS 同步稳定性",
+            "APS 同步不能被破坏"
+    );
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
             Pattern.MULTILINE
@@ -193,6 +214,70 @@ class PermissionModuleTreeTest {
                         "READONLY"
                 )
                 .doesNotContain("market:delivered-item:wms-allocate' AND r.role_code = 'READONLY'");
+    }
+
+    @Test
+    void mesWmsFinalPermissionsAreCompleteAndModuleScoped() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("MES/WMS final governance permissions must all exist in the fallback catalog")
+                .contains(
+                        "market:delivered-item:view",
+                        "market:delivered-item:file-preview",
+                        "market:delivered-item:mes-sync",
+                        "market:delivered-item:wms-allocate",
+                        "market:locked-item:view"
+                );
+        assertThat(source)
+                .as("Delivered and locked items must stay as independent order MENU modules")
+                .contains(
+                        "permission(158L, \"MENU\", \"market:delivered-item:view\"",
+                        "\"/delivered-items\"",
+                        "\"DeliveredItemManage\"",
+                        "permission(162L, \"MENU\", \"market:locked-item:view\"",
+                        "\"/locked-items\"",
+                        "\"LockedItemManage\""
+                );
+        assertThat(source)
+                .as("MES/WMS delivered-item actions and file preview must hang under delivered items")
+                .contains(
+                        "permission(159L, \"API\", \"market:delivered-item:file-preview\"",
+                        "127, 158L)",
+                        "permission(160L, \"BUTTON\", \"market:delivered-item:mes-sync\"",
+                        "128, 158L)",
+                        "permission(161L, \"BUTTON\", \"market:delivered-item:wms-allocate\"",
+                        "129, 158L)"
+                );
+        assertThat(source)
+                .as("No MES/WMS ability should be introduced as an assignable common permission")
+                .doesNotContain("common:mes", "common:wms", "common:delivered-item", "common:locked-item");
+    }
+
+    @Test
+    void qpoDocsNoLongerDescribeApsAsFutureTargetSystem() throws IOException {
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(DOCS_ROOT)) {
+            for (Path file : files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".md"))
+                    .filter(this::isQpoGovernanceDoc)
+                    .toList()) {
+                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+                for (int i = 0; i < lines.size(); i++) {
+                    String line = lines.get(i);
+                    for (String phrase : APS_TARGET_SYSTEM_PHRASES) {
+                        if (line.contains(phrase)) {
+                            violations.add(file + ":" + (i + 1) + " contains " + phrase);
+                        }
+                    }
+                }
+            }
+        }
+
+        assertThat(violations)
+                .as("QPO docs may mention old APS compatibility, but must not describe APS as a future target system")
+                .isEmpty();
     }
 
     @Test
@@ -425,6 +510,14 @@ class PermissionModuleTreeTest {
             routes.put(matcher.group(1), matcher.group(2));
         }
         return routes;
+    }
+
+    private boolean isQpoGovernanceDoc(Path path) {
+        String normalized = path.toString().replace('\\', '/');
+        return normalized.contains("/QPO-MES-WMS")
+                || normalized.contains("/QPO报价状态流转")
+                || normalized.contains("/QPO权限用户体系")
+                || normalized.contains("/QPO日志模块");
     }
 
     private record PermissionRow(String type, String code, String path) {

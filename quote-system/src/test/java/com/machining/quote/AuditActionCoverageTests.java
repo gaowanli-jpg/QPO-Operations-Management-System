@@ -331,6 +331,16 @@ class AuditActionCoverageTests {
     }
 
     @Test
+    void mesWmsAuditActionsExposeStableChineseLabels() {
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isEqualTo("提交MES物料号同步");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isEqualTo("MES物料号同步成功");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_FAILED")).isEqualTo("MES物料号同步失败");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("提交WMS锁库");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("WMS锁库成功");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("WMS锁库失败");
+    }
+
+    @Test
     void wmsAllocationAuditActionsAndFileLogEventsAreReserved() throws Exception {
         String plan = Files.readString(WMS_ALLOCATION_PLAN, StandardCharsets.UTF_8);
 

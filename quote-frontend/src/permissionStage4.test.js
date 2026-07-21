@@ -43,6 +43,11 @@ describe('QPO permission stage 4 menu and button permissions', () => {
     expect(routerSource).not.toContain('anyPermissions')
 
     expect(routePermissionEntries()).toEqual(protectedRoutePermissions)
+    expect(routePermissionEntries()['/delivered-items']).toBe('market:delivered-item:view')
+    expect(routePermissionEntries()['/locked-items']).toBe('market:locked-item:view')
+    expect(routePermissionEntries()['/delivered-items']).not.toBe(routePermissionEntries()['/locked-items'])
+    expect(routePermissionEntries()['/delivered-items']).not.toBe('market:order:view')
+    expect(routePermissionEntries()['/locked-items']).not.toBe('market:order:view')
     expect(routerSource).toContain('authStore.hasPermission(permission)')
   })
 
