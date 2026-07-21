@@ -29,6 +29,7 @@ class PermissionModuleTreeTest {
     private static final Path DELIVERED_ITEM_FOUNDATION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
     private static final Path DELIVERED_ITEM_MES_SYNC_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V46__delivery_ticket_mes_sync_permission.sql");
     private static final Path WMS_ALLOCATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V47__delivery_ticket_wms_allocation_permissions.sql");
+    private static final Path MES_WMS_PERMISSION_TREE_REPAIR_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V49__mes_wms_permission_tree_repair.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path DOCS_ROOT = Path.of("..", "docs");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
@@ -214,6 +215,22 @@ class PermissionModuleTreeTest {
                         "READONLY"
                 )
                 .doesNotContain("market:delivered-item:wms-allocate' AND r.role_code = 'READONLY'");
+    }
+
+    @Test
+    void mesWmsPermissionTreeRepairMigrationKeepsDeliveredItemChildrenAttached() throws IOException {
+        String migration = Files.readString(MES_WMS_PERMISSION_TREE_REPAIR_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .as("Older databases that already ran V45 need delivered-item children reattached under the module")
+                .contains(
+                        "market:delivered-item:view",
+                        "market:delivered-item:file-preview",
+                        "market:delivered-item:mes-sync",
+                        "market:delivered-item:wms-allocate",
+                        "market:locked-item:view",
+                        "parent_id = delivered_item.id"
+                );
     }
 
     @Test

@@ -67,8 +67,8 @@ class DeliveredItemQueryBackendTest {
                         "FROM order_delivery_ticket ticket",
                         "LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id",
                         "LEFT JOIN item_quote_version item ON item.id = ticket.item_id",
-                        "rfq.rfq_no AS rfq_no",
-                        "rfq.customer_name AS customer_name",
+                        "COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no",
+                        "COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name",
                         "item.drawing_url AS drawing_url"
                 );
     }

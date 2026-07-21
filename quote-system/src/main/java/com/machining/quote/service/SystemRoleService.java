@@ -472,7 +472,10 @@ public class SystemRoleService {
         if (permissionCode == null) {
             return null;
         }
-        if (permissionCode.startsWith("market:order:") || permissionCode.startsWith("market:history-order:")) {
+        if (permissionCode.startsWith("market:order:")
+                || permissionCode.startsWith("market:history-order:")
+                || permissionCode.startsWith("market:delivered-item:")
+                || permissionCode.startsWith("market:locked-item:")) {
             return "orders";
         }
         if (permissionCode.startsWith("market:")) {

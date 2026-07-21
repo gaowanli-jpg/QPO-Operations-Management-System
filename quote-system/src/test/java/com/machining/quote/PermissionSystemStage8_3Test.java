@@ -77,6 +77,32 @@ class PermissionSystemStage8_3Test {
     }
 
     @Test
+    void permissionTreeKeepsDeliveredAndLockedItemsUnderOrderGroup() {
+        SystemPermissionMapper permissionMapper = mock(SystemPermissionMapper.class);
+        SystemRoleService service = new SystemRoleService();
+        ReflectionTestUtils.setField(service, "permissionMapper", permissionMapper);
+
+        when(permissionMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
+                permission(3L, 0L, "MENU", "market:order:view", "Order", true, true, 120),
+                permission(158L, 0L, "MENU", "market:delivered-item:view", "Delivered Items", true, true, 126),
+                permission(159L, 158L, "API", "market:delivered-item:file-preview", "Delivered Item File Preview", false, true, 127),
+                permission(161L, 158L, "BUTTON", "market:delivered-item:wms-allocate", "WMS Allocate", false, true, 129),
+                permission(162L, 0L, "MENU", "market:locked-item:view", "Locked Items", true, true, 127)
+        ));
+
+        List<PermissionTreeNodeDTO> tree = service.listPermissionTree();
+
+        PermissionTreeNodeDTO orderGroup = findNode(tree, "group:orders");
+        assertThat(orderGroup.getChildren())
+                .as("Delivered and locked item pages are order sidebar modules, not market modules")
+                .extracting(PermissionTreeNodeDTO::getPermissionCode)
+                .contains("market:order:view", "market:delivered-item:view", "market:locked-item:view");
+        assertThat(findNode(orderGroup.getChildren(), "market:delivered-item:view").getChildren())
+                .extracting(PermissionTreeNodeDTO::getPermissionCode)
+                .containsExactly("market:delivered-item:file-preview", "market:delivered-item:wms-allocate");
+    }
+
+    @Test
     void assignPermissionsAddsParentMenuFiltersGroupKeysAndAuditsDelta() {
         SystemRoleMapper roleMapper = mock(SystemRoleMapper.class);
         SystemPermissionMapper permissionMapper = mock(SystemPermissionMapper.class);
