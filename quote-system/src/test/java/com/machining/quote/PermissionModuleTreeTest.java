@@ -26,6 +26,7 @@ class PermissionModuleTreeTest {
     private static final Path PRICING_SHEET_EXPORT_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V41__engineer_pricing_sheet_export_permission.sql");
     private static final Path RFQ_ORDER_TYPE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V44__rfq_order_type_select_permission.sql");
     private static final Path DELIVERED_ITEM_FOUNDATION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
+    private static final Path DELIVERED_ITEM_MES_SYNC_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V46__delivery_ticket_mes_sync_permission.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -119,6 +120,24 @@ class PermissionModuleTreeTest {
                 .as("Market users and managers can request MES material numbers; read-only users cannot")
                 .contains("Map.entry(\"market:delivered-item:mes-sync\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))")
                 .doesNotContain("Map.entry(\"market:delivered-item:mes-sync\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+    }
+
+    @Test
+    void deliveredItemMesSyncMigrationKeepsDatabaseCatalogAligned() throws IOException {
+        String migration = Files.readString(DELIVERED_ITEM_MES_SYNC_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .as("MES material sync must be added to the database permission tree under delivered items")
+                .contains(
+                        "market:delivered-item:view",
+                        "market:delivered-item:mes-sync",
+                        "BUTTON",
+                        "128",
+                        "SUPER_ADMIN",
+                        "MARKET_USER",
+                        "MARKET_MANAGER"
+                )
+                .doesNotContain("WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER', 'READONLY')");
     }
 
     @Test
