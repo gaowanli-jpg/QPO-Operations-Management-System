@@ -1,8 +1,11 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.OrderStatusChangeReq;
+import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.OrderManagementService;
+import com.machining.quote.service.OrderStatusManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +19,8 @@ import java.util.Map;
 public class OrderManagementController {
     @Autowired
     private OrderManagementService orderManagementService;
+    @Autowired
+    private OrderStatusManagementService orderStatusManagementService;
 
     @GetMapping("/orders")
     @RequirePermission("market:order:view")
@@ -61,5 +66,37 @@ public class OrderManagementController {
             @RequestParam(value = "deleteFiles", defaultValue = "true") boolean deleteFiles) {
         orderManagementService.deleteOrderCompletely(rfqId, deleteFiles);
         return Map.of("success", true, "message", "订单及关联数据已彻底删除");
+    }
+
+    @PostMapping("/orders/{rfqId}/rollback-quoted")
+    @RequirePermission("market:order:rollback-quoted")
+    public OrderStatusChangeResult rollbackQuoted(
+            @PathVariable Integer rfqId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return orderStatusManagementService.rollbackQuoted(rfqId, req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{rfqId}/rollback-priced")
+    @RequirePermission("market:order:rollback-priced")
+    public OrderStatusChangeResult rollbackPriced(
+            @PathVariable Integer rfqId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return orderStatusManagementService.rollbackPriced(rfqId, req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{rfqId}/discard")
+    @RequirePermission("market:order:discard")
+    public OrderStatusChangeResult discard(
+            @PathVariable Integer rfqId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return orderStatusManagementService.discard(rfqId, req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{rfqId}/restore")
+    @RequirePermission("market:order:restore")
+    public OrderStatusChangeResult restore(
+            @PathVariable Integer rfqId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return orderStatusManagementService.restore(rfqId, req == null ? new OrderStatusChangeReq() : req);
     }
 }

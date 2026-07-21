@@ -100,6 +100,10 @@ class PermissionSystemStage5Test {
                 .contains("@RequirePermission(\"market:history-order:customer-select\")")
                 .contains("@RequirePermission(\"market:order:supplement-drawing\")")
                 .contains("@RequirePermission(\"market:order:delete\")")
+                .contains("@RequirePermission(\"market:order:rollback-quoted\")")
+                .contains("@RequirePermission(\"market:order:rollback-priced\")")
+                .contains("@RequirePermission(\"market:order:discard\")")
+                .contains("@RequirePermission(\"market:order:restore\")")
                 .doesNotContain("common:order:select")
                 .doesNotContain("common:customer:select");
         assertThat(admin)
@@ -156,6 +160,18 @@ class PermissionSystemStage5Test {
         assertThat(allowed).isTrue();
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(AuthContext.get()).isNotNull();
+    }
+
+    @Test
+    void interceptorRejectsOrderStatusActionWhenPermissionIsMissing() throws Exception {
+        AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:order:view"));
+        MockHttpServletRequest request = request();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        boolean allowed = interceptor.preHandle(request, response, handler("discardOrder"));
+
+        assertThat(allowed).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
     }
 
     @Test
@@ -219,6 +235,10 @@ class PermissionSystemStage5Test {
     static class SecuredController {
         @RequirePermission("market:rfq:import")
         public void importRfq() {
+        }
+
+        @RequirePermission("market:order:discard")
+        public void discardOrder() {
         }
     }
 }
