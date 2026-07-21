@@ -21,6 +21,17 @@
         <el-select v-model="filters.wmsAllocateStatus" clearable placeholder="WMS状态" class="filter-select" @change="handleSearch" @clear="handleSearch">
           <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
+        <el-date-picker
+          v-model="filters.dateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="至"
+          start-placeholder="提单日期起"
+          end-placeholder="提单日期止"
+          class="filter-date-range"
+          @change="handleSearch"
+          @clear="handleSearch"
+        />
         <el-button @click="handleSearch">搜索</el-button>
         <el-button type="primary" :loading="loading" @click="loadItems">刷新</el-button>
       </div>
@@ -48,9 +59,22 @@
             <template #default="{ row }"><el-tag :type="statusTagType(row.wmsAllocateStatus)" size="small">{{ statusText(row.wmsAllocateStatus) }}</el-tag></template>
           </el-table-column>
           <el-table-column prop="deliveryDate" label="交货日期" width="120" />
-          <el-table-column label="操作" width="100" align="center" fixed="right">
+          <el-table-column label="操作" width="170" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" @click="openDetail(row)">详情</el-button>
+              <div class="erp-table-actions delivered-row-actions">
+                <el-button size="small" @click="openDetail(row)">详情</el-button>
+                <el-button
+                  v-if="row.drawingUrl"
+                  v-permission="DELIVERED_ITEM_FILE_PREVIEW_PERMISSION"
+                  size="small"
+                  type="primary"
+                  plain
+                  @click="openDrawingPreview(row)"
+                >
+                  预览图纸
+                </el-button>
+                <el-tag v-else type="info" size="small">无图纸</el-tag>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -93,9 +117,11 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { openAuthenticatedFileInNewWindow } from '../api'
 import { getDeliveredItem, listDeliveredItems } from '../services/deliveredItemApi'
 
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
+const DELIVERED_ITEM_FILE_PREVIEW_PERMISSION = 'market:delivered-item:file-preview'
 
 const filters = reactive({
   customerName: '',
@@ -105,7 +131,8 @@ const filters = reactive({
   materialNo: '',
   internalProjectNo: '',
   mesSyncStatus: '',
-  wmsAllocateStatus: ''
+  wmsAllocateStatus: '',
+  dateRange: []
 })
 const syncStatusOptions = [
   { value: 'PENDING', label: '未处理' },
@@ -123,11 +150,18 @@ const selectedItem = ref(null)
 
 watch([page, pageSize], () => loadItems())
 
-const buildParams = () => ({
-  ...Object.fromEntries(Object.entries(filters).filter(([, value]) => String(value || '').trim())),
-  page: page.value,
-  pageSize: pageSize.value
-})
+const buildParams = () => {
+  const params = Object.fromEntries(Object.entries(filters)
+    .filter(([key, value]) => key !== 'dateRange' && String(value || '').trim()))
+  const [dateFrom, dateTo] = filters.dateRange || []
+  if (dateFrom) params.dateFrom = dateFrom
+  if (dateTo) params.dateTo = dateTo
+  return {
+    ...params,
+    page: page.value,
+    pageSize: pageSize.value
+  }
+}
 
 const loadItems = async () => {
   loading.value = true
@@ -155,6 +189,16 @@ const openDetail = async (row) => {
   } catch (error) {
     console.error(error)
     ElMessage.error(error.response?.data?.message || error.message || '已提零件详情加载失败。')
+  }
+}
+
+const openDrawingPreview = async (row) => {
+  if (!row?.drawingUrl) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  const result = await openAuthenticatedFileInNewWindow(row.drawingUrl)
+  if (!result.success) {
+    ElMessage.warning(result.blocked ? '浏览器拦截了新窗口，请允许弹窗后重试。' : (result.message || '图纸打开失败。'))
   }
 }
 
@@ -210,8 +254,21 @@ onMounted(() => loadItems())
   flex: 0 0 130px;
 }
 
+.filter-date-range {
+  width: 250px;
+  flex: 0 0 250px;
+}
+
 .delivered-table-surface .erp-table-body {
   padding: var(--erp-space-3);
+}
+
+.delivered-row-actions {
+  justify-content: center;
+}
+
+.delivered-row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .detail-wrap {

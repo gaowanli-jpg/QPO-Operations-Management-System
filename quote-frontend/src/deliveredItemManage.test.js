@@ -9,7 +9,7 @@ const source = readFileSync(resolve(currentDir, 'components', 'DeliveredItemMana
 describe('DeliveredItemManage foundation page', () => {
   test('freezes delivered item page title, filters, and core columns', () => {
     expect(source).toContain('已提零件')
-    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', 'MES状态', 'WMS状态']) {
+    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', 'MES状态', 'WMS状态', '提单日期']) {
       expect(source).toContain(label)
     }
     for (const label of ['提单ID', '图号', '物料号', '提单数量', 'MES状态', 'WMS状态']) {
@@ -30,5 +30,20 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('formatProcessRoute')
     expect(source).toContain('JSON.parse')
     expect(source).not.toContain('工艺解析失败')
+  })
+
+  test('maps delivery date range filters to backend query params', () => {
+    expect(source).toContain('dateRange')
+    expect(source).toContain('dateFrom')
+    expect(source).toContain('dateTo')
+    expect(source).toContain('value-format="YYYY-MM-DD"')
+  })
+
+  test('wires drawing preview to delivered item module permission', () => {
+    expect(source).toContain('market:delivered-item:file-preview')
+    expect(source).toContain('预览图纸')
+    expect(source).toContain('openDrawingPreview')
+    expect(source).toContain('当前零件没有绑定图纸。')
+    expect(source).toContain('图纸打开失败。')
   })
 })
