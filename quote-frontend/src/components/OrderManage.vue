@@ -23,11 +23,28 @@
           v-model="keyword"
           clearable
           :disabled="!selectedCustomer"
-          placeholder="搜索 RFQ 号 / 状态"
+          placeholder="搜索 RFQ 号"
           class="search-input"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
+        <el-select
+          v-model="statusFilter"
+          clearable
+          :disabled="!selectedCustomer"
+          placeholder="全部状态"
+          class="status-select"
+          @change="handleSearch"
+          @clear="handleSearch"
+        >
+          <el-option label="全部状态" value="" />
+          <el-option
+            v-for="status in ORDER_MANAGEMENT_STATUSES"
+            :key="status"
+            :label="status"
+            :value="status"
+          />
+        </el-select>
         <el-button :disabled="!selectedCustomer" @click="handleSearch">搜索</el-button>
         <el-button type="primary" :loading="loading" :disabled="!selectedCustomer" @click="refreshOrders">刷新</el-button>
       </div>
@@ -69,10 +86,30 @@
             <template #default="scope">{{ scope.row.processSheetCount || 0 }}</template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-          <el-table-column label="操作" width="100" align="center" fixed="right">
+          <el-table-column label="操作" width="270" align="center" fixed="right">
             <template #default="scope">
-              <div class="erp-table-actions">
+              <div class="erp-table-actions order-row-actions">
                 <el-button size="small" @click="openDetail(scope.row)">详情</el-button>
+                <el-button
+                  v-for="action in rowStatusActions(scope.row)"
+                  :key="`${scope.row.id}-${action.label}`"
+                  v-permission="action.permission"
+                  size="small"
+                  :type="action.type"
+                  plain
+                  class="status-action-button"
+                  :loading="statusActionLoadingKey === statusActionKey(scope.row, action)"
+                  @click="handleStatusAction(scope.row, action)"
+                >
+                  {{ action.label }}
+                </el-button>
+                <el-tooltip
+                  v-if="statusActionLocked(scope.row)"
+                  :content="RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON"
+                  placement="top"
+                >
+                  <span class="status-locked-label">状态锁定</span>
+                </el-tooltip>
               </div>
             </template>
           </el-table-column>
@@ -254,22 +291,28 @@
 
 <script setup>
 import { computed, defineComponent, h, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
+  discardOrder,
   getOrder,
   listOrders,
+  restoreOrder,
+  rollbackPricedOrder,
+  rollbackQuotedOrder,
   supplementDrawings
 } from '../services/orderApi'
 
 const orders = ref([])
 const selectedCustomer = ref('')
 const keyword = ref('')
+const statusFilter = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
+const statusActionLoadingKey = ref('')
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const orderDetail = ref(null)
@@ -281,36 +324,85 @@ const supplementUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 
 const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
+const RELEASED_ORDER_STATUSES = ['部分已提单', '已生成提单']
 const ORDER_STATUS_ACTIONS = [
   {
     status: '已报价',
     label: '退回已核价',
-    permission: 'market:order:rollback-quoted'
+    permission: 'market:order:rollback-quoted',
+    handler: rollbackQuotedOrder,
+    type: 'warning',
+    reason: '订单管理：已报价退回已核价',
+    successMessage: '订单已退回已核价。',
+    errorMessage: '退回已核价失败。',
+    confirmTitle: '退回已核价',
+    confirmButtonText: '确认退回',
+    confirmMessage: (row) => `确认将订单「${row.rfqNo || row.id}」从“已报价”退回“已核价”吗？系统只调整订单和零件状态，不会清空报价交期、核价结果或图纸。`
   },
   {
     status: '已核价',
     label: '退回未核价',
-    permission: 'market:order:rollback-priced'
+    permission: 'market:order:rollback-priced',
+    handler: rollbackPricedOrder,
+    type: 'warning',
+    reason: '订单管理：已核价退回未核价',
+    successMessage: '订单已退回未核价。',
+    errorMessage: '退回未核价失败。',
+    confirmTitle: '退回未核价',
+    confirmButtonText: '确认退回',
+    confirmMessage: (row) => `确认将订单「${row.rfqNo || row.id}」从“已核价”退回“未核价”吗？系统只调整状态，已有核价数据会保留为草稿。`
   },
   {
     status: '未核价',
     label: '废弃',
-    permission: 'market:order:discard'
+    permission: 'market:order:discard',
+    handler: discardOrder,
+    type: 'danger',
+    reason: '订单管理：废弃未核价订单',
+    successMessage: '订单已废弃。',
+    errorMessage: '废弃订单失败。',
+    confirmTitle: '废弃订单',
+    confirmButtonText: '确认废弃',
+    confirmMessage: (row) => `确认废弃订单「${row.rfqNo || row.id}」吗？废弃后订单不会进入核价、报价处理和议价提单候选，但数据仍保留。`
   },
   {
     status: '已核价',
     label: '废弃',
-    permission: 'market:order:discard'
+    permission: 'market:order:discard',
+    handler: discardOrder,
+    type: 'danger',
+    reason: '订单管理：废弃已核价订单',
+    successMessage: '订单已废弃。',
+    errorMessage: '废弃订单失败。',
+    confirmTitle: '废弃订单',
+    confirmButtonText: '确认废弃',
+    confirmMessage: (row) => `确认废弃订单「${row.rfqNo || row.id}」吗？系统只调整状态，不会清空核价结果、报价交期或图纸。`
   },
   {
     status: '已报价',
     label: '废弃',
-    permission: 'market:order:discard'
+    permission: 'market:order:discard',
+    handler: discardOrder,
+    type: 'danger',
+    reason: '订单管理：废弃已报价订单',
+    successMessage: '订单已废弃。',
+    errorMessage: '废弃订单失败。',
+    confirmTitle: '废弃订单',
+    confirmButtonText: '确认废弃',
+    confirmMessage: (row) => `确认废弃订单「${row.rfqNo || row.id}」吗？系统只调整状态，不会清空报价单数据。`
   },
   {
     status: '废弃',
     label: '恢复为已核价',
-    permission: 'market:order:restore'
+    permission: 'market:order:restore',
+    handler: restoreOrder,
+    type: 'success',
+    reason: '订单管理：恢复废弃订单',
+    successMessage: '订单已恢复为已核价。',
+    errorMessage: '恢复订单失败。',
+    confirmTitle: '恢复订单',
+    confirmButtonText: '确认恢复',
+    confirmMessage: (row) => `确认将废弃订单「${row.rfqNo || row.id}」恢复为“已核价”吗？恢复后仍需按后续业务校验保存报价单。`
   }
 ]
 const RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON = '订单已生成提单，不能废弃或回退'
@@ -352,6 +444,7 @@ const loadOrders = async () => {
     const response = await listOrders({
       customerName: selectedCustomer.value,
       keyword: keyword.value.trim() || undefined,
+      status: statusFilter.value || undefined,
       page: page.value,
       pageSize: pageSize.value
     })
@@ -376,6 +469,7 @@ const handleSearch = async () => {
 
 const handleCustomerChange = async () => {
   keyword.value = ''
+  statusFilter.value = ''
   page.value = 1
   orderDetail.value = null
   detailVisible.value = false
@@ -389,6 +483,7 @@ const handleCustomerSelected = async (customer) => {
 
 const handleCustomerClear = () => {
   keyword.value = ''
+  statusFilter.value = ''
   orders.value = []
   total.value = 0
   page.value = 1
@@ -430,6 +525,56 @@ const refreshCurrentDetail = async () => {
   if (!orderDetail.value?.orderInfo?.id) return
   const currentId = orderDetail.value.orderInfo.id
   orderDetail.value = await getOrder(currentId)
+}
+
+const statusActionLocked = (row) => {
+  if (!row) return false
+  return RELEASED_ORDER_STATUSES.includes(row.status) || Number(row.ticketCount || 0) > 0
+}
+
+const rowStatusActions = (row) => {
+  if (!row || statusActionLocked(row)) {
+    return []
+  }
+  return ORDER_STATUS_ACTIONS.filter(action => action.status === row.status)
+}
+
+const statusActionKey = (row, action) => `${row?.id || 'unknown'}:${action.label}`
+
+const handleStatusAction = async (row, action) => {
+  if (!row?.id || !action?.handler) return
+  try {
+    await ElMessageBox.confirm(
+      action.confirmMessage(row),
+      action.confirmTitle,
+      {
+        type: action.type === 'danger' ? 'error' : 'warning',
+        confirmButtonText: action.confirmButtonText,
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+  await performStatusAction(row, action)
+}
+
+const performStatusAction = async (row, action) => {
+  const loadingKey = statusActionKey(row, action)
+  statusActionLoadingKey.value = loadingKey
+  try {
+    const response = await action.handler(row.id, { reason: action.reason })
+    ElMessage.success(response.message || action.successMessage)
+    await loadOrders()
+    await refreshCurrentDetail()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || action.errorMessage)
+  } finally {
+    if (statusActionLoadingKey.value === loadingKey) {
+      statusActionLoadingKey.value = ''
+    }
+  }
 }
 
 const submitSupplementDrawings = async () => {
@@ -516,6 +661,11 @@ const formatRoute = (route) => {
   flex: 0 0 260px;
 }
 
+.status-select {
+  width: 150px;
+  flex: 0 0 150px;
+}
+
 .order-table-surface {
   overflow: hidden;
 }
@@ -526,6 +676,30 @@ const formatRoute = (route) => {
 
 .order-table-surface .erp-empty-state {
   margin: var(--erp-space-4);
+}
+
+.order-row-actions {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.status-action-button {
+  margin-left: 0;
+}
+
+.status-locked-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  background: var(--erp-surface-soft);
+  cursor: default;
 }
 
 .detail-wrap {
@@ -627,8 +801,10 @@ const formatRoute = (route) => {
 
 @media (max-width: 760px) {
   .customer-picker-trigger,
-  .search-input {
+  .search-input,
+  .status-select {
     width: 100%;
+    flex-basis: 100%;
   }
 }
 </style>

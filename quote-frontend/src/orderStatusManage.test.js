@@ -48,4 +48,30 @@ describe('order status management stage 0 guardrails', () => {
     expect(orderApi).toContain('restoreOrder')
     expect(orderApi).toContain('/api/order-management/orders/${rfqId}/restore')
   })
+
+  test('wires the status filter into the order query params', () => {
+    expect(orderManage).toContain('v-model="statusFilter"')
+    expect(orderManage).toContain('v-for="status in ORDER_MANAGEMENT_STATUSES"')
+    expect(orderManage).toContain('status: statusFilter.value || undefined')
+    expect(orderManage).toContain('statusFilter.value = \'\'')
+  })
+
+  test('renders allowed row status actions with permission guards only for mutable states', () => {
+    expect(orderManage).toContain('rowStatusActions(scope.row)')
+    expect(orderManage).toContain('v-permission="action.permission"')
+    expect(orderManage).toContain('@click="handleStatusAction(scope.row, action)"')
+    expect(orderManage).toContain('ORDER_STATUS_ACTIONS.filter(action => action.status === row.status)')
+    expect(orderManage).toContain('return []')
+    expect(orderManage).toContain('RELEASED_ORDER_STATUSES.includes(row.status)')
+    expect(orderManage).toContain('Number(row.ticketCount || 0) > 0')
+  })
+
+  test('confirms and executes status actions then refreshes list and opened detail', () => {
+    expect(orderManage).toContain('ElMessageBox.confirm')
+    expect(orderManage).toContain('action.handler(row.id, { reason: action.reason })')
+    expect(orderManage).toContain('await loadOrders()')
+    expect(orderManage).toContain('await refreshCurrentDetail()')
+    expect(orderManage).toContain('ElMessage.success(response.message')
+    expect(orderManage).toContain('error.response?.data?.message || action.errorMessage')
+  })
 })
