@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 @Service
@@ -60,6 +61,8 @@ public class MesMaterialClient {
         } catch (HttpStatusCodeException error) {
             throw new RuntimeException("MES material resolve failed status=" + error.getStatusCode().value()
                     + " message=" + abbreviate(error.getResponseBodyAsString()), error);
+        } catch (ResourceAccessException error) {
+            throw new RuntimeException("MES material resolve failed message=" + abbreviate(error.getMessage()), error);
         }
     }
 
