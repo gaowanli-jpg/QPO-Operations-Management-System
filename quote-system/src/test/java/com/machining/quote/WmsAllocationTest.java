@@ -122,6 +122,7 @@ class WmsAllocationTest {
         when(ticketMapper.selectOne(any())).thenReturn(ticket());
         when(orderMapper.selectById(88)).thenReturn(order());
         when(client.allocate(any())).thenReturn(successResponse(3, locks(lock("MO-001", 4), lock("MO-002", 2))));
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
 
         Map<String, Object> result = service.allocate(123, 9001L);
@@ -159,10 +160,12 @@ class WmsAllocationTest {
                     assertThat(row.getStatus()).isEqualTo("ACTIVE");
                     assertThat(row.getSourcePayload()).isNotNull();
                 });
-        ArgumentCaptor<OrderDeliveryTicket> updates = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
-        verify(ticketMapper, times(2)).updateById(updates.capture());
-        assertThat(updates.getAllValues().get(0).getWmsAllocateStatus()).isEqualTo("PROCESSING");
-        OrderDeliveryTicket success = updates.getAllValues().get(1);
+        ArgumentCaptor<OrderDeliveryTicket> processing = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).update(processing.capture(), any());
+        assertThat(processing.getValue().getWmsAllocateStatus()).isEqualTo("PROCESSING");
+        ArgumentCaptor<OrderDeliveryTicket> successCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).updateById(successCaptor.capture());
+        OrderDeliveryTicket success = successCaptor.getValue();
         assertThat(success.getWmsAllocateStatus()).isEqualTo("SUCCESS");
         assertThat(success.getWmsAllocateMessage()).isEqualTo("allocated");
         assertThat(success.getWmsAllocatedAt()).isNotNull();
@@ -190,6 +193,7 @@ class WmsAllocationTest {
         when(ticketMapper.selectOne(any())).thenReturn(ticket());
         when(orderMapper.selectById(88)).thenReturn(order());
         when(client.allocate(any())).thenReturn(successResponse(9, locks(lock("MO-001", 2))));
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
 
         assertThatThrownBy(() -> service.allocate(123, 9002L))
@@ -197,9 +201,12 @@ class WmsAllocationTest {
                 .hasMessageContaining("WMS locked quantity exceeds demand");
 
         verify(allocationMapper, never()).insert(any());
-        ArgumentCaptor<OrderDeliveryTicket> updates = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
-        verify(ticketMapper, times(2)).updateById(updates.capture());
-        OrderDeliveryTicket failed = updates.getAllValues().get(1);
+        ArgumentCaptor<OrderDeliveryTicket> processing = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).update(processing.capture(), any());
+        assertThat(processing.getValue().getWmsAllocateStatus()).isEqualTo("PROCESSING");
+        ArgumentCaptor<OrderDeliveryTicket> failedCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).updateById(failedCaptor.capture());
+        OrderDeliveryTicket failed = failedCaptor.getValue();
         assertThat(failed.getWmsAllocateStatus()).isEqualTo("FAILED");
         assertThat(failed.getWmsAllocateMessage()).contains("WMS locked quantity exceeds demand");
         verify(auditService).record(
@@ -213,6 +220,30 @@ class WmsAllocationTest {
                 contains("ticketId=123 taskId=9002"),
                 contains("WMS locked quantity exceeds demand")
         );
+    }
+
+    @Test
+    void allocateRejectsAlreadySuccessfulTicketWithoutChangingStatusOrRows() {
+        WmsAllocationService service = new WmsAllocationService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        WmsAllocationClient client = mock(WmsAllocationClient.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setWmsAllocateStatus("SUCCESS");
+        when(ticketMapper.selectOne(any())).thenReturn(ticket);
+        wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
+
+        assertThatThrownBy(() -> service.allocate(123, 9003L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("WMS");
+
+        verify(ticketMapper, never()).updateById(any());
+        verify(ticketMapper, never()).update(any(OrderDeliveryTicket.class), any());
+        verify(allocationMapper, never()).insert(any());
+        verify(client, never()).allocate(any());
+        verify(auditService, never()).record(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

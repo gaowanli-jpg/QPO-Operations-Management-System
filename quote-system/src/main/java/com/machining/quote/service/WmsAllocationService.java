@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.WmsAllocationReq;
 import com.machining.quote.dto.WmsAllocationResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -48,6 +49,7 @@ public class WmsAllocationService {
     public Map<String, Object> allocate(Integer ticketId, Long taskId) {
         long startedAt = System.currentTimeMillis();
         OrderDeliveryTicket ticket = loadTicketForUpdate(ticketId);
+        assertCanStart(ticket);
         OrderRfq order = loadOrder(ticket);
         log.info("WMS allocation started ticketId={} taskId={} rfqId={} materialNo={} demandQty={}",
                 ticket.getId(), taskId, ticket.getRfqId(), ticket.getMaterialNo(), ticket.getQty());
@@ -85,6 +87,16 @@ public class WmsAllocationService {
             throw new RuntimeException("提单行不存在");
         }
         return ticket;
+    }
+
+    private void assertCanStart(OrderDeliveryTicket ticket) {
+        String status = ticket.getWmsAllocateStatus();
+        if (STATUS_SUCCESS.equalsIgnoreCase(status)) {
+            throw new RuntimeException("WMS allocation already completed");
+        }
+        if (STATUS_PROCESSING.equalsIgnoreCase(status)) {
+            throw new RuntimeException("WMS allocation is already processing");
+        }
     }
 
     private OrderRfq loadOrder(OrderDeliveryTicket ticket) {
@@ -230,7 +242,18 @@ public class WmsAllocationService {
         update.setId(ticket.getId());
         update.setWmsAllocateStatus(STATUS_PROCESSING);
         update.setWmsAllocateMessage("WMS allocation processing");
-        ticketMapper.updateById(update);
+        UpdateWrapper<OrderDeliveryTicket> wrapper = new UpdateWrapper<>();
+        wrapper.eq("id", ticket.getId())
+                .and(status -> status
+                        .isNull("wms_allocate_status")
+                        .or()
+                        .notIn("wms_allocate_status", STATUS_PROCESSING, STATUS_SUCCESS));
+        int updated = ticketMapper.update(update, wrapper);
+        if (updated <= 0) {
+            OrderDeliveryTicket current = loadTicketForUpdate(ticket.getId());
+            assertCanStart(current);
+            throw new RuntimeException("WMS allocation status changed before processing");
+        }
     }
 
     private void markSuccess(OrderDeliveryTicket ticket, String message) {

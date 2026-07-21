@@ -1,5 +1,6 @@
 package com.machining.quote.service;
 
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.MesMaterialResolveReq;
 import com.machining.quote.dto.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -41,6 +42,7 @@ public class MesMaterialSyncService {
     public Map<String, Object> syncMaterialNo(Integer ticketId, Long taskId) {
         long startedAt = System.currentTimeMillis();
         OrderDeliveryTicket ticket = loadTicket(ticketId);
+        assertCanStart(ticket);
         log.info("MES material sync started ticketId={} taskId={} rfqId={} partNo={}",
                 ticket.getId(), taskId, ticket.getRfqId(), ticket.getPartNo());
         markProcessing(ticket);
@@ -74,6 +76,16 @@ public class MesMaterialSyncService {
             throw new RuntimeException("提单行不存在");
         }
         return ticket;
+    }
+
+    private void assertCanStart(OrderDeliveryTicket ticket) {
+        String status = ticket.getMesSyncStatus();
+        if (STATUS_SUCCESS.equalsIgnoreCase(status) && !isBlank(ticket.getMaterialNo())) {
+            throw new RuntimeException("MES material sync already completed");
+        }
+        if (STATUS_PROCESSING.equalsIgnoreCase(status)) {
+            throw new RuntimeException("MES material sync is already processing");
+        }
     }
 
     private MesMaterialResolveReq buildRequest(OrderDeliveryTicket ticket) {
@@ -111,7 +123,18 @@ public class MesMaterialSyncService {
         update.setId(ticket.getId());
         update.setMesSyncStatus(STATUS_PROCESSING);
         update.setMesSyncMessage("MES material sync processing");
-        ticketMapper.updateById(update);
+        UpdateWrapper<OrderDeliveryTicket> wrapper = new UpdateWrapper<>();
+        wrapper.eq("id", ticket.getId())
+                .and(status -> status
+                        .isNull("mes_sync_status")
+                        .or()
+                        .notIn("mes_sync_status", STATUS_PROCESSING, STATUS_SUCCESS));
+        int updated = ticketMapper.update(update, wrapper);
+        if (updated <= 0) {
+            OrderDeliveryTicket current = loadTicket(ticket.getId());
+            assertCanStart(current);
+            throw new RuntimeException("MES material sync status changed before processing");
+        }
     }
 
     private void markSuccess(OrderDeliveryTicket ticket, String materialNo, String message) {
