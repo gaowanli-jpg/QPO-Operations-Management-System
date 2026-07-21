@@ -8,6 +8,7 @@ import com.machining.quote.config.JsonbTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @TableName(value = "order_delivery_ticket", autoResultMap = true)
@@ -40,4 +41,11 @@ public class OrderDeliveryTicket {
     private Object materialData;
     private Double materialGrossWeight;
     private Double partNetWeight;
+    private String materialNo;
+    private String mesSyncStatus;
+    private String mesSyncMessage;
+    private LocalDateTime mesSyncedAt;
+    private String wmsAllocateStatus;
+    private String wmsAllocateMessage;
+    private LocalDateTime wmsAllocatedAt;
 }

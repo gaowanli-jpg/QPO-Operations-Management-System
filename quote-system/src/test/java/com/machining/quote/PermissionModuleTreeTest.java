@@ -24,6 +24,7 @@ class PermissionModuleTreeTest {
     private static final Path RETIRE_COMMON_SELECTION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V38__retire_common_selection_permissions.sql");
     private static final Path ORGANIZATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V40__organization_identity_permissions.sql");
     private static final Path PRICING_SHEET_EXPORT_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V41__engineer_pricing_sheet_export_permission.sql");
+    private static final Path DELIVERED_ITEM_FOUNDATION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
             "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
@@ -51,6 +52,42 @@ class PermissionModuleTreeTest {
         assertThat(duplicates)
                 .as("Permission codes must be unique in the fallback catalog")
                 .isEmpty();
+    }
+
+    @Test
+    void deliveredItemPermissionIsIndependentOrderMenuModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("Delivered item demand pool needs its own left-sidebar MENU permission")
+                .contains("market:delivered-item:view", "market:delivered-item:file-preview");
+        assertThat(source)
+                .as("Delivered items must be a visible MENU route, not a reused order management permission")
+                .contains("permission(158L, \"MENU\", \"market:delivered-item:view\"")
+                .contains("\"/delivered-items\"")
+                .contains("\"DeliveredItemManage\"");
+        assertThat(source)
+                .as("Delivered item file preview must hang under the delivered item module")
+                .contains("permission(159L, \"API\", \"market:delivered-item:file-preview\"")
+                .contains("158L)");
+        assertThat(source)
+                .as("Market roles and read-only roles can view the demand pool by default")
+                .contains("Map.entry(\"market:delivered-item:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+    }
+
+    @Test
+    void deliveredItemFoundationMigrationKeepsPermissionTreeAligned() throws IOException {
+        String migration = Files.readString(DELIVERED_ITEM_FOUNDATION_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("market:delivered-item:view")
+                .contains("market:delivered-item:file-preview")
+                .contains("/delivered-items")
+                .contains("DeliveredItemManage")
+                .contains("SUPER_ADMIN")
+                .contains("MARKET_USER")
+                .contains("MARKET_MANAGER")
+                .contains("READONLY");
     }
 
     @Test

@@ -10,6 +10,7 @@ const ItemPricing = () => import('../components/ItemPricing.vue')
 const MaterialProcessManage = () => import('../components/MaterialProcessManage.vue')
 const OrderManage = () => import('../components/OrderManage.vue')
 const HistoryOrderManage = () => import('../components/HistoryOrderManage.vue')
+const DeliveredItemManage = () => import('../components/DeliveredItemManage.vue')
 const UserManage = () => import('../components/UserManage.vue')
 const SystemRoleManage = () => import('../components/SystemRoleManage.vue')
 const SystemOrgManage = () => import('../components/SystemOrgManage.vue')
@@ -26,6 +27,7 @@ const routes = [
   { path: '/material-process', component: MaterialProcessManage, meta: { permission: 'engineer:dict:view' } },
   { path: '/orders', component: OrderManage, meta: { permission: 'market:order:view' } },
   { path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:history-order:view' } },
+  { path: '/delivered-items', component: DeliveredItemManage, meta: { permission: 'market:delivered-item:view' } },
   { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },
   { path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } },
   { path: '/organization', component: SystemOrgManage, meta: { permission: 'system:org:view' } },

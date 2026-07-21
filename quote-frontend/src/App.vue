@@ -116,7 +116,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
-  { key: 'orders', title: '订单', paths: ['/orders', '/history-orders'] },
+  { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/audit-logs'] }
 ]
 
@@ -129,6 +129,7 @@ const menuMetaByPath = {
   '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
   '/orders': { title: '订单管理', permission: 'market:order:view', icon: Document },
   '/history-orders': { title: '历史订单', permission: 'market:history-order:view', icon: Files },
+  '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
   '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
   '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
@@ -202,6 +203,10 @@ const shellMetaByPath = {
   '/history-orders': {
     title: '历史订单',
     description: '查询历史报价、提单和工艺资料。'
+  },
+  '/delivered-items': {
+    title: '已提零件',
+    description: '查看已生成提单的零件需求池和外部系统处理状态。'
   },
   '/users': {
     title: '用户权限',

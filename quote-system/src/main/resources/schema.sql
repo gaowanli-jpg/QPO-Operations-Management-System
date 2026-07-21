@@ -137,7 +137,14 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     process_route JSONB DEFAULT '[]'::jsonb,
     material_data JSONB DEFAULT '{}'::jsonb,
     material_gross_weight NUMERIC(14, 4),
-    part_net_weight NUMERIC(14, 4)
+    part_net_weight NUMERIC(14, 4),
+    material_no VARCHAR(100),
+    mes_sync_status VARCHAR(30) DEFAULT 'PENDING',
+    mes_sync_message TEXT,
+    mes_synced_at TIMESTAMP,
+    wms_allocate_status VARCHAR(30) DEFAULT 'PENDING',
+    wms_allocate_message TEXT,
+    wms_allocated_at TIMESTAMP
 );
 
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES item_quote_version(id);
@@ -147,12 +154,42 @@ ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS process_route JSONB;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_data JSONB;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS mes_sync_status VARCHAR(30) DEFAULT 'PENDING';
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS mes_sync_message TEXT;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS mes_synced_at TIMESTAMP;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS wms_allocate_status VARCHAR(30) DEFAULT 'PENDING';
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS wms_allocate_message TEXT;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS wms_allocated_at TIMESTAMP;
 ALTER TABLE order_delivery_ticket
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB;
 ALTER TABLE order_delivery_ticket
     ALTER COLUMN process_route SET DEFAULT '[]'::jsonb,
     ALTER COLUMN material_data SET DEFAULT '{}'::jsonb;
+
+CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id),
+    rfq_id INTEGER REFERENCES order_rfq(id),
+    item_id INTEGER REFERENCES item_quote_version(id),
+    allocation_type VARCHAR(40) NOT NULL,
+    qty INTEGER NOT NULL,
+    material_no VARCHAR(100),
+    part_no VARCHAR(100),
+    version VARCHAR(20),
+    customer_name VARCHAR(255),
+    internal_project_no VARCHAR(100),
+    wms_production_order_no VARCHAR(100),
+    source_payload JSONB DEFAULT '{}'::jsonb,
+    status VARCHAR(30) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_order_delivery_ticket_allocation_qty CHECK (qty > 0),
+    CONSTRAINT chk_order_delivery_ticket_allocation_type CHECK (
+        allocation_type IN ('IN_STOCK_LOCK', 'IN_PRODUCTION_LOCK', 'PRODUCTION_REQUIRED')
+    )
+);
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,

@@ -59,7 +59,13 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain('backendVisiblePermissions.value.has(permission)')
     expect(appVue).toContain('return backendPaths.has(path)')
     expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:history-order:view'")
+    expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
     expect(appVue).not.toContain("permission: 'market:order:view', icon: Files")
+  })
+
+  test('places delivered items in the order sidebar group with a four-character title', () => {
+    expect(appVue).toContain("{ key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items'] }")
+    expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
   })
 
   test('places quote template under market release instead of the system group', () => {
