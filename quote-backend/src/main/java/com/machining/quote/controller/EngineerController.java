@@ -76,6 +76,33 @@ public class EngineerController {
         return getOrderSummary(rfqId);
     }
 
+    @GetMapping("/pricing/items/{rfqId}")
+    @RequirePermission("engineer:pricing:view")
+    @SuppressWarnings("unchecked")
+    public PageResult<ItemQuoteVersion> listPricingItems(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return page((List<ItemQuoteVersion>) getOrderSummary(rfqId).get("itemList"), page, pageSize);
+    }
+
+    @GetMapping("/pricing/assembly-child-candidates/{rfqId}")
+    @RequirePermission("engineer:pricing:view")
+    @SuppressWarnings("unchecked")
+    public PageResult<ItemQuoteVersion> listAssemblyChildCandidates(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "parentItemId", required = false) Integer parentItemId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        List<ItemQuoteVersion> items = (List<ItemQuoteVersion>) getOrderSummary(rfqId).get("itemList");
+        if (parentItemId != null) {
+            items = items.stream()
+                    .filter(item -> !parentItemId.equals(item.getId()))
+                    .toList();
+        }
+        return page(items, page, pageSize);
+    }
+
     /**
      * 获取待评估的零件任务列表
      * 网址: http://localhost:8080/api/engineer/pending-items
@@ -190,5 +217,14 @@ public class EngineerController {
         result.put("itemCount", itemCount == null ? 0L : itemCount);
         result.put("previewLimit", SETUP_PREVIEW_LIMIT);
         return result;
+    }
+
+    private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {
+        List<T> rows = allRows == null ? List.of() : allRows;
+        int safePage = page == null || page < 1 ? 1 : page;
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
+        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
     }
 }

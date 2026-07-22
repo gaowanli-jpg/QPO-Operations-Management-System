@@ -143,7 +143,7 @@
           <div class="erp-table-surface workflow-main-panel quote-process-table-panel">
             <div class="erp-table-header workflow-table-header panel-title-row">
               <div class="panel-title">零件交期</div>
-              <el-tag v-if="itemList.length" type="info">{{ itemList.length }} 项</el-tag>
+              <el-tag v-if="quoteProcessItemTotal" type="info">{{ quoteProcessItemTotal }} 项</el-tag>
             </div>
             <el-empty v-if="!selectedRfqId" description="请选择已核价或已报价订单" />
             <el-table
@@ -223,13 +223,13 @@
                 </template>
               </el-table-column>
             </el-table>
-            <div v-if="selectedRfqId && itemList.length" class="erp-pagination">
+            <div v-if="selectedRfqId && quoteProcessItemTotal" class="erp-pagination">
               <el-pagination
                 v-model:current-page="quoteProcessPagination.page"
                 v-model:page-size="quoteProcessPagination.pageSize"
                 :page-sizes="CLIENT_PAGE_SIZES"
                 :pager-count="7"
-                :total="itemList.length"
+                :total="quoteProcessItemTotal"
                 layout="total, sizes, prev, pager, next, jumper"
                 background
                 @size-change="quoteProcessPagination.page = 1"
@@ -280,6 +280,7 @@ const QUOTE_PROCESS_SAVE_QUOTE_PERMISSION = 'market:quote-process:save-quote'
 const selectedRfqId = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])
+const quoteProcessItemTotal = ref(0)
 const selectedRows = ref([])
 const quoteProcessTableRef = ref(null)
 const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
@@ -340,12 +341,17 @@ const handleOrderSelected = async (order) => {
   await loadQuoteProcess(order.id)
 }
 
+const setQuoteProcessRows = (rows, total) => {
+  itemList.value = normalizeRows(rows || [])
+  quoteProcessItemTotal.value = Number(total ?? itemList.value.length)
+}
+
 const loadQuoteProcess = async (rfqId) => {
   loadingItems.value = true
   try {
     const response = await getQuoteProcess(rfqId)
     orderInfo.value = response.orderInfo || {}
-    itemList.value = normalizeRows(response.itemList || [])
+    setQuoteProcessRows(response.itemList || [], response.itemCount)
     selectedRows.value = []
     quoteProcessPagination.page = 1
     await nextTick()
@@ -386,7 +392,7 @@ const applyShift = async (direction) => {
       itemIds: selectedRows.value.map(row => row.id),
       days
     })
-    itemList.value = normalizeRows(response.itemList || [])
+    setQuoteProcessRows(response.itemList || [], response.itemCount)
     selectedRows.value = []
     await nextTick()
     quoteProcessTableRef.value?.clearSelection()
@@ -418,7 +424,7 @@ const setQuoteLeadTime = async () => {
       itemIds: selectedRows.value.map(row => row.id),
       quoteLeadTime: manualQuoteDate.value
     })
-    itemList.value = normalizeRows(response.itemList || [])
+    setQuoteProcessRows(response.itemList || [], response.itemCount)
     selectedRows.value = []
     await nextTick()
     quoteProcessTableRef.value?.clearSelection()
@@ -469,7 +475,7 @@ const saveMarketQuoteSheet = async () => {
   try {
     const response = await saveQuoteSheetApi(selectedRfqId.value)
     orderInfo.value = response.orderInfo || orderInfo.value
-    itemList.value = normalizeRows(response.itemList || itemList.value)
+    setQuoteProcessRows(response.itemList || itemList.value, response.itemCount ?? quoteProcessItemTotal.value)
     selectedRows.value = []
     await nextTick()
     quoteProcessTableRef.value?.clearSelection()

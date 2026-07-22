@@ -4,6 +4,9 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.OrderStatusManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +40,39 @@ public class OrderManagementController {
     @RequirePermission("market:order:view")
     public Map<String, Object> getOrderDetail(@PathVariable Integer rfqId) {
         return orderManagementService.getOrderDetail(rfqId);
+    }
+
+    @GetMapping("/orders/{rfqId}/items")
+    @RequirePermission("market:order:view")
+    public PageResult<ItemQuoteVersion> listOrderItems(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageOrderItems(rfqId, page, pageSize);
+    }
+
+    @GetMapping("/orders/{rfqId}/tickets")
+    @RequirePermission("market:order:view")
+    public PageResult<OrderDeliveryTicket> listOrderTickets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageOrderTickets(rfqId, page, pageSize);
+    }
+
+    @GetMapping("/orders/{rfqId}/process-sheets")
+    @RequirePermission("market:order:view")
+    public PageResult<ProcessSheetDTO> listOrderProcessSheets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageOrderProcessSheets(rfqId, page, pageSize);
+    }
+
+    @GetMapping("/orders/{rfqId}/drawing-summary")
+    @RequirePermission("market:order:view")
+    public Map<String, Object> getDrawingSummary(@PathVariable Integer rfqId) {
+        return orderManagementService.getDrawingSummary(rfqId);
     }
 
     @GetMapping("/customers")

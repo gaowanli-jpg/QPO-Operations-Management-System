@@ -22,18 +22,18 @@
       <div class="pricing-metric-grid">
         <div class="pricing-metric">
           <span class="pricing-metric-label">零件总数</span>
-          <strong class="pricing-metric-value">{{ quoteData?.itemList?.length || 0 }}</strong>
+          <strong class="pricing-metric-value">{{ pricingItemTotal }}</strong>
         </div>
         <div class="pricing-metric">
           <span class="pricing-metric-label">已核价</span>
           <strong class="pricing-metric-value">
-            {{ quoteData?.itemList?.filter(item => item.finalUnitPrice != null).length || 0 }}
+            {{ pricedItemTotal }}
           </strong>
         </div>
         <div class="pricing-metric">
           <span class="pricing-metric-label">重复件</span>
           <strong class="pricing-metric-value">
-            {{ quoteData?.itemList?.filter(item => repeatItemMap.has(itemIdentityKey(item))).length || 0 }}
+            {{ repeatItemTotal }}
           </strong>
         </div>
       </div>
@@ -148,7 +148,7 @@
             v-model:page-size="pricingListPagination.pageSize"
             :page-sizes="CLIENT_PAGE_SIZES"
             :pager-count="7"
-            :total="quoteData.itemList.length"
+            :total="pricingItemTotal"
             layout="total, sizes, prev, pager, next, jumper"
             background
             @size-change="pricingListPagination.page = 1"
@@ -668,6 +668,21 @@ const repeatItemMap = computed(() => {
 })
 
 const pagedPricingItems = computed(() => paginateRows(quoteData.value?.itemList || [], pricingListPagination))
+const pricingItemTotal = computed(() => Number(
+  quoteData.value?.itemPage?.total
+  ?? quoteData.value?.summary?.itemCount
+  ?? quoteData.value?.itemCount
+  ?? quoteData.value?.itemList?.length
+  ?? 0
+))
+const pricedItemTotal = computed(() => Number(
+  quoteData.value?.summary?.pricedCount
+  ?? (quoteData.value?.itemList || []).filter(item => item.finalUnitPrice != null).length
+))
+const repeatItemTotal = computed(() => Number(
+  quoteData.value?.summary?.repeatCount
+  ?? (quoteData.value?.itemList || []).filter(item => repeatItemMap.value.has(itemIdentityKey(item))).length
+))
 
 const canExportPricingSheet = computed(() => {
   const items = quoteData.value?.itemList || []

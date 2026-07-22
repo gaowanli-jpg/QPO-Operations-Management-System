@@ -164,7 +164,7 @@
                     size="small"
                     plain
                     class="workflow-soft-button"
-                    :disabled="!selectedRfqId || itemList.length === 0"
+                    :disabled="!selectedRfqId || releaseItemTotal === 0"
                     :loading="importSelecting"
                   >
                     导入表格选定
@@ -255,13 +255,13 @@
               </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
             </el-table>
-            <div v-if="itemList.length" class="erp-pagination">
+            <div v-if="releaseItemTotal" class="erp-pagination">
               <el-pagination
                 v-model:current-page="releaseItemPagination.page"
                 v-model:page-size="releaseItemPagination.pageSize"
                 :page-sizes="CLIENT_PAGE_SIZES"
                 :pager-count="7"
-                :total="itemList.length"
+                :total="releaseItemTotal"
                 layout="total, sizes, prev, pager, next, jumper"
                 background
                 @size-change="releaseItemPagination.page = 1"
@@ -272,7 +272,7 @@
           <div class="erp-table-surface release-table-panel ticket-panel">
             <div class="erp-table-header panel-title-row">
               <div class="panel-title">已生成提单行</div>
-              <el-button size="small" plain class="workflow-soft-button" :disabled="ticketList.length === 0" @click="exportExcel('tickets')">
+              <el-button size="small" plain class="workflow-soft-button" :disabled="releaseTicketTotal === 0" @click="exportExcel('tickets')">
                 导出提单 Excel
               </el-button>
             </div>
@@ -294,13 +294,13 @@
                 <template #default="{ row }">{{ displayTicketText(row.remark) }}</template>
               </el-table-column>
             </el-table>
-            <div v-if="ticketList.length" class="erp-pagination">
+            <div v-if="releaseTicketTotal" class="erp-pagination">
               <el-pagination
                 v-model:current-page="ticketPagination.page"
                 v-model:page-size="ticketPagination.pageSize"
                 :page-sizes="CLIENT_PAGE_SIZES"
                 :pager-count="7"
-                :total="ticketList.length"
+                :total="releaseTicketTotal"
                 layout="total, sizes, prev, pager, next, jumper"
                 background
                 @size-change="ticketPagination.page = 1"
@@ -311,7 +311,7 @@
           <div class="erp-table-surface release-table-panel ticket-panel">
             <div class="erp-table-header panel-title-row">
               <div class="panel-title">已生成工艺表行</div>
-              <el-button size="small" plain class="workflow-soft-button" :disabled="processSheetList.length === 0" @click="exportExcel('process')">
+              <el-button size="small" plain class="workflow-soft-button" :disabled="releaseProcessSheetTotal === 0" @click="exportExcel('process')">
                 导出工艺表 Excel
               </el-button>
             </div>
@@ -337,13 +337,13 @@
                 </template>
               </el-table-column>
             </el-table>
-            <div v-if="processSheetList.length" class="erp-pagination">
+            <div v-if="releaseProcessSheetTotal" class="erp-pagination">
               <el-pagination
                 v-model:current-page="processSheetPagination.page"
                 v-model:page-size="processSheetPagination.pageSize"
                 :page-sizes="CLIENT_PAGE_SIZES"
                 :pager-count="7"
-                :total="processSheetList.length"
+                :total="releaseProcessSheetTotal"
                 layout="total, sizes, prev, pager, next, jumper"
                 background
                 @size-change="processSheetPagination.page = 1"
@@ -394,6 +394,9 @@ const orderInfo = ref({})
 const itemList = ref([])
 const ticketList = ref([])
 const processSheetList = ref([])
+const releaseItemTotal = ref(0)
+const releaseTicketTotal = ref(0)
+const releaseProcessSheetTotal = ref(0)
 const selectedRows = ref([])
 const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
@@ -524,6 +527,7 @@ const setItemList = (rows) => {
     ...row,
     internalTargetLeadTimeDraft: row.internalTargetLeadTime || ''
   }))
+  releaseItemTotal.value = itemList.value.length
   itemList.value.forEach(item => {
     const remainingQty = remainingQtyFor(item)
     if (!acceptedQtyMap[item.id] || acceptedQtyMap[item.id] > remainingQty) {
@@ -537,6 +541,7 @@ const loadTickets = async (rfqId) => {
   try {
     const response = await listTickets(rfqId)
     ticketList.value = response || []
+    releaseTicketTotal.value = ticketList.value.length
   } catch (error) {
     console.error(error)
     ElMessage.error('提单列表加载失败。')
@@ -550,6 +555,7 @@ const loadProcessSheets = async (rfqId) => {
   try {
     const response = await listProcessSheets(rfqId)
     processSheetList.value = response || []
+    releaseProcessSheetTotal.value = processSheetList.value.length
   } catch (error) {
     console.error(error)
     ElMessage.error('工艺表列表加载失败。')

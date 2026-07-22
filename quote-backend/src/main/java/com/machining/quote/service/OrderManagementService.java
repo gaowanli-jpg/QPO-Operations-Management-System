@@ -176,6 +176,36 @@ public class OrderManagementService {
         return detail;
     }
 
+    public PageResult<ItemQuoteVersion> pageOrderItems(Integer rfqId, Integer page, Integer pageSize) {
+        requireOrder(rfqId);
+        return pageRows(listItems(rfqId), page, pageSize);
+    }
+
+    public PageResult<OrderDeliveryTicket> pageOrderTickets(Integer rfqId, Integer page, Integer pageSize) {
+        requireOrder(rfqId);
+        return pageRows(listTickets(rfqId), page, pageSize);
+    }
+
+    public PageResult<ProcessSheetDTO> pageOrderProcessSheets(Integer rfqId, Integer page, Integer pageSize) {
+        requireOrder(rfqId);
+        return pageRows(listProcessSheets(rfqId), page, pageSize);
+    }
+
+    public Map<String, Object> getDrawingSummary(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        long boundCount = items.stream().filter(item -> !isBlank(item.getDrawingUrl())).count();
+        long missingCount = items.size() - boundCount;
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("rfqId", order.getId());
+        summary.put("rfqNo", order.getRfqNo());
+        summary.put("itemCount", items.size());
+        summary.put("boundDrawingCount", boundCount);
+        summary.put("missingDrawingCount", missingCount);
+        summary.put("fileRoot", buildOrderFileRoot(order));
+        return summary;
+    }
+
     @Transactional
     public Map<String, Object> supplementDrawings(Integer rfqId, List<MultipartFile> drawings) {
         OrderRfq order = requireOrderForUpdate(rfqId);
@@ -415,6 +445,15 @@ public class OrderManagementService {
             return 20;
         }
         return Math.min(pageSize, 100);
+    }
+
+    private <T> PageResult<T> pageRows(List<T> allRows, Integer page, Integer pageSize) {
+        List<T> rows = allRows == null ? List.of() : allRows;
+        int safePage = normalizePage(page);
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
+        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
     }
 
     private static Number numberValue(Object value) {

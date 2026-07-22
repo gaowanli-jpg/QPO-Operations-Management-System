@@ -192,6 +192,34 @@ public class MarketController {
         return result;
     }
 
+    @GetMapping("/release/items/{rfqId}")
+    @RequirePermission("market:release:view")
+    @SuppressWarnings("unchecked")
+    public PageResult<ItemQuoteVersion> listReleaseItems(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return page((List<ItemQuoteVersion>) getReleaseSummary(rfqId).get("itemList"), page, pageSize);
+    }
+
+    @GetMapping("/release/tickets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<OrderDeliveryTicket> listReleaseTickets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return page(deliveryService.listTickets(rfqId), page, pageSize);
+    }
+
+    @GetMapping("/release/process-sheets/{rfqId}")
+    @RequirePermission("market:release:view")
+    public PageResult<ProcessSheetDTO> listReleaseProcessSheets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return page(deliveryService.listProcessSheets(rfqId), page, pageSize);
+    }
+
     @PostMapping("/parse-part-selection")
     @RequirePermission("market:release:create")
     public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
@@ -503,5 +531,14 @@ public class MarketController {
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
         return normalized;
+    }
+
+    private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {
+        List<T> rows = allRows == null ? List.of() : allRows;
+        int safePage = page == null || page < 1 ? 1 : page;
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
+        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
     }
 }
