@@ -81,19 +81,19 @@ WMS 调用异常 / 返回数量超额 / 在产订单缺单号 / 物料号缺失
 
 | 类型 | 文件 | 说明 |
 | --- | --- | --- |
-| 新增 | `quote-system/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql` | 新增 WMS 分配权限和锁库零件菜单权限。 |
-| 修改 | `quote-system/src/main/resources/schema.sql` | 如 02 未完全同步 allocation 表，本阶段补齐。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog 和默认角色映射。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/dto/WmsAllocationReq.java` | QPO 调 WMS 请求 DTO。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/dto/WmsAllocationResp.java` | WMS 返回 DTO。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/dto/LockedItemDTO.java` | 锁库零件列表 DTO。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java` | 锁库零件分页 DTO。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/service/WmsAllocationClient.java` | WMS HTTP 客户端。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/service/WmsAllocationService.java` | WMS 分配业务服务。 |
-| 新增或扩展 | `quote-system/src/main/java/com/machining/quote/service/LockedItemService.java` | 锁库零件查询服务。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitWmsAllocationTask(ticketId)`。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加 WMS 触发接口和 allocation 查询接口。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/service/AuditService.java` | 增加 WMS 动作中文化。 |
+| 新增 | `quote-backend/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql` | 新增 WMS 分配权限和锁库零件菜单权限。 |
+| 修改 | `quote-backend/src/main/resources/schema.sql` | 如 02 未完全同步 allocation 表，本阶段补齐。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog 和默认角色映射。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/dto/WmsAllocationReq.java` | QPO 调 WMS 请求 DTO。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/dto/WmsAllocationResp.java` | WMS 返回 DTO。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/dto/LockedItemDTO.java` | 锁库零件列表 DTO。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java` | 锁库零件分页 DTO。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/service/WmsAllocationClient.java` | WMS HTTP 客户端。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/service/WmsAllocationService.java` | WMS 分配业务服务。 |
+| 新增或扩展 | `quote-backend/src/main/java/com/machining/quote/service/LockedItemService.java` | 锁库零件查询服务。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitWmsAllocationTask(ticketId)`。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加 WMS 触发接口和 allocation 查询接口。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/AuditService.java` | 增加 WMS 动作中文化。 |
 | 修改 | `docker-compose.yml` | 注入 WMS 配置。 |
 | 修改 | `erp.env` | 增加 WMS 配置项。 |
 
@@ -111,11 +111,11 @@ WMS 调用异常 / 返回数量超额 / 在产订单缺单号 / 物料号缺失
 
 | 类型 | 文件 | 说明 |
 | --- | --- | --- |
-| 新增 | `quote-system/src/test/java/com/machining/quote/WmsAllocationTest.java` | WMS 分配服务测试。 |
-| 新增 | `quote-system/src/test/java/com/machining/quote/WmsAllocationClientTest.java` | WMS 客户端契约测试。 |
-| 新增 | `quote-system/src/test/java/com/machining/quote/LockedItemQueryTest.java` | 锁库零件查询测试。 |
-| 修改 | `quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java` | 增加 WMS 操作日志动作。 |
-| 修改 | `quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结 WMS 和锁库零件权限。 |
+| 新增 | `quote-backend/src/test/java/com/machining/quote/WmsAllocationTest.java` | WMS 分配服务测试。 |
+| 新增 | `quote-backend/src/test/java/com/machining/quote/WmsAllocationClientTest.java` | WMS 客户端契约测试。 |
+| 新增 | `quote-backend/src/test/java/com/machining/quote/LockedItemQueryTest.java` | 锁库零件查询测试。 |
+| 修改 | `quote-backend/src/test/java/com/machining/quote/AuditActionCoverageTests.java` | 增加 WMS 操作日志动作。 |
+| 修改 | `quote-backend/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结 WMS 和锁库零件权限。 |
 | 修改 | `quote-frontend/src/deliveredItemApi.test.js` | 增加 WMS API 测试。 |
 | 新增 | `quote-frontend/src/deliveredItemWmsAllocation.test.js` | 已提零件 WMS 按钮测试。 |
 | 新增 | `quote-frontend/src/lockedItemManage.test.js` | 锁库零件页面测试。 |
@@ -694,7 +694,7 @@ WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} durationMs={}
 验收：
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd test -Dtest=WmsAllocationTest,WmsAllocationClientTest,LockedItemQueryTest,PermissionModuleTreeTest,AuditActionCoverageTests
 
 cd D:\Code\quote-frontend
@@ -794,7 +794,7 @@ npm test -- deliveredItemApi.test.js deliveredItemWmsAllocation.test.js lockedIt
 本阶段验收命令：
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd test
 
 cd D:\Code\quote-frontend
@@ -806,23 +806,23 @@ npm run build
 
 ```powershell
 git add docs/QPO-MES-WMS对接/04-WMS锁库分配与锁库零件模块开发文档.md `
-  quote-system/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql `
-  quote-system/src/main/java/com/machining/quote/dto/WmsAllocationReq.java `
-  quote-system/src/main/java/com/machining/quote/dto/WmsAllocationResp.java `
-  quote-system/src/main/java/com/machining/quote/dto/LockedItemDTO.java `
-  quote-system/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java `
-  quote-system/src/main/java/com/machining/quote/service/WmsAllocationClient.java `
-  quote-system/src/main/java/com/machining/quote/service/WmsAllocationService.java `
-  quote-system/src/main/java/com/machining/quote/service/LockedItemService.java `
-  quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java `
-  quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
-  quote-system/src/main/java/com/machining/quote/service/AuditService.java `
-  quote-system/src/main/java/com/machining/quote/service/PermissionService.java `
+  quote-backend/src/main/resources/db/migration/V47__delivery_ticket_wms_allocation_permissions.sql `
+  quote-backend/src/main/java/com/machining/quote/dto/WmsAllocationReq.java `
+  quote-backend/src/main/java/com/machining/quote/dto/WmsAllocationResp.java `
+  quote-backend/src/main/java/com/machining/quote/dto/LockedItemDTO.java `
+  quote-backend/src/main/java/com/machining/quote/dto/LockedItemPageDTO.java `
+  quote-backend/src/main/java/com/machining/quote/service/WmsAllocationClient.java `
+  quote-backend/src/main/java/com/machining/quote/service/WmsAllocationService.java `
+  quote-backend/src/main/java/com/machining/quote/service/LockedItemService.java `
+  quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java `
+  quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
+  quote-backend/src/main/java/com/machining/quote/service/AuditService.java `
+  quote-backend/src/main/java/com/machining/quote/service/PermissionService.java `
   docker-compose.yml `
   erp.env `
-  quote-system/src/test/java/com/machining/quote/WmsAllocationTest.java `
-  quote-system/src/test/java/com/machining/quote/WmsAllocationClientTest.java `
-  quote-system/src/test/java/com/machining/quote/LockedItemQueryTest.java `
+  quote-backend/src/test/java/com/machining/quote/WmsAllocationTest.java `
+  quote-backend/src/test/java/com/machining/quote/WmsAllocationClientTest.java `
+  quote-backend/src/test/java/com/machining/quote/LockedItemQueryTest.java `
   quote-frontend/src/services/deliveredItemApi.js `
   quote-frontend/src/components/DeliveredItemManage.vue `
   quote-frontend/src/components/LockedItemManage.vue `

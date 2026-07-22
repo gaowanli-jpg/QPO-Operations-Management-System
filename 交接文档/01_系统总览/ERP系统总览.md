@@ -97,7 +97,7 @@ Docker 部署时，前端由 Nginx 容器提供静态页面，并将 API 请求�
 后端项目目录：
 
 ```text
-D:\Code\quote-system
+D:\Code\quote-backend
 ```
 
 技术栈：
@@ -115,7 +115,7 @@ D:\Code\quote-system
 后端入口：
 
 ```text
-D:\Code\quote-system\src\main\java\com\machining\quote\QuoteSystemApplication.java
+D:\Code\quote-backend\src\main\java\com\machining\quote\QuoteSystemApplication.java
 ```
 
 后端默认端口：
@@ -147,7 +147,7 @@ Flyway
 迁移目录：
 
 ```text
-D:\Code\quote-system\src\main\resources\db\migration
+D:\Code\quote-backend\src\main\resources\db\migration
 ```
 
 当前主数据表包括：
@@ -953,15 +953,15 @@ APS 通过 ERP 数据源接口主动拉取：
 | 材料与工艺管理页面 | `D:\Code\quote-frontend\src\components\MaterialProcessManage.vue` |
 | 订单管理页面 | `D:\Code\quote-frontend\src\components\OrderManage.vue` |
 | 用户管理页面 | `D:\Code\quote-frontend\src\components\UserManage.vue` |
-| 市场接口控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\MarketController.java` |
-| 工程接口控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\EngineerController.java` |
-| 字典接口控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\DictController.java` |
-| 系统管理控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\AdminController.java` |
-| APS 数据源控制器 | `D:\Code\quote-system\src\main\java\com\machining\quote\controller\ApsSourceController.java` |
-| 工程核价服务 | `D:\Code\quote-system\src\main\java\com\machining\quote\service\EngineerService.java` |
-| 提单服务 | `D:\Code\quote-system\src\main\java\com\machining\quote\service\DeliveryService.java` |
-| APS 数据源服务 | `D:\Code\quote-system\src\main\java\com\machining\quote\service\ApsSourceService.java` |
-| 数据库迁移 | `D:\Code\quote-system\src\main\resources\db\migration` |
+| 市场接口控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\MarketController.java` |
+| 工程接口控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\EngineerController.java` |
+| 字典接口控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\DictController.java` |
+| 系统管理控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\AdminController.java` |
+| APS 数据源控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\ApsSourceController.java` |
+| 工程核价服务 | `D:\Code\quote-backend\src\main\java\com\machining\quote\service\EngineerService.java` |
+| 提单服务 | `D:\Code\quote-backend\src\main\java\com\machining\quote\service\DeliveryService.java` |
+| APS 数据源服务 | `D:\Code\quote-backend\src\main\java\com\machining\quote\service\ApsSourceService.java` |
+| 数据库迁移 | `D:\Code\quote-backend\src\main\resources\db\migration` |
 
 ## 20. 交接结论
 

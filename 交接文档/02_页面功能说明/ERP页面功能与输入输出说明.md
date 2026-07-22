@@ -7,11 +7,11 @@
 本文用于交接 ERP 系统前端页面功能，重点说明每个页面“做什么、谁能用、输入什么、输出什么、会影响哪些数据”。本文依据当前代码仓库整理：
 
 - 前端工程：`D:\Code\quote-frontend`
-- 后端工程：`D:\Code\quote-system`
+- 后端工程：`D:\Code\quote-backend`
 - 前端路由：`D:\Code\quote-frontend\src\router\index.js`
 - 前端页面组件：`D:\Code\quote-frontend\src\components`
-- 后端接口控制器：`D:\Code\quote-system\src\main\java\com\machining\quote\controller`
-- 后端业务服务：`D:\Code\quote-system\src\main\java\com\machining\quote\service`
+- 后端接口控制器：`D:\Code\quote-backend\src\main\java\com\machining\quote\controller`
+- 后端业务服务：`D:\Code\quote-backend\src\main\java\com\machining\quote\service`
 
 ## 1. 页面总表
 

@@ -11,8 +11,8 @@
     <groupId>com.machining</groupId>
     <artifactId>quote</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>quote-system</name>
-    <description>quote-system</description>
+    <name>quote-backend</name>
+    <description>quote-backend</description>
     <url/>
     <licenses>
         <license/>

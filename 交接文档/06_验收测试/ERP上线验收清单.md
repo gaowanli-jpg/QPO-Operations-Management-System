@@ -26,7 +26,7 @@
 
 | 序号 | 检查项 | 预期结果 | 结果 | 备注 |
 | --- | --- | --- | --- | --- |
-| 1 | 已准备 ERP 源码和部署文件 | `D:\Code\docker-compose.yml`、`quote-system`、`quote-frontend` 存在 |  |  |
+| 1 | 已准备 ERP 源码和部署文件 | `D:\Code\docker-compose.yml`、`quote-backend`、`quote-frontend` 存在 |  |  |
 | 2 | 已准备 `erp.env` | 文件存在，且包含生产密码和密钥 |  |  |
 | 3 | 数据库密码已更换 | `POSTGRES_PASSWORD` 不是默认值 |  |  |
 | 4 | JWT 密钥已更换 | `ERP_JWT_SECRET` 是强随机值 |  |  |
@@ -41,7 +41,7 @@
 
 | 序号 | 检查项 | 操作 | 预期结果 | 结果 |
 | --- | --- | --- | --- | --- |
-| 1 | 后端测试 | `cd D:\Code\quote-system; .\mvnw.cmd test` | 测试通过 |  |
+| 1 | 后端测试 | `cd D:\Code\quote-backend; .\mvnw.cmd test` | 测试通过 |  |
 | 2 | 前端构建 | `cd D:\Code\quote-frontend; npm run build` | 构建成功 |  |
 | 3 | Docker 构建启动 | `docker compose --env-file erp.env up -d --build` | 三个容器启动 |  |
 | 4 | 容器状态 | `docker compose --env-file erp.env ps` | `postgres`、`backend`、`frontend` 运行正常 |  |

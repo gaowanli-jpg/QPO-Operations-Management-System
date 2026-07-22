@@ -87,7 +87,7 @@ try {
         throw "Temporary PostgreSQL container is not ready."
     }
 
-    $containerDump = "/tmp/quote-system-restore-drill.sql"
+    $containerDump = "/tmp/quote-backend-restore-drill.sql"
     docker cp $dbDump "${ContainerName}:$containerDump" | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to copy backup into temporary PostgreSQL container."

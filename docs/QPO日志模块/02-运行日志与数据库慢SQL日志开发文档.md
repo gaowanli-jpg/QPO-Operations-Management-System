@@ -109,7 +109,7 @@ postgres:
 对应 Docker volume：
 
 ```text
-quote-system_backups_data
+quote-backend_backups_data
 ```
 
 查看目录：
@@ -163,7 +163,7 @@ docker logs quote-postgres 2>&1 | Select-String "lock"
 新增文件：
 
 ```text
-quote-system/src/main/resources/logback-spring.xml
+quote-backend/src/main/resources/logback-spring.xml
 ```
 
 建议配置：
@@ -265,9 +265,9 @@ POSTGRES_LOG_MIN_DURATION_STATEMENT_MS=1000
 
 文件：
 
-- 新增 `quote-system/src/main/resources/logback-spring.xml`
-- 修改 `quote-system/src/main/java/com/machining/quote/config/RequestTraceFilter.java`
-- 修改或检查 `quote-system/src/main/java/com/machining/quote/config/GlobalExceptionHandler.java`
+- 新增 `quote-backend/src/main/resources/logback-spring.xml`
+- 修改 `quote-backend/src/main/java/com/machining/quote/config/RequestTraceFilter.java`
+- 修改或检查 `quote-backend/src/main/java/com/machining/quote/config/GlobalExceptionHandler.java`
 - 修改 `docker-compose.yml`
 - 修改 `erp.env`
 
@@ -323,8 +323,8 @@ POSTGRES_LOG_MIN_DURATION_STATEMENT_MS=1000
 建议新增或扩展：
 
 ```text
-quote-system/src/test/java/com/machining/quote/RequestTraceFilterTests.java
-quote-system/src/test/java/com/machining/quote/GlobalExceptionHandlerTests.java
+quote-backend/src/test/java/com/machining/quote/RequestTraceFilterTests.java
+quote-backend/src/test/java/com/machining/quote/GlobalExceptionHandlerTests.java
 ```
 
 测试重点：

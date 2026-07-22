@@ -49,7 +49,7 @@ services:
 
   backend:
     build:
-      context: ./quote-system
+      context: ./quote-backend
     container_name: quote-backend
     restart: unless-stopped
     depends_on:

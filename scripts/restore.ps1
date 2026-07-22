@@ -81,7 +81,7 @@ try {
     docker compose @compose up -d postgres
     Start-Sleep -Seconds 10
 
-    $containerDump = "/tmp/quote-system-restore.sql"
+    $containerDump = "/tmp/quote-backend-restore.sql"
     docker compose @compose cp $dbDump "postgres:$containerDump" | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to copy database backup into PostgreSQL container."

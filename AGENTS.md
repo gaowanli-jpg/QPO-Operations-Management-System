@@ -2,7 +2,7 @@
 
 This repository contains two systems:
 
-- QPO quotation system: `quote-frontend`, `quote-system`, `docker-compose.yml`, and `erp.env`.
+- QPO quotation system: `quote-frontend`, `quote-backend`, `docker-compose.yml`, and `erp.env`.
 - APS scheduling system: `aps-frontend`, `aps-system`, `docker-compose.aps.yml`, and `aps.env`.
 
 Use this file as the root long-term execution memory for future Codex work. Always verify current files with `git status`, `rg`, and direct reads instead of relying on memory alone.

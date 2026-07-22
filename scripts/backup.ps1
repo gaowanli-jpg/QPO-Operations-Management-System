@@ -80,7 +80,7 @@ New-Item -ItemType Directory -Force -Path $dbDir, $uploadsDir, $metaDir | Out-Nu
 Push-Location $ProjectRoot
 try {
     $compose = @("--env-file", $EnvFile, "-f", $ComposeFile)
-    $containerDump = "/tmp/quote-system-backup-$timestamp.sql"
+    $containerDump = "/tmp/quote-backend-backup-$timestamp.sql"
     $dumpCommand = "pg_dump -U $(Escape-ShSingle $dbUser) -d $(Escape-ShSingle $dbName) > $(Escape-ShSingle $containerDump)"
 
     docker compose @compose exec -T postgres sh -lc $dumpCommand

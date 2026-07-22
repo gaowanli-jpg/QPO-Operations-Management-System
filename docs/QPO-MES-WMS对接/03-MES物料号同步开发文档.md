@@ -75,15 +75,15 @@ MES 调用异常 / 返回无物料号 / 请求字段不完整
 
 | 类型 | 文件 | 说明 |
 | --- | --- | --- |
-| 新增 | `quote-system/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql` | 新增 MES 同步权限。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog 和默认角色映射。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java` | QPO 调 MES 请求 DTO。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java` | MES 返回 DTO。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/service/MesMaterialClient.java` | MES HTTP 客户端。 |
-| 新增 | `quote-system/src/main/java/com/machining/quote/service/MesMaterialSyncService.java` | 物料号同步业务服务。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitMesMaterialSyncTask(ticketId)`。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加触发接口。 |
-| 修改 | `quote-system/src/main/java/com/machining/quote/service/AuditService.java` | 增加 MES 动作中文化。 |
+| 新增 | `quote-backend/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql` | 新增 MES 同步权限。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/PermissionService.java` | fallback catalog 和默认角色映射。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java` | QPO 调 MES 请求 DTO。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java` | MES 返回 DTO。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/service/MesMaterialClient.java` | MES HTTP 客户端。 |
+| 新增 | `quote-backend/src/main/java/com/machining/quote/service/MesMaterialSyncService.java` | 物料号同步业务服务。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitMesMaterialSyncTask(ticketId)`。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加触发接口。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/AuditService.java` | 增加 MES 动作中文化。 |
 | 修改 | `docker-compose.yml` | 注入 MES 配置。 |
 | 修改 | `erp.env` | 增加 MES 配置项。 |
 
@@ -99,10 +99,10 @@ MES 调用异常 / 返回无物料号 / 请求字段不完整
 
 | 类型 | 文件 | 说明 |
 | --- | --- | --- |
-| 新增 | `quote-system/src/test/java/com/machining/quote/MesMaterialSyncTest.java` | MES 同步服务测试。 |
-| 新增 | `quote-system/src/test/java/com/machining/quote/MesMaterialClientTest.java` | MES 客户端契约测试。 |
-| 修改 | `quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java` | 增加 MES 操作日志动作。 |
-| 修改 | `quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结 MES 权限。 |
+| 新增 | `quote-backend/src/test/java/com/machining/quote/MesMaterialSyncTest.java` | MES 同步服务测试。 |
+| 新增 | `quote-backend/src/test/java/com/machining/quote/MesMaterialClientTest.java` | MES 客户端契约测试。 |
+| 修改 | `quote-backend/src/test/java/com/machining/quote/AuditActionCoverageTests.java` | 增加 MES 操作日志动作。 |
+| 修改 | `quote-backend/src/test/java/com/machining/quote/PermissionModuleTreeTest.java` | 冻结 MES 权限。 |
 | 修改 | `quote-frontend/src/deliveredItemApi.test.js` | 增加 sync API 测试。 |
 | 新增 | `quote-frontend/src/deliveredItemMesSync.test.js` | 页面按钮和权限测试。 |
 | 修改 | `docs/QPO权限用户体系/02-权限点清单与现有角色映射.md` | 增加 MES 同步权限。 |
@@ -540,7 +540,7 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 验收：
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd test -Dtest=MesMaterialSyncTest,MesMaterialClientTest,PermissionModuleTreeTest,AuditActionCoverageTests
 
 cd D:\Code\quote-frontend
@@ -638,7 +638,7 @@ npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 验收命令：
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd test
 
 cd D:\Code\quote-frontend
@@ -650,21 +650,21 @@ npm run build
 
 ```powershell
 git add docs/QPO-MES-WMS对接/03-MES物料号同步开发文档.md `
-  quote-system/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql `
-  quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java `
-  quote-system/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java `
-  quote-system/src/main/java/com/machining/quote/service/MesMaterialClient.java `
-  quote-system/src/main/java/com/machining/quote/service/MesMaterialSyncService.java `
-  quote-system/src/main/java/com/machining/quote/service/SystemTaskService.java `
-  quote-system/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
-  quote-system/src/main/java/com/machining/quote/service/AuditService.java `
-  quote-system/src/main/java/com/machining/quote/service/PermissionService.java `
+  quote-backend/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql `
+  quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java `
+  quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java `
+  quote-backend/src/main/java/com/machining/quote/service/MesMaterialClient.java `
+  quote-backend/src/main/java/com/machining/quote/service/MesMaterialSyncService.java `
+  quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java `
+  quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
+  quote-backend/src/main/java/com/machining/quote/service/AuditService.java `
+  quote-backend/src/main/java/com/machining/quote/service/PermissionService.java `
   docker-compose.yml `
   erp.env `
-  quote-system/src/test/java/com/machining/quote/MesMaterialSyncTest.java `
-  quote-system/src/test/java/com/machining/quote/MesMaterialClientTest.java `
-  quote-system/src/test/java/com/machining/quote/AuditActionCoverageTests.java `
-  quote-system/src/test/java/com/machining/quote/PermissionModuleTreeTest.java `
+  quote-backend/src/test/java/com/machining/quote/MesMaterialSyncTest.java `
+  quote-backend/src/test/java/com/machining/quote/MesMaterialClientTest.java `
+  quote-backend/src/test/java/com/machining/quote/AuditActionCoverageTests.java `
+  quote-backend/src/test/java/com/machining/quote/PermissionModuleTreeTest.java `
   quote-frontend/src/services/deliveredItemApi.js `
   quote-frontend/src/components/DeliveredItemManage.vue `
   quote-frontend/src/deliveredItemApi.test.js `

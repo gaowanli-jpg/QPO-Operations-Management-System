@@ -2,7 +2,7 @@
 
 ## 项目用途
 
-`quote-system` 是QPO后端服务，负责订单、报价、材料与工艺、文件、库存和APS数据同步等业务接口。
+`quote-backend` 是QPO后端服务，负责订单、报价、材料与工艺、文件、库存和APS数据同步等业务接口。
 
 ## 技术栈
 
@@ -15,7 +15,7 @@
 ## 本地运行
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -24,7 +24,7 @@ cd D:\Code\quote-system
 ## 测试
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd test
 ```
 

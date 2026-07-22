@@ -5,7 +5,7 @@
 部署方式：Docker Compose  
 当前部署根目录：`D:\Code`  
 
-本文用于交接 ERP 系统的部署方式。内容依据当前 `D:\Code\docker-compose.yml`、`D:\Code\erp.env`、`quote-system/Dockerfile`、`quote-frontend/Dockerfile`、`quote-frontend/nginx.conf` 和后端 `application.yaml` 整理。
+本文用于交接 ERP 系统的部署方式。内容依据当前 `D:\Code\docker-compose.yml`、`D:\Code\erp.env`、`quote-backend/Dockerfile`、`quote-frontend/Dockerfile`、`quote-frontend/nginx.conf` 和后端 `application.yaml` 整理。
 
 注意：本文不记录当前 `erp.env` 中的真实数据库密码、JWT 密钥和 ERP-APS 接口令牌。实际交接时应通过安全方式单独交付或在正式环境重新生成。
 
@@ -29,7 +29,7 @@ flowchart TD
 | 服务 | 容器名 | 镜像 / 构建方式 | 端口 |
 | --- | --- | --- | --- |
 | `postgres` | `quote-postgres` | `postgres:15` | 宿主机 `127.0.0.1:5432` -> 容器 `5432` |
-| `backend` | `quote-backend` | 从 `quote-system/Dockerfile` 构建 | 宿主机 `127.0.0.1:8080` -> 容器 `8080` |
+| `backend` | `quote-backend` | 从 `quote-backend/Dockerfile` 构建 | 宿主机 `127.0.0.1:8080` -> 容器 `8080` |
 | `frontend` | `quote-frontend` | 从 `quote-frontend/Dockerfile` 构建 | 宿主机 `127.0.0.1:8088` -> 容器 `80` |
 
 当前访问地址：
@@ -105,10 +105,10 @@ docker compose --env-file erp.env stop
 | --- | --- |
 | `D:\Code\docker-compose.yml` | ERP Docker Compose 主文件 |
 | `D:\Code\erp.env` | ERP 部署环境变量文件，包含真实密码和密钥 |
-| `D:\Code\quote-system` | ERP 后端 Spring Boot 工程 |
-| `D:\Code\quote-system\Dockerfile` | 后端镜像构建文件 |
-| `D:\Code\quote-system\src\main\resources\application.yaml` | 后端配置入口 |
-| `D:\Code\quote-system\src\main\resources\db\migration` | Flyway 数据库迁移脚本 |
+| `D:\Code\quote-backend` | ERP 后端 Spring Boot 工程 |
+| `D:\Code\quote-backend\Dockerfile` | 后端镜像构建文件 |
+| `D:\Code\quote-backend\src\main\resources\application.yaml` | 后端配置入口 |
+| `D:\Code\quote-backend\src\main\resources\db\migration` | Flyway 数据库迁移脚本 |
 | `D:\Code\quote-frontend` | ERP 前端 Vue 工程 |
 | `D:\Code\quote-frontend\Dockerfile` | 前端镜像构建文件 |
 | `D:\Code\quote-frontend\nginx.conf` | 前端容器 Nginx 配置 |
@@ -498,7 +498,7 @@ ERP 使用 Flyway 管理数据库结构。
 迁移脚本位置：
 
 ```text
-D:\Code\quote-system\src\main\resources\db\migration
+D:\Code\quote-backend\src\main\resources\db\migration
 ```
 
 后端启动时：

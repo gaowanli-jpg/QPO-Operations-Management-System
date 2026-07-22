@@ -53,7 +53,7 @@ openssl rand -base64 48
 Compose文件已经配置容器健康检查、日志轮转、保守的CPU/内存限制，以及应用容器的 `no-new-privileges`。
 
 ## HTTPS反向代理
-可参考 `deploy/nginx/quote-system.https.example.conf` 作为服务器级Nginx配置示例。
+可参考 `deploy/nginx/quote-backend.https.example.conf` 作为服务器级Nginx配置示例。
 
 生产前需要：
 1. 把 `qpo.example.com` 替换成真实域名。

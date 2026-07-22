@@ -1,10 +1,10 @@
 # ERP 开发交接说明
 
-编写日期：2026-06-13  
-适用系统：机加工报价 ERP 系统  
-后端工程：`D:\Code\quote-system`  
-前端工程：`D:\Code\quote-frontend`  
-部署入口：`D:\Code\docker-compose.yml`  
+编写日期：2026-06-13
+适用系统：机加工报价 ERP 系统
+后端工程：`D:\Code\quote-backend`
+前端工程：`D:\Code\quote-frontend`
+部署入口：`D:\Code\docker-compose.yml`
 
 本文面向后续开发团队，说明 ERP 系统的工程结构、启动方式、关键代码入口、开发规则、测试方式和常见改动路径。
 
@@ -40,7 +40,7 @@
 后端目录：
 
 ```text
-D:\Code\quote-system
+D:\Code\quote-backend
 ```
 
 关键目录：
@@ -162,7 +162,7 @@ D:\Code\quote-frontend
 进入后端目录：
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 ```
 
 运行测试：
@@ -246,7 +246,7 @@ http://127.0.0.1:8088
 后端配置文件：
 
 ```text
-D:\Code\quote-system\src\main\resources\application.yaml
+D:\Code\quote-backend\src\main\resources\application.yaml
 ```
 
 主要环境变量：
@@ -356,7 +356,7 @@ AuthInterceptor.java
 迁移脚本目录：
 
 ```text
-D:\Code\quote-system\src\main\resources\db\migration
+D:\Code\quote-backend\src\main\resources\db\migration
 ```
 
 规则：
@@ -537,7 +537,7 @@ ENGINEER
 测试目录：
 
 ```text
-D:\Code\quote-system\src\test\java\com\machining\quote
+D:\Code\quote-backend\src\test\java\com\machining\quote
 ```
 
 当前测试覆盖：
@@ -561,7 +561,7 @@ D:\Code\quote-system\src\test\java\com\machining\quote
 运行：
 
 ```powershell
-cd D:\Code\quote-system
+cd D:\Code\quote-backend
 .\mvnw.cmd test
 ```
 
