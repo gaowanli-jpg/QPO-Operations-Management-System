@@ -27,7 +27,8 @@ describe('QPO final UI punch-list polish', () => {
 
     expect(marketDashboard).toContain('workflow-soft-button')
     expect(marketDashboard).toContain('folder-select-button')
-    expect(marketDashboard).toContain('@click="triggerFolderSelect"')
+    expect(marketDashboard).toContain('@click="triggerDrawingFileSelect"')
+    expect(marketDashboard).toContain('@click="triggerDrawingFolderSelect"')
     expect(marketDashboard).not.toContain('<el-button size="small" @click="triggerFolderSelect"')
     expect(marketDashboard).toContain('.folder-select-button')
   })

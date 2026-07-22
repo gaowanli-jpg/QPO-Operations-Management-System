@@ -228,22 +228,32 @@
         </div>
 
         <div class="erp-upload-surface upload-area">
-          <el-upload v-permission="'market:order:supplement-drawing'"
-            ref="supplementUploadRef"
-            drag
-            multiple
-            action="#"
-            accept=".pdf"
-            :auto-upload="false"
-            :on-change="handleSupplementFileChange"
-            :on-remove="handleSupplementFileRemove"
+          <div v-permission="'market:order:supplement-drawing'"
+            class="custom-dropzone supplement-dropzone"
+            @dragover.prevent
+            @drop.prevent="handleSupplementDrop"
           >
             <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-            <div class="el-upload__text">拖拽后补 PDF 图纸到这里，或点击选择</div>
-            <template #tip>
-              <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
-            </template>
-          </el-upload>
+            <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
+            <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
+            <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+            <div class="supplement-upload-actions">
+              <el-button v-permission="'market:order:supplement-drawing'" plain class="workflow-soft-button folder-select-button" @click="triggerSupplementFileSelect">选择多个 PDF</el-button>
+              <el-button v-permission="'market:order:supplement-drawing'" plain class="workflow-soft-button folder-select-button" @click="triggerSupplementFolderSelect">选择文件夹</el-button>
+            </div>
+            <input type="file" ref="supplementFileInput" accept=".pdf" multiple class="hidden-input" @change="handleSupplementFileSelect" />
+            <input type="file" ref="supplementFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleSupplementFolderSelect" />
+          </div>
+        </div>
+
+        <div v-if="supplementFiles.length > 0" class="supplement-file-stats">
+          <h4>已选择待补传图纸（{{ supplementFiles.length }} 份）</h4>
+          <ul class="supplement-pdf-list">
+            <li v-for="(file, index) in supplementFiles" :key="`${file.name}-${file.size}-${index}`">
+              <span>{{ file.name }}</span>
+              <el-button v-permission="'market:order:supplement-drawing'" link type="danger" size="small" @click="removeSupplementFile(index)">移除</el-button>
+            </li>
+          </ul>
         </div>
 
         <div v-if="supplementResult" class="supplement-result">
@@ -294,6 +304,7 @@ import { computed, defineComponent, h, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
 import {
   discardOrder,
   getOrder,
@@ -320,7 +331,8 @@ const supplementVisible = ref(false)
 const supplementUploading = ref(false)
 const supplementFiles = ref([])
 const supplementResult = ref(null)
-const supplementUploadRef = ref(null)
+const supplementFileInput = ref(null)
+const supplementFolderInput = ref(null)
 const customerPickerVisible = ref(false)
 
 const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
@@ -507,18 +519,45 @@ const openDetail = async (row) => {
 const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
-  if (supplementUploadRef.value) {
-    supplementUploadRef.value.clearFiles()
-  }
   supplementVisible.value = true
 }
 
-const handleSupplementFileChange = (uploadFile, uploadFiles) => {
-  supplementFiles.value = uploadFiles.map(file => file.raw).filter(Boolean)
+const addSupplementFiles = (files, sourceLabel) => {
+  const beforeCount = supplementFiles.value.length
+  supplementFiles.value = mergePdfFiles(supplementFiles.value, files)
+  const addedCount = supplementFiles.value.length - beforeCount
+  if (addedCount > 0) {
+    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
+  } else {
+    ElMessage.warning('未找到新的 PDF 图纸。')
+  }
 }
 
-const handleSupplementFileRemove = (uploadFile, uploadFiles) => {
-  supplementFiles.value = uploadFiles.map(file => file.raw).filter(Boolean)
+const handleSupplementDrop = async (e) => {
+  const pdfs = await collectPdfFilesFromDataTransfer(e.dataTransfer)
+  addSupplementFiles(pdfs, '提取')
+}
+
+const triggerSupplementFileSelect = () => {
+  supplementFileInput.value?.click()
+}
+
+const triggerSupplementFolderSelect = () => {
+  supplementFolderInput.value?.click()
+}
+
+const handleSupplementFileSelect = (e) => {
+  addSupplementFiles(e.target.files, '选择')
+  e.target.value = ''
+}
+
+const handleSupplementFolderSelect = (e) => {
+  addSupplementFiles(e.target.files, '从选中的文件夹中提取')
+  e.target.value = ''
+}
+
+const removeSupplementFile = (index) => {
+  supplementFiles.value.splice(index, 1)
 }
 
 const refreshCurrentDetail = async () => {
@@ -591,9 +630,6 @@ const submitSupplementDrawings = async () => {
     supplementResult.value = response
     ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
-    if (supplementUploadRef.value) {
-      supplementUploadRef.value.clearFiles()
-    }
     await refreshCurrentDetail()
     await loadOrders()
   } catch (error) {
@@ -744,14 +780,85 @@ const formatRoute = (route) => {
   font-weight: 700;
 }
 
-.upload-area :deep(.el-upload) {
+.custom-dropzone {
   width: 100%;
-}
-
-.upload-area :deep(.el-upload-dragger) {
-  width: 100%;
+  padding: 28px 16px;
+  border: 1px dashed #aab6c8;
   border-radius: 8px;
   background: var(--erp-surface-soft);
+  text-align: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.custom-dropzone:hover {
+  border-color: var(--erp-primary);
+  background: #f3f8fc;
+}
+
+.supplement-dropzone :deep(.el-icon),
+.supplement-dropzone .el-icon {
+  margin-bottom: 12px;
+  color: #8c98aa;
+  font-size: 42px;
+}
+
+.folder-select-row {
+  margin-top: 12px;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.supplement-upload-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.folder-select-button {
+  min-height: 32px;
+  min-width: 150px;
+  padding-inline: 14px;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.supplement-file-stats {
+  padding: 12px 14px;
+  border: 1px solid #cfe8d2;
+  border-radius: 8px;
+  background: #f4fbf5;
+  color: var(--erp-success);
+}
+
+.supplement-file-stats h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.supplement-pdf-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.supplement-pdf-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #dcefe0;
+  color: #256b2b;
+}
+
+.supplement-pdf-list li:last-child {
+  border-bottom: none;
 }
 
 .supplement-result {

@@ -104,19 +104,21 @@
           <div v-permission="'market:rfq:upload-drawing'"
             class="custom-dropzone"
             @dragover.prevent
-            @drop.prevent="handleFolderDrop"
+            @drop.prevent="handleDrawingDrop"
           >
             <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
             <div class="el-upload__text dropzone-text">
-              将 <em>图纸文件夹</em> 或多个图纸直接拖拽至此处
+              将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
             </div>
 
-            <!-- 备用的点击选文件夹按钮 -->
-            <div class="folder-select-row">或点击下方按钮选择图纸文件夹</div>
+            <!-- 备用的点击选择按钮 -->
+            <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
             <div class="import-action-row">
-              <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerFolderSelect">选择文件夹</el-button>
+              <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFileSelect">选择多个 PDF</el-button>
+              <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFolderSelect">选择文件夹</el-button>
             </div>
-            <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
+            <input type="file" ref="drawingFileInput" accept=".pdf" multiple class="hidden-input" @change="handleDrawingFileSelect" />
+            <input type="file" ref="drawingFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleDrawingFolderSelect" />
           </div>
 
           <!-- 展示挖出来的 PDF 文件列表 -->
@@ -153,12 +155,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { importRfq } from '../services/marketApi'
+import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
 
 const rfqForm = reactive({ customerName: '', orderType: '' })
 const excelFile = ref(null)
 const drawingFiles = ref([])
 const isSubmitting = ref(false)
-const folderInput = ref(null)
+const drawingFileInput = ref(null)
+const drawingFolderInput = ref(null)
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 
@@ -169,78 +173,37 @@ const selectExistingCustomer = (customer) => {
   rfqForm.customerName = customer
 }
 
-// 递归扫描文件夹中的 PDF 文件
-const scanFiles = async (item) => {
-  if (item.isFile) {
-    return new Promise((resolve) => {
-      item.file((file) => {
-        // 只筛选出 PDF 文件
-        if (file.name.toLowerCase().endsWith('.pdf')) {
-          resolve(file)
-        } else {
-          resolve(null)
-        }
-      })
-    })
-  } else if (item.isDirectory) {
-    const dirReader = item.createReader()
-    let allFiles = []
-    
-    // 读取目录内的条目
-    const readEntries = () => {
-      return new Promise((resolve) => {
-        dirReader.readEntries(async (entries) => {
-          if (entries.length === 0) {
-            resolve([])
-          } else {
-            const promises = entries.map(entry => scanFiles(entry))
-            const files = await Promise.all(promises)
-            // 递归读取以防一次读不完
-            const moreFiles = await readEntries() 
-            resolve([...files, ...moreFiles])
-          }
-        })
-      })
-    }
-    return readEntries()
-  }
-}
-
-// 处理拖拽文件夹事件
-const handleFolderDrop = async (e) => {
-  const items = e.dataTransfer.items
-  let newFiles = []
-  
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i].webkitGetAsEntry()
-    if (item) {
-      const result = await scanFiles(item)
-      // 抹平多维数组，过滤掉 null
-      const flatFiles = Array.isArray(result) ? result.flat(Infinity).filter(f => f) : [result].filter(f => f)
-      newFiles = [...newFiles, ...flatFiles]
-    }
-  }
-  
-  if (newFiles.length > 0) {
-    drawingFiles.value = [...drawingFiles.value, ...newFiles]
-    ElMessage.success(`成功从文件夹中提取 ${newFiles.length} 份 PDF！`)
+const addDrawingFiles = (files, sourceLabel) => {
+  const beforeCount = drawingFiles.value.length
+  drawingFiles.value = mergePdfFiles(drawingFiles.value, files)
+  const addedCount = drawingFiles.value.length - beforeCount
+  if (addedCount > 0) {
+    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF！`)
   } else {
-    ElMessage.warning('未在拖入的内容中找到 PDF 文件！')
+    ElMessage.warning('未找到新的 PDF 文件！')
   }
 }
 
-// 备用方案：点击按钮选择文件夹
-const triggerFolderSelect = () => {
-  folderInput.value.click()
+const handleDrawingDrop = async (e) => {
+  const pdfs = await collectPdfFilesFromDataTransfer(e.dataTransfer)
+  addDrawingFiles(pdfs, '提取')
 }
-const handleFolderSelect = (e) => {
-  const files = Array.from(e.target.files)
-  const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'))
-  drawingFiles.value = [...drawingFiles.value, ...pdfs]
-  if (pdfs.length > 0) {
-    ElMessage.success(`成功从选中的文件夹中提取 ${pdfs.length} 份 PDF！`)
-  }
-  // 清空 input，允许下次选同一个文件夹
+
+const triggerDrawingFileSelect = () => {
+  drawingFileInput.value?.click()
+}
+
+const triggerDrawingFolderSelect = () => {
+  drawingFolderInput.value?.click()
+}
+
+const handleDrawingFileSelect = (e) => {
+  addDrawingFiles(e.target.files, '选择')
+  e.target.value = ''
+}
+
+const handleDrawingFolderSelect = (e) => {
+  addDrawingFiles(e.target.files, '从选中的文件夹中提取')
   e.target.value = ''
 }
 
@@ -483,6 +446,8 @@ const submitRfqPackage = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
   width: 100%;
   margin-top: 12px;
 }
