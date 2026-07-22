@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -35,6 +36,7 @@ class OperationalWorkflowIntegrationTests {
     private OrderManagementService orderManagementService;
     @Autowired
     private AuthService authService;
+
     @Test
     void supplementDrawingsAndDeleteOrderWorkTogether() throws Exception {
         OrderRfq order = new OrderRfq();
@@ -83,6 +85,42 @@ class OperationalWorkflowIntegrationTests {
 
         orderManagementService.deleteOrderCompletely(order.getId(), true);
         assertThat(orderMapper.selectById(order.getId())).isNull();
+    }
+
+    @Test
+    void supplementDrawingsDoesNotChangeOrderStatus() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("SUP-STATUS-" + System.nanoTime());
+        order.setCustomerName("补图状态客户");
+        order.setProjectName("补图状态项目");
+        order.setStatus(QuoteStatusWorkflow.PRICED);
+        orderMapper.insert(order);
+
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo("SUP-001");
+        item.setVersion("A");
+        item.setDescription("补图不改订单状态零件");
+        item.setQty(1);
+        item.setStatus(QuoteStatusWorkflow.PRICED);
+        itemMapper.insert(item);
+
+        MockMultipartFile drawing = new MockMultipartFile(
+                "drawings",
+                "SUP-001.pdf",
+                "application/pdf",
+                "%PDF-1.4 status".getBytes(StandardCharsets.UTF_8)
+        );
+
+        Map<String, Object> result = orderManagementService.supplementDrawings(order.getId(), List.of(drawing));
+
+        assertThat(result.get("success")).isEqualTo(true);
+        assertThat(itemMapper.selectById(item.getId()).getStatus())
+                .as("补图绑定到具体零件后，该零件可回到未核价等待重新核价")
+                .isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        assertThat(orderMapper.selectById(order.getId()).getStatus())
+                .as("订单状态只能通过专门状态流转动作改变，补图不应隐式回退订单")
+                .isEqualTo(QuoteStatusWorkflow.PRICED);
     }
 
     @Test

@@ -245,8 +245,6 @@ public class OrderManagementService {
         }
 
         if (!boundItems.isEmpty()) {
-            order.setStatus(resolveOrderStatusAfterReset(rfqId));
-            orderMapper.updateById(order);
             auditService.record("ORDER_SUPPLEMENT_DRAWINGS", "order_rfq", rfqId, null, boundItems);
         }
 
@@ -451,24 +449,6 @@ public class OrderManagementService {
             stats.ticketQty = numberValue(row.get("ticket_qty")).intValue();
             return stats;
         }
-    }
-
-    private String resolveOrderStatusAfterReset(Integer rfqId) {
-        List<ItemQuoteVersion> items = listItems(rfqId);
-        if (items.isEmpty()) {
-            return QuoteStatusWorkflow.UNPRICED;
-        }
-        List<ItemQuoteVersion> drawableItems = items.stream()
-                .filter(item -> !isBlank(item.getDrawingUrl()))
-                .toList();
-        if (drawableItems.isEmpty()) {
-            return QuoteStatusWorkflow.UNPRICED;
-        }
-        boolean allQuoted = drawableItems.stream().allMatch(item -> item.getFinalUnitPrice() != null);
-        if (allQuoted) {
-            return QuoteStatusWorkflow.QUOTED;
-        }
-        return QuoteStatusWorkflow.UNPRICED;
     }
 
     private OrderRfq requireOrder(Integer rfqId) {
