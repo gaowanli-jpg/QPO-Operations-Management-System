@@ -176,8 +176,8 @@ describe('QPO workflow page polish', () => {
 
     expectIncludes(source, 'MarketRelease.vue', [
       'const selectedRowsInItemOrder = () =>',
-      'const selectedIds = new Set(selectedRows.value.map(row => row.id))',
-      'return itemList.value.filter(row => selectedIds.has(row.id))',
+      'selectedRows.value.slice().sort',
+      'Number(left.id || 0) - Number(right.id || 0)',
       'const orderedSelectedRows = selectedRowsInItemOrder()',
       'items: orderedSelectedRows.map(row => ({'
     ])

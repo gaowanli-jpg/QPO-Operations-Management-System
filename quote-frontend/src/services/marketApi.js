@@ -28,23 +28,13 @@ export const listMarketOrders = (params = {}, scope) => {
   return request(endpoint, { params })
 }
 
-export const listInternalTargetLeadTimeItems = (rfqId) => request(`/api/market/internal-target-lead-time/${rfqId}/items`)
+export const listReleaseItems = (rfqId, params = {}) => request(`/api/market/release/items/${rfqId}`, { params })
 
-export const listTickets = (rfqId) => request(`/api/market/tickets/${rfqId}`)
+export const listTickets = (rfqId, params = {}) => request(`/api/market/tickets/${rfqId}`, { params })
 
-export const listProcessSheets = (rfqId) => request(`/api/market/process-sheets/${rfqId}`)
+export const listProcessSheets = (rfqId, params = {}) => request(`/api/market/process-sheets/${rfqId}`, { params })
 
-export const loadReleaseWorkspace = async (rfqId) => {
-  const [summary, internalTargetItems, tickets, processSheets] = await Promise.all([
-    getReleaseSummary(rfqId),
-    listInternalTargetLeadTimeItems(rfqId),
-    listTickets(rfqId),
-    listProcessSheets(rfqId)
-  ])
-  return { summary, internalTargetItems, tickets, processSheets }
-}
-
-export const parsePartSelection = (formData) => multipartPost('/api/market/parse-part-selection', formData)
+export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/market/release/parse-part-selection/${rfqId}`, formData)
 
 export const shiftInternalTargetLeadTime = (payload) => postJson('/api/market/internal-target-lead-time/shift', payload)
 

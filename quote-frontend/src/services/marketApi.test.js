@@ -56,33 +56,25 @@ describe('marketApi', () => {
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/orders', { params })
   })
 
-  test('loadReleaseWorkspace requests all release data by rfq id', async () => {
-    request
-      .mockResolvedValueOnce({ orderInfo: { id: 18 } })
-      .mockResolvedValueOnce([{ id: 1 }])
-      .mockResolvedValueOnce([{ id: 2 }])
-      .mockResolvedValueOnce([{ id: 3 }])
+  test('release workspace helpers use split paging endpoints', async () => {
+    const params = { page: 2, pageSize: 50, keyword: 'PN' }
 
-    const result = await marketApi.loadReleaseWorkspace(18)
+    await marketApi.listReleaseItems(18, params)
+    await marketApi.listTickets(18, params)
+    await marketApi.listProcessSheets(18, params)
 
-    expect(request).toHaveBeenNthCalledWith(1, '/api/market/release/summary/18')
-    expect(request).toHaveBeenNthCalledWith(2, '/api/market/internal-target-lead-time/18/items')
-    expect(request).toHaveBeenNthCalledWith(3, '/api/market/tickets/18')
-    expect(request).toHaveBeenNthCalledWith(4, '/api/market/process-sheets/18')
-    expect(result).toEqual({
-      summary: { orderInfo: { id: 18 } },
-      internalTargetItems: [{ id: 1 }],
-      tickets: [{ id: 2 }],
-      processSheets: [{ id: 3 }]
-    })
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/release/items/18', { params })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/tickets/18', { params })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/process-sheets/18', { params })
+    expect('loadReleaseWorkspace' in marketApi).toBe(false)
   })
 
-  test('parsePartSelection uploads selection form data', async () => {
+  test('parsePartSelection uploads selection form data by rfq id', async () => {
     const formData = new FormData()
 
-    await marketApi.parsePartSelection(formData)
+    await marketApi.parsePartSelection(18, formData)
 
-    expect(request).toHaveBeenCalledWith('/api/market/parse-part-selection', {
+    expect(request).toHaveBeenCalledWith('/api/market/release/parse-part-selection/18', {
       method: 'POST',
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }

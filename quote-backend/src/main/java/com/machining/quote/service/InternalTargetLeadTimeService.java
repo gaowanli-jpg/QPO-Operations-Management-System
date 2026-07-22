@@ -6,6 +6,9 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
 import com.machining.quote.dto.InternalTargetLeadTimeShiftReq;
 import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
+import com.machining.quote.dto.OrderItemPageDTO;
+import com.machining.quote.dto.OrderItemPageReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -20,9 +23,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class InternalTargetLeadTimeService {
@@ -38,6 +43,8 @@ public class InternalTargetLeadTimeService {
     private LeadTimeService leadTimeService;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private OrderItemPageService orderItemPageService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -78,7 +85,6 @@ public class InternalTargetLeadTimeService {
         result.put("adjustedCount", adjustedCount);
         result.put("skippedCount", skipped.size());
         result.put("skippedItems", skipped);
-        result.put("itemList", buildItemRows(req.getRfqId()));
         log.info("Internal target lead time shifted rfqId={} itemCount={} adjustedCount={} skippedCount={} days={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), days);
         if (!skipped.isEmpty()) {
@@ -117,7 +123,6 @@ public class InternalTargetLeadTimeService {
         result.put("adjustedCount", adjustedCount);
         result.put("skippedCount", skipped.size());
         result.put("skippedItems", skipped);
-        result.put("itemList", buildItemRows(req.getRfqId()));
         log.info("Internal target lead time set rfqId={} itemCount={} adjustedCount={} skippedCount={} targetLeadTime={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), normalizedDate);
         if (!skipped.isEmpty()) {
@@ -156,6 +161,76 @@ public class InternalTargetLeadTimeService {
     public List<Map<String, Object>> listItemRows(Integer rfqId) {
         requireOrder(rfqId);
         return buildItemRows(rfqId);
+    }
+
+    public Map<String, Object> releaseSummary(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("orderInfo", order);
+        result.put("summary", orderItemPageService.summarizeItems(rfqId));
+        return result;
+    }
+
+    public PageResult<Map<String, Object>> pageItemRows(
+            Integer rfqId,
+            Integer page,
+            Integer pageSize,
+            String keyword,
+            String status,
+            Boolean remainingOnly) {
+        requireOrder(rfqId);
+        OrderItemPageReq req = new OrderItemPageReq();
+        req.setRfqId(rfqId);
+        req.setPage(page);
+        req.setPageSize(pageSize);
+        req.setKeyword(keyword);
+        req.setStatus(status);
+        OrderItemPageDTO itemPage = orderItemPageService.pageItems(req);
+        List<ItemQuoteVersion> items = itemPage.getRecords();
+        List<OrderDeliveryTicket> tickets = listTicketsForItems(rfqId, items);
+        List<Map<String, Object>> rows = items.stream()
+                .map(item -> buildItemRow(item, ticketedQty(item, tickets)))
+                .filter(row -> !Boolean.TRUE.equals(remainingOnly) || safeInt(row.get("remainingQty")) > 0)
+                .toList();
+        return PageResult.of(rows, itemPage.getTotal(), itemPage.getPage(), itemPage.getPageSize());
+    }
+
+    public Map<String, Object> matchPartSelection(Integer rfqId, List<Map<String, String>> importedItems) {
+        requireOrder(rfqId);
+        Set<String> importedKeys = new HashSet<>();
+        for (Map<String, String> item : importedItems == null ? List.<Map<String, String>>of() : importedItems) {
+            String key = itemKey(item.getOrDefault("normalizedPartNo", item.get("partNo")),
+                    item.getOrDefault("normalizedVersion", item.get("version")));
+            if (!"||".equals(key)) {
+                importedKeys.add(key);
+            }
+        }
+        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
+        List<Map<String, Object>> selectedRows = new ArrayList<>();
+        List<Map<String, Object>> skippedRows = new ArrayList<>();
+        int matchedCount = 0;
+        for (ItemQuoteVersion item : listItems(rfqId)) {
+            if (!importedKeys.contains(itemKey(item.getPartNo(), item.getVersion()))) {
+                continue;
+            }
+            matchedCount++;
+            Map<String, Object> row = buildItemRow(item, ticketedQty(item, tickets));
+            if (Boolean.TRUE.equals(row.get("canSelect"))) {
+                selectedRows.add(row);
+            } else {
+                skippedRows.add(row);
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("importedCount", importedKeys.size());
+        result.put("matchedCount", matchedCount);
+        result.put("selectedCount", selectedRows.size());
+        result.put("skippedCount", skippedRows.size());
+        result.put("data", selectedRows);
+        result.put("skippedItems", skippedRows);
+        return result;
     }
 
     private OrderRfq requireOrder(Integer rfqId) {
@@ -230,6 +305,22 @@ public class InternalTargetLeadTimeService {
         return ticketMapper.selectList(qw);
     }
 
+    private List<OrderDeliveryTicket> listTicketsForItems(Integer rfqId, List<ItemQuoteVersion> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> itemIds = items.stream()
+                .map(ItemQuoteVersion::getId)
+                .filter(id -> id != null)
+                .toList();
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
+        qw.eq("rfq_id", rfqId);
+        if (!itemIds.isEmpty()) {
+            qw.and(wrapper -> wrapper.in("item_id", itemIds).or().isNull("item_id"));
+        }
+        return ticketMapper.selectList(qw);
+    }
+
     private int ticketedQty(ItemQuoteVersion item, List<OrderDeliveryTicket> tickets) {
         return tickets.stream()
                 .filter(ticket -> matchesTicketItem(item, ticket))
@@ -279,7 +370,29 @@ public class InternalTargetLeadTimeService {
         row.put("remark", item.getRemark());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
+        boolean canSelect = item.getFinalUnitPrice() != null
+                && remainingQty > 0
+                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+        row.put("canSelect", canSelect);
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReason(item, remainingQty));
         return row;
+    }
+
+    private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
+        if (item.getFinalUnitPrice() == null) {
+            return "零件未报价";
+        }
+        if (remainingQty <= 0) {
+            return "零件已全部提单";
+        }
+        if (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus())) {
+            return "零件已提单";
+        }
+        return "";
     }
 
     private String normalizePartNo(String partNo) {
@@ -292,6 +405,14 @@ public class InternalTargetLeadTimeService {
 
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private int safeInt(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
     }
 
     private Map<String, Object> skipRow(Integer itemId, String partNo, String version, String reason) {

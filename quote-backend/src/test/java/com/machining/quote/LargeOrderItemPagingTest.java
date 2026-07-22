@@ -7,9 +7,13 @@ import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.DeliveryService;
+import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderItemPageService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,11 +41,17 @@ class LargeOrderItemPagingTest {
     @Autowired
     private OrderItemPageService orderItemPageService;
     @Autowired
+    private InternalTargetLeadTimeService internalTargetLeadTimeService;
+    @Autowired
+    private DeliveryService deliveryService;
+    @Autowired
     private EngineerController engineerController;
     @Autowired
     private OrderRfqMapper orderMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
+    @Autowired
+    private OrderDeliveryTicketMapper ticketMapper;
 
     @AfterEach
     void tearDown() {
@@ -189,10 +200,26 @@ class LargeOrderItemPagingTest {
                 .doesNotContain("quoteProcessService.getQuoteProcess(rfqId)")
                 .doesNotContain("workspace.getOrDefault(\"itemList\"");
 
-        assertThat(source("controller", "MarketController.java"))
+        String marketController = source("controller", "MarketController.java");
+        assertThat(marketController)
                 .contains("@GetMapping(\"/release/items/{rfqId}\")")
-                .contains("@GetMapping(\"/release/tickets/{rfqId}\")")
-                .contains("@GetMapping(\"/release/process-sheets/{rfqId}\")");
+                .contains("@GetMapping(\"/tickets/{rfqId}\")")
+                .contains("@GetMapping(\"/process-sheets/{rfqId}\")")
+                .contains("@PostMapping(\"/release/parse-part-selection/{rfqId}\")");
+        assertThat(method(marketController, "getReleaseSummary"))
+                .contains("internalTargetLeadTimeService.releaseSummary(rfqId)")
+                .doesNotContain("itemQuoteVersionMapper.selectList")
+                .doesNotContain("result.put(\"itemList\"");
+        assertThat(method(marketController, "listReleaseItems"))
+                .contains("internalTargetLeadTimeService.pageItemRows")
+                .doesNotContain("getReleaseSummary(rfqId)")
+                .doesNotContain("page((List<ItemQuoteVersion>)");
+        assertThat(method(marketController, "listDeliveryTickets"))
+                .contains("deliveryService.pageTickets")
+                .doesNotContain("deliveryService.listTickets(rfqId)");
+        assertThat(method(marketController, "listProcessSheets"))
+                .contains("deliveryService.pageProcessSheets")
+                .doesNotContain("deliveryService.listProcessSheets(rfqId)");
 
         assertThat(source("controller", "OrderManagementController.java"))
                 .contains("@GetMapping(\"/orders/{rfqId}/items\")")
@@ -261,6 +288,60 @@ class LargeOrderItemPagingTest {
                 .doesNotContain("result.put(\"itemList\"");
     }
 
+    @Test
+    void releaseItemPagingReturnsBackendRemainingQuantityForCurrentPage() {
+        OrderRfq order = createOrder("RELEASE-PAGE");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.updateById(order);
+        ItemQuoteVersion first = createItem(order, "REL-01", QuoteStatusWorkflow.QUOTED, 10.0, "/rel-1.pdf");
+        first.setQty(10);
+        itemMapper.updateById(first);
+        ItemQuoteVersion second = createItem(order, "REL-02", QuoteStatusWorkflow.ITEM_RELEASED, 20.0, "/rel-2.pdf");
+        second.setQty(5);
+        itemMapper.updateById(second);
+        createTicket(order, first, 3);
+        createTicket(order, second, 5);
+
+        PageResult<Map<String, Object>> firstPage = internalTargetLeadTimeService.pageItemRows(
+                order.getId(), 1, 1, null, null, false);
+        PageResult<Map<String, Object>> secondPage = internalTargetLeadTimeService.pageItemRows(
+                order.getId(), 2, 1, null, null, false);
+
+        assertThat(firstPage.getTotal()).isEqualTo(2);
+        assertThat(firstPage.getRecords()).hasSize(1);
+        assertThat(firstPage.getRecords().get(0))
+                .containsEntry("id", first.getId())
+                .containsEntry("ticketedQty", 3)
+                .containsEntry("remainingQty", 7)
+                .containsEntry("canSelect", true)
+                .containsEntry("releaseBlockedReason", "");
+        assertThat(secondPage.getRecords().get(0))
+                .containsEntry("id", second.getId())
+                .containsEntry("ticketedQty", 5)
+                .containsEntry("remainingQty", 0)
+                .containsEntry("canSelect", false);
+    }
+
+    @Test
+    void releaseTicketsAndProcessSheetsArePagedByDeliveryService() {
+        OrderRfq order = createOrder("RELEASE-TICKET-PAGE");
+        order.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.updateById(order);
+        ItemQuoteVersion first = createItem(order, "TICKET-01", QuoteStatusWorkflow.ITEM_RELEASED, 10.0, "/ticket-1.pdf");
+        ItemQuoteVersion second = createItem(order, "TICKET-02", QuoteStatusWorkflow.ITEM_RELEASED, 20.0, "/ticket-2.pdf");
+        createTicket(order, first, 1);
+        createTicket(order, second, 1);
+
+        PageResult<OrderDeliveryTicket> tickets = deliveryService.pageTickets(order.getId(), 2, 1);
+        PageResult<?> processSheets = deliveryService.pageProcessSheets(order.getId(), 2, 1);
+
+        assertThat(tickets.getTotal()).isEqualTo(2);
+        assertThat(tickets.getRecords()).hasSize(1);
+        assertThat(tickets.getRecords().get(0).getPartNo()).isEqualTo("TICKET-02");
+        assertThat(processSheets.getTotal()).isEqualTo(2);
+        assertThat(processSheets.getRecords()).hasSize(1);
+    }
+
     private String source(String packageName, String fileName) throws Exception {
         return Files.readString(MAIN_JAVA.resolve(packageName).resolve(fileName), StandardCharsets.UTF_8);
     }
@@ -299,5 +380,18 @@ class LargeOrderItemPagingTest {
         item.setDrawingUrl(drawingUrl);
         itemMapper.insert(item);
         return item;
+    }
+
+    private OrderDeliveryTicket createTicket(OrderRfq order, ItemQuoteVersion item, int qty) {
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setRfqId(order.getId());
+        ticket.setRfqNo(order.getRfqNo());
+        ticket.setCustomerName(order.getCustomerName());
+        ticket.setItemId(item.getId());
+        ticket.setPartNo(item.getPartNo());
+        ticket.setVersion(item.getVersion());
+        ticket.setQty(qty);
+        ticketMapper.insert(ticket);
+        return ticket;
     }
 }

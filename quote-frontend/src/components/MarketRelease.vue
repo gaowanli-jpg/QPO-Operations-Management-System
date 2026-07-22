@@ -373,7 +373,7 @@ import {
   downloadMarketExport,
   generateTicket,
   getReleaseSummary,
-  listInternalTargetLeadTimeItems,
+  listReleaseItems,
   listProcessSheets,
   listTickets,
   parsePartSelection,
@@ -383,9 +383,7 @@ import {
 } from '../services/marketApi'
 import {
   CLIENT_PAGE_SIZES,
-  DEFAULT_CLIENT_PAGE_SIZE,
-  clampPage,
-  paginateRows
+  DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
 
 const selectedRfqId = ref(null)
@@ -397,7 +395,7 @@ const processSheetList = ref([])
 const releaseItemTotal = ref(0)
 const releaseTicketTotal = ref(0)
 const releaseProcessSheetTotal = ref(0)
-const selectedRows = ref([])
+const selectedItemIdMap = reactive({})
 const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
 const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
@@ -436,15 +434,20 @@ const releaseForm = reactive({
   arrangeType: '计划'
 })
 
-const pagedReleaseItems = computed(() => paginateRows(itemList.value, releaseItemPagination))
-const pagedTicketList = computed(() => paginateRows(ticketList.value, ticketPagination))
-const pagedProcessSheetList = computed(() => paginateRows(processSheetList.value, processSheetPagination))
+const pagedReleaseItems = computed(() => itemList.value)
+const pagedTicketList = computed(() => ticketList.value)
+const pagedProcessSheetList = computed(() => processSheetList.value)
+const selectedRows = computed(() => Object.values(selectedItemIdMap))
 const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
 
 const resetReleasePagination = () => {
   releaseItemPagination.page = 1
   ticketPagination.page = 1
   processSheetPagination.page = 1
+}
+
+const clearSelectedRows = () => {
+  Object.keys(selectedItemIdMap).forEach(id => delete selectedItemIdMap[id])
 }
 
 const syncReleaseItemTableSelection = async () => {
@@ -461,24 +464,29 @@ const syncReleaseItemTableSelection = async () => {
 }
 
 watch(
-  () => [itemList.value.length, releaseItemPagination.page, releaseItemPagination.pageSize],
+  () => [releaseItemPagination.page, releaseItemPagination.pageSize],
   () => {
-    releaseItemPagination.page = clampPage(releaseItemPagination, itemList.value.length)
-    syncReleaseItemTableSelection()
+    if (selectedRfqId.value) {
+      fetchReleaseItems(selectedRfqId.value)
+    }
   }
 )
 
 watch(
-  () => [ticketList.value.length, ticketPagination.page, ticketPagination.pageSize],
+  () => [ticketPagination.page, ticketPagination.pageSize],
   () => {
-    ticketPagination.page = clampPage(ticketPagination, ticketList.value.length)
+    if (selectedRfqId.value) {
+      loadTickets(selectedRfqId.value)
+    }
   }
 )
 
 watch(
-  () => [processSheetList.value.length, processSheetPagination.page, processSheetPagination.pageSize],
+  () => [processSheetPagination.page, processSheetPagination.pageSize],
   () => {
-    processSheetPagination.page = clampPage(processSheetPagination, processSheetList.value.length)
+    if (selectedRfqId.value) {
+      loadProcessSheets(selectedRfqId.value)
+    }
   }
 )
 
@@ -498,13 +506,13 @@ const loadOrder = async (rfqId) => {
   try {
     const response = await getReleaseSummary(rfqId)
     orderInfo.value = response.orderInfo || {}
-    await loadInternalTargetItems(rfqId)
+    await fetchReleaseItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''
     releaseForm.orderType = ''
     releaseForm.internalProjectNo = ''
     releaseForm.customerOrderNo = ''
     releaseForm.customerProjectNo = ''
-    selectedRows.value = []
+    clearSelectedRows()
     await nextTick()
     itemTableRef.value?.clearSelection()
     await loadTickets(rfqId)
@@ -517,9 +525,15 @@ const loadOrder = async (rfqId) => {
   }
 }
 
-const loadInternalTargetItems = async (rfqId) => {
-  const response = await listInternalTargetLeadTimeItems(rfqId)
-  setItemList(response || [])
+const fetchReleaseItems = async (rfqId) => {
+  const response = await listReleaseItems(rfqId, {
+    page: releaseItemPagination.page,
+    pageSize: releaseItemPagination.pageSize
+  })
+  itemList.value = response.records || []
+  setItemList(response.records || [])
+  releaseItemTotal.value = Number(response.total ?? 0)
+  await syncReleaseItemTableSelection()
 }
 
 const setItemList = (rows) => {
@@ -527,11 +541,13 @@ const setItemList = (rows) => {
     ...row,
     internalTargetLeadTimeDraft: row.internalTargetLeadTime || ''
   }))
-  releaseItemTotal.value = itemList.value.length
   itemList.value.forEach(item => {
     const remainingQty = remainingQtyFor(item)
     if (!acceptedQtyMap[item.id] || acceptedQtyMap[item.id] > remainingQty) {
       acceptedQtyMap[item.id] = remainingQty > 0 ? remainingQty : 0
+    }
+    if (selectedItemIdMap[item.id]) {
+      selectedItemIdMap[item.id] = { ...selectedItemIdMap[item.id], ...item }
     }
   })
 }
@@ -539,9 +555,12 @@ const setItemList = (rows) => {
 const loadTickets = async (rfqId) => {
   loadingTickets.value = true
   try {
-    const response = await listTickets(rfqId)
-    ticketList.value = response || []
-    releaseTicketTotal.value = ticketList.value.length
+    const response = await listTickets(rfqId, {
+      page: ticketPagination.page,
+      pageSize: ticketPagination.pageSize
+    })
+    ticketList.value = response.records || []
+    releaseTicketTotal.value = Number(response.total ?? 0)
   } catch (error) {
     console.error(error)
     ElMessage.error('提单列表加载失败。')
@@ -553,9 +572,12 @@ const loadTickets = async (rfqId) => {
 const loadProcessSheets = async (rfqId) => {
   loadingProcessSheets.value = true
   try {
-    const response = await listProcessSheets(rfqId)
-    processSheetList.value = response || []
-    releaseProcessSheetTotal.value = processSheetList.value.length
+    const response = await listProcessSheets(rfqId, {
+      page: processSheetPagination.page,
+      pageSize: processSheetPagination.pageSize
+    })
+    processSheetList.value = response.records || []
+    releaseProcessSheetTotal.value = Number(response.total ?? 0)
   } catch (error) {
     console.error(error)
     ElMessage.error('工艺表列表加载失败。')
@@ -570,6 +592,7 @@ const remainingQtyFor = (row) => {
 }
 
 const canSelectItem = (row) => {
+  if (row?.canSelect === false) return false
   return row.status !== '已生成提单'
     && row.status !== '已提单'
     && row.status !== '已部分提单'
@@ -580,22 +603,18 @@ const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === '
 
 const handleSelectionChange = (rows) => {
   if (syncingReleaseItemSelection) return
-  const currentPageIds = new Set(pagedReleaseItems.value.map(row => row.id))
-  const preservedRows = selectedRows.value.filter(row => !currentPageIds.has(row.id))
-  selectedRows.value = [...preservedRows, ...rows]
+  const currentPageIds = new Set(itemList.value.map(row => row.id))
+  currentPageIds.forEach(id => delete selectedItemIdMap[id])
+  rows.forEach(row => {
+    if (canSelectItem(row)) {
+      selectedItemIdMap[row.id] = row
+    }
+  })
 }
 
 const selectedRowsInItemOrder = () => {
-  const selectedIds = new Set(selectedRows.value.map(row => row.id))
-  return itemList.value.filter(row => selectedIds.has(row.id))
+  return selectedRows.value.slice().sort((left, right) => Number(left.id || 0) - Number(right.id || 0))
 }
-
-const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
-const normalizeVersion = (value) => {
-  const normalized = String(value || '').trim().toUpperCase()
-  return normalized
-}
-const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 
 const handleSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
@@ -612,40 +631,26 @@ const handleSelectionExcelChange = async (uploadFile) => {
   formData.append('excelFile', file)
   importSelecting.value = true
   try {
-    const response = await parsePartSelection(formData)
-    const importedItems = response?.data || []
-    const importedKeys = new Set(
-      importedItems
-        .map(item => `${normalizePartNo(item.normalizedPartNo || item.partNo)}||${normalizeVersion(item.normalizedVersion ?? item.version)}`)
-        .filter(key => !key.startsWith('||'))
-    )
-
-    let matchedCount = 0
-    let selectedCount = 0
-    let skippedCount = 0
-    const importedSelection = []
-    itemList.value.forEach(row => {
-      if (!importedKeys.has(itemIdentityKey(row))) {
-        return
-      }
-      matchedCount++
-      if (canSelectItem(row)) {
-        importedSelection.push(row)
-        selectedCount++
-      } else {
-        skippedCount++
-      }
+    const response = await parsePartSelection(selectedRfqId.value, formData)
+    clearSelectedRows()
+    ;(response?.data || []).forEach(row => {
+      selectedItemIdMap[row.id] = row
+      const remainingQty = remainingQtyFor(row)
+      acceptedQtyMap[row.id] = remainingQty > 0 ? remainingQty : 0
     })
-    selectedRows.value = importedSelection
     await syncReleaseItemTableSelection()
 
-    if (importedKeys.size === 0) {
+    const importedCount = Number(response?.importedCount ?? 0)
+    const matchedCount = Number(response?.matchedCount ?? 0)
+    const selectedCount = Number(response?.selectedCount ?? 0)
+    const skippedCount = Number(response?.skippedCount ?? 0)
+    if (importedCount === 0) {
       ElMessage.warning('表格中未读取到有效的图号+版本。')
     } else if (selectedCount === 0) {
-      ElMessage.warning(`已读取 ${importedKeys.size} 个图号+版本，但没有匹配到当前订单中可选的零件。`)
+      ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单中可选的零件。`)
     } else {
-      const skippedText = skippedCount > 0 ? `，${skippedCount} 项因已提单未勾选` : ''
-      ElMessage.success(`已读取 ${importedKeys.size} 个图号+版本，匹配 ${matchedCount} 项，已勾选 ${selectedCount} 项${skippedText}。`)
+      const skippedText = skippedCount > 0 ? `，${skippedCount} 项因不可选未勾选` : ''
+      ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已勾选 ${selectedCount} 项${skippedText}。`)
     }
   } catch (error) {
     console.error(error)
@@ -668,9 +673,8 @@ const adjustInternalLeadTime = async (direction) => {
       itemIds: selectedRows.value.map(row => row.id),
       days
     })
-    setItemList(response.itemList || [])
-    selectedRows.value = []
-    await syncReleaseItemTableSelection()
+    clearSelectedRows()
+    await fetchReleaseItems(selectedRfqId.value)
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -698,9 +702,8 @@ const setInternalTargetLeadTime = async () => {
       itemIds: selectedRows.value.map(row => row.id),
       internalTargetLeadTime: manualInternalTargetDate.value
     })
-    setItemList(response.itemList || [])
-    selectedRows.value = []
-    await syncReleaseItemTableSelection()
+    clearSelectedRows()
+    await fetchReleaseItems(selectedRfqId.value)
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -732,6 +735,9 @@ const saveInternalTargetLeadTime = async (row) => {
     const index = itemList.value.findIndex(item => item.id === row.id)
     if (index >= 0) {
       itemList.value.splice(index, 1, saved)
+    }
+    if (selectedItemIdMap[row.id]) {
+      selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
     }
     ElMessage.success('内部目标交期已保存。')
   } catch (error) {

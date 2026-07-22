@@ -17,6 +17,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
+import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderFilePathService;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.QuoteTemplateExportService;
@@ -49,6 +50,9 @@ public class MarketController {
 
     @Autowired
     private DeliveryService deliveryService;
+
+    @Autowired
+    private InternalTargetLeadTimeService internalTargetLeadTimeService;
 
     @Autowired
     private ExcelExportService excelExportService;
@@ -118,14 +122,20 @@ public class MarketController {
 
     @GetMapping("/tickets/{rfqId}")
     @RequirePermission("market:release:view")
-    public List<OrderDeliveryTicket> listDeliveryTickets(@PathVariable Integer rfqId) {
-        return deliveryService.listTickets(rfqId);
+    public PageResult<OrderDeliveryTicket> listDeliveryTickets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryService.pageTickets(rfqId, page, pageSize);
     }
 
     @GetMapping("/process-sheets/{rfqId}")
     @RequirePermission("market:release:view")
-    public List<ProcessSheetDTO> listProcessSheets(@PathVariable Integer rfqId) {
-        return deliveryService.listProcessSheets(rfqId);
+    public PageResult<ProcessSheetDTO> listProcessSheets(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryService.pageProcessSheets(rfqId, page, pageSize);
     }
 
     @GetMapping("/export/tickets/{rfqId}")
@@ -178,28 +188,19 @@ public class MarketController {
     @GetMapping("/release/summary/{rfqId}")
     @RequirePermission("market:release:view")
     public Map<String, Object> getReleaseSummary(@PathVariable Integer rfqId) {
-        OrderRfq order = orderRfqMapper.selectById(rfqId);
-        if (dataScopeService != null) {
-            dataScopeService.assertCanAccessOrder(order);
-        }
-        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
-        List<ItemQuoteVersion> items = itemQuoteVersionMapper.selectList(qw);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("orderInfo", order);
-        result.put("itemList", items);
-        return result;
+        return internalTargetLeadTimeService.releaseSummary(rfqId);
     }
 
     @GetMapping("/release/items/{rfqId}")
     @RequirePermission("market:release:view")
-    @SuppressWarnings("unchecked")
-    public PageResult<ItemQuoteVersion> listReleaseItems(
+    public PageResult<Map<String, Object>> listReleaseItems(
             @PathVariable Integer rfqId,
             @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return page((List<ItemQuoteVersion>) getReleaseSummary(rfqId).get("itemList"), page, pageSize);
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "remainingOnly", required = false) Boolean remainingOnly) {
+        return internalTargetLeadTimeService.pageItemRows(rfqId, page, pageSize, keyword, status, remainingOnly);
     }
 
     @GetMapping("/release/tickets/{rfqId}")
@@ -208,7 +209,7 @@ public class MarketController {
             @PathVariable Integer rfqId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return page(deliveryService.listTickets(rfqId), page, pageSize);
+        return deliveryService.pageTickets(rfqId, page, pageSize);
     }
 
     @GetMapping("/release/process-sheets/{rfqId}")
@@ -217,12 +218,29 @@ public class MarketController {
             @PathVariable Integer rfqId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return page(deliveryService.listProcessSheets(rfqId), page, pageSize);
+        return deliveryService.pageProcessSheets(rfqId, page, pageSize);
+    }
+
+    @PostMapping("/release/parse-part-selection/{rfqId}")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> parsePartSelectionForOrder(
+            @PathVariable Integer rfqId,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        return internalTargetLeadTimeService.matchPartSelection(rfqId, readPartSelectionRows(excelFile));
     }
 
     @PostMapping("/parse-part-selection")
     @RequirePermission("market:release:create")
     public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
+        List<Map<String, String>> items = readPartSelectionRows(excelFile);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("count", items.size());
+        result.put("data", items);
+        return result;
+    }
+
+    private List<Map<String, String>> readPartSelectionRows(MultipartFile excelFile) {
         try {
             List<Map<Integer, String>> rows = EasyExcel.read(excelFile.getInputStream())
                     .headRowNumber(0)
@@ -281,11 +299,7 @@ public class MarketController {
                 items.add(item);
             }
 
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("count", items.size());
-            result.put("data", items);
-            return result;
+            return items;
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {

@@ -3,6 +3,7 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -29,6 +30,9 @@ import java.util.Set;
 @Service
 public class DeliveryService {
     private static final Logger log = LoggerFactory.getLogger(DeliveryService.class);
+    private static final int DEFAULT_PAGE = 1;
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 100;
     private static final Set<String> ALLOWED_ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
 
     @Autowired
@@ -175,6 +179,19 @@ public class DeliveryService {
         return ticketMapper.selectList(qw);
     }
 
+    public PageResult<OrderDeliveryTicket> pageTickets(Integer rfqId, Integer page, Integer pageSize) {
+        assertOrderDataScope(rfqId);
+        int safePage = safePage(page);
+        int safePageSize = safePageSize(pageSize);
+        long offset = (long) (safePage - 1) * safePageSize;
+        QueryWrapper<OrderDeliveryTicket> countQuery = ticketQuery(rfqId);
+        Long total = ticketMapper.selectCount(countQuery);
+        QueryWrapper<OrderDeliveryTicket> pageQuery = ticketQuery(rfqId)
+                .orderByAsc("id")
+                .last("LIMIT " + safePageSize + " OFFSET " + offset);
+        return PageResult.of(ticketMapper.selectList(pageQuery), total == null ? 0L : total, safePage, safePageSize);
+    }
+
     public List<ProcessSheetDTO> listProcessSheets(Integer rfqId) {
         assertOrderDataScope(rfqId);
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
@@ -185,6 +202,22 @@ public class DeliveryService {
         return ticketMapper.selectList(qw).stream()
                 .map(this::buildProcessSheet)
                 .toList();
+    }
+
+    public PageResult<ProcessSheetDTO> pageProcessSheets(Integer rfqId, Integer page, Integer pageSize) {
+        PageResult<OrderDeliveryTicket> ticketPage = pageTickets(rfqId, page, pageSize);
+        List<ProcessSheetDTO> records = ticketPage.getRecords().stream()
+                .map(this::buildProcessSheet)
+                .toList();
+        return PageResult.of(records, ticketPage.getTotal(), ticketPage.getPage(), ticketPage.getPageSize());
+    }
+
+    private QueryWrapper<OrderDeliveryTicket> ticketQuery(Integer rfqId) {
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
+        if (rfqId != null) {
+            qw.eq("rfq_id", rfqId);
+        }
+        return qw;
     }
 
     private void assertOrderDataScope(Integer rfqId) {
@@ -442,6 +475,17 @@ public class DeliveryService {
 
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private int safePage(Integer page) {
+        return page == null || page < 1 ? DEFAULT_PAGE : page;
+    }
+
+    private int safePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private record DemandLine(ItemQuoteVersion item, int qty) {
