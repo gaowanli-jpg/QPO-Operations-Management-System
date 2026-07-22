@@ -65,6 +65,15 @@ CREATE INDEX IF NOT EXISTS idx_item_quote_version_repeat_released_key
       AND material_data IS NOT NULL
       AND process_route IS NOT NULL;
 
+CREATE INDEX IF NOT EXISTS idx_item_quote_version_rfq_id_id
+    ON item_quote_version(rfq_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_item_quote_version_rfq_status_id
+    ON item_quote_version(rfq_id, status, id);
+
+CREATE INDEX IF NOT EXISTS idx_item_quote_version_rfq_part_version_id
+    ON item_quote_version(rfq_id, part_no, version, id);
+
 CREATE TABLE IF NOT EXISTS dict_material (
     id SERIAL PRIMARY KEY,
     material_name VARCHAR(100) NOT NULL,
@@ -241,6 +250,12 @@ ALTER TABLE order_delivery_ticket_allocation
 
 CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_part_version
     ON order_delivery_ticket(part_no, version, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_id_id
+    ON order_delivery_ticket(rfq_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_item_id
+    ON order_delivery_ticket(rfq_id, item_id);
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,

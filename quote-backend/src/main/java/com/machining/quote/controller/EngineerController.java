@@ -2,6 +2,8 @@ package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.OrderItemPageDTO;
+import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
@@ -11,6 +13,7 @@ import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.service.OrderItemPageService;
 import com.machining.quote.service.OrderManagementService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +41,9 @@ public class EngineerController {
 
     @Autowired
     private OrderManagementService orderManagementService;
+
+    @Autowired
+    private OrderItemPageService orderItemPageService;
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -78,12 +84,16 @@ public class EngineerController {
 
     @GetMapping("/pricing/items/{rfqId}")
     @RequirePermission("engineer:pricing:view")
-    @SuppressWarnings("unchecked")
     public PageResult<ItemQuoteVersion> listPricingItems(
             @PathVariable Integer rfqId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return page((List<ItemQuoteVersion>) getOrderSummary(rfqId).get("itemList"), page, pageSize);
+        OrderItemPageReq req = new OrderItemPageReq();
+        req.setRfqId(rfqId);
+        req.setPage(page);
+        req.setPageSize(pageSize);
+        OrderItemPageDTO result = orderItemPageService.pageItems(req);
+        return PageResult.of(result.getRecords(), result.getTotal(), result.getPage(), result.getPageSize());
     }
 
     @GetMapping("/pricing/assembly-child-candidates/{rfqId}")
