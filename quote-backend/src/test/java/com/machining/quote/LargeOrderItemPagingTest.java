@@ -175,10 +175,19 @@ class LargeOrderItemPagingTest {
                 .contains("@GetMapping(\"/pricing/assembly-child-candidates/{rfqId}\")")
                 .contains("PageResult<ItemQuoteVersion>");
 
-        assertThat(source("controller", "QuoteProcessController.java"))
+        String quoteProcessController = source("controller", "QuoteProcessController.java");
+        assertThat(quoteProcessController)
                 .contains("@GetMapping(\"/{rfqId}/summary\")")
                 .contains("@GetMapping(\"/{rfqId}/items\")")
                 .contains("PageResult<Map<String, Object>>");
+        assertThat(method(quoteProcessController, "getQuoteProcessSummary"))
+                .contains("quoteProcessService.getQuoteProcessSummary(rfqId)")
+                .doesNotContain("quoteProcessService.getQuoteProcess(rfqId)")
+                .doesNotContain("itemList");
+        assertThat(method(quoteProcessController, "listQuoteProcessItems"))
+                .contains("quoteProcessService.listQuoteProcessItems(req)")
+                .doesNotContain("quoteProcessService.getQuoteProcess(rfqId)")
+                .doesNotContain("workspace.getOrDefault(\"itemList\"");
 
         assertThat(source("controller", "MarketController.java"))
                 .contains("@GetMapping(\"/release/items/{rfqId}\")")
@@ -227,6 +236,29 @@ class LargeOrderItemPagingTest {
         assertThat(method(source("controller", "MarketController.java"), "generateDeliveryTicket"))
                 .doesNotContain("RequestParam(value = \"page\"")
                 .contains("deliveryService.generateTickets(req)");
+    }
+
+    @Test
+    void quoteProcessServiceUsesPagedItemsAndSummaryResults() throws Exception {
+        String service = source("service", "QuoteProcessService.java");
+
+        assertThat(service)
+                .contains("public Map<String, Object> getQuoteProcessSummary(Integer rfqId)")
+                .contains("public PageResult<Map<String, Object>> listQuoteProcessItems(OrderItemPageReq req)")
+                .contains("orderItemPageService.pageItems(req)");
+        assertThat(method(service, "getQuoteProcessSummary"))
+                .contains("orderItemPageService.summarizeItems(rfqId)")
+                .doesNotContain("listItems(rfqId)")
+                .doesNotContain("itemList");
+        assertThat(method(service, "shiftLeadTimes"))
+                .contains("quoteLeadTimeMutationSummary")
+                .doesNotContain("result.put(\"itemList\"");
+        assertThat(method(service, "setLeadTimes"))
+                .contains("quoteLeadTimeMutationSummary")
+                .doesNotContain("result.put(\"itemList\"");
+        assertThat(method(service, "saveQuoteSheet"))
+                .contains("quoteSheetSummary")
+                .doesNotContain("result.put(\"itemList\"");
     }
 
     private String source(String packageName, String fileName) throws Exception {

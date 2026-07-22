@@ -54,7 +54,9 @@ export const updateInternalTargetLeadTime = (payload) => postJson('/api/market/i
 
 export const generateTicket = (payload) => postJson('/api/market/generate-ticket', payload)
 
-export const getQuoteProcess = (rfqId) => request(`/api/market/quote-process/${rfqId}`)
+export const getQuoteProcessSummary = (rfqId) => request(`/api/market/quote-process/${rfqId}/summary`)
+
+export const listQuoteProcessItems = (rfqId, params = {}) => request(`/api/market/quote-process/${rfqId}/items`, { params })
 
 export const shiftQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/shift', payload)
 

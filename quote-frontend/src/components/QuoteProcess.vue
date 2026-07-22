@@ -41,7 +41,7 @@
                   :icon="Plus"
                   plain
                   class="workflow-soft-button"
-                  :disabled="!canEditQuoteLeadTime || selectedRows.length === 0"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0"
                   :loading="adjusting"
                   @click="applyShift(1)"
                 >
@@ -51,7 +51,7 @@
                   :icon="Minus"
                   plain
                   class="workflow-soft-button"
-                  :disabled="!canEditQuoteLeadTime || selectedRows.length === 0"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0"
                   :loading="adjusting"
                   @click="applyShift(-1)"
                 >
@@ -72,14 +72,14 @@
                 <el-button v-permission="'market:quote-process:update-lead-time'"
                   plain
                   class="workflow-soft-button quote-manual-date-button"
-                  :disabled="!canEditQuoteLeadTime || selectedRows.length === 0 || !manualQuoteDate"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate"
                   :loading="settingQuoteDate"
                   @click="setQuoteLeadTime"
                 >
                   指定
                 </el-button>
               </div>
-              <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
+              <div class="selection-count">已选 {{ selectedQuoteProcessItemIds.size }} 项</div>
             </div>
 
             <div class="workflow-action-stack quote-export-actions">
@@ -261,7 +261,8 @@ import {
   downloadQuoteTemplateDetail,
   downloadQuoteTemplateSimple,
   downloadSimpleQuote,
-  getQuoteProcess,
+  getQuoteProcessSummary,
+  listQuoteProcessItems,
   saveQuoteSheet as saveQuoteSheetApi,
   setQuoteProcessLeadTime,
   shiftQuoteProcessLeadTime,
@@ -269,9 +270,7 @@ import {
 } from '../services/marketApi'
 import {
   CLIENT_PAGE_SIZES,
-  DEFAULT_CLIENT_PAGE_SIZE,
-  clampPage,
-  paginateRows
+  DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
 
 const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价']
@@ -281,7 +280,7 @@ const selectedRfqId = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])
 const quoteProcessItemTotal = ref(0)
-const selectedRows = ref([])
+const selectedQuoteProcessItemIds = ref(new Set())
 const quoteProcessTableRef = ref(null)
 const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const orderPickerVisible = ref(false)
@@ -301,9 +300,9 @@ const selectedOrderLabel = computed(() => (
     : '未选择订单'
 ))
 
-const pagedQuoteProcessItems = computed(() => paginateRows(itemList.value, quoteProcessPagination))
+const pagedQuoteProcessItems = computed(() => itemList.value)
 
-const selectedQuoteProcessIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
+const selectedQuoteProcessIdsForSubmit = () => Array.from(selectedQuoteProcessItemIds.value)
 
 const canEditQuoteLeadTime = computed(() => orderInfo.value.status === '已核价')
 
@@ -316,7 +315,7 @@ const syncQuoteProcessPageSelection = async () => {
   await nextTick()
   quoteProcessTableRef.value?.clearSelection()
   pagedQuoteProcessItems.value.forEach(row => {
-    if (selectedQuoteProcessIds.value.has(row.id)) {
+    if (selectedQuoteProcessItemIds.value.has(row.id)) {
       quoteProcessTableRef.value?.toggleRowSelection(row, true)
     }
   })
@@ -325,10 +324,11 @@ const syncQuoteProcessPageSelection = async () => {
 }
 
 watch(
-  () => [itemList.value.length, quoteProcessPagination.page, quoteProcessPagination.pageSize],
-  () => {
-    quoteProcessPagination.page = clampPage(quoteProcessPagination, itemList.value.length)
-    syncQuoteProcessPageSelection()
+  () => [quoteProcessPagination.page, quoteProcessPagination.pageSize],
+  async () => {
+    if (selectedRfqId.value) {
+      await fetchQuoteProcessItems()
+    }
   }
 )
 
@@ -341,21 +341,48 @@ const handleOrderSelected = async (order) => {
   await loadQuoteProcess(order.id)
 }
 
-const setQuoteProcessRows = (rows, total) => {
-  itemList.value = normalizeRows(rows || [])
-  quoteProcessItemTotal.value = Number(total ?? itemList.value.length)
+
+const fetchQuoteProcessSummary = async (rfqId = selectedRfqId.value) => {
+  const response = await getQuoteProcessSummary(rfqId)
+  orderInfo.value = response.orderInfo || {}
+  quoteProcessItemTotal.value = Number(response.itemCount ?? response.summary?.itemCount ?? quoteProcessItemTotal.value)
+  return response
+}
+
+const fetchQuoteProcessItems = async () => {
+  if (!selectedRfqId.value) return
+  const response = await listQuoteProcessItems(selectedRfqId.value, {
+    page: quoteProcessPagination.page,
+    pageSize: quoteProcessPagination.pageSize
+  })
+  itemList.value = response.records || []
+  itemList.value = normalizeRows(itemList.value)
+  quoteProcessItemTotal.value = Number(response.total ?? 0)
+  await syncQuoteProcessPageSelection()
+}
+
+const clearQuoteProcessSelection = async () => {
+  selectedQuoteProcessItemIds.value = new Set()
+  await nextTick()
+  quoteProcessTableRef.value?.clearSelection()
+}
+
+const refreshQuoteProcessWorkspace = async ({ clearSelection = false } = {}) => {
+  await fetchQuoteProcessSummary()
+  await fetchQuoteProcessItems()
+  if (clearSelection) {
+    await clearQuoteProcessSelection()
+  }
 }
 
 const loadQuoteProcess = async (rfqId) => {
   loadingItems.value = true
   try {
-    const response = await getQuoteProcess(rfqId)
-    orderInfo.value = response.orderInfo || {}
-    setQuoteProcessRows(response.itemList || [], response.itemCount)
-    selectedRows.value = []
+    selectedQuoteProcessItemIds.value = new Set()
     quoteProcessPagination.page = 1
-    await nextTick()
-    quoteProcessTableRef.value?.clearSelection()
+    await fetchQuoteProcessSummary(rfqId)
+    await fetchQuoteProcessItems()
+    await clearQuoteProcessSelection()
   } catch (error) {
     console.error(error)
     ElMessage.error(error.response?.data?.message || '报价单处理数据加载失败。')
@@ -374,14 +401,15 @@ const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === '
 const handleSelectionChange = (rows) => {
   if (syncingQuoteProcessSelection) return
   const currentPageIds = new Set(pagedQuoteProcessItems.value.map(row => row.id))
-  const preservedRows = selectedRows.value.filter(row => !currentPageIds.has(row.id))
-  selectedRows.value = [...preservedRows, ...rows]
+  currentPageIds.forEach(id => selectedQuoteProcessItemIds.value.delete(id))
+  rows.forEach(row => selectedQuoteProcessItemIds.value.add(row.id))
+  selectedQuoteProcessItemIds.value = new Set(selectedQuoteProcessItemIds.value)
 }
 
 const applyShift = async (direction) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再调整。')
-  if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  if (selectedQuoteProcessItemIds.value.size === 0) return ElMessage.warning('请至少选择一个零件。')
   const days = Math.abs(Number(shiftDays.value || 0)) * direction
   if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
 
@@ -389,13 +417,10 @@ const applyShift = async (direction) => {
   try {
     const response = await shiftQuoteProcessLeadTime({
       rfqId: selectedRfqId.value,
-      itemIds: selectedRows.value.map(row => row.id),
+      itemIds: selectedQuoteProcessIdsForSubmit(),
       days
     })
-    setQuoteProcessRows(response.itemList || [], response.itemCount)
-    selectedRows.value = []
-    await nextTick()
-    quoteProcessTableRef.value?.clearSelection()
+    await refreshQuoteProcessWorkspace({ clearSelection: true })
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -414,20 +439,17 @@ const applyShift = async (direction) => {
 const setQuoteLeadTime = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再调整。')
-  if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  if (selectedQuoteProcessItemIds.value.size === 0) return ElMessage.warning('请至少选择一个零件。')
   if (!manualQuoteDate.value) return ElMessage.warning('请先选择报价交期。')
 
   settingQuoteDate.value = true
   try {
     const response = await setQuoteProcessLeadTime({
       rfqId: selectedRfqId.value,
-      itemIds: selectedRows.value.map(row => row.id),
+      itemIds: selectedQuoteProcessIdsForSubmit(),
       quoteLeadTime: manualQuoteDate.value
     })
-    setQuoteProcessRows(response.itemList || [], response.itemCount)
-    selectedRows.value = []
-    await nextTick()
-    quoteProcessTableRef.value?.clearSelection()
+    await refreshQuoteProcessWorkspace({ clearSelection: true })
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -458,6 +480,7 @@ const saveLeadTime = async (row) => {
     if (index >= 0) {
       itemList.value.splice(index, 1, saved)
     }
+    await fetchQuoteProcessSummary()
     ElMessage.success('报价交期已保存。')
   } catch (error) {
     console.error(error)
@@ -475,10 +498,7 @@ const saveMarketQuoteSheet = async () => {
   try {
     const response = await saveQuoteSheetApi(selectedRfqId.value)
     orderInfo.value = response.orderInfo || orderInfo.value
-    setQuoteProcessRows(response.itemList || itemList.value, response.itemCount ?? quoteProcessItemTotal.value)
-    selectedRows.value = []
-    await nextTick()
-    quoteProcessTableRef.value?.clearSelection()
+    await refreshQuoteProcessWorkspace({ clearSelection: true })
     ElMessage.success('报价单已保存，可导出。')
   } catch (error) {
     console.error(error)

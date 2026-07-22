@@ -138,10 +138,18 @@ describe('marketApi', () => {
     expect('deleteProcessSheet' in marketApi).toBe(false)
   })
 
-  test('getQuoteProcess loads quote process data', async () => {
-    await marketApi.getQuoteProcess(18)
+  test('quote process summary and item paging helpers use split endpoints', async () => {
+    const params = { page: 2, pageSize: 50, keyword: 'PN' }
 
-    expect(request).toHaveBeenCalledWith('/api/market/quote-process/18')
+    await marketApi.getQuoteProcessSummary(18)
+    await marketApi.listQuoteProcessItems(18, params)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/18/summary')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/18/items', { params })
+  })
+
+  test('does not expose legacy full quote process workspace loader', () => {
+    expect('getQuoteProcess' in marketApi).toBe(false)
   })
 
   test('quote process lead time helpers preserve endpoints', async () => {

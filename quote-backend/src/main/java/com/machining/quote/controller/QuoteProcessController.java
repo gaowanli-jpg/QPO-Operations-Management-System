@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
@@ -12,10 +13,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -32,27 +32,29 @@ public class QuoteProcessController {
 
     @GetMapping("/{rfqId}/summary")
     @RequirePermission("market:quote-process:view")
-    @SuppressWarnings("unchecked")
     public Map<String, Object> getQuoteProcessSummary(@PathVariable Integer rfqId) {
-        Map<String, Object> workspace = quoteProcessService.getQuoteProcess(rfqId);
-        List<Map<String, Object>> items = (List<Map<String, Object>>) workspace.getOrDefault("itemList", List.of());
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("orderInfo", workspace.get("orderInfo"));
-        result.put("itemCount", items.size());
-        result.put("missingLeadTimeCount", items.stream().filter(row -> isBlank(row.get("effectiveLeadTime"))).count());
-        result.put("quotedCount", items.stream().filter(row -> row.get("finalUnitPrice") != null).count());
-        return result;
+        return quoteProcessService.getQuoteProcessSummary(rfqId);
     }
 
     @GetMapping("/{rfqId}/items")
     @RequirePermission("market:quote-process:view")
-    @SuppressWarnings("unchecked")
     public PageResult<Map<String, Object>> listQuoteProcessItems(
             @PathVariable Integer rfqId,
-            @org.springframework.web.bind.annotation.RequestParam(value = "page", required = false) Integer page,
-            @org.springframework.web.bind.annotation.RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        Map<String, Object> workspace = quoteProcessService.getQuoteProcess(rfqId);
-        return page((List<Map<String, Object>>) workspace.getOrDefault("itemList", List.of()), page, pageSize);
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "partNo", required = false) String partNo,
+            @RequestParam(value = "version", required = false) String version) {
+        OrderItemPageReq req = new OrderItemPageReq();
+        req.setRfqId(rfqId);
+        req.setPage(page);
+        req.setPageSize(pageSize);
+        req.setKeyword(keyword);
+        req.setStatus(status);
+        req.setPartNo(partNo);
+        req.setVersion(version);
+        return quoteProcessService.listQuoteProcessItems(req);
     }
 
     @PostMapping("/lead-time/shift")
@@ -79,16 +81,4 @@ public class QuoteProcessController {
         return quoteProcessService.saveQuoteSheet(rfqId);
     }
 
-    private static boolean isBlank(Object value) {
-        return value == null || value.toString().trim().isEmpty();
-    }
-
-    private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {
-        List<T> rows = allRows == null ? List.of() : allRows;
-        int safePage = page == null || page < 1 ? 1 : page;
-        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
-        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
-        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
-        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
-    }
 }

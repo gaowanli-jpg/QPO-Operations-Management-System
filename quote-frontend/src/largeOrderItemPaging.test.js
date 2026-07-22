@@ -73,4 +73,36 @@ describe('large order item paging contracts', () => {
     expect(source).toContain('keyword: assemblyChildKeyword.value')
     expect(source).not.toContain('const pagedAssemblyChildOptions = computed(() => paginateRows(assemblyChildOptions.value, assemblyPickerPagination))')
   })
+
+  test('quote process page uses backend paging and split summary', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+    const apiSource = readSource('services', 'marketApi.js')
+
+    expect(apiSource).toContain('getQuoteProcessSummary')
+    expect(apiSource).toContain('/api/market/quote-process/${rfqId}/summary')
+    expect(apiSource).toContain('listQuoteProcessItems')
+    expect(apiSource).toContain('/api/market/quote-process/${rfqId}/items')
+    expect(apiSource).not.toContain('export const getQuoteProcess =')
+
+    expect(source).toContain('getQuoteProcessSummary')
+    expect(source).toContain('listQuoteProcessItems')
+    expect(source).toContain('fetchQuoteProcessSummary')
+    expect(source).toContain('fetchQuoteProcessItems')
+    expect(source).toContain('itemList.value = response.records || []')
+    expect(source).toContain('quoteProcessItemTotal.value = Number(response.total ?? 0)')
+    expect(source).toContain('watch(\n  () => [quoteProcessPagination.page, quoteProcessPagination.pageSize]')
+    expect(source).not.toContain('const pagedQuoteProcessItems = computed(() => paginateRows(itemList.value, quoteProcessPagination))')
+    expect(source).not.toContain('paginateRows')
+  })
+
+  test('quote process batch lead time uses cross-page selected id set', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+
+    expect(source).toContain('selectedQuoteProcessItemIds')
+    expect(source).toContain('selectedQuoteProcessItemIds.value.size')
+    expect(source).toContain('itemIds: selectedQuoteProcessIdsForSubmit()')
+    expect(source).toContain('currentPageIds.forEach(id => selectedQuoteProcessItemIds.value.delete(id))')
+    expect(source).toContain('rows.forEach(row => selectedQuoteProcessItemIds.value.add(row.id))')
+    expect(source).not.toContain('selectedRows.value.map(row => row.id)')
+  })
 })

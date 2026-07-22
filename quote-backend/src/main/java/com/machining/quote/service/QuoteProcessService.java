@@ -3,6 +3,10 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.OrderItemPageDTO;
+import com.machining.quote.dto.OrderItemPageReq;
+import com.machining.quote.dto.OrderItemSummaryDTO;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
@@ -38,6 +42,8 @@ public class QuoteProcessService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private SystemTaskGuardService taskGuardService;
+    @Autowired
+    private OrderItemPageService orderItemPageService;
 
     public Map<String, Object> getQuoteProcess(Integer rfqId) {
         OrderRfq order = requireQuoteProcessReadableOrder(rfqId);
@@ -47,6 +53,28 @@ public class QuoteProcessService {
         result.put("orderInfo", order);
         result.put("itemList", items.stream().map(this::buildItemRow).toList());
         return result;
+    }
+
+    public Map<String, Object> getQuoteProcessSummary(Integer rfqId) {
+        OrderRfq order = requireQuoteProcessReadableOrder(rfqId);
+        OrderItemSummaryDTO summary = orderItemPageService.summarizeItems(rfqId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("orderInfo", order);
+        result.put("summary", summary);
+        result.put("itemCount", summary.getItemCount());
+        result.put("missingLeadTimeCount", countMissingQuoteLeadTimes(rfqId));
+        result.put("quotedCount", summary.getQuotedCount());
+        return result;
+    }
+
+    public PageResult<Map<String, Object>> listQuoteProcessItems(OrderItemPageReq req) {
+        if (req == null || req.getRfqId() == null) {
+            throw new RuntimeException("RFQ ID 不能为空");
+        }
+        requireQuoteProcessReadableOrder(req.getRfqId());
+        OrderItemPageDTO page = orderItemPageService.pageItems(req);
+        List<Map<String, Object>> rows = page.getRecords().stream().map(this::buildItemRow).toList();
+        return PageResult.of(rows, page.getTotal(), page.getPage(), page.getPageSize());
     }
 
     @Transactional
@@ -81,12 +109,7 @@ public class QuoteProcessService {
             }
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("success", true);
-        result.put("adjustedCount", adjustedCount);
-        result.put("skippedCount", skipped.size());
-        result.put("skippedItems", skipped);
-        result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped);
         log.info("Quote lead time shifted rfqId={} itemCount={} adjustedCount={} skippedCount={} days={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), days);
         if (!skipped.isEmpty()) {
@@ -120,12 +143,7 @@ public class QuoteProcessService {
             adjustedCount++;
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("success", true);
-        result.put("adjustedCount", adjustedCount);
-        result.put("skippedCount", skipped.size());
-        result.put("skippedItems", skipped);
-        result.put("itemList", listItems(req.getRfqId()).stream().map(this::buildItemRow).toList());
+        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped);
         log.info("Quote lead time set rfqId={} itemCount={} adjustedCount={} skippedCount={} targetLeadTime={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), normalizedDate);
         if (!skipped.isEmpty()) {
@@ -195,8 +213,7 @@ public class QuoteProcessService {
             orderRfqMapper.updateById(order);
             int itemStatusUpdatedCount = markPricedItemsAsQuoted(items);
             OrderRfq savedOrder = orderRfqMapper.selectById(order.getId());
-            List<ItemQuoteVersion> savedItems = listItems(rfqId);
-            Map<String, Object> after = quoteSheetSummary(savedOrder, savedItems, 0, itemStatusUpdatedCount);
+            Map<String, Object> after = quoteSheetSummary(savedOrder, items, 0, itemStatusUpdatedCount);
             auditService.record(
                     "QUOTE_PROCESS_SAVE_QUOTE",
                     "order_rfq",
@@ -216,7 +233,9 @@ public class QuoteProcessService {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", true);
             result.put("orderInfo", savedOrder);
-            result.put("itemList", savedItems.stream().map(this::buildItemRow).toList());
+            result.put("summary", after);
+            result.put("itemCount", items.size());
+            result.put("itemStatusUpdatedCount", itemStatusUpdatedCount);
             return result;
         } catch (RuntimeException e) {
             long durationMs = System.currentTimeMillis() - startedAt;
@@ -314,6 +333,32 @@ public class QuoteProcessService {
             dataScopeService.assertCanAccessOrder(order);
         }
     }
+
+    private Map<String, Object> quoteLeadTimeMutationSummary(Integer rfqId, int adjustedCount,
+                                                             List<Map<String, Object>> skipped) {
+        OrderItemSummaryDTO summary = orderItemPageService.summarizeItems(rfqId);
+        long missingLeadTimeCount = countMissingQuoteLeadTimes(rfqId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("adjustedCount", adjustedCount);
+        result.put("skippedCount", skipped == null ? 0 : skipped.size());
+        result.put("skippedItems", skipped == null ? List.of() : skipped);
+        result.put("summary", summary);
+        result.put("itemCount", summary.getItemCount());
+        result.put("missingLeadTimeCount", missingLeadTimeCount);
+        result.put("quotedCount", summary.getQuotedCount());
+        return result;
+    }
+
+    private long countMissingQuoteLeadTimes(Integer rfqId) {
+        QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
+        query.eq("rfq_id", rfqId)
+                .apply("(quote_lead_time IS NULL OR BTRIM(quote_lead_time) = '')")
+                .apply("(lead_time IS NULL OR BTRIM(lead_time) = '')");
+        Long count = itemMapper.selectCount(query);
+        return count == null ? 0L : count;
+    }
+
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
