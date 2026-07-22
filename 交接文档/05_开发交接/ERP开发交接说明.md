@@ -2,9 +2,9 @@
 
 编写日期：2026-06-13
 适用系统：机加工报价 ERP 系统
-后端工程：`D:\Code\quote-backend`
-前端工程：`D:\Code\quote-frontend`
-部署入口：`D:\Code\docker-compose.yml`
+后端工程：`D:\QPO-Operations-Management-System\quote-backend`
+前端工程：`D:\QPO-Operations-Management-System\quote-frontend`
+部署入口：`D:\QPO-Operations-Management-System\docker-compose.yml`
 
 本文面向后续开发团队，说明 ERP 系统的工程结构、启动方式、关键代码入口、开发规则、测试方式和常见改动路径。
 
@@ -40,7 +40,7 @@
 后端目录：
 
 ```text
-D:\Code\quote-backend
+D:\QPO-Operations-Management-System\quote-backend
 ```
 
 关键目录：
@@ -118,7 +118,7 @@ D:\Code\quote-backend
 前端目录：
 
 ```text
-D:\Code\quote-frontend
+D:\QPO-Operations-Management-System\quote-frontend
 ```
 
 关键文件：
@@ -162,7 +162,7 @@ D:\Code\quote-frontend
 进入后端目录：
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 ```
 
 运行测试：
@@ -196,7 +196,7 @@ jdbc:postgresql://localhost:5432/postgres
 进入前端目录：
 
 ```powershell
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 ```
 
 安装依赖：
@@ -229,7 +229,7 @@ npm run build
 根目录：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 
@@ -246,7 +246,7 @@ http://127.0.0.1:8088
 后端配置文件：
 
 ```text
-D:\Code\quote-backend\src\main\resources\application.yaml
+D:\QPO-Operations-Management-System\quote-backend\src\main\resources\application.yaml
 ```
 
 主要环境变量：
@@ -273,7 +273,7 @@ D:\Code\quote-backend\src\main\resources\application.yaml
 前端配置文件：
 
 ```text
-D:\Code\quote-frontend\src\config.js
+D:\QPO-Operations-Management-System\quote-frontend\src\config.js
 ```
 
 配置项：
@@ -303,7 +303,7 @@ VITE_API_BASE_URL=
 前端路由定义：
 
 ```text
-D:\Code\quote-frontend\src\router\index.js
+D:\QPO-Operations-Management-System\quote-frontend\src\router\index.js
 ```
 
 路由通过 `meta.roles` 限制访问：
@@ -317,7 +317,7 @@ D:\Code\quote-frontend\src\router\index.js
 前端登录状态：
 
 ```text
-D:\Code\quote-frontend\src\auth.js
+D:\QPO-Operations-Management-System\quote-frontend\src\auth.js
 ```
 
 本地存储：
@@ -356,7 +356,7 @@ AuthInterceptor.java
 迁移脚本目录：
 
 ```text
-D:\Code\quote-backend\src\main\resources\db\migration
+D:\QPO-Operations-Management-System\quote-backend\src\main\resources\db\migration
 ```
 
 规则：
@@ -537,7 +537,7 @@ ENGINEER
 测试目录：
 
 ```text
-D:\Code\quote-backend\src\test\java\com\machining\quote
+D:\QPO-Operations-Management-System\quote-backend\src\test\java\com\machining\quote
 ```
 
 当前测试覆盖：
@@ -561,7 +561,7 @@ D:\Code\quote-backend\src\test\java\com\machining\quote
 运行：
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test
 ```
 
@@ -572,14 +572,14 @@ cd D:\Code\quote-backend
 运行：
 
 ```powershell
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm run build
 ```
 
 ### 10.3 Docker 验证
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 docker compose --env-file erp.env ps
 ```

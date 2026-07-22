@@ -1,4 +1,4 @@
-# ERP Pinia 与 Axios Service 层重构开发文档
+﻿# ERP Pinia 与 Axios Service 层重构开发文档
 
 > 日期：2026-07-14  
 > 范围：`quote-frontend` 前端  
@@ -13,10 +13,10 @@
   - `quote-frontend/package.json` 没有 `pinia` 依赖。
   - `quote-frontend/src` 内没有 `createPinia`、`defineStore`、`useXxxStore`。
 - APS 前端已经完成 Axios service 层拆分，可作为 ERP 的实现风格参考：
-  - `aps-frontend/src/api.js`
-  - `aps-frontend/src/services/authApi.js`
-  - `aps-frontend/src/services/taskApi.js`
-  - `aps-frontend/src/services/inventoryApi.js`
+  - `APS 前端目录/src/api.js`
+  - `APS 前端目录/src/services/authApi.js`
+  - `APS 前端目录/src/services/taskApi.js`
+  - `APS 前端目录/src/services/inventoryApi.js`
 
 ### ERP 当前主要问题
 
@@ -61,7 +61,7 @@
 
 - 建立 ERP 自己的 Axios 客户端：
   - `src/api.js` 提供 `apiClient`、`request()`、`downloadFile()`、认证拦截器配置能力。
-  - 风格对齐 APS 的 `aps-frontend/src/api.js`。
+  - 风格对齐 APS 的 `APS 前端目录/src/api.js`。
 - 建立业务 service 层：
   - `src/services/authApi.js`
   - `src/services/dictApi.js`
@@ -361,7 +361,7 @@ Store 层负责状态和缓存：
 ### 本地构建
 
 ```powershell
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm run build
 ```
 
@@ -373,7 +373,7 @@ npm run build
 ### 代码扫描
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 rg -n "from '../auth'|from './auth'|authState|setAuth|clearAuth|updateAuthUser|verifyAuth|hasRole" quote-frontend/src
 rg -n "import axios|axios\\." quote-frontend/src
 rg -n "localStorage\\.getItem\\(`erp_global_config|localStorage\\.setItem\\(`erp_global_config" quote-frontend/src
@@ -390,7 +390,7 @@ rg -n "localStorage\\.getItem\\(`erp_global_config|localStorage\\.setItem\\(`erp
 ERP 当前仍是无 Redis 版本，验证命令保持：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 docker compose --env-file erp.env ps
 ```

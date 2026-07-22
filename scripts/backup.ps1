@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectRoot = "D:\Code",
+    [string]$ProjectRoot = "D:\QPO-Operations-Management-System",
     [string]$BackupRoot = "",
     [string]$ComposeFile = "",
     [string]$EnvFile = "",

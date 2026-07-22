@@ -1,11 +1,14 @@
-# QPO运维说明
+﻿# QPO运维说明
+## Workspace Boundary
+
+This document only covers QPO operations. APS may appear only as historical compatibility context; QPO operations, backups, logs, and scheduled tasks no longer maintain APS project files.
 
 ## 容量报告
 
 生成一次容量报告：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 powershell -ExecutionPolicy Bypass -File .\scripts\capacity-report.ps1
 ```
 

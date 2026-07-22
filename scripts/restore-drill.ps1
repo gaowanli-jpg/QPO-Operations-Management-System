@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$BackupDir,
-    [string]$ProjectRoot = "D:\Code",
+    [string]$ProjectRoot = "D:\QPO-Operations-Management-System",
     [string]$EnvFile = "",
     [string]$ContainerName = "",
     [string]$Image = "postgres:15"

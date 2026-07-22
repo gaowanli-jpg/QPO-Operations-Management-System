@@ -694,10 +694,10 @@ WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} durationMs={}
 验收：
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test -Dtest=WmsAllocationTest,WmsAllocationClientTest,LockedItemQueryTest,PermissionModuleTreeTest,AuditActionCoverageTests
 
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm test -- deliveredItemApi.test.js deliveredItemWmsAllocation.test.js lockedItemManage.test.js permissionStage4.test.js appShell.test.js
 ```
 
@@ -794,10 +794,10 @@ npm test -- deliveredItemApi.test.js deliveredItemWmsAllocation.test.js lockedIt
 本阶段验收命令：
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test
 
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm test
 npm run build
 ```

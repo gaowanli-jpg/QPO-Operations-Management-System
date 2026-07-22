@@ -1,10 +1,13 @@
-# QPO生产部署说明
+﻿# QPO生产部署说明
+## Workspace Boundary
+
+This document only covers the QPO quotation system. APS may appear only as historical compatibility context; QPO deployment work must not recreate or maintain APS project files.
 
 > QPO 是产品名称；现有部署文件仍沿用 `erp.env` / `ERP_*` 技术前缀以保持兼容。不要在本次品牌改名里把这些配置名改成 `qpo`，除非后续单独做技术前缀迁移。
 
 ## 本地Docker验证
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 

@@ -65,7 +65,7 @@ ERP 负责订单与报价源头数据，主要包括：
 前端项目目录：
 
 ```text
-D:\Code\quote-frontend
+D:\QPO-Operations-Management-System\quote-frontend
 ```
 
 技术栈：
@@ -85,7 +85,7 @@ D:\Code\quote-frontend
 生产构建：
 
 ```powershell
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm install
 npm run build
 ```
@@ -97,7 +97,7 @@ Docker 部署时，前端由 Nginx 容器提供静态页面，并将 API 请求�
 后端项目目录：
 
 ```text
-D:\Code\quote-backend
+D:\QPO-Operations-Management-System\quote-backend
 ```
 
 技术栈：
@@ -115,7 +115,7 @@ D:\Code\quote-backend
 后端入口：
 
 ```text
-D:\Code\quote-backend\src\main\java\com\machining\quote\QuoteSystemApplication.java
+D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\QuoteSystemApplication.java
 ```
 
 后端默认端口：
@@ -147,7 +147,7 @@ Flyway
 迁移目录：
 
 ```text
-D:\Code\quote-backend\src\main\resources\db\migration
+D:\QPO-Operations-Management-System\quote-backend\src\main\resources\db\migration
 ```
 
 当前主数据表包括：
@@ -816,19 +816,19 @@ GET /api/tasks
 ERP Docker Compose 文件：
 
 ```text
-D:\Code\docker-compose.yml
+D:\QPO-Operations-Management-System\docker-compose.yml
 ```
 
 ERP 环境变量文件：
 
 ```text
-D:\Code\erp.env
+D:\QPO-Operations-Management-System\erp.env
 ```
 
 启动命令：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 
@@ -942,26 +942,26 @@ APS 通过 ERP 数据源接口主动拉取：
 
 | 类型 | 路径 |
 |---|---|
-| 前端路由 | `D:\Code\quote-frontend\src\router\index.js` |
-| 前端主布局 | `D:\Code\quote-frontend\src\App.vue` |
-| 登录状态 | `D:\Code\quote-frontend\src\auth.js` |
-| 市场新单导入页面 | `D:\Code\quote-frontend\src\components\MarketDashboard.vue` |
-| 报价单处理页面 | `D:\Code\quote-frontend\src\components\QuoteProcess.vue` |
-| 议价提单页面 | `D:\Code\quote-frontend\src\components\MarketRelease.vue` |
-| 工程全局设定页面 | `D:\Code\quote-frontend\src\components\GlobalSetup.vue` |
-| 工程逐件核价页面 | `D:\Code\quote-frontend\src\components\ItemPricing.vue` |
-| 材料与工艺管理页面 | `D:\Code\quote-frontend\src\components\MaterialProcessManage.vue` |
-| 订单管理页面 | `D:\Code\quote-frontend\src\components\OrderManage.vue` |
-| 用户管理页面 | `D:\Code\quote-frontend\src\components\UserManage.vue` |
-| 市场接口控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\MarketController.java` |
-| 工程接口控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\EngineerController.java` |
-| 字典接口控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\DictController.java` |
-| 系统管理控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\AdminController.java` |
-| APS 数据源控制器 | `D:\Code\quote-backend\src\main\java\com\machining\quote\controller\ApsSourceController.java` |
-| 工程核价服务 | `D:\Code\quote-backend\src\main\java\com\machining\quote\service\EngineerService.java` |
-| 提单服务 | `D:\Code\quote-backend\src\main\java\com\machining\quote\service\DeliveryService.java` |
-| APS 数据源服务 | `D:\Code\quote-backend\src\main\java\com\machining\quote\service\ApsSourceService.java` |
-| 数据库迁移 | `D:\Code\quote-backend\src\main\resources\db\migration` |
+| 前端路由 | `D:\QPO-Operations-Management-System\quote-frontend\src\router\index.js` |
+| 前端主布局 | `D:\QPO-Operations-Management-System\quote-frontend\src\App.vue` |
+| 登录状态 | `D:\QPO-Operations-Management-System\quote-frontend\src\auth.js` |
+| 市场新单导入页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\MarketDashboard.vue` |
+| 报价单处理页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\QuoteProcess.vue` |
+| 议价提单页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\MarketRelease.vue` |
+| 工程全局设定页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\GlobalSetup.vue` |
+| 工程逐件核价页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\ItemPricing.vue` |
+| 材料与工艺管理页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\MaterialProcessManage.vue` |
+| 订单管理页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\OrderManage.vue` |
+| 用户管理页面 | `D:\QPO-Operations-Management-System\quote-frontend\src\components\UserManage.vue` |
+| 市场接口控制器 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\controller\MarketController.java` |
+| 工程接口控制器 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\controller\EngineerController.java` |
+| 字典接口控制器 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\controller\DictController.java` |
+| 系统管理控制器 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\controller\AdminController.java` |
+| APS 数据源控制器 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\controller\ApsSourceController.java` |
+| 工程核价服务 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\service\EngineerService.java` |
+| 提单服务 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\service\DeliveryService.java` |
+| APS 数据源服务 | `D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\service\ApsSourceService.java` |
+| 数据库迁移 | `D:\QPO-Operations-Management-System\quote-backend\src\main\resources\db\migration` |
 
 ## 20. 交接结论
 

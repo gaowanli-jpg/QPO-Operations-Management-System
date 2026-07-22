@@ -15,7 +15,7 @@
 ## 本地运行
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -24,16 +24,16 @@ cd D:\Code\quote-backend
 ## 测试
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test
 ```
 
 ## Docker部署
 
-QPO 的 Docker 编排文件在 `D:\Code\docker-compose.yml`，运行配置在 `D:\Code\erp.env`。
+QPO 的 Docker 编排文件在 `D:\QPO-Operations-Management-System\docker-compose.yml`，运行配置在 `D:\QPO-Operations-Management-System\erp.env`。
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 

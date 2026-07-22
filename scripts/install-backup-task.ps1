@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectRoot = "D:\Code",
+    [string]$ProjectRoot = "D:\QPO-Operations-Management-System",
     [string]$TaskName = "QuoteSystemDailyBackup",
     [string]$DailyAt = "02:00",
     [int]$KeepDays = 14

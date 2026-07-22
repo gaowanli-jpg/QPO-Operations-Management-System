@@ -3,9 +3,9 @@
 编写日期：2026-06-13  
 适用系统：机加工报价 ERP 系统  
 部署方式：Docker Compose  
-当前部署根目录：`D:\Code`  
+当前部署根目录：`D:\QPO-Operations-Management-System`
 
-本文用于交接 ERP 系统的部署方式。内容依据当前 `D:\Code\docker-compose.yml`、`D:\Code\erp.env`、`quote-backend/Dockerfile`、`quote-frontend/Dockerfile`、`quote-frontend/nginx.conf` 和后端 `application.yaml` 整理。
+本文用于交接 ERP 系统的部署方式。内容依据当前 `D:\QPO-Operations-Management-System\docker-compose.yml`、`D:\QPO-Operations-Management-System\erp.env`、`quote-backend/Dockerfile`、`quote-frontend/Dockerfile`、`quote-frontend/nginx.conf` 和后端 `application.yaml` 整理。
 
 注意：本文不记录当前 `erp.env` 中的真实数据库密码、JWT 密钥和 ERP-APS 接口令牌。实际交接时应通过安全方式单独交付或在正式环境重新生成。
 
@@ -45,7 +45,7 @@ flowchart TD
 Compose 文件位置：
 
 ```text
-D:\Code\docker-compose.yml
+D:\QPO-Operations-Management-System\docker-compose.yml
 ```
 
 当前 Compose 项目名：
@@ -57,7 +57,7 @@ name: quote-system
 启动命令：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 
@@ -103,23 +103,23 @@ docker compose --env-file erp.env stop
 
 | 路径 | 说明 |
 | --- | --- |
-| `D:\Code\docker-compose.yml` | ERP Docker Compose 主文件 |
-| `D:\Code\erp.env` | ERP 部署环境变量文件，包含真实密码和密钥 |
-| `D:\Code\quote-backend` | ERP 后端 Spring Boot 工程 |
-| `D:\Code\quote-backend\Dockerfile` | 后端镜像构建文件 |
-| `D:\Code\quote-backend\src\main\resources\application.yaml` | 后端配置入口 |
-| `D:\Code\quote-backend\src\main\resources\db\migration` | Flyway 数据库迁移脚本 |
-| `D:\Code\quote-frontend` | ERP 前端 Vue 工程 |
-| `D:\Code\quote-frontend\Dockerfile` | 前端镜像构建文件 |
-| `D:\Code\quote-frontend\nginx.conf` | 前端容器 Nginx 配置 |
-| `D:\Code\backups` | 当前本机已有的手动备份目录，不等同于 Compose volume |
+| `D:\QPO-Operations-Management-System\docker-compose.yml` | ERP Docker Compose 主文件 |
+| `D:\QPO-Operations-Management-System\erp.env` | ERP 部署环境变量文件，包含真实密码和密钥 |
+| `D:\QPO-Operations-Management-System\quote-backend` | ERP 后端 Spring Boot 工程 |
+| `D:\QPO-Operations-Management-System\quote-backend\Dockerfile` | 后端镜像构建文件 |
+| `D:\QPO-Operations-Management-System\quote-backend\src\main\resources\application.yaml` | 后端配置入口 |
+| `D:\QPO-Operations-Management-System\quote-backend\src\main\resources\db\migration` | Flyway 数据库迁移脚本 |
+| `D:\QPO-Operations-Management-System\quote-frontend` | ERP 前端 Vue 工程 |
+| `D:\QPO-Operations-Management-System\quote-frontend\Dockerfile` | 前端镜像构建文件 |
+| `D:\QPO-Operations-Management-System\quote-frontend\nginx.conf` | 前端容器 Nginx 配置 |
+| `D:\QPO-Operations-Management-System\backups` | 当前本机已有的手动备份目录，不等同于 Compose volume |
 
 ## 5. 环境变量文件
 
 ERP 当前使用独立环境变量文件：
 
 ```text
-D:\Code\erp.env
+D:\QPO-Operations-Management-System\erp.env
 ```
 
 启动时必须显式指定：
@@ -282,7 +282,7 @@ nginx:1.27-alpine
 前端 Nginx 配置文件：
 
 ```text
-D:\Code\quote-frontend\nginx.conf
+D:\QPO-Operations-Management-System\quote-frontend\nginx.conf
 ```
 
 当前 Nginx 规则：
@@ -306,7 +306,7 @@ client_max_body_size 100m;
 ### 9.1 首次启动
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 
@@ -353,7 +353,7 @@ http://127.0.0.1:8088
 代码更新后重新构建：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env up -d --build
 ```
 
@@ -498,7 +498,7 @@ ERP 使用 Flyway 管理数据库结构。
 迁移脚本位置：
 
 ```text
-D:\Code\quote-backend\src\main\resources\db\migration
+D:\QPO-Operations-Management-System\quote-backend\src\main\resources\db\migration
 ```
 
 后端启动时：
@@ -650,4 +650,3 @@ docker compose --env-file erp.env logs postgres
 6. 已确认 PostgreSQL、上传文件、模板文件有备份方案。
 7. 已完成至少一次容器重启验证。
 8. 已完成至少一次数据库备份和恢复演练。
-

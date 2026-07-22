@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectRoot = "D:\Code",
+    [string]$ProjectRoot = "D:\QPO-Operations-Management-System",
     [int]$KeepDays = 14
 )
 

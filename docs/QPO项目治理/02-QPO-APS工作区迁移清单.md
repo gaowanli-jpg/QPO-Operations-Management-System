@@ -1,4 +1,4 @@
-# QPO / APS 工作区迁移清单
+﻿# QPO / APS 工作区迁移清单
 
 生成时间：2026-07-22。
 
@@ -12,11 +12,11 @@
 - QPO 文件：367 个。
 - APS 文件：195 个。
 - 混合/治理/待拆分文件：103 个。
-- 当前根目录文件夹：aps-frontend、aps-system、backups、capacity-reports、deploy、docs、logs、quote-frontend、quote-system、scripts、材料与工艺费用表、交接文档、图纸、用例表格资料。
+- 当前根目录文件夹：APS 前端目录、APS 后端目录、backups、capacity-reports、deploy、docs、logs、quote-frontend、旧 QPO 后端目录、scripts、材料与工艺费用表、交接文档、图纸、用例表格资料。
 
 ## 3. QPO 保留范围
 
-- `quote-system/`：阶段 1 重命名为 `quote-backend/`。
+- `旧 QPO 后端目录/`：阶段 1 重命名为 `quote-backend/`。
 - `quote-frontend/`。
 - `docker-compose.yml`、`erp.env`、`erp.env.example`。
 - `docs/QPO*/` 与本 `docs/QPO项目治理/`。
@@ -31,9 +31,9 @@
 
 ## 5. APS 迁出范围
 
-- `aps-system/`。
-- `aps-frontend/`。
-- `docker-compose.aps.yml`、`aps.env`、`aps.env.example`。
+- `APS 后端目录/`。
+- `APS 前端目录/`。
+- `APS Compose 文件`、`APS 环境变量文件`、`APS 环境变量示例文件`。
 - `APS上线验收清单.md`、`APS部署说明.md`、`start-aps-backend.ps1`。
 - APS 脚本：`scripts/*-aps.ps1`。
 - APS 专项设计文档：`docs/superpowers/specs/*aps*.md`。
@@ -48,7 +48,7 @@
 
 ## 7. 阶段 1 立即修改点
 
-- `quote-system/` 使用 `git mv` 改名为 `quote-backend/`。
+- `旧 QPO 后端目录/` 使用 `git mv` 改名为 `quote-backend/`。
 - `docker-compose.yml` 的 backend build context 改为 `./quote-backend`。
-- QPO 相关文档、脚本、测试中的 `quote-system` 路径改为 `quote-backend`。
-- APS 相关文件中的 `quote-system` 历史表述本阶段不批量迁移；阶段 2 迁出 APS 时处理。
+- QPO 相关文档、脚本、测试中的 `旧 QPO 后端目录` 路径改为 `quote-backend`。
+- APS 相关文件中的 `旧 QPO 后端目录` 历史表述本阶段不批量迁移；阶段 2 迁出 APS 时处理。

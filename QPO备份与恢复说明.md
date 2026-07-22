@@ -1,8 +1,11 @@
-# QPO备份与恢复说明
+﻿# QPO备份与恢复说明
+## Workspace Boundary
+
+This document only covers QPO backup and restore. APS is maintained separately; QPO backup, restore drills, and scheduled tasks no longer cover APS project files or APS-only data.
 
 ## 手动备份
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1
 ```
 
@@ -15,12 +18,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -PruneOld -KeepDay
 恢复会覆盖目标Docker数据库，所以必须显式添加 `-Force`。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir "D:\Code\backups\20260517_020000" -Force
+powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir "D:\QPO-Operations-Management-System\backups\20260517_020000" -Force
 ```
 
 ## 不影响业务库的恢复演练
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir "D:\Code\backups\20260517_020000"
+powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir "D:\QPO-Operations-Management-System\backups\20260517_020000"
 ```
 
 ## 安装每日定时备份

@@ -3,7 +3,7 @@
 编写日期：2026-06-13  
 适用系统：机加工报价 ERP 系统  
 适用部署方式：Docker Compose  
-当前项目根目录：`D:\Code`  
+当前项目根目录：`D:\QPO-Operations-Management-System`
 
 本文用于交接 ERP 的备份、恢复和恢复演练方法。ERP 的关键数据不只在数据库里，还包括上传的询价文件、图纸 PDF、报价单模板和后台任务输出。因此备份必须同时覆盖数据库和上传文件。
 
@@ -12,7 +12,7 @@
 脚本目录：
 
 ```text
-D:\Code\scripts
+D:\QPO-Operations-Management-System\scripts
 ```
 
 ERP 相关脚本：
@@ -35,7 +35,7 @@ ERP 相关脚本：
 一次有效 ERP 备份目录结构如下：
 
 ```text
-D:\Code\backups\
+D:\QPO-Operations-Management-System\backups\
   yyyyMMdd_HHmmss\
     db\
       postgres.sql
@@ -121,21 +121,21 @@ backend:/data/uploads
 
 1. Docker 正常运行。
 2. ERP Compose 服务正在运行，至少 `postgres` 和 `backend` 容器可访问。
-3. `D:\Code\erp.env` 存在且配置正确。
+3. `D:\QPO-Operations-Management-System\erp.env` 存在且配置正确。
 4. 当前用户有执行 PowerShell 脚本和 Docker 命令的权限。
 
 ### 4.2 执行命令
 
 ```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Code
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\QPO-Operations-Management-System
 ```
 
 带清理旧备份：
 
 ```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Code -PruneOld -KeepDays 14
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\QPO-Operations-Management-System -PruneOld -KeepDays 14
 ```
 
 ### 4.3 脚本实际做了什么
@@ -143,7 +143,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Co
 `backup.ps1` 会执行：
 
 1. 读取 `erp.env` 中的数据库名和数据库用户。
-2. 在 `D:\Code\backups` 下创建时间戳目录。
+2. 在 `D:\QPO-Operations-Management-System\backups` 下创建时间戳目录。
 3. 在 PostgreSQL 容器内执行 `pg_dump`。
 4. 将 dump 文件复制到 `db\postgres.sql`。
 5. 从后端容器复制 `/data/uploads` 到备份目录。
@@ -155,15 +155,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Co
 备份完成后应看到类似输出：
 
 ```text
-Backup completed: D:\Code\backups\yyyyMMdd_HHmmss
+Backup completed: D:\QPO-Operations-Management-System\backups\yyyyMMdd_HHmmss
 ```
 
 并检查：
 
 ```powershell
-Get-Item D:\Code\backups\yyyyMMdd_HHmmss\db\postgres.sql
-Get-ChildItem D:\Code\backups\yyyyMMdd_HHmmss\uploads
-Get-Content D:\Code\backups\yyyyMMdd_HHmmss\meta\backup.json
+Get-Item D:\QPO-Operations-Management-System\backups\yyyyMMdd_HHmmss\db\postgres.sql
+Get-ChildItem D:\QPO-Operations-Management-System\backups\yyyyMMdd_HHmmss\uploads
+Get-Content D:\QPO-Operations-Management-System\backups\yyyyMMdd_HHmmss\meta\backup.json
 ```
 
 ## 5. 自动备份
@@ -185,8 +185,8 @@ QuoteSystemDailyBackup
 安装命令：
 
 ```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\install-backup-task.ps1 -ProjectRoot D:\Code -DailyAt 02:00 -KeepDays 14
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\install-backup-task.ps1 -ProjectRoot D:\QPO-Operations-Management-System -DailyAt 02:00 -KeepDays 14
 ```
 
 ### 5.2 自动备份日志
@@ -194,13 +194,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-backup-task.ps1 -Proj
 日志位置：
 
 ```text
-D:\Code\backups\logs\scheduled-backup.log
+D:\QPO-Operations-Management-System\backups\logs\scheduled-backup.log
 ```
 
 查看日志：
 
 ```powershell
-Get-Content D:\Code\backups\logs\scheduled-backup.log -Tail 100
+Get-Content D:\QPO-Operations-Management-System\backups\logs\scheduled-backup.log -Tail 100
 ```
 
 ### 5.3 查看计划任务
@@ -215,7 +215,7 @@ Get-ScheduledTask -TaskName QuoteSystemDailyBackup
 Start-ScheduledTask -TaskName QuoteSystemDailyBackup
 ```
 
-触发后查看日志和 `D:\Code\backups` 下是否产生新的有效备份目录。
+触发后查看日志和 `D:\QPO-Operations-Management-System\backups` 下是否产生新的有效备份目录。
 
 ### 5.5 删除计划任务
 
@@ -232,8 +232,8 @@ Unregister-ScheduledTask -TaskName QuoteSystemDailyBackup -Confirm:$false
 ### 6.1 演练命令
 
 ```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir D:\Code\backups\yyyyMMdd_HHmmss -ProjectRoot D:\Code
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir D:\QPO-Operations-Management-System\backups\yyyyMMdd_HHmmss -ProjectRoot D:\QPO-Operations-Management-System
 ```
 
 ### 6.2 脚本实际做了什么
@@ -263,7 +263,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\restore-drill.ps1 -BackupDir 
 2026-06-13 已使用以下备份做过恢复演练：
 
 ```text
-D:\Code\backups\20260527_080802
+D:\QPO-Operations-Management-System\backups\20260527_080802
 ```
 
 演练结果：成功。临时 PostgreSQL 容器中核心表可恢复并查询。
@@ -296,15 +296,15 @@ D:\Code\backups\20260527_080802
 建议先做恢复前备份：
 
 ```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\Code
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\backup.ps1 -ProjectRoot D:\QPO-Operations-Management-System
 ```
 
 ### 7.2 正式恢复命令
 
 ```powershell
-cd D:\Code
-powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir D:\Code\backups\yyyyMMdd_HHmmss -ProjectRoot D:\Code -Force
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir D:\QPO-Operations-Management-System\backups\yyyyMMdd_HHmmss -ProjectRoot D:\QPO-Operations-Management-System -Force
 ```
 
 必须带 `-Force`。不带 `-Force` 时脚本会直接拒绝执行。
@@ -332,7 +332,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupDir D:\Cod
 恢复完成后执行：
 
 ```powershell
-cd D:\Code
+cd D:\QPO-Operations-Management-System
 docker compose --env-file erp.env ps
 ```
 
@@ -381,7 +381,7 @@ docker compose down -v
 
 含义：
 
-1. 只清理 `D:\Code\backups` 下名称符合 `yyyyMMdd_HHmmss` 的目录。
+1. 只清理 `D:\QPO-Operations-Management-System\backups` 下名称符合 `yyyyMMdd_HHmmss` 的目录。
 2. 删除最后修改时间早于保留天数的目录。
 3. 不会清理 `aps`、`aps-postgres`、`logs` 等非时间戳目录。
 

@@ -540,10 +540,10 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 验收：
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test -Dtest=MesMaterialSyncTest,MesMaterialClientTest,PermissionModuleTreeTest,AuditActionCoverageTests
 
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 ```
 
@@ -638,10 +638,10 @@ npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 验收命令：
 
 ```powershell
-cd D:\Code\quote-backend
+cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test
 
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm test
 npm run build
 ```

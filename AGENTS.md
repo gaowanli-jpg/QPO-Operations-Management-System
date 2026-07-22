@@ -1,16 +1,17 @@
-# Project Agent Memory
+﻿# Project Agent Memory
 
-This repository is the QPO quotation system workspace:
+This repository is the QPO quotation system dedicated workspace:
 
 - QPO quotation system: `quote-frontend`, `quote-backend`, `docker-compose.yml`, and `erp.env`.
-- APS scheduling system has been moved to `D:\APS-Operations-Management-System`.
+- APS is no longer maintained inside this QPO workspace. Treat any APS references here as historical compatibility notes only.
 
 Use this file as the root long-term execution memory for future Codex work. Always verify current files with `git status`, `rg`, and direct reads instead of relying on memory alone.
 
 ## System Boundaries
 
 - Do not mix QPO and APS changes unless the user explicitly asks for both.
-- Do not recreate APS source folders or APS compose/env files inside this QPO workspace.
+- Do not recreate APS source folders, APS compose files, or APS environment files inside this QPO workspace.
+- Do not use APS as the design target for new QPO integrations; new external integration work follows the MES/WMS documents unless the user explicitly changes direction.
 - For QPO product copy, use `QPO`.
 - Keep QPO compatibility identifiers unless the user explicitly approves a separate migration: `erp.env`, `ERP_*`, `erp_token`, `erp_user`, `erp_global_config*`, `erp-page`, `erp-toolbar`, `.erp-*`, `--erp-*`, backend `erp.*`, `ErpUser`, and `erp_user`.
 

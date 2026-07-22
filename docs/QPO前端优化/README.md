@@ -1,4 +1,4 @@
-# QPO Frontend UI Redesign Guide
+﻿# QPO Frontend UI Redesign Guide
 
 This folder is the source of truth for the completed `quote-frontend` QPO UI redesign and the ongoing stable maintenance baseline.
 
@@ -35,7 +35,7 @@ Use a **clean manufacturing QPO workbench** style:
 
 ## Folder Map
 
-- `../../AGENTS.md` - root project memory for QPO/APS boundaries, QPO UI maintenance, permission/log cross-checks, and development guardrails.
+- `../../AGENTS.md` - root project memory for QPO workspace boundaries, QPO UI maintenance, permission/log cross-checks, and development guardrails.
 - `01-current-ui-audit.md` - what is messy today and why.
 - `02-open-source-reference.md` - open-source QPO/admin projects to borrow from.
 - `03-design-direction.md` - chosen product design direction.

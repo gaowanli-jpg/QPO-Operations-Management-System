@@ -135,7 +135,7 @@ ERP_APS_SOURCE_TOKEN == APS_ERP_AUTH_TOKEN
 这些接口位于 ERP 后端：
 
 ```text
-D:\Code\quote-backend\src\main\java\com\machining\quote\controller\ApsSourceController.java
+D:\QPO-Operations-Management-System\quote-backend\src\main\java\com\machining\quote\controller\ApsSourceController.java
 ```
 
 ### 6.1 工艺同步接口

@@ -14,7 +14,7 @@
 ## 本地开发
 
 ```powershell
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm install
 npm run dev
 ```
@@ -24,13 +24,13 @@ Vite默认会使用本地开发端口。后端API地址由 `VITE_API_BASE_URL` �
 ## 构建
 
 ```powershell
-cd D:\Code\quote-frontend
+cd D:\QPO-Operations-Management-System\quote-frontend
 npm run build
 ```
 
 ## Docker部署
 
-前端Docker镜像由 `D:\Code\quote-frontend\Dockerfile` 构建。生产环境由Nginx提供静态页面，并通过 QPO 的 Docker Compose 统一启动。
+前端Docker镜像由 `D:\QPO-Operations-Management-System\quote-frontend\Dockerfile` 构建。生产环境由Nginx提供静态页面，并通过 QPO 的 Docker Compose 统一启动。
 
 ## 参考链接
 
