@@ -79,17 +79,32 @@ public class EngineerController {
     @GetMapping("/pricing/summary/{rfqId}")
     @RequirePermission("engineer:pricing:view")
     public Map<String, Object> getPricingSummary(@PathVariable Integer rfqId) {
-        return getOrderSummary(rfqId);
+        OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("orderInfo", order);
+        result.put("summary", orderItemPageService.summarizeItems(rfqId));
+        return result;
     }
 
     @GetMapping("/pricing/items/{rfqId}")
     @RequirePermission("engineer:pricing:view")
     public PageResult<ItemQuoteVersion> listPricingItems(
             @PathVariable Integer rfqId,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "partNo", required = false) String partNo,
+            @RequestParam(value = "version", required = false) String version,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         OrderItemPageReq req = new OrderItemPageReq();
         req.setRfqId(rfqId);
+        req.setKeyword(keyword);
+        req.setStatus(status);
+        req.setPartNo(partNo);
+        req.setVersion(version);
         req.setPage(page);
         req.setPageSize(pageSize);
         OrderItemPageDTO result = orderItemPageService.pageItems(req);
@@ -98,19 +113,20 @@ public class EngineerController {
 
     @GetMapping("/pricing/assembly-child-candidates/{rfqId}")
     @RequirePermission("engineer:pricing:view")
-    @SuppressWarnings("unchecked")
     public PageResult<ItemQuoteVersion> listAssemblyChildCandidates(
             @PathVariable Integer rfqId,
             @RequestParam(value = "parentItemId", required = false) Integer parentItemId,
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        List<ItemQuoteVersion> items = (List<ItemQuoteVersion>) getOrderSummary(rfqId).get("itemList");
-        if (parentItemId != null) {
-            items = items.stream()
-                    .filter(item -> !parentItemId.equals(item.getId()))
-                    .toList();
-        }
-        return page(items, page, pageSize);
+        OrderItemPageReq req = new OrderItemPageReq();
+        req.setRfqId(rfqId);
+        req.setExcludeItemId(parentItemId);
+        req.setKeyword(keyword);
+        req.setPage(page);
+        req.setPageSize(pageSize);
+        OrderItemPageDTO result = orderItemPageService.pageItems(req);
+        return PageResult.of(result.getRecords(), result.getTotal(), result.getPage(), result.getPageSize());
     }
 
     /**

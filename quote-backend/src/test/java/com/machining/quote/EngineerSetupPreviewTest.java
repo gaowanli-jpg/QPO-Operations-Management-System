@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.machining.quote.controller.EngineerController;
+import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -56,22 +57,17 @@ class EngineerSetupPreviewTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void pricingSummaryStillReturnsAllItemsForItemPricingWorkspace() {
+    void pricingSummaryReturnsOnlyOrderInfoAndWholeOrderStatsForItemPricingWorkspace() {
         OrderRfq order = createOrder("PRICING-FULL");
         createItems(order, 12);
 
         Map<String, Object> summary = engineerController.getPricingSummary(order.getId());
 
-        assertThat(summary).doesNotContainKeys("previewItemList", "previewLimit");
-        assertThat((List<ItemQuoteVersion>) summary.get("itemList"))
-                .hasSize(12)
-                .extracting(ItemQuoteVersion::getPartNo)
-                .containsExactly(
-                        "PREVIEW-01", "PREVIEW-02", "PREVIEW-03", "PREVIEW-04", "PREVIEW-05",
-                        "PREVIEW-06", "PREVIEW-07", "PREVIEW-08", "PREVIEW-09", "PREVIEW-10",
-                        "PREVIEW-11", "PREVIEW-12"
-                );
+        assertThat(summary).containsKeys("orderInfo", "summary");
+        assertThat(summary).doesNotContainKeys("itemList", "previewItemList", "previewLimit");
+        assertThat((OrderItemSummaryDTO) summary.get("summary"))
+                .extracting(OrderItemSummaryDTO::getItemCount)
+                .isEqualTo(12L);
     }
 
     private OrderRfq createOrder(String prefix) {

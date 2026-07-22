@@ -1,9 +1,11 @@
 package com.machining.quote;
 
+import com.machining.quote.controller.EngineerController;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.OrderItemSummaryDTO;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -33,6 +35,8 @@ class LargeOrderItemPagingTest {
 
     @Autowired
     private OrderItemPageService orderItemPageService;
+    @Autowired
+    private EngineerController engineerController;
     @Autowired
     private OrderRfqMapper orderMapper;
     @Autowired
@@ -127,6 +131,29 @@ class LargeOrderItemPagingTest {
         assertThat(serviceSource)
                 .contains("SUM(CASE WHEN final_unit_price IS NOT NULL THEN 1 ELSE 0 END)")
                 .contains("SUM(CASE WHEN status =");
+    }
+
+    @Test
+    void pricingControllerPagesAssemblyChildCandidatesWithoutLoadingWholeOrder() {
+        OrderRfq order = createOrder("ASSEMBLY-CHILD-PAGE");
+        ItemQuoteVersion parent = createItem(order, "PARENT", QuoteStatusWorkflow.UNPRICED, null, "/parent.pdf");
+        createItem(order, "CHILD-01", QuoteStatusWorkflow.PRICED, 11.0, "/child-1.pdf");
+        createItem(order, "CHILD-02", QuoteStatusWorkflow.PRICED, 12.0, "/child-2.pdf");
+        createItem(order, "CHILD-03", QuoteStatusWorkflow.PRICED, 13.0, "/child-3.pdf");
+        createItem(order, "OTHER-01", QuoteStatusWorkflow.PRICED, 99.0, "/other.pdf");
+
+        PageResult<ItemQuoteVersion> page = engineerController.listAssemblyChildCandidates(
+                order.getId(), parent.getId(), "CHILD", 2, 2);
+
+        assertThat(page.getTotal()).isEqualTo(3);
+        assertThat(page.getPage()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(2);
+        assertThat(page.getRecords())
+                .extracting(ItemQuoteVersion::getPartNo)
+                .containsExactly("CHILD-03");
+        assertThat(page.getRecords())
+                .extracting(ItemQuoteVersion::getId)
+                .doesNotContain(parent.getId());
     }
 
     @Test
@@ -229,7 +256,7 @@ class LargeOrderItemPagingTest {
         return order;
     }
 
-    private void createItem(OrderRfq order, String partNo, String status, Double finalUnitPrice, String drawingUrl) {
+    private ItemQuoteVersion createItem(OrderRfq order, String partNo, String status, Double finalUnitPrice, String drawingUrl) {
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setRfqId(order.getId());
         item.setPartNo(partNo);
@@ -239,5 +266,6 @@ class LargeOrderItemPagingTest {
         item.setFinalUnitPrice(finalUnitPrice);
         item.setDrawingUrl(drawingUrl);
         itemMapper.insert(item);
+        return item;
     }
 }

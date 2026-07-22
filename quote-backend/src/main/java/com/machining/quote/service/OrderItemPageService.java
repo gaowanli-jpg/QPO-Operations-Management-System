@@ -60,9 +60,24 @@ public class OrderItemPageService {
         return OrderItemPageDTO.of(records, total == null ? 0L : total, page, pageSize, summary);
     }
 
+    public OrderItemSummaryDTO summarizeItems(Integer rfqId) {
+        if (rfqId == null) {
+            throw new IllegalArgumentException("rfqId is required");
+        }
+        OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (order == null) {
+            throw new IllegalArgumentException("Order does not exist");
+        }
+        dataScopeService.assertCanAccessOrder(order);
+        return querySummary(rfqId);
+    }
+
     private QueryWrapper<ItemQuoteVersion> buildFilteredQuery(OrderItemPageReq req) {
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.eq("rfq_id", req.getRfqId());
+        if (req.getExcludeItemId() != null) {
+            query.ne("id", req.getExcludeItemId());
+        }
         if (!isBlank(req.getKeyword())) {
             String keyword = req.getKeyword().trim();
             query.and(wrapper -> wrapper

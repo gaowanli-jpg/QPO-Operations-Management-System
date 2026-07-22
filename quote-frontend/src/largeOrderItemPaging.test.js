@@ -51,4 +51,26 @@ describe('large order item paging contracts', () => {
     expect(marketRelease).not.toContain(':total="ticketList.length"')
     expect(marketRelease).not.toContain(':total="processSheetList.length"')
   })
+
+  test('item pricing page uses backend paging for the main pricing table', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('listPricingItems')
+    expect(source).toContain('fetchPricingItems')
+    expect(source).toContain('quoteData.value.itemList = response.records || []')
+    expect(source).toContain('pricingItemTotal.value = Number(response.total ?? 0)')
+    expect(source).toContain('watch(\n  () => [pricingListPagination.page, pricingListPagination.pageSize]')
+    expect(source).not.toContain('const pagedPricingItems = computed(() => paginateRows(quoteData.value?.itemList || [], pricingListPagination))')
+  })
+
+  test('item pricing assembly child picker uses backend paging and search', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('listAssemblyChildCandidates')
+    expect(source).toContain('fetchAssemblyChildCandidates')
+    expect(source).toContain('assemblyChildKeyword')
+    expect(source).toContain(':total="assemblyChildTotal"')
+    expect(source).toContain('keyword: assemblyChildKeyword.value')
+    expect(source).not.toContain('const pagedAssemblyChildOptions = computed(() => paginateRows(assemblyChildOptions.value, assemblyPickerPagination))')
+  })
 })

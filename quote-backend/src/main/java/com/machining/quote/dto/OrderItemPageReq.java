@@ -11,4 +11,5 @@ public class OrderItemPageReq {
     private String status;
     private String partNo;
     private String version;
+    private Integer excludeItemId;
 }

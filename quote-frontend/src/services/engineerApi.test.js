@@ -50,6 +50,22 @@ describe('engineerApi', () => {
     expect(request).toHaveBeenCalledWith('/api/engineer/pricing/summary/12')
   })
 
+  test('listPricingItems forwards server-side item paging params', async () => {
+    const params = { page: 2, pageSize: 50, keyword: 'PN-001', status: '已核价' }
+
+    await engineerApi.listPricingItems(12, params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/items/12', { params })
+  })
+
+  test('listAssemblyChildCandidates forwards server-side child picker params', async () => {
+    const params = { parentItemId: 34, page: 2, pageSize: 20, keyword: 'CHILD' }
+
+    await engineerApi.listAssemblyChildCandidates(12, params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/assembly-child-candidates/12', { params })
+  })
+
   test('applyRepeatQuotes posts repeat quote application by order id', async () => {
     await engineerApi.applyRepeatQuotes(12)
 

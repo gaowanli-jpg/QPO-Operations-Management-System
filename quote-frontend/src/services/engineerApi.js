@@ -6,6 +6,13 @@ export const getSetupSummary = (rfqId) => request(`/api/engineer/setup/summary/$
 
 export const getPricingSummary = (rfqId) => request(`/api/engineer/pricing/summary/${rfqId}`)
 
+export const listPricingItems = (rfqId, params = {}) => request(`/api/engineer/pricing/items/${rfqId}`, { params })
+
+export const listAssemblyChildCandidates = (rfqId, params = {}) => request(
+  `/api/engineer/pricing/assembly-child-candidates/${rfqId}`,
+  { params }
+)
+
 export const downloadPricingSheet = (rfqId, fallbackName = `pricing-sheet-${rfqId}.xlsx`) => downloadFile(
   `/api/engineer/pricing/export-sheet/${rfqId}`,
   fallbackName
