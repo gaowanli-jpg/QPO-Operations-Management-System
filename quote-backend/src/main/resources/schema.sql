@@ -58,6 +58,13 @@ ALTER TABLE item_quote_version
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
     ALTER COLUMN fee_data TYPE JSONB USING NULLIF(fee_data::TEXT, '')::JSONB;
 
+CREATE INDEX IF NOT EXISTS idx_item_quote_version_repeat_released_key
+    ON item_quote_version(part_no, version, id DESC)
+    WHERE status = '已提单'
+      AND final_unit_price IS NOT NULL
+      AND material_data IS NOT NULL
+      AND process_route IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS dict_material (
     id SERIAL PRIMARY KEY,
     material_name VARCHAR(100) NOT NULL,

@@ -878,6 +878,34 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    void repeatReleasedItemLookupUsesPartialIndexWithoutCustomerOrTicketIndex() throws Exception {
+        Path migrationPath = Path.of(
+                "src", "main", "resources", "db", "migration", "V55__repeat_quote_released_item_match_index.sql");
+        assertThat(migrationPath)
+                .as("阶段 1 必须新增重复件已提单历史零件部分索引迁移")
+                .exists();
+
+        String migration = Files.readString(migrationPath, StandardCharsets.UTF_8);
+        String schema = source("src/main/resources/schema.sql");
+        String combined = migration + "\n" + schema;
+
+        assertThat(combined)
+                .contains("idx_item_quote_version_repeat_released_key")
+                .contains("ON item_quote_version(part_no, version, id DESC)")
+                .contains("WHERE status = '\u5df2\u63d0\u5355'")
+                .contains("final_unit_price IS NOT NULL")
+                .contains("material_data IS NOT NULL")
+                .contains("process_route IS NOT NULL");
+        assertThat(combined)
+                .as("重复件匹配不能退回普通全量联合索引")
+                .doesNotContain("item_quote_version(part_no, version, status, id DESC)");
+        assertThat(migration)
+                .as("重复件匹配索引不能新增客户或提单表专用索引")
+                .doesNotContain("customer")
+                .doesNotContain("order_delivery_ticket");
+    }
+
+    @Test
     void repeatQuoteApplicationDoesNotCompleteOrderAutomatically() {
         String customerName = "重复审核客户-" + System.nanoTime();
 
