@@ -565,6 +565,7 @@ import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import {
+  applyRepeatQuotes,
   completeOrderQuote as completeOrderQuoteRequest,
   getPricingSummary,
   getRepeatAnalysis,
@@ -574,6 +575,7 @@ import {
   submitQuote
 } from '../services/engineerApi'
 import { getTask, refreshEngineerQuotes } from '../services/taskApi'
+import { useAuthStore } from '../stores/authStore'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
@@ -590,9 +592,11 @@ import {
 } from '../utils/clientPagination'
 
 const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
+const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
@@ -602,6 +606,8 @@ const quoteData = ref(null)
 const loading = ref(false)
 const completeLoading = ref(false)
 const refreshLoading = ref(false)
+const repeatApplyAttempted = ref(false)
+const repeatApplyLoading = ref(false)
 const pricingTableRef = ref(null)
 const pricingListPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const materialOptions = computed(() => dictionaryStore.materials)
@@ -688,6 +694,7 @@ const canRefreshQuotes = computed(() => {
     && !!quoteData.value
     && items.some(item => item.finalUnitPrice != null || isAssemblyItem(item))
 })
+const canApplyRepeatQuotes = computed(() => authStore.hasPermission(ENGINEER_PRICING_SAVE_ITEM_PERMISSION))
 
 const returnToGlobalSetup = () => {
   if (!rfqId.value) {
@@ -761,6 +768,9 @@ const fetchQuoteData = async (options = {}) => {
       globalConfig.value = globalConfigStore.applyEngineerConfig(rfqId.value, quoteData.value.orderInfo.engineerConfig)
     }
     await loadRepeatAnalysis()
+    if (!options.skipRepeatApply) {
+      await applyRepeatQuotesOnPricingLoad()
+    }
     if (options.keepScroll) {
       restorePricingTableScrollTop(scrollTop)
     }
@@ -768,6 +778,25 @@ const fetchQuoteData = async (options = {}) => {
     ElMessage.error('获取失败，请检查后端状态！')
   } finally {
     loading.value = false
+  }
+}
+
+const applyRepeatQuotesOnPricingLoad = async () => {
+  if (!rfqId.value || repeatApplyAttempted.value) return
+  if (!canApplyRepeatQuotes.value) return
+  repeatApplyAttempted.value = true
+  repeatApplyLoading.value = true
+  try {
+    const response = await applyRepeatQuotes(rfqId.value)
+    if (response?.appliedCount > 0) {
+      ElMessage.success(`已自动套用 ${response.appliedCount} 个重复零件的历史核价。`)
+      await fetchQuoteData({ keepScroll: true, skipRepeatApply: true })
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.warning('重复件自动核价失败，可继续手动核价。')
+  } finally {
+    repeatApplyLoading.value = false
   }
 }
 

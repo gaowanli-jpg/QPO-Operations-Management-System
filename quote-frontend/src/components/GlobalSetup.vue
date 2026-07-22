@@ -254,7 +254,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { applyRepeatQuotes, getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
+import { getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
 import {
@@ -480,27 +480,6 @@ const fetchDicts = async () => {
   }
 }
 
-const manualRepeatSkipReasons = (response) => {
-  const skippedItems = Array.isArray(response?.skippedItems) ? response.skippedItems : []
-  return skippedItems
-    .map(item => item?.reason)
-    .filter(reason => typeof reason === 'string' && reason.includes('需手动补齐'))
-}
-
-const notifyManualRepeatQuoteSkips = (response) => {
-  const reasons = manualRepeatSkipReasons(response)
-  if (reasons.length === 0) return
-
-  const preview = reasons.slice(0, 3).join('；')
-  const suffix = reasons.length > 3 ? ` 等 ${reasons.length} 项` : ''
-  ElMessage({
-    type: 'warning',
-    showClose: true,
-    duration: 0,
-    message: `有 ${reasons.length} 个重复组合件未自动套用：${preview}${suffix}。请在逐件核价页手动补齐组合件关系。`
-  })
-}
-
 const handleNext = async () => {
   if (!orderInfo.value.id) {
     return ElMessage.warning('请先选择订单并加载数据。')
@@ -514,19 +493,6 @@ const handleNext = async () => {
   } catch (error) {
     console.error(error)
     return ElMessage.error('订单全局默认设定保存失败，请检查后端服务。')
-  }
-
-  if (repeatAnalysis.value?.repeatCount > 0) {
-    try {
-      const response = await applyRepeatQuotes(orderInfo.value.id)
-      if (response.appliedCount > 0) {
-        ElMessage.success(`已自动套用 ${response.appliedCount} 个重复零件的历史核价，请进入逐件核价页审核后手动完成核价提交。`)
-      }
-      notifyManualRepeatQuoteSkips(response)
-    } catch (error) {
-      console.error(error)
-      ElMessage.warning('重复件自动核价失败，可进入逐件核价页面手动处理。')
-    }
   }
 
   ElMessage.success('基础设定已保存，正在为您跳转至逐件核价中心...')

@@ -40,4 +40,13 @@ describe('item pricing repeat quote reuse ownership', () => {
     expect(source).toContain('if (!rfqId.value || repeatApplyAttempted.value) return')
     expect(source).toContain('repeatApplyAttempted.value = true')
   })
+
+  test('requires item save permission before automatic repeat quote reuse', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain("const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'")
+    expect(source).toContain('const authStore = useAuthStore()')
+    expect(source).toContain('authStore.hasPermission(ENGINEER_PRICING_SAVE_ITEM_PERMISSION)')
+    expect(source).toContain('if (!canApplyRepeatQuotes.value) return')
+  })
 })
