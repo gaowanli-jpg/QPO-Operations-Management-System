@@ -82,6 +82,17 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
 
     @Select("""
             <script>
+            SELECT DISTINCT COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name
+            FROM order_delivery_ticket ticket
+            LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
+            ${ew.customSqlSegment}
+            ORDER BY customer_name ASC
+            </script>
+            """)
+    List<String> selectDeliveredItemCustomers(@Param(Constants.WRAPPER) Wrapper<DeliveredItemDTO> query);
+
+    @Select("""
+            <script>
             SELECT
                 ticket.id,
                 ticket.rfq_id,

@@ -6,7 +6,9 @@ const CUSTOMER_ENDPOINTS = {
   release: '/api/market/release/customers',
   'engineer-setup': '/api/engineer/setup/customers',
   'market-order': '/api/order-management/customers',
-  'history-order': '/api/order-management/history-orders/customers'
+  'history-order': '/api/order-management/history-orders/customers',
+  'delivered-item': '/api/order-delivery/tickets/customers',
+  'locked-item': '/api/order-delivery/allocations/customers'
 }
 
 export const listCustomers = (scope = 'market-order') => request(

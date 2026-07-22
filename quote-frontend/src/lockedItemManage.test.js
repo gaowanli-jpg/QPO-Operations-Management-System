@@ -32,18 +32,50 @@ describe('LockedItemManage guardrails', () => {
     for (const token of [
       'customerName',
       'rfqNo',
-      'partNo',
-      'version',
       'materialNo',
       'internalProjectNo',
+      'customerOrderNo',
+      'customerProjectNo',
       'allocationType',
-      'wmsProductionOrderNo'
+      'dateRange'
     ]) {
       expect(pageSource).toContain(token)
     }
 
     for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', '分配类型', '在产订单号', '数量']) {
       expect(pageSource).toContain(label)
+    }
+  })
+
+  test('uses module customer picker and freezes common locked-item filters', () => {
+    const toolbarStart = pageSource.indexOf('locked-filter-group')
+    const toolbarSource = pageSource.slice(toolbarStart, pageSource.indexOf('</section>', toolbarStart))
+
+    expect(pageSource).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
+    expect(pageSource).toContain('<CustomerPickerDialog')
+    expect(pageSource).toContain('customer-scope="locked-item"')
+    expect(pageSource).toContain('v-permission="\'market:locked-item:customer-select\'"')
+    expect(pageSource).toContain('@select="handleCustomerSelected"')
+    expect(toolbarSource).not.toContain('v-model="filters.customerName"')
+
+    for (const token of [
+      'filters.rfqNo',
+      'filters.internalProjectNo',
+      'filters.customerOrderNo',
+      'filters.customerProjectNo',
+      'filters.materialNo',
+      'filters.allocationType',
+      'filters.dateRange'
+    ]) {
+      expect(toolbarSource).toContain(token)
+    }
+
+    for (const removedCommonFilter of [
+      'filters.partNo',
+      'filters.version',
+      'filters.wmsProductionOrderNo'
+    ]) {
+      expect(toolbarSource).not.toContain(removedCommonFilter)
     }
   })
 

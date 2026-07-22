@@ -100,6 +100,31 @@ public class OrderManagementService {
         return PageResult.of(orderMapper.selectList(qw), total, safePage, safePageSize);
     }
 
+    public PageResult<OrderRfq> listQuoteProcessCandidateOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        String normalizedStatus = isBlank(status) ? null : status.trim();
+        if (normalizedStatus != null && !QuoteStatusWorkflow.canReadQuoteProcess(normalizedStatus)) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+
+        QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderDataScope(qw);
+        applyOrderFilters(qw, customerName, keyword, null);
+        if (normalizedStatus == null) {
+            qw.in("status", QuoteStatusWorkflow.PRICED, QuoteStatusWorkflow.QUOTED);
+        } else {
+            qw.eq("status", normalizedStatus);
+        }
+        Long total = orderMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByDesc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(orderMapper.selectList(qw), total, safePage, safePageSize);
+    }
+
     public PageResult<OrderRfq> listReleaseCandidateOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);

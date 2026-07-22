@@ -49,6 +49,16 @@ public class DeliveredItemService {
         return item;
     }
 
+    public List<String> listCustomers() {
+        QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
+        query.isNotNull("COALESCE(ticket.customer_name, rfq.customer_name)");
+        query.ne("COALESCE(ticket.customer_name, rfq.customer_name)", "");
+        dataScopeService.applyRfqScope(query, "ticket.rfq_id");
+        return ticketMapper.selectDeliveredItemCustomers(query).stream()
+                .filter(this::hasText)
+                .toList();
+    }
+
     private QueryWrapper<DeliveredItemDTO> buildQuery(DeliveredItemQueryReq req) {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
         applyLike(query, "ticket.customer_name", req.getCustomerName());
@@ -57,6 +67,8 @@ public class DeliveredItemService {
         applyEquals(query, "ticket.version", req.getVersion());
         applyLike(query, "ticket.material_no", req.getMaterialNo());
         applyLike(query, "ticket.internal_project_no", req.getInternalProjectNo());
+        applyLike(query, "ticket.customer_order_no", req.getCustomerOrderNo());
+        applyLike(query, "ticket.customer_project_no", req.getCustomerProjectNo());
         applyEquals(query, "ticket.mes_sync_status", req.getMesSyncStatus());
         applyEquals(query, "ticket.wms_allocate_status", req.getWmsAllocateStatus());
         if (req.getDateFrom() != null) {

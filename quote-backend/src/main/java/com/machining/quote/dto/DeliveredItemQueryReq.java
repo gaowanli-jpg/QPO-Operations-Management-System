@@ -14,6 +14,8 @@ public class DeliveredItemQueryReq {
     private String version;
     private String materialNo;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private String mesSyncStatus;
     private String wmsAllocateStatus;
     private LocalDate dateFrom;

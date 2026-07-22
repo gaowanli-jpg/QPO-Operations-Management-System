@@ -14,6 +14,8 @@ public class LockedItemQueryReq {
     private String version;
     private String materialNo;
     private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
     private String allocationType;
     private String wmsProductionOrderNo;
     private LocalDate dateFrom;

@@ -9,12 +9,20 @@
 
     <section class="erp-toolbar delivered-filter-toolbar">
       <div class="erp-toolbar-group delivered-filter-group">
-        <el-input v-model="filters.customerName" clearable placeholder="客户" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
+          <span
+            :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
+            :title="filters.customerName || '选择客户'"
+          >
+            {{ filters.customerName || '选择客户' }}
+          </span>
+          <span class="customer-picker-action">选择客户</span>
+        </el-button>
+        <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
         <el-input v-model="filters.rfqNo" clearable placeholder="RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.materialNo" clearable placeholder="物料号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.customerOrderNo" clearable placeholder="客户订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.customerProjectNo" clearable placeholder="客户项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-select v-model="filters.mesSyncStatus" clearable placeholder="MES状态" class="filter-select" @change="handleSearch" @clear="handleSearch">
           <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
@@ -26,8 +34,8 @@
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
-          start-placeholder="提单日期起"
-          end-placeholder="提单日期止"
+          start-placeholder="交货日期起"
+          end-placeholder="交货日期止"
           class="filter-date-range"
           @change="handleSearch"
           @clear="handleSearch"
@@ -186,6 +194,13 @@
         </section>
       </div>
     </el-drawer>
+
+    <CustomerPickerDialog
+      v-model="customerPickerVisible"
+      :current-customer="filters.customerName"
+      customer-scope="delivered-item"
+      @select="handleCustomerSelected"
+    />
   </div>
 </template>
 
@@ -194,6 +209,7 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { openAuthenticatedFileInNewWindow } from '../api'
+import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { getDeliveredItem, listDeliveredItems, submitWmsAllocation, syncMesMaterial } from '../services/deliveredItemApi'
 
 const router = useRouter()
@@ -207,10 +223,9 @@ const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
 const filters = reactive({
   customerName: '',
   rfqNo: '',
-  partNo: '',
-  version: '',
-  materialNo: '',
   internalProjectNo: '',
+  customerOrderNo: '',
+  customerProjectNo: '',
   mesSyncStatus: '',
   wmsAllocateStatus: '',
   dateRange: []
@@ -230,6 +245,7 @@ const pageSize = ref(20)
 const total = ref(0)
 const detailVisible = ref(false)
 const selectedItem = ref(null)
+const customerPickerVisible = ref(false)
 
 watch([page, pageSize], () => loadItems())
 
@@ -263,6 +279,16 @@ const loadItems = async () => {
 const handleSearch = async () => {
   page.value = 1
   await loadItems()
+}
+
+const handleCustomerSelected = async (customer) => {
+  filters.customerName = customer
+  await handleSearch()
+}
+
+const handleCustomerClear = async () => {
+  filters.customerName = ''
+  await handleSearch()
 }
 
 const openDetail = async (row) => {

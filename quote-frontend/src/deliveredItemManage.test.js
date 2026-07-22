@@ -9,7 +9,7 @@ const source = readFileSync(resolve(currentDir, 'components', 'DeliveredItemMana
 describe('DeliveredItemManage foundation page', () => {
   test('freezes delivered item page title, filters, and core columns', () => {
     expect(source).toContain('已提零件')
-    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', 'MES状态', 'WMS状态', '提单日期']) {
+    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', 'MES状态', 'WMS状态', '交货日期']) {
       expect(source).toContain(label)
     }
     for (const label of ['提单ID', '图号', '物料号', '提单数量', 'MES状态', 'WMS状态', '客户订单号', '客户项目号', '材料类型', '毛重', '净重', '工艺路线', '材料描述', '表面处理']) {
@@ -78,6 +78,38 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('dateFrom')
     expect(source).toContain('dateTo')
     expect(source).toContain('value-format="YYYY-MM-DD"')
+  })
+
+  test('uses module customer picker and freezes common delivered-item filters', () => {
+    const toolbarStart = source.indexOf('delivered-filter-group')
+    const toolbarSource = source.slice(toolbarStart, source.indexOf('</section>', toolbarStart))
+
+    expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
+    expect(source).toContain('<CustomerPickerDialog')
+    expect(source).toContain('customer-scope="delivered-item"')
+    expect(source).toContain('v-permission="\'market:delivered-item:customer-select\'"')
+    expect(source).toContain('@select="handleCustomerSelected"')
+    expect(toolbarSource).not.toContain('v-model="filters.customerName"')
+
+    for (const token of [
+      'filters.rfqNo',
+      'filters.internalProjectNo',
+      'filters.customerOrderNo',
+      'filters.customerProjectNo',
+      'filters.mesSyncStatus',
+      'filters.wmsAllocateStatus',
+      'filters.dateRange'
+    ]) {
+      expect(toolbarSource).toContain(token)
+    }
+
+    for (const removedCommonFilter of [
+      'filters.partNo',
+      'filters.version',
+      'filters.materialNo'
+    ]) {
+      expect(toolbarSource).not.toContain(removedCommonFilter)
+    }
   })
 
   test('wires drawing preview to delivered item module permission', () => {

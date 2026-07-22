@@ -45,6 +45,16 @@ public class LockedItemService {
         return allocationMapper.selectLockedItems(query, TICKET_ALLOCATION_LIMIT, 0);
     }
 
+    public List<String> listCustomers() {
+        QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
+        query.isNotNull("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)");
+        query.ne("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");
+        dataScopeService.applyRfqScope(query, "alloc.rfq_id");
+        return allocationMapper.selectLockedItemCustomers(query).stream()
+                .filter(this::hasText)
+                .toList();
+    }
+
     private QueryWrapper<LockedItemDTO> buildQuery(LockedItemQueryReq req) {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         applyLike(query, "alloc.customer_name", req.getCustomerName());
@@ -53,13 +63,15 @@ public class LockedItemService {
         applyEquals(query, "alloc.version", req.getVersion());
         applyLike(query, "alloc.material_no", req.getMaterialNo());
         applyLike(query, "alloc.internal_project_no", req.getInternalProjectNo());
+        applyLike(query, "alloc.customer_order_no", req.getCustomerOrderNo());
+        applyLike(query, "alloc.customer_project_no", req.getCustomerProjectNo());
         applyEquals(query, "alloc.allocation_type", normalizeUpper(req.getAllocationType()));
         applyLike(query, "alloc.wms_production_order_no", req.getWmsProductionOrderNo());
         if (req.getDateFrom() != null) {
-            query.ge("alloc.created_at", req.getDateFrom().atStartOfDay());
+            query.ge("alloc.delivery_date", req.getDateFrom());
         }
         if (req.getDateTo() != null) {
-            query.lt("alloc.created_at", req.getDateTo().plusDays(1).atStartOfDay());
+            query.le("alloc.delivery_date", req.getDateTo());
         }
         dataScopeService.applyRfqScope(query, "alloc.rfq_id");
         return query;

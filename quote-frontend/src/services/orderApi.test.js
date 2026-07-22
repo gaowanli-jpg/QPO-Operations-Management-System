@@ -24,6 +24,8 @@ describe('orderApi', () => {
     await orderApi.listCustomers('engineer-setup')
     await orderApi.listCustomers('market-order')
     await orderApi.listCustomers('history-order')
+    await orderApi.listCustomers('delivered-item')
+    await orderApi.listCustomers('locked-item')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/rfq/customers')
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/customers')
@@ -31,6 +33,8 @@ describe('orderApi', () => {
     expect(request).toHaveBeenNthCalledWith(4, '/api/engineer/setup/customers')
     expect(request).toHaveBeenNthCalledWith(5, '/api/order-management/customers')
     expect(request).toHaveBeenNthCalledWith(6, '/api/order-management/history-orders/customers')
+    expect(request).toHaveBeenNthCalledWith(7, '/api/order-delivery/tickets/customers')
+    expect(request).toHaveBeenNthCalledWith(8, '/api/order-delivery/allocations/customers')
   })
 
   test('listOrders forwards query params', async () => {

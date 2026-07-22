@@ -129,6 +129,33 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    void quoteProcessOrderSelectionReturnsPricedAndQuotedOrders() {
+        String customerName = "报价处理候选客户-" + System.nanoTime();
+        OrderRfq priced = orderWithItemsTicketsAndSheets(customerName, "QP-A", "已核价", 1, 1, 0, 0, 0);
+        OrderRfq quoted = orderWithItemsTicketsAndSheets(customerName, "QP-B", "已报价", 1, 1, 0, 0, 0);
+        orderWithItemsTicketsAndSheets(customerName, "QP-C", "未核价", 1, 0, 0, 0, 0);
+        orderWithItemsTicketsAndSheets(customerName, "QP-D", "部分已提单", 1, 1, 0, 1, 1);
+
+        PageResult<OrderRfq> candidates = orderManagementService.listQuoteProcessCandidateOrders(
+                customerName, null, null, 1, 20);
+
+        assertThat(candidates.getRecords())
+                .extracting(OrderRfq::getId)
+                .containsExactly(quoted.getId(), priced.getId());
+
+        PageResult<OrderRfq> pricedOnly = orderManagementService.listQuoteProcessCandidateOrders(
+                customerName, null, "已核价", 1, 20);
+        assertThat(pricedOnly.getRecords())
+                .extracting(OrderRfq::getId)
+                .containsExactly(priced.getId());
+
+        PageResult<OrderRfq> partialReleased = orderManagementService.listQuoteProcessCandidateOrders(
+                customerName, null, "部分已提单", 1, 20);
+        assertThat(partialReleased.getTotal()).isZero();
+        assertThat(partialReleased.getRecords()).isEmpty();
+    }
+
+    @Test
     void quoteSavePersistsGrossAndNetWeights() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("WEIGHT-" + System.nanoTime());

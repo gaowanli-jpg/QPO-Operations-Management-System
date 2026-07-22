@@ -88,6 +88,21 @@ describe('QPO customer picker dialog', () => {
     expect(historyManage).toContain('v-permission="\'market:history-order:customer-select\'"')
   })
 
+  test('delivered and locked item modules use their own customer selection scopes', () => {
+    const deliveredManage = readComponent('DeliveredItemManage.vue')
+    const lockedManage = readComponent('LockedItemManage.vue')
+
+    expect(deliveredManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
+    expect(deliveredManage).toContain('customer-scope="delivered-item"')
+    expect(deliveredManage).toContain('v-permission="\'market:delivered-item:customer-select\'"')
+    expect(deliveredManage).toContain('@select="handleCustomerSelected"')
+
+    expect(lockedManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
+    expect(lockedManage).toContain('customer-scope="locked-item"')
+    expect(lockedManage).toContain('v-permission="\'market:locked-item:customer-select\'"')
+    expect(lockedManage).toContain('@select="handleCustomerSelected"')
+  })
+
   test('order workspaces use module-scoped summary APIs instead of common market summary', () => {
     const globalSetup = readComponent('GlobalSetup.vue')
     const itemPricing = readComponent('ItemPricing.vue')

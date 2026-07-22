@@ -97,7 +97,7 @@ public class MarketController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listReleaseCandidateOrders(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listQuoteProcessCandidateOrders(customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/release/customers")

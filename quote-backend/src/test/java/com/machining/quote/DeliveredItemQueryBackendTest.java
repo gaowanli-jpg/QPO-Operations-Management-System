@@ -20,6 +20,8 @@ class DeliveredItemQueryBackendTest {
             "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
     private static final Path ORDER_DELIVERY_TICKET_MAPPER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "mapper", "OrderDeliveryTicketMapper.java");
+    private static final Path QUERY_INDEX_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
 
     @Test
     void deliveredItemDtosExposeJoinedOrderItemAndExternalSystemFields() throws IOException {
@@ -51,6 +53,9 @@ class DeliveredItemQueryBackendTest {
                         "private String rfqNo;",
                         "private String partNo;",
                         "private String materialNo;",
+                        "private String internalProjectNo;",
+                        "private String customerOrderNo;",
+                        "private String customerProjectNo;",
                         "private String mesSyncStatus;",
                         "private String wmsAllocateStatus;"
                 );
@@ -87,6 +92,15 @@ class DeliveredItemQueryBackendTest {
                         "selectDeliveredItems",
                         "dataScopeService.assertCanAccessOrder(item.getRfqId(), orderRfqMapper)"
                 );
+        assertThat(source)
+                .as("Common delivered-item filters must cover customer order/project numbers and delivery date")
+                .contains(
+                        "applyLike(query, \"ticket.customer_order_no\", req.getCustomerOrderNo())",
+                        "applyLike(query, \"ticket.customer_project_no\", req.getCustomerProjectNo())",
+                        "query.ge(\"ticket.delivery_date\", req.getDateFrom())",
+                        "query.le(\"ticket.delivery_date\", req.getDateTo())",
+                        "listCustomers"
+                );
     }
 
     @Test
@@ -99,10 +113,30 @@ class DeliveredItemQueryBackendTest {
                         "@RequirePermission(\"market:delivered-item:view\")",
                         "public PageResult<DeliveredItemDTO> listTickets(DeliveredItemQueryReq req)",
                         "return deliveredItemService.listTickets(req)",
-                        "return deliveredItemService.getTicket(ticketId)"
+                        "return deliveredItemService.getTicket(ticketId)",
+                        "@GetMapping(\"/tickets/customers\")",
+                        "@RequirePermission(\"market:delivered-item:customer-select\")",
+                        "return deliveredItemService.listCustomers()"
                 )
                 .doesNotContain("ticketMapper.selectPage")
                 .doesNotContain("new QueryWrapper<OrderDeliveryTicket>");
+    }
+
+    @Test
+    void deliveredItemCommonQueryIndexesStayFocusedOnRecommendedFields() throws IOException {
+        String migration = read(QUERY_INDEX_MIGRATION);
+
+        assertThat(migration)
+                .contains(
+                        "idx_order_delivery_ticket_rfq_no",
+                        "ON order_delivery_ticket(rfq_no, id)",
+                        "idx_order_delivery_ticket_delivery_date",
+                        "ON order_delivery_ticket(delivery_date, id)"
+                )
+                .doesNotContain(
+                        "idx_order_delivery_ticket_customer_order_no",
+                        "idx_order_delivery_ticket_customer_project_no"
+                );
     }
 
     private String read(Path path) throws IOException {

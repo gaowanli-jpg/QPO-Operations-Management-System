@@ -37,6 +37,12 @@ public class OrderDeliveryController {
         return deliveredItemService.listTickets(req);
     }
 
+    @GetMapping("/tickets/customers")
+    @RequirePermission("market:delivered-item:customer-select")
+    public List<String> listTicketCustomers() {
+        return deliveredItemService.listCustomers();
+    }
+
     @GetMapping("/tickets/{ticketId}")
     @RequirePermission("market:delivered-item:view")
     public DeliveredItemDTO getTicket(@PathVariable Integer ticketId) {
@@ -59,6 +65,12 @@ public class OrderDeliveryController {
     @RequirePermission("market:locked-item:view")
     public LockedItemPageDTO listAllocations(@ModelAttribute LockedItemQueryReq req) {
         return lockedItemService.listAllocations(req);
+    }
+
+    @GetMapping("/allocations/customers")
+    @RequirePermission("market:locked-item:customer-select")
+    public List<String> listAllocationCustomers() {
+        return lockedItemService.listCustomers();
     }
 
     @GetMapping("/tickets/{ticketId}/allocations")

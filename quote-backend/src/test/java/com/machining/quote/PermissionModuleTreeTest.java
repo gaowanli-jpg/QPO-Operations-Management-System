@@ -30,6 +30,7 @@ class PermissionModuleTreeTest {
     private static final Path DELIVERED_ITEM_MES_SYNC_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V46__delivery_ticket_mes_sync_permission.sql");
     private static final Path WMS_ALLOCATION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V47__delivery_ticket_wms_allocation_permissions.sql");
     private static final Path MES_WMS_PERMISSION_TREE_REPAIR_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V49__mes_wms_permission_tree_repair.sql");
+    private static final Path DELIVERY_COMMON_QUERY_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path DOCS_ROOT = Path.of("..", "docs");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
@@ -241,10 +242,12 @@ class PermissionModuleTreeTest {
                 .as("MES/WMS final governance permissions must all exist in the fallback catalog")
                 .contains(
                         "market:delivered-item:view",
+                        "market:delivered-item:customer-select",
                         "market:delivered-item:file-preview",
                         "market:delivered-item:mes-sync",
                         "market:delivered-item:wms-allocate",
-                        "market:locked-item:view"
+                        "market:locked-item:view",
+                        "market:locked-item:customer-select"
                 );
         assertThat(source)
                 .as("Delivered and locked items must stay as independent order MENU modules")
@@ -261,14 +264,47 @@ class PermissionModuleTreeTest {
                 .contains(
                         "permission(159L, \"API\", \"market:delivered-item:file-preview\"",
                         "127, 158L)",
+                        "permission(163L, \"API\", \"market:delivered-item:customer-select\"",
+                        "130, 158L)",
                         "permission(160L, \"BUTTON\", \"market:delivered-item:mes-sync\"",
                         "128, 158L)",
                         "permission(161L, \"BUTTON\", \"market:delivered-item:wms-allocate\"",
-                        "129, 158L)"
+                        "129, 158L)",
+                        "permission(164L, \"API\", \"market:locked-item:customer-select\"",
+                        "128, 162L)"
                 );
         assertThat(source)
                 .as("No MES/WMS ability should be introduced as an assignable common permission")
                 .doesNotContain("common:mes", "common:wms", "common:delivered-item", "common:locked-item");
+    }
+
+    @Test
+    void deliveredAndLockedCustomerSelectionPermissionsStayModuleScoped() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+        String migration = Files.readString(DELIVERY_COMMON_QUERY_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .contains(
+                        "market:delivered-item:customer-select",
+                        "market:locked-item:customer-select"
+                );
+        assertThat(source)
+                .contains(
+                        "Map.entry(\"market:delivered-item:customer-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:locked-item:customer-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))"
+                )
+                .doesNotContain("common:customer:select");
+        assertThat(migration)
+                .contains(
+                        "market:delivered-item:customer-select",
+                        "market:locked-item:customer-select",
+                        "market:delivered-item:view",
+                        "market:locked-item:view",
+                        "SUPER_ADMIN",
+                        "MARKET_USER",
+                        "MARKET_MANAGER",
+                        "READONLY"
+                );
     }
 
     @Test

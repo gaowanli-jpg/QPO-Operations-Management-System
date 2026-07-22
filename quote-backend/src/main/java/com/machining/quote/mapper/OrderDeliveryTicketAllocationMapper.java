@@ -76,4 +76,16 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             </script>
             """)
     long countLockedItems(@Param(Constants.WRAPPER) Wrapper<LockedItemDTO> query);
+
+    @Select("""
+            <script>
+            SELECT DISTINCT COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name) AS customer_name
+            FROM order_delivery_ticket_allocation alloc
+            LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
+            LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
+            ${ew.customSqlSegment}
+            ORDER BY customer_name ASC
+            </script>
+            """)
+    List<String> selectLockedItemCustomers(@Param(Constants.WRAPPER) Wrapper<LockedItemDTO> query);
 }

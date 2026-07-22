@@ -10,23 +10,31 @@
     <section class="erp-toolbar locked-filter-toolbar">
       <div class="erp-toolbar-group locked-filter-group">
         <el-tag v-if="route.query.ticketId" type="info" effect="plain">提单ID：{{ route.query.ticketId }}</el-tag>
-        <el-input v-model="filters.customerName" clearable placeholder="客户" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-button v-permission="'market:locked-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
+          <span
+            :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
+            :title="filters.customerName || '选择客户'"
+          >
+            {{ filters.customerName || '选择客户' }}
+          </span>
+          <span class="customer-picker-action">选择客户</span>
+        </el-button>
+        <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
         <el-input v-model="filters.rfqNo" clearable placeholder="RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.materialNo" clearable placeholder="物料号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.customerOrderNo" clearable placeholder="客户订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.customerProjectNo" clearable placeholder="客户项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-select v-model="filters.allocationType" clearable placeholder="分配类型" class="filter-select" @change="handleSearch" @clear="handleSearch">
           <el-option v-for="option in allocationTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
-        <el-input v-model="filters.wmsProductionOrderNo" clearable placeholder="在产订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-date-picker
           v-model="filters.dateRange"
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
-          start-placeholder="创建日期起"
-          end-placeholder="创建日期止"
+          start-placeholder="交货日期起"
+          end-placeholder="交货日期止"
           class="filter-date-range"
           @change="handleSearch"
           @clear="handleSearch"
@@ -112,6 +120,13 @@
         />
       </div>
     </section>
+
+    <CustomerPickerDialog
+      v-model="customerPickerVisible"
+      :current-customer="filters.customerName"
+      customer-scope="locked-item"
+      @select="handleCustomerSelected"
+    />
   </div>
 </template>
 
@@ -119,6 +134,7 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listLockedItems, listTicketAllocations } from '../services/deliveredItemApi'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
@@ -129,12 +145,11 @@ const router = useRouter()
 const filters = reactive({
   customerName: '',
   rfqNo: '',
-  partNo: '',
-  version: '',
   materialNo: '',
   internalProjectNo: '',
+  customerOrderNo: '',
+  customerProjectNo: '',
   allocationType: '',
-  wmsProductionOrderNo: '',
   dateRange: []
 })
 
@@ -149,6 +164,7 @@ const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const customerPickerVisible = ref(false)
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
@@ -189,6 +205,16 @@ const loadItems = async () => {
 const handleSearch = async () => {
   page.value = 1
   await loadItems()
+}
+
+const handleCustomerSelected = async (customer) => {
+  filters.customerName = customer
+  await handleSearch()
+}
+
+const handleCustomerClear = async () => {
+  filters.customerName = ''
+  await handleSearch()
 }
 
 const showAllItems = () => {

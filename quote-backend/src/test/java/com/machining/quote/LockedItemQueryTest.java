@@ -26,6 +26,8 @@ class LockedItemQueryTest {
             "src", "main", "java", "com", "machining", "quote", "mapper", "OrderDeliveryTicketAllocationMapper.java");
     private static final Path ORDER_DELIVERY_CONTROLLER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
+    private static final Path QUERY_INDEX_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
 
     @Test
     void lockedItemQueryContractFreezesEndpointsAndPermission() throws IOException {
@@ -137,6 +139,9 @@ class LockedItemQueryTest {
                         "private String customerName;",
                         "private String partNo;",
                         "private String materialNo;",
+                        "private String internalProjectNo;",
+                        "private String customerOrderNo;",
+                        "private String customerProjectNo;",
                         "private String allocationType;",
                         "private String wmsProductionOrderNo;"
                 );
@@ -145,6 +150,11 @@ class LockedItemQueryTest {
                         "listAllocations",
                         "listTicketAllocations",
                         "dataScopeService.applyRfqScope(query, \"alloc.rfq_id\")",
+                        "applyLike(query, \"alloc.customer_order_no\", req.getCustomerOrderNo())",
+                        "applyLike(query, \"alloc.customer_project_no\", req.getCustomerProjectNo())",
+                        "query.ge(\"alloc.delivery_date\", req.getDateFrom())",
+                        "query.le(\"alloc.delivery_date\", req.getDateTo())",
+                        "listCustomers",
                         "countLockedItems",
                         "selectLockedItems"
                 );
@@ -181,7 +191,29 @@ class LockedItemQueryTest {
                 .contains(
                         "@GetMapping(\"/allocations\")",
                         "@GetMapping(\"/tickets/{ticketId}/allocations\")",
-                        "@RequirePermission(\"market:locked-item:view\")"
+                        "@RequirePermission(\"market:locked-item:view\")",
+                        "@GetMapping(\"/allocations/customers\")",
+                        "@RequirePermission(\"market:locked-item:customer-select\")",
+                        "return lockedItemService.listCustomers()"
+                );
+    }
+
+    @Test
+    void lockedItemCommonQueryIndexesStayFocusedOnRecommendedFields() throws IOException {
+        String migration = read(QUERY_INDEX_MIGRATION);
+
+        assertThat(migration)
+                .contains(
+                        "idx_delivery_allocation_rfq_no",
+                        "ON order_delivery_ticket_allocation(rfq_no, id)",
+                        "idx_delivery_allocation_internal_project",
+                        "ON order_delivery_ticket_allocation(internal_project_no, id)",
+                        "idx_delivery_allocation_delivery_date",
+                        "ON order_delivery_ticket_allocation(delivery_date, id)"
+                )
+                .doesNotContain(
+                        "idx_delivery_allocation_customer_order_no",
+                        "idx_delivery_allocation_customer_project_no"
                 );
     }
 
