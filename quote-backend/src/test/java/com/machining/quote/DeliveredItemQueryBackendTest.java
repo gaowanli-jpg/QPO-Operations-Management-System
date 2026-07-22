@@ -22,6 +22,8 @@ class DeliveredItemQueryBackendTest {
             "src", "main", "java", "com", "machining", "quote", "mapper", "OrderDeliveryTicketMapper.java");
     private static final Path QUERY_INDEX_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
+    private static final Path QUERY_OPTIMIZATION_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V52__delivery_part_version_and_exact_customer_filters.sql");
 
     @Test
     void deliveredItemDtosExposeJoinedOrderItemAndExternalSystemFields() throws IOException {
@@ -95,12 +97,16 @@ class DeliveredItemQueryBackendTest {
         assertThat(source)
                 .as("Common delivered-item filters must cover customer order/project numbers and delivery date")
                 .contains(
+                        "applyEquals(query, \"ticket.customer_name\", req.getCustomerName())",
                         "applyLike(query, \"ticket.customer_order_no\", req.getCustomerOrderNo())",
                         "applyLike(query, \"ticket.customer_project_no\", req.getCustomerProjectNo())",
                         "query.ge(\"ticket.delivery_date\", req.getDateFrom())",
                         "query.le(\"ticket.delivery_date\", req.getDateTo())",
                         "listCustomers"
                 );
+        assertThat(source)
+                .as("Customer picker passes exact customer names, so the delivered-item query should not use fuzzy customer matching")
+                .doesNotContain("applyLike(query, \"ticket.customer_name\", req.getCustomerName())");
     }
 
     @Test
@@ -125,6 +131,7 @@ class DeliveredItemQueryBackendTest {
     @Test
     void deliveredItemCommonQueryIndexesStayFocusedOnRecommendedFields() throws IOException {
         String migration = read(QUERY_INDEX_MIGRATION);
+        String optimizationMigration = read(QUERY_OPTIMIZATION_MIGRATION);
 
         assertThat(migration)
                 .contains(
@@ -136,6 +143,12 @@ class DeliveredItemQueryBackendTest {
                 .doesNotContain(
                         "idx_order_delivery_ticket_customer_order_no",
                         "idx_order_delivery_ticket_customer_project_no"
+                );
+        assertThat(optimizationMigration)
+                .as("Delivered items now support direct part number + version filtering")
+                .contains(
+                        "idx_order_delivery_ticket_part_version",
+                        "ON order_delivery_ticket(part_no, version, id)"
                 );
     }
 

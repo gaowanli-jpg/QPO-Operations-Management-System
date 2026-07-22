@@ -21,6 +21,8 @@
         </el-button>
         <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
         <el-input v-model="filters.rfqNo" clearable placeholder="RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.materialNo" clearable placeholder="物料号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerOrderNo" clearable placeholder="客户订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
@@ -145,6 +147,8 @@ const router = useRouter()
 const filters = reactive({
   customerName: '',
   rfqNo: '',
+  partNo: '',
+  version: '',
   materialNo: '',
   internalProjectNo: '',
   customerOrderNo: '',

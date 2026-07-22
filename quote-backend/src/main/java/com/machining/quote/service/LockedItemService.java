@@ -57,7 +57,7 @@ public class LockedItemService {
 
     private QueryWrapper<LockedItemDTO> buildQuery(LockedItemQueryReq req) {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
-        applyLike(query, "alloc.customer_name", req.getCustomerName());
+        applyEquals(query, "alloc.customer_name", req.getCustomerName());
         applyLike(query, "alloc.rfq_no", req.getRfqNo());
         applyLike(query, "alloc.part_no", req.getPartNo());
         applyEquals(query, "alloc.version", req.getVersion());

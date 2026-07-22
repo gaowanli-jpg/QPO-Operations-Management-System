@@ -60,6 +60,8 @@ describe('LockedItemManage guardrails', () => {
 
     for (const token of [
       'filters.rfqNo',
+      'filters.partNo',
+      'filters.version',
       'filters.internalProjectNo',
       'filters.customerOrderNo',
       'filters.customerProjectNo',
@@ -71,8 +73,6 @@ describe('LockedItemManage guardrails', () => {
     }
 
     for (const removedCommonFilter of [
-      'filters.partNo',
-      'filters.version',
       'filters.wmsProductionOrderNo'
     ]) {
       expect(toolbarSource).not.toContain(removedCommonFilter)

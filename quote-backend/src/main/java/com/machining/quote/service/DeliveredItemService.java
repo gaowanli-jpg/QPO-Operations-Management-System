@@ -61,7 +61,7 @@ public class DeliveredItemService {
 
     private QueryWrapper<DeliveredItemDTO> buildQuery(DeliveredItemQueryReq req) {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
-        applyLike(query, "ticket.customer_name", req.getCustomerName());
+        applyEquals(query, "ticket.customer_name", req.getCustomerName());
         applyLike(query, "ticket.rfq_no", req.getRfqNo());
         applyLike(query, "ticket.part_no", req.getPartNo());
         applyEquals(query, "ticket.version", req.getVersion());

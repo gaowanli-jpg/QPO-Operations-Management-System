@@ -150,6 +150,7 @@ class LockedItemQueryTest {
                         "listAllocations",
                         "listTicketAllocations",
                         "dataScopeService.applyRfqScope(query, \"alloc.rfq_id\")",
+                        "applyEquals(query, \"alloc.customer_name\", req.getCustomerName())",
                         "applyLike(query, \"alloc.customer_order_no\", req.getCustomerOrderNo())",
                         "applyLike(query, \"alloc.customer_project_no\", req.getCustomerProjectNo())",
                         "query.ge(\"alloc.delivery_date\", req.getDateFrom())",
@@ -158,6 +159,9 @@ class LockedItemQueryTest {
                         "countLockedItems",
                         "selectLockedItems"
                 );
+        assertThat(service)
+                .as("Customer picker passes exact customer names, so locked-item queries should not use fuzzy customer matching")
+                .doesNotContain("applyLike(query, \"alloc.customer_name\", req.getCustomerName())");
         assertThat(mapper)
                 .contains(
                         "countLockedItems",

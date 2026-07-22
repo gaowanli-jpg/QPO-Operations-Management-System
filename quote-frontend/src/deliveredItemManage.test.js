@@ -93,6 +93,8 @@ describe('DeliveredItemManage foundation page', () => {
 
     for (const token of [
       'filters.rfqNo',
+      'filters.partNo',
+      'filters.version',
       'filters.internalProjectNo',
       'filters.customerOrderNo',
       'filters.customerProjectNo',
@@ -104,8 +106,6 @@ describe('DeliveredItemManage foundation page', () => {
     }
 
     for (const removedCommonFilter of [
-      'filters.partNo',
-      'filters.version',
       'filters.materialNo'
     ]) {
       expect(toolbarSource).not.toContain(removedCommonFilter)

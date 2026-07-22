@@ -230,6 +230,9 @@ ALTER TABLE order_delivery_ticket_allocation
     ALTER COLUMN process_route SET DEFAULT '[]'::jsonb,
     ALTER COLUMN material_data SET DEFAULT '{}'::jsonb;
 
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_part_version
+    ON order_delivery_ticket(part_no, version, id);
+
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,
     bar_density, bar_price, tube_density, tube_price
