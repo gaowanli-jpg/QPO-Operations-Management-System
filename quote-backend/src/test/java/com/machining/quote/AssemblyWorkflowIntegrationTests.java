@@ -330,11 +330,14 @@ class AssemblyWorkflowIntegrationTests {
         currentOrder.setCustomerName(customerName);
         orderMapper.updateById(currentOrder);
         ItemQuoteVersion currentParent = createPendingItem(currentOrder, historicalParent.getPartNo(), 1);
+        ItemQuoteVersion before = itemMapper.selectById(currentParent.getId());
 
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
         ItemQuoteVersion saved = itemMapper.selectById(currentParent.getId());
         assertThat(result.get("appliedCount")).isEqualTo(0);
+        assertThat(saved.getQuoteMode()).isEqualTo(before.getQuoteMode());
+        assertThat(saved.getAssemblyFee()).isEqualTo(before.getAssemblyFee());
         assertThat(saved.getFinalUnitPrice()).isNull();
         assertThat(saved.getStatus()).isEqualTo("待核价");
         List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");

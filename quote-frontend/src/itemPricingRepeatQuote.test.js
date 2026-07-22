@@ -33,6 +33,15 @@ describe('item pricing repeat quote reuse ownership', () => {
     expect(combined).not.toContain('notifyManualRepeatQuoteSkips')
   })
 
+  test('keeps unpriced parent rows on the normal pricing action path', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('<el-table-column prop="status" label="状态"')
+    expect(source).toContain('去核价')
+    expect(source).toContain('openQuoteDialog(scope.row)')
+    expect(source).toContain('v-if="scope.row.drawingUrl"')
+  })
+
   test('keeps repeat quote application to a single automatic attempt per pricing page load', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
