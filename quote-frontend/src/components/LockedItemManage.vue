@@ -40,8 +40,8 @@
     <section class="erp-table-surface locked-table-surface">
       <div class="erp-table-body">
         <el-table :data="items" border stripe height="600" v-loading="loading">
-          <el-table-column prop="id" label="分配ID" width="96" fixed align="center" />
-          <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" />
+          <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
+          <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
             <template #default="{ row }">{{ formatDash(row.version) }}</template>

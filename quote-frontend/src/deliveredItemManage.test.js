@@ -47,6 +47,10 @@ describe('DeliveredItemManage foundation page', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
   })
 
+  test('keeps delivered ticket id tooltip enabled for long ids', () => {
+    expect(source).toContain('prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip')
+  })
+
   test('wires WMS allocation action and locked-result entry after the WMS allocation phase', () => {
     expect(source).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
     expect(source).toContain('market:delivered-item:wms-allocate')

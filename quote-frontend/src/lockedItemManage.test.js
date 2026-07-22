@@ -85,6 +85,11 @@ describe('LockedItemManage guardrails', () => {
     }
   })
 
+  test('keeps allocation and delivered ticket id tooltips enabled for long ids', () => {
+    expect(pageSource).toContain('prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip')
+    expect(pageSource).toContain('prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip')
+  })
+
   test('localizes allocation types and uses stable tag types', () => {
     expect(pageSource).toContain('IN_STOCK_LOCK')
     expect(pageSource).toContain('IN_PRODUCTION_LOCK')
