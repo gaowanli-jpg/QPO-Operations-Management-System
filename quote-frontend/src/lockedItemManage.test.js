@@ -102,7 +102,8 @@ describe('LockedItemManage guardrails', () => {
       '工艺路线',
       '交货日期',
       '材料描述',
-      '表面处理'
+      '表面处理',
+      '备注'
     ]
 
     const labels = Array.from(pageSource.matchAll(/label="([^"]+)"/g)).map(match => match[1])

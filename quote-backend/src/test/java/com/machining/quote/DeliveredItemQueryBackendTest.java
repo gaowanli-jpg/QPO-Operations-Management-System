@@ -40,6 +40,7 @@ class DeliveredItemQueryBackendTest {
                         "private String partNo;",
                         "private String version;",
                         "private String orderType;",
+                        "private String remark;",
                         "private String drawingUrl;",
                         "private Object processRoute;",
                         "private Object materialData;",
@@ -78,6 +79,7 @@ class DeliveredItemQueryBackendTest {
                         "COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no",
                         "COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name",
                         "ticket.order_type AS order_type",
+                        "ticket.remark",
                         "item.drawing_url AS drawing_url"
                 );
         assertThat(source)

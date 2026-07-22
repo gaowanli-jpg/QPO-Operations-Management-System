@@ -41,6 +41,7 @@ describe('DeliveredItemManage foundation page', () => {
       'label="交货日期"',
       'label="材料描述"',
       'label="表面处理"',
+      'label="备注"',
       'label="操作"'
     ]
     const positions = labels.map(label => tableSource.indexOf(label))

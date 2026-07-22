@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     material_name VARCHAR(100),
     engineering_material_name VARCHAR(255),
     surface_treatment VARCHAR(100),
+    remark TEXT,
     description TEXT,
     delivery_date DATE,
     process_route JSONB DEFAULT '[]'::jsonb,
@@ -217,6 +218,7 @@ ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_p
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_name VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS engineering_material_name VARCHAR(255);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS surface_treatment VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS remark TEXT;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS delivery_date DATE;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS process_route JSONB DEFAULT '[]'::jsonb;

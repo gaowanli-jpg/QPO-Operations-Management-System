@@ -25,6 +25,7 @@ public class LockedItemDTO {
     private String materialName;
     private String engineeringMaterialName;
     private String surfaceTreatment;
+    private String remark;
     private String description;
     private LocalDate deliveryDate;
     private Object processRoute;

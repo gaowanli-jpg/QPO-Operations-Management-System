@@ -108,6 +108,9 @@
           <el-table-column prop="surfaceTreatment" label="表面处理" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.surfaceTreatment) }}</template>
           </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.remark) }}</template>
+          </el-table-column>
         </el-table>
       </div>
       <div class="erp-pagination">

@@ -47,6 +47,8 @@ class WmsAllocationTest {
             "..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path FOUNDATION_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
+    private static final Path ALLOCATION_REMARK_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V54__delivery_allocation_remark_snapshot.sql");
     private static final Path DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERY_ALLOCATION = Path.of(
@@ -165,6 +167,7 @@ class WmsAllocationTest {
                     assertSnapshot(row, "getMaterialName", "6061");
                     assertSnapshot(row, "getEngineeringMaterialName", "7075");
                     assertSnapshot(row, "getSurfaceTreatment", "Anodized");
+                    assertSnapshot(row, "getRemark", "Rush note");
                     assertSnapshot(row, "getDescription", "Bracket");
                     assertSnapshot(row, "getDeliveryDate", LocalDate.of(2026, 8, 12));
                     assertSnapshot(row, "getProcessRoute", List.of(Map.of("processName", "CNC", "inputVal", "2h")));
@@ -369,6 +372,7 @@ class WmsAllocationTest {
     @Test
     void allocationFoundationSupportsAllRequiredSplitRowFields() throws IOException {
         String migration = read(FOUNDATION_MIGRATION);
+        String remarkMigration = read(ALLOCATION_REMARK_MIGRATION);
         String entity = read(DELIVERY_ALLOCATION);
 
         assertThat(migration)
@@ -383,6 +387,11 @@ class WmsAllocationTest {
                         "IN_PRODUCTION_LOCK",
                         "PRODUCTION_REQUIRED",
                         "idx_delivery_allocation_wms_order"
+                );
+        assertThat(remarkMigration)
+                .contains(
+                        "ALTER TABLE order_delivery_ticket_allocation",
+                        "ADD COLUMN IF NOT EXISTS remark TEXT"
                 );
         assertThat(entity)
                 .contains(
@@ -404,6 +413,7 @@ class WmsAllocationTest {
                         "private String materialName;",
                         "private String engineeringMaterialName;",
                         "private String surfaceTreatment;",
+                        "private String remark;",
                         "private String description;",
                         "private LocalDate deliveryDate;",
                         "private Object processRoute;",
@@ -428,6 +438,7 @@ class WmsAllocationTest {
                         "row.setMaterialName(ticket.getMaterialName())",
                         "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName())",
                         "row.setSurfaceTreatment(ticket.getSurfaceTreatment())",
+                        "row.setRemark(ticket.getRemark())",
                         "row.setDescription(ticket.getDescription())",
                         "row.setDeliveryDate(ticket.getDeliveryDate())",
                         "row.setProcessRoute(ticket.getProcessRoute())",
@@ -476,6 +487,7 @@ class WmsAllocationTest {
         ticket.setMaterialName("6061");
         ticket.setEngineeringMaterialName("7075");
         ticket.setSurfaceTreatment("Anodized");
+        ticket.setRemark("Rush note");
         ticket.setDescription("Bracket");
         ticket.setDeliveryDate(LocalDate.of(2026, 8, 12));
         ticket.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", "2h")));

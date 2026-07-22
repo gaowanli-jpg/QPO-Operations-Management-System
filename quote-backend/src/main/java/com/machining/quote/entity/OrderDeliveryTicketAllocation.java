@@ -34,6 +34,7 @@ public class OrderDeliveryTicketAllocation {
     private String materialName;
     private String engineeringMaterialName;
     private String surfaceTreatment;
+    private String remark;
     private String description;
     private LocalDate deliveryDate;
     @TableField(typeHandler = JsonbTypeHandler.class)

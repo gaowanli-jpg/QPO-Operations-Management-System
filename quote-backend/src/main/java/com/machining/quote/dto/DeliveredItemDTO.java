@@ -17,6 +17,7 @@ public class DeliveredItemDTO {
     private String description;
     private Integer qty;
     private String orderType;
+    private String remark;
     private String internalProjectNo;
     private String customerOrderNo;
     private String customerProjectNo;

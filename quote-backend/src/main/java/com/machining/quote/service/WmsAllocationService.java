@@ -223,6 +223,7 @@ public class WmsAllocationService {
         row.setMaterialName(ticket.getMaterialName());
         row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
         row.setSurfaceTreatment(ticket.getSurfaceTreatment());
+        row.setRemark(ticket.getRemark());
         row.setDescription(ticket.getDescription());
         row.setDeliveryDate(ticket.getDeliveryDate());
         row.setProcessRoute(ticket.getProcessRoute());

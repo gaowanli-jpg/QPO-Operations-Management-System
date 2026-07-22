@@ -124,6 +124,7 @@ class LockedItemQueryTest {
                         "private String materialName;",
                         "private String engineeringMaterialName;",
                         "private String surfaceTreatment;",
+                        "private String remark;",
                         "private String description;",
                         "private LocalDate deliveryDate;",
                         "private Object processRoute;",
@@ -177,6 +178,7 @@ class LockedItemQueryTest {
                         "alloc.material_data",
                         "alloc.material_gross_weight",
                         "alloc.part_net_weight",
+                        "alloc.remark",
                         "ORDER BY alloc.id DESC"
                 );
         assertThat(mapper)

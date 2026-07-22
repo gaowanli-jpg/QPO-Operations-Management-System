@@ -99,6 +99,9 @@
           <el-table-column prop="surfaceTreatment" label="表面处理" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ row.surfaceTreatment || '-' }}</template>
           </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.remark || '-' }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="280" align="center" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions delivered-row-actions">
@@ -188,6 +191,7 @@
           <el-descriptions-item label="交货日期">{{ selectedItem.deliveryDate || '-' }}</el-descriptions-item>
           <el-descriptions-item label="材料描述">{{ selectedItem.description || '-' }}</el-descriptions-item>
           <el-descriptions-item label="表面处理">{{ selectedItem.surfaceTreatment || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="备注">{{ selectedItem.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <section class="detail-section">
