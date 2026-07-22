@@ -41,7 +41,6 @@ class PermissionSystemStage4Test {
 
         assertThat(info.getPermissions()).contains(
                 "market:rfq:import",
-                "market:rfq:order-type-select",
                 "market:rfq:upload-drawing",
                 "market:quote-process:update-lead-time",
                 "market:quote-process:save-quote",
@@ -72,6 +71,9 @@ class PermissionSystemStage4Test {
                 "system:audit:export",
                 "system:audit:retention"
         );
-        assertThat(info.getPermissions()).doesNotContain("market:release:reset");
+        assertThat(info.getPermissions()).doesNotContain(
+                "market:rfq:order-type-select",
+                "market:release:reset"
+        );
     }
 }

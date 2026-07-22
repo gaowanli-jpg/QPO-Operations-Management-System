@@ -28,6 +28,13 @@
             </el-descriptions>
 
             <el-form label-width="80px" class="ticket-form">
+              <el-form-item label="订单类型" required>
+                <el-select v-model="releaseForm.orderType" class="full-width release-order-type-select" placeholder="请选择订单类型" clearable>
+                  <el-option label="预测订单" value="预测订单" />
+                  <el-option label="备货订单" value="备货订单" />
+                  <el-option label="正式订单" value="正式订单" />
+                </el-select>
+              </el-form-item>
               <el-form-item label="RFQ号">
                 <el-input v-model="releaseForm.projectNo" placeholder="默认取 RFQ 号" disabled />
               </el-form-item>
@@ -131,7 +138,7 @@
                 size="large"
                 class="workflow-primary-action"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0 || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim()"
+                :disabled="selectedRows.length === 0 || !releaseForm.orderType || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim()"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -271,6 +278,7 @@
             </div>
             <el-table :data="pagedTicketList" border stripe height="280" v-loading="loadingTickets">
               <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
+              <el-table-column prop="orderType" label="订单类型" width="100" align="center" show-overflow-tooltip />
               <el-table-column prop="itemType" label="类型" width="90" align="center" />
               <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
@@ -416,6 +424,7 @@ const selectedOrderLabel = computed(() => (
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
+  orderType: '',
   projectNo: '',
   internalProjectNo: '',
   customerOrderNo: '',
@@ -488,6 +497,7 @@ const loadOrder = async (rfqId) => {
     orderInfo.value = response.orderInfo || {}
     await loadInternalTargetItems(rfqId)
     releaseForm.projectNo = orderInfo.value.rfqNo || ''
+    releaseForm.orderType = ''
     releaseForm.internalProjectNo = ''
     releaseForm.customerOrderNo = ''
     releaseForm.customerProjectNo = ''
@@ -729,6 +739,7 @@ const saveInternalTargetLeadTime = async (row) => {
 const submitTicket = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
+  if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')
   const internalProjectNo = releaseForm.internalProjectNo.trim()
   if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')
   const customerOrderNo = releaseForm.customerOrderNo.trim()
@@ -756,6 +767,7 @@ const submitTicket = async () => {
   try {
     const payload = {
       rfqId: selectedRfqId.value,
+      orderType: releaseForm.orderType,
       projectNo: releaseForm.projectNo,
       internalProjectNo,
       customerOrderNo,

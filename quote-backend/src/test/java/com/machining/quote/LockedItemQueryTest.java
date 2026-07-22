@@ -169,7 +169,7 @@ class LockedItemQueryTest {
                         "order_delivery_ticket_allocation alloc",
                         "LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id",
                         "LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id",
-                        "COALESCE(alloc.order_type, ticket.order_type, rfq.order_type) AS order_type",
+                        "alloc.order_type AS order_type",
                         "alloc.rfq_no",
                         "alloc.customer_order_no",
                         "alloc.customer_project_no",
@@ -189,7 +189,8 @@ class LockedItemQueryTest {
                         "ticket.material_data",
                         "ticket.material_gross_weight",
                         "ticket.part_net_weight",
-                        "LEFT JOIN item_quote_version item"
+                        "LEFT JOIN item_quote_version item",
+                        "COALESCE(alloc.order_type, ticket.order_type, rfq.order_type)"
                 );
         assertThat(controller)
                 .contains(

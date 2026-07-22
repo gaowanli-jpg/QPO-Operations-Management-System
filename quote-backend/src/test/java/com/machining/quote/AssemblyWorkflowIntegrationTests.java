@@ -162,6 +162,7 @@ class AssemblyWorkflowIntegrationTests {
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
+        req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-ASSY");
         req.setCustomerOrderNo("CO-ASSY");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();

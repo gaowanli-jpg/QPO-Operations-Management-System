@@ -32,28 +32,10 @@
         </div>
       </div>
 
-      <div class="import-step import-step-order-type">
-        <div class="section-title">
-          <span class="step-index">02</span>
-          <span>步骤 2：选择订单类型</span>
-        </div>
-        <div class="form-box step-panel">
-          <el-form v-permission="'market:rfq:order-type-select'" class="order-type-form" :model="rfqForm" label-width="120px" label-position="top">
-            <el-form-item label="订单类型" required>
-              <el-radio-group v-model="rfqForm.orderType" class="order-type-options">
-                <el-radio-button label="预测订单">预测订单</el-radio-button>
-                <el-radio-button label="备货订单">备货订单</el-radio-button>
-                <el-radio-button label="正式订单">正式订单</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-          </el-form>
-        </div>
-      </div>
-
       <div class="import-step import-step-excel">
         <div class="section-title">
-          <span class="step-index">03</span>
-          <span>步骤 3：上传客户询价表（Excel）</span>
+          <span class="step-index">02</span>
+          <span>步骤 2：上传客户询价表（Excel）</span>
         </div>
         <div class="upload-box step-panel">
           <el-alert
@@ -88,8 +70,8 @@
 
       <div class="import-step import-step-drawings">
         <div class="section-title">
-          <span class="step-index">04</span>
-          <span>步骤 4：上传关联图纸（PDF）</span>
+          <span class="step-index">03</span>
+          <span>步骤 3：上传关联图纸（PDF）</span>
         </div>
         <div class="upload-box step-panel">
           <el-alert
@@ -157,7 +139,7 @@ import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { importRfq } from '../services/marketApi'
 import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
 
-const rfqForm = reactive({ customerName: '', orderType: '' })
+const rfqForm = reactive({ customerName: '' })
 const excelFile = ref(null)
 const drawingFiles = ref([])
 const isSubmitting = ref(false)
@@ -275,13 +257,11 @@ const buildDrawingReportHtml = (report) => {
 // 提交询价单和图纸
 const submitRfqPackage = async () => {
   if (!rfqForm.customerName) return ElMessage.warning('请填写客户名称！')
-  if (!rfqForm.orderType) return ElMessage.warning('请选择订单类型！')
   if (!excelFile.value) return ElMessage.warning('请上传客户询价表 Excel！')
 
   isSubmitting.value = true
   const formData = new FormData()
   formData.append('customerName', rfqForm.customerName)
-  formData.append('orderType', rfqForm.orderType)
   formData.append('excelFile', excelFile.value)
 
   drawingFiles.value.forEach(file => {
@@ -306,7 +286,6 @@ const submitRfqPackage = async () => {
         }
       ).then(() => {
         rfqForm.customerName = ''
-        rfqForm.orderType = ''
         excelFile.value = null
         drawingFiles.value = [] // 清空拖拽出来的 PDF
         if (excelUploadRef.value) {
@@ -389,26 +368,6 @@ const submitRfqPackage = async () => {
   margin-bottom: 0;
 }
 
-.order-type-form :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-
-.order-type-form :deep(.el-form-item__label) {
-  justify-content: center;
-  padding-bottom: 8px;
-  text-align: center;
-}
-
-.order-type-form :deep(.el-form-item__content) {
-  justify-content: center;
-}
-
-.order-type-options {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
 
 .customer-input-col {
   max-width: 560px;

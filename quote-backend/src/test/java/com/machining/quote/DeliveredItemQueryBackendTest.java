@@ -77,9 +77,12 @@ class DeliveredItemQueryBackendTest {
                         "LEFT JOIN item_quote_version item ON item.id = ticket.item_id",
                         "COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no",
                         "COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name",
-                        "COALESCE(ticket.order_type, rfq.order_type, item.order_type) AS order_type",
+                        "ticket.order_type AS order_type",
                         "item.drawing_url AS drawing_url"
                 );
+        assertThat(source)
+                .as("Delivered-item order type is the immutable delivery-ticket batch type, not an RFQ/item fallback")
+                .doesNotContain("COALESCE(ticket.order_type, rfq.order_type, item.order_type)");
     }
 
     @Test

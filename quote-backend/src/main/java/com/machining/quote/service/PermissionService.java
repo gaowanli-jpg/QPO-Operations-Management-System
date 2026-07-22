@@ -189,7 +189,6 @@ public class PermissionService {
     private static final List<SystemPermission> FALLBACK_CATALOG = List.of(
             permission(1L, "MENU", "market:rfq:view", "新单导入", "/market", "MarketDashboard", true, 110),
             permission(2L, "BUTTON", "market:rfq:import", "导入 RFQ", null, null, false, 111, 1L),
-            permission(157L, "BUTTON", "market:rfq:order-type-select", "选择订单类型", null, null, false, 113, 1L),
             permission(101L, "BUTTON", "market:rfq:upload-drawing", "上传图纸", null, null, false, 114, 1L),
             permission(130L, "API", "market:rfq:customer-select", "新单导入选择客户", null, null, false, 115, 1L),
             permission(131L, "API", "market:rfq:file-preview", "新单导入预览文件", null, null, false, 116, 1L),
@@ -271,7 +270,6 @@ public class PermissionService {
     private static final Map<String, Set<String>> FALLBACK_ROLE_PERMISSIONS = Map.ofEntries(
             Map.entry("market:rfq:view", Set.of("MARKET_USER", "MARKET_MANAGER", "READONLY")),
             Map.entry("market:rfq:import", Set.of("MARKET_USER", "MARKET_MANAGER")),
-            Map.entry("market:rfq:order-type-select", Set.of("MARKET_USER", "MARKET_MANAGER")),
             Map.entry("market:rfq:upload-drawing", Set.of("MARKET_USER", "MARKET_MANAGER")),
             Map.entry("market:rfq:customer-select", Set.of("MARKET_USER", "MARKET_MANAGER", "READONLY")),
             Map.entry("market:rfq:file-preview", Set.of("MARKET_USER", "MARKET_MANAGER", "READONLY")),

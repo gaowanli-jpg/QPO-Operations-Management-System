@@ -285,6 +285,7 @@ class CoreWorkflowIntegrationTests {
         internalTargetLeadTimeService.setLeadTimes(setReq);
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
+        req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-DATE");
         req.setCustomerOrderNo("CO-DATE");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
@@ -327,6 +328,7 @@ class CoreWorkflowIntegrationTests {
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
+        req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-001");
         req.setCustomerOrderNo("CO-001");
         req.setCustomerProjectNo("CP-001");
@@ -379,6 +381,7 @@ class CoreWorkflowIntegrationTests {
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
+        req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-SEQUENCE");
         req.setCustomerOrderNo("CO-SEQUENCE");
         req.setItems(List.of(
@@ -453,6 +456,7 @@ class CoreWorkflowIntegrationTests {
 
         DeliveryGenerateReq deliveryReq = new DeliveryGenerateReq();
         deliveryReq.setRfqId(order.getId());
+        deliveryReq.setOrderType("正式订单");
         deliveryReq.setInternalProjectNo("IP-APS-MAT");
         deliveryReq.setCustomerOrderNo("CO-APS-MAT");
         deliveryReq.setCustomerProjectNo("CP-APS-MAT");
@@ -570,21 +574,25 @@ class CoreWorkflowIntegrationTests {
         item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 2, "calcType", "工时")));
         itemMapper.updateById(item);
 
-        List<OrderDeliveryTicket> firstBatch = deliveryService.generateTickets(deliveryReq(order, item, 4));
+        List<OrderDeliveryTicket> firstBatch = deliveryService.generateTickets(deliveryReq(order, item, 4, "预测订单"));
         assertThat(firstBatch).hasSize(1);
         assertThat(firstBatch.get(0).getQty()).isEqualTo(4);
+        assertThat(firstBatch.get(0).getOrderType()).isEqualTo("预测订单");
         assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
         assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PARTIALLY_RELEASED);
 
-        List<OrderDeliveryTicket> secondBatch = deliveryService.generateTickets(deliveryReq(order, item, 6));
+        List<OrderDeliveryTicket> secondBatch = deliveryService.generateTickets(deliveryReq(order, item, 6, "正式订单"));
         assertThat(secondBatch).hasSize(1);
         assertThat(secondBatch.get(0).getQty()).isEqualTo(6);
+        assertThat(secondBatch.get(0).getOrderType()).isEqualTo("正式订单");
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId());
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQw);
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(4, 6);
+        assertThat(tickets).extracting(OrderDeliveryTicket::getOrderType)
+                .containsExactly("预测订单", "正式订单");
         assertThat(tickets).allSatisfy(ticket -> assertThat(ticket.getProcessRoute()).isNotNull());
 
         List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(order.getId());
@@ -811,8 +819,13 @@ class CoreWorkflowIntegrationTests {
     }
 
     private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item, int acceptedQty) {
+        return deliveryReq(order, item, acceptedQty, "正式订单");
+    }
+
+    private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item, int acceptedQty, String orderType) {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqId(order.getId());
+        req.setOrderType(orderType);
         req.setInternalProjectNo("IP-" + order.getId() + "-" + acceptedQty);
         req.setCustomerOrderNo("CO-" + order.getId() + "-" + acceptedQty);
         req.setCustomerProjectNo("CP-" + order.getId());

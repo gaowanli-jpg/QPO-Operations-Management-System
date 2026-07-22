@@ -24,10 +24,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class DeliveryService {
     private static final Logger log = LoggerFactory.getLogger(DeliveryService.class);
+    private static final Set<String> ALLOWED_ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -68,6 +70,7 @@ public class DeliveryService {
             }
             throw new RuntimeException("只有已报价订单可以生成提单");
         }
+        String orderType = normalizeOrderType(req.getOrderType());
         LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
         String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
         String internalProjectNo = req.getInternalProjectNo() == null ? "" : req.getInternalProjectNo().trim();
@@ -137,7 +140,7 @@ public class DeliveryService {
             ItemQuoteVersion item = demand.item();
             int acceptedQty = demand.qty();
 
-            OrderDeliveryTicket ticket = insertTicket(order, item, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
+            OrderDeliveryTicket ticket = insertTicket(order, item, orderType, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
                     item.getRemark(), arrangeType);
             createdTickets.add(ticket);
         }
@@ -190,12 +193,22 @@ public class DeliveryService {
         }
     }
 
+    private String normalizeOrderType(String orderType) {
+        String normalized = orderType == null ? "" : orderType.trim();
+        if (normalized.isEmpty()) {
+            throw new RuntimeException("请选择订单类型");
+        }
+        if (!ALLOWED_ORDER_TYPES.contains(normalized)) {
+            throw new RuntimeException("订单类型不合法：" + normalized);
+        }
+        return normalized;
+    }
     private void assertOrderDataScope(OrderRfq order) {
         if (dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(order);
         }
     }
-    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String internalProjectNo,
+    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String orderType, String internalProjectNo,
                                              String customerOrderNo, String customerProjectNo, String projectNo,
                                              LocalDate startDate, int qty, String remark, String arrangeType) {
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
@@ -203,7 +216,7 @@ public class DeliveryService {
         ticket.setRfqNo(order.getRfqNo());
         ticket.setCustomerName(order.getCustomerName());
         ticket.setItemId(item.getId());
-        ticket.setOrderType(isBlank(item.getOrderType()) ? "正式订单" : item.getOrderType());
+        ticket.setOrderType(orderType);
         ticket.setInternalProjectNo(internalProjectNo);
         ticket.setCustomerOrderNo(customerOrderNo);
         ticket.setCustomerProjectNo(customerProjectNo);

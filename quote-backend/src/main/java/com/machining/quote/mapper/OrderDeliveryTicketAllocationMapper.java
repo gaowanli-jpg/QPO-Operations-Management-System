@@ -28,7 +28,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.allocation_type,
                 alloc.qty,
                 alloc.material_no,
-                COALESCE(alloc.order_type, ticket.order_type, rfq.order_type) AS order_type,
+                alloc.order_type AS order_type,
                 alloc.part_no,
                 alloc.version,
                 alloc.internal_project_no,

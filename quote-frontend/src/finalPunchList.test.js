@@ -37,32 +37,33 @@ describe('QPO final UI punch-list polish', () => {
     const marketDashboard = readSource('components', 'MarketDashboard.vue')
 
     expect(marketDashboard).toContain('class="import-step import-step-customer"')
-    expect(marketDashboard).toContain('class="import-step import-step-order-type"')
     expect(marketDashboard).toContain('class="import-step import-step-excel"')
     expect(marketDashboard).toContain('class="import-step import-step-drawings"')
     expect(marketDashboard).toContain('class="import-action-row"')
-    expect(marketDashboard).toContain('v-permission="\'market:rfq:order-type-select\'" class="order-type-form"')
     expect(marketDashboard).toContain('class="workflow-primary-action import-axis-button"')
     expect(marketDashboard).toContain('class="workflow-soft-button folder-select-button import-axis-button"')
     expect(marketDashboard).toContain('class="submit-btn import-axis-button"')
-    expect(marketDashboard).toContain('.order-type-form :deep(.el-form-item)')
-    expect(marketDashboard).toContain('.order-type-options')
     expect(marketDashboard).toContain('.import-axis-button')
     expect(marketDashboard).toContain('justify-content: center')
   })
 
-  test('requires an explicit RFQ order type before market import submission', () => {
+  test('keeps RFQ import free of order type and moves order type selection to release generation', () => {
     const marketDashboard = readSource('components', 'MarketDashboard.vue')
+    const marketRelease = readSource('components', 'MarketRelease.vue')
 
-    expect(marketDashboard).toContain('步骤 2：选择订单类型')
-    expect(marketDashboard).toContain('预测订单')
-    expect(marketDashboard).toContain('备货订单')
-    expect(marketDashboard).toContain('正式订单')
-    expect(marketDashboard).toContain("const rfqForm = reactive({ customerName: '', orderType: '' })")
-    expect(marketDashboard).toContain('market:rfq:order-type-select')
-    expect(marketDashboard).toContain("if (!rfqForm.orderType) return ElMessage.warning('请选择订单类型！')")
-    expect(marketDashboard).toContain("formData.append('orderType', rfqForm.orderType)")
-    expect(marketDashboard).toContain("rfqForm.orderType = ''")
+    expect(marketDashboard).not.toContain('import-step-order-type')
+    expect(marketDashboard).not.toContain("rfqForm = reactive({ customerName: '', orderType: '' })")
+    expect(marketDashboard).not.toContain('market:rfq:order-type-select')
+    expect(marketDashboard).not.toContain("formData.append('orderType'")
+    expect(marketDashboard).toContain("const rfqForm = reactive({ customerName: '' })")
+
+    expect(marketRelease).toContain('v-model="releaseForm.orderType"')
+    expect(marketRelease).toContain('release-order-type-select')
+    expect(marketRelease).toContain('预测订单')
+    expect(marketRelease).toContain('备货订单')
+    expect(marketRelease).toContain('正式订单')
+    expect(marketRelease).toContain("if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')")
+    expect(marketRelease).toContain('orderType: releaseForm.orderType')
   })
 
   test('explains customer inquiry spreadsheet headers and lead time formats before upload', () => {

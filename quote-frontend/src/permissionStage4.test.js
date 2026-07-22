@@ -70,7 +70,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
 
   test('wires critical business actions to permission points', () => {
     const expectations = [
-      ['MarketDashboard', ['market:rfq:import', 'market:rfq:order-type-select', 'market:rfq:upload-drawing']],
+      ['MarketDashboard', ['market:rfq:import', 'market:rfq:upload-drawing']],
       ['QuoteProcess', ['market:quote-process:update-lead-time', 'market:quote-process:save-quote', 'market:quote-process:export']],
       ['MarketRelease', ['market:release:create']],
       ['OrderManage', ['market:order:supplement-drawing', 'market:order:rollback-quoted', 'market:order:rollback-priced', 'market:order:discard', 'market:order:restore']],
@@ -95,6 +95,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
     }
 
     expect(componentSource('MarketRelease')).not.toContain('market:release:reset')
+    expect(componentSource('MarketDashboard')).not.toContain('market:rfq:order-type-select')
     expect(componentSource('OrderManage')).not.toContain('reset-production')
     expect(componentSource('OrderManage')).not.toContain('重置提单/工艺')
   })

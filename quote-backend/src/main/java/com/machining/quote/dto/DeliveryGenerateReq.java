@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 public class DeliveryGenerateReq {
     private Integer rfqId;
+    private String orderType;
     private String projectNo;
     private String internalProjectNo;
     private String customerOrderNo;

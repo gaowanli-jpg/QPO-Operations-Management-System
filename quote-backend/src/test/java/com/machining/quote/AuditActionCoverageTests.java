@@ -201,7 +201,7 @@ class AuditActionCoverageTests {
             return 1;
         }).when(orderRfqMapper).insert(any(OrderRfq.class));
 
-        controller.importRfq("ACME", "备货订单", rfqFile(), List.of());
+        controller.importRfq("ACME", rfqFile(), List.of());
 
         ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
@@ -220,29 +220,20 @@ class AuditActionCoverageTests {
         );
         assertThat(messageCaptor.getValue())
                 .contains("RFQ-20260717-001")
-                .contains("备货订单");
+                .doesNotContain("备货订单");
         Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
         assertThat(afterData)
                 .containsEntry("customerName", "ACME")
-                .containsEntry("orderType", "备货订单")
                 .containsEntry("rfqNo", "RFQ-20260717-001")
                 .containsEntry("itemCount", 2)
-                .containsEntry("uploadedDrawingCount", 0);
+                .containsEntry("uploadedDrawingCount", 0)
+                .doesNotContainKey("orderType");
         verify(orderRfqMapper).insert(orderCaptor.capture());
-        assertThat(orderCaptor.getValue().getOrderType()).isEqualTo("备货订单");
+        assertThat(orderCaptor.getValue().getOrderType()).isNull();
         verify(itemQuoteVersionMapper, times(2)).insert(itemCaptor.capture());
         assertThat(itemCaptor.getAllValues())
                 .extracting(ItemQuoteVersion::getOrderType)
-                .containsExactly("备货订单", "备货订单");
-    }
-
-    @Test
-    void rfqImportRejectsMissingOrderType() {
-        MarketController controller = new MarketController();
-
-        assertThatThrownBy(() -> controller.importRfq("ACME", "", rfqFile(), List.of()))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("请选择订单类型");
+                .containsExactly(null, null);
     }
 
     @Test

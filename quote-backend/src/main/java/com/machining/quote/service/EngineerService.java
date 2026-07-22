@@ -702,7 +702,6 @@ public class EngineerService {
         copy.setDescription(source.getDescription());
         copy.setQty(source.getQty());
         copy.setVersion(source.getVersion());
-        copy.setOrderType(source.getOrderType());
         copy.setMaterialName(source.getMaterialName());
         copy.setSurfaceTreatment(source.getSurfaceTreatment());
         copy.setUnit(source.getUnit());
