@@ -26,7 +26,11 @@
       </div>
       <div class="engineering-metric-grid">
         <div class="engineering-metric">
-          <span>零件数</span>
+          <span>总零件数</span>
+          <strong>{{ itemCount || itemList.length || 0 }}</strong>
+        </div>
+        <div class="engineering-metric">
+          <span>当前预览</span>
           <strong>{{ itemList.length || 0 }}</strong>
         </div>
         <div class="engineering-metric">
@@ -52,7 +56,7 @@
               订单概览 <span v-if="orderInfo.rfqNo" class="order-no">({{ orderInfo.rfqNo }})</span>
             </h2>
             <p class="panel-desc">
-              系统已自动同步市场部传入的 Excel 明细与图纸，请工程师在此核对并预览。
+              仅预览前 {{ previewLimit }} 个零件，用于快速判断全局材料与工艺设定；完整零件清单请进入逐件核价页处理。
             </p>
           </div>
         </div>
@@ -281,6 +285,8 @@ const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
 const orderInfo = ref({})
 const itemList = ref([])
+const itemCount = ref(0)
+const previewLimit = ref(10)
 const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
@@ -550,13 +556,15 @@ const fetchOrderData = async () => {
     const response = await getSetupSummary(testRfqId.value)
     if (response && response.orderInfo) {
       orderInfo.value = response.orderInfo
-      itemList.value = response.itemList
+      itemList.value = response.previewItemList || response.itemList || []
+      itemCount.value = Number(response.itemCount ?? itemList.value.length)
+      previewLimit.value = Number(response.previewLimit ?? 10)
       if (orderInfo.value.engineerConfig) {
         globalConfigStore.applyEngineerConfig(orderInfo.value.id, orderInfo.value.engineerConfig)
         assignConfig(orderInfo.value.engineerConfig)
       }
       await loadRepeatAnalysis(orderInfo.value.id, !!orderInfo.value.engineerConfig)
-      ElMessage.success(`成功加载 ${itemList.value.length} 条零件数据！`)
+      ElMessage.success(`成功加载订单概览，总零件 ${itemCount.value} 个，当前预览 ${itemList.value.length} 个。`)
     } else {
       ElMessage.warning('未找到该订单，请检查 ID 是否正确。')
     }
@@ -729,7 +737,7 @@ onMounted(async () => {
 
 .engineering-metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--erp-space-2);
 }
 

@@ -24,6 +24,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/engineer") // 工程部的统一网址前缀
 public class EngineerController {
+    private static final int SETUP_PREVIEW_LIMIT = 10;
 
     // --- 统一在这里召唤需要的依赖（管家和查询器） ---
     @Autowired
@@ -66,7 +67,7 @@ public class EngineerController {
     @GetMapping("/setup/summary/{rfqId}")
     @RequirePermission("engineer:setup:view")
     public Map<String, Object> getSetupSummary(@PathVariable Integer rfqId) {
-        return getOrderSummary(rfqId);
+        return getSetupOrderSummary(rfqId);
     }
 
     @GetMapping("/pricing/summary/{rfqId}")
@@ -163,6 +164,31 @@ public class EngineerController {
         Map<String, Object> result = new HashMap<>();
         result.put("orderInfo", order);
         result.put("itemList", items);
+        return result;
+    }
+
+    private Map<String, Object> getSetupOrderSummary(Integer rfqId) {
+        OrderRfq order = orderRfqMapper.selectById(rfqId);
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(order);
+        }
+
+        QueryWrapper<ItemQuoteVersion> countQw = new QueryWrapper<>();
+        countQw.eq("rfq_id", rfqId);
+        Long itemCount = itemQuoteVersionMapper.selectCount(countQw);
+
+        QueryWrapper<ItemQuoteVersion> previewQw = new QueryWrapper<>();
+        previewQw.eq("rfq_id", rfqId)
+                .orderByAsc("id")
+                .last("LIMIT " + SETUP_PREVIEW_LIMIT);
+        List<ItemQuoteVersion> previewItems = itemQuoteVersionMapper.selectList(previewQw);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("orderInfo", order);
+        result.put("itemList", previewItems);
+        result.put("previewItemList", previewItems);
+        result.put("itemCount", itemCount == null ? 0L : itemCount);
+        result.put("previewLimit", SETUP_PREVIEW_LIMIT);
         return result;
     }
 }
