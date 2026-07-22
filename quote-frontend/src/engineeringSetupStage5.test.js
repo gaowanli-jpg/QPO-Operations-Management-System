@@ -56,4 +56,13 @@ describe('QPO Stage 5 engineering setup redesign', () => {
     expect(source).toContain('const initialRfqId = resolveRouteRfqId()')
     expect(source).toContain('await fetchOrderData()')
   })
+
+  test('surfaces assembly repeat quote skips as persistent manual-fix warnings', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
+
+    expect(source).toContain('skippedItems')
+    expect(source).toContain('需手动补齐')
+    expect(source).toContain('showClose: true')
+    expect(source).toContain('duration: 0')
+  })
 })

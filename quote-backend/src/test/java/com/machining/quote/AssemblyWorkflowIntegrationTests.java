@@ -194,8 +194,119 @@ class AssemblyWorkflowIntegrationTests {
     }
 
     @Test
+    void repeatQuoteReusesHistoricalAssemblyParentWithCurrentChildIds() {
+        resetMarkupFeesForAssemblyTest();
+        String customerName = "组合重复复用客户-" + System.nanoTime();
+
+        OrderRfq historicalOrder = createOrder("ASSY-HIST-REUSE");
+        historicalOrder.setCustomerName(customerName);
+        historicalOrder.setStatus("已生成提单");
+        orderMapper.updateById(historicalOrder);
+        ItemQuoteVersion historicalChild = createPendingItem(historicalOrder, "H-CHILD-REUSE", 2);
+        submitNormalQuoteWithBaseCost(historicalChild, 10.0);
+        historicalChild = itemMapper.selectById(historicalChild.getId());
+        ItemQuoteVersion historicalParent = createPendingItem(historicalOrder, "H-PARENT-REUSE", 1);
+        submitAssembly(historicalParent, 30.0, child(historicalParent, historicalChild, 2.5, 30));
+        historicalParent = itemMapper.selectById(historicalParent.getId());
+
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setRfqId(historicalOrder.getId());
+        ticket.setItemId(historicalParent.getId());
+        ticket.setPartNo(historicalParent.getPartNo());
+        ticket.setVersion(historicalParent.getVersion());
+        ticket.setQty(1);
+        ticket.setArrangeType("组合件组装");
+        ticketMapper.insert(ticket);
+
+        OrderRfq currentOrder = createOrder("ASSY-CUR-REUSE");
+        currentOrder.setCustomerName(customerName);
+        orderMapper.updateById(currentOrder);
+        ItemQuoteVersion currentChild = createPendingItem(currentOrder, historicalChild.getPartNo(), 2);
+        ItemQuoteVersion currentParent = createPendingItem(currentOrder, historicalParent.getPartNo(), 1);
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion savedChild = itemMapper.selectById(currentChild.getId());
+        ItemQuoteVersion savedParent = itemMapper.selectById(currentParent.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(2);
+        assertThat(savedChild.getFinalUnitPrice()).isNotNull();
+        assertThat(savedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
+        assertThat(savedParent.getAssemblyFee()).isEqualTo(30.0);
+        assertThat(savedParent.getFinalUnitPrice()).isNotNull();
+
+        QueryWrapper<ItemAssemblyRelation> relationQw = new QueryWrapper<>();
+        relationQw.eq("parent_item_id", currentParent.getId());
+        List<ItemAssemblyRelation> relations = assemblyRelationMapper.selectList(relationQw);
+        assertThat(relations).hasSize(1);
+        ItemAssemblyRelation relation = relations.get(0);
+        assertThat(relation.getChildItemId()).isEqualTo(currentChild.getId());
+        assertThat(relation.getChildItemId()).isNotEqualTo(historicalChild.getId());
+        assertThat(relation.getChildQtyPerParent()).isEqualTo(2.5);
+        assertThat(relation.getSortNo()).isEqualTo(30);
+    }
+
+    @Test
+    void repeatQuoteReusesNestedHistoricalAssembliesInDependencyOrder() {
+        resetMarkupFeesForAssemblyTest();
+        String customerName = "组合多层复用客户-" + System.nanoTime();
+
+        OrderRfq historicalOrder = createOrder("ASSY-NEST-HIST");
+        historicalOrder.setCustomerName(customerName);
+        historicalOrder.setStatus("已生成提单");
+        orderMapper.updateById(historicalOrder);
+        ItemQuoteVersion historicalLeaf = createPendingItem(historicalOrder, "N-LEAF", 4);
+        submitNormalQuoteWithBaseCost(historicalLeaf, 12.0);
+        historicalLeaf = itemMapper.selectById(historicalLeaf.getId());
+        ItemQuoteVersion historicalMiddle = createPendingItem(historicalOrder, "N-MID", 2);
+        submitAssembly(historicalMiddle, 6.0, child(historicalMiddle, historicalLeaf, 3, 20));
+        historicalMiddle = itemMapper.selectById(historicalMiddle.getId());
+        ItemQuoteVersion historicalTop = createPendingItem(historicalOrder, "N-TOP", 1);
+        submitAssembly(historicalTop, 9.0, child(historicalTop, historicalMiddle, 2, 40));
+        historicalTop = itemMapper.selectById(historicalTop.getId());
+
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setRfqId(historicalOrder.getId());
+        ticket.setItemId(historicalTop.getId());
+        ticket.setPartNo(historicalTop.getPartNo());
+        ticket.setVersion(historicalTop.getVersion());
+        ticket.setQty(1);
+        ticket.setArrangeType("组合件组装");
+        ticketMapper.insert(ticket);
+
+        OrderRfq currentOrder = createOrder("ASSY-NEST-CUR");
+        currentOrder.setCustomerName(customerName);
+        orderMapper.updateById(currentOrder);
+        ItemQuoteVersion currentLeaf = createPendingItem(currentOrder, historicalLeaf.getPartNo(), 4);
+        ItemQuoteVersion currentMiddle = createPendingItem(currentOrder, historicalMiddle.getPartNo(), 2);
+        ItemQuoteVersion currentTop = createPendingItem(currentOrder, historicalTop.getPartNo(), 1);
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        assertThat(result.get("appliedCount")).isEqualTo(3);
+        assertThat(itemMapper.selectById(currentLeaf.getId()).getFinalUnitPrice()).isNotNull();
+        assertThat(itemMapper.selectById(currentMiddle.getId()).getQuoteMode()).isEqualTo("ASSEMBLY");
+        assertThat(itemMapper.selectById(currentTop.getId()).getQuoteMode()).isEqualTo("ASSEMBLY");
+
+        QueryWrapper<ItemAssemblyRelation> middleRelationQw = new QueryWrapper<>();
+        middleRelationQw.eq("parent_item_id", currentMiddle.getId());
+        List<ItemAssemblyRelation> middleRelations = assemblyRelationMapper.selectList(middleRelationQw);
+        assertThat(middleRelations).hasSize(1);
+        assertThat(middleRelations.get(0).getChildItemId()).isEqualTo(currentLeaf.getId());
+        assertThat(middleRelations.get(0).getChildQtyPerParent()).isEqualTo(3.0);
+        assertThat(middleRelations.get(0).getSortNo()).isEqualTo(20);
+
+        QueryWrapper<ItemAssemblyRelation> topRelationQw = new QueryWrapper<>();
+        topRelationQw.eq("parent_item_id", currentTop.getId());
+        List<ItemAssemblyRelation> topRelations = assemblyRelationMapper.selectList(topRelationQw);
+        assertThat(topRelations).hasSize(1);
+        assertThat(topRelations.get(0).getChildItemId()).isEqualTo(currentMiddle.getId());
+        assertThat(topRelations.get(0).getChildQtyPerParent()).isEqualTo(2.0);
+        assertThat(topRelations.get(0).getSortNo()).isEqualTo(40);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
-    void repeatQuoteSkipsHistoricalAssemblyParent() {
+    void repeatQuoteSkipsAssemblyWhenCurrentChildIsMissing() {
         String customerName = "组合重复客户-" + System.nanoTime();
 
         OrderRfq historicalOrder = createOrder("ASSY-HIST");
@@ -227,8 +338,8 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(saved.getFinalUnitPrice()).isNull();
         assertThat(saved.getStatus()).isEqualTo("待核价");
         List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
-        assertThat(skippedItems).extracting(row -> row.get("reason"))
-                .contains("历史重复件为组合件，请手动建立子件关系后核价");
+        assertThat(skippedItems).extracting(row -> row.get("reason").toString())
+                .anyMatch(reason -> reason.contains("缺少子件"));
     }
 
     private OrderRfq createOrder(String prefix) {
@@ -265,10 +376,14 @@ class AssemblyWorkflowIntegrationTests {
     }
 
     private QuoteSubmitReq.AssemblyChildDTO child(ItemQuoteVersion parent, ItemQuoteVersion child, double qtyPerParent) {
+        return child(parent, child, qtyPerParent, 10);
+    }
+
+    private QuoteSubmitReq.AssemblyChildDTO child(ItemQuoteVersion parent, ItemQuoteVersion child, double qtyPerParent, int sortNo) {
         QuoteSubmitReq.AssemblyChildDTO dto = new QuoteSubmitReq.AssemblyChildDTO();
         dto.setChildItemId(child.getId());
         dto.setQtyPerParent(qtyPerParent);
-        dto.setSortNo(10);
+        dto.setSortNo(sortNo);
         return dto;
     }
 

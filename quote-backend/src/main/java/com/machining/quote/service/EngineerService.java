@@ -635,8 +635,43 @@ public class EngineerService {
 
         List<Map<String, Object>> appliedItems = new ArrayList<>();
         List<Map<String, Object>> skippedItems = new ArrayList<>();
+        Map<String, ItemQuoteVersion> currentItemByKey = buildCurrentItemByKey(currentItems);
+        Set<Integer> handledItemIds = new HashSet<>();
+        Set<Integer> visitingItemIds = new HashSet<>();
 
         for (ItemQuoteVersion item : currentItems) {
+            RepeatSource source = repeatSources.get(itemKey(item));
+            if (source == null) {
+                continue;
+            }
+            if (!hasDrawing(item)) {
+                skippedItems.add(buildSkipInfo(item, "当前零件无图，暂不自动核价"));
+                handledItemIds.add(item.getId());
+                continue;
+            }
+            if (item.getFinalUnitPrice() != null) {
+                skippedItems.add(buildSkipInfo(item, "当前零件已有报价，未覆盖"));
+                handledItemIds.add(item.getId());
+                continue;
+            }
+
+            String skippedReason = applyRepeatQuoteRecursive(
+                    source,
+                    item,
+                    currentItemByKey,
+                    handledItemIds,
+                    visitingItemIds,
+                    appliedItems);
+            if (skippedReason != null) {
+                skippedItems.add(buildSkipInfo(item, skippedReason));
+                handledItemIds.add(item.getId());
+            }
+        }
+
+        for (ItemQuoteVersion item : currentItems) {
+            if (handledItemIds.contains(item.getId())) {
+                continue;
+            }
             RepeatSource source = repeatSources.get(itemKey(item));
             if (source == null) {
                 skippedItems.add(buildSkipInfo(item, "未找到同客户已提单历史重复件"));
@@ -650,23 +685,6 @@ public class EngineerService {
                 skippedItems.add(buildSkipInfo(item, "当前零件已有报价，未覆盖"));
                 continue;
             }
-
-            ItemQuoteVersion sourceItem = source.item();
-            if (QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(sourceItem.getQuoteMode()))) {
-                skippedItems.add(buildSkipInfo(item, "历史重复件为组合件，请手动建立子件关系后核价"));
-                continue;
-            }
-            item.setMaterialName(isBlank(item.getMaterialName()) ? sourceItem.getMaterialName() : item.getMaterialName());
-            item.setSurfaceTreatment(isBlank(item.getSurfaceTreatment()) ? sourceItem.getSurfaceTreatment() : item.getSurfaceTreatment());
-
-            Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
-            List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
-            saveCalculatedQuote(item, materialData, processRoute, sourceItem.getPartNetWeight());
-
-            Map<String, Object> applied = buildRepeatItemInfo(item, source);
-            applied.put("finalUnitPrice", item.getFinalUnitPrice());
-            applied.put("finalTotalPrice", item.getFinalTotalPrice());
-            appliedItems.add(applied);
         }
 
         if (!appliedItems.isEmpty()) {
@@ -680,6 +698,131 @@ public class EngineerService {
         result.put("skippedCount", skippedItems.size());
         result.put("appliedItems", appliedItems);
         result.put("skippedItems", skippedItems);
+        return result;
+    }
+
+    private String applyRepeatQuoteRecursive(RepeatSource source,
+                                             ItemQuoteVersion currentItem,
+                                             Map<String, ItemQuoteVersion> currentItemByKey,
+                                             Set<Integer> handledItemIds,
+                                             Set<Integer> visitingItemIds,
+                                             List<Map<String, Object>> appliedItems) {
+        if (source == null || source.item() == null || currentItem == null || currentItem.getId() == null) {
+            return "历史重复件不存在，需手动补齐";
+        }
+        if (handledItemIds.contains(currentItem.getId())) {
+            return null;
+        }
+        if (!hasDrawing(currentItem)) {
+            return "当前零件无图，暂不自动核价";
+        }
+        if (currentItem.getFinalUnitPrice() != null) {
+            handledItemIds.add(currentItem.getId());
+            return null;
+        }
+        if (!visitingItemIds.add(currentItem.getId())) {
+            return "组合件关系存在循环引用，需手动补齐";
+        }
+
+        try {
+            ItemQuoteVersion sourceItem = source.item();
+            if (QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(sourceItem.getQuoteMode()))) {
+                return applyRepeatAssemblyQuote(source, currentItem, currentItemByKey, handledItemIds, visitingItemIds, appliedItems);
+            }
+            if (!hasReusableQuote(sourceItem)) {
+                return "历史重复件缺少可复用核价结果，需手动补齐";
+            }
+            applyRepeatNormalQuote(source, currentItem, handledItemIds, appliedItems);
+            return null;
+        } finally {
+            visitingItemIds.remove(currentItem.getId());
+        }
+    }
+
+    private String applyRepeatAssemblyQuote(RepeatSource source,
+                                            ItemQuoteVersion currentParent,
+                                            Map<String, ItemQuoteVersion> currentItemByKey,
+                                            Set<Integer> handledItemIds,
+                                            Set<Integer> visitingItemIds,
+                                            List<Map<String, Object>> appliedItems) {
+        ItemQuoteVersion sourceParent = source.item();
+        List<ItemAssemblyRelation> historicalRelations = listRelationsByParent(sourceParent.getId());
+        if (historicalRelations.isEmpty()) {
+            return "历史组合件缺少子件关系，需手动补齐";
+        }
+
+        List<QuoteSubmitReq.AssemblyChildDTO> currentChildren = new ArrayList<>();
+        for (ItemAssemblyRelation historicalRelation : historicalRelations) {
+            ItemQuoteVersion historicalChild = itemMapper.selectById(historicalRelation.getChildItemId());
+            if (historicalChild == null) {
+                return "历史组合件子件不存在，需手动补齐";
+            }
+
+            ItemQuoteVersion currentChild = currentItemByKey.get(itemKey(historicalChild));
+            if (currentChild == null) {
+                return "缺少子件 " + itemLabel(historicalChild) + "，需手动补齐";
+            }
+
+            String skippedReason = applyRepeatQuoteRecursive(
+                    new RepeatSource(source.order(), historicalChild),
+                    currentChild,
+                    currentItemByKey,
+                    handledItemIds,
+                    visitingItemIds,
+                    appliedItems);
+            if (skippedReason != null) {
+                return "子件 " + itemLabel(historicalChild) + " " + skippedReason;
+            }
+            if (currentChild.getFinalUnitPrice() == null) {
+                return "子件 " + itemLabel(historicalChild) + " 尚未核价，需手动补齐";
+            }
+
+            QuoteSubmitReq.AssemblyChildDTO child = new QuoteSubmitReq.AssemblyChildDTO();
+            child.setChildItemId(currentChild.getId());
+            child.setQtyPerParent(historicalRelation.getChildQtyPerParent());
+            child.setSortNo(historicalRelation.getSortNo());
+            currentChildren.add(child);
+        }
+
+        saveAssemblyQuote(currentParent, sourceParent.getAssemblyFee(), currentChildren);
+        addAppliedRepeatItem(currentParent, source, handledItemIds, appliedItems);
+        return null;
+    }
+
+    private void applyRepeatNormalQuote(RepeatSource source,
+                                        ItemQuoteVersion currentItem,
+                                        Set<Integer> handledItemIds,
+                                        List<Map<String, Object>> appliedItems) {
+        ItemQuoteVersion sourceItem = source.item();
+        currentItem.setMaterialName(isBlank(currentItem.getMaterialName()) ? sourceItem.getMaterialName() : currentItem.getMaterialName());
+        currentItem.setSurfaceTreatment(isBlank(currentItem.getSurfaceTreatment()) ? sourceItem.getSurfaceTreatment() : currentItem.getSurfaceTreatment());
+
+        Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
+        List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
+        saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight());
+        addAppliedRepeatItem(currentItem, source, handledItemIds, appliedItems);
+    }
+
+    private void addAppliedRepeatItem(ItemQuoteVersion item,
+                                      RepeatSource source,
+                                      Set<Integer> handledItemIds,
+                                      List<Map<String, Object>> appliedItems) {
+        handledItemIds.add(item.getId());
+        Map<String, Object> applied = buildRepeatItemInfo(item, source);
+        applied.put("finalUnitPrice", item.getFinalUnitPrice());
+        applied.put("finalTotalPrice", item.getFinalTotalPrice());
+        applied.put("quoteMode", normalizeQuoteMode(item.getQuoteMode()));
+        appliedItems.add(applied);
+    }
+
+    private Map<String, ItemQuoteVersion> buildCurrentItemByKey(List<ItemQuoteVersion> currentItems) {
+        Map<String, ItemQuoteVersion> result = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : currentItems) {
+            String key = itemKey(item);
+            if (!key.startsWith("||")) {
+                result.putIfAbsent(key, item);
+            }
+        }
         return result;
     }
 
