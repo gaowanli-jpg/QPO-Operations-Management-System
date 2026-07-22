@@ -77,4 +77,13 @@ describe('QPO Stage 5 engineering setup redesign', () => {
     expect(source).toContain('仅预览')
     expect(source).toContain('完整零件清单')
   })
+
+  test('describes repeat recommendations by part number and version instead of same customer', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
+
+    expect(source).not.toContain('同客户已提单历史重复件')
+    expect(source).not.toContain('同客户')
+    expect(source).toContain('图号和版本')
+    expect(source).toContain('已提单历史重复件')
+  })
 })

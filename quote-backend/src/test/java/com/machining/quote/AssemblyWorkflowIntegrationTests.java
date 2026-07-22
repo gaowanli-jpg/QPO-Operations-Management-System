@@ -2,6 +2,7 @@ package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMarkupFee;
@@ -204,10 +205,10 @@ class AssemblyWorkflowIntegrationTests {
         orderMapper.updateById(historicalOrder);
         ItemQuoteVersion historicalChild = createPendingItem(historicalOrder, "H-CHILD-REUSE", 2);
         submitNormalQuoteWithBaseCost(historicalChild, 10.0);
-        historicalChild = itemMapper.selectById(historicalChild.getId());
+        historicalChild = markItemReleased(historicalChild);
         ItemQuoteVersion historicalParent = createPendingItem(historicalOrder, "H-PARENT-REUSE", 1);
         submitAssembly(historicalParent, 30.0, child(historicalParent, historicalChild, 2.5, 30));
-        historicalParent = itemMapper.selectById(historicalParent.getId());
+        historicalParent = markItemReleased(historicalParent);
 
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(historicalOrder.getId());
@@ -256,13 +257,13 @@ class AssemblyWorkflowIntegrationTests {
         orderMapper.updateById(historicalOrder);
         ItemQuoteVersion historicalLeaf = createPendingItem(historicalOrder, "N-LEAF", 4);
         submitNormalQuoteWithBaseCost(historicalLeaf, 12.0);
-        historicalLeaf = itemMapper.selectById(historicalLeaf.getId());
+        historicalLeaf = markItemReleased(historicalLeaf);
         ItemQuoteVersion historicalMiddle = createPendingItem(historicalOrder, "N-MID", 2);
         submitAssembly(historicalMiddle, 6.0, child(historicalMiddle, historicalLeaf, 3, 20));
-        historicalMiddle = itemMapper.selectById(historicalMiddle.getId());
+        historicalMiddle = markItemReleased(historicalMiddle);
         ItemQuoteVersion historicalTop = createPendingItem(historicalOrder, "N-TOP", 1);
         submitAssembly(historicalTop, 9.0, child(historicalTop, historicalMiddle, 2, 40));
-        historicalTop = itemMapper.selectById(historicalTop.getId());
+        historicalTop = markItemReleased(historicalTop);
 
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(historicalOrder.getId());
@@ -313,9 +314,10 @@ class AssemblyWorkflowIntegrationTests {
         historicalOrder.setCustomerName(customerName);
         historicalOrder.setStatus("已生成提单");
         orderMapper.updateById(historicalOrder);
-        ItemQuoteVersion historicalChild = createQuotedItem(historicalOrder, "H-CHILD", 2, 10.0);
+        ItemQuoteVersion historicalChild = markItemReleased(createQuotedItem(historicalOrder, "H-CHILD", 2, 10.0));
         ItemQuoteVersion historicalParent = createPendingItem(historicalOrder, "H-PARENT", 1);
         submitAssembly(historicalParent, 30.0, child(historicalParent, historicalChild, 1));
+        historicalParent = markItemReleased(historicalParent);
 
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setRfqId(historicalOrder.getId());
@@ -351,6 +353,43 @@ class AssemblyWorkflowIntegrationTests {
                 .isEmpty();
     }
 
+    @Test
+    void repeatQuoteReusesReleasedHistoricalAssemblyAcrossCustomersWithoutDeliveryTickets() {
+        resetMarkupFeesForAssemblyTest();
+
+        OrderRfq historicalOrder = createOrder("ASSY-REL-HIST");
+        historicalOrder.setCustomerName("历史组合客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.updateById(historicalOrder);
+        ItemQuoteVersion historicalChild = createPendingItem(historicalOrder, "REL-ASSY-CHILD", 2);
+        submitNormalQuoteWithBaseCost(historicalChild, 18.0);
+        historicalChild = markItemReleased(historicalChild);
+        ItemQuoteVersion historicalParent = createPendingItem(historicalOrder, "REL-ASSY-PARENT", 1);
+        submitAssembly(historicalParent, 25.0, child(historicalParent, historicalChild, 2, 20));
+        historicalParent = markItemReleased(historicalParent);
+
+        OrderRfq currentOrder = createOrder("ASSY-REL-CUR");
+        currentOrder.setCustomerName("当前组合客户");
+        orderMapper.updateById(currentOrder);
+        ItemQuoteVersion currentChild = createPendingItem(currentOrder, historicalChild.getPartNo(), 2);
+        ItemQuoteVersion currentParent = createPendingItem(currentOrder, historicalParent.getPartNo(), 1);
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion savedChild = itemMapper.selectById(currentChild.getId());
+        ItemQuoteVersion savedParent = itemMapper.selectById(currentParent.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(2);
+        assertThat(savedChild.getFinalUnitPrice()).isNotNull();
+        assertThat(savedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
+        assertThat(savedParent.getAssemblyFee()).isEqualTo(25.0);
+
+        QueryWrapper<ItemAssemblyRelation> relationQw = new QueryWrapper<>();
+        relationQw.eq("parent_item_id", currentParent.getId());
+        List<ItemAssemblyRelation> relations = assemblyRelationMapper.selectList(relationQw);
+        assertThat(relations).hasSize(1);
+        assertThat(relations.get(0).getChildItemId()).isEqualTo(currentChild.getId());
+    }
+
     private OrderRfq createOrder(String prefix) {
         OrderRfq order = new OrderRfq();
         order.setRfqNo(prefix + "-" + System.nanoTime());
@@ -381,6 +420,13 @@ class AssemblyWorkflowIntegrationTests {
         item.setFinalTotalPrice(unitPrice * qty);
         item.setStatus("已报价");
         itemMapper.updateById(item);
+        return itemMapper.selectById(item.getId());
+    }
+
+    private ItemQuoteVersion markItemReleased(ItemQuoteVersion item) {
+        ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+        saved.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
+        itemMapper.updateById(saved);
         return itemMapper.selectById(item.getId());
     }
 

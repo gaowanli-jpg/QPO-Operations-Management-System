@@ -684,7 +684,7 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
         historicalItem.setFinalUnitPrice(20.0);
         historicalItem.setFinalTotalPrice(20.0);
-        historicalItem.setStatus("已生成提单");
+        historicalItem.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         itemMapper.insert(historicalItem);
 
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
@@ -731,6 +731,153 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    void repeatQuoteReusesReleasedHistoryAcrossCustomersByPartVersionOnly() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-CROSS-" + System.nanoTime());
+        historicalOrder.setCustomerName("历史客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        releasedReusableItem(historicalOrder, "CROSS-100", "A", 20.0);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-CROSS-" + System.nanoTime());
+        currentOrder.setCustomerName("当前客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "CROSS-100", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(saved.getFinalUnitPrice()).isNotNull();
+        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+    }
+
+    @Test
+    void repeatQuoteIgnoresNonReleasedHistoryEvenWhenDeliveryTicketExists() {
+        String customerName = "非已提单重复客户-" + System.nanoTime();
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-NON-REL-" + System.nanoTime());
+        historicalOrder.setCustomerName(customerName);
+        historicalOrder.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = reusableItem(historicalOrder, "NONREL-100", "A", 20.0, QuoteStatusWorkflow.QUOTED);
+
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setRfqId(historicalOrder.getId());
+        ticket.setItemId(historicalItem.getId());
+        ticket.setPartNo(historicalItem.getPartNo());
+        ticket.setVersion(historicalItem.getVersion());
+        ticket.setQty(1);
+        ticket.setArrangeType("计划");
+        ticketMapper.insert(ticket);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-NON-REL-" + System.nanoTime());
+        currentOrder.setCustomerName(customerName);
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "NONREL-100", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(0);
+        assertThat(saved.getFinalUnitPrice()).isNull();
+        assertThat(saved.getStatus()).isEqualTo("待核价");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
+        assertThat(skippedItems).extracting(row -> row.get("reason").toString())
+                .contains("未找到已提单历史重复件");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void repeatAnalysisUsesNewestReleasedHistoryForSamePartVersion() {
+        OrderRfq olderOrder = new OrderRfq();
+        olderOrder.setRfqNo("HIST-OLDER-" + System.nanoTime());
+        olderOrder.setCustomerName("旧客户");
+        olderOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(olderOrder);
+        ItemQuoteVersion older = releasedReusableItem(olderOrder, "LATEST-100", "A", 10.0);
+
+        OrderRfq newerOrder = new OrderRfq();
+        newerOrder.setRfqNo("HIST-NEWER-" + System.nanoTime());
+        newerOrder.setCustomerName("新客户");
+        newerOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(newerOrder);
+        ItemQuoteVersion newer = releasedReusableItem(newerOrder, "LATEST-100", "A", 30.0);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-LATEST-" + System.nanoTime());
+        currentOrder.setCustomerName("当前客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        pendingItem(currentOrder, "LATEST-100", "A");
+
+        Map<String, Object> result = engineerService.analyzeRepeatOrder(currentOrder.getId());
+
+        assertThat(result.get("repeatCount")).isEqualTo(1);
+        List<Map<String, Object>> repeatItems = (List<Map<String, Object>>) result.get("repeatItems");
+        Map<String, Object> row = repeatItems.get(0);
+        assertThat(row.get("sourceItemId")).isEqualTo(newer.getId());
+        assertThat(row.get("sourceItemId")).isNotEqualTo(older.getId());
+        assertThat(row.get("sourceFinalUnitPrice")).isEqualTo(30.0);
+    }
+
+    @Test
+    void repeatQuoteBatchesLargeCurrentPartVersionSets() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-BATCH-" + System.nanoTime());
+        historicalOrder.setCustomerName("批量历史客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-BATCH-" + System.nanoTime());
+        currentOrder.setCustomerName("批量当前客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+
+        int itemCount = 505;
+        for (int i = 0; i < itemCount; i++) {
+            String partNo = "BATCH-" + i;
+            releasedReusableItem(historicalOrder, partNo, "A", 20.0 + i);
+            pendingItem(currentOrder, partNo, "A");
+        }
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        assertThat(result.get("appliedCount")).isEqualTo(itemCount);
+    }
+
+    @Test
+    void repeatSourceImplementationUsesReleasedItemLookupWithoutDeliveryTicketCandidatePath() throws Exception {
+        String service = source("src/main/java/com/machining/quote/service/EngineerService.java");
+        String repeatMethod = methodBody(service, "private Map<String, RepeatSource> findRepeatSources", "private boolean hasReusableQuote");
+
+        assertThat(repeatMethod)
+                .as("重复件候选入口应直接查 item_quote_version，不能再依赖 order_delivery_ticket")
+                .doesNotContain("OrderDeliveryTicket")
+                .doesNotContain("ticketMapper");
+        assertThat(repeatMethod)
+                .as("重复件候选不应使用 QueryWrapper OR 拼接大量图号版本条件")
+                .doesNotContain(".or(");
+        assertThat(service)
+                .as("当前订单图号版本集合需要固定批次拆分，避免单条 SQL 参数过长")
+                .contains("REPEAT_SOURCE_KEY_BATCH_SIZE");
+
+        String mapper = source("src/main/java/com/machining/quote/mapper/ItemQuoteVersionMapper.java");
+        String provider = optionalSource("src/main/java/com/machining/quote/mapper/RepeatQuoteSourceSqlProvider.java");
+        String repeatSqlSource = mapper + "\n" + provider;
+        assertThat(repeatSqlSource)
+                .contains("selectLatestReleasedRepeatSources")
+                .contains("JOIN LATERAL")
+                .contains("VALUES");
+    }
+
+    @Test
     void repeatQuoteApplicationDoesNotCompleteOrderAutomatically() {
         String customerName = "重复审核客户-" + System.nanoTime();
 
@@ -752,7 +899,7 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
         historicalItem.setFinalUnitPrice(20.0);
         historicalItem.setFinalTotalPrice(20.0);
-        historicalItem.setStatus("已生成提单");
+        historicalItem.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         itemMapper.insert(historicalItem);
 
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
@@ -807,6 +954,41 @@ class CoreWorkflowIntegrationTests {
         item.setFinalUnitPrice(10.0);
         item.setFinalTotalPrice(10.0);
         item.setStatus("已报价");
+        itemMapper.insert(item);
+        return itemMapper.selectById(item.getId());
+    }
+
+    private ItemQuoteVersion pendingItem(OrderRfq order, String partNo, String version) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo(partNo);
+        item.setVersion(version);
+        item.setDescription(partNo + "描述");
+        item.setQty(1);
+        item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
+        item.setStatus("待核价");
+        itemMapper.insert(item);
+        return itemMapper.selectById(item.getId());
+    }
+
+    private ItemQuoteVersion releasedReusableItem(OrderRfq order, String partNo, String version, double unitPrice) {
+        return reusableItem(order, partNo, version, unitPrice, QuoteStatusWorkflow.ITEM_RELEASED);
+    }
+
+    private ItemQuoteVersion reusableItem(OrderRfq order, String partNo, String version, double unitPrice, String status) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(order.getId());
+        item.setPartNo(partNo);
+        item.setVersion(version);
+        item.setDescription(partNo + "历史描述");
+        item.setQty(1);
+        item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
+        item.setMaterialName("45#钢");
+        item.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", unitPrice));
+        item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
+        item.setFinalUnitPrice(unitPrice);
+        item.setFinalTotalPrice(unitPrice);
+        item.setStatus(status);
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
     }
@@ -884,5 +1066,19 @@ class CoreWorkflowIntegrationTests {
 
     private String source(String relativePath) throws Exception {
         return Files.readString(Path.of(relativePath), StandardCharsets.UTF_8);
+    }
+
+    private String optionalSource(String relativePath) throws Exception {
+        Path path = Path.of(relativePath);
+        return Files.exists(path) ? Files.readString(path, StandardCharsets.UTF_8) : "";
+    }
+
+    private String methodBody(String source, String startToken, String endToken) {
+        int start = source.indexOf(startToken);
+        if (start < 0) {
+            return "";
+        }
+        int end = source.indexOf(endToken, start);
+        return end < 0 ? source.substring(start) : source.substring(start, end);
     }
 }
