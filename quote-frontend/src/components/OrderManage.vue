@@ -124,6 +124,7 @@
             :pager-count="7"
             :total="total"
             background
+            @size-change="page = 1"
           />
         </div>
       </template>
@@ -180,6 +181,7 @@
                 :total="detailItemTotal"
                 background
                 :pager-count="7"
+                @size-change="detailItemPagination.page = 1"
               />
             </div>
           </el-tab-pane>
@@ -204,6 +206,7 @@
                 :total="detailTicketTotal"
                 background
                 :pager-count="7"
+                @size-change="detailTicketPagination.page = 1"
               />
             </div>
           </el-tab-pane>
@@ -229,6 +232,7 @@
                 :total="detailProcessSheetTotal"
                 background
                 :pager-count="7"
+                @size-change="detailProcessSheetPagination.page = 1"
               />
             </div>
           </el-tab-pane>

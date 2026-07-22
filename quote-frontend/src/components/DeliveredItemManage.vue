@@ -165,6 +165,7 @@
           :pager-count="7"
           :total="total"
           background
+          @size-change="page = 1"
         />
       </div>
     </section>

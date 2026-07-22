@@ -54,4 +54,20 @@ describe('pagination consistency', () => {
     expect(itemPricing).toContain('pricingListPagination')
     expect(itemPricing).toContain('assemblyPickerPagination')
   })
+
+  test('all pageable controls reset to first page when page size changes', () => {
+    const vueFiles = collectVueFiles(srcDir)
+    const paginationBlocks = vueFiles.flatMap((file) => {
+      const content = readFileSync(file, 'utf8')
+      return [...content.matchAll(/<el-pagination[\s\S]*?\/>/g)].map((match) => ({
+        file,
+        block: match[0]
+      }))
+    })
+
+    expect(paginationBlocks.length).toBeGreaterThan(0)
+    for (const { file, block } of paginationBlocks) {
+      expect(block, file).toContain('@size-change=')
+    }
+  })
 })
