@@ -57,12 +57,24 @@ describe('QPO Stage 5 engineering setup redesign', () => {
     expect(source).toContain('await fetchOrderData()')
   })
 
-  test('surfaces assembly repeat quote skips as persistent manual-fix warnings', () => {
+  test('keeps GlobalSetup as preview-only without repeat quote application', () => {
     const source = readSource('components', 'GlobalSetup.vue')
 
-    expect(source).toContain('skippedItems')
-    expect(source).toContain('需手动补齐')
-    expect(source).toContain('showClose: true')
-    expect(source).toContain('duration: 0')
+    expect(source).not.toContain('applyRepeatQuotes')
+    expect(source).not.toContain('manualRepeatSkipReasons')
+    expect(source).not.toContain('notifyManualRepeatQuoteSkips')
+    expect(source).not.toContain('skippedItems')
+    expect(source).not.toContain('需手动补齐')
+    expect(source).not.toContain('showClose: true')
+    expect(source).not.toContain('duration: 0')
+  })
+
+  test('shows setup summary as a limited item preview with full order count', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
+
+    expect(source).toContain('itemCount')
+    expect(source).toContain('previewLimit')
+    expect(source).toContain('仅预览')
+    expect(source).toContain('完整零件清单')
   })
 })

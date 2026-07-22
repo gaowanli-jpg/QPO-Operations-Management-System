@@ -340,6 +340,12 @@ class AssemblyWorkflowIntegrationTests {
         List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
         assertThat(skippedItems).extracting(row -> row.get("reason").toString())
                 .anyMatch(reason -> reason.contains("缺少子件"));
+
+        QueryWrapper<ItemAssemblyRelation> relationQw = new QueryWrapper<>();
+        relationQw.eq("parent_item_id", currentParent.getId());
+        assertThat(assemblyRelationMapper.selectList(relationQw))
+                .as("缺少当前订单子件时，重复组合件父件不能写入关系表")
+                .isEmpty();
     }
 
     private OrderRfq createOrder(String prefix) {
