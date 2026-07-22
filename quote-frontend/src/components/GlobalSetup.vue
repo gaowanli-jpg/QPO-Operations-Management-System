@@ -124,7 +124,7 @@
         <div class="erp-section-body">
           <el-alert
             v-if="repeatAnalysis?.repeatCount > 0"
-            title="已根据同客户已提单历史重复件推荐默认材料与工艺路线，可继续手动调整后覆盖到本单其他零件。"
+            title="已根据图号和版本匹配已提单历史重复件推荐默认材料与工艺路线，可继续手动调整后覆盖到本单其他零件。"
             type="success"
             :closable="false"
             show-icon
