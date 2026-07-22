@@ -6,6 +6,7 @@ import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -15,6 +16,7 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderItemPageService;
+import com.machining.quote.service.OrderManagementService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,8 @@ class LargeOrderItemPagingTest {
     private InternalTargetLeadTimeService internalTargetLeadTimeService;
     @Autowired
     private DeliveryService deliveryService;
+    @Autowired
+    private OrderManagementService orderManagementService;
     @Autowired
     private EngineerController engineerController;
     @Autowired
@@ -236,13 +240,79 @@ class LargeOrderItemPagingTest {
         assertThat(controller)
                 .contains("pageOrderItems(rfqId, page, pageSize)")
                 .contains("pageOrderTickets(rfqId, page, pageSize)")
-                .contains("pageOrderProcessSheets(rfqId, page, pageSize)")
+                .contains("pageDynamicProcessSheets(rfqId, page, pageSize)")
                 .contains("getDrawingSummary(rfqId)");
         assertThat(service)
                 .contains("public PageResult<ItemQuoteVersion> pageOrderItems")
                 .contains("public PageResult<OrderDeliveryTicket> pageOrderTickets")
-                .contains("public PageResult<ProcessSheetDTO> pageOrderProcessSheets")
+                .contains("public PageResult<ProcessSheetDTO> pageDynamicProcessSheets")
                 .contains("public Map<String, Object> getDrawingSummary");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void orderBaseDetailDoesNotEmbedWholeDetailLists() {
+        OrderRfq order = createOrder("ORDER-DETAIL-PAGED");
+        createItem(order, "DETAIL-01", QuoteStatusWorkflow.PRICED, 10.0, "/detail-1.pdf");
+        ItemQuoteVersion missing = createItem(order, "DETAIL-02", QuoteStatusWorkflow.UNPRICED, null, null);
+        createTicket(order, missing, 1);
+
+        Map<String, Object> detail = orderManagementService.getOrderDetail(order.getId());
+
+        assertThat(detail)
+                .containsKeys("summary", "orderInfo", "fileRoot", "drawingSummary")
+                .doesNotContainKeys("itemList", "ticketList", "processSheetList", "missingDrawingFiles");
+        Map<String, Object> summary = (Map<String, Object>) detail.get("summary");
+        Map<String, Object> drawingSummary = (Map<String, Object>) detail.get("drawingSummary");
+        assertThat(summary)
+                .containsEntry("itemCount", 2)
+                .containsEntry("missingDrawingCount", 1)
+                .containsEntry("ticketCount", 1)
+                .containsEntry("processSheetCount", 1);
+        assertThat(drawingSummary)
+                .containsEntry("itemCount", 2L)
+                .containsEntry("boundDrawingCount", 1L)
+                .containsEntry("missingDrawingCount", 1L);
+    }
+
+    @Test
+    void orderDetailTabsUsePagedQueriesAndDrawingSummaryUsesAggregates() throws Exception {
+        OrderRfq order = createOrder("ORDER-TAB-PAGED");
+        ItemQuoteVersion first = createItem(order, "TAB-01", QuoteStatusWorkflow.PRICED, 10.0, "/tab-1.pdf");
+        ItemQuoteVersion second = createItem(order, "TAB-02", QuoteStatusWorkflow.PRICED, 11.0, null);
+        createTicket(order, first, 1);
+        createTicket(order, second, 1);
+
+        PageResult<ItemQuoteVersion> itemPage = orderManagementService.pageOrderItems(order.getId(), 2, 1);
+        PageResult<OrderDeliveryTicket> ticketPage = orderManagementService.pageOrderTickets(order.getId(), 2, 1);
+        PageResult<ProcessSheetDTO> processSheetPage = orderManagementService.pageDynamicProcessSheets(order.getId(), 2, 1);
+
+        assertThat(itemPage.getTotal()).isEqualTo(2);
+        assertThat(itemPage.getRecords()).extracting(ItemQuoteVersion::getPartNo).containsExactly("TAB-02");
+        assertThat(ticketPage.getTotal()).isEqualTo(2);
+        assertThat(ticketPage.getRecords()).extracting(OrderDeliveryTicket::getPartNo).containsExactly("TAB-02");
+        assertThat(processSheetPage.getTotal()).isEqualTo(2);
+        assertThat(processSheetPage.getRecords()).extracting(ProcessSheetDTO::getPartNo).containsExactly("TAB-02");
+
+        String service = source("service", "OrderManagementService.java");
+        assertThat(method(service, "getOrderDetail"))
+                .doesNotContain("detail.put(\"itemList\"")
+                .doesNotContain("detail.put(\"ticketList\"")
+                .doesNotContain("detail.put(\"processSheetList\"");
+        assertThat(method(service, "pageOrderItems"))
+                .contains("itemMapper.selectCount")
+                .contains("LIMIT")
+                .doesNotContain("pageRows(listItems");
+        assertThat(method(service, "pageOrderTickets"))
+                .contains("ticketMapper.selectCount")
+                .contains("LIMIT")
+                .doesNotContain("pageRows(listTickets");
+        assertThat(method(service, "pageDynamicProcessSheets"))
+                .contains("deliveryService.pageProcessSheets")
+                .doesNotContain("pageRows(listProcessSheets");
+        assertThat(method(service, "getDrawingSummary"))
+                .contains("itemMapper.selectMaps")
+                .doesNotContain("listItems(rfqId)");
     }
 
     @Test

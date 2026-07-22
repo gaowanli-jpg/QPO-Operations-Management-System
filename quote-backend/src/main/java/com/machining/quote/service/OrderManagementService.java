@@ -168,38 +168,69 @@ public class OrderManagementService {
         Map<String, Object> detail = new HashMap<>();
         detail.put("summary", buildSummary(order));
         detail.put("orderInfo", order);
-        detail.put("itemList", listItems(rfqId));
-        detail.put("ticketList", listTickets(rfqId));
-        detail.put("processSheetList", listProcessSheets(rfqId));
         detail.put("fileRoot", buildOrderFileRoot(order));
-        detail.put("missingDrawingFiles", listMissingDrawingFiles(listItems(rfqId)));
+        detail.put("drawingSummary", getDrawingSummary(rfqId));
         return detail;
     }
 
     public PageResult<ItemQuoteVersion> pageOrderItems(Integer rfqId, Integer page, Integer pageSize) {
         requireOrder(rfqId);
-        return pageRows(listItems(rfqId), page, pageSize);
+        int safePage = normalizePage(page);
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        long offset = (long) (safePage - 1) * safePageSize;
+        QueryWrapper<ItemQuoteVersion> countQuery = new QueryWrapper<>();
+        countQuery.eq("rfq_id", rfqId);
+        Long total = itemMapper.selectCount(countQuery);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        QueryWrapper<ItemQuoteVersion> pageQuery = new QueryWrapper<>();
+        pageQuery.eq("rfq_id", rfqId)
+                .orderByAsc("id")
+                .last("LIMIT " + safePageSize + " OFFSET " + offset);
+        return PageResult.of(itemMapper.selectList(pageQuery), total, safePage, safePageSize);
     }
 
     public PageResult<OrderDeliveryTicket> pageOrderTickets(Integer rfqId, Integer page, Integer pageSize) {
         requireOrder(rfqId);
-        return pageRows(listTickets(rfqId), page, pageSize);
+        int safePage = normalizePage(page);
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        long offset = (long) (safePage - 1) * safePageSize;
+        QueryWrapper<OrderDeliveryTicket> countQuery = new QueryWrapper<>();
+        countQuery.eq("rfq_id", rfqId);
+        Long total = ticketMapper.selectCount(countQuery);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        QueryWrapper<OrderDeliveryTicket> pageQuery = new QueryWrapper<>();
+        pageQuery.eq("rfq_id", rfqId)
+                .orderByAsc("id")
+                .last("LIMIT " + safePageSize + " OFFSET " + offset);
+        return PageResult.of(ticketMapper.selectList(pageQuery), total, safePage, safePageSize);
     }
 
-    public PageResult<ProcessSheetDTO> pageOrderProcessSheets(Integer rfqId, Integer page, Integer pageSize) {
+    public PageResult<ProcessSheetDTO> pageDynamicProcessSheets(Integer rfqId, Integer page, Integer pageSize) {
         requireOrder(rfqId);
-        return pageRows(listProcessSheets(rfqId), page, pageSize);
+        return deliveryService.pageProcessSheets(rfqId, page, pageSize);
     }
 
     public Map<String, Object> getDrawingSummary(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
-        List<ItemQuoteVersion> items = listItems(rfqId);
-        long boundCount = items.stream().filter(item -> !isBlank(item.getDrawingUrl())).count();
-        long missingCount = items.size() - boundCount;
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.select(
+                "COUNT(*) AS item_count",
+                "SUM(CASE WHEN drawing_url IS NOT NULL AND drawing_url <> '' THEN 1 ELSE 0 END) AS bound_drawing_count",
+                "SUM(CASE WHEN drawing_url IS NULL OR drawing_url = '' THEN 1 ELSE 0 END) AS missing_drawing_count"
+        );
+        qw.eq("rfq_id", rfqId);
+        Map<String, Object> row = itemMapper.selectMaps(qw).stream().findFirst().orElse(Map.of());
+        long itemCount = numberValue(row.get("item_count")).longValue();
+        long boundCount = numberValue(row.get("bound_drawing_count")).longValue();
+        long missingCount = numberValue(row.get("missing_drawing_count")).longValue();
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("rfqId", order.getId());
         summary.put("rfqNo", order.getRfqNo());
-        summary.put("itemCount", items.size());
+        summary.put("itemCount", itemCount);
         summary.put("boundDrawingCount", boundCount);
         summary.put("missingDrawingCount", missingCount);
         summary.put("fileRoot", buildOrderFileRoot(order));
@@ -327,30 +358,9 @@ public class OrderManagementService {
     }
 
     private Map<String, Object> buildSummary(OrderRfq order) {
-        Integer rfqId = order.getId();
-        List<ItemQuoteVersion> items = listItems(rfqId);
-        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
-        List<ProcessSheetDTO> sheets = listProcessSheets(rfqId);
-
-        long quotedCount = items.stream().filter(item -> item.getFinalUnitPrice() != null).count();
-        long missingDrawingCount = items.stream().filter(item -> isBlank(item.getDrawingUrl())).count();
-        int ticketQty = tickets.stream().mapToInt(ticket -> safeInt(ticket.getQty())).sum();
-
-        Map<String, Object> summary = new HashMap<>();
-        summary.put("id", order.getId());
-        summary.put("rfqNo", order.getRfqNo());
-        summary.put("customerName", order.getCustomerName());
-        summary.put("projectName", order.getProjectName());
-        summary.put("status", order.getStatus());
-        summary.put("createdAt", order.getCreatedAt());
-        summary.put("itemCount", items.size());
-        summary.put("quotedCount", quotedCount);
-        summary.put("missingDrawingCount", missingDrawingCount);
-        summary.put("ticketCount", tickets.size());
-        summary.put("ticketQty", ticketQty);
-        summary.put("processSheetCount", sheets.size());
-        summary.put("fileRoot", buildOrderFileRoot(order));
-        return summary;
+        ItemStats itemStats = loadItemStats(List.of(order.getId())).getOrDefault(order.getId(), new ItemStats());
+        TicketStats ticketStats = loadTicketStats(List.of(order.getId())).getOrDefault(order.getId(), new TicketStats());
+        return buildSummary(order, itemStats, ticketStats);
     }
 
     private List<Map<String, Object>> buildSummaries(List<OrderRfq> orders) {

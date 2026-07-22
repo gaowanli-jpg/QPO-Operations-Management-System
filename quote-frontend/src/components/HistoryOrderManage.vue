@@ -117,9 +117,9 @@
           :closable="false"
         />
 
-        <el-tabs class="detail-tabs">
-          <el-tab-pane label="零件明细">
-            <el-table :data="orderDetail.itemList || []" border stripe height="360">
+        <el-tabs v-model="activeDetailTab" class="detail-tabs" @tab-change="handleDetailTabChange">
+          <el-tab-pane label="零件明细" name="items">
+            <el-table :data="detailItemList" border stripe height="360" v-loading="detailItemsLoading">
               <el-table-column prop="partNo" label="图号" min-width="140" fixed show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
@@ -138,10 +138,21 @@
                 </template>
               </el-table-column>
             </el-table>
+            <div class="erp-pagination detail-pagination">
+              <el-pagination
+                v-model:current-page="detailItemPagination.page"
+                v-model:page-size="detailItemPagination.pageSize"
+                :page-sizes="[20, 50, 100]"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="detailItemTotal"
+                background
+                :pager-count="7"
+              />
+            </div>
           </el-tab-pane>
 
-          <el-tab-pane label="提单行">
-            <el-table :data="orderDetail.ticketList || []" border stripe height="320">
+          <el-tab-pane label="提单行" name="tickets">
+            <el-table :data="detailTicketList" border stripe height="320" v-loading="detailTicketsLoading">
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
@@ -151,10 +162,21 @@
               <el-table-column prop="deliveryDate" label="交货日期" width="120" />
               <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
             </el-table>
+            <div class="erp-pagination detail-pagination">
+              <el-pagination
+                v-model:current-page="detailTicketPagination.page"
+                v-model:page-size="detailTicketPagination.pageSize"
+                :page-sizes="[20, 50, 100]"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="detailTicketTotal"
+                background
+                :pager-count="7"
+              />
+            </div>
           </el-tab-pane>
 
-          <el-tab-pane label="工艺表行">
-            <el-table :data="orderDetail.processSheetList || []" border stripe height="320">
+          <el-tab-pane label="工艺表行" name="processSheets">
+            <el-table :data="detailProcessSheetList" border stripe height="320" v-loading="detailProcessSheetsLoading">
               <el-table-column prop="internalProjectNo" label="内部项目号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
@@ -165,6 +187,17 @@
                 <template #default="{ row }">{{ formatRoute(row.processRoute) }}</template>
               </el-table-column>
             </el-table>
+            <div class="erp-pagination detail-pagination">
+              <el-pagination
+                v-model:current-page="detailProcessSheetPagination.page"
+                v-model:page-size="detailProcessSheetPagination.pageSize"
+                :page-sizes="[20, 50, 100]"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="detailProcessSheetTotal"
+                background
+                :pager-count="7"
+              />
+            </div>
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -179,11 +212,11 @@
   </div>
 </template>
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { useAuthStore } from '../stores/authStore'
-import { deleteOrder, getOrder, listOrders } from '../services/orderApi'
+import { deleteOrder, getOrder, listOrderItems, listOrderProcessSheets, listOrderTickets, listOrders } from '../services/orderApi'
 
 const authStore = useAuthStore()
 const orders = ref([])
@@ -196,12 +229,43 @@ const orderDetail = ref(null)
 const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
+const activeDetailTab = ref('items')
+const detailItemList = ref([])
+const detailTicketList = ref([])
+const detailProcessSheetList = ref([])
+const detailItemsLoading = ref(false)
+const detailTicketsLoading = ref(false)
+const detailProcessSheetsLoading = ref(false)
+const detailItemPagination = reactive({ page: 1, pageSize: 20 })
+const detailTicketPagination = reactive({ page: 1, pageSize: 20 })
+const detailProcessSheetPagination = reactive({ page: 1, pageSize: 20 })
+const detailItemTotal = ref(0)
+const detailTicketTotal = ref(0)
+const detailProcessSheetTotal = ref(0)
 const customerPickerVisible = ref(false)
 const canDeleteHistoryOrders = computed(() => authStore.hasPermission('market:order:delete'))
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {
     loadOrders()
+  }
+})
+
+watch(() => [detailItemPagination.page, detailItemPagination.pageSize], () => {
+  if (detailVisible.value && activeDetailTab.value === 'items') {
+    fetchDetailItems()
+  }
+})
+
+watch(() => [detailTicketPagination.page, detailTicketPagination.pageSize], () => {
+  if (detailVisible.value && activeDetailTab.value === 'tickets') {
+    fetchDetailTickets()
+  }
+})
+
+watch(() => [detailProcessSheetPagination.page, detailProcessSheetPagination.pageSize], () => {
+  if (detailVisible.value && activeDetailTab.value === 'processSheets') {
+    fetchDetailProcessSheets()
   }
 })
 
@@ -259,17 +323,103 @@ const handleCustomerClear = () => {
   detailVisible.value = false
 }
 
+const resetDetailPagination = () => {
+  activeDetailTab.value = 'items'
+  detailItemPagination.page = 1
+  detailTicketPagination.page = 1
+  detailProcessSheetPagination.page = 1
+  detailItemList.value = []
+  detailTicketList.value = []
+  detailProcessSheetList.value = []
+  detailItemTotal.value = 0
+  detailTicketTotal.value = 0
+  detailProcessSheetTotal.value = 0
+}
+
 const openDetail = async (row) => {
   detailVisible.value = true
   detailLoading.value = true
+  resetDetailPagination()
   try {
     orderDetail.value = await getOrder(row.id)
+    await fetchCurrentDetailTab()
   } catch (error) {
     console.error(error)
     ElMessage.error('历史订单详情加载失败。')
   } finally {
     detailLoading.value = false
   }
+}
+
+const fetchDetailItems = async () => {
+  const rfqId = orderDetail.value?.orderInfo?.id
+  if (!rfqId) return
+  detailItemsLoading.value = true
+  try {
+    const response = await listOrderItems(rfqId, {
+      page: detailItemPagination.page,
+      pageSize: detailItemPagination.pageSize
+    })
+    detailItemList.value = response.records || []
+    detailItemTotal.value = Number(response.total ?? 0)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('历史订单零件明细加载失败。')
+  } finally {
+    detailItemsLoading.value = false
+  }
+}
+
+const fetchDetailTickets = async () => {
+  const rfqId = orderDetail.value?.orderInfo?.id
+  if (!rfqId) return
+  detailTicketsLoading.value = true
+  try {
+    const response = await listOrderTickets(rfqId, {
+      page: detailTicketPagination.page,
+      pageSize: detailTicketPagination.pageSize
+    })
+    detailTicketList.value = response.records || []
+    detailTicketTotal.value = Number(response.total ?? 0)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('历史订单提单行加载失败。')
+  } finally {
+    detailTicketsLoading.value = false
+  }
+}
+
+const fetchDetailProcessSheets = async () => {
+  const rfqId = orderDetail.value?.orderInfo?.id
+  if (!rfqId) return
+  detailProcessSheetsLoading.value = true
+  try {
+    const response = await listOrderProcessSheets(rfqId, {
+      page: detailProcessSheetPagination.page,
+      pageSize: detailProcessSheetPagination.pageSize
+    })
+    detailProcessSheetList.value = response.records || []
+    detailProcessSheetTotal.value = Number(response.total ?? 0)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('历史订单工艺表行加载失败。')
+  } finally {
+    detailProcessSheetsLoading.value = false
+  }
+}
+
+const fetchCurrentDetailTab = async () => {
+  if (activeDetailTab.value === 'tickets') {
+    await fetchDetailTickets()
+  } else if (activeDetailTab.value === 'processSheets') {
+    await fetchDetailProcessSheets()
+  } else {
+    await fetchDetailItems()
+  }
+}
+
+const handleDetailTabChange = async () => {
+  await fetchCurrentDetailTab()
 }
 
 const deleteHistoryOrder = async (row) => {

@@ -51,6 +51,20 @@ describe('orderApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-management/orders/12')
   })
 
+  test('order detail tabs use independent paged endpoints', async () => {
+    const params = { page: 2, pageSize: 50 }
+
+    await orderApi.listOrderItems(12, params)
+    await orderApi.listOrderTickets(12, params)
+    await orderApi.listOrderProcessSheets(12, params)
+    await orderApi.getOrderDrawingSummary(12)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-management/orders/12/items', { params })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-management/orders/12/tickets', { params })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/order-management/orders/12/process-sheets', { params })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/order-management/orders/12/drawing-summary')
+  })
+
   test('deleteOrder preserves delete files query option', async () => {
     await orderApi.deleteOrder(12, { deleteFiles: true })
 

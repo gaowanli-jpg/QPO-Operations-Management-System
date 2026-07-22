@@ -62,11 +62,11 @@ public class OrderManagementController {
 
     @GetMapping("/orders/{rfqId}/process-sheets")
     @RequirePermission("market:order:view")
-    public PageResult<ProcessSheetDTO> listOrderProcessSheets(
+    public PageResult<ProcessSheetDTO> listDynamicProcessSheets(
             @PathVariable Integer rfqId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.pageOrderProcessSheets(rfqId, page, pageSize);
+        return orderManagementService.pageDynamicProcessSheets(rfqId, page, pageSize);
     }
 
     @GetMapping("/orders/{rfqId}/drawing-summary")

@@ -693,10 +693,12 @@ const canExportPricingSheet = computed(() => !!rfqId.value
   && quoteData.value?.orderInfo?.status === '已核价'
   && pricingItemTotal.value > 0)
 
-const canCompleteQuote = computed(() => !!rfqId.value
-  && !refreshLoading.value
-  && quoteData.value?.orderInfo?.status === '未核价'
-  && pricingItemTotal.value > 0)
+const canCompleteQuote = computed(() => {
+  return !!rfqId.value
+    && !refreshLoading.value
+    && quoteData.value?.orderInfo?.status === '未核价'
+    && pricingItemTotal.value > 0
+})
 
 const canRefreshQuotes = computed(() => !!rfqId.value
   && !!quoteData.value

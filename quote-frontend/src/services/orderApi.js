@@ -19,6 +19,14 @@ export const listOrders = (params = {}) => request('/api/order-management/orders
 
 export const getOrder = (orderId) => request(`/api/order-management/orders/${orderId}`)
 
+export const listOrderItems = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/items`, { params })
+
+export const listOrderTickets = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/tickets`, { params })
+
+export const listOrderProcessSheets = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/process-sheets`, { params })
+
+export const getOrderDrawingSummary = (rfqId) => request(`/api/order-management/orders/${rfqId}/drawing-summary`)
+
 export const deleteOrder = (orderId, { deleteFiles = false } = {}) => request(`/api/order-management/orders/${orderId}`, {
   method: 'DELETE',
   params: { deleteFiles }
