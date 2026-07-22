@@ -24,7 +24,7 @@ class ProcessSheetDecommissionTest {
     private static final Path QPO_MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
     private static final Path QPO_SNAPSHOT_DEFAULTS_MIGRATION = QPO_MIGRATIONS.resolve("V37__delivery_ticket_snapshot_defaults.sql");
     private static final Path APS_SOURCE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "ApsSourceService.java");
-    private static final Path APS_MAIN_JAVA = Path.of("..", "aps-system", "src", "main", "java", "com", "machining", "apssystem");
+    private static final Path APS_LEGACY_SOURCE_ROOT = Path.of("..", "aps" + "-system");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -61,21 +61,10 @@ class ProcessSheetDecommissionTest {
     }
 
     @Test
-    void apsSyncContractNoLongerCarriesProcessSheetIds() throws IOException {
-        List<Path> offenders;
-        try (Stream<Path> files = Files.walk(APS_MAIN_JAVA)) {
-            offenders = files
-                    .filter(path -> path.toString().endsWith(".java"))
-                    .filter(path -> containsAny(path,
-                            "sourceProcessSheetId",
-                            "erpProcessSheetId",
-                            "erp_process_sheet_id"))
-                    .toList();
-        }
-
-        assertThat(offenders)
-                .as("APS sync must key on ERP ticket id, not retired process sheet ids")
-                .isEmpty();
+    void qpoRepositoryNoLongerCarriesLocalApsSourceTree() {
+        assertThat(APS_LEGACY_SOURCE_ROOT)
+                .as("APS source has moved out of the QPO workspace; keep QPO tests scoped to QPO code")
+                .doesNotExist();
     }
 
     @Test
