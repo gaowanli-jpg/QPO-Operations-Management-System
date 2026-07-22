@@ -59,6 +59,9 @@
           <el-table-column prop="wmsProductionOrderNo" label="在产订单号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.wmsProductionOrderNo) }}</template>
           </el-table-column>
+          <el-table-column prop="orderType" label="订单类型" width="110" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.orderType) }}</template>
+          </el-table-column>
           <el-table-column prop="qty" label="数量" width="96" align="right" />
           <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
           <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />

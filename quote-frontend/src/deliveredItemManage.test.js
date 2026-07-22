@@ -26,6 +26,7 @@ describe('DeliveredItemManage foundation page', () => {
       'label="物料号"',
       'label="MES状态"',
       'label="WMS状态"',
+      'label="订单类型"',
       'label="提单数量"',
       'label="客户"',
       'label="RFQ号"',

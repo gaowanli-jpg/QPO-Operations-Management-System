@@ -54,6 +54,9 @@
           <el-table-column label="WMS状态" width="110" align="center">
             <template #default="{ row }"><el-tag :type="statusTagType(row.wmsAllocateStatus)" size="small">{{ statusText(row.wmsAllocateStatus) }}</el-tag></template>
           </el-table-column>
+          <el-table-column prop="orderType" label="订单类型" width="110" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.orderType || '-' }}</template>
+          </el-table-column>
           <el-table-column prop="qty" label="提单数量" width="100" align="right" />
           <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
           <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />

@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     allocation_type VARCHAR(40) NOT NULL,
     qty INTEGER NOT NULL,
     material_no VARCHAR(100),
+    order_type VARCHAR(20),
     part_no VARCHAR(100),
     version VARCHAR(20),
     rfq_no VARCHAR(100),
@@ -210,6 +211,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
 );
 
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS order_type VARCHAR(20);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_name VARCHAR(100);

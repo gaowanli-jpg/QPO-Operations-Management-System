@@ -158,6 +158,7 @@ class WmsAllocationTest {
                     assertThat(row.getVersion()).isEqualTo("A");
                     assertThat(row.getCustomerName()).isEqualTo("ACME");
                     assertThat(row.getInternalProjectNo()).isEqualTo("IP-9");
+                    assertSnapshot(row, "getOrderType", "预测订单");
                     assertSnapshot(row, "getRfqNo", "RFQ-88");
                     assertSnapshot(row, "getCustomerOrderNo", "CO-9");
                     assertSnapshot(row, "getCustomerProjectNo", "CP-9");
@@ -391,6 +392,7 @@ class WmsAllocationTest {
                         "private String allocationType;",
                         "private Integer qty;",
                         "private String materialNo;",
+                        "private String orderType;",
                         "private String partNo;",
                         "private String version;",
                         "private String customerName;",
@@ -420,6 +422,7 @@ class WmsAllocationTest {
                 .as("Each WMS allocation split row must own its immutable display snapshot")
                 .contains(
                         "row.setCustomerOrderNo(ticket.getCustomerOrderNo())",
+                        "row.setOrderType(ticket.getOrderType())",
                         "row.setRfqNo(resolveRfqNo(ticket, order))",
                         "row.setCustomerProjectNo(ticket.getCustomerProjectNo())",
                         "row.setMaterialName(ticket.getMaterialName())",
@@ -464,6 +467,7 @@ class WmsAllocationTest {
         ticket.setVersion("A");
         ticket.setQty(10);
         ticket.setMaterialNo("MAT-001");
+        ticket.setOrderType("预测订单");
         ticket.setInternalProjectNo("IP-9");
         ticket.setRfqNo("RFQ-88");
         ticket.setCustomerName("ACME");

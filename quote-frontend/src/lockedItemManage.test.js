@@ -56,6 +56,7 @@ describe('LockedItemManage guardrails', () => {
       '物料号',
       '分配类型',
       '在产订单号',
+      '订单类型',
       '数量',
       '客户',
       'RFQ号',

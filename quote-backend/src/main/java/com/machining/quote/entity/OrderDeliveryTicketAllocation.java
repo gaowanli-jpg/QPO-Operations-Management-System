@@ -22,6 +22,7 @@ public class OrderDeliveryTicketAllocation {
     private String allocationType;
     private Integer qty;
     private String materialNo;
+    private String orderType;
     private String partNo;
     private String version;
     private String rfqNo;

@@ -28,6 +28,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.allocation_type,
                 alloc.qty,
                 alloc.material_no,
+                COALESCE(alloc.order_type, ticket.order_type, rfq.order_type) AS order_type,
                 alloc.part_no,
                 alloc.version,
                 alloc.internal_project_no,
@@ -49,6 +50,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.updated_at
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
+            LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
             ${ew.customSqlSegment}
             ORDER BY alloc.id DESC
             LIMIT #{limit} OFFSET #{offset}
