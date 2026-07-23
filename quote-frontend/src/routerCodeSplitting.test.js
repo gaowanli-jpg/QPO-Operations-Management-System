@@ -9,6 +9,7 @@ const routerSource = readFileSync(resolve(currentDir, 'router', 'index.js'), 'ut
 const businessRouteComponents = [
   'MarketDashboard',
   'MarketRelease',
+  'DeliveryDocumentManage',
   'QuoteProcess',
   'GlobalSetup',
   'ItemPricing',

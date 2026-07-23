@@ -4,6 +4,7 @@ const CUSTOMER_ENDPOINTS = {
   'market-rfq': '/api/market/rfq/customers',
   'quote-process': '/api/market/quote-process/customers',
   release: '/api/market/release/customers',
+  'delivery-document': '/api/market/delivery-documents/customers',
   'engineer-setup': '/api/engineer/setup/customers',
   'market-order': '/api/order-management/customers',
   'history-order': '/api/order-management/history-orders/customers',

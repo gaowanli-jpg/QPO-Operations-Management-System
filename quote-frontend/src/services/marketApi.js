@@ -17,7 +17,8 @@ export const importRfq = (formData) => multipartPost('/api/market/import-rfq', f
 
 const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',
-  release: '/api/market/release/orders'
+  release: '/api/market/release/orders',
+  'delivery-document': '/api/market/delivery-documents/orders'
 }
 
 export const listMarketOrders = (params = {}, scope) => {
@@ -33,6 +34,18 @@ export const listReleaseItems = (rfqId, params = {}) => request(`/api/market/rel
 export const listTickets = (rfqId, params = {}) => request(`/api/market/tickets/${rfqId}`, { params })
 
 export const listProcessSheets = (rfqId, params = {}) => request(`/api/market/process-sheets/${rfqId}`, { params })
+
+export const getDeliveryDocumentSummary = (rfqId) => request(`/api/market/delivery-documents/summary/${rfqId}`)
+
+export const listDeliveryDocumentTickets = (rfqId, params = {}) => request(
+  `/api/market/delivery-documents/tickets/${rfqId}`,
+  { params }
+)
+
+export const listDeliveryDocumentProcessSheets = (rfqId, params = {}) => request(
+  `/api/market/delivery-documents/process-sheets/${rfqId}`,
+  { params }
+)
 
 export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/market/release/parse-part-selection/${rfqId}`, formData)
 
@@ -58,6 +71,11 @@ export const saveQuoteSheet = (rfqId) => postJson(`/api/market/quote-process/${r
 
 export const downloadMarketExport = (path, rfqId, fallbackName = `${path}-${rfqId}.xlsx`) => downloadFile(
   `/api/market/export/${path}/${rfqId}`,
+  fallbackName
+)
+
+export const downloadDeliveryDocumentExport = (path, rfqId, fallbackName = `${path}-${rfqId}.xlsx`) => downloadFile(
+  `/api/market/delivery-documents/export/${path}/${rfqId}`,
   fallbackName
 )
 

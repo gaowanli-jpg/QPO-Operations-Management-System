@@ -51,9 +51,28 @@ describe('marketApi', () => {
 
     await marketApi.listMarketOrders(params, 'quote-process')
     await marketApi.listMarketOrders(params, 'release')
+    await marketApi.listMarketOrders(params, 'delivery-document')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/orders', { params })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/delivery-documents/orders', { params })
+  })
+
+  test('delivery document helpers use the independent backend namespace', async () => {
+    const params = { page: 2, pageSize: 50 }
+
+    await marketApi.getDeliveryDocumentSummary(18)
+    await marketApi.listDeliveryDocumentTickets(18, params)
+    await marketApi.listDeliveryDocumentProcessSheets(18, params)
+    await marketApi.downloadDeliveryDocumentExport('tickets', 18, 'delivery-tickets-18.xlsx')
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/delivery-documents/summary/18')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/delivery-documents/tickets/18', { params })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/delivery-documents/process-sheets/18', { params })
+    expect(downloadFile).toHaveBeenCalledWith(
+      '/api/market/delivery-documents/export/tickets/18',
+      'delivery-tickets-18.xlsx'
+    )
   })
 
   test('release workspace helpers use split paging endpoints', async () => {

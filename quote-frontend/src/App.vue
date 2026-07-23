@@ -114,7 +114,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
 const menuGroups = [
-  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/quote-template'] },
+  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/audit-logs'] }
@@ -124,6 +124,7 @@ const menuMetaByPath = {
   '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
   '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
+  '/delivery-documents': { title: '提单表据', permission: 'market:delivery-document:view', icon: Document },
   '/quote-template': { title: '报价模板', permission: 'market:template:view', icon: Files },
   '/engineering': { title: '零件核价', permission: 'engineer:setup:view', icon: Setting },
   '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
@@ -184,6 +185,10 @@ const shellMetaByPath = {
   '/release': {
     title: '议价提单',
     description: '处理议价结果并生成生产交付资料。'
+  },
+  '/delivery-documents': {
+    title: '提单表据',
+    description: '选择已提单订单，查看并导出已生成提单行和工艺表行。'
   },
   '/engineering': {
     title: '零件核价',
