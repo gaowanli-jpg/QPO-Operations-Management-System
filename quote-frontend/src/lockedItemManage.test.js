@@ -42,7 +42,7 @@ describe('LockedItemManage guardrails', () => {
       expect(pageSource).toContain(token)
     }
 
-    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', '分配类型', '在产订单号', '数量']) {
+    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '零件类型', '内部项目号', '分配类型', '在产订单号', '数量']) {
       expect(pageSource).toContain(label)
     }
   })
@@ -86,6 +86,7 @@ describe('LockedItemManage guardrails', () => {
       '图号',
       '版本',
       '物料号',
+      '零件类型',
       '分配类型',
       '在产订单号',
       '订单类型',

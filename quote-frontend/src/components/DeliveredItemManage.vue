@@ -58,6 +58,9 @@
           <el-table-column label="物料号" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ formatMaterialNo(row.materialNo) }}</template>
           </el-table-column>
+          <el-table-column prop="itemType" label="零件类型" width="100" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.itemType || '-' }}</template>
+          </el-table-column>
           <el-table-column label="MES状态" width="110" align="center">
             <template #default="{ row }"><el-tag :type="statusTagType(row.mesSyncStatus)" size="small">{{ statusText(row.mesSyncStatus) }}</el-tag></template>
           </el-table-column>
@@ -177,6 +180,7 @@
           <el-descriptions-item label="图号">{{ selectedItem.partNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="版本">{{ selectedItem.version || '-' }}</el-descriptions-item>
           <el-descriptions-item label="物料号">{{ formatMaterialNo(selectedItem.materialNo) }}</el-descriptions-item>
+          <el-descriptions-item label="零件类型">{{ selectedItem.itemType || '-' }}</el-descriptions-item>
           <el-descriptions-item label="MES状态">{{ statusText(selectedItem.mesSyncStatus) }}</el-descriptions-item>
           <el-descriptions-item label="WMS状态">{{ statusText(selectedItem.wmsAllocateStatus) }}</el-descriptions-item>
           <el-descriptions-item label="提单数量">{{ selectedItem.qty ?? '-' }}</el-descriptions-item>

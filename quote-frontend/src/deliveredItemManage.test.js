@@ -9,10 +9,10 @@ const source = readFileSync(resolve(currentDir, 'components', 'DeliveredItemMana
 describe('DeliveredItemManage foundation page', () => {
   test('freezes delivered item page title, filters, and core columns', () => {
     expect(source).toContain('已提零件')
-    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '内部项目号', 'MES状态', 'WMS状态', '交货日期']) {
+    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '零件类型', '内部项目号', 'MES状态', 'WMS状态', '交货日期']) {
       expect(source).toContain(label)
     }
-    for (const label of ['提单ID', '图号', '物料号', '提单数量', 'MES状态', 'WMS状态', '客户订单号', '客户项目号', '材料类型', '毛重', '净重', '工艺路线', '材料描述', '表面处理']) {
+    for (const label of ['提单ID', '图号', '物料号', '零件类型', '提单数量', 'MES状态', 'WMS状态', '客户订单号', '客户项目号', '材料类型', '毛重', '净重', '工艺路线', '材料描述', '表面处理']) {
       expect(source).toContain(label)
     }
   })
@@ -24,6 +24,7 @@ describe('DeliveredItemManage foundation page', () => {
       'label="图号"',
       'label="版本"',
       'label="物料号"',
+      'label="零件类型"',
       'label="MES状态"',
       'label="WMS状态"',
       'label="订单类型"',

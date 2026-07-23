@@ -59,6 +59,9 @@
           <el-table-column prop="materialNo" label="物料号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.materialNo) }}</template>
           </el-table-column>
+          <el-table-column prop="itemType" label="零件类型" width="100" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.itemType) }}</template>
+          </el-table-column>
           <el-table-column label="分配类型" width="150" align="center">
             <template #default="{ row }">
               <el-tag :type="allocationTypeMeta(row.allocationType).type" size="small">
