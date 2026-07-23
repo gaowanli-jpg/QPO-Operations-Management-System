@@ -49,6 +49,8 @@ class WmsAllocationTest {
             "src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
     private static final Path ALLOCATION_REMARK_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V54__delivery_allocation_remark_snapshot.sql");
+    private static final Path ALLOCATION_ITEM_TYPE_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V58__delivery_allocation_item_type_snapshot.sql");
     private static final Path DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERY_ALLOCATION = Path.of(
@@ -160,6 +162,7 @@ class WmsAllocationTest {
                     assertThat(row.getVersion()).isEqualTo("A");
                     assertThat(row.getCustomerName()).isEqualTo("ACME");
                     assertThat(row.getInternalProjectNo()).isEqualTo("IP-9");
+                    assertSnapshot(row, "getItemType", "组合件");
                     assertSnapshot(row, "getOrderType", "预测订单");
                     assertSnapshot(row, "getRfqNo", "RFQ-88");
                     assertSnapshot(row, "getCustomerOrderNo", "CO-9");
@@ -393,11 +396,23 @@ class WmsAllocationTest {
                         "ALTER TABLE order_delivery_ticket_allocation",
                         "ADD COLUMN IF NOT EXISTS remark TEXT"
                 );
+        assertThat(read(ALLOCATION_ITEM_TYPE_MIGRATION))
+                .as("Locked item rows must snapshot the delivered ticket item type for display, filters, and future push routing")
+                .contains(
+                        "ALTER TABLE order_delivery_ticket_allocation",
+                        "ADD COLUMN IF NOT EXISTS item_type",
+                        "UPDATE order_delivery_ticket_allocation alloc",
+                        "FROM order_delivery_ticket ticket",
+                        "alloc.ticket_id = ticket.id",
+                        "ticket.item_type",
+                        "idx_delivery_allocation_item_type"
+                );
         assertThat(entity)
                 .contains(
                         "private Integer ticketId;",
                         "private Integer rfqId;",
                         "private Integer itemId;",
+                        "private String itemType;",
                         "private String allocationType;",
                         "private Integer qty;",
                         "private String materialNo;",
@@ -433,6 +448,7 @@ class WmsAllocationTest {
                 .contains(
                         "row.setCustomerOrderNo(ticket.getCustomerOrderNo())",
                         "row.setOrderType(ticket.getOrderType())",
+                        "row.setItemType(ticket.getItemType())",
                         "row.setRfqNo(resolveRfqNo(ticket, order))",
                         "row.setCustomerProjectNo(ticket.getCustomerProjectNo())",
                         "row.setMaterialName(ticket.getMaterialName())",
@@ -474,6 +490,7 @@ class WmsAllocationTest {
         ticket.setId(123);
         ticket.setRfqId(88);
         ticket.setItemId(77);
+        ticket.setItemType("组合件");
         ticket.setPartNo("P-100");
         ticket.setVersion("A");
         ticket.setQty(10);

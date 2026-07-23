@@ -112,6 +112,7 @@ class LockedItemQueryTest {
                         "private Integer rfqId;",
                         "private String rfqNo;",
                         "private String customerName;",
+                        "private String itemType;",
                         "private String allocationType;",
                         "private Integer qty;",
                         "private String materialNo;",
@@ -143,6 +144,7 @@ class LockedItemQueryTest {
                         "private String internalProjectNo;",
                         "private String customerOrderNo;",
                         "private String customerProjectNo;",
+                        "private String itemType;",
                         "private String allocationType;",
                         "private String wmsProductionOrderNo;"
                 );
@@ -154,6 +156,7 @@ class LockedItemQueryTest {
                         "applyEquals(query, \"alloc.customer_name\", req.getCustomerName())",
                         "applyLike(query, \"alloc.customer_order_no\", req.getCustomerOrderNo())",
                         "applyLike(query, \"alloc.customer_project_no\", req.getCustomerProjectNo())",
+                        "applyEquals(query, \"alloc.item_type\", req.getItemType())",
                         "query.ge(\"alloc.delivery_date\", req.getDateFrom())",
                         "query.le(\"alloc.delivery_date\", req.getDateTo())",
                         "listCustomers",
@@ -171,6 +174,7 @@ class LockedItemQueryTest {
                         "LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id",
                         "LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id",
                         "alloc.order_type AS order_type",
+                        "alloc.item_type",
                         "alloc.rfq_no",
                         "alloc.customer_order_no",
                         "alloc.customer_project_no",

@@ -213,6 +213,7 @@ public class WmsAllocationService {
         row.setQty(qty);
         row.setMaterialNo(ticket.getMaterialNo());
         row.setOrderType(ticket.getOrderType());
+        row.setItemType(ticket.getItemType());
         row.setPartNo(ticket.getPartNo());
         row.setVersion(ticket.getVersion());
         row.setRfqNo(resolveRfqNo(ticket, order));

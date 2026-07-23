@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     qty INTEGER NOT NULL,
     material_no VARCHAR(100),
     order_type VARCHAR(20),
+    item_type VARCHAR(20) DEFAULT '普通件',
     part_no VARCHAR(100),
     version VARCHAR(20),
     rfq_no VARCHAR(100),
@@ -229,6 +230,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
 
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS order_type VARCHAR(20);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS item_type VARCHAR(20) DEFAULT '普通件';
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_name VARCHAR(100);
@@ -256,6 +258,9 @@ CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_id_id
 
 CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_item_id
     ON order_delivery_ticket(rfq_id, item_id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_item_type
+    ON order_delivery_ticket_allocation(item_type, id);
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,

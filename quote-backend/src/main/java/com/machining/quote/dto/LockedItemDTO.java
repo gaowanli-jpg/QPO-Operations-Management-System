@@ -13,6 +13,7 @@ public class LockedItemDTO {
     private String rfqNo;
     private String customerName;
     private Integer itemId;
+    private String itemType;
     private String allocationType;
     private Integer qty;
     private String materialNo;
