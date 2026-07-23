@@ -74,7 +74,8 @@ class QuoteTemplateExportServiceTests {
             assertThat(rowContains(sheet, 2, order.getRfqNo())).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
-            assertThat(rowContains(sheet, 6, "第4道工艺")).isTrue();
+            assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
+            assertThat(rowContains(sheet, 6, "装配")).isTrue();
             assertThat(rowContains(sheet, HEADER_ROW_INDEX, "加急费率(%)")).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "交货周期"))).isEqualTo("2026-04-01");
         }
@@ -126,12 +127,41 @@ class QuoteTemplateExportServiceTests {
 
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
-            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("工艺名称");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("类型");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("工时/金额");
+            assertThat(groupHeaderCol(sheet, "下料")).isEqualTo(11);
+            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("工时/金额");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("单价");
             assertThat(rowContains(sheet, HEADER_ROW_INDEX, "运输费率(%)")).isTrue();
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("下料");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("工时");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 12)).isEqualTo("1");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "基础成本"))).isEqualTo("70");
+        }
+    }
+
+    @Test
+    void detailTemplateExportMergesRepeatedProcessesUnderProcessNameHeaders() throws Exception {
+        OrderRfq order = createOrder();
+        createQuotedItem(order.getId(), List.of(
+                route("铣", "工时", 1.0, 70.0, 70.0, 10),
+                route("CNC", "工时", 2.0, 100.0, 200.0, 20),
+                route("铣", "工时", 3.0, 80.0, 240.0, 30)
+        ));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        quoteTemplateExportService.exportTemplateQuoteDetail(order.getId(), response);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
+            int millCol = groupHeaderCol(sheet, "铣");
+            assertThat(text(sheet, HEADER_ROW_INDEX, millCol)).isEqualTo("类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, millCol + 1)).isEqualTo("工时/金额");
+            assertThat(text(sheet, HEADER_ROW_INDEX, millCol + 2)).isEqualTo("单价");
+            assertThat(text(sheet, HEADER_ROW_INDEX, millCol + 3)).isEqualTo("费用");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol)).isEqualTo("工时");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 1)).isEqualTo("4");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 2)).isEqualTo("77.5");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 3)).isEqualTo("310");
         }
     }
 
@@ -168,6 +198,30 @@ class QuoteTemplateExportServiceTests {
             item.setFinalTotalPrice(180.0);
             itemMapper.insert(item);
         }
+    }
+
+    private void createQuotedItem(Integer rfqId, List<Map<String, Object>> processRoutes) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setRfqId(rfqId);
+        item.setPartNo("P-MERGE-TPL");
+        item.setVersion("A");
+        item.setDescription("模板重复工艺测试件");
+        item.setQty(1);
+        item.setUnit("件");
+        item.setDrawingUrl("/uploads/test/P-MERGE-TPL.pdf");
+        item.setMaterialName("45#钢");
+        item.setSurfaceTreatment("阳极");
+        item.setLeadTime("2026-03-20");
+        item.setQuoteLeadTime("2026-04-01");
+        item.setStatus("已报价");
+        item.setRemark("重复工艺");
+        item.setMaterialData(Map.of("weight", 1.0, "cost", 20.0));
+        item.setProcessRoute(processRoutes);
+        item.setFeeData(List.of());
+        item.setBaseCost(530.0);
+        item.setFinalUnitPrice(530.0);
+        item.setFinalTotalPrice(530.0);
+        itemMapper.insert(item);
     }
 
     private List<Map<String, Object>> processRoutes() {
@@ -321,6 +375,16 @@ class QuoteTemplateExportServiceTests {
             }
         }
         throw new AssertionError("Missing header: " + header);
+    }
+
+    private int groupHeaderCol(Sheet sheet, String header) {
+        Row row = sheet.getRow(6);
+        for (Cell cell : row) {
+            if (header.equals(formatter.formatCellValue(cell))) {
+                return cell.getColumnIndex();
+            }
+        }
+        throw new AssertionError("Missing group header: " + header);
     }
 
     private String text(Sheet sheet, int rowIndex, int colIndex) {

@@ -93,6 +93,27 @@ class QuoteTemplateServiceTests {
     }
 
     @Test
+    void uploadTemplateAcceptsProcessNamePromotedDetailHeaders() throws Exception {
+        QuoteTemplateService service = service();
+        List<String> headers = List.of(
+                "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
+                "类型", "工时/金额", "单价", "费用",
+                "运输费率(%)", "运输金额", "基础成本",
+                "含税单价", "含税总价", "交货周期", "备注"
+        );
+        MockMultipartFile file = new MockMultipartFile(
+                "templateFile",
+                "新版客户模板.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                workbookBytes(headers)
+        );
+
+        var status = service.uploadTemplate(file);
+
+        assertThat(status).containsEntry("exists", true);
+    }
+
+    @Test
     void requireTemplateShowsClearMissingTemplateError() {
         QuoteTemplateService service = service();
 

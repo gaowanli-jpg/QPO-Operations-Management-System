@@ -36,13 +36,15 @@ public class QuoteTemplateExportService {
     private static final int GROUP_ROW_INDEX = 6;
     private static final int HEADER_ROW_INDEX = 7;
     private static final int DETAIL_START_ROW_INDEX = 8;
-    private static final int PROCESS_BLOCK_WIDTH = 5;
+    private static final int PROCESS_BLOCK_WIDTH = 4;
+    private static final int LEGACY_PROCESS_BLOCK_WIDTH = 5;
     private static final int FEE_BLOCK_WIDTH = 2;
     private static final List<String> SIMPLE_HEADERS = List.of(
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
     );
-    private static final List<String> PROCESS_HEADERS = List.of("工艺名称", "类型", "工时/金额", "单价", "费用");
+    private static final List<String> OLD_PROCESS_HEADERS = List.of("工艺名称", "类型", "工时/金额", "单价", "费用");
+    private static final List<String> PROCESS_HEADERS = QuoteProcessExportSupport.PROCESS_VALUE_HEADERS;
     private static final DateTimeFormatter TOP_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/M/d");
 
     @Autowired
@@ -104,17 +106,19 @@ public class QuoteTemplateExportService {
     }
 
     private TemplateColumns configureDetailColumns(Sheet sheet, List<ItemQuoteVersion> items) {
-        int maxRouteSize = Math.max(resolveMaxRouteSize(items), 1);
+        List<String> processNames = collectQuoteProcessNames(items);
+        int requiredProcessSlots = Math.max(processNames.size(), 1);
         List<String> feeNames = collectQuoteFeeNames(items);
         int requiredFeeSlots = Math.max(feeNames.size(), 1);
 
-        ColumnLayout layout = ensureDetailLayout(sheet, maxRouteSize, requiredFeeSlots);
-        if (maxRouteSize > layout.processSlots()) {
-            int extraBlocks = maxRouteSize - layout.processSlots();
+        ColumnLayout layout = ensureDetailLayout(sheet, requiredProcessSlots, requiredFeeSlots);
+        if (requiredProcessSlots > layout.processSlots()) {
+            int extraBlocks = requiredProcessSlots - layout.processSlots();
             int insertAt = layout.feeStartCol() >= 0 ? layout.feeStartCol() : layout.baseCostCol();
             for (int i = 0; i < extraBlocks; i++) {
-                int sourceStart = layout.processStartCol() + Math.max(layout.processSlots() - 1, 0) * PROCESS_BLOCK_WIDTH;
-                insertColumns(sheet, insertAt + i * PROCESS_BLOCK_WIDTH, PROCESS_BLOCK_WIDTH, sourceStart, PROCESS_BLOCK_WIDTH);
+                int blockWidth = layout.processBlockWidth();
+                int sourceStart = layout.processStartCol() + Math.max(layout.processSlots() - 1, 0) * blockWidth;
+                insertColumns(sheet, insertAt + i * blockWidth, blockWidth, sourceStart, blockWidth);
             }
         }
 
@@ -129,19 +133,20 @@ public class QuoteTemplateExportService {
         }
 
         layout = detectColumnLayout(sheet);
-        int processSlots = Math.max(layout.processSlots(), maxRouteSize);
-        writeProcessHeaders(sheet, layout.processStartCol(), processSlots);
+        int processSlots = Math.max(layout.processSlots(), requiredProcessSlots);
+        writeProcessHeaders(sheet, layout.processStartCol(), processSlots, processNames, layout.processBlockWidth());
 
         int finalFeeSlots = Math.max(Math.max(layout.feeSlots(), feeNames.size()), 1);
         writeFeeHeaders(sheet, layout.feeStartCol(), finalFeeSlots, feeNames);
         writeGroupHeader(sheet, layout.baseCostCol(), 6, "合计");
 
         Map<String, Integer> headers = headerMap(sheet);
-        return new TemplateColumns(headers, layout.processStartCol(), processSlots, layout.feeStartCol(), finalFeeSlots, feeNames);
+        return new TemplateColumns(headers, layout.processStartCol(), processSlots, processNames, layout.processBlockWidth(),
+                layout.feeStartCol(), finalFeeSlots, feeNames);
     }
 
     private TemplateColumns simpleColumns(Sheet sheet) {
-        return new TemplateColumns(headerMap(sheet), -1, 0, -1, 0, List.of());
+        return new TemplateColumns(headerMap(sheet), -1, 0, List.of(), PROCESS_BLOCK_WIDTH, -1, 0, List.of());
     }
 
     private void writeQuoteRow(Row row, ItemQuoteVersion item, int index, TemplateColumns columns, boolean simpleMode) {
@@ -171,17 +176,19 @@ public class QuoteTemplateExportService {
             setByHeader(row, columns.headers(), "重量(KG)", missingDrawing ? "" : firstNonNullDouble(materialData.get("weight"), 0.0));
             setByHeader(row, columns.headers(), "材料费", missingDrawing ? "" : materialCost);
 
+            Map<String, QuoteProcessExportSupport.MergedProcess> processMap = QuoteProcessExportSupport.mergeProcessRoutes(processRoutes);
             for (int i = 0; i < columns.processSlots(); i++) {
-                int startCol = columns.processStartCol() + i * PROCESS_BLOCK_WIDTH;
-                if (i < processRoutes.size() && !missingDrawing) {
-                    Map<String, Object> route = processRoutes.get(i);
-                    setCell(row, startCol, route.get("processName"));
-                    setCell(row, startCol + 1, route.get("calcType"));
-                    setCell(row, startCol + 2, firstNonNullDouble(route.get("inputVal"), 0.0));
-                    setCell(row, startCol + 3, safeNumber(route.get("unitRate")));
-                    setCell(row, startCol + 4, processLineCost(route));
+                int startCol = columns.processStartCol() + i * columns.processBlockWidth();
+                String processName = i < columns.processNames().size() ? columns.processNames().get(i) : "";
+                QuoteProcessExportSupport.MergedProcess process = processMap.get(processName);
+                if (process != null && !missingDrawing) {
+                    setCell(row, startCol, process.calcType());
+                    setCell(row, startCol + 1, process.inputVal());
+                    setCell(row, startCol + 2, process.weightedUnitRate());
+                    setCell(row, startCol + 3, process.lineCost());
+                    clearCells(row, startCol + PROCESS_HEADERS.size(), columns.processBlockWidth() - PROCESS_HEADERS.size());
                 } else {
-                    clearCells(row, startCol, PROCESS_BLOCK_WIDTH);
+                    clearCells(row, startCol, columns.processBlockWidth());
                 }
             }
 
@@ -377,18 +384,16 @@ public class QuoteTemplateExportService {
     private ColumnLayout detectColumnLayout(Sheet sheet) {
         Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
         int processStart = findHeader(headerRow, "工艺名称", 0);
-        int processSlots = 0;
-        if (processStart >= 0) {
-            int col = processStart;
-            while (matchesProcessBlock(headerRow, col)) {
-                processSlots++;
-                col += PROCESS_BLOCK_WIDTH;
-            }
+        int processBlockWidth = processStart >= 0 ? LEGACY_PROCESS_BLOCK_WIDTH : PROCESS_BLOCK_WIDTH;
+        if (processStart < 0) {
+            processStart = findNewProcessStart(headerRow);
         }
-        int feeStart = findHeaderContaining(headerRow, "费率(%)", processStart < 0 ? 0 : processStart + processSlots * PROCESS_BLOCK_WIDTH);
+        int processSlots = countProcessSlots(headerRow, processStart, processBlockWidth);
+        int feeStart = findHeaderContaining(headerRow, "费率(%)",
+                processStart < 0 ? 0 : processStart + processSlots * processBlockWidth);
         int baseCost = findHeader(headerRow, "基础成本", 0);
         int feeSlots = feeStart >= 0 && baseCost > feeStart ? (baseCost - feeStart) / FEE_BLOCK_WIDTH : 0;
-        return new ColumnLayout(processStart, processSlots, feeStart, feeSlots, baseCost);
+        return new ColumnLayout(processStart, processSlots, processBlockWidth, feeStart, feeSlots, baseCost);
     }
 
     private ColumnLayout ensureDetailLayout(Sheet sheet, int processSlots, int feeSlots) {
@@ -416,7 +421,8 @@ public class QuoteTemplateExportService {
 
         if (layout.processStartCol() >= 0 && layout.processSlots() <= 0) {
             int inferredSlots = inferProcessSlots(sheet, layout);
-            writeProcessHeaders(sheet, layout.processStartCol(), Math.max(inferredSlots, 1));
+            writeProcessHeaders(sheet, layout.processStartCol(), Math.max(inferredSlots, 1), List.of(),
+                    layout.processBlockWidth());
             layout = detectColumnLayout(sheet);
         }
 
@@ -425,7 +431,7 @@ public class QuoteTemplateExportService {
                     findFirstHeader(sheet.getRow(HEADER_ROW_INDEX), List.of("含税单价", "含税总价", "交货周期", "备注")),
                     maxColumn(sheet) + 1);
             insertColumnsLike(sheet, insertAt, processSlots * PROCESS_BLOCK_WIDTH);
-            writeProcessHeaders(sheet, insertAt, processSlots);
+            writeProcessHeaders(sheet, insertAt, processSlots, List.of(), PROCESS_BLOCK_WIDTH);
             layout = detectColumnLayout(sheet);
         }
 
@@ -441,8 +447,8 @@ public class QuoteTemplateExportService {
                 findFirstHeader(headerRow, List.of("含税单价", "含税总价", "交货周期", "备注")),
                 maxColumn(sheet) + 1);
         int slots = 0;
-        for (int col = layout.processStartCol(); col < boundary; col += PROCESS_BLOCK_WIDTH) {
-            if (!normalizeHeader("工艺名称").equals(normalizeHeader(dataFormatter.formatCellValue(headerRow.getCell(col))))) {
+        for (int col = layout.processStartCol(); col < boundary; col += layout.processBlockWidth()) {
+            if (!matchesProcessBlock(headerRow, col, layout.processBlockWidth())) {
                 break;
             }
             slots++;
@@ -475,19 +481,22 @@ public class QuoteTemplateExportService {
         insertColumns(sheet, insertAt, count, sourceCol, 1);
     }
 
-    private void writeProcessHeaders(Sheet sheet, int processStartCol, int processSlots) {
+    private void writeProcessHeaders(Sheet sheet, int processStartCol, int processSlots, List<String> processNames,
+                                     int processBlockWidth) {
         if (processStartCol < 0) {
             return;
         }
         Row groupRow = getOrCreateRow(sheet, GROUP_ROW_INDEX);
         Row headerRow = getOrCreateRow(sheet, HEADER_ROW_INDEX);
         for (int i = 0; i < processSlots; i++) {
-            int startCol = processStartCol + i * PROCESS_BLOCK_WIDTH;
-            writeGroupHeader(sheet, startCol, PROCESS_BLOCK_WIDTH, "第" + (i + 1) + "道工艺");
+            int startCol = processStartCol + i * processBlockWidth;
+            String processName = i < processNames.size() ? processNames.get(i) : "";
+            writeGroupHeader(sheet, startCol, processBlockWidth, processName);
             for (int offset = 0; offset < PROCESS_HEADERS.size(); offset++) {
                 setCell(headerRow, startCol + offset, PROCESS_HEADERS.get(offset));
             }
-            clearCells(groupRow, startCol + 1, PROCESS_BLOCK_WIDTH - 1);
+            clearCells(headerRow, startCol + PROCESS_HEADERS.size(), processBlockWidth - PROCESS_HEADERS.size());
+            clearCells(groupRow, startCol + 1, processBlockWidth - 1);
         }
     }
 
@@ -587,6 +596,31 @@ public class QuoteTemplateExportService {
         return -1;
     }
 
+    private int findNewProcessStart(Row headerRow) {
+        if (headerRow == null) {
+            return -1;
+        }
+        for (int col = 0; col <= headerRow.getLastCellNum(); col++) {
+            if (matchesNewProcessBlock(headerRow, col)) {
+                return col;
+            }
+        }
+        return -1;
+    }
+
+    private int countProcessSlots(Row headerRow, int processStart, int processBlockWidth) {
+        int processSlots = 0;
+        if (processStart < 0) {
+            return processSlots;
+        }
+        int col = processStart;
+        while (matchesProcessBlock(headerRow, col, processBlockWidth)) {
+            processSlots++;
+            col += processBlockWidth;
+        }
+        return processSlots;
+    }
+
     private int findHeaderContaining(Row row, String text, int fromCol) {
         String normalized = normalizeHeader(text);
         if (row == null) {
@@ -600,7 +634,27 @@ public class QuoteTemplateExportService {
         return -1;
     }
 
-    private boolean matchesProcessBlock(Row row, int startCol) {
+    private boolean matchesProcessBlock(Row row, int startCol, int processBlockWidth) {
+        if (processBlockWidth == LEGACY_PROCESS_BLOCK_WIDTH) {
+            return matchesOldProcessBlock(row, startCol) || matchesNewProcessBlock(row, startCol);
+        }
+        return matchesNewProcessBlock(row, startCol);
+    }
+
+    private boolean matchesOldProcessBlock(Row row, int startCol) {
+        if (row == null || startCol < 0) {
+            return false;
+        }
+        for (int i = 0; i < OLD_PROCESS_HEADERS.size(); i++) {
+            String header = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol + i)));
+            if (!normalizeHeader(OLD_PROCESS_HEADERS.get(i)).equals(header)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesNewProcessBlock(Row row, int startCol) {
         if (row == null || startCol < 0) {
             return false;
         }
@@ -724,12 +778,8 @@ public class QuoteTemplateExportService {
         return max;
     }
 
-    private int resolveMaxRouteSize(List<ItemQuoteVersion> items) {
-        int max = 0;
-        for (ItemQuoteVersion item : items) {
-            max = Math.max(max, normalizeProcessRoute(item.getProcessRoute()).size());
-        }
-        return max;
+    private List<String> collectQuoteProcessNames(List<ItemQuoteVersion> items) {
+        return QuoteProcessExportSupport.collectProcessNames(items, this::normalizeProcessRoute);
     }
 
     private List<String> collectQuoteFeeNames(List<ItemQuoteVersion> items) {
@@ -948,10 +998,12 @@ public class QuoteTemplateExportService {
         return value == null || value.trim().isEmpty();
     }
 
-    private record ColumnLayout(int processStartCol, int processSlots, int feeStartCol, int feeSlots, int baseCostCol) {
+    private record ColumnLayout(int processStartCol, int processSlots, int processBlockWidth,
+                                int feeStartCol, int feeSlots, int baseCostCol) {
     }
 
     private record TemplateColumns(Map<String, Integer> headers, int processStartCol, int processSlots,
+                                   List<String> processNames, int processBlockWidth,
                                    int feeStartCol, int feeSlots, List<String> feeNames) {
     }
 }

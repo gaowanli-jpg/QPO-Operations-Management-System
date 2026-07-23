@@ -39,7 +39,8 @@ public class QuoteTemplateService {
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
     );
-    private static final List<String> DETAIL_REQUIRED_HEADERS = List.of("工艺名称", "费率(%)", "基础成本");
+    private static final List<String> DETAIL_REQUIRED_HEADERS = List.of("费率(%)", "基础成本");
+    private static final List<String> PROMOTED_PROCESS_HEADERS = List.of("类型", "工时/金额", "单价", "费用");
 
     @Value("${erp.upload-dir}")
     private String uploadDir;
@@ -156,6 +157,9 @@ public class QuoteTemplateService {
             if (!missingDetailHeaders.isEmpty()) {
                 throw new RuntimeException("报价单模板缺少详细报价单必要表头：" + String.join("、", missingDetailHeaders));
             }
+            if (!hasDetailHeader(headers, "工艺名称") && !hasPromotedProcessHeaders(headers)) {
+                throw new RuntimeException("报价单模板缺少详细报价单必要表头：工艺名称或类型、工时/金额、单价、费用");
+            }
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -242,5 +246,10 @@ public class QuoteTemplateService {
             return headers.stream().anyMatch(header -> header.contains(normalized));
         }
         return headers.contains(normalized);
+    }
+
+    private boolean hasPromotedProcessHeaders(Set<String> headers) {
+        return PROMOTED_PROCESS_HEADERS.stream()
+                .allMatch(header -> headers.contains(normalizeHeader(header)));
     }
 }

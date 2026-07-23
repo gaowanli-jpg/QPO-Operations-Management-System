@@ -232,12 +232,12 @@ public class ExcelExportService {
             return file;
         }
 
-        int maxRouteSize = resolveMaxRouteSize(items);
+        List<String> processNames = collectQuoteProcessNames(items);
         List<String> feeNames = collectQuoteFeeNames(items);
-        List<List<String>> head = buildQuoteHead(maxRouteSize, feeNames);
+        List<List<String>> head = buildQuoteHead(processNames, feeNames);
         List<List<Object>> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
-            rows.add(buildQuoteRow(items.get(i), i + 1, maxRouteSize, feeNames, true));
+            rows.add(buildQuoteRow(items.get(i), i + 1, processNames, feeNames, true));
         }
         EasyExcel.write(file.toFile()).head(head).sheet(sheetName).doWrite(rows);
         return file;
@@ -254,13 +254,13 @@ public class ExcelExportService {
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
 
-        int maxRouteSize = resolveMaxRouteSize(items);
+        List<String> processNames = collectQuoteProcessNames(items);
         List<String> feeNames = collectQuoteFeeNames(items);
-        List<List<String>> head = buildQuoteHead(maxRouteSize, feeNames);
+        List<List<String>> head = buildQuoteHead(processNames, feeNames);
         List<List<Object>> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             ItemQuoteVersion item = items.get(i);
-            rows.add(buildQuoteRow(item, i + 1, maxRouteSize, feeNames, useQuoteLeadTime));
+            rows.add(buildQuoteRow(item, i + 1, processNames, feeNames, useQuoteLeadTime));
         }
         write(response, buildFileName(rfqId, fileSuffix), sheetName, head, rows);
         return rows.size();
@@ -335,18 +335,15 @@ public class ExcelExportService {
         return row;
     }
 
-    private List<List<String>> buildQuoteHead(int maxRouteSize, List<String> feeNames) {
+    private List<List<String>> buildQuoteHead(List<String> processNames, List<String> feeNames) {
         List<List<String>> head = new ArrayList<>();
         for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位", "重量(KG)", "材料费")) {
             head.add(List.of("基础信息", title));
         }
-        for (int i = 0; i < maxRouteSize; i++) {
-            String stepName = "第" + (i + 1) + "道工艺";
-            head.add(List.of(stepName, "工艺名称"));
-            head.add(List.of(stepName, "类型"));
-            head.add(List.of(stepName, "工时/金额"));
-            head.add(List.of(stepName, "单价"));
-            head.add(List.of(stepName, "费用"));
+        for (String processName : processNames) {
+            for (String title : QuoteProcessExportSupport.PROCESS_VALUE_HEADERS) {
+                head.add(List.of(processName, title));
+            }
         }
         for (String feeName : feeNames) {
             head.add(List.of("百分比费用", feeName + "费率(%)"));
@@ -358,9 +355,9 @@ public class ExcelExportService {
         return head;
     }
 
-    private List<Object> buildQuoteRow(ItemQuoteVersion item, int index, int maxRouteSize, List<String> feeNames, boolean useQuoteLeadTime) {
+    private List<Object> buildQuoteRow(ItemQuoteVersion item, int index, List<String> processNames, List<String> feeNames, boolean useQuoteLeadTime) {
         if (isMissingDrawing(item)) {
-            return buildMissingDrawingQuoteRow(item, index, maxRouteSize, feeNames, useQuoteLeadTime);
+            return buildMissingDrawingQuoteRow(item, index, processNames, feeNames, useQuoteLeadTime);
         }
 
         Map<String, Object> materialData = normalizeMap(item.getMaterialData());
@@ -387,16 +384,15 @@ public class ExcelExportService {
         row.add(firstNonNullDouble(materialData.get("weight"), 0.0));
         row.add(materialCost);
 
-        for (int i = 0; i < maxRouteSize; i++) {
-            if (i < processRoutes.size()) {
-                Map<String, Object> route = processRoutes.get(i);
-                row.add(safe(route.get("processName")));
-                row.add(safe(route.get("calcType")));
-                row.add(firstNonNullDouble(route.get("inputVal"), 0.0));
-                row.add(safeNumber(route.get("unitRate")));
-                row.add(processLineCost(route));
+        Map<String, QuoteProcessExportSupport.MergedProcess> processMap = QuoteProcessExportSupport.mergeProcessRoutes(processRoutes);
+        for (String processName : processNames) {
+            QuoteProcessExportSupport.MergedProcess process = processMap.get(processName);
+            if (process != null) {
+                row.add(process.calcType());
+                row.add(process.inputVal());
+                row.add(process.weightedUnitRate());
+                row.add(process.lineCost());
             } else {
-                row.add("");
                 row.add("");
                 row.add("");
                 row.add("");
@@ -420,7 +416,7 @@ public class ExcelExportService {
         return row;
     }
 
-    private List<Object> buildMissingDrawingQuoteRow(ItemQuoteVersion item, int index, int maxRouteSize, List<String> feeNames, boolean useQuoteLeadTime) {
+    private List<Object> buildMissingDrawingQuoteRow(ItemQuoteVersion item, int index, List<String> processNames, List<String> feeNames, boolean useQuoteLeadTime) {
         List<Object> row = new ArrayList<>();
         row.add(index);
         row.add(safe(item.getPartNo()));
@@ -434,8 +430,7 @@ public class ExcelExportService {
         row.add("");
         row.add("");
 
-        for (int i = 0; i < maxRouteSize; i++) {
-            row.add("");
+        for (String ignored : processNames) {
             row.add("");
             row.add("");
             row.add("");
@@ -460,12 +455,8 @@ public class ExcelExportService {
         return useQuoteLeadTime ? leadTimeService.effectiveLeadTime(item) : item.getLeadTime();
     }
 
-    private int resolveMaxRouteSize(List<ItemQuoteVersion> items) {
-        int max = 0;
-        for (ItemQuoteVersion item : items) {
-            max = Math.max(max, normalizeProcessRoute(item.getProcessRoute()).size());
-        }
-        return max;
+    private List<String> collectQuoteProcessNames(List<ItemQuoteVersion> items) {
+        return QuoteProcessExportSupport.collectProcessNames(items, this::normalizeProcessRoute);
     }
 
     private List<String> collectQuoteFeeNames(List<ItemQuoteVersion> items) {
