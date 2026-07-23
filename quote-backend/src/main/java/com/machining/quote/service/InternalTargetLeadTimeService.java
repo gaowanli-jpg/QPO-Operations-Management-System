@@ -689,6 +689,9 @@ public class InternalTargetLeadTimeService {
         row.put("rfqId", item.getRfqId());
         row.put("partNo", item.getPartNo());
         row.put("version", item.getVersion());
+        String drawingUrl = item.getDrawingUrl();
+        row.put("drawingUrl", drawingUrl);
+        row.put("hasDrawing", drawingUrl != null && !drawingUrl.trim().isEmpty());
         row.put("description", item.getDescription());
         row.put("qty", item.getQty());
         row.put("ticketedQty", ticketedQty);

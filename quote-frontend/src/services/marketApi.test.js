@@ -162,6 +162,17 @@ describe('marketApi', () => {
     })
   })
 
+  test('updateReleaseItemVersion posts item-scoped version payload', async () => {
+    const payload = { rfqId: 18, version: 'B' }
+
+    await marketApi.updateReleaseItemVersion(201, payload)
+
+    expect(request).toHaveBeenCalledWith('/api/market/release/items/201/version', {
+      method: 'POST',
+      data: payload
+    })
+  })
+
   test('does not expose destructive release result delete helpers', () => {
     expect('deleteTicket' in marketApi).toBe(false)
     expect('deleteProcessSheet' in marketApi).toBe(false)

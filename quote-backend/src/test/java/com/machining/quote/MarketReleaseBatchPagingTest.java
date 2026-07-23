@@ -3,6 +3,8 @@ package com.machining.quote;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.OrderItemPageDTO;
+import com.machining.quote.dto.OrderItemPageReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
@@ -108,6 +110,84 @@ class MarketReleaseBatchPagingTest {
     }
 
     @Test
+    void singleReleaseItemPagingReturnsDrawingStatusWithoutChangingBackendPaging() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderItemPageService pageService = mock(OrderItemPageService.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, pageService);
+        OrderRfq order = releaseOrder(101, "RFQ-DRAWING-A");
+        ItemQuoteVersion withDrawing = releaseItem(201, 101, "DRAW-001", "A");
+        withDrawing.setDrawingUrl("/uploads/ACME/RFQ-DRAWING-A/DRAW-001.pdf");
+        ItemQuoteVersion missingDrawing = releaseItem(202, 101, "DRAW-002", "A");
+        missingDrawing.setDrawingUrl(" ");
+        when(orderMapper.selectById(101)).thenReturn(order);
+        when(pageService.pageItems(any(OrderItemPageReq.class)))
+                .thenReturn(OrderItemPageDTO.of(List.of(withDrawing, missingDrawing), 7, 3, 2, null));
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        PageResult<Map<String, Object>> page = service.pageItemRows(101, 3, 2, "DRAW", QuoteStatusWorkflow.QUOTED, false);
+
+        assertThat(page.getTotal()).isEqualTo(7);
+        assertThat(page.getPage()).isEqualTo(3);
+        assertThat(page.getPageSize()).isEqualTo(2);
+        assertThat(page.getRecords().get(0))
+                .containsEntry("id", 201)
+                .containsEntry("drawingUrl", "/uploads/ACME/RFQ-DRAWING-A/DRAW-001.pdf")
+                .containsEntry("hasDrawing", true);
+        assertThat(page.getRecords().get(1))
+                .containsEntry("id", 202)
+                .containsEntry("drawingUrl", " ")
+                .containsEntry("hasDrawing", false);
+        ArgumentCaptor<OrderItemPageReq> reqCaptor = ArgumentCaptor.forClass(OrderItemPageReq.class);
+        verify(pageService).pageItems(reqCaptor.capture());
+        assertThat(reqCaptor.getValue())
+                .extracting(OrderItemPageReq::getRfqId, OrderItemPageReq::getPage, OrderItemPageReq::getPageSize,
+                        OrderItemPageReq::getKeyword, OrderItemPageReq::getStatus)
+                .containsExactly(101, 3, 2, "DRAW", QuoteStatusWorkflow.QUOTED);
+    }
+
+    @Test
+    void batchReleaseItemPagingReturnsDrawingStatusWithoutChangingBackendPaging() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderItemPageService pageService = mock(OrderItemPageService.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, pageService);
+        OrderRfq firstOrder = releaseOrder(101, "RFQ-DRAWING-A");
+        OrderRfq secondOrder = releaseOrder(102, "RFQ-DRAWING-B");
+        ItemQuoteVersion row = releaseItem(203, 102, "DRAW-B-001", "B");
+        row.setDrawingUrl("/uploads/ACME/RFQ-DRAWING-B/DRAW-B-001.pdf");
+        when(orderMapper.selectBatchIds(List.of(101, 102))).thenReturn(List.of(firstOrder, secondOrder));
+        when(pageService.pageItemsBatch(any(ReleaseItemBatchQueryReq.class)))
+                .thenReturn(OrderItemPageDTO.of(List.of(row), 5, 2, 1, null));
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        ReleaseItemBatchQueryReq req = new ReleaseItemBatchQueryReq();
+        req.setRfqIds(List.of(101, 102));
+        req.setPage(2);
+        req.setPageSize(1);
+        req.setRemainingOnly(false);
+
+        PageResult<Map<String, Object>> page = service.pageItemRowsBatch(req);
+
+        assertThat(page.getTotal()).isEqualTo(5);
+        assertThat(page.getPage()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(1);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0))
+                .containsEntry("id", 203)
+                .containsEntry("rfqId", 102)
+                .containsEntry("rfqNo", "RFQ-DRAWING-B")
+                .containsEntry("drawingUrl", "/uploads/ACME/RFQ-DRAWING-B/DRAW-B-001.pdf")
+                .containsEntry("hasDrawing", true);
+        ArgumentCaptor<ReleaseItemBatchQueryReq> reqCaptor = ArgumentCaptor.forClass(ReleaseItemBatchQueryReq.class);
+        verify(pageService).pageItemsBatch(reqCaptor.capture());
+        assertThat(reqCaptor.getValue().getRfqIds()).containsExactly(101, 102);
+        assertThat(reqCaptor.getValue().getPage()).isEqualTo(2);
+        assertThat(reqCaptor.getValue().getPageSize()).isEqualTo(1);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void batchPartSelectionWithoutRfqNoMatchesAcrossAllSelectedOrders() {
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
@@ -193,11 +273,22 @@ class MarketReleaseBatchPagingTest {
             OrderRfqMapper orderMapper,
             ItemQuoteVersionMapper itemMapper,
             OrderDeliveryTicketMapper ticketMapper) {
+        return releaseService(orderMapper, itemMapper, ticketMapper, null);
+    }
+
+    private InternalTargetLeadTimeService releaseService(
+            OrderRfqMapper orderMapper,
+            ItemQuoteVersionMapper itemMapper,
+            OrderDeliveryTicketMapper ticketMapper,
+            OrderItemPageService orderItemPageService) {
         InternalTargetLeadTimeService service = new InternalTargetLeadTimeService();
         ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+        if (orderItemPageService != null) {
+            ReflectionTestUtils.setField(service, "orderItemPageService", orderItemPageService);
+        }
         return service;
     }
 

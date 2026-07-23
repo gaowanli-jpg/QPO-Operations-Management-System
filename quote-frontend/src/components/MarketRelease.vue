@@ -205,7 +205,30 @@
                 </template>
               </el-table-column>
               <el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />
-              <el-table-column prop="version" label="版本" width="80" align="center" />
+              <el-table-column prop="version" label="版本" width="150" align="center">
+                <template #default="{ row }">
+                  <div class="row-version-editor">
+                    <el-input
+                      v-model="row.versionDraft"
+                      size="small"
+                      maxlength="20"
+                      clearable
+                      :disabled="!canSelectItem(row)"
+                      class="row-version-input"
+                    />
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canSelectItem(row)"
+                      :loading="!!savingVersionRowMap[row.id]"
+                      @click.stop="saveReleaseItemVersion(row)"
+                    >
+                      保存
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
               <el-table-column prop="ticketedQty" label="已提单数量" width="105" align="center" />
@@ -317,7 +340,8 @@ import {
   parsePartSelectionBatch,
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
-  updateInternalTargetLeadTime
+  updateInternalTargetLeadTime,
+  updateReleaseItemVersion
 } from '../services/marketApi'
 import {
   CLIENT_PAGE_SIZES,
@@ -337,6 +361,7 @@ const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
 const savingInternalRowMap = reactive({})
+const savingVersionRowMap = reactive({})
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -504,7 +529,8 @@ const removeSelectedOrder = async (orderId) => {
 const setItemList = (rows) => {
   itemList.value = (rows || []).map(row => ({
     ...row,
-    internalTargetLeadTimeDraft: row.internalTargetLeadTime || ''
+    internalTargetLeadTimeDraft: row.internalTargetLeadTime || '',
+    versionDraft: row.version || ''
   }))
   itemList.value.forEach(item => {
     const remainingQty = remainingQtyFor(item)
@@ -531,6 +557,38 @@ const canSelectItem = (row) => {
 }
 
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
+
+const saveReleaseItemVersion = async (row) => {
+  const rowRfqId = row?.rfqId || selectedRfqId.value
+  if (!rowRfqId || !row?.id) return
+  row.versionDraft = String(row.versionDraft ?? '').trim()
+  savingVersionRowMap[row.id] = true
+  try {
+    const response = await updateReleaseItemVersion(row.id, {
+      rfqId: rowRfqId,
+      version: row.versionDraft
+    })
+    const savedData = response?.data || {}
+    const saved = {
+      ...row,
+      ...savedData,
+      versionDraft: savedData.version ?? row.versionDraft ?? ''
+    }
+    const index = itemList.value.findIndex(item => item.id === row.id)
+    if (index >= 0) {
+      itemList.value.splice(index, 1, saved)
+    }
+    if (selectedItemIdMap[row.id]) {
+      selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
+    }
+    ElMessage.success('版本已保存。')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '版本保存失败。')
+  } finally {
+    savingVersionRowMap[row.id] = false
+  }
+}
 
 const handleSelectionChange = (rows) => {
   if (syncingReleaseItemSelection) return
@@ -1018,6 +1076,16 @@ const statusTagType = (status) => {
 
 .row-date-picker {
   width: 128px;
+}
+
+.row-version-editor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.row-version-input {
+  width: 72px;
 }
 
 .selection-count {
