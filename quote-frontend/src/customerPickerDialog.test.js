@@ -77,6 +77,14 @@ describe('QPO customer picker dialog', () => {
     expect(marketRelease).toContain('v-permission="\'market:release:order-select\'"')
   })
 
+  test('engineer setup order picker only exposes unpriced order status', () => {
+    const orderPicker = readComponent('OrderPickerDialog.vue')
+    const globalSetup = readComponent('GlobalSetup.vue')
+
+    expect(globalSetup).toContain('order-scope="engineer-setup"')
+    expect(orderPicker).toContain("'engineer-setup': ['未核价']")
+  })
+
   test('customer selection buttons are gated by module-owned permissions', () => {
     const orderPicker = readComponent('OrderPickerDialog.vue')
     const orderManage = readComponent('OrderManage.vue')

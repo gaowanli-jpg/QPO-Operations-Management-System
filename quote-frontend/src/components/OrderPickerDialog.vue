@@ -134,7 +134,8 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
 const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单']
 
 const STATUS_OPTIONS_BY_SCOPE = {
-  'delivery-document': ['部分已提单', '已生成提单']
+  'delivery-document': ['部分已提单', '已生成提单'],
+  'engineer-setup': ['未核价']
 }
 
 const props = defineProps({
