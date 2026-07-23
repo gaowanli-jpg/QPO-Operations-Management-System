@@ -3,6 +3,7 @@
     <header class="erp-page-header quote-process-page-header">
           <div>
             <h2>市场部：报价单处理生成</h2>
+            <p>维护已核价订单的报价交期，生成并导出客户报价单。</p>
           </div>
           <div class="erp-page-actions header-actions">
             <el-button v-permission="'market:quote-process:order-select'" :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
@@ -554,7 +555,7 @@ const exportTemplateSimpleQuote = async () => {
 .quote-process-page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
 
@@ -563,6 +564,12 @@ const exportTemplateSimpleQuote = async () => {
   color: var(--erp-text);
   font-size: 20px;
   line-height: 1.3;
+}
+
+.quote-process-page-header p {
+  margin: 6px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
 }
 
 .header-actions {

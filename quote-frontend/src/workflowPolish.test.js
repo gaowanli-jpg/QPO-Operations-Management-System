@@ -39,7 +39,8 @@ describe('QPO workflow page polish', () => {
       'workflow-action-stack',
       'workflow-muted-actions',
       'workflow-soft-button',
-      'workflow-primary-action'
+      'workflow-primary-action',
+      '维护已核价订单的报价交期，生成并导出客户报价单。'
     ])
   })
 
