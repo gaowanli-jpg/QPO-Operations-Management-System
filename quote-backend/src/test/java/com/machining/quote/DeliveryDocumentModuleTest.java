@@ -1,11 +1,13 @@
 package com.machining.quote;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.DeliveryDocumentService;
 import com.machining.quote.service.ExcelExportService;
@@ -26,8 +28,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +48,7 @@ class DeliveryDocumentModuleTest {
     private DeliveryService deliveryService;
     private ExcelExportService excelExportService;
     private AuditService auditService;
+    private DataScopeService dataScopeService;
     private DeliveryDocumentService service;
 
     @BeforeEach
@@ -50,11 +57,13 @@ class DeliveryDocumentModuleTest {
         deliveryService = mock(DeliveryService.class);
         excelExportService = mock(ExcelExportService.class);
         auditService = mock(AuditService.class);
+        dataScopeService = mock(DataScopeService.class);
         service = new DeliveryDocumentService();
         ReflectionTestUtils.setField(service, "orderRfqMapper", orderRfqMapper);
         ReflectionTestUtils.setField(service, "deliveryService", deliveryService);
         ReflectionTestUtils.setField(service, "excelExportService", excelExportService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
     }
 
     @Test
@@ -117,12 +126,102 @@ class DeliveryDocumentModuleTest {
 
     @Test
     void deliveryDocumentServiceRejectsNonReleasedOrdersBeforeReadingRows() {
-        OrderRfq quoted = order(42, QuoteStatusWorkflow.QUOTED);
-        when(orderRfqMapper.selectById(42)).thenReturn(quoted);
+        for (String status : List.of(
+                QuoteStatusWorkflow.UNPRICED,
+                QuoteStatusWorkflow.PRICED,
+                QuoteStatusWorkflow.QUOTED,
+                QuoteStatusWorkflow.DISCARDED)) {
+            when(orderRfqMapper.selectById(42)).thenReturn(order(42, status));
 
-        assertThatThrownBy(() -> service.documentSummary(42))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("只有部分已提单或已生成提单订单可以查看提单表据");
+            assertThatThrownBy(() -> service.documentSummary(42))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("只有部分已提单或已生成提单订单可以查看提单表据");
+        }
+        verifyNoInteractions(deliveryService, excelExportService, auditService);
+    }
+
+    @Test
+    void documentOrderListUsesDataScopeAndOnlyAllowedStatuses() {
+        when(orderRfqMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        PageResult<OrderRfq> result = service.listDocumentOrders(null, null, null, 1, 20);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<QueryWrapper<OrderRfq>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(dataScopeService).applyOrderScope(any(QueryWrapper.class));
+        verify(orderRfqMapper).selectCount(queryCaptor.capture());
+        verify(orderRfqMapper, never()).selectList(any(QueryWrapper.class));
+        QueryWrapper<OrderRfq> capturedQuery = queryCaptor.getValue();
+        assertThat(capturedQuery.getSqlSegment()).contains("status IN");
+        assertThat(capturedQuery.getParamNameValuePairs().values())
+                .contains(QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
+        assertThat(result.getRecords()).isEmpty();
+        assertThat(result.getTotal()).isZero();
+    }
+
+    @Test
+    void documentOrderListReturnsEmptyForEveryDisallowedStatusFilter() {
+        for (String status : List.of(
+                QuoteStatusWorkflow.UNPRICED,
+                QuoteStatusWorkflow.PRICED,
+                QuoteStatusWorkflow.QUOTED,
+                QuoteStatusWorkflow.DISCARDED)) {
+            PageResult<OrderRfq> result = service.listDocumentOrders(null, null, status, 2, 50);
+
+            assertThat(result.getRecords()).isEmpty();
+            assertThat(result.getTotal()).isZero();
+            assertThat(result.getPage()).isEqualTo(2);
+            assertThat(result.getPageSize()).isEqualTo(50);
+        }
+        verifyNoInteractions(orderRfqMapper, dataScopeService);
+    }
+
+    @Test
+    void documentOrderListReturnsEmptyWhenDataScopeProducesNoRows() {
+        doAnswer(invocation -> {
+            QueryWrapper<?> query = invocation.getArgument(0);
+            query.apply("1 = 0");
+            return null;
+        }).when(dataScopeService).applyOrderScope(any(QueryWrapper.class));
+        when(orderRfqMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        PageResult<OrderRfq> result = service.listDocumentOrders(null, null, null, 1, 20);
+
+        assertThat(result.getRecords()).isEmpty();
+        assertThat(result.getTotal()).isZero();
+        verify(orderRfqMapper, never()).selectList(any(QueryWrapper.class));
+    }
+
+    @Test
+    void pagedDocumentRowsDelegateRequestedPageArguments() {
+        OrderRfq released = order(42, QuoteStatusWorkflow.RELEASED);
+        PageResult<com.machining.quote.entity.OrderDeliveryTicket> ticketPage =
+                PageResult.of(List.of(), 12, 3, 50);
+        PageResult<ProcessSheetDTO> processSheetPage = PageResult.of(List.of(), 9, 4, 25);
+        when(orderRfqMapper.selectById(42)).thenReturn(released);
+        when(deliveryService.pageTickets(42, 3, 50)).thenReturn(ticketPage);
+        when(deliveryService.pageProcessSheets(42, 4, 25)).thenReturn(processSheetPage);
+
+        assertThat(service.pageTickets(42, 3, 50)).isSameAs(ticketPage);
+        assertThat(service.pageProcessSheets(42, 4, 25)).isSameAs(processSheetPage);
+
+        verify(deliveryService).pageTickets(42, 3, 50);
+        verify(deliveryService).pageProcessSheets(42, 4, 25);
+    }
+
+    @Test
+    void documentRowsAndExportsStopWhenDataScopeRejectsOrder() throws IOException {
+        OrderRfq released = order(42, QuoteStatusWorkflow.RELEASED);
+        when(orderRfqMapper.selectById(42)).thenReturn(released);
+        doThrow(new RuntimeException("No data permission for order 42"))
+                .when(dataScopeService).assertCanAccessOrder(released);
+
+        assertThatThrownBy(() -> service.pageTickets(42, 1, 20))
+                .hasMessageContaining("No data permission");
+        assertThatThrownBy(() -> service.exportTickets(42, mock(HttpServletResponse.class)))
+                .hasMessageContaining("No data permission");
+
+        verifyNoInteractions(deliveryService, excelExportService, auditService);
     }
 
     @Test

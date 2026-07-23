@@ -23,6 +23,7 @@ class PermissionSystemStage4Test {
                         "/locked-items",
                         "/quote-process",
                         "/release",
+                        "/delivery-documents",
                         "/quote-template",
                         "/engineering",
                         "/material-process",

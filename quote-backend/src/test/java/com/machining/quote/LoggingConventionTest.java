@@ -43,6 +43,7 @@ class LoggingConventionTest {
         assertHasLogger("service/LeadTimeService.java", "LeadTimeService");
         assertHasLogger("service/OrderManagementService.java", "OrderManagementService");
         assertHasLogger("service/DeliveryService.java", "DeliveryService");
+        assertHasLogger("service/DeliveryDocumentService.java", "DeliveryDocumentService");
         assertHasLogger("service/WmsAllocationService.java", "WmsAllocationService");
         assertHasLogger("service/QuoteProcessService.java", "QuoteProcessService");
         assertHasLogger("service/InternalTargetLeadTimeService.java", "InternalTargetLeadTimeService");
@@ -101,6 +102,13 @@ class LoggingConventionTest {
                 .contains("Delivery ticket generation completed")
                 .contains("Delivery ticket generation failed")
                 .contains("log.error(\"Delivery ticket generation failed");
+
+        assertThat(source("service/DeliveryDocumentService.java"))
+                .contains("Delivery document export started")
+                .contains("Delivery document export completed")
+                .contains("Delivery document export rejected")
+                .contains("Delivery document export failed")
+                .contains("log.error(\"Delivery document export failed");
 
         assertThat(source("service/WmsAllocationService.java"))
                 .contains("WMS allocation started")
@@ -175,7 +183,10 @@ class LoggingConventionTest {
                 .contains("主流程文件日志事件命名")
                 .contains("grep -R 'RFQ import")
                 .contains("grep -R 'taskId=")
-                .contains("requestId + taskId + audit_log");
+                .contains("requestId + taskId + audit_log")
+                .contains("DELIVERY_TICKET_EXPORT")
+                .contains("DELIVERY_PROCESS_SHEET_EXPORT")
+                .contains("Delivery document export");
     }
 
     private void assertHasLogger(String relativePath, String className) throws IOException {

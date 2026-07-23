@@ -7,6 +7,8 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 const source = readSource('components', 'DeliveryDocumentManage.vue')
+const ticketTableSource = readSource('components', 'delivery-document', 'DeliveryTicketRowsTable.vue')
+const processSheetTableSource = readSource('components', 'delivery-document', 'ProcessSheetRowsTable.vue')
 
 const expectIncludes = (tokens) => {
   for (const token of tokens) {
@@ -87,6 +89,12 @@ describe('delivery document page assembly', () => {
       '`${path}-${selectedRfqId.value}.xlsx`'
     ])
     expect(source).not.toContain('downloadMarketExport')
+  })
+
+  test('guards both export buttons with the delivery document export permission', () => {
+    for (const tableSource of [ticketTableSource, processSheetTableSource]) {
+      expect(tableSource).toContain(`v-permission="'market:delivery-document:export'"`)
+    }
   })
 
   test('does not bring the release generation left-side parameter panel into the new page', () => {

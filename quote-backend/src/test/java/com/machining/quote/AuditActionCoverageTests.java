@@ -308,6 +308,8 @@ class AuditActionCoverageTests {
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_TICKET_EXPORT")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("DELIVERY");
 
         assertThat(AuditService.labelForAction("AUTH_ACCOUNT_LOCKED")).isNotEqualTo("AUTH_ACCOUNT_LOCKED");
         assertThat(AuditService.labelForAction("RFQ_IMPORT")).isNotEqualTo("RFQ_IMPORT");
@@ -319,6 +321,8 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUCCESS");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_FAILED");
+        assertThat(AuditService.labelForAction("DELIVERY_TICKET_EXPORT")).isNotEqualTo("DELIVERY_TICKET_EXPORT");
+        assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isNotEqualTo("DELIVERY_PROCESS_SHEET_EXPORT");
     }
 
     @Test
@@ -329,6 +333,12 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("提交WMS锁库");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("WMS锁库成功");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("WMS锁库失败");
+    }
+
+    @Test
+    void deliveryDocumentExportActionsExposeStableChineseLabels() {
+        assertThat(AuditService.labelForAction("DELIVERY_TICKET_EXPORT")).isEqualTo("导出提单表");
+        assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("导出工艺表");
     }
 
     @Test

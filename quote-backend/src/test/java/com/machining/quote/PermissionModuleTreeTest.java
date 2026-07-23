@@ -31,6 +31,7 @@ class PermissionModuleTreeTest {
     private static final Path MES_WMS_PERMISSION_TREE_REPAIR_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V49__mes_wms_permission_tree_repair.sql");
     private static final Path DELIVERY_COMMON_QUERY_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
     private static final Path RETIRE_RFQ_ORDER_TYPE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V53__retire_rfq_order_type_select_permission.sql");
+    private static final Path DELIVERY_DOCUMENT_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path DOCS_ROOT = Path.of("..", "docs");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
@@ -125,6 +126,38 @@ class PermissionModuleTreeTest {
         assertThat(source)
                 .as("Market roles and read-only roles can view the demand pool by default")
                 .contains("Map.entry(\"market:delivered-item:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+    }
+
+    @Test
+    void deliveryDocumentPermissionsFormIndependentMenuTree() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+        String migration = Files.readString(DELIVERY_DOCUMENT_PERMISSION_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .contains(
+                        "market:delivery-document:view",
+                        "market:delivery-document:customer-select",
+                        "market:delivery-document:order-select",
+                        "market:delivery-document:export"
+                );
+        assertThat(source)
+                .contains(
+                        "permission(165L, \"MENU\", \"market:delivery-document:view\", \"提单表据\", \"/delivery-documents\", \"DeliveryDocumentManage\", true, 146)",
+                        "permission(166L, \"API\", \"market:delivery-document:customer-select\", \"提单表据选择客户\", null, null, false, 147, 165L)",
+                        "permission(167L, \"API\", \"market:delivery-document:order-select\", \"提单表据选择订单\", null, null, false, 148, 165L)",
+                        "permission(168L, \"BUTTON\", \"market:delivery-document:export\", \"导出提单表据\", null, null, false, 149, 165L)",
+                        "Map.entry(\"market:delivery-document:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
+                )
+                .doesNotContain("Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+        assertThat(migration)
+                .contains(
+                        "('market:delivery-document:view', 'API', 'market:delivery-document:customer-select'",
+                        "('market:delivery-document:view', 'API', 'market:delivery-document:order-select'",
+                        "('market:delivery-document:view', 'BUTTON', 'market:delivery-document:export'",
+                        "AND r.role_code = 'READONLY'",
+                        "AND p.permission_code = 'market:delivery-document:export'"
+                );
     }
 
     @Test

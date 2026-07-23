@@ -39,7 +39,14 @@ class AuditServiceTests {
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("materialName", "7075-T6");
         after.put("password", "new-secret");
-        after.put("nested", Map.of("token", "jwt-token", "safe", "kept"));
+        after.put("nested", Map.of(
+                "token", "jwt-token",
+                "jwtToken", "jwt-alias",
+                "authorizationHeader", "Bearer secret",
+                "cookie", "erp_token=cookie-secret",
+                "setCookie", "erp_token=set-cookie-secret",
+                "safe", "kept"
+        ));
 
         service.record("DICT_MATERIAL_UPDATE", "dict_material", 12, before, after);
 
@@ -56,7 +63,9 @@ class AuditServiceTests {
         assertThat(readProperty(log, "requestPath")).isEqualTo("/api/dict/materials/12");
         assertThat(readProperty(log, "requestId")).isEqualTo("req-123");
         assertThat(log.getBeforeData()).contains("[已脱敏]").doesNotContain("old-secret");
-        assertThat(log.getAfterData()).contains("[已脱敏]", "kept").doesNotContain("new-secret", "jwt-token");
+        assertThat(log.getAfterData())
+                .contains("[已脱敏]", "kept")
+                .doesNotContain("new-secret", "jwt-token", "jwt-alias", "Bearer secret", "cookie-secret", "set-cookie-secret");
     }
 
     @Test

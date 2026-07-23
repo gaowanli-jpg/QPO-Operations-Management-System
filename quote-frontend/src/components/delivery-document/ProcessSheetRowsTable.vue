@@ -3,6 +3,7 @@
     <div class="erp-table-header panel-title-row">
       <div class="panel-title">已生成工艺表行</div>
       <el-button
+        v-permission="'market:delivery-document:export'"
         size="small"
         plain
         class="workflow-soft-button"
