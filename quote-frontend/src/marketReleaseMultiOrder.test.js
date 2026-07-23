@@ -35,16 +35,15 @@ describe('market release multi-order stage 2', () => {
     expect(source).not.toContain('fetchReleaseItems(selectedRfqId.value)')
   })
 
-  test('market release displays order source columns and removes selected order rows', () => {
+  test('market release displays order source columns and selected order summary table', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
     expect(source).toContain('prop="rfqNo" label="RFQ号"')
     expect(source).toContain('prop="customerName" label="客户"')
     expect(source).toContain('prop="orderStatus" label="订单状态"')
-    expect(source).toContain('removeSelectedOrder')
-    expect(source).toContain('row.rfqId === orderId')
-    expect(source).toContain('delete selectedItemIdMap[id]')
-    expect(source).toContain('selectedOrders.value = selectedOrders.value.filter(order => order.id !== orderId)')
+    expect(source).toContain('class="selected-orders-mini-table"')
+    expect(source).toContain('prop="status" label="订单状态"')
+    expect(source).toContain('height="132"')
     expect(source).toContain(':multiple="true"')
     expect(source).toContain(':locked-customer-name="selectedCustomerName"')
     expect(source).toContain(':selected-order-ids="selectedOrderIds"')

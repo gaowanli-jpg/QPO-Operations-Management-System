@@ -141,7 +141,7 @@ describe('QPO final UI punch-list polish', () => {
     expect(itemPricing).toContain('<th scope="row" title="预测本件材料费">预测本件材料费</th>')
     expect(itemPricing).toContain('<td :title="`¥ ${calculatedMaterialCost.toFixed(2)}`">')
     expect(itemPricing).toContain('.material-summary-table th,\n.material-summary-table td {\n  min-width: 0;\n  max-width: 0;\n  overflow: hidden;')
-    expect(marketRelease).toContain('<div class="selected-order-text" :title="selectedOrderLabel">')
+    expect(marketRelease).toContain('class="selected-orders-mini-table"')
     expect(quoteProcess).toContain('<div class="selected-order-text" :title="selectedOrderLabel">')
   })
 })

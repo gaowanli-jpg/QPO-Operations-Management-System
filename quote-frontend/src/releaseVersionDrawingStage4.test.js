@@ -48,4 +48,31 @@ describe('release drawing replacement stage 4', () => {
     expect(source).toContain('row.hasDrawing || row.drawingUrl')
     expect(source).toContain("{{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}")
   })
+
+  test('market release keeps order picking in the header and summarizes selected orders as a compact table', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+    const inquiryPanel = source.slice(
+      source.indexOf('<div class="panel-title">询价单</div>'),
+      source.indexOf('<el-form label-width="80px" class="ticket-form">')
+    )
+
+    expect(inquiryPanel).toContain('selected-orders-mini-table')
+    expect(inquiryPanel).toContain('prop="customerName"')
+    expect(inquiryPanel).toContain('prop="rfqNo"')
+    expect(inquiryPanel).toContain('prop="status"')
+    expect(inquiryPanel).toContain('height="132"')
+    expect(inquiryPanel).not.toContain('order-picker-row')
+    expect(inquiryPanel).not.toContain('selected-order-tags')
+    expect(inquiryPanel).not.toContain('@click="openOrderPicker"')
+  })
+
+  test('market release uses horizontal import actions and shared drawing upload wording', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+
+    expect(source).toContain('class="release-table-actions import-action-row"')
+    expect(source).toContain('支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。')
+    expect(source).toContain('class="custom-dropzone drawing-replace-dropzone supplement-dropzone"')
+    expect(source).toContain('class="drawing-replace-upload-actions import-action-row"')
+    expect(source).toContain('将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处')
+  })
 })

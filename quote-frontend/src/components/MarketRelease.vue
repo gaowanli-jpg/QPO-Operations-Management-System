@@ -14,30 +14,23 @@
         <el-col :span="7">
           <div class="erp-surface release-panel">
             <div class="panel-title">询价单</div>
-            <div class="order-picker-row">
-              <div class="selected-order-text" :title="selectedOrderLabel">
-                {{ selectedOrderLabel }}
-              </div>
-              <el-button v-permission="'market:release:order-select'" plain class="workflow-soft-button" @click="openOrderPicker" :loading="loading">选择订单</el-button>
-            </div>
-
-            <div v-if="selectedOrders.length" class="selected-order-tags">
-              <el-tag
-                v-for="order in selectedOrders"
-                :key="order.id"
-                closable
-                type="info"
-                @close="removeSelectedOrder(order.id)"
-              >
-                {{ order.rfqNo || order.id }} / {{ order.status || '-' }}
-              </el-tag>
-            </div>
-
-            <el-descriptions v-if="selectedOrders.length" :column="1" border class="order-desc">
-              <el-descriptions-item label="客户">{{ selectedCustomerName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="订单数">{{ selectedOrders.length }}</el-descriptions-item>
-              <el-descriptions-item label="状态">{{ selectedOrderStatusSummary }}</el-descriptions-item>
-            </el-descriptions>
+            <el-table
+              class="selected-orders-mini-table"
+              :data="selectedOrders"
+              height="132"
+              size="small"
+              border
+              stripe
+              empty-text="请在右上角选择订单"
+            >
+              <el-table-column prop="customerName" label="客户" min-width="86" show-overflow-tooltip />
+              <el-table-column prop="rfqNo" label="RFQ号" min-width="122" show-overflow-tooltip />
+              <el-table-column prop="status" label="订单状态" width="94" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="statusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
 
             <el-form label-width="80px" class="ticket-form">
               <el-form-item label="订单类型" required>
@@ -163,7 +156,7 @@
           <div class="erp-table-surface release-table-panel">
             <div class="erp-table-header panel-title-row">
               <div class="panel-title">通过零件选择</div>
-              <div class="release-table-actions">
+              <div class="release-table-actions import-action-row">
                 <el-button
                   v-permission="'market:release:create'"
                   size="small"
@@ -352,15 +345,17 @@
         <div class="erp-upload-surface drawing-replace-upload">
           <div
             v-permission="'market:release:create'"
-            class="custom-dropzone drawing-replace-dropzone"
+            class="custom-dropzone drawing-replace-dropzone supplement-dropzone"
             @dragover.prevent
             @drop.prevent="handleReplacementDrop"
           >
-            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-            <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
-            <div class="el-upload__tip">仅支持 PDF；系统按文件名解析图号，匹配成功后直接替换旧图纸。</div>
+            <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
+            <div class="el-upload__text dropzone-text">
+              将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
+            </div>
+            <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
             <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-            <div class="drawing-replace-upload-actions">
+            <div class="drawing-replace-upload-actions import-action-row">
               <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" @click="triggerReplacementFileSelect">选择多个 PDF</el-button>
               <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" @click="triggerReplacementFolderSelect">选择文件夹</el-button>
             </div>
@@ -520,18 +515,6 @@ const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提�
 
 const selectedOrderIds = computed(() => selectedOrders.value.map(order => order.id))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
-const selectedOrderStatusSummary = computed(() => {
-  const statuses = [...new Set(selectedOrders.value.map(order => order.status).filter(Boolean))]
-  return statuses.length > 0 ? statuses.join(' / ') : '-'
-})
-
-const selectedOrderLabel = computed(() => (
-  selectedOrders.value.length === 1
-    ? `${selectedOrders.value[0].rfqNo || selectedOrders.value[0].id} / ${selectedOrders.value[0].customerName || '-'}`
-    : selectedOrders.value.length > 1
-      ? `已选择 ${selectedOrders.value.length} 个订单 / ${selectedCustomerName.value || '-'}`
-    : '未选择订单'
-))
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
@@ -654,29 +637,6 @@ const resetReleaseFormForOrders = () => {
   releaseForm.internalProjectNo = ''
   releaseForm.customerOrderNo = ''
   releaseForm.customerProjectNo = ''
-}
-
-const removeSelectedOrder = async (orderId) => {
-  selectedOrders.value = selectedOrders.value.filter(order => order.id !== orderId)
-  selectedRfqId.value = selectedOrders.value[0]?.id || null
-  const belongsToRemovedOrder = row => row.rfqId === orderId
-  itemList.value = itemList.value.filter(row => !belongsToRemovedOrder(row))
-  Object.keys(selectedItemIdMap).forEach(id => {
-    if (belongsToRemovedOrder(selectedItemIdMap[id])) {
-      delete selectedItemIdMap[id]
-    }
-  })
-  if (selectedOrders.value.length === 0) {
-    setItemList([])
-    releaseItemTotal.value = 0
-    clearSelectedRows()
-    resetReleaseFormForOrders()
-    await nextTick()
-    itemTableRef.value?.clearSelection()
-    return
-  }
-  resetReleasePagination()
-  await fetchReleaseItemsBatch()
 }
 
 const setItemList = (rows) => {
@@ -1222,25 +1182,18 @@ const statusTagType = (status) => {
   margin-bottom: 10px;
 }
 
-.order-picker-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
+.selected-orders-mini-table {
+  width: 100%;
+  border-radius: 6px;
 }
 
-.selected-order-text {
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  color: var(--erp-text);
-  border: 1px solid var(--erp-border);
-  border-radius: 6px;
-  padding: 0 10px;
-  background: var(--erp-surface-soft);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.selected-orders-mini-table :deep(.el-table__cell) {
+  padding: 5px 0;
+}
+
+.selected-orders-mini-table :deep(.el-table__empty-text) {
+  color: var(--erp-text-secondary);
+  font-size: 13px;
 }
 
 .panel-title-row {
@@ -1255,14 +1208,33 @@ const statusTagType = (status) => {
   margin-bottom: 0;
 }
 
-.order-desc {
-  margin-top: 14px;
-}
-
 .ticket-form {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--erp-border-soft);
+}
+
+.import-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+.release-table-actions {
+  justify-content: flex-end;
+  width: auto;
+  margin-top: 0;
+}
+
+.release-table-actions :deep(.el-upload) {
+  display: flex;
+}
+
+.release-table-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 .full-width {
@@ -1374,10 +1346,148 @@ const statusTagType = (status) => {
   margin-top: 14px;
 }
 
-:deep(.el-descriptions__label) {
-  width: 78px;
+.drawing-replace-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.drawing-replace-upload {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.custom-dropzone {
+  width: 100%;
+  padding: 28px 16px;
+  border: 1px dashed #aab6c8;
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+  text-align: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.custom-dropzone:hover {
+  border-color: var(--erp-primary);
+  background: #f3f8fc;
+}
+
+.dropzone-icon {
+  margin-bottom: 12px;
+  color: #8c98aa;
+  font-size: 42px;
+}
+
+.dropzone-text {
   color: var(--erp-text-secondary);
-  background: #f5f7fb;
+  font-size: 15px;
+}
+
+.drawing-replace-dropzone :deep(.el-upload__tip) {
+  margin-top: 8px;
+  color: var(--erp-text-secondary);
+}
+
+.folder-select-row {
+  margin-top: 12px;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.drawing-replace-upload-actions {
+  margin-top: 12px;
+}
+
+.folder-select-button {
+  min-height: 32px;
+  min-width: 150px;
+  padding-inline: 14px;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.replacement-file-stats {
+  padding: 12px 14px;
+  border: 1px solid #cfe8d2;
+  border-radius: 8px;
+  background: #f4fbf5;
+  color: var(--erp-success);
+}
+
+.replacement-file-stats h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.replacement-pdf-list,
+.result-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.replacement-pdf-list li,
+.result-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #dcefe0;
+  color: #256b2b;
+}
+
+.replacement-pdf-list li:last-child,
+.result-list li:last-child {
+  border-bottom: none;
+}
+
+.replacement-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replacement-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.replacement-summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-soft);
+}
+
+.replacement-summary-grid strong {
+  color: var(--erp-text);
+  font-size: 18px;
+}
+
+.replacement-summary-grid span,
+.result-sub {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.result-main {
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.result-reason {
+  color: var(--erp-warning);
 }
 
 @media (max-width: 1180px) {
@@ -1394,11 +1504,24 @@ const statusTagType = (status) => {
 
 @media (max-width: 760px) {
   .release-page-header,
-  .panel-title-row,
-  .order-picker-row {
+  .panel-title-row {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .release-table-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .release-table-actions :deep(.el-button),
+  .release-table-actions :deep(.el-upload) {
+    width: 100%;
+  }
+
+  .replacement-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

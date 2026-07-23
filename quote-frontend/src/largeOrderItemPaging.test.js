@@ -128,7 +128,7 @@ describe('large order item paging contracts', () => {
     expect(source).toContain('currentPageIds.forEach(id => delete selectedItemIdMap[id])')
     expect(source).toContain("formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))")
     expect(source).toContain('parsePartSelectionBatch(formData)')
-    expect(source).toContain('removeSelectedOrder')
+    expect(source).toContain('selected-orders-mini-table')
     expect(source).not.toContain('paginateRows')
     expect(source).not.toContain('listInternalTargetLeadTimeItems')
   })
