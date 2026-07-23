@@ -269,29 +269,6 @@
             </div>
           </div>
 
-          <DeliveryTicketRowsTable
-            :rows="pagedTicketList"
-            :total="releaseTicketTotal"
-            :page="ticketPagination.page"
-            :page-size="ticketPagination.pageSize"
-            :loading="loadingTickets"
-            :exportable="releaseTicketTotal > 0"
-            @page-change="handleTicketPageChange"
-            @page-size-change="handleTicketPageSizeChange"
-            @export="exportExcel('tickets')"
-          />
-
-          <ProcessSheetRowsTable
-            :rows="pagedProcessSheetList"
-            :total="releaseProcessSheetTotal"
-            :page="processSheetPagination.page"
-            :page-size="processSheetPagination.pageSize"
-            :loading="loadingProcessSheets"
-            :exportable="releaseProcessSheetTotal > 0"
-            @page-change="handleProcessSheetPageChange"
-            @page-size-change="handleProcessSheetPageSizeChange"
-            @export="exportExcel('process')"
-          />
         </el-col>
       </el-row>
     </section>
@@ -310,16 +287,11 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import DeliveryTicketRowsTable from './delivery-document/DeliveryTicketRowsTable.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import ProcessSheetRowsTable from './delivery-document/ProcessSheetRowsTable.vue'
 import {
-  downloadMarketExport,
   generateTicket,
   getReleaseSummary,
   listReleaseItems,
-  listProcessSheets,
-  listTickets,
   parsePartSelection,
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
@@ -334,25 +306,17 @@ const selectedRfqId = ref(null)
 const orderPickerVisible = ref(false)
 const orderInfo = ref({})
 const itemList = ref([])
-const ticketList = ref([])
-const processSheetList = ref([])
 const releaseItemTotal = ref(0)
-const releaseTicketTotal = ref(0)
-const releaseProcessSheetTotal = ref(0)
 const selectedItemIdMap = reactive({})
 const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
 const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
-const ticketPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
-const processSheetPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
 const savingInternalRowMap = reactive({})
 
 const loading = ref(false)
-const loadingTickets = ref(false)
-const loadingProcessSheets = ref(false)
 const submitting = ref(false)
 const adjustingInternalLeadTime = ref(false)
 const settingInternalTargetLeadTime = ref(false)
@@ -379,31 +343,11 @@ const releaseForm = reactive({
 })
 
 const pagedReleaseItems = computed(() => itemList.value)
-const pagedTicketList = computed(() => ticketList.value)
-const pagedProcessSheetList = computed(() => processSheetList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
 const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
 
 const resetReleasePagination = () => {
   releaseItemPagination.page = 1
-  ticketPagination.page = 1
-  processSheetPagination.page = 1
-}
-
-const handleTicketPageChange = (value) => {
-  ticketPagination.page = value
-}
-
-const handleTicketPageSizeChange = (value) => {
-  ticketPagination.pageSize = value
-}
-
-const handleProcessSheetPageChange = (value) => {
-  processSheetPagination.page = value
-}
-
-const handleProcessSheetPageSizeChange = (value) => {
-  processSheetPagination.pageSize = value
 }
 
 const clearSelectedRows = () => {
@@ -428,24 +372,6 @@ watch(
   () => {
     if (selectedRfqId.value) {
       fetchReleaseItems(selectedRfqId.value)
-    }
-  }
-)
-
-watch(
-  () => [ticketPagination.page, ticketPagination.pageSize],
-  () => {
-    if (selectedRfqId.value) {
-      loadTickets(selectedRfqId.value)
-    }
-  }
-)
-
-watch(
-  () => [processSheetPagination.page, processSheetPagination.pageSize],
-  () => {
-    if (selectedRfqId.value) {
-      loadProcessSheets(selectedRfqId.value)
     }
   }
 )
@@ -475,8 +401,6 @@ const loadOrder = async (rfqId) => {
     clearSelectedRows()
     await nextTick()
     itemTableRef.value?.clearSelection()
-    await loadTickets(rfqId)
-    await loadProcessSheets(rfqId)
   } catch (error) {
     console.error(error)
     ElMessage.error('询价单明细加载失败。')
@@ -510,40 +434,6 @@ const setItemList = (rows) => {
       selectedItemIdMap[item.id] = { ...selectedItemIdMap[item.id], ...item }
     }
   })
-}
-
-const loadTickets = async (rfqId) => {
-  loadingTickets.value = true
-  try {
-    const response = await listTickets(rfqId, {
-      page: ticketPagination.page,
-      pageSize: ticketPagination.pageSize
-    })
-    ticketList.value = response.records || []
-    releaseTicketTotal.value = Number(response.total ?? 0)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('提单列表加载失败。')
-  } finally {
-    loadingTickets.value = false
-  }
-}
-
-const loadProcessSheets = async (rfqId) => {
-  loadingProcessSheets.value = true
-  try {
-    const response = await listProcessSheets(rfqId, {
-      page: processSheetPagination.page,
-      pageSize: processSheetPagination.pageSize
-    })
-    processSheetList.value = response.records || []
-    releaseProcessSheetTotal.value = Number(response.total ?? 0)
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('工艺表列表加载失败。')
-  } finally {
-    loadingProcessSheets.value = false
-  }
 }
 
 const remainingQtyFor = (row) => {
@@ -753,7 +643,7 @@ const submitTicket = async () => {
     }
     const response = await generateTicket(payload)
     if (response.success) {
-      ElMessage.success(response.message)
+      ElMessage.success(`${response.message || '提单已生成。'}可到「提单表据」查看和导出。`)
       await loadOrder(selectedRfqId.value)
     } else {
       ElMessage.error(response.message || '提单生成失败。')
@@ -772,19 +662,6 @@ const resolveDeliveryLeadTime = (row) => {
     || row.quoteLeadTime
     || row.leadTime
     || '-'
-}
-
-const exportExcel = async (type) => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
-  const pathMap = {
-    tickets: 'tickets',
-    process: 'process-sheets'
-  }
-  const path = pathMap[type] || 'process-sheets'
-  const result = await downloadMarketExport(path, selectedRfqId.value, `${path}-${selectedRfqId.value}.xlsx`)
-  if (!result.success) {
-    ElMessage.error(result.message || 'Excel 导出失败。')
-  }
 }
 
 </script>

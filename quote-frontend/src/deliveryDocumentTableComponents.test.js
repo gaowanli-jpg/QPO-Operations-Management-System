@@ -14,7 +14,7 @@ const ticketTablePath = resolve(currentDir, 'components', 'delivery-document', '
 const processTablePath = resolve(currentDir, 'components', 'delivery-document', 'ProcessSheetRowsTable.vue')
 const ticketTable = () => readIfExists('components', 'delivery-document', 'DeliveryTicketRowsTable.vue')
 const processTable = () => readIfExists('components', 'delivery-document', 'ProcessSheetRowsTable.vue')
-const marketRelease = () => readSource('components', 'MarketRelease.vue')
+const deliveryDocumentManage = () => readSource('components', 'DeliveryDocumentManage.vue')
 
 const expectIncludes = (source, fileName, tokens) => {
   for (const token of tokens) {
@@ -102,32 +102,32 @@ describe('delivery document table components', () => {
     ])
   })
 
-  test('uses the extracted components from MarketRelease without keeping table formatting logic inline', () => {
-    const source = marketRelease()
+  test('uses the extracted components from DeliveryDocumentManage without keeping table formatting logic inline', () => {
+    const source = deliveryDocumentManage()
 
-    expectIncludes(source, 'MarketRelease.vue', [
+    expectIncludes(source, 'DeliveryDocumentManage.vue', [
       "import DeliveryTicketRowsTable from './delivery-document/DeliveryTicketRowsTable.vue'",
       "import ProcessSheetRowsTable from './delivery-document/ProcessSheetRowsTable.vue'",
       '<DeliveryTicketRowsTable',
-      ':rows="pagedTicketList"',
-      ':total="releaseTicketTotal"',
+      ':rows="ticketRows"',
+      ':total="ticketTotal"',
       ':page="ticketPagination.page"',
       ':page-size="ticketPagination.pageSize"',
       ':loading="loadingTickets"',
-      ':exportable="releaseTicketTotal > 0"',
+      ':exportable="ticketExportable"',
       '@page-change="handleTicketPageChange"',
       '@page-size-change="handleTicketPageSizeChange"',
-      '@export="exportExcel(\'tickets\')"',
+      '@export="exportDeliveryDocumentExcel(\'tickets\')"',
       '<ProcessSheetRowsTable',
-      ':rows="pagedProcessSheetList"',
-      ':total="releaseProcessSheetTotal"',
+      ':rows="processSheetRows"',
+      ':total="processSheetTotal"',
       ':page="processSheetPagination.page"',
       ':page-size="processSheetPagination.pageSize"',
       ':loading="loadingProcessSheets"',
-      ':exportable="releaseProcessSheetTotal > 0"',
+      ':exportable="processSheetExportable"',
       '@page-change="handleProcessSheetPageChange"',
       '@page-size-change="handleProcessSheetPageSizeChange"',
-      '@export="exportExcel(\'process\')"'
+      '@export="exportDeliveryDocumentExcel(\'process\')"'
     ])
 
     expect(source).not.toContain('const formatRoute = (route) =>')
