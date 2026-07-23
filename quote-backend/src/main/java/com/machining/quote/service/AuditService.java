@@ -259,6 +259,8 @@ public class AuditService {
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "INTERNAL_TARGET_LEAD_TIME_UPDATE" -> "更新内部目标交期";
             case "DELIVERY_TICKET_GENERATE" -> "生成提单";
+            case "DELIVERY_TICKET_EXPORT" -> "导出提单表";
+            case "DELIVERY_PROCESS_SHEET_EXPORT" -> "导出工艺表";
             case "DELIVERY_MES_MATERIAL_SYNC_SUBMIT" -> "提交MES物料号同步";
             case "DELIVERY_MES_MATERIAL_SYNC_SUCCESS" -> "MES物料号同步成功";
             case "DELIVERY_MES_MATERIAL_SYNC_FAILED" -> "MES物料号同步失败";
