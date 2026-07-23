@@ -21,10 +21,22 @@
               <el-button v-permission="'market:release:order-select'" plain class="workflow-soft-button" @click="openOrderPicker" :loading="loading">选择订单</el-button>
             </div>
 
-            <el-descriptions v-if="orderInfo.id" :column="1" border class="order-desc">
-              <el-descriptions-item label="客户">{{ orderInfo.customerName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="RFQ号">{{ orderInfo.rfqNo || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="状态">{{ orderInfo.status || '-' }}</el-descriptions-item>
+            <div v-if="selectedOrders.length" class="selected-order-tags">
+              <el-tag
+                v-for="order in selectedOrders"
+                :key="order.id"
+                closable
+                type="info"
+                @close="removeSelectedOrder(order.id)"
+              >
+                {{ order.rfqNo || order.id }} / {{ order.status || '-' }}
+              </el-tag>
+            </div>
+
+            <el-descriptions v-if="selectedOrders.length" :column="1" border class="order-desc">
+              <el-descriptions-item label="客户">{{ selectedCustomerName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="订单数">{{ selectedOrders.length }}</el-descriptions-item>
+              <el-descriptions-item label="状态">{{ selectedOrderStatusSummary }}</el-descriptions-item>
             </el-descriptions>
 
             <el-form label-width="80px" class="ticket-form">
@@ -36,7 +48,7 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="RFQ号">
-                <el-input v-model="releaseForm.projectNo" placeholder="默认取 RFQ 号" disabled />
+                <el-input v-model="releaseForm.projectNo" placeholder="多订单按各订单 RFQ 号生成" disabled />
               </el-form-item>
               <el-form-item label="开工日期">
                 <el-date-picker
@@ -164,7 +176,7 @@
                     size="small"
                     plain
                     class="workflow-soft-button"
-                    :disabled="!selectedRfqId || releaseItemTotal === 0"
+                    :disabled="selectedOrders.length !== 1 || releaseItemTotal === 0"
                     :loading="importSelecting"
                   >
                     导入表格选定
@@ -185,6 +197,13 @@
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />
+              <el-table-column prop="rfqNo" label="RFQ号" width="150" fixed show-overflow-tooltip />
+              <el-table-column prop="customerName" label="客户" width="130" show-overflow-tooltip />
+              <el-table-column prop="orderStatus" label="订单状态" width="110" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="statusTagType(row.orderStatus)" size="small">{{ row.orderStatus || '-' }}</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
@@ -279,6 +298,9 @@
       customer-scope="release"
       order-scope="release"
       :allowed-statuses="RELEASE_ALLOWED_STATUSES"
+      :multiple="true"
+      :locked-customer-name="selectedCustomerName"
+      :selected-order-ids="selectedOrderIds"
       @select="handleOrderSelected"
     />
   </div>
@@ -291,7 +313,7 @@ import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   generateTicket,
   getReleaseSummary,
-  listReleaseItems,
+  listReleaseItemsBatch,
   parsePartSelection,
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
@@ -303,8 +325,8 @@ import {
 } from '../utils/clientPagination'
 
 const selectedRfqId = ref(null)
+const selectedOrders = ref([])
 const orderPickerVisible = ref(false)
-const orderInfo = ref({})
 const itemList = ref([])
 const releaseItemTotal = ref(0)
 const selectedItemIdMap = reactive({})
@@ -325,9 +347,18 @@ let syncingReleaseItemSelection = false
 
 const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
 
+const selectedOrderIds = computed(() => selectedOrders.value.map(order => order.id))
+const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
+const selectedOrderStatusSummary = computed(() => {
+  const statuses = [...new Set(selectedOrders.value.map(order => order.status).filter(Boolean))]
+  return statuses.length > 0 ? statuses.join(' / ') : '-'
+})
+
 const selectedOrderLabel = computed(() => (
-  orderInfo.value.id
-    ? `${orderInfo.value.rfqNo || orderInfo.value.id} / ${orderInfo.value.customerName || '-'}`
+  selectedOrders.value.length === 1
+    ? `${selectedOrders.value[0].rfqNo || selectedOrders.value[0].id} / ${selectedOrders.value[0].customerName || '-'}`
+    : selectedOrders.value.length > 1
+      ? `已选择 ${selectedOrders.value.length} 个订单 / ${selectedCustomerName.value || '-'}`
     : '未选择订单'
 ))
 
@@ -370,8 +401,8 @@ const syncReleaseItemTableSelection = async () => {
 watch(
   () => [releaseItemPagination.page, releaseItemPagination.pageSize],
   () => {
-    if (selectedRfqId.value) {
-      fetchReleaseItems(selectedRfqId.value)
+    if (selectedOrders.value.length) {
+      fetchReleaseItemsBatch()
     }
   }
 )
@@ -380,24 +411,38 @@ const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
-const handleOrderSelected = async (order) => {
-  selectedRfqId.value = order.id
-  await loadOrder(order.id)
+const handleOrderSelected = async (orderOrOrders) => {
+  const incomingOrders = Array.isArray(orderOrOrders) ? orderOrOrders : [orderOrOrders]
+  const existingIds = new Set(selectedOrderIds.value)
+  const nextOrders = incomingOrders
+    .filter(order => order?.id && !existingIds.has(order.id))
+  if (nextOrders.length === 0) return
+
+  const wasEmpty = selectedOrders.value.length === 0
+  selectedOrders.value = [...selectedOrders.value, ...nextOrders]
+  selectedRfqId.value = selectedOrders.value[0]?.id || null
+  resetReleasePagination()
+  if (wasEmpty) {
+    resetReleaseFormForOrders()
+    clearSelectedRows()
+  }
+  loading.value = true
+  try {
+    await fetchReleaseItemsBatch()
+  } finally {
+    loading.value = false
+  }
 }
 
 const loadOrder = async (rfqId) => {
   if (!rfqId) return
-  resetReleasePagination()
   loading.value = true
   try {
     const response = await getReleaseSummary(rfqId)
-    orderInfo.value = response.orderInfo || {}
-    await fetchReleaseItems(rfqId)
-    releaseForm.projectNo = orderInfo.value.rfqNo || ''
-    releaseForm.orderType = ''
-    releaseForm.internalProjectNo = ''
-    releaseForm.customerOrderNo = ''
-    releaseForm.customerProjectNo = ''
+    const refreshedOrder = response.orderInfo || {}
+    selectedOrders.value = selectedOrders.value.map(order => order.id === rfqId ? { ...order, ...refreshedOrder } : order)
+    selectedRfqId.value = selectedOrders.value[0]?.id || null
+    await fetchReleaseItemsBatch()
     clearSelectedRows()
     await nextTick()
     itemTableRef.value?.clearSelection()
@@ -409,15 +454,51 @@ const loadOrder = async (rfqId) => {
   }
 }
 
-const fetchReleaseItems = async (rfqId) => {
-  const response = await listReleaseItems(rfqId, {
+const fetchReleaseItemsBatch = async () => {
+  if (selectedOrderIds.value.length === 0) {
+    setItemList([])
+    releaseItemTotal.value = 0
+    return
+  }
+  const response = await listReleaseItemsBatch({
+    rfqIds: selectedOrderIds.value,
     page: releaseItemPagination.page,
     pageSize: releaseItemPagination.pageSize
   })
-  itemList.value = response.records || []
   setItemList(response.records || [])
   releaseItemTotal.value = Number(response.total ?? 0)
   await syncReleaseItemTableSelection()
+}
+
+const resetReleaseFormForOrders = () => {
+  releaseForm.projectNo = ''
+  releaseForm.orderType = ''
+  releaseForm.internalProjectNo = ''
+  releaseForm.customerOrderNo = ''
+  releaseForm.customerProjectNo = ''
+}
+
+const removeSelectedOrder = async (orderId) => {
+  selectedOrders.value = selectedOrders.value.filter(order => order.id !== orderId)
+  selectedRfqId.value = selectedOrders.value[0]?.id || null
+  const belongsToRemovedOrder = row => row.rfqId === orderId
+  itemList.value = itemList.value.filter(row => !belongsToRemovedOrder(row))
+  Object.keys(selectedItemIdMap).forEach(id => {
+    if (belongsToRemovedOrder(selectedItemIdMap[id])) {
+      delete selectedItemIdMap[id]
+    }
+  })
+  if (selectedOrders.value.length === 0) {
+    setItemList([])
+    releaseItemTotal.value = 0
+    clearSelectedRows()
+    resetReleaseFormForOrders()
+    await nextTick()
+    itemTableRef.value?.clearSelection()
+    return
+  }
+  resetReleasePagination()
+  await fetchReleaseItemsBatch()
 }
 
 const setItemList = (rows) => {
@@ -463,13 +544,34 @@ const handleSelectionChange = (rows) => {
 }
 
 const selectedRowsInItemOrder = () => {
-  return selectedRows.value.slice().sort((left, right) => Number(left.id || 0) - Number(right.id || 0))
+  return selectedRows.value.slice().sort((left, right) => {
+    const rfqCompare = Number(left.rfqId || 0) - Number(right.rfqId || 0)
+    return rfqCompare !== 0 ? rfqCompare : Number(left.id || 0) - Number(right.id || 0)
+  })
+}
+
+const selectedRowsRfqIds = () => {
+  return [...new Set(selectedRows.value.map(row => row.rfqId || selectedRfqId.value).filter(Boolean))]
+}
+
+const requireSingleSelectedRowsRfqId = (actionText) => {
+  if (!selectedOrders.value.length) {
+    ElMessage.warning('请先选择询价单。')
+    return null
+  }
+  const rfqIds = selectedRowsRfqIds()
+  if (rfqIds.length !== 1) {
+    ElMessage.warning(`${actionText}暂只支持同一订单下的已选零件，多订单统一处理将在后续阶段接入。`)
+    return null
+  }
+  return rfqIds[0]
 }
 
 const handleSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
   selectionUploadRef.value?.clearFiles()
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
+  if (selectedOrders.value.length !== 1) return ElMessage.warning('导入表格选定暂只支持单个订单，多订单导入将在后续阶段接入。')
   if (!file) return
 
   const fileName = String(file.name || '').toLowerCase()
@@ -511,20 +613,21 @@ const handleSelectionExcelChange = async (uploadFile) => {
 }
 
 const adjustInternalLeadTime = async (direction) => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  const rfqId = requireSingleSelectedRowsRfqId('内部目标交期调整')
+  if (!rfqId) return
   const days = Math.abs(Number(internalShiftDays.value || 0)) * direction
   if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
 
   adjustingInternalLeadTime.value = true
   try {
     const response = await shiftInternalTargetLeadTime({
-      rfqId: selectedRfqId.value,
+      rfqId,
       itemIds: selectedRows.value.map(row => row.id),
       days
     })
     clearSelectedRows()
-    await fetchReleaseItems(selectedRfqId.value)
+    await fetchReleaseItemsBatch()
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -541,19 +644,20 @@ const adjustInternalLeadTime = async (direction) => {
 }
 
 const setInternalTargetLeadTime = async () => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个零件。')
+  const rfqId = requireSingleSelectedRowsRfqId('指定内部目标交期')
+  if (!rfqId) return
   if (!manualInternalTargetDate.value) return ElMessage.warning('请先选择内部目标交期。')
 
   settingInternalTargetLeadTime.value = true
   try {
     const response = await setInternalTargetLeadTimeRequest({
-      rfqId: selectedRfqId.value,
+      rfqId,
       itemIds: selectedRows.value.map(row => row.id),
       internalTargetLeadTime: manualInternalTargetDate.value
     })
     clearSelectedRows()
-    await fetchReleaseItems(selectedRfqId.value)
+    await fetchReleaseItemsBatch()
     const adjusted = response.adjustedCount || 0
     const skipped = response.skippedCount || 0
     if (skipped > 0) {
@@ -570,11 +674,12 @@ const setInternalTargetLeadTime = async () => {
 }
 
 const saveInternalTargetLeadTime = async (row) => {
-  if (!selectedRfqId.value || !row?.id) return
+  const rowRfqId = row?.rfqId || selectedRfqId.value
+  if (!rowRfqId || !row?.id) return
   savingInternalRowMap[row.id] = true
   try {
     const response = await updateInternalTargetLeadTime({
-      rfqId: selectedRfqId.value,
+      rfqId: rowRfqId,
       itemId: row.id,
       internalTargetLeadTime: row.internalTargetLeadTimeDraft
     })
@@ -599,8 +704,9 @@ const saveInternalTargetLeadTime = async (row) => {
 }
 
 const submitTicket = async () => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
+  const rfqId = requireSingleSelectedRowsRfqId('生成正式提单')
+  if (!rfqId) return
   if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')
   const internalProjectNo = releaseForm.internalProjectNo.trim()
   if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')
@@ -628,7 +734,7 @@ const submitTicket = async () => {
   submitting.value = true
   try {
     const payload = {
-      rfqId: selectedRfqId.value,
+      rfqId,
       orderType: releaseForm.orderType,
       projectNo: releaseForm.projectNo,
       internalProjectNo,
@@ -644,7 +750,7 @@ const submitTicket = async () => {
     const response = await generateTicket(payload)
     if (response.success) {
       ElMessage.success(`${response.message || '提单已生成。'}可到「提单表据」查看和导出。`)
-      await loadOrder(selectedRfqId.value)
+      await loadOrder(rfqId)
     } else {
       ElMessage.error(response.message || '提单生成失败。')
     }
@@ -662,6 +768,15 @@ const resolveDeliveryLeadTime = (row) => {
     || row.quoteLeadTime
     || row.leadTime
     || '-'
+}
+
+const statusTagType = (status) => {
+  if (status === '已生成提单') return 'success'
+  if (status === '已报价') return 'primary'
+  if (status === '部分已提单') return 'warning'
+  if (status === '已核价') return 'warning'
+  if (status === '未核价') return 'info'
+  return 'info'
 }
 
 </script>

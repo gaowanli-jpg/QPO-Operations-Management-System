@@ -79,12 +79,17 @@ describe('marketApi', () => {
     const params = { page: 2, pageSize: 50, keyword: 'PN' }
 
     await marketApi.listReleaseItems(18, params)
+    await marketApi.listReleaseItemsBatch({ rfqIds: [18, 19], ...params })
     await marketApi.listTickets(18, params)
     await marketApi.listProcessSheets(18, params)
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/release/items/18', { params })
-    expect(request).toHaveBeenNthCalledWith(2, '/api/market/tickets/18', { params })
-    expect(request).toHaveBeenNthCalledWith(3, '/api/market/process-sheets/18', { params })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/items/batch', {
+      method: 'POST',
+      data: { rfqIds: [18, 19], ...params }
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/tickets/18', { params })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/process-sheets/18', { params })
     expect('loadReleaseWorkspace' in marketApi).toBe(false)
   })
 

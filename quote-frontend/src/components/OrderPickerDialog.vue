@@ -2,7 +2,12 @@
   <el-dialog v-model="visible" :title="title" width="900px" @closed="resetPicker">
     <div class="picker-step">
       <div class="step-title">1. 选择客户</div>
-      <el-button v-permission="customerSelectPermission" class="customer-picker-trigger full-width" @click="customerPickerVisible = true">
+      <el-button
+        v-permission="customerSelectPermission"
+        class="customer-picker-trigger full-width"
+        :disabled="Boolean(lockedCustomerName)"
+        @click="customerPickerVisible = true"
+      >
         <span class="customer-picker-content">
           <span
             :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
@@ -10,7 +15,7 @@
           >
             {{ selectedCustomer || '请选择客户名称' }}
           </span>
-          <span class="customer-picker-action">选择客户</span>
+          <span class="customer-picker-action">{{ lockedCustomerName ? '已锁定' : '选择客户' }}</span>
         </span>
       </el-button>
     </div>
@@ -67,12 +72,13 @@
           <el-table-column label="操作" width="90" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
-                :type="row.id === selectedOrderId ? 'success' : 'primary'"
+                :type="isOrderSelected(row.id) ? 'success' : 'primary'"
                 size="small"
-                :plain="row.id !== selectedOrderId"
+                :plain="!isOrderSelected(row.id)"
+                :disabled="isOrderAlreadySelected(row.id)"
                 @click.stop="selectOrder(row)"
               >
-                {{ row.id === selectedOrderId ? '已选择' : '选择' }}
+                {{ isOrderSelected(row.id) ? '已选择' : '选择' }}
               </el-button>
             </template>
           </el-table-column>
@@ -101,15 +107,15 @@
 
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :disabled="!selectedOrderId" @click="submitOrder">
-        确定订单
+      <el-button type="primary" :disabled="multiple ? pendingSelectedOrderCount === 0 : !selectedOrderId" @click="submitOrder">
+        {{ multiple ? '添加订单' : '确定订单' }}
       </el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listMarketOrders } from '../services/marketApi'
@@ -155,6 +161,18 @@ const props = defineProps({
   orderScope: {
     type: String,
     default: 'quote-process'
+  },
+  multiple: {
+    type: Boolean,
+    default: false
+  },
+  lockedCustomerName: {
+    type: String,
+    default: ''
+  },
+  selectedOrderIds: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -176,7 +194,12 @@ const page = ref(1)
 const pageSize = ref(20)
 const loadingOrders = ref(false)
 const customerPickerVisible = ref(false)
+const pendingSelectedOrders = reactive({})
 let keywordTimer = null
+
+const multiple = computed(() => props.multiple)
+const lockedCustomerName = computed(() => props.lockedCustomerName || '')
+const pendingSelectedOrderCount = computed(() => Object.keys(pendingSelectedOrders).length)
 
 const statusOptions = computed(() => {
   const allowed = props.allowedStatuses.filter(Boolean)
@@ -191,12 +214,14 @@ watch(selectedCustomer, () => {
   selectedStatus.value = ''
   selectedOrderId.value = null
   selectedOrder.value = null
+  clearPendingSelectedOrders()
   resetPageAndRows()
 })
 
 watch(selectedStatus, () => {
   selectedOrderId.value = null
   selectedOrder.value = null
+  clearPendingSelectedOrders()
   resetPageAndRows()
   if (selectedStatus.value) {
     loadOrders()
@@ -217,7 +242,24 @@ watch([page, pageSize], () => {
   }
 })
 
+watch(
+  () => [props.modelValue, props.lockedCustomerName],
+  ([isVisible, customerName]) => {
+    if (isVisible && customerName) {
+      selectedCustomer.value = customerName
+    }
+  },
+  { immediate: true }
+)
+
 const submitOrder = () => {
+  if (props.multiple) {
+    const selected = Object.values(pendingSelectedOrders)
+    if (selected.length === 0) return
+    emit('select', Object.values(pendingSelectedOrders))
+    visible.value = false
+    return
+  }
   const order = selectedOrder.value || orders.value.find(item => item.id === selectedOrderId.value)
   if (!order) return
   emit('select', order)
@@ -230,12 +272,26 @@ const resetPicker = () => {
   selectedOrderId.value = null
   selectedOrder.value = null
   keyword.value = ''
+  clearPendingSelectedOrders()
   resetPageAndRows()
 }
 
 const selectOrder = (order) => {
+  if (props.multiple) {
+    if (isOrderAlreadySelected(order.id)) return
+    if (pendingSelectedOrders[order.id]) {
+      delete pendingSelectedOrders[order.id]
+    } else {
+      pendingSelectedOrders[order.id] = order
+    }
+    return
+  }
   selectedOrderId.value = order.id
   selectedOrder.value = order
+}
+
+const clearPendingSelectedOrders = () => {
+  Object.keys(pendingSelectedOrders).forEach(id => delete pendingSelectedOrders[id])
 }
 
 const resetPageAndRows = () => {
@@ -277,7 +333,17 @@ const loadOrders = async () => {
 }
 
 const resolveRowClassName = ({ row }) => {
-  return row.id === selectedOrderId.value ? 'selected-order-row' : ''
+  return isOrderSelected(row.id) ? 'selected-order-row' : ''
+}
+
+const isOrderAlreadySelected = (orderId) => {
+  return props.selectedOrderIds.includes(orderId)
+}
+
+const isOrderSelected = (orderId) => {
+  return props.multiple
+    ? isOrderAlreadySelected(orderId) || Boolean(pendingSelectedOrders[orderId])
+    : orderId === selectedOrderId.value
 }
 
 const statusTagType = (status) => {

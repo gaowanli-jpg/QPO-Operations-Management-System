@@ -31,6 +31,8 @@ export const listMarketOrders = (params = {}, scope) => {
 
 export const listReleaseItems = (rfqId, params = {}) => request(`/api/market/release/items/${rfqId}`, { params })
 
+export const listReleaseItemsBatch = (payload) => postJson('/api/market/release/items/batch', payload)
+
 export const listTickets = (rfqId, params = {}) => request(`/api/market/tickets/${rfqId}`, { params })
 
 export const listProcessSheets = (rfqId, params = {}) => request(`/api/market/process-sheets/${rfqId}`, { params })

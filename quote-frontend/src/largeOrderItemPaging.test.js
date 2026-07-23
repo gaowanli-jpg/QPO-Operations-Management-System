@@ -108,6 +108,8 @@ describe('large order item paging contracts', () => {
 
     expect(apiSource).toContain('listReleaseItems')
     expect(apiSource).toContain('/api/market/release/items/${rfqId}')
+    expect(apiSource).toContain('listReleaseItemsBatch')
+    expect(apiSource).toContain('/api/market/release/items/batch')
     expect(apiSource).toContain('listTickets')
     expect(apiSource).toContain('/api/market/tickets/${rfqId}')
     expect(apiSource).toContain('listProcessSheets')
@@ -115,16 +117,19 @@ describe('large order item paging contracts', () => {
     expect(apiSource).toContain('/api/market/release/parse-part-selection/${rfqId}')
     expect(apiSource).not.toContain('loadReleaseWorkspace')
 
-    expect(source).toContain('listReleaseItems')
-    expect(source).toContain('fetchReleaseItems')
-    expect(source).toContain('itemList.value = response.records || []')
+    expect(source).toContain('selectedOrders')
+    expect(source).toContain('selectedOrderIds')
+    expect(source).toContain('listReleaseItemsBatch')
+    expect(source).toContain('fetchReleaseItemsBatch')
+    expect(source).toContain('rfqIds: selectedOrderIds.value')
+    expect(source).toContain('setItemList(response.records || [])')
     expect(source).toContain('releaseItemTotal.value = Number(response.total ?? 0)')
     expect(source).toContain('selectedItemIdMap')
     expect(source).toContain('currentPageIds.forEach(id => delete selectedItemIdMap[id])')
     expect(source).toContain('parsePartSelection(selectedRfqId.value, formData)')
+    expect(source).toContain('removeSelectedOrder')
     expect(source).not.toContain('paginateRows')
     expect(source).not.toContain('listInternalTargetLeadTimeItems')
-    expect(source).not.toContain('itemList.value.forEach(row => {')
   })
 
   test('order detail API exposes independent paged tabs and drawing summary', () => {
