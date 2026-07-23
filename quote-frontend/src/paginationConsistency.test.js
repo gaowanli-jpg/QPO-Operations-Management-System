@@ -43,8 +43,8 @@ describe('pagination consistency', () => {
     expect(quoteProcess).toContain('quoteProcessPagination')
 
     expect(marketRelease).toContain(':data="pagedReleaseItems"')
-    expect(marketRelease).toContain(':data="pagedTicketList"')
-    expect(marketRelease).toContain(':data="pagedProcessSheetList"')
+    expect(marketRelease).toContain(':rows="pagedTicketList"')
+    expect(marketRelease).toContain(':rows="pagedProcessSheetList"')
     expect(marketRelease).toContain('releaseItemPagination')
     expect(marketRelease).toContain('ticketPagination')
     expect(marketRelease).toContain('processSheetPagination')

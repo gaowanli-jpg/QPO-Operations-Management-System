@@ -269,87 +269,29 @@
             </div>
           </div>
 
-          <div class="erp-table-surface release-table-panel ticket-panel">
-            <div class="erp-table-header panel-title-row">
-              <div class="panel-title">已生成提单行</div>
-              <el-button size="small" plain class="workflow-soft-button" :disabled="releaseTicketTotal === 0" @click="exportExcel('tickets')">
-                导出提单 Excel
-              </el-button>
-            </div>
-            <el-table :data="pagedTicketList" border stripe height="280" v-loading="loadingTickets">
-              <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
-              <el-table-column prop="orderType" label="订单类型" width="100" align="center" show-overflow-tooltip />
-              <el-table-column prop="itemType" label="类型" width="90" align="center" />
-              <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
-              <el-table-column prop="version" label="版本" width="80" align="center" />
-              <el-table-column prop="qty" label="数量" width="70" align="center" />
-              <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
-              <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
-              <el-table-column prop="startDate" label="开工日期" width="110" />
-              <el-table-column prop="deliveryDate" label="交货日期" width="110" />
-              <el-table-column label="安排类型" width="100">
-                <template #default="{ row }">{{ displayTicketText(row.arrangeType) }}</template>
-              </el-table-column>
-              <el-table-column label="备注" min-width="180" show-overflow-tooltip>
-                <template #default="{ row }">{{ displayTicketText(row.remark) }}</template>
-              </el-table-column>
-            </el-table>
-            <div v-if="releaseTicketTotal" class="erp-pagination">
-              <el-pagination
-                v-model:current-page="ticketPagination.page"
-                v-model:page-size="ticketPagination.pageSize"
-                :page-sizes="CLIENT_PAGE_SIZES"
-                :pager-count="7"
-                :total="releaseTicketTotal"
-                layout="total, sizes, prev, pager, next, jumper"
-                background
-                @size-change="ticketPagination.page = 1"
-              />
-            </div>
-          </div>
+          <DeliveryTicketRowsTable
+            :rows="pagedTicketList"
+            :total="releaseTicketTotal"
+            :page="ticketPagination.page"
+            :page-size="ticketPagination.pageSize"
+            :loading="loadingTickets"
+            :exportable="releaseTicketTotal > 0"
+            @page-change="handleTicketPageChange"
+            @page-size-change="handleTicketPageSizeChange"
+            @export="exportExcel('tickets')"
+          />
 
-          <div class="erp-table-surface release-table-panel ticket-panel">
-            <div class="erp-table-header panel-title-row">
-              <div class="panel-title">已生成工艺表行</div>
-              <el-button size="small" plain class="workflow-soft-button" :disabled="releaseProcessSheetTotal === 0" @click="exportExcel('process')">
-                导出工艺表 Excel
-              </el-button>
-            </div>
-            <el-table :data="pagedProcessSheetList" border stripe height="260" v-loading="loadingProcessSheets">
-              <el-table-column prop="internalProjectNo" label="内部项目号" width="130" show-overflow-tooltip />
-              <el-table-column prop="itemType" label="类型" width="90" align="center" />
-              <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
-              <el-table-column prop="version" label="版本" width="80" align="center" />
-              <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="qty" label="数量" width="70" align="center" />
-              <el-table-column prop="engineeringMaterialName" label="材料" width="120" show-overflow-tooltip />
-              <el-table-column label="毛重(kg)" width="95" align="right">
-                <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
-              </el-table-column>
-              <el-table-column label="净重(kg)" width="95" align="right">
-                <template #default="{ row }">{{ formatWeight(row.partNetWeight) }}</template>
-              </el-table-column>
-              <el-table-column prop="surfaceTreatment" label="表面处理" width="130" show-overflow-tooltip />
-              <el-table-column prop="deliveryDate" label="交期" width="110" />
-              <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
-                <template #default="scope">
-                  {{ formatRoute(scope.row.processRoute) }}
-                </template>
-              </el-table-column>
-            </el-table>
-            <div v-if="releaseProcessSheetTotal" class="erp-pagination">
-              <el-pagination
-                v-model:current-page="processSheetPagination.page"
-                v-model:page-size="processSheetPagination.pageSize"
-                :page-sizes="CLIENT_PAGE_SIZES"
-                :pager-count="7"
-                :total="releaseProcessSheetTotal"
-                layout="total, sizes, prev, pager, next, jumper"
-                background
-                @size-change="processSheetPagination.page = 1"
-              />
-            </div>
-          </div>
+          <ProcessSheetRowsTable
+            :rows="pagedProcessSheetList"
+            :total="releaseProcessSheetTotal"
+            :page="processSheetPagination.page"
+            :page-size="processSheetPagination.pageSize"
+            :loading="loadingProcessSheets"
+            :exportable="releaseProcessSheetTotal > 0"
+            @page-change="handleProcessSheetPageChange"
+            @page-size-change="handleProcessSheetPageSizeChange"
+            @export="exportExcel('process')"
+          />
         </el-col>
       </el-row>
     </section>
@@ -368,7 +310,9 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import DeliveryTicketRowsTable from './delivery-document/DeliveryTicketRowsTable.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import ProcessSheetRowsTable from './delivery-document/ProcessSheetRowsTable.vue'
 import {
   downloadMarketExport,
   generateTicket,
@@ -444,6 +388,22 @@ const resetReleasePagination = () => {
   releaseItemPagination.page = 1
   ticketPagination.page = 1
   processSheetPagination.page = 1
+}
+
+const handleTicketPageChange = (value) => {
+  ticketPagination.page = value
+}
+
+const handleTicketPageSizeChange = (value) => {
+  ticketPagination.pageSize = value
+}
+
+const handleProcessSheetPageChange = (value) => {
+  processSheetPagination.page = value
+}
+
+const handleProcessSheetPageSizeChange = (value) => {
+  processSheetPagination.pageSize = value
 }
 
 const clearSelectedRows = () => {
@@ -812,33 +772,6 @@ const resolveDeliveryLeadTime = (row) => {
     || row.quoteLeadTime
     || row.leadTime
     || '-'
-}
-
-const formatRoute = (route) => {
-  if (!route) return '-'
-  let list = Array.isArray(route) ? route : []
-  if (typeof route === 'string') {
-    try {
-      list = JSON.parse(route)
-    } catch {
-      list = []
-    }
-  }
-  if (list.length === 0) return '-'
-  return list
-    .map(item => `${item.processName || ''}${item.inputVal ? `(${item.inputVal})` : ''}`)
-    .filter(Boolean)
-    .join(' / ')
-}
-
-const formatWeight = (value) => {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return '-'
-  return number.toFixed(3).replace(/\.?0+$/, '')
-}
-
-const displayTicketText = (value) => {
-  return String(value || '').replaceAll('待产', '在产')
 }
 
 const exportExcel = async (type) => {

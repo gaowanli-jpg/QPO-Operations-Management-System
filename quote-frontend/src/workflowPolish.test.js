@@ -149,8 +149,8 @@ describe('QPO workflow page polish', () => {
       '@click="adjustInternalLeadTime(-1)"',
       '@click="setInternalTargetLeadTime"',
       '@click="submitTicket"',
-      '@click="exportExcel(\'tickets\')"',
-      '@click="exportExcel(\'process\')"'
+      '@export="exportExcel(\'tickets\')"',
+      '@export="exportExcel(\'process\')"'
     ])
     expectExcludes(releaseSource, 'MarketRelease.vue', [
       '@click="deleteTicket(scope.row)"',
