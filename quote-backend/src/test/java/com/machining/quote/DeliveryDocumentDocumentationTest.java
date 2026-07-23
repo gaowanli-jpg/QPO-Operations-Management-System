@@ -44,6 +44,29 @@ class DeliveryDocumentDocumentationTest {
     }
 
     @Test
+    void permissionDocsDocumentMultiOrderReleaseUsesExistingReleasePermissions() throws IOException {
+        String permissionList = read(PERMISSION_LIST);
+        String adminGuide = read(ADMIN_GUIDE);
+
+        assertThat(permissionList)
+                .contains(
+                        "多订单议价提单",
+                        "批量候选零件分页、跨订单导入匹配、按订单分组生成",
+                        "`market:release:view`、`market:release:order-select`、`market:release:create`",
+                        "不新增 `market:release:batch-*`",
+                        "不新增可分配 `common:*`"
+                );
+        assertThat(adminGuide)
+                .contains(
+                        "多订单选择只是议价提单生成页面的能力扩展",
+                        "`market:release:view`",
+                        "`market:release:order-select`",
+                        "`market:release:create`",
+                        "不需要新增批量提单权限"
+                );
+    }
+
+    @Test
     void loggingDocsFreezeDeliveryDocumentAuditAndFileLogRules() throws IOException {
         String operationsGuide = read(LOG_OPS_GUIDE);
         String fileLogGuide = read(FILE_LOG_GUIDE);
@@ -63,6 +86,27 @@ class DeliveryDocumentDocumentationTest {
                         "Delivery document export rejected",
                         "Delivery document export failed",
                         "rfqId={} exportType={} rowCount={} durationMs={}"
+                );
+    }
+
+    @Test
+    void loggingDocsDocumentMultiOrderReleaseKeepsLowNoiseBoundaries() throws IOException {
+        String operationsGuide = read(LOG_OPS_GUIDE);
+        String fileLogGuide = read(FILE_LOG_GUIDE);
+
+        assertThat(operationsGuide)
+                .contains(
+                        "多订单议价提单",
+                        "批量候选零件分页、订单选择、跨订单导入匹配不新增操作日志",
+                        "DELIVERY_TICKET_GENERATE",
+                        "按订单分别产生"
+                );
+        assertThat(fileLogGuide)
+                .contains(
+                        "多订单选择、批量候选零件分页和跨订单导入匹配属于页面辅助读取/解析能力",
+                        "不写操作日志，也不新增业务 INFO",
+                        "仍沿用 `Delivery ticket generation started/completed/failed`",
+                        "按订单分组调用生成接口"
                 );
     }
 

@@ -66,14 +66,16 @@ describe('market release stage 5 cleanup', () => {
       'releaseForm.arrangeType',
       '@click="submitTicket"',
       'generateTicket(payload)',
-      'await loadOrder(rfqId)'
+      'groupSelectedRowsByRfqId(orderedSelectedRows)',
+      'await refreshSelectedOrdersAfterGeneration(successItemIds)'
     ])
   })
 
   test('guides users to delivery documents after successful ticket generation', () => {
     expectIncludes([
-      "ElMessage.success(`${response.message || '提单已生成。'}可到「提单表据」查看和导出。`)",
-      'await loadOrder(rfqId)'
+      '可到「提单表据」查看和导出',
+      '部分生成成功',
+      'formatGenerationFailures(failedResults)'
     ])
   })
 })

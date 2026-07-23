@@ -177,7 +177,8 @@ describe('QPO workflow page polish', () => {
       'selectedRows.value.slice().sort',
       'Number(left.id || 0) - Number(right.id || 0)',
       'const orderedSelectedRows = selectedRowsInItemOrder()',
-      'items: orderedSelectedRows.map(row => ({'
+      'const releaseGroups = groupSelectedRowsByRfqId(orderedSelectedRows)',
+      'items: rows.map(row => ({'
     ])
     expect(source).not.toContain('items: selectedRows.value.map(row => ({')
   })

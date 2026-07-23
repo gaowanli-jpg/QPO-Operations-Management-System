@@ -554,6 +554,49 @@ const selectedRowsRfqIds = () => {
   return [...new Set(selectedRows.value.map(row => row.rfqId || selectedRfqId.value).filter(Boolean))]
 }
 
+const groupSelectedRowsByRfqId = (rows) => {
+  const groups = new Map()
+  ;(rows || []).forEach(row => {
+    const rfqId = row.rfqId || selectedRfqId.value
+    if (!rfqId) return
+    if (!groups.has(rfqId)) {
+      groups.set(rfqId, [])
+    }
+    groups.get(rfqId).push(row)
+  })
+  return groups
+}
+
+const orderLabelById = (rfqId) => {
+  const order = selectedOrders.value.find(item => item.id === rfqId)
+  return order?.rfqNo || rfqId
+}
+
+const formatGenerationFailures = (failedResults) => {
+  return failedResults
+    .map(result => `${orderLabelById(result.rfqId)}：${result.message}`)
+    .join('；')
+}
+
+const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) => {
+  successItemIds.forEach(id => delete selectedItemIdMap[id])
+  const refreshedOrders = await Promise.all(selectedOrderIds.value.map(async (rfqId) => {
+    try {
+      const response = await getReleaseSummary(rfqId)
+      return { rfqId, orderInfo: response.orderInfo || {} }
+    } catch (error) {
+      console.error(error)
+      return { rfqId, orderInfo: null }
+    }
+  }))
+  selectedOrders.value = selectedOrders.value.map(order => {
+    const refreshed = refreshedOrders.find(item => item.rfqId === order.id)
+    return refreshed?.orderInfo ? { ...order, ...refreshed.orderInfo } : order
+  })
+  selectedRfqId.value = selectedOrders.value[0]?.id || null
+  await fetchReleaseItemsBatch()
+}
+
 const requireSingleSelectedRowsRfqId = (actionText) => {
   if (!selectedOrders.value.length) {
     ElMessage.warning('请先选择询价单。')
@@ -705,8 +748,7 @@ const saveInternalTargetLeadTime = async (row) => {
 
 const submitTicket = async () => {
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
-  const rfqId = requireSingleSelectedRowsRfqId('生成正式提单')
-  if (!rfqId) return
+  if (!selectedOrders.value.length) return ElMessage.warning('请先选择询价单。')
   if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')
   const internalProjectNo = releaseForm.internalProjectNo.trim()
   if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')
@@ -725,34 +767,67 @@ const submitTicket = async () => {
     return ElMessage.warning(`有 ${overRemaining.length} 个零件的通过数量超过剩余可提数量。`)
   }
 
+  const releaseGroups = groupSelectedRowsByRfqId(orderedSelectedRows)
+  if (releaseGroups.size === 0) {
+    return ElMessage.warning('已选零件缺少订单信息，无法生成正式提单。')
+  }
+
   await ElMessageBox.confirm(
-    `确认生成 ${orderedSelectedRows.length} 个零件的正式提单？通过数量不能超过剩余可提数量。`,
+    `确认按 ${releaseGroups.size} 个订单生成 ${orderedSelectedRows.length} 个零件的正式提单？通过数量不能超过剩余可提数量。`,
     '生成提单确认',
     { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
   )
 
   submitting.value = true
   try {
-    const payload = {
-      rfqId,
-      orderType: releaseForm.orderType,
-      projectNo: releaseForm.projectNo,
-      internalProjectNo,
-      customerOrderNo,
-      customerProjectNo,
-      startDate: releaseForm.startDate,
-      arrangeType: releaseForm.arrangeType,
-      items: orderedSelectedRows.map(row => ({
-        itemId: row.id,
-        acceptedQty: acceptedQtyMap[row.id] || remainingQtyFor(row)
-      }))
+    const successfulResults = []
+    const failedResults = []
+    const successItemIds = new Set()
+    for (const [rfqId, rows] of releaseGroups) {
+      const payload = {
+        rfqId,
+        orderType: releaseForm.orderType,
+        projectNo: releaseForm.projectNo || '',
+        internalProjectNo,
+        customerOrderNo,
+        customerProjectNo,
+        startDate: releaseForm.startDate,
+        arrangeType: releaseForm.arrangeType,
+        items: rows.map(row => ({
+          itemId: row.id,
+          acceptedQty: acceptedQtyMap[row.id] || remainingQtyFor(row)
+        }))
+      }
+      try {
+        const response = await generateTicket(payload)
+        if (response.success) {
+          successfulResults.push({ rfqId, rows, response })
+          rows.forEach(row => successItemIds.add(row.id))
+        } else {
+          failedResults.push({ rfqId, rows, message: response.message || '提单生成失败。' })
+        }
+      } catch (error) {
+        console.error(error)
+        failedResults.push({
+          rfqId,
+          rows,
+          message: error.response?.data?.message || error.message || '提单生成请求失败。'
+        })
+      }
     }
-    const response = await generateTicket(payload)
-    if (response.success) {
-      ElMessage.success(`${response.message || '提单已生成。'}可到「提单表据」查看和导出。`)
-      await loadOrder(rfqId)
+
+    if (successfulResults.length > 0) {
+      await refreshSelectedOrdersAfterGeneration(successItemIds)
+    }
+
+    if (failedResults.length === 0) {
+      const successItemCount = successfulResults.reduce((total, result) => total + result.rows.length, 0)
+      ElMessage.success(`已按 ${successfulResults.length} 个订单生成 ${successItemCount} 项提单，可到「提单表据」查看和导出。`)
+    } else if (successfulResults.length > 0) {
+      const failureText = formatGenerationFailures(failedResults)
+      ElMessage.warning(`部分生成成功：成功 ${successfulResults.length} 个订单，失败 ${failedResults.length} 个订单。${failureText}`)
     } else {
-      ElMessage.error(response.message || '提单生成失败。')
+      ElMessage.error(`提单生成失败：${formatGenerationFailures(failedResults)}`)
     }
   } catch (error) {
     console.error(error)
