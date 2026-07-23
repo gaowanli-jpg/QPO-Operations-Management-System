@@ -49,4 +49,19 @@ describe('market release multi-order stage 2', () => {
     expect(source).toContain(':locked-customer-name="selectedCustomerName"')
     expect(source).toContain(':selected-order-ids="selectedOrderIds"')
   })
+
+  test('market release imports selection across selected orders and preserves cross-page map', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+    const apiSource = readSource('services', 'marketApi.js')
+
+    expect(apiSource).toContain('parsePartSelectionBatch')
+    expect(apiSource).toContain('/api/market/release/parse-part-selection/batch')
+    expect(source).toContain('parsePartSelectionBatch')
+    expect(source).toContain("formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))")
+    expect(source).toContain('const response = await parsePartSelectionBatch(formData)')
+    expect(source).toContain('selectedItemIdMap[row.id] = row')
+    expect(source).toContain('await syncReleaseItemTableSelection()')
+    expect(source).not.toContain('selectedOrders.value.length !== 1')
+    expect(source).not.toContain('parsePartSelection(selectedRfqId.value, formData)')
+  })
 })

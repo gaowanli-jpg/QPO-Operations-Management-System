@@ -176,7 +176,7 @@
                     size="small"
                     plain
                     class="workflow-soft-button"
-                    :disabled="selectedOrders.length !== 1 || releaseItemTotal === 0"
+                    :disabled="selectedOrders.length === 0 || releaseItemTotal === 0"
                     :loading="importSelecting"
                   >
                     导入表格选定
@@ -314,7 +314,7 @@ import {
   generateTicket,
   getReleaseSummary,
   listReleaseItemsBatch,
-  parsePartSelection,
+  parsePartSelectionBatch,
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
   updateInternalTargetLeadTime
@@ -571,7 +571,6 @@ const handleSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
   selectionUploadRef.value?.clearFiles()
   if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
-  if (selectedOrders.value.length !== 1) return ElMessage.warning('导入表格选定暂只支持单个订单，多订单导入将在后续阶段接入。')
   if (!file) return
 
   const fileName = String(file.name || '').toLowerCase()
@@ -581,9 +580,10 @@ const handleSelectionExcelChange = async (uploadFile) => {
 
   const formData = new FormData()
   formData.append('excelFile', file)
+  formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))
   importSelecting.value = true
   try {
-    const response = await parsePartSelection(selectedRfqId.value, formData)
+    const response = await parsePartSelectionBatch(formData)
     clearSelectedRows()
     ;(response?.data || []).forEach(row => {
       selectedItemIdMap[row.id] = row

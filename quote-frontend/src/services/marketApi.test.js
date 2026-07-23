@@ -105,6 +105,19 @@ describe('marketApi', () => {
     })
   })
 
+  test('parsePartSelectionBatch uploads selection form data with rfq ids payload', async () => {
+    const formData = new FormData()
+    formData.append('rfqIds', JSON.stringify([18, 19]))
+
+    await marketApi.parsePartSelectionBatch(formData)
+
+    expect(request).toHaveBeenCalledWith('/api/market/release/parse-part-selection/batch', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  })
+
   test('shiftInternalTargetLeadTime posts shift payload', async () => {
     const payload = { rfqId: 18, itemIds: [1], deltaDays: 2 }
 

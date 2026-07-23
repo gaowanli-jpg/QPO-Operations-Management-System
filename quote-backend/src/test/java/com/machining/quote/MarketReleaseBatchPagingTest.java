@@ -1,22 +1,28 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.InternalTargetLeadTimeService;
+import com.machining.quote.service.LeadTimeService;
 import com.machining.quote.service.OrderItemPageService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -101,6 +107,72 @@ class MarketReleaseBatchPagingTest {
                 .contains(".orderByAsc(\"id\")");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void batchPartSelectionWithoutRfqNoMatchesAcrossAllSelectedOrders() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper);
+        OrderRfq firstOrder = releaseOrder(101, "RFQ-BATCH-A");
+        OrderRfq secondOrder = releaseOrder(102, "RFQ-BATCH-B");
+        ItemQuoteVersion firstItem = releaseItem(201, 101, "SHARED-IMPORT-01", "A");
+        ItemQuoteVersion secondItem = releaseItem(202, 102, "SHARED-IMPORT-01", "A");
+        when(orderMapper.selectBatchIds(List.of(101, 102))).thenReturn(List.of(firstOrder, secondOrder));
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(firstItem, secondItem));
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        Map<String, Object> result = service.matchPartSelectionBatch(
+                List.of(101, 102),
+                List.of(importedSelection("", "SHARED-IMPORT-01", "A")));
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("data");
+
+        assertThat(result)
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 2)
+                .containsEntry("selectedCount", 2)
+                .containsEntry("skippedCount", 0);
+        assertThat(rows)
+                .extracting(row -> row.get("id"))
+                .containsExactly(201, 202);
+        assertThat(rows)
+                .extracting(row -> row.get("rfqNo"))
+                .containsExactly("RFQ-BATCH-A", "RFQ-BATCH-B");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void batchPartSelectionWithRfqNoMatchesOnlySpecifiedOrder() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper);
+        OrderRfq firstOrder = releaseOrder(101, "RFQ-BATCH-A");
+        OrderRfq secondOrder = releaseOrder(102, "RFQ-BATCH-B");
+        ItemQuoteVersion firstItem = releaseItem(201, 101, "RFQ-SPECIFIC-01", "A");
+        ItemQuoteVersion secondItem = releaseItem(202, 102, "RFQ-SPECIFIC-01", "A");
+        when(orderMapper.selectBatchIds(List.of(101, 102))).thenReturn(List.of(firstOrder, secondOrder));
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(firstItem, secondItem));
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        Map<String, Object> result = service.matchPartSelectionBatch(
+                List.of(101, 102),
+                List.of(importedSelection("RFQ-BATCH-B", "RFQ-SPECIFIC-01", "A")));
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("data");
+
+        assertThat(result)
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 1)
+                .containsEntry("selectedCount", 1);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0))
+                .containsEntry("id", 202)
+                .containsEntry("rfqId", 102)
+                .containsEntry("rfqNo", "RFQ-BATCH-B")
+                .containsEntry("customerName", "ACME")
+                .containsEntry("orderStatus", QuoteStatusWorkflow.QUOTED);
+    }
+
     private OrderRfq order(Integer id) {
         OrderRfq order = new OrderRfq();
         order.setId(id);
@@ -115,6 +187,50 @@ class MarketReleaseBatchPagingTest {
         item.setRfqId(rfqId);
         item.setPartNo(partNo);
         return item;
+    }
+
+    private InternalTargetLeadTimeService releaseService(
+            OrderRfqMapper orderMapper,
+            ItemQuoteVersionMapper itemMapper,
+            OrderDeliveryTicketMapper ticketMapper) {
+        InternalTargetLeadTimeService service = new InternalTargetLeadTimeService();
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+        return service;
+    }
+
+    private OrderRfq releaseOrder(Integer id, String rfqNo) {
+        OrderRfq order = new OrderRfq();
+        order.setId(id);
+        order.setRfqNo(rfqNo);
+        order.setCustomerName("ACME");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        return order;
+    }
+
+    private ItemQuoteVersion releaseItem(Integer id, Integer rfqId, String partNo, String version) {
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setId(id);
+        item.setRfqId(rfqId);
+        item.setPartNo(partNo);
+        item.setVersion(version);
+        item.setQty(1);
+        item.setFinalUnitPrice(10.0);
+        item.setStatus(QuoteStatusWorkflow.QUOTED);
+        return item;
+    }
+
+    private Map<String, String> importedSelection(String rfqNo, String partNo, String version) {
+        return Map.of(
+                "rfqNo", rfqNo,
+                "normalizedRfqNo", rfqNo == null ? "" : rfqNo.trim().toUpperCase(),
+                "partNo", partNo,
+                "normalizedPartNo", partNo == null ? "" : partNo.trim().toUpperCase(),
+                "version", version,
+                "normalizedVersion", version == null ? "" : version.trim().toUpperCase()
+        );
     }
 
     private String source(String packageName, String fileName) throws Exception {

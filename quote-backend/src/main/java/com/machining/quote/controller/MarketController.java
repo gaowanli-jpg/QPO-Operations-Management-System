@@ -2,6 +2,8 @@ package com.machining.quote.controller;
 
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
@@ -48,6 +50,7 @@ import java.util.UUID;
 @RequestMapping("/api/market")
 public class MarketController {
     private static final Logger log = LoggerFactory.getLogger(MarketController.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private DeliveryService deliveryService;
@@ -236,6 +239,14 @@ public class MarketController {
         return internalTargetLeadTimeService.matchPartSelection(rfqId, readPartSelectionRows(excelFile));
     }
 
+    @PostMapping("/release/parse-part-selection/batch")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> parsePartSelectionForOrders(
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam("rfqIds") String rfqIdsJson) {
+        return internalTargetLeadTimeService.matchPartSelectionBatch(parseRfqIds(rfqIdsJson), readPartSelectionRows(excelFile));
+    }
+
     @PostMapping("/parse-part-selection")
     @RequirePermission("market:release:create")
     public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
@@ -256,14 +267,19 @@ public class MarketController {
 
             int partNoColumn = -1;
             int versionColumn = -1;
+            int rfqNoColumn = -1;
             int headerRowIndex = -1;
             int maxScanRows = Math.min(rows.size(), 20);
             for (int rowIndex = 0; rowIndex < maxScanRows; rowIndex++) {
                 Map<Integer, String> row = rows.get(rowIndex);
                 int currentPartNoColumn = -1;
                 int currentVersionColumn = -1;
+                int currentRfqNoColumn = -1;
                 for (Map.Entry<Integer, String> cell : row.entrySet()) {
                     String header = normalizeHeader(cell.getValue());
+                    if (isRfqNoHeader(header)) {
+                        currentRfqNoColumn = cell.getKey();
+                    }
                     if ("图号".equals(header)) {
                         currentPartNoColumn = cell.getKey();
                     } else if ("版本".equals(header)) {
@@ -273,6 +289,7 @@ public class MarketController {
                 if (currentPartNoColumn >= 0 && currentVersionColumn >= 0) {
                     partNoColumn = currentPartNoColumn;
                     versionColumn = currentVersionColumn;
+                    rfqNoColumn = currentRfqNoColumn;
                     headerRowIndex = rowIndex;
                     break;
                 }
@@ -293,14 +310,18 @@ public class MarketController {
                 }
 
                 String normalizedVersion = normalizeVersion(row.get(versionColumn));
-                String key = normalizedPartNo + "||" + normalizedVersion;
+                String rfqNo = rfqNoColumn >= 0 ? cellText(row.get(rfqNoColumn)) : "";
+                String normalizedRfqNo = normalizeRfqNo(rfqNo);
+                String key = normalizedRfqNo + "||" + normalizedPartNo + "||" + normalizedVersion;
                 if (!seenKeys.add(key)) {
                     continue;
                 }
 
                 Map<String, String> item = new LinkedHashMap<>();
+                item.put("rfqNo", rfqNo);
                 item.put("partNo", partNo);
                 item.put("version", normalizedVersion);
+                item.put("normalizedRfqNo", normalizedRfqNo);
                 item.put("normalizedPartNo", normalizedPartNo);
                 item.put("normalizedVersion", normalizedVersion);
                 items.add(item);
@@ -532,6 +553,11 @@ public class MarketController {
         return value == null ? "" : value.replaceAll("\\s+", "").trim();
     }
 
+    private boolean isRfqNoHeader(String header) {
+        String normalized = header == null ? "" : header.trim().toUpperCase();
+        return "RFQ号".equals(normalized) || "RFQNO".equals(normalized) || "RFQ".equals(normalized);
+    }
+
     private String cellText(String value) {
         return value == null ? "" : value.trim();
     }
@@ -552,6 +578,22 @@ public class MarketController {
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
         return normalized;
+    }
+
+    private String normalizeRfqNo(String rfqNo) {
+        return rfqNo == null ? "" : rfqNo.trim().toUpperCase();
+    }
+
+    private List<Integer> parseRfqIds(String rfqIdsJson) {
+        if (rfqIdsJson == null || rfqIdsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(rfqIdsJson, new TypeReference<List<Integer>>() {
+            });
+        } catch (Exception e) {
+            throw new IllegalArgumentException("rfqIds must be a JSON integer array", e);
+        }
     }
 
     private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {

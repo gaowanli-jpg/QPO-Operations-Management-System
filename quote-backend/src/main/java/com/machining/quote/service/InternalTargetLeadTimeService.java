@@ -268,6 +268,61 @@ public class InternalTargetLeadTimeService {
         return result;
     }
 
+    public Map<String, Object> matchPartSelectionBatch(List<Integer> rfqIds, List<Map<String, String>> importedItems) {
+        List<OrderRfq> orders = requireOrders(rfqIds);
+        Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
+        orders.forEach(order -> orderById.put(order.getId(), order));
+
+        Set<String> importedKeys = new HashSet<>();
+        Map<String, Set<String>> importedKeysByRfqNo = new LinkedHashMap<>();
+        for (Map<String, String> item : importedItems == null ? List.<Map<String, String>>of() : importedItems) {
+            String key = itemKey(item.getOrDefault("normalizedPartNo", item.get("partNo")),
+                    item.getOrDefault("normalizedVersion", item.get("version")));
+            if ("||".equals(key)) {
+                continue;
+            }
+            String rfqNo = normalizeRfqNo(item.getOrDefault("normalizedRfqNo", item.get("rfqNo")));
+            if (rfqNo.isEmpty()) {
+                importedKeys.add(key);
+            } else {
+                importedKeysByRfqNo.computeIfAbsent(rfqNo, ignored -> new HashSet<>()).add(key);
+            }
+        }
+
+        List<ItemQuoteVersion> items = listItemsBatch(orderById.keySet().stream().toList());
+        List<OrderDeliveryTicket> tickets = listTicketsForItems(items);
+        List<Map<String, Object>> selectedRows = new ArrayList<>();
+        List<Map<String, Object>> skippedRows = new ArrayList<>();
+        int matchedCount = 0;
+        for (ItemQuoteVersion item : items) {
+            OrderRfq order = orderById.get(item.getRfqId());
+            String key = itemKey(item.getPartNo(), item.getVersion());
+            String rfqNo = order == null ? "" : normalizeRfqNo(order.getRfqNo());
+            boolean matchesAnySelectedOrder = importedKeys.contains(key);
+            boolean matchesSpecifiedOrder = importedKeysByRfqNo.getOrDefault(rfqNo, Set.of()).contains(key);
+            if (!matchesAnySelectedOrder && !matchesSpecifiedOrder) {
+                continue;
+            }
+            matchedCount++;
+            Map<String, Object> row = buildBatchItemRow(item, ticketedQty(item, tickets), orderById);
+            if (Boolean.TRUE.equals(row.get("canSelect"))) {
+                selectedRows.add(row);
+            } else {
+                skippedRows.add(row);
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("importedCount", importedKeys.size() + importedKeysByRfqNo.values().stream().mapToInt(Set::size).sum());
+        result.put("matchedCount", matchedCount);
+        result.put("selectedCount", selectedRows.size());
+        result.put("skippedCount", skippedRows.size());
+        result.put("data", selectedRows);
+        result.put("skippedItems", skippedRows);
+        return result;
+    }
+
     private OrderRfq requireOrder(Integer rfqId) {
         if (rfqId == null) {
             throw new RuntimeException("RFQ ID 不能为空");
@@ -365,6 +420,17 @@ public class InternalTargetLeadTimeService {
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
+        return itemMapper.selectList(qw);
+    }
+
+    private List<ItemQuoteVersion> listItemsBatch(List<Integer> rfqIds) {
+        if (rfqIds == null || rfqIds.isEmpty()) {
+            return List.of();
+        }
+        QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
+        qw.in("rfq_id", rfqIds)
+                .orderByAsc("rfq_id")
+                .orderByAsc("id");
         return itemMapper.selectList(qw);
     }
 
@@ -511,6 +577,10 @@ public class InternalTargetLeadTimeService {
 
     private String normalizeVersion(String version) {
         return version == null ? "" : version.trim().toUpperCase();
+    }
+
+    private String normalizeRfqNo(String rfqNo) {
+        return rfqNo == null ? "" : rfqNo.trim().toUpperCase();
     }
 
     private int safeInt(Integer value) {

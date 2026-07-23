@@ -431,6 +431,61 @@ class LargeOrderItemPagingTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void batchPartSelectionWithoutRfqNoMatchesAcrossAllSelectedOrders() {
+        OrderRfq firstOrder = createReleaseOrder("BATCH-IMPORT-A");
+        OrderRfq secondOrder = createReleaseOrder("BATCH-IMPORT-B");
+        OrderRfq unrelatedOrder = createReleaseOrder("BATCH-IMPORT-C");
+        ItemQuoteVersion firstItem = createItem(firstOrder, "SHARED-IMPORT-01", QuoteStatusWorkflow.QUOTED, 10.0, "/import-a.pdf");
+        ItemQuoteVersion secondItem = createItem(secondOrder, "SHARED-IMPORT-01", QuoteStatusWorkflow.QUOTED, 11.0, "/import-b.pdf");
+        createItem(unrelatedOrder, "SHARED-IMPORT-01", QuoteStatusWorkflow.QUOTED, 12.0, "/import-c.pdf");
+
+        Map<String, Object> result = internalTargetLeadTimeService.matchPartSelectionBatch(
+                List.of(firstOrder.getId(), secondOrder.getId()),
+                List.of(importedSelection("", "SHARED-IMPORT-01", "A")));
+        List<Map<String, Object>> selectedRows = (List<Map<String, Object>>) result.get("data");
+
+        assertThat(result)
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 2)
+                .containsEntry("selectedCount", 2)
+                .containsEntry("skippedCount", 0);
+        assertThat(selectedRows)
+                .extracting(row -> row.get("id"))
+                .containsExactly(firstItem.getId(), secondItem.getId());
+        assertThat(selectedRows)
+                .extracting(row -> row.get("rfqNo"))
+                .containsExactly(firstOrder.getRfqNo(), secondOrder.getRfqNo());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void batchPartSelectionWithRfqNoMatchesOnlySpecifiedOrder() {
+        OrderRfq firstOrder = createReleaseOrder("BATCH-IMPORT-RFQ-A");
+        OrderRfq secondOrder = createReleaseOrder("BATCH-IMPORT-RFQ-B");
+        createItem(firstOrder, "RFQ-SPECIFIC-01", QuoteStatusWorkflow.QUOTED, 10.0, "/rfq-a.pdf");
+        ItemQuoteVersion secondItem = createItem(secondOrder, "RFQ-SPECIFIC-01", QuoteStatusWorkflow.QUOTED, 11.0, "/rfq-b.pdf");
+
+        Map<String, Object> result = internalTargetLeadTimeService.matchPartSelectionBatch(
+                List.of(firstOrder.getId(), secondOrder.getId()),
+                List.of(importedSelection(secondOrder.getRfqNo(), "RFQ-SPECIFIC-01", "A")));
+        List<Map<String, Object>> selectedRows = (List<Map<String, Object>>) result.get("data");
+
+        assertThat(result)
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 1)
+                .containsEntry("selectedCount", 1);
+        assertThat(selectedRows)
+                .extracting(row -> row.get("id"))
+                .containsExactly(secondItem.getId());
+        assertThat(selectedRows.get(0))
+                .containsEntry("rfqId", secondOrder.getId())
+                .containsEntry("rfqNo", secondOrder.getRfqNo())
+                .containsEntry("customerName", secondOrder.getCustomerName())
+                .containsEntry("orderStatus", secondOrder.getStatus());
+    }
+
+    @Test
     void releaseBatchItemPagingExposesStableBackendContracts() throws Exception {
         assertThat(MAIN_JAVA.resolve("dto").resolve("ReleaseItemBatchQueryReq.java")).exists();
 
@@ -560,5 +615,16 @@ class LargeOrderItemPagingTest {
         ticket.setQty(qty);
         ticketMapper.insert(ticket);
         return ticket;
+    }
+
+    private Map<String, String> importedSelection(String rfqNo, String partNo, String version) {
+        return Map.of(
+                "rfqNo", rfqNo,
+                "normalizedRfqNo", rfqNo == null ? "" : rfqNo.trim().toUpperCase(),
+                "partNo", partNo,
+                "normalizedPartNo", partNo == null ? "" : partNo.trim().toUpperCase(),
+                "version", version,
+                "normalizedVersion", version == null ? "" : version.trim().toUpperCase()
+        );
     }
 }

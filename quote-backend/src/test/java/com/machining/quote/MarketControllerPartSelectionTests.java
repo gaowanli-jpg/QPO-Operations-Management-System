@@ -42,4 +42,33 @@ class MarketControllerPartSelectionTests {
         assertThat(items).extracting("normalizedVersion")
                 .containsExactly("A", "");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void parsesOptionalRfqNoHeaderForBatchSelection() {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        List<List<String>> rows = List.of(
+                List.of("selection"),
+                List.of("RFQ\u53f7", "\u56fe\u53f7", "\u7248\u672c"),
+                List.of(" RFQ-2026-001 ", " CROSS-ORDER-01 ", " b ")
+        );
+        EasyExcel.write(outputStream).sheet("selection").doWrite(rows);
+
+        MockMultipartFile file = new MockMultipartFile(
+                "excelFile",
+                "selection.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                outputStream.toByteArray()
+        );
+
+        Map<String, Object> result = new MarketController().parsePartSelection(file);
+        List<Map<String, String>> items = (List<Map<String, String>>) result.get("data");
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0))
+                .containsEntry("rfqNo", "RFQ-2026-001")
+                .containsEntry("normalizedRfqNo", "RFQ-2026-001")
+                .containsEntry("normalizedPartNo", "CROSS-ORDER-01")
+                .containsEntry("normalizedVersion", "B");
+    }
 }
