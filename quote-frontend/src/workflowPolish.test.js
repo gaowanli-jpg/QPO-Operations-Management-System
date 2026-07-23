@@ -49,7 +49,9 @@ describe('QPO workflow page polish', () => {
     expectIncludes(source, 'QuoteProcess.vue', [
       'quote-manual-date-row',
       'quote-manual-date-input',
-      'quote-manual-date-button'
+      'quote-manual-date-button',
+      '.quote-manual-date-input.el-date-editor.el-input',
+      'max-width: 100%;'
     ])
     expect(source).toContain('手动指定报价交期')
   })

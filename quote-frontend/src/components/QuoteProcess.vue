@@ -646,6 +646,14 @@ const exportTemplateSimpleQuote = async () => {
 }
 
 .quote-manual-date-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.quote-manual-date-row :deep(.quote-manual-date-input.el-date-editor.el-input) {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
