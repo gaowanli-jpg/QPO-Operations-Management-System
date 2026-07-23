@@ -58,20 +58,30 @@ describe('QPO workflow page polish', () => {
     const source = readComponent('MarketRelease.vue')
 
     expectIncludes(source, 'MarketRelease.vue', [
-      'erp-page release-page',
-      'erp-surface release-workspace',
-      'erp-surface release-panel',
-      'erp-table-surface release-table-panel',
+      'erp-page release-page workflow-page',
+      'erp-surface workflow-workspace release-workspace',
+      'erp-surface workflow-side-panel release-panel',
+      'erp-table-surface workflow-main-panel release-table-panel',
       'internal-lead-panel',
       'internal-project-panel'
     ])
     expectExcludes(source, 'MarketRelease.vue', [
-      'workflow-page',
-      'workflow-workspace',
-      'workflow-side-panel',
-      'workflow-main-panel',
       'workflow-batch-panel',
       'workflow-action-stack'
+    ])
+  })
+
+  test('aligns market release workspace proportions with quote process page', () => {
+    const source = readComponent('MarketRelease.vue')
+
+    expectIncludes(source, 'MarketRelease.vue', [
+      '<section class="erp-surface workflow-workspace release-workspace">',
+      '<el-row :gutter="16">',
+      '<el-col :span="6">',
+      '<el-col :span="18">',
+      'class="erp-surface workflow-side-panel release-panel"',
+      'class="erp-table-surface workflow-main-panel release-table-panel"',
+      'height="640"'
     ])
   })
 

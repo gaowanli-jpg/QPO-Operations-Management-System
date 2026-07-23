@@ -1,5 +1,5 @@
 <template>
-  <div class="erp-page release-page">
+  <div class="erp-page release-page workflow-page">
     <header class="erp-page-header release-page-header">
           <div>
             <h2>市场部：议价确认与提单生成</h2>
@@ -9,10 +9,10 @@
 
     </header>
 
-    <section class="erp-surface release-workspace">
-      <el-row :gutter="20">
-        <el-col :span="7">
-          <div class="erp-surface release-panel">
+    <section class="erp-surface workflow-workspace release-workspace">
+      <el-row :gutter="16">
+        <el-col :span="6">
+          <div class="erp-surface workflow-side-panel release-panel">
             <div class="panel-title">询价单</div>
             <el-table
               class="selected-orders-mini-table"
@@ -152,8 +152,8 @@
           </div>
         </el-col>
 
-        <el-col :span="17">
-          <div class="erp-table-surface release-table-panel">
+        <el-col :span="18">
+          <div class="erp-table-surface workflow-main-panel release-table-panel">
             <div class="erp-table-header panel-title-row">
               <div class="panel-title">通过零件选择</div>
               <div class="release-table-actions import-action-row">
@@ -197,7 +197,7 @@
               row-key="id"
               border
               stripe
-              height="360"
+              height="640"
               scrollbar-always-on
               v-loading="loading"
               @selection-change="handleSelectionChange"
@@ -1161,6 +1161,10 @@ const statusTagType = (status) => {
   margin: 6px 0 0;
   color: var(--erp-text-secondary);
   font-size: 13px;
+}
+
+.release-workspace {
+  margin-top: var(--erp-space-5);
 }
 
 .release-panel,
