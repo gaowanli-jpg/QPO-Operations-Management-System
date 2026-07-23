@@ -85,6 +85,9 @@ describe('QPO workflow page polish', () => {
       'class="erp-table-surface workflow-main-panel release-table-panel"',
       'height="640"'
     ])
+    expectExcludes(source, 'MarketRelease.vue', [
+      '.release-workspace {\n  margin-top:'
+    ])
   })
 
   test('allows released orders in release picker while keeping item selection guarded', () => {

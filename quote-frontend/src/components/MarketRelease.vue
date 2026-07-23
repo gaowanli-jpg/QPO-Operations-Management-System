@@ -1163,10 +1163,6 @@ const statusTagType = (status) => {
   font-size: 13px;
 }
 
-.release-workspace {
-  margin-top: var(--erp-space-5);
-}
-
 .release-panel,
 .release-table-panel {
   padding: 14px;
