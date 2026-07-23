@@ -123,6 +123,14 @@ CREATE TABLE IF NOT EXISTS dict_markup_fee (
     enabled BOOLEAN DEFAULT TRUE
 );
 
+CREATE TABLE IF NOT EXISTS dict_assembly_markup_fee (
+    id SERIAL PRIMARY KEY,
+    fee_name VARCHAR(100) NOT NULL UNIQUE,
+    rate_percent NUMERIC(10, 2) DEFAULT 0,
+    sort_no INTEGER,
+    enabled BOOLEAN DEFAULT TRUE
+);
+
 CREATE TABLE IF NOT EXISTS dict_extra_fee_item (
     id SERIAL PRIMARY KEY,
     fee_name VARCHAR(100) NOT NULL UNIQUE,
@@ -293,6 +301,13 @@ VALUES
     ('管理费', 5.00, 2, TRUE),
     ('利润', 15.00, 3, TRUE),
     ('税费', 13.00, 4, TRUE)
+ON CONFLICT (fee_name) DO NOTHING;
+
+INSERT INTO dict_assembly_markup_fee (fee_name, rate_percent, sort_no, enabled)
+SELECT fee_name, rate_percent, sort_no, enabled
+FROM dict_markup_fee
+WHERE fee_name NOT LIKE '%运输%'
+  AND fee_name NOT LIKE '%运费%'
 ON CONFLICT (fee_name) DO NOTHING;
 
 INSERT INTO dict_extra_fee_item (fee_name, sort_no, enabled, remarks)

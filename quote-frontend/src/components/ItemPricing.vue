@@ -325,7 +325,7 @@
             <el-alert
               type="info"
               :closable="false"
-              title="组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装费对应的管理费/利润/税费；组装费不收运输费。"
+              title="组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装件百分比费用；费用项在材料与工艺管理中维护。"
               class="assembly-tip"
             />
             <div class="erp-table-actions assembly-actions">
@@ -626,7 +626,7 @@ const pricingItemTotal = ref(0)
 const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
-const markupFeeOptions = computed(() => dictionaryStore.markupFees)
+const assemblyMarkupFeeOptions = computed(() => dictionaryStore.assemblyMarkupFees)
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
@@ -1147,13 +1147,8 @@ const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum,
   return Number.isFinite(unitPrice) ? sum + unitPrice * qty : sum
 }, 0))
 
-const isTransportMarkupFee = (feeName) => {
-  const text = String(feeName || '')
-  return text.includes('运输') || text.includes('运费')
-}
-
-const assemblyFeeMarkupRows = computed(() => markupFeeOptions.value
-  .filter(fee => fee.enabled !== false && !isTransportMarkupFee(fee.feeName))
+const assemblyFeeMarkupRows = computed(() => assemblyMarkupFeeOptions.value
+  .filter(fee => fee.enabled !== false)
   .map(fee => {
     const ratePercent = Number(fee.ratePercent || 0)
     const cost = numberOrZero(assemblyFee.value) * ratePercent / 100

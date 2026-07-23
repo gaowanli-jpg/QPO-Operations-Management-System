@@ -14,6 +14,7 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.DrawingPartNoResolver;
 import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +23,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class QuoteProcessService {
@@ -75,6 +78,39 @@ public class QuoteProcessService {
         OrderItemPageDTO page = orderItemPageService.pageItems(req);
         List<Map<String, Object>> rows = page.getRecords().stream().map(this::buildItemRow).toList();
         return PageResult.of(rows, page.getTotal(), page.getPage(), page.getPageSize());
+    }
+
+    public Map<String, Object> matchPartSelection(Integer rfqId, List<Map<String, String>> importedItems) {
+        requireQuoteProcessEditableOrder(rfqId);
+        Set<String> importedKeys = new HashSet<>();
+        for (Map<String, String> item : importedItems == null ? List.<Map<String, String>>of() : importedItems) {
+            String key = itemKey(
+                    item.getOrDefault("normalizedPartNo", item.get("partNo")),
+                    item.getOrDefault("normalizedVersion", item.get("version")));
+            if (!"||".equals(key)) {
+                importedKeys.add(key);
+            }
+        }
+
+        List<Map<String, Object>> selectedRows = new ArrayList<>();
+        int matchedCount = 0;
+        for (ItemQuoteVersion item : listItems(rfqId)) {
+            if (!importedKeys.contains(itemKey(item.getPartNo(), item.getVersion()))) {
+                continue;
+            }
+            matchedCount++;
+            selectedRows.add(buildItemRow(item));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("importedCount", importedKeys.size());
+        result.put("matchedCount", matchedCount);
+        result.put("selectedCount", selectedRows.size());
+        result.put("skippedCount", 0);
+        result.put("data", selectedRows);
+        result.put("skippedItems", List.of());
+        return result;
     }
 
     @Transactional
@@ -291,6 +327,17 @@ public class QuoteProcessService {
         return order;
     }
 
+    private OrderRfq requireQuoteProcessEditableOrder(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
+            if (QuoteStatusWorkflow.QUOTED.equals(order.getStatus())) {
+                throw new RuntimeException("已报价订单交期已锁定，不能修改报价交期");
+            }
+            throw new RuntimeException("只有已核价订单可以维护报价交期");
+        }
+        return order;
+    }
+
     private OrderRfq requireQuoteProcessEditableOrderForUpdate(Integer rfqId) {
         OrderRfq order = requireOrderForUpdate(rfqId);
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
@@ -433,6 +480,10 @@ public class QuoteProcessService {
         return row;
     }
 
+    private String itemKey(String partNo, String version) {
+        return DrawingPartNoResolver.normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
     private boolean hasDrawing(ItemQuoteVersion item) {
         return item != null && !isBlank(item.getDrawingUrl());
     }
@@ -446,6 +497,10 @@ public class QuoteProcessService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String normalizeVersion(String version) {
+        return version == null ? "" : version.trim().toUpperCase();
     }
 
     private boolean isBusinessRejection(RuntimeException e) {

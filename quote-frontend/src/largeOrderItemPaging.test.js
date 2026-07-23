@@ -102,6 +102,21 @@ describe('large order item paging contracts', () => {
     expect(source).not.toContain('selectedRows.value.map(row => row.id)')
   })
 
+  test('quote process imports an excel file to lock cross-page selected item ids', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+    const apiSource = readSource('services', 'marketApi.js')
+
+    expect(apiSource).toContain('parseQuoteProcessPartSelection')
+    expect(apiSource).toContain('/api/market/quote-process/${rfqId}/parse-part-selection')
+    expect(source).toContain('parseQuoteProcessPartSelection')
+    expect(source).toContain('selectionUploadRef')
+    expect(source).toContain('importSelecting')
+    expect(source).toContain('handleQuoteProcessSelectionExcelChange')
+    expect(source).toContain(':on-change="handleQuoteProcessSelectionExcelChange"')
+    expect(source).toContain('selectedQuoteProcessItemIds.value = new Set(importedIds)')
+    expect(source).toContain('await syncQuoteProcessPageSelection()')
+  })
+
   test('market release page uses backend paging and cross-page selection state', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const apiSource = readSource('services', 'marketApi.js')

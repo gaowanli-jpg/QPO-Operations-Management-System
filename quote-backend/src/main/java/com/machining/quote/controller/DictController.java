@@ -2,10 +2,12 @@ package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictProcess;
+import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
@@ -26,6 +28,8 @@ public class DictController {
     private DictProcessMapper processMapper;
     @Autowired
     private DictMarkupFeeMapper markupFeeMapper;
+    @Autowired
+    private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired
@@ -142,6 +146,43 @@ public class DictController {
         return Map.of("success", true, "message", "费用类已删除");
     }
 
+    @GetMapping("/assembly-markup-fees")
+    @RequirePermission("engineer:dict:view")
+    public List<DictAssemblyMarkupFee> listAssemblyMarkupFees() {
+        QueryWrapper<DictAssemblyMarkupFee> qw = new QueryWrapper<>();
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        return assemblyMarkupFeeMapper.selectList(qw);
+    }
+
+    @PostMapping("/assembly-markup-fees")
+    @RequirePermission("engineer:dict:fee-manage")
+    public Map<String, Object> createAssemblyMarkupFee(@RequestBody DictAssemblyMarkupFee fee) {
+        normalizeAssemblyMarkupFee(fee);
+        assemblyMarkupFeeMapper.insert(fee);
+        auditService.record("DICT_ASSEMBLY_MARKUP_FEE_CREATE", "dict_assembly_markup_fee", fee.getId(), null, fee);
+        return Map.of("success", true, "message", "组装件费用类已新增", "data", fee);
+    }
+
+    @PutMapping("/assembly-markup-fees/{id}")
+    @RequirePermission("engineer:dict:fee-manage")
+    public Map<String, Object> updateAssemblyMarkupFee(@PathVariable Integer id, @RequestBody DictAssemblyMarkupFee fee) {
+        DictAssemblyMarkupFee before = assemblyMarkupFeeMapper.selectById(id);
+        fee.setId(id);
+        normalizeAssemblyMarkupFee(fee);
+        assemblyMarkupFeeMapper.updateById(fee);
+        auditService.record("DICT_ASSEMBLY_MARKUP_FEE_UPDATE", "dict_assembly_markup_fee", id, before, fee);
+        return Map.of("success", true, "message", "组装件费用类已更新", "data", fee);
+    }
+
+    @DeleteMapping("/assembly-markup-fees/{id}")
+    @RequirePermission("engineer:dict:fee-manage")
+    public Map<String, Object> deleteAssemblyMarkupFee(@PathVariable Integer id) {
+        DictAssemblyMarkupFee before = assemblyMarkupFeeMapper.selectById(id);
+        assemblyMarkupFeeMapper.deleteById(id);
+        auditService.record("DICT_ASSEMBLY_MARKUP_FEE_DELETE", "dict_assembly_markup_fee", id, before, null);
+        return Map.of("success", true, "message", "组装件费用类已删除");
+    }
+
     @GetMapping("/extra-fee-items")
     @RequirePermission("engineer:dict:view")
     public List<DictExtraFeeItem> listExtraFeeItems() {
@@ -218,6 +259,22 @@ public class DictController {
     }
 
     private void normalizeMarkupFee(DictMarkupFee fee) {
+        if (isBlank(fee.getFeeName())) {
+            throw new RuntimeException("费用名称不能为空");
+        }
+        fee.setFeeName(fee.getFeeName().trim());
+        if (fee.getRatePercent() == null) {
+            fee.setRatePercent(0.0);
+        }
+        if (fee.getSortNo() == null) {
+            fee.setSortNo(0);
+        }
+        if (fee.getEnabled() == null) {
+            fee.setEnabled(true);
+        }
+    }
+
+    private void normalizeAssemblyMarkupFee(DictAssemblyMarkupFee fee) {
         if (isBlank(fee.getFeeName())) {
             throw new RuntimeException("费用名称不能为空");
         }

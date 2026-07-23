@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import {
+  listAssemblyMarkupFees,
   listExtraFeeItems,
   listMarkupFees,
   listMaterials,
@@ -12,6 +13,7 @@ export const useDictionaryStore = defineStore('dictionary', {
     processes: [],
     extraFeeItems: [],
     markupFees: [],
+    assemblyMarkupFees: [],
     loadedAt: null,
     loading: false,
     lastIncludeMarkupFees: false,
@@ -49,7 +51,8 @@ export const useDictionaryStore = defineStore('dictionary', {
           materials: this.materials,
           processes: this.processes,
           extraFeeItems: this.extraFeeItems,
-          markupFees: this.markupFees
+          markupFees: this.markupFees,
+          assemblyMarkupFees: this.assemblyMarkupFees
         }
       }
 
@@ -62,13 +65,15 @@ export const useDictionaryStore = defineStore('dictionary', {
         ]
         if (includeMarkupFees) {
           requests.push(listMarkupFees())
+          requests.push(listAssemblyMarkupFees())
         }
-        const [materials, processes, extraFeeItems, markupFees] = await Promise.all(requests)
+        const [materials, processes, extraFeeItems, markupFees, assemblyMarkupFees] = await Promise.all(requests)
         this.materials = materials || []
         this.processes = processes || []
         this.extraFeeItems = extraFeeItems || []
         if (includeMarkupFees) {
           this.markupFees = markupFees || []
+          this.assemblyMarkupFees = assemblyMarkupFees || []
         }
         this.loadedAt = Date.now()
         this.lastIncludeMarkupFees = this.lastIncludeMarkupFees || includeMarkupFees
@@ -77,7 +82,8 @@ export const useDictionaryStore = defineStore('dictionary', {
           materials: this.materials,
           processes: this.processes,
           extraFeeItems: this.extraFeeItems,
-          markupFees: this.markupFees
+          markupFees: this.markupFees,
+          assemblyMarkupFees: this.assemblyMarkupFees
         }
       } finally {
         this.loading = false
@@ -106,6 +112,11 @@ export const useDictionaryStore = defineStore('dictionary', {
         { id: 'fallback-management', feeName: '管理费', ratePercent: 5, enabled: true },
         { id: 'fallback-profit', feeName: '利润', ratePercent: 15, enabled: true },
         { id: 'fallback-tax', feeName: '税费', ratePercent: 13, enabled: true }
+      ]
+      this.assemblyMarkupFees = [
+        { id: 'fallback-assembly-management', feeName: '组装管理费', ratePercent: 5, enabled: true },
+        { id: 'fallback-assembly-profit', feeName: '组装利润', ratePercent: 15, enabled: true },
+        { id: 'fallback-assembly-tax', feeName: '组装税费', ratePercent: 13, enabled: true }
       ]
       this.loadedAt = Date.now()
       this.lastIncludeMarkupFees = true

@@ -42,6 +42,20 @@ export const deleteMarkupFee = (id) => request(`/api/dict/markup-fees/${id}`, {
   method: 'DELETE'
 })
 
+export const listAssemblyMarkupFees = () => request('/api/dict/assembly-markup-fees')
+
+export const saveAssemblyMarkupFee = (payload) => {
+  const id = payload?.id
+  return request(id ? `/api/dict/assembly-markup-fees/${id}` : '/api/dict/assembly-markup-fees', {
+    method: id ? 'PUT' : 'POST',
+    data: payload
+  })
+}
+
+export const deleteAssemblyMarkupFee = (id) => request(`/api/dict/assembly-markup-fees/${id}`, {
+  method: 'DELETE'
+})
+
 export const listExtraFeeItems = ({ includeDisabled = false } = {}) => request(
   includeDisabled ? '/api/dict/extra-fee-items/all' : '/api/dict/extra-fee-items'
 )

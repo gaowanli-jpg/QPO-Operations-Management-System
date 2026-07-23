@@ -30,6 +30,7 @@ public class AuditLogQueryService {
             "dict_material",
             "dict_process",
             "dict_markup_fee",
+            "dict_assembly_markup_fee",
             "dict_extra_fee_item",
             "order_rfq",
             "item_quote_version",

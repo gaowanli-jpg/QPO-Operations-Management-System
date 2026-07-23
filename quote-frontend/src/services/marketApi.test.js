@@ -201,6 +201,18 @@ describe('marketApi', () => {
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/18/items', { params })
   })
 
+  test('parseQuoteProcessPartSelection uploads quote process lock form data by rfq id', async () => {
+    const formData = new FormData()
+
+    await marketApi.parseQuoteProcessPartSelection(18, formData)
+
+    expect(request).toHaveBeenCalledWith('/api/market/quote-process/18/parse-part-selection', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  })
+
   test('does not expose legacy full quote process workspace loader', () => {
     expect('getQuoteProcess' in marketApi).toBe(false)
   })

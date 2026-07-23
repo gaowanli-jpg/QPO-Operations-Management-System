@@ -69,6 +69,11 @@ export const getQuoteProcessSummary = (rfqId) => request(`/api/market/quote-proc
 
 export const listQuoteProcessItems = (rfqId, params = {}) => request(`/api/market/quote-process/${rfqId}/items`, { params })
 
+export const parseQuoteProcessPartSelection = (rfqId, formData) => multipartPost(
+  `/api/market/quote-process/${rfqId}/parse-part-selection`,
+  formData
+)
+
 export const shiftQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/shift', payload)
 
 export const setQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/set', payload)

@@ -6,6 +6,7 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
+import com.machining.quote.service.PartSelectionImportService;
 import com.machining.quote.service.QuoteProcessService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
@@ -23,6 +25,8 @@ import java.util.Map;
 public class QuoteProcessController {
     @Autowired
     private QuoteProcessService quoteProcessService;
+    @Autowired
+    private PartSelectionImportService partSelectionImportService;
 
     @GetMapping("/{rfqId}")
     @RequirePermission("market:quote-process:view")
@@ -55,6 +59,14 @@ public class QuoteProcessController {
         req.setPartNo(partNo);
         req.setVersion(version);
         return quoteProcessService.listQuoteProcessItems(req);
+    }
+
+    @PostMapping("/{rfqId}/parse-part-selection")
+    @RequirePermission("market:quote-process:update-lead-time")
+    public Map<String, Object> parsePartSelection(
+            @PathVariable Integer rfqId,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        return quoteProcessService.matchPartSelection(rfqId, partSelectionImportService.readPartSelectionRows(excelFile));
     }
 
     @PostMapping("/lead-time/shift")

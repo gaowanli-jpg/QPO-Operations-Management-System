@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -13,6 +14,7 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -47,6 +49,8 @@ class AssemblyWorkflowIntegrationTests {
     @Autowired
     private DictMarkupFeeMapper markupFeeMapper;
     @Autowired
+    private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
+    @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private EngineerService engineerService;
@@ -55,8 +59,9 @@ class AssemblyWorkflowIntegrationTests {
 
     @Test
     @SuppressWarnings("unchecked")
-    void assemblyQuoteAddsMarkupFeesToAssemblyFeeExceptTransport() {
+    void assemblyQuoteUsesAssemblyMarkupFeeDictionary() {
         resetMarkupFeesForAssemblyTest();
+        upsertMarkupFee("普通件专用费", 100.0, 9);
         OrderRfq order = createOrder("ASSY-PRICE");
         ItemQuoteVersion childA = createQuotedItem(order, "A-1", 2, 10.0);
         ItemQuoteVersion childB = createQuotedItem(order, "B-1", 1, 20.0);
@@ -74,7 +79,7 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(feeRows).hasSize(3);
         assertThat(feeRows)
                 .extracting(row -> row.get("feeName"))
-                .containsExactly("管理费", "利润", "税费");
+                .containsExactly("组装管理费", "组装利润", "组装税费");
         assertThat(feeRows)
                 .extracting(row -> row.get("cost"))
                 .containsExactly(2.5, 7.5, 6.5);
@@ -108,7 +113,7 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(result.get("normalCount")).isEqualTo(1);
         assertThat(result.get("assemblyCount")).isEqualTo(1);
         assertThat(child.getFinalUnitPrice()).isCloseTo(148.0, within(0.000001));
-        assertThat(parent.getFinalUnitPrice()).isCloseTo(217.0, within(0.000001));
+        assertThat(parent.getFinalUnitPrice()).isCloseTo(214.5, within(0.000001));
     }
 
     @Test
@@ -470,6 +475,13 @@ class AssemblyWorkflowIntegrationTests {
         upsertMarkupFee("管理费", 5.0, 2);
         upsertMarkupFee("利润", 15.0, 3);
         upsertMarkupFee("税费", 13.0, 4);
+
+        UpdateWrapper<DictAssemblyMarkupFee> disableAssemblyAll = new UpdateWrapper<>();
+        disableAssemblyAll.set("enabled", false);
+        assemblyMarkupFeeMapper.update(null, disableAssemblyAll);
+        upsertAssemblyMarkupFee("组装管理费", 5.0, 1);
+        upsertAssemblyMarkupFee("组装利润", 15.0, 2);
+        upsertAssemblyMarkupFee("组装税费", 13.0, 3);
     }
 
     private void upsertMarkupFee(String feeName, double ratePercent, int sortNo) {
@@ -487,6 +499,24 @@ class AssemblyWorkflowIntegrationTests {
             markupFeeMapper.insert(fee);
         } else {
             markupFeeMapper.updateById(fee);
+        }
+    }
+
+    private void upsertAssemblyMarkupFee(String feeName, double ratePercent, int sortNo) {
+        QueryWrapper<DictAssemblyMarkupFee> qw = new QueryWrapper<>();
+        qw.eq("fee_name", feeName);
+        DictAssemblyMarkupFee fee = assemblyMarkupFeeMapper.selectOne(qw);
+        if (fee == null) {
+            fee = new DictAssemblyMarkupFee();
+        }
+        fee.setFeeName(feeName);
+        fee.setRatePercent(ratePercent);
+        fee.setSortNo(sortNo);
+        fee.setEnabled(true);
+        if (fee.getId() == null) {
+            assemblyMarkupFeeMapper.insert(fee);
+        } else {
+            assemblyMarkupFeeMapper.updateById(fee);
         }
     }
 }

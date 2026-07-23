@@ -35,4 +35,21 @@ describe('dictApi', () => {
       method: 'DELETE'
     })
   })
+
+  test('manages assembly markup fees with dedicated endpoints', async () => {
+    const payload = { id: 11, feeName: '组装管理费', ratePercent: 5 }
+
+    await dictApi.listAssemblyMarkupFees()
+    await dictApi.saveAssemblyMarkupFee(payload)
+    await dictApi.deleteAssemblyMarkupFee(11)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/assembly-markup-fees')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/dict/assembly-markup-fees/11', {
+      method: 'PUT',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/dict/assembly-markup-fees/11', {
+      method: 'DELETE'
+    })
+  })
 })

@@ -18,6 +18,7 @@ import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderItemPageService;
 import com.machining.quote.service.OrderManagementService;
+import com.machining.quote.service.QuoteProcessService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,8 @@ class LargeOrderItemPagingTest {
     private DeliveryService deliveryService;
     @Autowired
     private OrderManagementService orderManagementService;
+    @Autowired
+    private QuoteProcessService quoteProcessService;
     @Autowired
     private EngineerController engineerController;
     @Autowired
@@ -196,7 +199,12 @@ class LargeOrderItemPagingTest {
         assertThat(quoteProcessController)
                 .contains("@GetMapping(\"/{rfqId}/summary\")")
                 .contains("@GetMapping(\"/{rfqId}/items\")")
+                .contains("@PostMapping(\"/{rfqId}/parse-part-selection\")")
+                .contains("@RequirePermission(\"market:quote-process:update-lead-time\")")
                 .contains("PageResult<Map<String, Object>>");
+        assertThat(method(quoteProcessController, "parsePartSelection"))
+                .contains("partSelectionImportService.readPartSelectionRows(excelFile)")
+                .contains("quoteProcessService.matchPartSelection(rfqId");
         assertThat(method(quoteProcessController, "getQuoteProcessSummary"))
                 .contains("quoteProcessService.getQuoteProcessSummary(rfqId)")
                 .doesNotContain("quoteProcessService.getQuoteProcess(rfqId)")
@@ -344,8 +352,9 @@ class LargeOrderItemPagingTest {
         assertThat(service)
                 .contains("public Map<String, Object> getQuoteProcessSummary(Integer rfqId)")
                 .contains("public PageResult<Map<String, Object>> listQuoteProcessItems(OrderItemPageReq req)")
+                .contains("public Map<String, Object> matchPartSelection(Integer rfqId, List<Map<String, String>> importedItems)")
                 .contains("orderItemPageService.pageItems(req)");
-        assertThat(method(service, "getQuoteProcessSummary"))
+        assertThat(javaMethod(service, "getQuoteProcessSummary"))
                 .contains("orderItemPageService.summarizeItems(rfqId)")
                 .doesNotContain("listItems(rfqId)")
                 .doesNotContain("itemList");
@@ -358,6 +367,38 @@ class LargeOrderItemPagingTest {
         assertThat(method(service, "saveQuoteSheet"))
                 .contains("quoteSheetSummary")
                 .doesNotContain("result.put(\"itemList\"");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void quoteProcessPartSelectionMatchesCurrentEditableOrderWithoutLoadingPage() {
+        OrderRfq editableOrder = createOrder("QUOTE-IMPORT");
+        editableOrder.setStatus(QuoteStatusWorkflow.PRICED);
+        orderMapper.updateById(editableOrder);
+        ItemQuoteVersion firstMatch = createItem(editableOrder, "QUOTE-IMPORT-01", QuoteStatusWorkflow.PRICED, 10.0, "/quote-import-1.pdf");
+        ItemQuoteVersion secondMatch = createItem(editableOrder, "QUOTE-IMPORT-01", QuoteStatusWorkflow.PRICED, 11.0, "/quote-import-2.pdf");
+        createItem(editableOrder, "QUOTE-IMPORT-02", QuoteStatusWorkflow.PRICED, 12.0, "/quote-import-3.pdf");
+        OrderRfq quotedOrder = createOrder("QUOTE-IMPORT-LOCKED");
+        quotedOrder.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.updateById(quotedOrder);
+        createItem(quotedOrder, "QUOTE-IMPORT-01", QuoteStatusWorkflow.QUOTED, 13.0, "/quote-import-locked.pdf");
+
+        Map<String, Object> result = quoteProcessService.matchPartSelection(
+                editableOrder.getId(),
+                List.of(importedSelection("", "QUOTE-IMPORT-01", "A")));
+        List<Map<String, Object>> selectedRows = (List<Map<String, Object>>) result.get("data");
+
+        assertThat(result)
+                .containsEntry("importedCount", 1)
+                .containsEntry("matchedCount", 2)
+                .containsEntry("selectedCount", 2)
+                .containsEntry("skippedCount", 0);
+        assertThat(selectedRows)
+                .extracting(row -> row.get("id"))
+                .containsExactly(firstMatch.getId(), secondMatch.getId());
+        assertThat(selectedRows)
+                .extracting(row -> row.get("rfqId"))
+                .containsOnly(editableOrder.getId());
     }
 
     @Test

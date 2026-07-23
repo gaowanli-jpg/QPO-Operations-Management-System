@@ -13,6 +13,7 @@
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processes'" type="primary" @click="openProcessDialog()">新增工艺</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
+        <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'assemblyMarkupFees'" type="primary" @click="openAssemblyMarkupFeeDialog()">新增组装件费用类</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
       </div>
     </section>
@@ -97,6 +98,31 @@
                 <div class="erp-table-actions">
                   <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
                   <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteMarkupFee(scope.row)">删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="组装件百分比费用类" name="assemblyMarkupFees">
+          <el-table :data="assemblyMarkupFees" border stripe height="560" v-loading="loading">
+            <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+            <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
+            <el-table-column label="费率" width="120" align="right">
+              <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
+            </el-table-column>
+            <el-table-column label="启用" width="90" align="center">
+              <template #default="scope">
+                <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">
+                  {{ scope.row.enabled ? '启用' : '停用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="160" align="center" fixed="right">
+              <template #default="scope">
+                <div class="erp-table-actions">
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openAssemblyMarkupFeeDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteAssemblyMarkupFee(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -267,6 +293,29 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="assemblyMarkupFeeDialogVisible" :title="assemblyMarkupFeeForm.id ? '编辑组装件费用类' : '新增组装件费用类'" width="520px">
+      <el-form :model="assemblyMarkupFeeForm" label-width="100px" class="erp-dialog-form">
+        <el-form-item label="序号">
+          <el-input-number v-model="assemblyMarkupFeeForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="费用名称" required>
+          <el-input v-model="assemblyMarkupFeeForm.feeName" placeholder="例如：组装管理费、组装利润、组装税费" />
+        </el-form-item>
+        <el-form-item label="费率(%)" required>
+          <el-input-number v-model="assemblyMarkupFeeForm.ratePercent" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="assemblyMarkupFeeForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="assemblyMarkupFeeDialogVisible = false">取消</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="saving" @click="saveAssemblyMarkupFee">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="extraFeeDialogVisible" :title="extraFeeForm.id ? '编辑非工时费用工艺' : '新增非工时费用工艺'" width="560px">
       <el-form :model="extraFeeForm" label-width="120px" class="erp-dialog-form">
         <el-form-item label="序号">
@@ -296,10 +345,12 @@
 import { computed, reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  deleteAssemblyMarkupFee as deleteAssemblyMarkupFeeRequest,
   deleteExtraFeeItem,
   deleteMarkupFee as deleteMarkupFeeRequest,
   deleteMaterial as deleteMaterialRequest,
   deleteProcess as deleteProcessRequest,
+  saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
   saveExtraFeeItem,
   saveMarkupFee as saveMarkupFeeRequest,
   saveMaterial as saveMaterialRequest,
@@ -312,6 +363,7 @@ const activeTab = ref('materials')
 const materials = computed(() => dictionaryStore.materials)
 const processes = computed(() => dictionaryStore.processes)
 const markupFees = computed(() => dictionaryStore.markupFees)
+const assemblyMarkupFees = computed(() => dictionaryStore.assemblyMarkupFees)
 const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
 const loading = ref(false)
 const saving = ref(false)
@@ -319,6 +371,7 @@ const saving = ref(false)
 const materialDialogVisible = ref(false)
 const processDialogVisible = ref(false)
 const markupFeeDialogVisible = ref(false)
+const assemblyMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
 
 const processPriceFields = [
@@ -335,6 +388,7 @@ const processPriceFields = [
 const materialForm = reactive(createEmptyMaterial())
 const processForm = reactive(createEmptyProcess())
 const markupFeeForm = reactive(createEmptyMarkupFee())
+const assemblyMarkupFeeForm = reactive(createEmptyMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
 
 const formatNumber = (value, precision) => {
@@ -430,6 +484,11 @@ const openMarkupFeeDialog = (row) => {
   markupFeeDialogVisible.value = true
 }
 
+const openAssemblyMarkupFeeDialog = (row) => {
+  Object.assign(assemblyMarkupFeeForm, createEmptyMarkupFee(), row || {})
+  assemblyMarkupFeeDialogVisible.value = true
+}
+
 const openExtraFeeDialog = (row) => {
   Object.assign(extraFeeForm, createEmptyExtraFee(), row || {})
   extraFeeDialogVisible.value = true
@@ -485,6 +544,22 @@ const saveMarkupFee = async () => {
   }
 }
 
+const saveAssemblyMarkupFee = async () => {
+  if (!assemblyMarkupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
+  saving.value = true
+  try {
+    const response = await saveAssemblyMarkupFeeRequest(assemblyMarkupFeeForm)
+    ElMessage.success(response.message || '保存成功')
+    assemblyMarkupFeeDialogVisible.value = false
+    await dictionaryStore.reloadAfterMutation()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('组装件费用类保存失败。')
+  } finally {
+    saving.value = false
+  }
+}
+
 const saveExtraFee = async () => {
   if (!extraFeeForm.feeName) return ElMessage.warning('请填写工艺名称。')
   saving.value = true
@@ -519,6 +594,13 @@ const deleteMarkupFee = async (row) => {
   await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
   await deleteMarkupFeeRequest(row.id)
   ElMessage.success('费用类已删除')
+  await dictionaryStore.reloadAfterMutation()
+}
+
+const deleteAssemblyMarkupFee = async (row) => {
+  await ElMessageBox.confirm(`确认删除组装件费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
+  await deleteAssemblyMarkupFeeRequest(row.id)
+  ElMessage.success('组装件费用类已删除')
   await dictionaryStore.reloadAfterMutation()
 }
 

@@ -1,7 +1,6 @@
 package com.machining.quote.controller;
 
 import com.alibaba.excel.EasyExcel;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.config.RequirePermission;
@@ -24,6 +23,7 @@ import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderFilePathService;
 import com.machining.quote.service.OrderManagementService;
+import com.machining.quote.service.PartSelectionImportService;
 import com.machining.quote.service.QuoteTemplateExportService;
 import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.util.DrawingPartNoResolver;
@@ -59,6 +59,8 @@ public class MarketController {
 
     @Autowired
     private InternalTargetLeadTimeService internalTargetLeadTimeService;
+    @Autowired
+    private PartSelectionImportService partSelectionImportService = new PartSelectionImportService();
 
     @Autowired
     private ExcelExportService excelExportService;
@@ -254,7 +256,7 @@ public class MarketController {
     public Map<String, Object> parsePartSelectionForOrder(
             @PathVariable Integer rfqId,
             @RequestParam("excelFile") MultipartFile excelFile) {
-        return internalTargetLeadTimeService.matchPartSelection(rfqId, readPartSelectionRows(excelFile));
+        return internalTargetLeadTimeService.matchPartSelection(rfqId, partSelectionImportService.readPartSelectionRows(excelFile));
     }
 
     @PostMapping("/release/parse-part-selection/batch")
@@ -262,13 +264,15 @@ public class MarketController {
     public Map<String, Object> parsePartSelectionForOrders(
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam("rfqIds") String rfqIdsJson) {
-        return internalTargetLeadTimeService.matchPartSelectionBatch(parseRfqIds(rfqIdsJson), readPartSelectionRows(excelFile));
+        return internalTargetLeadTimeService.matchPartSelectionBatch(
+                parseRfqIds(rfqIdsJson),
+                partSelectionImportService.readPartSelectionRows(excelFile));
     }
 
     @PostMapping("/parse-part-selection")
     @RequirePermission("market:release:create")
     public Map<String, Object> parsePartSelection(@RequestParam("excelFile") MultipartFile excelFile) {
-        List<Map<String, String>> items = readPartSelectionRows(excelFile);
+        List<Map<String, String>> items = partSelectionImportService.readPartSelectionRows(excelFile);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("count", items.size());

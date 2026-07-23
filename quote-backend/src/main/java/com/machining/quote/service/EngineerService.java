@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PartVersionKey;
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
@@ -12,6 +13,7 @@ import com.machining.quote.entity.DictProcess;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
@@ -49,6 +51,8 @@ public class EngineerService {
     private DictMaterialMapper materialMapper;
     @Autowired
     private DictMarkupFeeMapper markupFeeMapper;
+    @Autowired
+    private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired
@@ -1226,35 +1230,35 @@ public class EngineerService {
     }
 
     private List<Map<String, Object>> calculateMarkupFees(double baseCost) {
-        return calculateMarkupFees(baseCost, false);
-    }
-
-    private List<Map<String, Object>> calculateAssemblyFeeMarkupFees(double assemblyFee) {
-        return calculateMarkupFees(assemblyFee, true);
-    }
-
-    private List<Map<String, Object>> calculateMarkupFees(double baseCost, boolean excludeTransportFee) {
         QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
         qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
         List<DictMarkupFee> fees = markupFeeMapper.selectList(qw);
         List<Map<String, Object>> rows = new ArrayList<>();
         for (DictMarkupFee fee : fees) {
-            if (excludeTransportFee && isTransportFee(fee.getFeeName())) {
-                continue;
-            }
-            double ratePercent = fee.getRatePercent() == null ? 0.0 : fee.getRatePercent();
-            double cost = baseCost * ratePercent / 100.0;
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("feeName", fee.getFeeName());
-            row.put("ratePercent", ratePercent);
-            row.put("cost", cost);
-            rows.add(row);
+            rows.add(markupFeeRow(baseCost, fee.getFeeName(), fee.getRatePercent()));
         }
         return rows;
     }
 
-    private boolean isTransportFee(String feeName) {
-        return feeName != null && (feeName.contains("运输") || feeName.contains("运费"));
+    private List<Map<String, Object>> calculateAssemblyFeeMarkupFees(double assemblyFee) {
+        QueryWrapper<DictAssemblyMarkupFee> qw = new QueryWrapper<>();
+        qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
+        List<DictAssemblyMarkupFee> fees = assemblyMarkupFeeMapper.selectList(qw);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (DictAssemblyMarkupFee fee : fees) {
+            rows.add(markupFeeRow(assemblyFee, fee.getFeeName(), fee.getRatePercent()));
+        }
+        return rows;
+    }
+
+    private Map<String, Object> markupFeeRow(double baseCost, String feeName, Double ratePercentValue) {
+        double ratePercent = ratePercentValue == null ? 0.0 : ratePercentValue;
+        double cost = baseCost * ratePercent / 100.0;
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("feeName", feeName);
+        row.put("ratePercent", ratePercent);
+        row.put("cost", cost);
+        return row;
     }
 
     private double sumFeeCosts(List<Map<String, Object>> feeRows) {

@@ -80,6 +80,28 @@
                   指定
                 </el-button>
               </div>
+              <el-upload
+                ref="selectionUploadRef"
+                action="#"
+                :auto-upload="false"
+                :show-file-list="false"
+                accept=".xlsx, .xls"
+                :on-change="handleQuoteProcessSelectionExcelChange"
+                class="quote-import-action"
+              >
+                <template #trigger>
+                  <el-button
+                    v-permission="'market:quote-process:update-lead-time'"
+                    :icon="Upload"
+                    plain
+                    class="workflow-soft-button"
+                    :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0"
+                    :loading="importSelecting"
+                  >
+                    导入表格锁定
+                  </el-button>
+                </template>
+              </el-upload>
               <div class="selection-count">已选 {{ selectedQuoteProcessItemIds.size }} 项</div>
             </div>
 
@@ -255,7 +277,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
+import { Check, DocumentChecked, Download, Minus, Plus, Upload } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   downloadQuote,
@@ -264,6 +286,7 @@ import {
   downloadSimpleQuote,
   getQuoteProcessSummary,
   listQuoteProcessItems,
+  parseQuoteProcessPartSelection,
   saveQuoteSheet as saveQuoteSheetApi,
   setQuoteProcessLeadTime,
   shiftQuoteProcessLeadTime,
@@ -283,6 +306,7 @@ const itemList = ref([])
 const quoteProcessItemTotal = ref(0)
 const selectedQuoteProcessItemIds = ref(new Set())
 const quoteProcessTableRef = ref(null)
+const selectionUploadRef = ref(null)
 const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const orderPickerVisible = ref(false)
 const shiftDays = ref(0)
@@ -293,6 +317,7 @@ const loadingItems = ref(false)
 const adjusting = ref(false)
 const settingQuoteDate = ref(false)
 const savingQuoteSheet = ref(false)
+const importSelecting = ref(false)
 let syncingQuoteProcessSelection = false
 
 const selectedOrderLabel = computed(() => (
@@ -405,6 +430,49 @@ const handleSelectionChange = (rows) => {
   currentPageIds.forEach(id => selectedQuoteProcessItemIds.value.delete(id))
   rows.forEach(row => selectedQuoteProcessItemIds.value.add(row.id))
   selectedQuoteProcessItemIds.value = new Set(selectedQuoteProcessItemIds.value)
+}
+
+const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
+  const file = uploadFile?.raw
+  selectionUploadRef.value?.clearFiles()
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能导入锁定。')
+  if (!file) return
+
+  const fileName = String(file.name || '').toLowerCase()
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    return ElMessage.warning('请上传 xlsx 或 xls 表格。')
+  }
+
+  const formData = new FormData()
+  formData.append('excelFile', file)
+  importSelecting.value = true
+  try {
+    const response = await parseQuoteProcessPartSelection(selectedRfqId.value, formData)
+    const importedIds = (response?.data || [])
+      .map(row => row.id)
+      .filter(id => id !== null && id !== undefined)
+    selectedQuoteProcessItemIds.value = new Set(importedIds)
+    await syncQuoteProcessPageSelection()
+
+    const importedCount = Number(response?.importedCount ?? 0)
+    const matchedCount = Number(response?.matchedCount ?? 0)
+    const selectedCount = Number(response?.selectedCount ?? importedIds.length)
+    const skippedCount = Number(response?.skippedCount ?? 0)
+    if (importedCount === 0) {
+      ElMessage.warning('表格中未读取到有效的图号+版本。')
+    } else if (selectedCount === 0) {
+      ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单的报价零件。`)
+    } else {
+      const skippedText = skippedCount > 0 ? `，${skippedCount} 项未锁定` : ''
+      ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已锁定 ${selectedCount} 项${skippedText}。`)
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '导入表格锁定失败。')
+  } finally {
+    importSelecting.value = false
+  }
 }
 
 const applyShift = async (direction) => {
@@ -682,6 +750,15 @@ const exportTemplateSimpleQuote = async () => {
 }
 
 .batch-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.quote-import-action {
+  margin-top: 10px;
+}
+
+.quote-import-action :deep(.el-button) {
+  width: 100%;
   margin-left: 0;
 }
 
