@@ -10,19 +10,27 @@ import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.DrawingPartNoResolver;
 import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -30,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class InternalTargetLeadTimeService {
@@ -48,6 +57,8 @@ public class InternalTargetLeadTimeService {
     private LeadTimeService leadTimeService;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private OrderFilePathService orderFilePathService;
     @Autowired
     private OrderItemPageService orderItemPageService;
     @Autowired(required = false)
@@ -160,6 +171,152 @@ public class InternalTargetLeadTimeService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
         result.put("data", savedRow);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> updateReleaseItemVersion(Integer itemId, ReleaseItemVersionUpdateReq req) {
+        Integer rfqId = req == null ? null : req.getRfqId();
+        requireOrderForUpdate(rfqId);
+        if (itemId == null) {
+            throw new RuntimeException("零件 ID 不能为空");
+        }
+        ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
+        if (item == null || !Objects.equals(rfqId, item.getRfqId())) {
+            throw new RuntimeException("零件不存在或不属于当前 RFQ");
+        }
+        assertReleaseItemMutable(item, listTicketsForItems(rfqId, List.of(item)));
+
+        Map<String, Object> before = buildItemRow(item);
+        item.setVersion(normalizeVersion(req.getVersion()));
+        itemMapper.updateById(item);
+        ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+        Map<String, Object> savedRow = buildItemRow(saved == null ? item : saved);
+        auditService.record("RELEASE_ITEM_VERSION_UPDATE", "item_quote_version", item.getId(), before, savedRow);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("data", savedRow);
+        log.info("Release item version updated rfqId={} itemId={} partNo={}",
+                rfqId, item.getId(), normalizePartNo(item.getPartNo()));
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> replaceReleaseDrawings(List<Integer> rfqIds, List<MultipartFile> drawings) {
+        List<OrderRfq> orders = requireOrdersForUpdate(rfqIds);
+        if (drawings == null || drawings.isEmpty()) {
+            throw new RuntimeException("请至少上传一个 PDF 图纸");
+        }
+
+        Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
+        orders.forEach(order -> orderById.put(order.getId(), order));
+        List<ItemQuoteVersion> items = listItemsBatch(orderById.keySet().stream().toList());
+        List<OrderDeliveryTicket> tickets = listTicketsForItems(items);
+        Map<String, List<ItemQuoteVersion>> itemsByPartNo = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : items) {
+            String partNo = normalizePartNo(item.getPartNo());
+            if (!partNo.isEmpty()) {
+                itemsByPartNo.computeIfAbsent(partNo, ignored -> new ArrayList<>()).add(item);
+            }
+        }
+
+        List<Map<String, Object>> replacedItems = new ArrayList<>();
+        List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
+        List<Map<String, Object>> skippedFiles = new ArrayList<>();
+        List<Map<String, Object>> skippedItems = new ArrayList<>();
+        int matchedCount = 0;
+
+        try {
+            for (MultipartFile drawing : drawings) {
+                String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+                if (drawing == null || cleanFileName.isEmpty() || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+                    skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+                    continue;
+                }
+
+                String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemsByPartNo.keySet());
+                List<ItemQuoteVersion> matchedItems = itemsByPartNo.get(partNoFromFileName);
+                if (matchedItems == null || matchedItems.isEmpty()) {
+                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到所选订单对应零件"));
+                    continue;
+                }
+
+                matchedCount += matchedItems.size();
+                Map<Integer, String> newUrlByRfqId = new LinkedHashMap<>();
+                for (ItemQuoteVersion item : matchedItems) {
+                    int itemTicketedQty = ticketedQty(item, tickets);
+                    if (!isReleaseItemMutable(item, itemTicketedQty)) {
+                        skippedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName,
+                                releaseMutationBlockedReason(item, Math.max(0, safeInt(item.getQty()) - itemTicketedQty))));
+                        continue;
+                    }
+                    String fileUrl = newUrlByRfqId.computeIfAbsent(item.getRfqId(), ignored -> {
+                        try {
+                            return saveReleaseDrawing(drawing, cleanFileName, orderById.get(item.getRfqId()));
+                        } catch (IOException e) {
+                            throw new ReleaseDrawingSaveException("图纸保存失败：" + cleanFileName, e);
+                        }
+                    });
+                    item.setDrawingUrl(fileUrl);
+                    itemMapper.updateById(item);
+                    replacedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName, "已替换"));
+                }
+            }
+        } catch (ReleaseDrawingSaveException e) {
+            log.error("Release drawings replace failed rfqIds={} uploadCount={}", orderById.keySet(), drawings.size(), e);
+            throw new RuntimeException(e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error("Release drawings replace failed rfqIds={} uploadCount={}", orderById.keySet(), drawings.size(), e);
+            throw e;
+        }
+
+        Map<String, Object> auditSummary = new LinkedHashMap<>();
+        auditSummary.put("rfqIds", orderById.keySet());
+        auditSummary.put("rfqNos", orders.stream().map(OrderRfq::getRfqNo).toList());
+        auditSummary.put("uploadCount", drawings.size());
+        auditSummary.put("matchedCount", matchedCount);
+        auditSummary.put("replacedCount", replacedItems.size());
+        auditSummary.put("unmatchedCount", unmatchedDrawings.size());
+        auditSummary.put("skippedCount", skippedFiles.size() + skippedItems.size());
+        auditSummary.put("replacedItems", replacedItems);
+        auditSummary.put("unmatchedDrawings", unmatchedDrawings);
+        auditSummary.put("skippedFiles", skippedFiles);
+        auditSummary.put("skippedItems", skippedItems);
+        String auditTargetId = orderById.keySet().stream()
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(","));
+        auditService.record(
+                "RELEASE_DRAWING_REPLACE",
+                "item_quote_version",
+                auditTargetId,
+                null,
+                auditSummary,
+                "MARKET",
+                "SUCCESS",
+                "RELEASE_DRAWING_REPLACE rfqIds=" + orderById.keySet() + " replacedCount=" + replacedItems.size(),
+                null
+        );
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "图纸替换完成，成功替换 " + replacedItems.size() + " 项。");
+        result.put("uploadCount", drawings.size());
+        result.put("matchedCount", matchedCount);
+        result.put("replacedCount", replacedItems.size());
+        result.put("unmatchedCount", unmatchedDrawings.size());
+        result.put("skippedCount", skippedFiles.size() + skippedItems.size());
+        result.put("replacedItems", replacedItems);
+        result.put("unmatchedDrawings", unmatchedDrawings);
+        result.put("skippedFiles", skippedFiles);
+        result.put("skippedItems", skippedItems);
+        log.info("Release drawings replace completed rfqIds={} uploadCount={} matchedCount={} replacedCount={} unmatchedCount={} skippedCount={}",
+                orderById.keySet(), drawings.size(), matchedCount, replacedItems.size(), unmatchedDrawings.size(),
+                skippedFiles.size() + skippedItems.size());
+        if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty() || !skippedItems.isEmpty()) {
+            log.warn("Release drawings replace completed with warnings rfqIds={} unmatchedCount={} skippedCount={}",
+                    orderById.keySet(), unmatchedDrawings.size(), skippedFiles.size() + skippedItems.size());
+        }
         return result;
     }
 
@@ -354,6 +511,21 @@ public class InternalTargetLeadTimeService {
             }
             assertCanReadReleaseWorkspace(order);
             orders.add(order);
+        }
+        return orders;
+    }
+
+    private List<OrderRfq> requireOrdersForUpdate(List<Integer> rfqIds) {
+        List<Integer> normalizedIds = new ArrayList<>(new java.util.LinkedHashSet<>(
+                rfqIds == null ? List.of() : rfqIds.stream()
+                        .filter(id -> id != null)
+                        .toList()));
+        if (normalizedIds.isEmpty()) {
+            throw new RuntimeException("RFQ ID 不能为空");
+        }
+        List<OrderRfq> orders = new ArrayList<>();
+        for (Integer rfqId : normalizedIds) {
+            orders.add(requireOrderForUpdate(rfqId));
         }
         return orders;
     }
@@ -606,6 +778,85 @@ public class InternalTargetLeadTimeService {
         return normalizePartNo(partNo) + "||" + normalizeVersion(version);
     }
 
+    private void assertReleaseItemMutable(ItemQuoteVersion item, List<OrderDeliveryTicket> tickets) {
+        int itemTicketedQty = ticketedQty(item, tickets == null ? List.of() : tickets);
+        if (!isReleaseItemMutable(item, itemTicketedQty)) {
+            int remainingQty = Math.max(0, safeInt(item.getQty()) - itemTicketedQty);
+            throw new RuntimeException(releaseMutationBlockedReason(item, remainingQty));
+        }
+    }
+
+    private boolean isReleaseItemMutable(ItemQuoteVersion item, int ticketedQty) {
+        if (item == null) {
+            return false;
+        }
+        int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty);
+        return remainingQty > 0
+                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+    }
+
+    private String releaseMutationBlockedReason(ItemQuoteVersion item, int remainingQty) {
+        if (remainingQty <= 0) {
+            return "零件已全部提单";
+        }
+        if (item != null && (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus()))) {
+            return "零件已提单";
+        }
+        return "零件不可修改";
+    }
+
+    private String saveReleaseDrawing(MultipartFile drawing, String cleanFileName, OrderRfq order) throws IOException {
+        if (order == null) {
+            throw new IOException("订单不存在");
+        }
+        Path projectDir = orderFilePathService.orderDrawingDirectory(order);
+        Files.createDirectories(projectDir);
+        String newFilename = UUID.randomUUID() + ".pdf";
+        Path dest = projectDir.resolve(newFilename).normalize();
+        if (!dest.startsWith(projectDir)) {
+            throw new IOException("图纸保存路径非法：" + cleanFileName);
+        }
+        try (InputStream inputStream = drawing.getInputStream()) {
+            Files.copy(inputStream, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return orderFilePathService.drawingUrl(order, newFilename);
+    }
+
+    private String cleanFilename(String originalFilename) {
+        if (originalFilename == null) {
+            return "";
+        }
+        return originalFilename.replaceAll(".*[\\\\/]", "").trim();
+    }
+
+    private Map<String, Object> buildDrawingItemResult(
+            ItemQuoteVersion item,
+            OrderRfq order,
+            String fileName,
+            String reason) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rfqId", item == null ? null : item.getRfqId());
+        result.put("rfqNo", order == null ? "" : order.getRfqNo());
+        result.put("itemId", item == null ? null : item.getId());
+        result.put("partNo", item == null ? "" : item.getPartNo());
+        result.put("version", item == null ? "" : item.getVersion());
+        result.put("fileName", fileName);
+        result.put("reason", reason);
+        return result;
+    }
+
+    private Map<String, Object> buildFileResult(String fileName, String partNo, String reason) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("fileName", fileName);
+        result.put("partNo", partNo);
+        result.put("reason", reason);
+        return result;
+    }
+
     private Map<String, Object> skipRow(Integer itemId, String partNo, String version, String reason) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("itemId", itemId);
@@ -613,5 +864,11 @@ public class InternalTargetLeadTimeService {
         row.put("version", version);
         row.put("reason", reason);
         return row;
+    }
+
+    private static class ReleaseDrawingSaveException extends RuntimeException {
+        private ReleaseDrawingSaveException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

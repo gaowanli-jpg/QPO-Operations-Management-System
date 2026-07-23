@@ -10,6 +10,7 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -30,6 +31,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -211,6 +213,22 @@ public class MarketController {
     @RequirePermission("market:release:view")
     public PageResult<Map<String, Object>> listReleaseItemsBatch(@RequestBody ReleaseItemBatchQueryReq req) {
         return internalTargetLeadTimeService.pageItemRowsBatch(req);
+    }
+
+    @PostMapping("/release/items/{itemId}/version")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> updateReleaseItemVersion(
+            @PathVariable Integer itemId,
+            @RequestBody ReleaseItemVersionUpdateReq req) {
+        return internalTargetLeadTimeService.updateReleaseItemVersion(itemId, req);
+    }
+
+    @PostMapping(value = "/release/drawings/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:release:create")
+    public Map<String, Object> replaceReleaseDrawings(
+            @RequestParam("rfqIds") String rfqIdsJson,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
+        return internalTargetLeadTimeService.replaceReleaseDrawings(parseRfqIds(rfqIdsJson), drawings);
     }
 
     @GetMapping("/release/tickets/{rfqId}")

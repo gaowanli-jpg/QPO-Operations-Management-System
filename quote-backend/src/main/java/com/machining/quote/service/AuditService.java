@@ -193,7 +193,7 @@ public class AuditService {
                 || startsWith(action, "SYSTEM_POST_")) return "SYSTEM";
         if (startsWith(action, "ORDER_")) return "ORDER";
         if (startsWith(action, "DELIVERY_") || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
-        if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_")) return "MARKET";
+        if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_") || startsWith(action, "RELEASE_")) return "MARKET";
         if (startsWith(action, "ITEM_") || startsWith(action, "REPEAT_")) return "ENGINEER";
         if (startsWith(action, "AUTH_")) return "AUTH";
         return "SYSTEM";
@@ -262,6 +262,8 @@ public class AuditService {
             case "ORDER_RESTORE" -> "恢复废弃订单";
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "INTERNAL_TARGET_LEAD_TIME_UPDATE" -> "更新内部目标交期";
+            case "RELEASE_ITEM_VERSION_UPDATE" -> "议价提单修改零件版本";
+            case "RELEASE_DRAWING_REPLACE" -> "议价提单替换图纸";
             case "DELIVERY_TICKET_GENERATE" -> "生成提单";
             case "DELIVERY_TICKET_EXPORT" -> "导出提单表";
             case "DELIVERY_PROCESS_SHEET_EXPORT" -> "导出工艺表";
