@@ -7,6 +7,7 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -201,6 +202,12 @@ public class MarketController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "remainingOnly", required = false) Boolean remainingOnly) {
         return internalTargetLeadTimeService.pageItemRows(rfqId, page, pageSize, keyword, status, remainingOnly);
+    }
+
+    @PostMapping("/release/items/batch")
+    @RequirePermission("market:release:view")
+    public PageResult<Map<String, Object>> listReleaseItemsBatch(@RequestBody ReleaseItemBatchQueryReq req) {
+        return internalTargetLeadTimeService.pageItemRowsBatch(req);
     }
 
     @GetMapping("/release/tickets/{rfqId}")

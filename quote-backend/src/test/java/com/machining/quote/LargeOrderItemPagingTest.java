@@ -7,6 +7,7 @@ import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -393,6 +395,73 @@ class LargeOrderItemPagingTest {
     }
 
     @Test
+    void releaseBatchItemPagingCombinesSelectedOrdersWithBackendPagination() {
+        OrderRfq firstOrder = createReleaseOrder("RELEASE-BATCH-A");
+        OrderRfq secondOrder = createReleaseOrder("RELEASE-BATCH-B");
+        OrderRfq unrelatedOrder = createReleaseOrder("RELEASE-BATCH-C");
+        createItem(firstOrder, "BATCH-A-01", QuoteStatusWorkflow.QUOTED, 10.0, "/batch-a-1.pdf");
+        createItem(firstOrder, "BATCH-A-02", QuoteStatusWorkflow.QUOTED, 11.0, "/batch-a-2.pdf");
+        ItemQuoteVersion secondFirst = createItem(secondOrder, "BATCH-B-01", QuoteStatusWorkflow.QUOTED, 20.0, "/batch-b-1.pdf");
+        ItemQuoteVersion secondSecond = createItem(secondOrder, "BATCH-B-02", QuoteStatusWorkflow.QUOTED, 21.0, "/batch-b-2.pdf");
+        createItem(unrelatedOrder, "BATCH-C-99", QuoteStatusWorkflow.QUOTED, 99.0, "/batch-c-99.pdf");
+
+        ReleaseItemBatchQueryReq req = new ReleaseItemBatchQueryReq();
+        req.setRfqIds(List.of(firstOrder.getId(), secondOrder.getId()));
+        req.setPage(2);
+        req.setPageSize(2);
+
+        PageResult<Map<String, Object>> page = internalTargetLeadTimeService.pageItemRowsBatch(req);
+
+        assertThat(page.getTotal()).isEqualTo(4);
+        assertThat(page.getPage()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(2);
+        assertThat(page.getRecords())
+                .extracting(row -> row.get("id"))
+                .containsExactly(secondFirst.getId(), secondSecond.getId());
+        assertThat(page.getRecords())
+                .extracting(row -> row.get("rfqId"))
+                .containsOnly(secondOrder.getId());
+        assertThat(page.getRecords().get(0))
+                .containsEntry("rfqNo", secondOrder.getRfqNo())
+                .containsEntry("customerName", secondOrder.getCustomerName())
+                .containsEntry("orderStatus", secondOrder.getStatus());
+        assertThat(page.getRecords())
+                .extracting(row -> row.get("partNo"))
+                .doesNotContain("BATCH-C-99");
+    }
+
+    @Test
+    void releaseBatchItemPagingExposesStableBackendContracts() throws Exception {
+        assertThat(MAIN_JAVA.resolve("dto").resolve("ReleaseItemBatchQueryReq.java")).exists();
+
+        String marketController = source("controller", "MarketController.java");
+        assertThat(marketController)
+                .contains("@PostMapping(\"/release/items/batch\")")
+                .contains("ReleaseItemBatchQueryReq")
+                .contains("internalTargetLeadTimeService.pageItemRowsBatch(req)");
+        assertThat(method(marketController, "listReleaseItemsBatch"))
+                .doesNotContain("getReleaseSummary")
+                .doesNotContain("page((List");
+
+        String releaseService = source("service", "InternalTargetLeadTimeService.java");
+        assertThat(releaseService)
+                .contains("public PageResult<Map<String, Object>> pageItemRowsBatch(ReleaseItemBatchQueryReq req)")
+                .contains("orderItemPageService.pageItemsBatch(queryReq)");
+        assertThat(javaMethod(releaseService, "pageItemRowsBatch"))
+                .doesNotContain("buildItemRows(")
+                .doesNotContain("listItems(");
+
+        String itemPageService = source("service", "OrderItemPageService.java");
+        assertThat(itemPageService)
+                .contains("public OrderItemPageDTO pageItemsBatch(ReleaseItemBatchQueryReq req)")
+                .contains("selectCount(buildFilteredBatchQuery")
+                .contains("LIMIT \" + pageSize + \" OFFSET \" + offset")
+                .contains(".in(\"rfq_id\", accessibleRfqIds)")
+                .contains(".orderByAsc(\"rfq_id\")")
+                .contains(".orderByAsc(\"id\")");
+    }
+
+    @Test
     void releaseTicketsAndProcessSheetsArePagedByDeliveryService() {
         OrderRfq order = createOrder("RELEASE-TICKET-PAGE");
         order.setStatus(QuoteStatusWorkflow.RELEASED);
@@ -430,12 +499,40 @@ class LargeOrderItemPagingTest {
         return source.substring(start, end);
     }
 
+    private String javaMethod(String source, String methodName) {
+        int nameIndex = source.indexOf(methodName + "(");
+        assertThat(nameIndex).as("method %s exists", methodName).isGreaterThanOrEqualTo(0);
+        int start = source.lastIndexOf('\n', nameIndex);
+        int firstBrace = source.indexOf('{', nameIndex);
+        assertThat(firstBrace).as("method %s has a body", methodName).isGreaterThanOrEqualTo(0);
+        int depth = 0;
+        for (int index = firstBrace; index < source.length(); index++) {
+            char current = source.charAt(index);
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return source.substring(Math.max(0, start), index + 1);
+                }
+            }
+        }
+        throw new AssertionError("method body not closed: " + methodName);
+    }
+
     private OrderRfq createOrder(String prefix) {
         OrderRfq order = new OrderRfq();
         order.setRfqNo(prefix + "-" + System.nanoTime());
         order.setCustomerName(prefix + "-CUSTOMER");
         order.setStatus(QuoteStatusWorkflow.UNPRICED);
         orderMapper.insert(order);
+        return order;
+    }
+
+    private OrderRfq createReleaseOrder(String prefix) {
+        OrderRfq order = createOrder(prefix);
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        orderMapper.updateById(order);
         return order;
     }
 

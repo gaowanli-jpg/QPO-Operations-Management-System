@@ -9,6 +9,7 @@ import com.machining.quote.dto.InternalTargetLeadTimeUpdateReq;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -27,11 +28,15 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
 public class InternalTargetLeadTimeService {
     private static final Logger log = LoggerFactory.getLogger(InternalTargetLeadTimeService.class);
+    private static final int DEFAULT_PAGE = 1;
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 100;
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -195,6 +200,36 @@ public class InternalTargetLeadTimeService {
         return PageResult.of(rows, itemPage.getTotal(), itemPage.getPage(), itemPage.getPageSize());
     }
 
+    public PageResult<Map<String, Object>> pageItemRowsBatch(ReleaseItemBatchQueryReq req) {
+        List<OrderRfq> orders = requireOrders(req == null ? null : req.getRfqIds());
+        if (orders.isEmpty()) {
+            return PageResult.of(
+                    List.of(),
+                    0,
+                    safePage(req == null ? null : req.getPage()),
+                    safePageSize(req == null ? null : req.getPageSize()));
+        }
+
+        ReleaseItemBatchQueryReq queryReq = new ReleaseItemBatchQueryReq();
+        queryReq.setRfqIds(orders.stream().map(OrderRfq::getId).toList());
+        queryReq.setPage(req == null ? null : req.getPage());
+        queryReq.setPageSize(req == null ? null : req.getPageSize());
+        queryReq.setKeyword(req == null ? null : req.getKeyword());
+        queryReq.setStatus(req == null ? null : req.getStatus());
+        queryReq.setRemainingOnly(req == null ? null : req.getRemainingOnly());
+
+        OrderItemPageDTO itemPage = orderItemPageService.pageItemsBatch(queryReq);
+        List<ItemQuoteVersion> items = itemPage.getRecords();
+        List<OrderDeliveryTicket> tickets = listTicketsForItems(items);
+        Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
+        orders.forEach(order -> orderById.put(order.getId(), order));
+        List<Map<String, Object>> rows = items.stream()
+                .map(item -> buildBatchItemRow(item, ticketedQty(item, tickets), orderById))
+                .filter(row -> !Boolean.TRUE.equals(queryReq.getRemainingOnly()) || safeInt(row.get("remainingQty")) > 0)
+                .toList();
+        return PageResult.of(rows, itemPage.getTotal(), itemPage.getPage(), itemPage.getPageSize());
+    }
+
     public Map<String, Object> matchPartSelection(Integer rfqId, List<Map<String, String>> importedItems) {
         requireOrder(rfqId);
         Set<String> importedKeys = new HashSet<>();
@@ -246,6 +281,28 @@ public class InternalTargetLeadTimeService {
         return order;
     }
 
+    private List<OrderRfq> requireOrders(List<Integer> rfqIds) {
+        List<Integer> normalizedIds = new ArrayList<>(new java.util.LinkedHashSet<>(
+                rfqIds == null ? List.of() : rfqIds.stream()
+                        .filter(id -> id != null)
+                        .toList()));
+        if (normalizedIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
+        orderRfqMapper.selectBatchIds(normalizedIds).forEach(order -> orderById.put(order.getId(), order));
+        List<OrderRfq> orders = new ArrayList<>();
+        for (Integer rfqId : normalizedIds) {
+            OrderRfq order = orderById.get(rfqId);
+            if (order == null || !canAccessOrder(order)) {
+                continue;
+            }
+            assertCanReadReleaseWorkspace(order);
+            orders.add(order);
+        }
+        return orders;
+    }
+
     private OrderRfq requireOrderForUpdate(Integer rfqId) {
         if (rfqId == null) {
             throw new RuntimeException("RFQ ID 不能为空");
@@ -263,6 +320,26 @@ public class InternalTargetLeadTimeService {
         if (dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(order);
         }
+    }
+
+    private boolean canAccessOrder(OrderRfq order) {
+        if (dataScopeService == null) {
+            return true;
+        }
+        try {
+            dataScopeService.assertCanAccessOrder(order);
+            return true;
+        } catch (RuntimeException e) {
+            if (isDataScopeDenied(e)) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    private boolean isDataScopeDenied(RuntimeException e) {
+        String message = e.getMessage();
+        return message != null && message.startsWith("No data permission for order ");
     }
 
     private void assertCanReadReleaseWorkspace(OrderRfq order) {
@@ -321,6 +398,27 @@ public class InternalTargetLeadTimeService {
         return ticketMapper.selectList(qw);
     }
 
+    private List<OrderDeliveryTicket> listTicketsForItems(List<ItemQuoteVersion> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> rfqIds = items.stream()
+                .map(ItemQuoteVersion::getRfqId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        List<Integer> itemIds = items.stream()
+                .map(ItemQuoteVersion::getId)
+                .filter(id -> id != null)
+                .toList();
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
+        qw.in("rfq_id", rfqIds);
+        if (!itemIds.isEmpty()) {
+            qw.and(wrapper -> wrapper.in("item_id", itemIds).or().isNull("item_id"));
+        }
+        return ticketMapper.selectList(qw);
+    }
+
     private int ticketedQty(ItemQuoteVersion item, List<OrderDeliveryTicket> tickets) {
         return tickets.stream()
                 .filter(ticket -> matchesTicketItem(item, ticket))
@@ -329,6 +427,9 @@ public class InternalTargetLeadTimeService {
     }
 
     private boolean matchesTicketItem(ItemQuoteVersion item, OrderDeliveryTicket ticket) {
+        if (!Objects.equals(item.getRfqId(), ticket.getRfqId())) {
+            return false;
+        }
         if (item.getId() != null && item.getId().equals(ticket.getItemId())) {
             return true;
         }
@@ -380,6 +481,15 @@ public class InternalTargetLeadTimeService {
         return row;
     }
 
+    private Map<String, Object> buildBatchItemRow(ItemQuoteVersion item, int ticketedQty, Map<Integer, OrderRfq> orderById) {
+        Map<String, Object> row = buildItemRow(item, ticketedQty);
+        OrderRfq order = orderById.get(item.getRfqId());
+        row.put("rfqNo", order == null ? "" : order.getRfqNo());
+        row.put("customerName", order == null ? "" : order.getCustomerName());
+        row.put("orderStatus", order == null ? "" : order.getStatus());
+        return row;
+    }
+
     private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
         if (item.getFinalUnitPrice() == null) {
             return "零件未报价";
@@ -409,6 +519,17 @@ public class InternalTargetLeadTimeService {
 
     private int safeInt(Object value) {
         return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private int safePage(Integer page) {
+        return page == null || page < 1 ? DEFAULT_PAGE : page;
+    }
+
+    private int safePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private String itemKey(String partNo, String version) {
