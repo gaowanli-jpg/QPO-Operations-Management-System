@@ -107,8 +107,12 @@ describe('QPO workflow page polish', () => {
     expectIncludes(source, 'MarketRelease.vue', [
       'market-manual-date-row',
       'market-manual-date-input',
-      'market-manual-date-button'
+      'market-manual-date-button',
+      '.market-manual-date-row :deep(.market-manual-date-input.el-date-editor.el-input)'
     ])
+    expect(source).toMatch(
+      /\.market-manual-date-row :deep\(\.market-manual-date-input\.el-date-editor\.el-input\)\s*\{[\s\S]*?width: 100%;[\s\S]*?max-width: 100%;[\s\S]*?min-width: 0;[\s\S]*?\}/
+    )
   })
 
   test('keeps market release selection table free from right-edge scrollbar drift', () => {

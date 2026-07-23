@@ -1286,6 +1286,14 @@ const statusTagType = (status) => {
 }
 
 .market-manual-date-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.market-manual-date-row :deep(.market-manual-date-input.el-date-editor.el-input) {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
