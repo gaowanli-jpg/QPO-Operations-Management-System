@@ -49,6 +49,16 @@ describe('market release multi-order stage 2', () => {
     expect(source).toContain(':selected-order-ids="selectedOrderIds"')
   })
 
+  test('market release lets users remove selected orders without obsolete RFQ form field', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+
+    expect(source).toContain('@click.stop="removeSelectedOrder(row)"')
+    expect(source).toContain('const removeSelectedOrder = async (order) =>')
+    expect(source).not.toContain('v-model="releaseForm.projectNo"')
+    expect(source).not.toContain('projectNo: releaseForm.projectNo')
+    expect(source).not.toContain("projectNo: ''")
+  })
+
   test('market release imports selection across selected orders and preserves cross-page map', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const apiSource = readSource('services', 'marketApi.js')

@@ -30,6 +30,11 @@
                   <el-tag :type="statusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="操作" width="58" align="center" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="danger" size="small" @click.stop="removeSelectedOrder(row)">移除</el-button>
+                </template>
+              </el-table-column>
             </el-table>
 
             <el-form label-width="80px" class="ticket-form">
@@ -39,9 +44,6 @@
                   <el-option label="备货订单" value="备货订单" />
                   <el-option label="正式订单" value="正式订单" />
                 </el-select>
-              </el-form-item>
-              <el-form-item label="RFQ号">
-                <el-input v-model="releaseForm.projectNo" placeholder="多订单按各订单 RFQ 号生成" disabled />
               </el-form-item>
               <el-form-item label="开工日期">
                 <el-date-picker
@@ -519,7 +521,6 @@ const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerNam
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
   orderType: '',
-  projectNo: '',
   internalProjectNo: '',
   customerOrderNo: '',
   customerProjectNo: '',
@@ -595,6 +596,44 @@ const handleOrderSelected = async (orderOrOrders) => {
   }
 }
 
+const removeSelectedOrder = async (order) => {
+  const orderId = order?.id
+  if (!orderId) return
+  const orderIdText = String(orderId)
+
+  const relatedRows = [
+    ...itemList.value,
+    ...Object.values(selectedItemIdMap)
+  ].filter(row => (
+    String(row?.rfqId || '') === orderIdText
+    || (row?.rfqId == null && String(selectedRfqId.value || '') === orderIdText)
+  ))
+
+  relatedRows.forEach(row => {
+    delete selectedItemIdMap[row.id]
+    delete acceptedQtyMap[row.id]
+  })
+
+  selectedOrders.value = selectedOrders.value.filter(item => item.id !== orderId)
+  selectedRfqId.value = selectedOrders.value[0]?.id || null
+  resetReleasePagination()
+
+  if (selectedOrders.value.length === 0) {
+    setItemList([])
+    releaseItemTotal.value = 0
+    await nextTick()
+    itemTableRef.value?.clearSelection()
+    return
+  }
+
+  loading.value = true
+  try {
+    await fetchReleaseItemsBatch()
+  } finally {
+    loading.value = false
+  }
+}
+
 const loadOrder = async (rfqId) => {
   if (!rfqId) return
   loading.value = true
@@ -632,7 +671,6 @@ const fetchReleaseItemsBatch = async () => {
 }
 
 const resetReleaseFormForOrders = () => {
-  releaseForm.projectNo = ''
   releaseForm.orderType = ''
   releaseForm.internalProjectNo = ''
   releaseForm.customerOrderNo = ''
@@ -1069,7 +1107,6 @@ const submitTicket = async () => {
       const payload = {
         rfqId,
         orderType: releaseForm.orderType,
-        projectNo: releaseForm.projectNo || '',
         internalProjectNo,
         customerOrderNo,
         customerProjectNo,
