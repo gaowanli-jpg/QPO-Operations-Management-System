@@ -163,26 +163,39 @@
           <div class="erp-table-surface release-table-panel">
             <div class="erp-table-header panel-title-row">
               <div class="panel-title">通过零件选择</div>
-              <el-upload
-                ref="selectionUploadRef"
-                action="#"
-                :auto-upload="false"
-                :show-file-list="false"
-                accept=".xlsx, .xls"
-                :on-change="handleSelectionExcelChange"
-              >
-                <template #trigger>
-                  <el-button
-                    size="small"
-                    plain
-                    class="workflow-soft-button"
-                    :disabled="selectedOrders.length === 0 || releaseItemTotal === 0"
-                    :loading="importSelecting"
-                  >
-                    导入表格选定
-                  </el-button>
-                </template>
-              </el-upload>
+              <div class="release-table-actions">
+                <el-button
+                  v-permission="'market:release:create'"
+                  size="small"
+                  plain
+                  class="workflow-soft-button"
+                  :disabled="selectedOrders.length === 0"
+                  :loading="replacingDrawings"
+                  @click="openDrawingReplaceDialog"
+                >
+                  导入替换图纸
+                </el-button>
+                <el-upload
+                  ref="selectionUploadRef"
+                  action="#"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept=".xlsx, .xls"
+                  :on-change="handleSelectionExcelChange"
+                >
+                  <template #trigger>
+                    <el-button
+                      size="small"
+                      plain
+                      class="workflow-soft-button"
+                      :disabled="selectedOrders.length === 0 || releaseItemTotal === 0"
+                      :loading="importSelecting"
+                    >
+                      导入表格选定
+                    </el-button>
+                  </template>
+                </el-upload>
+              </div>
             </div>
             <el-table
               ref="itemTableRef"
@@ -227,6 +240,13 @@
                       保存
                     </el-button>
                   </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="图纸" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.hasDrawing || row.drawingUrl ? 'success' : 'warning'" size="small">
+                    {{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}
+                  </el-tag>
                 </template>
               </el-table-column>
               <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
@@ -315,6 +335,122 @@
       </el-row>
     </section>
 
+    <el-dialog
+      v-model="drawingReplaceVisible"
+      title="导入替换图纸"
+      width="720px"
+      :close-on-click-modal="false"
+    >
+      <div class="drawing-replace-dialog">
+        <el-alert
+          :title="`将按图号匹配当前已选 ${selectedOrders.length} 个订单，匹配成功会覆盖旧图纸。`"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+
+        <div class="erp-upload-surface drawing-replace-upload">
+          <div
+            v-permission="'market:release:create'"
+            class="custom-dropzone drawing-replace-dropzone"
+            @dragover.prevent
+            @drop.prevent="handleReplacementDrop"
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
+            <div class="el-upload__tip">仅支持 PDF；系统按文件名解析图号，匹配成功后直接替换旧图纸。</div>
+            <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+            <div class="drawing-replace-upload-actions">
+              <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" @click="triggerReplacementFileSelect">选择多个 PDF</el-button>
+              <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" @click="triggerReplacementFolderSelect">选择文件夹</el-button>
+            </div>
+            <input type="file" ref="replacementFileInput" accept=".pdf" multiple class="hidden-input" @change="handleReplacementFileSelect" />
+            <input type="file" ref="replacementFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleReplacementFolderSelect" />
+          </div>
+        </div>
+
+        <div v-if="replacementDrawingFiles.length > 0" class="replacement-file-stats">
+          <h4>已选择待替换图纸（{{ replacementDrawingFiles.length }} 份）</h4>
+          <ul class="replacement-pdf-list">
+            <li v-for="(file, index) in replacementDrawingFiles" :key="`${file.name}-${file.size}-${index}`">
+              <span>{{ file.name }}</span>
+              <el-button v-permission="'market:release:create'" link type="danger" size="small" @click="removeReplacementDrawingFile(index)">移除</el-button>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="clientSkippedReplacementFiles.length > 0 && !replacementDrawingResult" class="replacement-result">
+          <el-alert
+            :title="`已跳过 ${clientSkippedReplacementFiles.length} 个非 PDF 文件。`"
+            type="warning"
+            :closable="false"
+            show-icon
+          />
+        </div>
+
+        <div v-if="replacementDrawingResult" class="replacement-result">
+          <el-alert
+            :title="replacementDrawingResult.message || '图纸替换处理完成。'"
+            :type="replacementResultHasWarnings ? 'warning' : 'success'"
+            :closable="false"
+            show-icon
+          />
+          <div class="replacement-summary-grid">
+            <div><strong>{{ replacementDrawingResult.uploadCount || 0 }}</strong><span>上传PDF</span></div>
+            <div><strong>{{ replacementDrawingResult.matchedCount || 0 }}</strong><span>匹配零件</span></div>
+            <div><strong>{{ replacementDrawingResult.replacedCount || 0 }}</strong><span>已替换</span></div>
+            <div><strong>{{ replacementDrawingResult.unmatchedCount || 0 }}</strong><span>未匹配</span></div>
+            <div><strong>{{ replacementSkippedFiles.length }}</strong><span>非PDF</span></div>
+          </div>
+          <el-tabs>
+            <el-tab-pane :label="`已替换 ${replacementReplacedItems.length}`">
+              <ul v-if="replacementReplacedItems.length" class="result-list replacement-result-list">
+                <li v-for="(item, index) in replacementReplacedItems" :key="index">
+                  <span class="result-main">{{ item.partNo || '-' }} / {{ item.version || '-' }}</span>
+                  <span v-if="item.rfqNo" class="result-sub"> - {{ item.rfqNo }}</span>
+                  <span v-if="item.fileName" class="result-sub"> - {{ item.fileName }}</span>
+                </li>
+              </ul>
+              <el-empty v-else description="无记录" :image-size="60" />
+            </el-tab-pane>
+            <el-tab-pane :label="`未匹配 ${replacementUnmatchedDrawings.length}`">
+              <ul v-if="replacementUnmatchedDrawings.length" class="result-list replacement-result-list">
+                <li v-for="(item, index) in replacementUnmatchedDrawings" :key="index">
+                  <span class="result-main">{{ item.fileName || '-' }}</span>
+                  <span v-if="item.reason" class="result-reason"> - {{ item.reason }}</span>
+                </li>
+              </ul>
+              <el-empty v-else description="无记录" :image-size="60" />
+            </el-tab-pane>
+            <el-tab-pane :label="`非PDF ${replacementSkippedFiles.length}`">
+              <ul v-if="replacementSkippedFiles.length" class="result-list replacement-result-list">
+                <li v-for="(item, index) in replacementSkippedFiles" :key="index">
+                  <span class="result-main">{{ item.fileName || '-' }}</span>
+                  <span v-if="item.reason" class="result-reason"> - {{ item.reason }}</span>
+                </li>
+              </ul>
+              <el-empty v-else description="无记录" :image-size="60" />
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="drawingReplaceVisible = false">关闭</el-button>
+          <el-button
+            v-permission="'market:release:create'"
+            type="primary"
+            :loading="replacingDrawings"
+            :disabled="replacementDrawingFiles.length === 0"
+            @click="submitReplacementDrawings"
+          >
+            上传并替换
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择市场部议价订单"
@@ -332,12 +468,15 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {
   generateTicket,
   getReleaseSummary,
   listReleaseItemsBatch,
   parsePartSelectionBatch,
+  replaceReleaseDrawings,
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
   updateInternalTargetLeadTime,
@@ -356,18 +495,25 @@ const releaseItemTotal = ref(0)
 const selectedItemIdMap = reactive({})
 const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
+const replacementFileInput = ref(null)
+const replacementFolderInput = ref(null)
 const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
 const savingInternalRowMap = reactive({})
 const savingVersionRowMap = reactive({})
+const drawingReplaceVisible = ref(false)
+const replacementDrawingFiles = ref([])
+const replacementDrawingResult = ref(null)
+const clientSkippedReplacementFiles = ref([])
 
 const loading = ref(false)
 const submitting = ref(false)
 const adjustingInternalLeadTime = ref(false)
 const settingInternalTargetLeadTime = ref(false)
 const importSelecting = ref(false)
+const replacingDrawings = ref(false)
 let syncingReleaseItemSelection = false
 
 const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
@@ -401,6 +547,13 @@ const releaseForm = reactive({
 const pagedReleaseItems = computed(() => itemList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
 const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
+const replacementReplacedItems = computed(() => replacementDrawingResult.value?.replacedItems || [])
+const replacementUnmatchedDrawings = computed(() => replacementDrawingResult.value?.unmatchedDrawings || [])
+const replacementSkippedFiles = computed(() => replacementDrawingResult.value?.skippedFiles || [])
+const replacementResultHasWarnings = computed(() => (
+  Number(replacementDrawingResult.value?.unmatchedCount || 0) > 0
+  || replacementSkippedFiles.value.length > 0
+))
 
 const resetReleasePagination = () => {
   releaseItemPagination.page = 1
@@ -710,6 +863,117 @@ const handleSelectionExcelChange = async (uploadFile) => {
     ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
   } finally {
     importSelecting.value = false
+  }
+}
+
+const openDrawingReplaceDialog = () => {
+  if (selectedOrders.value.length === 0) {
+    ElMessage.warning('请先选择询价单。')
+    return
+  }
+  replacementDrawingFiles.value = []
+  replacementDrawingResult.value = null
+  clientSkippedReplacementFiles.value = []
+  drawingReplaceVisible.value = true
+}
+
+const addClientSkippedReplacementFiles = (files = []) => {
+  const skipped = Array.from(files || [])
+    .filter(file => !isPdfFile(file))
+    .map(file => ({
+      fileName: file.name || '-',
+      reason: '仅支持 PDF 图纸'
+    }))
+  if (skipped.length === 0) return
+
+  const seen = new Set(clientSkippedReplacementFiles.value.map(item => item.fileName))
+  clientSkippedReplacementFiles.value = [
+    ...clientSkippedReplacementFiles.value,
+    ...skipped.filter(item => {
+      if (seen.has(item.fileName)) return false
+      seen.add(item.fileName)
+      return true
+    })
+  ]
+  ElMessage.warning(`已跳过 ${skipped.length} 个非 PDF 文件。`)
+}
+
+const addReplacementDrawingFiles = (files, sourceLabel) => {
+  const incomingFiles = Array.from(files || [])
+  addClientSkippedReplacementFiles(incomingFiles)
+  const beforeCount = replacementDrawingFiles.value.length
+  replacementDrawingFiles.value = mergePdfFiles(replacementDrawingFiles.value, incomingFiles)
+  const addedCount = replacementDrawingFiles.value.length - beforeCount
+  replacementDrawingResult.value = null
+  if (addedCount > 0) {
+    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
+  } else if (incomingFiles.length > 0) {
+    ElMessage.warning('未找到新的 PDF 图纸。')
+  }
+}
+
+const handleReplacementDrop = async (event) => {
+  addClientSkippedReplacementFiles(event.dataTransfer?.files)
+  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
+  addReplacementDrawingFiles(pdfs, '提取')
+}
+
+const triggerReplacementFileSelect = () => {
+  replacementFileInput.value?.click()
+}
+
+const triggerReplacementFolderSelect = () => {
+  replacementFolderInput.value?.click()
+}
+
+const handleReplacementFileSelect = (event) => {
+  addReplacementDrawingFiles(event.target.files, '选择')
+  event.target.value = ''
+}
+
+const handleReplacementFolderSelect = (event) => {
+  addReplacementDrawingFiles(event.target.files, '从选中的文件夹中提取')
+  event.target.value = ''
+}
+
+const removeReplacementDrawingFile = (index) => {
+  replacementDrawingFiles.value.splice(index, 1)
+}
+
+const submitReplacementDrawings = async () => {
+  if (selectedOrderIds.value.length === 0) return ElMessage.warning('请先选择询价单。')
+  if (replacementDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
+
+  replacingDrawings.value = true
+  const formData = new FormData()
+  formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))
+  replacementDrawingFiles.value.forEach(file => formData.append('drawings', file))
+
+  try {
+    const response = await replaceReleaseDrawings(formData)
+    const skippedFiles = [
+      ...(response?.skippedFiles || []),
+      ...clientSkippedReplacementFiles.value
+    ]
+    replacementDrawingResult.value = {
+      ...(response || {}),
+      skippedFiles,
+      skippedCount: skippedFiles.length
+    }
+    replacementDrawingFiles.value = []
+    clientSkippedReplacementFiles.value = []
+    await fetchReleaseItemsBatch()
+
+    if (Number(replacementDrawingResult.value.unmatchedCount || 0) > 0 || skippedFiles.length > 0) {
+      ElMessage.warning(response?.message || '图纸替换处理完成，存在未匹配或跳过文件。')
+    } else {
+      ElMessage.success(response?.message || '图纸替换处理完成。')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || '图纸替换失败。')
+  } finally {
+    replacingDrawings.value = false
   }
 }
 

@@ -53,6 +53,8 @@ export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/marke
 
 export const parsePartSelectionBatch = (formData) => multipartPost('/api/market/release/parse-part-selection/batch', formData)
 
+export const replaceReleaseDrawings = (formData) => multipartPost('/api/market/release/drawings/replace', formData)
+
 export const shiftInternalTargetLeadTime = (payload) => postJson('/api/market/internal-target-lead-time/shift', payload)
 
 export const setInternalTargetLeadTime = (payload) => postJson('/api/market/internal-target-lead-time/set', payload)
