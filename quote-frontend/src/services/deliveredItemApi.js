@@ -12,6 +12,16 @@ export const submitWmsAllocation = (ticketId) => request(`/api/order-delivery/ti
   method: 'POST'
 })
 
+export const syncMesMaterialBatch = (ticketIds = []) => request('/api/order-delivery/tickets/mes-material/batch', {
+  method: 'POST',
+  data: { ticketIds }
+})
+
+export const submitWmsAllocationBatch = (ticketIds = []) => request('/api/order-delivery/tickets/wms-allocation/batch', {
+  method: 'POST',
+  data: { ticketIds }
+})
+
 export const listLockedItems = (params = {}) => request('/api/order-delivery/allocations', { params })
 
 export const listTicketAllocations = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/allocations`)

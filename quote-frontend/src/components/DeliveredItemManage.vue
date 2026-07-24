@@ -44,12 +44,33 @@
         />
         <el-button @click="handleSearch">搜索</el-button>
         <el-button type="primary" :loading="loading" @click="loadItems">刷新</el-button>
+        <el-button
+          v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"
+          type="success"
+          plain
+          :disabled="selectedTicketIds.length === 0 || isBatchMesSyncPending"
+          :loading="isBatchMesSyncPending"
+          @click="handleBatchMesSync"
+        >
+          批量获取物料号
+        </el-button>
+        <el-button
+          v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"
+          type="primary"
+          plain
+          :disabled="selectedTicketIds.length === 0 || isBatchWmsAllocationPending"
+          :loading="isBatchWmsAllocationPending"
+          @click="handleBatchWmsAllocation"
+        >
+          批量获取库存数据
+        </el-button>
       </div>
     </section>
 
     <section class="erp-table-surface delivered-table-surface">
       <div class="erp-table-body">
-        <el-table :data="items" border stripe height="600" v-loading="loading">
+        <el-table :data="items" border stripe height="600" v-loading="loading" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
@@ -216,12 +237,19 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { getDeliveredItem, listDeliveredItems, submitWmsAllocation, syncMesMaterial } from '../services/deliveredItemApi'
+import {
+  getDeliveredItem,
+  listDeliveredItems,
+  submitWmsAllocation,
+  submitWmsAllocationBatch,
+  syncMesMaterial,
+  syncMesMaterialBatch
+} from '../services/deliveredItemApi'
 import { usePendingAction } from '../composables/usePendingAction'
 
 const router = useRouter()
@@ -235,7 +263,9 @@ const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
 
 const deliveredActionKeys = {
   mesSync: (ticketId) => `delivery:mes-sync:${ticketId}`,
-  wmsAllocation: (ticketId) => `delivery:wms-allocation:${ticketId}`
+  wmsAllocation: (ticketId) => `delivery:wms-allocation:${ticketId}`,
+  batchMesSync: () => 'delivery:mes-sync:batch',
+  batchWmsAllocation: () => 'delivery:wms-allocation:batch'
 }
 
 const filters = reactive({
@@ -257,6 +287,8 @@ const syncStatusOptions = [
   { value: 'FAILED', label: '失败' }
 ]
 const items = ref([])
+const selectedRows = ref([])
+const selectedTicketIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
 const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
@@ -309,6 +341,14 @@ const handleCustomerClear = async () => {
   await handleSearch()
 }
 
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows || []
+}
+
+const selectedCountText = () => `${selectedTicketIds.value.length} 条已提零件`
+
+const taskIdOf = (task) => task?.id || task?.taskId || task?.task?.id
+
 const openDetail = async (row) => {
   try {
     selectedItem.value = await getDeliveredItem(row.id)
@@ -332,6 +372,10 @@ const openDrawingPreview = async (row) => {
 const isMesSyncPending = (row) => isPending(deliveredActionKeys.mesSync(row?.id))
 
 const isWmsAllocationPending = (row) => isPending(deliveredActionKeys.wmsAllocation(row?.id))
+
+const isBatchMesSyncPending = computed(() => isPending(deliveredActionKeys.batchMesSync()))
+
+const isBatchWmsAllocationPending = computed(() => isPending(deliveredActionKeys.batchWmsAllocation()))
 
 const isDeliveredRowActionPending = (row) => isMesSyncPending(row) || isWmsAllocationPending(row)
 
@@ -366,6 +410,34 @@ const handleMesSync = async (row) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || error.message || 'MES 物料号任务提交失败。')
+    }
+  })
+}
+
+const handleBatchMesSync = async () => {
+  if (selectedTicketIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要获取物料号的已提零件。')
+  }
+  try {
+    await ElMessageBox.confirm(`确认批量向 MES 获取 ${selectedCountText()} 的物料号？已成功或处理中的行会自动跳过。`, '批量获取MES物料号', {
+      confirmButtonText: '确认提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  return runAction(deliveredActionKeys.batchMesSync(), async () => {
+    try {
+      const task = await syncMesMaterialBatch(selectedTicketIds.value)
+      const taskId = taskIdOf(task)
+      ElMessage.success(taskId ? `批量 MES 物料号任务已提交，任务ID：${taskId}` : '批量 MES 物料号任务已提交')
+      selectedRows.value = []
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '批量 MES 物料号任务提交失败。')
     }
   })
 }
@@ -413,6 +485,34 @@ const handleWmsAllocation = async (row) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || error.message || 'WMS 锁库任务提交失败。')
+    }
+  })
+}
+
+const handleBatchWmsAllocation = async () => {
+  if (selectedTicketIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要获取库存数据的已提零件。')
+  }
+  try {
+    await ElMessageBox.confirm(`确认批量向 WMS 获取 ${selectedCountText()} 的库存数据？缺少物料号、已成功或处理中的行会自动跳过。`, '批量获取WMS库存数据', {
+      confirmButtonText: '确认提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  return runAction(deliveredActionKeys.batchWmsAllocation(), async () => {
+    try {
+      const task = await submitWmsAllocationBatch(selectedTicketIds.value)
+      const taskId = taskIdOf(task)
+      ElMessage.success(taskId ? `批量 WMS 库存任务已提交，任务ID：${taskId}` : '批量 WMS 库存任务已提交')
+      selectedRows.value = []
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '批量 WMS 库存任务提交失败。')
     }
   })
 }

@@ -22,8 +22,18 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain('market:rfq:import-sales-order')
     expect(marketDashboard).toContain('submitSalesOrderImport')
     expect(marketDashboard).toContain('importSalesOrder(formData)')
+    expect(marketDashboard).toContain('downloadSalesOrderImportTemplate')
+    expect(marketDashboard).toContain('下载销售订单模板')
     expect(marketDashboard).toContain("v-permission=\"'market:rfq:import-sales-order'\"")
     expect(marketDashboard).toContain("v-permission=\"'market:rfq:import'\"")
+  })
+
+  test('adds template download actions to both import modes', () => {
+    expect(marketDashboard).toContain('downloadRfqTemplate')
+    expect(marketDashboard).toContain('downloadSalesOrderTemplate')
+    expect(marketDashboard).toContain('下载询价单模板')
+    expect(marketDashboard).toContain('下载销售订单模板')
+    expect(marketDashboard).toContain(':icon="Download"')
   })
 
   test('renders clear sales order sync results for success and failure rows', () => {
@@ -40,5 +50,9 @@ describe('sales order import panel', () => {
   test('market API exposes sales order import endpoint under sales-orders namespace', () => {
     expect(marketApi).toContain('export const importSalesOrder')
     expect(marketApi).toContain("multipartPost('/api/market/sales-orders/import', formData)")
+    expect(marketApi).toContain('export const downloadRfqImportTemplate')
+    expect(marketApi).toContain("downloadFile('/api/market/import-rfq/template', '客户询价表导入模板.xlsx')")
+    expect(marketApi).toContain('export const downloadSalesOrderImportTemplate')
+    expect(marketApi).toContain("downloadFile('/api/market/sales-orders/import/template', '销售订单导入模板.xlsx')")
   })
 })

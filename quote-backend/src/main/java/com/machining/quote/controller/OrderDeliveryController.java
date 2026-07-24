@@ -3,6 +3,7 @@ package com.machining.quote.controller;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.DeliveryTicketBatchReq;
 import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.LockedItemQueryReq;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -55,10 +57,22 @@ public class OrderDeliveryController {
         return systemTaskService.submitMesMaterialSyncTask(ticketId);
     }
 
+    @PostMapping("/tickets/mes-material/batch")
+    @RequirePermission("market:delivered-item:mes-sync")
+    public SystemTask syncMesMaterialBatch(@RequestBody DeliveryTicketBatchReq req) {
+        return systemTaskService.submitMesMaterialBatchSyncTask(req == null ? null : req.getTicketIds());
+    }
+
     @PostMapping("/tickets/{ticketId}/wms-allocation")
     @RequirePermission("market:delivered-item:wms-allocate")
     public SystemTask submitWmsAllocation(@PathVariable Integer ticketId) {
         return systemTaskService.submitWmsAllocationTask(ticketId);
+    }
+
+    @PostMapping("/tickets/wms-allocation/batch")
+    @RequirePermission("market:delivered-item:wms-allocate")
+    public SystemTask submitWmsAllocationBatch(@RequestBody DeliveryTicketBatchReq req) {
+        return systemTaskService.submitWmsAllocationBatchTask(req == null ? null : req.getTicketIds());
     }
 
     @GetMapping("/allocations")

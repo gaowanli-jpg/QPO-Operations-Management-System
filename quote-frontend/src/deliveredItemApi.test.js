@@ -33,11 +33,29 @@ describe('deliveredItemApi', () => {
     })
   })
 
+  test('syncMesMaterialBatch posts one MES batch task for selected ticket ids', async () => {
+    await deliveredItemApi.syncMesMaterialBatch([123, 456])
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/mes-material/batch', {
+      method: 'POST',
+      data: { ticketIds: [123, 456] }
+    })
+  })
+
   test('submitWmsAllocation posts WMS allocation task by ticket id', async () => {
     await deliveredItemApi.submitWmsAllocation(123)
 
     expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/123/wms-allocation', {
       method: 'POST'
+    })
+  })
+
+  test('submitWmsAllocationBatch posts one WMS batch task for selected ticket ids', async () => {
+    await deliveredItemApi.submitWmsAllocationBatch([123, 456])
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/wms-allocation/batch', {
+      method: 'POST',
+      data: { ticketIds: [123, 456] }
     })
   })
 

@@ -72,7 +72,8 @@ services:
       ERP_AUTH_ENABLED: true
       ERP_JWT_SECRET: ${ERP_JWT_SECRET:?Set ERP_JWT_SECRET in erp.env before starting}
       ERP_JWT_TTL_MINUTES: ${ERP_JWT_TTL_MINUTES:-720}
-      # Legacy APS compatibility outlet; new external flow uses MES/WMS below.
+      # Legacy APS compatibility. Backend uses this only for /api/aps/source token validation.
+      # APS_ERP_* stays in env files for old local bridge tools and is not injected here.
       ERP_APS_SOURCE_TOKEN: ${ERP_APS_SOURCE_TOKEN:-}
       # MES material-number sync configuration.
       ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
@@ -84,6 +85,15 @@ services:
       ERP_WMS_AUTH_TOKEN: ${ERP_WMS_AUTH_TOKEN:-}
       ERP_WMS_ALLOCATION_PATH: ${ERP_WMS_ALLOCATION_PATH:-/api/wms/inventory/allocate}
       ERP_WMS_TIMEOUT_MS: ${ERP_WMS_TIMEOUT_MS:-10000}
+      # U9 sales order sync configuration.
+      ERP_U9_BASE_URL: ${ERP_U9_BASE_URL:-}
+      ERP_U9_USER_CODE: ${ERP_U9_USER_CODE:-}
+      ERP_U9_ENT_CODE: ${ERP_U9_ENT_CODE:-}
+      ERP_U9_ORG_CODE: ${ERP_U9_ORG_CODE:-}
+      ERP_U9_CLIENT_ID: ${ERP_U9_CLIENT_ID:-}
+      ERP_U9_CLIENT_SECRET: ${ERP_U9_CLIENT_SECRET:-}
+      ERP_U9_CONNECT_TIMEOUT_MS: ${ERP_U9_CONNECT_TIMEOUT_MS:-5000}
+      ERP_U9_READ_TIMEOUT_MS: ${ERP_U9_READ_TIMEOUT_MS:-30000}
       # Shared async executor for exports, MES sync, and WMS allocation.
       ERP_TASK_CORE_POOL_SIZE: ${ERP_TASK_CORE_POOL_SIZE:-2}
       ERP_TASK_MAX_POOL_SIZE: ${ERP_TASK_MAX_POOL_SIZE:-4}

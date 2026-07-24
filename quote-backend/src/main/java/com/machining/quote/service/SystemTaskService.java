@@ -43,6 +43,8 @@ public class SystemTaskService {
     @Autowired(required = false)
     private WmsAllocationService wmsAllocationService;
     @Autowired(required = false)
+    private DeliveryIntegrationBatchService deliveryIntegrationBatchService;
+    @Autowired(required = false)
     private OrderDeliveryTicketMapper orderDeliveryTicketMapper;
     @Autowired(required = false)
     private SystemTaskGuardService taskGuardService;
@@ -132,6 +134,22 @@ public class SystemTaskService {
         return taskMapper.selectById(task.getId());
     }
 
+    public SystemTask submitMesMaterialBatchSyncTask(List<Integer> ticketIds) {
+        if (deliveryIntegrationBatchService == null) {
+            throw new RuntimeException("MES 批量物料号同步服务不可用");
+        }
+        List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
+        deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("ticketIds", normalizedTicketIds);
+        request.put("ticketCount", normalizedTicketIds.size());
+        SystemTask task = createTask("MES_MATERIAL_BATCH_SYNC", request);
+        recordTaskSubmitAudit("DELIVERY_MES_MATERIAL_SYNC_SUBMIT", "DELIVERY", task, request);
+        log.info("MES material batch sync submitted taskId={} ticketCount={}", task.getId(), normalizedTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.syncMesMaterialBatch(normalizedTicketIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
     public SystemTask submitWmsAllocationTask(Integer ticketId) {
         if (ticketId == null) {
             throw new RuntimeException("提单行 ID 不能为空");
@@ -172,6 +190,22 @@ public class SystemTaskService {
         if (wmsAllocationService != null) {
             taskExecutor.execute(() -> runTask(task.getId(), () -> wmsAllocationService.allocate(ticketId, task.getId())));
         }
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitWmsAllocationBatchTask(List<Integer> ticketIds) {
+        if (deliveryIntegrationBatchService == null) {
+            throw new RuntimeException("WMS 批量锁库服务不可用");
+        }
+        List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
+        deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("ticketIds", normalizedTicketIds);
+        request.put("ticketCount", normalizedTicketIds.size());
+        SystemTask task = createTask("WMS_ALLOCATION_BATCH", request);
+        recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
+        log.info("WMS allocation batch submitted taskId={} ticketCount={}", task.getId(), normalizedTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.allocateWmsBatch(normalizedTicketIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 

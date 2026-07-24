@@ -49,6 +49,20 @@
                   class="upload-alert"
                 />
 
+                <div class="import-action-row template-download-row">
+                  <el-button
+                    v-permission="'market:rfq:import'"
+                    plain
+                    :icon="Download"
+                    class="workflow-soft-button template-download-button import-axis-button"
+                    :loading="isPending(DOWNLOAD_RFQ_TEMPLATE_ACTION_KEY)"
+                    :disabled="isPending(DOWNLOAD_RFQ_TEMPLATE_ACTION_KEY)"
+                    @click="downloadRfqTemplate"
+                  >
+                    下载询价单模板
+                  </el-button>
+                </div>
+
                 <div class="import-action-row">
                   <el-upload v-permission="'market:rfq:import'"
                     ref="excelUploadRef"
@@ -150,6 +164,20 @@
                   :closable="false"
                   class="upload-alert"
                 />
+
+                <div class="import-action-row template-download-row">
+                  <el-button
+                    v-permission="'market:rfq:import-sales-order'"
+                    plain
+                    :icon="Download"
+                    class="workflow-soft-button template-download-button import-axis-button"
+                    :loading="isPending(DOWNLOAD_SALES_ORDER_TEMPLATE_ACTION_KEY)"
+                    :disabled="isPending(DOWNLOAD_SALES_ORDER_TEMPLATE_ACTION_KEY)"
+                    @click="downloadSalesOrderTemplate"
+                  >
+                    下载销售订单模板
+                  </el-button>
+                </div>
 
                 <div class="import-action-row">
                   <el-upload
@@ -260,9 +288,14 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { Download, UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { importRfq, importSalesOrder } from '../services/marketApi'
+import {
+  downloadRfqImportTemplate,
+  downloadSalesOrderImportTemplate,
+  importRfq,
+  importSalesOrder
+} from '../services/marketApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
 import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
@@ -280,10 +313,21 @@ const salesOrderUploadRef = ref(null)
 const salesOrderImportResult = ref(null)
 const IMPORT_RFQ_ACTION_KEY = 'market:rfq:import'
 const IMPORT_SALES_ORDER_ACTION_KEY = 'market:rfq:import-sales-order'
+const DOWNLOAD_RFQ_TEMPLATE_ACTION_KEY = 'market:rfq:download-template'
+const DOWNLOAD_SALES_ORDER_TEMPLATE_ACTION_KEY = 'market:rfq:download-sales-order-template'
 const { isPending, runAction } = usePendingAction()
 
 const handleExcelChange = (uploadFile) => { excelFile.value = uploadFile.raw }
 const handleExcelRemove = () => { excelFile.value = null }
+
+const downloadRfqTemplate = () => runAction(DOWNLOAD_RFQ_TEMPLATE_ACTION_KEY, async () => {
+  try {
+    await downloadRfqImportTemplate()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(readActionError(error, '询价单模板下载失败，请稍后重试。'))
+  }
+})
 
 const salesOrderResultRows = computed(() => salesOrderImportResult.value?.rows || [])
 const salesOrderResultType = computed(() => salesOrderImportResult.value?.success ? 'success' : 'warning')
@@ -304,6 +348,15 @@ const handleSalesOrderExcelRemove = () => {
   salesOrderFile.value = null
   salesOrderImportResult.value = null
 }
+
+const downloadSalesOrderTemplate = () => runAction(DOWNLOAD_SALES_ORDER_TEMPLATE_ACTION_KEY, async () => {
+  try {
+    await downloadSalesOrderImportTemplate()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(readActionError(error, '销售订单模板下载失败，请稍后重试。'))
+  }
+})
 
 const selectExistingCustomer = (customer) => {
   rfqForm.customerName = customer
@@ -605,9 +658,17 @@ const submitRfqPackage = async () => {
   margin-top: 12px;
 }
 
+.template-download-row {
+  margin-top: 0;
+}
+
 .import-axis-button {
   justify-content: center;
   min-width: 240px;
+}
+
+.template-download-button {
+  min-height: 34px;
 }
 
 .upload-box :deep(.el-upload-dragger) {

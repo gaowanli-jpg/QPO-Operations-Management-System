@@ -54,6 +54,19 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip')
   })
 
+  test('supports selecting delivered items for batch MES and WMS tasks', () => {
+    expect(source).toContain('@selection-change="handleSelectionChange"')
+    expect(source).toContain('<el-table-column type="selection"')
+    expect(source).toContain('selectedRows')
+    expect(source).toContain('selectedTicketIds')
+    expect(source).toContain('batchMesSync')
+    expect(source).toContain('batchWmsAllocation')
+    expect(source).toContain('handleBatchMesSync')
+    expect(source).toContain('handleBatchWmsAllocation')
+    expect(source).toContain('syncMesMaterialBatch')
+    expect(source).toContain('submitWmsAllocationBatch')
+  })
+
   test('wires WMS allocation action and locked-result entry after the WMS allocation phase', () => {
     expect(source).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
     expect(source).toContain('market:delivered-item:wms-allocate')

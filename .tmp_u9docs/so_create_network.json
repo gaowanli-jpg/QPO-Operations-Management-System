@@ -1,0 +1,172 @@
+[
+  {
+    "url": "https://openapi.yyu9c.com/doc.html",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/css/app.371dc258.css",
+    "status": 200,
+    "contentType": "text/css"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/css/chunk-vendors.d0c6d64f.css",
+    "status": 200,
+    "contentType": "text/css"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-0d90a124.c9e80777.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/css/chunk-e8c06d7e.d4800d43.css",
+    "status": 200,
+    "contentType": "text/css"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-0fd67716.291c7ad3.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-214218f0.8f527705.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/app.c7b18044.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-2d0af44e.3add5aa7.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-2d0bd799.8f629c18.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-2d0da532.38c674af.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-2d22269d.32026321.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-3b888a65.0f025582.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-53014f5c.1089b5ac.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-589faee0.01e03a5c.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-c8e909fe.9c8275bf.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-e8c06d7e.e4acd335.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-vendors.9093ae82.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/dd839dd0caa0edec09cf.worker.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/v3/api-docs/swagger-config",
+    "status": 200,
+    "contentType": ""
+  },
+  {
+    "url": "https://openapi.yyu9c.com/file/U9COPENAPI.json",
+    "status": 200,
+    "contentType": "application/json"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/css/chunk-e8c06d7e.d4800d43.css",
+    "status": 200,
+    "contentType": "text/css"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-53014f5c.1089b5ac.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-e8c06d7e.e4acd335.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-c8e909fe.9c8275bf.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-2d0af44e.3add5aa7.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-2d0bd799.8f629c18.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-3b888a65.0f025582.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webjars/js/chunk-214218f0.8f527705.js",
+    "status": 200,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/webapi/ApiExample/GetExampleData?apiAddress=/webapi/SO/Create",
+    "status": 404,
+    "contentType": ""
+  },
+  {
+    "url": "https://openapi.yyu9c.com/file/document.pdf",
+    "status": 200,
+    "contentType": "application/pdf"
+  },
+  {
+    "url": "blob:https://openapi.yyu9c.com/1e489bca-eceb-48b9-92fa-f338437354f6",
+    "status": 200,
+    "contentType": "application/javascript"
+  },
+  {
+    "url": "blob:https://openapi.yyu9c.com/41ed13eb-2f19-4e34-973c-504e1e887f08",
+    "status": 200,
+    "contentType": "application/javascript"
+  },
+  {
+    "url": "https://openapi.yyu9c.com/file/document.pdf",
+    "status": 206,
+    "contentType": "application/pdf"
+  }
+]

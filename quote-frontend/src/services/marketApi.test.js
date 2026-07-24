@@ -43,6 +43,22 @@ describe('marketApi', () => {
     })
   })
 
+  test('downloads RFQ and sales order import templates', async () => {
+    await marketApi.downloadRfqImportTemplate()
+    await marketApi.downloadSalesOrderImportTemplate()
+
+    expect(downloadFile).toHaveBeenNthCalledWith(
+      1,
+      '/api/market/import-rfq/template',
+      '客户询价表导入模板.xlsx'
+    )
+    expect(downloadFile).toHaveBeenNthCalledWith(
+      2,
+      '/api/market/sales-orders/import/template',
+      '销售订单导入模板.xlsx'
+    )
+  })
+
   test('listMarketOrders requires a module-scoped order selection endpoint', () => {
     const params = { customerId: 3, keyword: 'RFQ' }
 

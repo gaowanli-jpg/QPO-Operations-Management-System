@@ -14,6 +14,8 @@ class SalesOrderU9ImportStage1Test {
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path SALES_ORDER_CONTROLLER = Path.of("src", "main", "java", "com", "machining", "quote", "controller", "SalesOrderImportController.java");
     private static final Path APPLICATION_YAML = Path.of("src", "main", "resources", "application.yaml");
+    private static final Path ENV_EXAMPLE = Path.of("..", "erp.env.example");
+    private static final Path DOCKER_COMPOSE = Path.of("..", "docker-compose.yml");
     private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path ADMIN_DOC = Path.of("..", "docs", "QPO权限用户体系", "03-权限体系部署与管理员使用说明.md");
 
@@ -69,6 +71,34 @@ class SalesOrderU9ImportStage1Test {
                 .contains("read-timeout-ms: ${ERP_U9_READ_TIMEOUT_MS:30000}")
                 .doesNotContain("ERP_U9_CLIENT_SECRET:change")
                 .doesNotContain("ERP_U9_CLIENT_SECRET:demo");
+    }
+
+    @Test
+    void deploymentConfigExposesU9EnvironmentVariablesWithoutSecretDefaults() throws IOException {
+        String envExample = read(ENV_EXAMPLE);
+        String compose = read(DOCKER_COMPOSE);
+
+        assertThat(envExample)
+                .contains("ERP_U9_BASE_URL=")
+                .contains("ERP_U9_USER_CODE=")
+                .contains("ERP_U9_ENT_CODE=")
+                .contains("ERP_U9_ORG_CODE=")
+                .contains("ERP_U9_CLIENT_ID=")
+                .contains("ERP_U9_CLIENT_SECRET=")
+                .contains("ERP_U9_CONNECT_TIMEOUT_MS=5000")
+                .contains("ERP_U9_READ_TIMEOUT_MS=30000")
+                .doesNotContain("ERP_U9_CLIENT_SECRET=change")
+                .doesNotContain("ERP_U9_CLIENT_SECRET=demo");
+
+        assertThat(compose)
+                .contains("ERP_U9_BASE_URL: ${ERP_U9_BASE_URL:-}")
+                .contains("ERP_U9_USER_CODE: ${ERP_U9_USER_CODE:-}")
+                .contains("ERP_U9_ENT_CODE: ${ERP_U9_ENT_CODE:-}")
+                .contains("ERP_U9_ORG_CODE: ${ERP_U9_ORG_CODE:-}")
+                .contains("ERP_U9_CLIENT_ID: ${ERP_U9_CLIENT_ID:-}")
+                .contains("ERP_U9_CLIENT_SECRET: ${ERP_U9_CLIENT_SECRET:-}")
+                .contains("ERP_U9_CONNECT_TIMEOUT_MS: ${ERP_U9_CONNECT_TIMEOUT_MS:-5000}")
+                .contains("ERP_U9_READ_TIMEOUT_MS: ${ERP_U9_READ_TIMEOUT_MS:-30000}");
     }
 
     @Test

@@ -15,7 +15,11 @@ const postJson = (path, payload) => request(path, {
 
 export const importRfq = (formData) => multipartPost('/api/market/import-rfq', formData)
 
+export const downloadRfqImportTemplate = () => downloadFile('/api/market/import-rfq/template', '客户询价表导入模板.xlsx')
+
 export const importSalesOrder = (formData) => multipartPost('/api/market/sales-orders/import', formData)
+
+export const downloadSalesOrderImportTemplate = () => downloadFile('/api/market/sales-orders/import/template', '销售订单导入模板.xlsx')
 
 const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',

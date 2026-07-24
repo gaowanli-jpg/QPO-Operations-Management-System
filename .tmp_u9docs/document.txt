@@ -1,0 +1,611 @@
+客开调用 U9WebAPI 说明文档
+
+                             U9WebAPI 服务调用说明
+
+
+
+使用前提：
+
+只适用于 U9C 企业版和标准版；
+
+
+需要打集团最新发布的标准补丁带如下关键字的标准补丁：PUB/UBF/BS/SLC/ISV
+
+
+（另外所有版本都提供标准的 webservice 版本的接口文档地址（接口比较齐全，适用于 U9 任
+何版本）：
+
+
+链接：https://pan.baidu.com/s/1sFrLafOME0HJe2NZCJxhlA?pwd=1234
+
+
+提取码：1234）
+
+
+测试成功的 JSON 串示例集，后续接口文档里面会补充：
+
+链接：https://pan.baidu.com/s/1lELqejQ8UpQO0wQbJjBz1g?pwd=tfaw
+
+
+提取码：tfaw 提取码：c1cl 接入流程：
+一、U9 已完成的 OpenAPI 清单：
+
+https://openapi.yyu9c.com/doc.html#/home 或
+
+
+https://localhost/U9C/swagger（因考虑安全因素，swager 本地访问只能在服务器上使用
+http://localhost/U9C/swagger 来访问了 ,不支持 IP 访问了，也不支持正式环境访问
+
+
+
+二、接口公共说明：
+
+接口返回值公共说明：
+
+
+参数 ResCode：0 成功，其他失败
+
+
+0 执行成功
+
+
+401 未授权
+
+
+402 token 已过期
+
+
+403 请求已过期
+
+
+404 路由错误
+405 授权码已过期
+
+
+406 用户名不存在
+
+
+407 ClientID 未启用
+
+
+408 组织编码不存在
+
+
+500 系统内部错误
+
+
+501 验签失败
+
+
+502 参数错误
+
+
+503 登录失败
+
+
+504 token 已失效
+
+
+601 客户端 IP 未授权
+
+
+业务接口都支持批量操作（批量操作数据直接互不影响，即失败的数据不影响其他操作成功的
+数据），参数 ResCode 返回 0，只是接口调用成功，并非业务数据操作成功，业务数据批量传
+入则会批量返回对应的数据，返回对象会放入 Data 字段中（序列化后），Data 中数据
+m_isSucess/IsSucess 表示这条业务数据操作成功或失败，失败会返回 m_errorMsg/ErrorMsg 的值
+
+
+
+
+三、第三方调用说明：
+
+接口文档通过访问：https://www.yyu9c.com/swagger 或 https://www.yyu9c.com/swagger 可
+以打开接口文档说明，如果本地环境也可以打开：http://本地 U9 地址/swagger 也可以打开
+接口文档。
+
+
+
+1、接口地址：
+
+U9 访问地址/webapi/定义的 Controller/Controller 下的方法名
+
+
+如：http://localhost/u9c/webapi/Department/Create 定义的 Controller 可以从第一步中
+获取，方法名点开第一步中具体的 Controller 即可看到方法名，如下图：
+1. 2.接口调用
+
+     ● 获取 Token
+使用 U9 系统分配的应用 ID 和应用秘钥获取授权码：
+
+
+(EA 进入系统，在“第三方应用接口授权”中配置应用 ID 和应用秘钥作为 clientid 和
+clientsecret 的值）
+
+
+GET 请求
+
+
+接口地址：
+
+http://localhost/u9c/webapi/OAuth2/AuthLogin?userCode=demo&entcode=001&orgcode=
+001&clientid=API1&clientsecret=36462bf7ecf74edd8bfadbb7b71a6607
+参数 clientid:
+
+
+   EA 登录 U9 系统，“第三方应用接口授权”中配置应用 ID，可任意配置，无限制，比如给
+MES 用的可以叫 MES，给 OA 用的可以叫 OA 即可
+
+
+参数 clientsecret：
+
+
+     EA 登录 U9 系统，“第三方应用接口授权”中配置应用秘钥，自动生成，不能更改（后
+期不建议点击重置，否则第三方需要对应更改）
+
+
+注意：这里设置的超时时间最长 240 分钟，设置的是 token 的超时时间（重启 IIS，或者重新
+获取 token 会失效）
+参数：entcode：
+
+
+  为企业编码（U9 的管理控制台打开后，企业管理里面的代码值），类似登录 U9 要选择企
+业一样，要咨询实施顾问，这个决定接口传入进去哪个数据库
+
+
+企业编码截图：
+
+
+
+
+参数 userCode：
+
+
+    为用户编码，登录 U9 时输入的用户编码
+
+
+参数 orgcode：
+
+
+为组织编码，登录 U9 时选择的组织编码（U9 是多组织的）。
+
+
+这几个值非常非常关键，特别是 entcode，不知道请问用友的实施顾问！！！
+
+
+这几个值非常非常关键，特别是 entcode，不知道请问用友的实施顾问！！！
+
+
+这几个值非常非常关键，特别是 entcode，不知道请问用友的实施顾问！！！
+调用示例：
+
+http://localhost/u9c/webapi/OAuth2/AuthLogin?userCode=demo&entcode=001&orgcode=
+001&clientid=API1&clientsecret=36462bf7ecf74edd8bfadbb7b71a6607
+
+
+
+
+)
+
+
+     ● 业务接口调用
+第二步获取 token 后就可以使用 post 调用业务接口了，token 值必须作为 Headers 的传参
+
+
+Post 请求
+
+
+接口地址：http://localhost/u9c/webapi/Department/Create
+接口中 Department 是自己写的 Controller 名称，Create 是具体接口的方法名，token 需要带
+入到 Headers 中
+
+
+业务接口参数可从地址：http://localhost/U9C/swagger 中获取。
+注意：目前产品的 OtherID 仅仅是批量生单的一个标识（比如创建 10 条，传入不同的
+
+OtherID ， 10 条里面有失败的和成功的，会返回告知第三方成功还是失败），这个字段不会记录
+
+到 U9 后台，标准产品暂时没有字段可以存储 OtherID ）
+
+
+
+
+四、开发新 WebAPI 步骤：
+
+1、使用前提：
+
+只适用于 U9C 企业版和标准版；
+
+
+建议使用前打标准补丁带如下关键字的标准补丁：PUB/UBF/BS/SLC/ISV
+
+
+
+2、使用背景：
+ 标准接口不满足对接需求，或个性化的对接需求，或客开单据需要开发服务给第三方调用等
+
+
+
+3、客开流程（有授权）：
+
+无需借助 UBF 开发平台也可开发 WebAPI 给第三方调用。
+
+
+● 使用 Visual Studio 开发工具开发类库项目，引用..Portal/bin/UFSoft.UBF.MVC.dll
+   和..Portal/bin/System.Web.Http.dll 文件
+
+
+● 新建客开接口的 XXXController.cs 文件,类名固定为 XXXController，XXX 不允许和产品
+   的 Controller 重复（请先查看下标准的 Controller,地址：
+   https://www.yyu9c.com/swagger ），继承 OpenAPIController
+
+
+● XXController 类中建自己需要的不同接口名称即可（不要和产品的实体名称一致，否则可
+   能会和标准的 API 冲突，比如料品的客开 API，不可定义成 ItemMasterController,建议
+   开头全部为 Cust 开头，如：CustItemMasterController）
+
+
+● 所有 Controller 中的方法返回值，全部返回 ApiResult<T>对象，T 泛型可以返回任意 DTO
+   对象或任意 DTO 对象的集合
+
+
+● 所有 Controller 中的方法传入值，参数需要声明[FromBody] List<自己定义的 DTO 类型>
+   或者[FromBody] 自己定义的 DTO 类型（即参数传入是集合，返回对应 T 泛型应该也是个
+   集合）
+
+
+● 特别注意：客开要通过 try catch+RequiresNew 事务把所有客开代码包起来，以确保
+
+   事务回滚并能正常返回异常信息给第三方：
+using (UBFTransactionScope scope = new UBFTransactionScope(TransactionOption.RequiresNew))
+
+           {
+
+               try
+
+               {
+
+                   //创建 、提交、审核
+
+               }
+              catch (Exception ex)
+
+                 {
+
+                     scope.Rollback();
+
+                     return;//返回，不执行 scope.Commit();就会回滚
+
+                 }
+
+             scope.Commit();
+
+             }
+
+
+
+
+Controller 参考示例：
+
+
+/// <summary>
+
+
+/// 需要引入 UFSoft.UBF.MVC.dll 正式接口,需要继承我们的 OpenAPIController
+
+
+/// </summary>
+
+
+public class SupplierController: OpenAPIController
+
+
+{
+
+
+/// <summary>
+
+
+/// 新增供应商
+
+
+/// </summary>
+
+
+/// <param name="supplierDTOs">供应商集合</param>
+
+
+/// <returns></returns>
+
+
+[HttpPost]
+
+
+public ApiResult<List<ResultDTORData>> Create([FromBody]
+List<UFIDA.U9.ISV.Supplier.SupplierDTOData> supplierDTOs)
+
+
+{
+//return UFIDA.U9.ISV.PUB.RestSV.Business.CBO.Supplier.CreateSupplier.Do(supplierDTOs);
+
+
+List<ResultDTORData> resultList =
+UFIDA.U9.ISV.PUB.RestSV.Business.CBO.Supplier.CreateSupplier.Do(supplierDTOs);//这里写自己的业务逻辑
+实现代码，返回 ApiResult<List<T>>即可
+
+
+ApiResult<List<ResultDTORData>> apiresult = new ApiResult<List<ResultDTORData>>(resultList);
+
+
+return apiresult;
+
+
+}
+
+
+}
+
+
+
+4、客开流程（无授权）：
+客开流程（有授权）：第三方调用需要传入授权码，获取 Token 才能调用业务接口
+
+客开流程（无授权）：只支持客开，第三方调用可以直接调用，无需调用授权接口
+
+U9 接口客开提供有授权和无授权接口访问机制：第四步与第三步是提供的两种不同的给第三
+方调用的方式，第三步开发的接口第三方调用需要第三方传入授权、传入 Token 才可以调用
+业务接口，第四步开发的接口第三方调用不需要传入授权
+
+
+● 开发方式和第三方的区别是继承 APIController（ System.Web.Http 命名空间下）
+
+
+● 引用..Portal/bin/UFSoft.UBF.MVC.dll 和..Portal/bin/System.Web.Http.dll 文件
+
+
+●   同时需要引用 UFIDA.U9.CBO.PubSV.dll 和 UFSoft.UBF.AopFrame.dll（重写上下文用，不管是调用 U9 的任何
+    方法，都要重写上下文）
+
+
+
+●   特别注意：客开要通过 try catch+RequiresNew 事务把所有客开代码包起来，以确保
+
+    事务回滚并能正常返回异常信息给第三方
+
+
+● 上下文需要客开自己增加企业编码、组织编码、用户编码，同时客开需要根据传入的上下
+    文参数写入到 U9 上下文，如下图及示例：
+
+
+    UFSoft.UBF.Util.Context.PlatformContext.Current 中可以取出上下文信息：
+    重写上下文，客开代码要写到 using 里面：
+
+
+    using (BPForEngine bp = new BPForEngine())
+
+
+    {
+
+                     ContextDTO       tdto    =   new   ContextDTO();
+                               tdto.UserCode=context.UserCode;//取接口传入的用户编码
+                               tdto.EntCode=context.EnterpriseID;//取接口传入的企业
+编码
+                               tdto.CultureName="zh-CN";//固定
+                               tdto.OrgCode=context.OrgCode;//取接口传入的组织编码
+                               tdto.WriteToContext();
+//编写代码逻辑
+}
+
+
+
+
+    举例如下：
+
+
+    using (BPForEngine bp = new BPForEngine())
+
+
+    {
+        ContextDTO cdto = new ContextDTO();
+
+        cdto.EntCode = head[0].EntCode;
+
+        cdto.OrgCode = head[0].OrgCode;
+
+        cdto.UserCode = head[0].UserCode;
+
+        cdto.WriteToContext();//重写上下文
+
+      UFIDA.U9.CBO.SCM.Supplier.BatchQuerySupplierByDTOSRV proxy = new
+UFIDA.U9.CBO.SCM.Supplier.BatchQuerySupplierByDTOSRV();
+
+        proxy.QuerySupplierDTOs = new List<UFIDA.U9.CBO.SCM.Supplier.QuerySupplierDTO>();
+
+      UFIDA.U9.CBO.SCM.Supplier.QuerySupplierDTO queryDTO = new
+UFIDA.U9.CBO.SCM.Supplier.QuerySupplierDTO();
+
+        queryDTO.Supplier = new CommonArchiveDataDTO();
+
+        queryDTO.Supplier.Code = head[0].DocNO;
+
+        queryDTO.Org = new CommonArchiveDataDTO();
+
+        queryDTO.Org.Code = UFIDA.U9.Base.Context.LoginOrg.Code;
+      proxy.QuerySupplierDTOs.Add(queryDTO);
+
+         List<UFIDA.U9.CBO.SCM.Supplier.SupplierDTO> resultList = proxy.Do();//代码实现
+
+
+  }
+
+
+
+
+5、部署说明
+需要生成类库项目的 dll 和 xml，图示：
+
+
+
+
+● 需要拷贝生成的 xx.dll 和 xxx.xml 放置到..Portal\ApplicationServer\Libs 下(非常关
+  键）;
+
+
+● 在 Portal\OpenApiExtend.config 文件中手工配置 dll 文件路径，在 MyApi 节点的 url 配
+  置 dll 路径的相对地址，即：\ApplicationServer\Libs\XXX.dll(非常关键）
+
+
+● 上面两步做完操作一定要重启 IIS
+
+
+● 访问地址 http://U9 地址/swagger/ui/index 即可打开所有服务的 Controller，找到自
+  己做的 Controller 即可，调用方式参考“三、第三方调用说明”步骤完全一样。
+
+
+*客开查询服务重点说明*：
+因为考虑数据安全性，提供的公共查询接口考虑不对外开发，需要客开处理自行先实现各客开
+查询服务（后续产品会实现各种单据、档案类型的查询接口），客开实现也非常简单，只需要
+对方传入查询的数据库视图语句（需要开发人员先在 U9 数据库写好相关的视图），使用
+Runsql 查询返回 Tabel 给第三方即可，代码实例：（需要引入
+UFSoft.UBF.Util.DataAccess.dll）
+
+public static DataTable Do(string SqlString)
+
+
+    {
+
+
+        DataSet ds = new DataSet();
+
+
+        string sql = string.Empty;
+
+
+
+
+        Validate(sql);
+
+
+        DataParamList _DataParamList = null;
+
+
+        DataAccessor.RunSQL(DataAccessor.GetConn(), sql, _DataParamList, out ds);
+
+
+        if (ds != null && ds.Tables[0] != null)
+
+
+        {
+
+
+            return ds.Tables[0]; //直接返回 Tabel，会自动转换为 JSON
+
+
+        }
+
+
+        else
+
+
+        {
+
+
+            return null;
+
+
+        }
+
+
+
+
+    }
+
+
+    private static void Validate(string sql)
+
+
+    {
+
+
+        string[] arrSQL = sql.Split(';');
+
+
+        for (int i = 0; i < arrSQL.Length; i++)
+          {
+
+
+              if (arrSQL[i].Trim().ToLower().Contains("update ") || arrSQL[i].Trim().ToLower().Contains("delete
+"))
+
+
+              {
+
+
+                  throw new Exception("该接口为查询接口，不允许更新及删除操作");
+
+
+              }
+
+
+          }
+
+
+
+
+      }
+
+
+
+
+      六、调试：
+如果需要调试，可附加到 w3wp 进程，调试相关 dll:
+
+\ApplicationServer\Libs\UFIDA.U9.ISV.FI.RestSV.dll 财务模块相关接口
+\ApplicationServer\Libs\UFIDA.U9.ISV.INV.RestSV.dll 库存相关接口
+
+\ApplicationServer\Libs\UFIDA.U9.ISV.MFG.RestSV.dll 生产相关接口
+
+\ApplicationServer\Libs\UFIDA.U9.ISV.PM.RestSV.dll 采购相关接口
+
+\ApplicationServer\Libs\UFIDA.U9.ISV.PUB.RestSV.dll 基础档案及公共接口
+
+\ApplicationServer\Libs\UFIDA.U9.ISV.SM.RestSV.dll 销售相关接口
+
+\ApplicationServer\Libs\UFIDA.U9.ISV.QC.RestSV.dll 质检相关接口
+
+
+
+\ApplicationServer\Libs\ UFIDA.U9.HI.HIBP.dll API/PersonInfoDocController 人员信息接口
+
+
+
+
+      七、特殊接口说明：
+
+1、 查询接口及查询实体全名：
+公共查询接口及客开查询表字段实体的方法
+
+https://docs.qq.com/doc/DQURjd0dGQVNtSlpn
+
+
+
+2、 审批接口：
+
+所有走工作流审批的档案或单据，只能调用
+/w e b a p i/M o b ile A p p r o v a l/S u b m itA p p r o v a l   这个接口审批档案或单据，传
+A c tio n （ 审 批 动 作 ） 、 E n tity T y p e （ 实 体 全 名 ， 参 考 以 上 “ 查 询 接 口 ” 里 面 的 说 明 获 取 实 体 全 名 、
+
+E n tity Id （ 档 案 或 单 据 ID ） 、 O p in io n （ 审 批 意 见 ， 拒 绝 时 必 传 ）
+
+
+
+3、 附件下载：
+
+调 用 接 口 A tta c h m e n tF ile /A tta c h m e n tF ile D o w n lo a d B y D o c ID ? d o c id = 单 据 ID 下 载 附 件 后 ， 如 果 下
+
+载到文件：
+
+
+接 口 返 回 的 F ile U r l 是 文 件 的 相 对 地 址 ， 接 口 返 回 后 （ 1 分 钟 内 ） 通 过 U 9 地 址 / F ile U r l 地 址 就 可 以
+
+下载到文件（这个是文件的完整访问地址，可以浏览器访问或程序下载），
+

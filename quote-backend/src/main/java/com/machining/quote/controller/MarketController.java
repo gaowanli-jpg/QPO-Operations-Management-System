@@ -20,6 +20,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
+import com.machining.quote.service.ImportTemplateExportService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderFilePathService;
 import com.machining.quote.service.OrderManagementService;
@@ -64,6 +65,9 @@ public class MarketController {
 
     @Autowired
     private ExcelExportService excelExportService;
+
+    @Autowired
+    private ImportTemplateExportService importTemplateExportService;
 
     @Autowired
     private QuoteTemplateExportService quoteTemplateExportService;
@@ -180,6 +184,12 @@ public class MarketController {
     @RequirePermission("market:quote-process:export")
     public void exportTemplateQuoteSimple(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         quoteTemplateExportService.exportTemplateQuoteSimple(rfqId, response);
+    }
+
+    @GetMapping("/import-rfq/template")
+    @RequirePermission("market:rfq:import")
+    public void exportRfqImportTemplate(HttpServletResponse response) throws IOException {
+        importTemplateExportService.exportRfqImportTemplate(response);
     }
 
     @PostMapping("/generate-ticket")
