@@ -22,12 +22,14 @@ describe('release version edit stage 3', () => {
     )
 
     expect(source).toContain('updateReleaseItemVersion')
-    expect(source).toContain('const savingVersionRowMap = reactive({})')
+    expect(source).toContain('version: (itemId) => `market:release:version:${itemId}`')
+    expect(source).toContain('const isVersionSaving = (row) => isPending(releaseActionKeys.version(row?.id))')
     expect(source).toContain('class="row-version-editor"')
     expect(source).toContain('v-model="row.versionDraft"')
-    expect(source).toContain(':loading="!!savingVersionRowMap[row.id]"')
+    expect(source).toContain(':loading="isVersionSaving(row)"')
     expect(source).toContain('@click.stop="saveReleaseItemVersion(row)"')
 
+    expect(saveBlock).toContain('return runAction(releaseActionKeys.version(row.id), async () =>')
     expect(saveBlock).toContain('updateReleaseItemVersion(row.id, {')
     expect(saveBlock).toContain('rfqId: rowRfqId')
     expect(saveBlock).toContain('version: row.versionDraft')

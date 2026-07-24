@@ -32,7 +32,7 @@
               </el-table-column>
               <el-table-column label="操作" width="58" align="center" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="danger" size="small" @click.stop="removeSelectedOrder(row)">移除</el-button>
+                  <el-button link type="danger" size="small" :disabled="submitting" @click.stop="removeSelectedOrder(row)">移除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -76,7 +76,7 @@
                 <el-button
                   plain
                   class="workflow-soft-button"
-                  :disabled="selectedRows.length === 0"
+                  :disabled="selectedRows.length === 0 || adjustingInternalLeadTime || submitting"
                   :loading="adjustingInternalLeadTime"
                   @click="adjustInternalLeadTime(1)"
                 >
@@ -85,7 +85,7 @@
                 <el-button
                   plain
                   class="workflow-soft-button"
-                  :disabled="selectedRows.length === 0"
+                  :disabled="selectedRows.length === 0 || adjustingInternalLeadTime || submitting"
                   :loading="adjustingInternalLeadTime"
                   @click="adjustInternalLeadTime(-1)"
                 >
@@ -105,7 +105,7 @@
                 <el-button
                   plain
                   class="workflow-soft-button market-manual-date-button"
-                  :disabled="selectedRows.length === 0 || !manualInternalTargetDate"
+                  :disabled="selectedRows.length === 0 || !manualInternalTargetDate || settingInternalTargetLeadTime || submitting"
                   :loading="settingInternalTargetLeadTime"
                   @click="setInternalTargetLeadTime"
                 >
@@ -145,7 +145,7 @@
                 size="large"
                 class="workflow-primary-action"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0 || !releaseForm.orderType || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim()"
+                :disabled="selectedRows.length === 0 || !releaseForm.orderType || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -164,7 +164,7 @@
                   size="small"
                   plain
                   class="workflow-soft-button"
-                  :disabled="selectedOrders.length === 0"
+                  :disabled="selectedOrders.length === 0 || replacingDrawings || submitting"
                   :loading="replacingDrawings"
                   @click="openDrawingReplaceDialog"
                 >
@@ -183,7 +183,7 @@
                       size="small"
                       plain
                       class="workflow-soft-button"
-                      :disabled="selectedOrders.length === 0 || releaseItemTotal === 0"
+                      :disabled="selectedOrders.length === 0 || releaseItemTotal === 0 || importSelecting || submitting"
                       :loading="importSelecting"
                     >
                       导入表格选定
@@ -228,8 +228,8 @@
                       size="small"
                       type="primary"
                       plain
-                      :disabled="!canSelectItem(row)"
-                      :loading="!!savingVersionRowMap[row.id]"
+                      :disabled="!canSelectItem(row) || isVersionSaving(row) || submitting"
+                      :loading="isVersionSaving(row)"
                       @click.stop="saveReleaseItemVersion(row)"
                     >
                       保存
@@ -278,8 +278,8 @@
                       size="small"
                       type="primary"
                       plain
-                      :disabled="!canSelectItem(row)"
-                      :loading="!!savingInternalRowMap[row.id]"
+                      :disabled="!canSelectItem(row) || isInternalLeadTimeSaving(row) || submitting"
+                      :loading="isInternalLeadTimeSaving(row)"
                       @click.stop="saveInternalTargetLeadTime(row)"
                     >
                       保存
@@ -439,7 +439,7 @@
             v-permission="'market:release:create'"
             type="primary"
             :loading="replacingDrawings"
-            :disabled="replacementDrawingFiles.length === 0"
+            :disabled="replacementDrawingFiles.length === 0 || replacingDrawings || submitting"
             @click="submitReplacementDrawings"
           >
             上传并替换
@@ -483,6 +483,7 @@ import {
   CLIENT_PAGE_SIZES,
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const selectedRfqId = ref(null)
 const selectedOrders = ref([])
@@ -498,25 +499,35 @@ const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
-const savingInternalRowMap = reactive({})
-const savingVersionRowMap = reactive({})
 const drawingReplaceVisible = ref(false)
 const replacementDrawingFiles = ref([])
 const replacementDrawingResult = ref(null)
 const clientSkippedReplacementFiles = ref([])
 
 const loading = ref(false)
-const submitting = ref(false)
-const adjustingInternalLeadTime = ref(false)
-const settingInternalTargetLeadTime = ref(false)
-const importSelecting = ref(false)
-const replacingDrawings = ref(false)
 let syncingReleaseItemSelection = false
 
 const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
 
 const selectedOrderIds = computed(() => selectedOrders.value.map(order => order.id))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
+const { isPending, runAction } = usePendingAction()
+const releaseActionKeys = {
+  importSelection: 'market:release:import-selection',
+  replaceDrawings: 'market:release:replace-drawings',
+  shiftInternalLeadTime: 'market:release:shift-internal-lead-time',
+  setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
+  version: (itemId) => `market:release:version:${itemId}`,
+  internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`,
+  generateTicket: () => `market:release:generate-ticket:${selectedOrderIds.value.join(',') || 'none'}`
+}
+const submitting = computed(() => isPending(releaseActionKeys.generateTicket()))
+const adjustingInternalLeadTime = computed(() => isPending(releaseActionKeys.shiftInternalLeadTime))
+const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys.setInternalTargetLeadTime))
+const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
+const replacingDrawings = computed(() => isPending(releaseActionKeys.replaceDrawings))
+const isVersionSaving = (row) => isPending(releaseActionKeys.version(row?.id))
+const isInternalLeadTimeSaving = (row) => isPending(releaseActionKeys.internalLeadTime(row?.id))
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
@@ -713,32 +724,31 @@ const saveReleaseItemVersion = async (row) => {
   const rowRfqId = row?.rfqId || selectedRfqId.value
   if (!rowRfqId || !row?.id) return
   row.versionDraft = String(row.versionDraft ?? '').trim()
-  savingVersionRowMap[row.id] = true
-  try {
-    const response = await updateReleaseItemVersion(row.id, {
-      rfqId: rowRfqId,
-      version: row.versionDraft
-    })
-    const savedData = response?.data || {}
-    const saved = {
-      ...row,
-      ...savedData,
-      versionDraft: savedData.version ?? row.versionDraft ?? ''
+  return runAction(releaseActionKeys.version(row.id), async () => {
+    try {
+      const response = await updateReleaseItemVersion(row.id, {
+        rfqId: rowRfqId,
+        version: row.versionDraft
+      })
+      const savedData = response?.data || {}
+      const saved = {
+        ...row,
+        ...savedData,
+        versionDraft: savedData.version ?? row.versionDraft ?? ''
+      }
+      const index = itemList.value.findIndex(item => item.id === row.id)
+      if (index >= 0) {
+        itemList.value.splice(index, 1, saved)
+      }
+      if (selectedItemIdMap[row.id]) {
+        selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
+      }
+      ElMessage.success('版本已保存。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '版本保存失败。')
     }
-    const index = itemList.value.findIndex(item => item.id === row.id)
-    if (index >= 0) {
-      itemList.value.splice(index, 1, saved)
-    }
-    if (selectedItemIdMap[row.id]) {
-      selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
-    }
-    ElMessage.success('版本已保存。')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '版本保存失败。')
-  } finally {
-    savingVersionRowMap[row.id] = false
-  }
+  })
 }
 
 const handleSelectionChange = (rows) => {
@@ -833,35 +843,34 @@ const handleSelectionExcelChange = async (uploadFile) => {
   const formData = new FormData()
   formData.append('excelFile', file)
   formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))
-  importSelecting.value = true
-  try {
-    const response = await parsePartSelectionBatch(formData)
-    clearSelectedRows()
-    ;(response?.data || []).forEach(row => {
-      selectedItemIdMap[row.id] = row
-      const remainingQty = remainingQtyFor(row)
-      acceptedQtyMap[row.id] = remainingQty > 0 ? remainingQty : 0
-    })
-    await syncReleaseItemTableSelection()
+  return runAction(releaseActionKeys.importSelection, async () => {
+    try {
+      const response = await parsePartSelectionBatch(formData)
+      clearSelectedRows()
+      ;(response?.data || []).forEach(row => {
+        selectedItemIdMap[row.id] = row
+        const remainingQty = remainingQtyFor(row)
+        acceptedQtyMap[row.id] = remainingQty > 0 ? remainingQty : 0
+      })
+      await syncReleaseItemTableSelection()
 
-    const importedCount = Number(response?.importedCount ?? 0)
-    const matchedCount = Number(response?.matchedCount ?? 0)
-    const selectedCount = Number(response?.selectedCount ?? 0)
-    const skippedCount = Number(response?.skippedCount ?? 0)
-    if (importedCount === 0) {
-      ElMessage.warning('表格中未读取到有效的图号+版本。')
-    } else if (selectedCount === 0) {
-      ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单中可选的零件。`)
-    } else {
-      const skippedText = skippedCount > 0 ? `，${skippedCount} 项因不可选未勾选` : ''
-      ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已勾选 ${selectedCount} 项${skippedText}。`)
+      const importedCount = Number(response?.importedCount ?? 0)
+      const matchedCount = Number(response?.matchedCount ?? 0)
+      const selectedCount = Number(response?.selectedCount ?? 0)
+      const skippedCount = Number(response?.skippedCount ?? 0)
+      if (importedCount === 0) {
+        ElMessage.warning('表格中未读取到有效的图号+版本。')
+      } else if (selectedCount === 0) {
+        ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单中可选的零件。`)
+      } else {
+        const skippedText = skippedCount > 0 ? `，${skippedCount} 项因不可选未勾选` : ''
+        ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已勾选 ${selectedCount} 项${skippedText}。`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
-  } finally {
-    importSelecting.value = false
-  }
+  })
 }
 
 const openDrawingReplaceDialog = () => {
@@ -942,37 +951,36 @@ const submitReplacementDrawings = async () => {
   if (selectedOrderIds.value.length === 0) return ElMessage.warning('请先选择询价单。')
   if (replacementDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
 
-  replacingDrawings.value = true
   const formData = new FormData()
   formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))
   replacementDrawingFiles.value.forEach(file => formData.append('drawings', file))
 
-  try {
-    const response = await replaceReleaseDrawings(formData)
-    const skippedFiles = [
-      ...(response?.skippedFiles || []),
-      ...clientSkippedReplacementFiles.value
-    ]
-    replacementDrawingResult.value = {
-      ...(response || {}),
-      skippedFiles,
-      skippedCount: skippedFiles.length
-    }
-    replacementDrawingFiles.value = []
-    clientSkippedReplacementFiles.value = []
-    await fetchReleaseItemsBatch()
+  return runAction(releaseActionKeys.replaceDrawings, async () => {
+    try {
+      const response = await replaceReleaseDrawings(formData)
+      const skippedFiles = [
+        ...(response?.skippedFiles || []),
+        ...clientSkippedReplacementFiles.value
+      ]
+      replacementDrawingResult.value = {
+        ...(response || {}),
+        skippedFiles,
+        skippedCount: skippedFiles.length
+      }
+      replacementDrawingFiles.value = []
+      clientSkippedReplacementFiles.value = []
+      await fetchReleaseItemsBatch()
 
-    if (Number(replacementDrawingResult.value.unmatchedCount || 0) > 0 || skippedFiles.length > 0) {
-      ElMessage.warning(response?.message || '图纸替换处理完成，存在未匹配或跳过文件。')
-    } else {
-      ElMessage.success(response?.message || '图纸替换处理完成。')
+      if (Number(replacementDrawingResult.value.unmatchedCount || 0) > 0 || skippedFiles.length > 0) {
+        ElMessage.warning(response?.message || '图纸替换处理完成，存在未匹配或跳过文件。')
+      } else {
+        ElMessage.success(response?.message || '图纸替换处理完成。')
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '图纸替换失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '图纸替换失败。')
-  } finally {
-    replacingDrawings.value = false
-  }
+  })
 }
 
 const adjustInternalLeadTime = async (direction) => {
@@ -982,28 +990,27 @@ const adjustInternalLeadTime = async (direction) => {
   const days = Math.abs(Number(internalShiftDays.value || 0)) * direction
   if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
 
-  adjustingInternalLeadTime.value = true
-  try {
-    const response = await shiftInternalTargetLeadTime({
-      rfqId,
-      itemIds: selectedRows.value.map(row => row.id),
-      days
-    })
-    clearSelectedRows()
-    await fetchReleaseItemsBatch()
-    const adjusted = response.adjustedCount || 0
-    const skipped = response.skippedCount || 0
-    if (skipped > 0) {
-      ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
-    } else {
-      ElMessage.success(`已调整 ${adjusted} 项。`)
+  return runAction(releaseActionKeys.shiftInternalLeadTime, async () => {
+    try {
+      const response = await shiftInternalTargetLeadTime({
+        rfqId,
+        itemIds: selectedRows.value.map(row => row.id),
+        days
+      })
+      clearSelectedRows()
+      await fetchReleaseItemsBatch()
+      const adjusted = response.adjustedCount || 0
+      const skipped = response.skippedCount || 0
+      if (skipped > 0) {
+        ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
+      } else {
+        ElMessage.success(`已调整 ${adjusted} 项。`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '内部目标交期调整失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '内部目标交期调整失败。')
-  } finally {
-    adjustingInternalLeadTime.value = false
-  }
+  })
 }
 
 const setInternalTargetLeadTime = async () => {
@@ -1012,58 +1019,56 @@ const setInternalTargetLeadTime = async () => {
   if (!rfqId) return
   if (!manualInternalTargetDate.value) return ElMessage.warning('请先选择内部目标交期。')
 
-  settingInternalTargetLeadTime.value = true
-  try {
-    const response = await setInternalTargetLeadTimeRequest({
-      rfqId,
-      itemIds: selectedRows.value.map(row => row.id),
-      internalTargetLeadTime: manualInternalTargetDate.value
-    })
-    clearSelectedRows()
-    await fetchReleaseItemsBatch()
-    const adjusted = response.adjustedCount || 0
-    const skipped = response.skippedCount || 0
-    if (skipped > 0) {
-      ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
-    } else {
-      ElMessage.success(`已指定 ${adjusted} 项内部目标交期。`)
+  return runAction(releaseActionKeys.setInternalTargetLeadTime, async () => {
+    try {
+      const response = await setInternalTargetLeadTimeRequest({
+        rfqId,
+        itemIds: selectedRows.value.map(row => row.id),
+        internalTargetLeadTime: manualInternalTargetDate.value
+      })
+      clearSelectedRows()
+      await fetchReleaseItemsBatch()
+      const adjusted = response.adjustedCount || 0
+      const skipped = response.skippedCount || 0
+      if (skipped > 0) {
+        ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
+      } else {
+        ElMessage.success(`已指定 ${adjusted} 项内部目标交期。`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '指定内部目标交期失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '指定内部目标交期失败。')
-  } finally {
-    settingInternalTargetLeadTime.value = false
-  }
+  })
 }
 
 const saveInternalTargetLeadTime = async (row) => {
   const rowRfqId = row?.rfqId || selectedRfqId.value
   if (!rowRfqId || !row?.id) return
-  savingInternalRowMap[row.id] = true
-  try {
-    const response = await updateInternalTargetLeadTime({
-      rfqId: rowRfqId,
-      itemId: row.id,
-      internalTargetLeadTime: row.internalTargetLeadTimeDraft
-    })
-    const saved = {
-      ...(response.data || {}),
-      internalTargetLeadTimeDraft: response.data?.internalTargetLeadTime || ''
+  return runAction(releaseActionKeys.internalLeadTime(row.id), async () => {
+    try {
+      const response = await updateInternalTargetLeadTime({
+        rfqId: rowRfqId,
+        itemId: row.id,
+        internalTargetLeadTime: row.internalTargetLeadTimeDraft
+      })
+      const saved = {
+        ...(response.data || {}),
+        internalTargetLeadTimeDraft: response.data?.internalTargetLeadTime || ''
+      }
+      const index = itemList.value.findIndex(item => item.id === row.id)
+      if (index >= 0) {
+        itemList.value.splice(index, 1, saved)
+      }
+      if (selectedItemIdMap[row.id]) {
+        selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
+      }
+      ElMessage.success('内部目标交期已保存。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '内部目标交期保存失败。')
     }
-    const index = itemList.value.findIndex(item => item.id === row.id)
-    if (index >= 0) {
-      itemList.value.splice(index, 1, saved)
-    }
-    if (selectedItemIdMap[row.id]) {
-      selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
-    }
-    ElMessage.success('内部目标交期已保存。')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '内部目标交期保存失败。')
-  } finally {
-    savingInternalRowMap[row.id] = false
-  }
+  })
 }
 
 const submitTicket = async () => {
@@ -1092,68 +1097,67 @@ const submitTicket = async () => {
     return ElMessage.warning('已选零件缺少订单信息，无法生成正式提单。')
   }
 
-  await ElMessageBox.confirm(
-    `确认按 ${releaseGroups.size} 个订单生成 ${orderedSelectedRows.length} 个零件的正式提单？通过数量不能超过剩余可提数量。`,
-    '生成提单确认',
-    { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
-  )
+  return runAction(releaseActionKeys.generateTicket(), async () => {
+    await ElMessageBox.confirm(
+      `确认按 ${releaseGroups.size} 个订单生成 ${orderedSelectedRows.length} 个零件的正式提单？通过数量不能超过剩余可提数量。`,
+      '生成提单确认',
+      { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
+    )
 
-  submitting.value = true
-  try {
-    const successfulResults = []
-    const failedResults = []
-    const successItemIds = new Set()
-    for (const [rfqId, rows] of releaseGroups) {
-      const payload = {
-        rfqId,
-        orderType: releaseForm.orderType,
-        internalProjectNo,
-        customerOrderNo,
-        customerProjectNo,
-        startDate: releaseForm.startDate,
-        arrangeType: releaseForm.arrangeType,
-        items: rows.map(row => ({
-          itemId: row.id,
-          acceptedQty: acceptedQtyMap[row.id] || remainingQtyFor(row)
-        }))
-      }
-      try {
-        const response = await generateTicket(payload)
-        if (response.success) {
-          successfulResults.push({ rfqId, rows, response })
-          rows.forEach(row => successItemIds.add(row.id))
-        } else {
-          failedResults.push({ rfqId, rows, message: response.message || '提单生成失败。' })
-        }
-      } catch (error) {
-        console.error(error)
-        failedResults.push({
+    try {
+      const successfulResults = []
+      const failedResults = []
+      const successItemIds = new Set()
+      for (const [rfqId, rows] of releaseGroups) {
+        const payload = {
           rfqId,
-          rows,
-          message: error.response?.data?.message || error.message || '提单生成请求失败。'
-        })
+          orderType: releaseForm.orderType,
+          internalProjectNo,
+          customerOrderNo,
+          customerProjectNo,
+          startDate: releaseForm.startDate,
+          arrangeType: releaseForm.arrangeType,
+          items: rows.map(row => ({
+            itemId: row.id,
+            acceptedQty: acceptedQtyMap[row.id] || remainingQtyFor(row)
+          }))
+        }
+        try {
+          const response = await generateTicket(payload)
+          if (response.success) {
+            successfulResults.push({ rfqId, rows, response })
+            rows.forEach(row => successItemIds.add(row.id))
+          } else {
+            failedResults.push({ rfqId, rows, message: response.message || '提单生成失败。' })
+          }
+        } catch (error) {
+          console.error(error)
+          failedResults.push({
+            rfqId,
+            rows,
+            message: error.response?.data?.message || error.message || '提单生成请求失败。'
+          })
+        }
       }
-    }
 
-    if (successfulResults.length > 0) {
-      await refreshSelectedOrdersAfterGeneration(successItemIds)
-    }
+      if (successfulResults.length > 0) {
+        await refreshSelectedOrdersAfterGeneration(successItemIds)
+      }
 
-    if (failedResults.length === 0) {
-      const successItemCount = successfulResults.reduce((total, result) => total + result.rows.length, 0)
-      ElMessage.success(`已按 ${successfulResults.length} 个订单生成 ${successItemCount} 项提单，可到「提单表据」查看和导出。`)
-    } else if (successfulResults.length > 0) {
-      const failureText = formatGenerationFailures(failedResults)
-      ElMessage.warning(`部分生成成功：成功 ${successfulResults.length} 个订单，失败 ${failedResults.length} 个订单。${failureText}`)
-    } else {
-      ElMessage.error(`提单生成失败：${formatGenerationFailures(failedResults)}`)
+      if (failedResults.length === 0) {
+        const successItemCount = successfulResults.reduce((total, result) => total + result.rows.length, 0)
+        ElMessage.success(`已按 ${successfulResults.length} 个订单生成 ${successItemCount} 项提单，可到「提单表据」查看和导出。`)
+      } else if (successfulResults.length > 0) {
+        const failureText = formatGenerationFailures(failedResults)
+        ElMessage.warning(`部分生成成功：成功 ${successfulResults.length} 个订单，失败 ${failedResults.length} 个订单。${failureText}`)
+      } else {
+        ElMessage.error(`提单生成失败：${formatGenerationFailures(failedResults)}`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '提单生成请求失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '提单生成请求失败。')
-  } finally {
-    submitting.value = false
-  }
+  })
 }
 
 const resolveDeliveryLeadTime = (row) => {

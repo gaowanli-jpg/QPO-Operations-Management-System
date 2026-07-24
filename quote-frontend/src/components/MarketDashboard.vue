@@ -117,7 +117,15 @@
       </div>
 
       <div class="erp-toolbar submit-footer">
-        <el-button v-permission="'market:rfq:import'" type="success" size="large" @click="submitRfqPackage" :loading="isSubmitting" class="submit-btn import-axis-button">
+        <el-button
+          v-permission="'market:rfq:import'"
+          type="success"
+          size="large"
+          @click="submitRfqPackage"
+          :loading="isPending(IMPORT_RFQ_ACTION_KEY)"
+          :disabled="isPending(IMPORT_RFQ_ACTION_KEY)"
+          class="submit-btn import-axis-button"
+        >
           确认无误，提交工程部评估
         </el-button>
       </div>
@@ -137,16 +145,19 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { importRfq } from '../services/marketApi'
+import { usePendingAction } from '../composables/usePendingAction'
+import { readActionError } from '../utils/actionError'
 import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
 
 const rfqForm = reactive({ customerName: '' })
 const excelFile = ref(null)
 const drawingFiles = ref([])
-const isSubmitting = ref(false)
 const drawingFileInput = ref(null)
 const drawingFolderInput = ref(null)
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
+const IMPORT_RFQ_ACTION_KEY = 'market:rfq:import'
+const { isPending, runAction } = usePendingAction()
 
 const handleExcelChange = (uploadFile) => { excelFile.value = uploadFile.raw }
 const handleExcelRemove = () => { excelFile.value = null }
@@ -259,53 +270,51 @@ const submitRfqPackage = async () => {
   if (!rfqForm.customerName) return ElMessage.warning('请填写客户名称！')
   if (!excelFile.value) return ElMessage.warning('请上传客户询价表 Excel！')
 
-  isSubmitting.value = true
-  const formData = new FormData()
-  formData.append('customerName', rfqForm.customerName)
-  formData.append('excelFile', excelFile.value)
+  return runAction(IMPORT_RFQ_ACTION_KEY, async () => {
+    const formData = new FormData()
+    formData.append('customerName', rfqForm.customerName)
+    formData.append('excelFile', excelFile.value)
 
-  drawingFiles.value.forEach(file => {
-    formData.append('drawings', file)
-  })
+    drawingFiles.value.forEach(file => {
+      formData.append('drawings', file)
+    })
 
-  try {
-    const response = await importRfq(formData)
-    
-    if (response.success) {
-      const drawingReportHtml = buildDrawingReportHtml(response.drawingReport)
-      ElMessageBox.alert(
-        `<div style="font-size: 15px; line-height: 1.5;">${response.message}</div>
-         <div style="color: #67C23A; margin-top: 10px;">工程部已收到系统推送任务。</div>
-         ${drawingReportHtml}`,
-        '订单导入成功',
-        {
-          dangerouslyUseHTMLString: true,
-        confirmButtonText: '开启下一单',
-          type: 'success',
-          center: true,
-        }
-      ).then(() => {
-        rfqForm.customerName = ''
-        excelFile.value = null
-        drawingFiles.value = [] // 清空拖拽出来的 PDF
-        if (excelUploadRef.value) {
-          excelUploadRef.value.clearFiles() // 清空原生的 Excel 选择框
-        }
-      })
-      
-    } else {
-      ElMessage.error({
-        message: response.message,
-        duration: 5000, 
-        showClose: true
-      })
+    try {
+      const response = await importRfq(formData)
+
+      if (response.success) {
+        const drawingReportHtml = buildDrawingReportHtml(response.drawingReport)
+        ElMessageBox.alert(
+          `<div style="font-size: 15px; line-height: 1.5;">${response.message}</div>
+           <div style="color: #67C23A; margin-top: 10px;">工程部已收到系统推送任务。</div>
+           ${drawingReportHtml}`,
+          '订单导入成功',
+          {
+            dangerouslyUseHTMLString: true,
+            confirmButtonText: '开启下一单',
+            type: 'success',
+            center: true,
+          }
+        ).then(() => {
+          rfqForm.customerName = ''
+          excelFile.value = null
+          drawingFiles.value = [] // 清空拖拽出来的 PDF
+          if (excelUploadRef.value) {
+            excelUploadRef.value.clearFiles() // 清空原生的 Excel 选择框
+          }
+        })
+      } else {
+        ElMessage.error({
+          message: response.message,
+          duration: 5000,
+          showClose: true
+        })
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(readActionError(error, '网络请求失败，请确保后端服务正常。'))
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('网络请求失败，请确保后端服务正常。')
-  } finally {
-    isSubmitting.value = false
-  }
+  })
 }
 </script>
 
