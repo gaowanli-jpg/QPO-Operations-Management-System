@@ -15,6 +15,8 @@ const postJson = (path, payload) => request(path, {
 
 export const importRfq = (formData) => multipartPost('/api/market/import-rfq', formData)
 
+export const importSalesOrder = (formData) => multipartPost('/api/market/sales-orders/import', formData)
+
 const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',
   release: '/api/market/release/orders',

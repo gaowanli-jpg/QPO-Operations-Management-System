@@ -31,6 +31,18 @@ describe('marketApi', () => {
     })
   })
 
+  test('importSalesOrder uploads sales order form data', async () => {
+    const formData = new FormData()
+
+    await marketApi.importSalesOrder(formData)
+
+    expect(request).toHaveBeenCalledWith('/api/market/sales-orders/import', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  })
+
   test('listMarketOrders requires a module-scoped order selection endpoint', () => {
     const params = { customerId: 3, keyword: 'RFQ' }
 

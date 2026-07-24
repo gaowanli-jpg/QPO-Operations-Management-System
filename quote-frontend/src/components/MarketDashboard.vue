@@ -2,134 +2,252 @@
   <div class="erp-page market-page">
     <header class="erp-page-header">
       <div>
-        <h1 class="erp-page-title">市场部：新询价单导入中心</h1>
-        <p class="erp-page-description">上传客户询价表和关联图纸，提交工程部评估。</p>
+        <h1 class="erp-page-title">市场部：新单导入中心</h1>
+        <p class="erp-page-description">上传客户询价表和关联图纸，或导入销售订单并同步 U9。</p>
       </div>
     </header>
 
-    <section class="erp-surface import-workflow">
-      <div class="import-step import-step-customer">
-        <div class="section-title">
-          <span class="step-index">01</span>
-          <span>步骤 1：客户基础信息</span>
-        </div>
-        <div class="form-box step-panel">
-          <el-form :model="rfqForm" label-width="120px" class="customer-form">
-            <el-row :gutter="20" justify="center">
-              <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
-                <el-form-item label="客户名称/代码" required>
-                  <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为">
-                    <template #append>
-                      <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="customerPickerVisible = true">
-                        选择已有客户
+    <section class="erp-surface import-mode-shell">
+      <el-tabs v-model="activeImportMode" class="import-mode-tabs">
+        <el-tab-pane label="询价单" name="rfq">
+          <section class="erp-surface import-workflow">
+            <div class="import-step import-step-customer">
+              <div class="section-title">
+                <span class="step-index">01</span>
+                <span>步骤 1：客户基础信息</span>
+              </div>
+              <div class="form-box step-panel">
+                <el-form :model="rfqForm" label-width="120px" class="customer-form">
+                  <el-row :gutter="20" justify="center">
+                    <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
+                      <el-form-item label="客户名称/代码" required>
+                        <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为">
+                          <template #append>
+                            <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="customerPickerVisible = true">
+                              选择已有客户
+                            </el-button>
+                          </template>
+                        </el-input>
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                </el-form>
+              </div>
+            </div>
+
+            <div class="import-step import-step-excel">
+              <div class="section-title">
+                <span class="step-index">02</span>
+                <span>步骤 2：上传客户询价表（Excel）</span>
+              </div>
+              <div class="upload-box step-panel">
+                <el-alert
+                  title="客户询价表需包含表头：图号、物料描述、材料名称、表面处理、版本、数量、单位、交货周期、备注；交货周期支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8）、天数周期（如 7天）或 Excel 日期序列号（如 46089）。"
+                  type="info"
+                  show-icon
+                  :closable="false"
+                  class="upload-alert"
+                />
+
+                <div class="import-action-row">
+                  <el-upload v-permission="'market:rfq:import'"
+                    ref="excelUploadRef"
+                    action="#"
+                    :auto-upload="false"
+                    :limit="1"
+                    accept=".xlsx, .xls"
+                    :on-change="handleExcelChange"
+                    :on-remove="handleExcelRemove"
+                    class="centered-upload"
+                  >
+                    <template #trigger>
+                      <el-button type="primary" plain class="workflow-primary-action import-axis-button">选取 客户询价表.xlsx</el-button>
+                    </template>
+                    <template #tip>
+                      <div class="el-upload__tip">只能上传 1 份标准格式的 Excel 文件</div>
+                    </template>
+                  </el-upload>
+                </div>
+              </div>
+            </div>
+
+            <div class="import-step import-step-drawings">
+              <div class="section-title">
+                <span class="step-index">03</span>
+                <span>步骤 3：上传关联图纸（PDF）</span>
+              </div>
+              <div class="upload-box step-panel">
+                <el-alert
+                  title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
+                  type="info"
+                  show-icon
+                  :closable="false"
+                  class="upload-alert"
+                />
+
+                <!-- 覆盖原生拖拽事件，接管控制权 -->
+                <div v-permission="'market:rfq:upload-drawing'"
+                  class="custom-dropzone"
+                  @dragover.prevent
+                  @drop.prevent="handleDrawingDrop"
+                >
+                  <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
+                  <div class="el-upload__text dropzone-text">
+                    将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
+                  </div>
+
+                  <!-- 备用的点击选择按钮 -->
+                  <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+                  <div class="import-action-row">
+                    <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFileSelect">选择多个 PDF</el-button>
+                    <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFolderSelect">选择文件夹</el-button>
+                  </div>
+                  <input type="file" ref="drawingFileInput" accept=".pdf" multiple class="hidden-input" @change="handleDrawingFileSelect" />
+                  <input type="file" ref="drawingFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleDrawingFolderSelect" />
+                </div>
+
+                <!-- 展示挖出来的 PDF 文件列表 -->
+                <div v-if="drawingFiles.length > 0" class="file-stats">
+                  <h4>已成功提取待提交图纸（{{ drawingFiles.length }} 份）</h4>
+                  <ul class="pdf-list">
+                    <li v-for="(file, index) in drawingFiles" :key="index">
+                      <span>{{ file.name }}</span>
+                      <el-button v-permission="'market:rfq:upload-drawing'" link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="erp-toolbar submit-footer">
+              <el-button
+                v-permission="'market:rfq:import'"
+                type="success"
+                size="large"
+                @click="submitRfqPackage"
+                :loading="isPending(IMPORT_RFQ_ACTION_KEY)"
+                :disabled="isPending(IMPORT_RFQ_ACTION_KEY)"
+                class="submit-btn import-axis-button"
+              >
+                确认无误，提交工程部评估
+              </el-button>
+            </div>
+          </section>
+        </el-tab-pane>
+
+        <el-tab-pane label="销售订单" name="sales-order">
+          <section class="sales-order-workflow">
+            <div class="import-step import-step-sales-order">
+              <div class="section-title">
+                <span class="step-index">01</span>
+                <span>上传销售订单（Excel）</span>
+              </div>
+              <div class="upload-box step-panel">
+                <el-alert
+                  title="销售订单 Excel 需包含客户编码、单据类型编码、客户订单号、业务日期、U9料号、数量、销售单位、计价单位、单价、交期等表头；字段校验以后端返回为准。"
+                  type="info"
+                  show-icon
+                  :closable="false"
+                  class="upload-alert"
+                />
+
+                <div class="import-action-row">
+                  <el-upload
+                    v-permission="'market:rfq:import-sales-order'"
+                    ref="salesOrderUploadRef"
+                    action="#"
+                    :auto-upload="false"
+                    :limit="1"
+                    accept=".xlsx, .xls"
+                    :on-change="handleSalesOrderExcelChange"
+                    :on-remove="handleSalesOrderExcelRemove"
+                    :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                    class="centered-upload"
+                  >
+                    <template #trigger>
+                      <el-button
+                        type="primary"
+                        plain
+                        class="workflow-primary-action import-axis-button"
+                        :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                      >
+                        选取 销售订单.xlsx
                       </el-button>
                     </template>
-                  </el-input>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </div>
-      </div>
-
-      <div class="import-step import-step-excel">
-        <div class="section-title">
-          <span class="step-index">02</span>
-          <span>步骤 2：上传客户询价表（Excel）</span>
-        </div>
-        <div class="upload-box step-panel">
-          <el-alert
-            title="客户询价表需包含表头：图号、物料描述、材料名称、表面处理、版本、数量、单位、交货周期、备注；交货周期支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8）、天数周期（如 7天）或 Excel 日期序列号（如 46089）。"
-            type="info"
-            show-icon
-            :closable="false"
-            class="upload-alert"
-          />
-
-          <div class="import-action-row">
-            <el-upload v-permission="'market:rfq:import'"
-              ref="excelUploadRef"
-              action="#"
-              :auto-upload="false"
-              :limit="1"
-              accept=".xlsx, .xls"
-              :on-change="handleExcelChange"
-              :on-remove="handleExcelRemove"
-              class="centered-upload"
-            >
-              <template #trigger>
-                <el-button type="primary" plain class="workflow-primary-action import-axis-button">选取 客户询价表.xlsx</el-button>
-              </template>
-              <template #tip>
-                <div class="el-upload__tip">只能上传 1 份标准格式的 Excel 文件</div>
-              </template>
-            </el-upload>
-          </div>
-        </div>
-      </div>
-
-      <div class="import-step import-step-drawings">
-        <div class="section-title">
-          <span class="step-index">03</span>
-          <span>步骤 3：上传关联图纸（PDF）</span>
-        </div>
-        <div class="upload-box step-panel">
-          <el-alert
-            title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
-            type="info"
-            show-icon
-            :closable="false"
-            class="upload-alert"
-          />
-          
-          <!-- 覆盖原生拖拽事件，接管控制权 -->
-          <div v-permission="'market:rfq:upload-drawing'"
-            class="custom-dropzone"
-            @dragover.prevent
-            @drop.prevent="handleDrawingDrop"
-          >
-            <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
-            <div class="el-upload__text dropzone-text">
-              将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
+                    <template #tip>
+                      <div class="el-upload__tip">只能上传 1 份销售订单 Excel，导入后将直接同步 U9。</div>
+                    </template>
+                  </el-upload>
+                </div>
+              </div>
             </div>
 
-            <!-- 备用的点击选择按钮 -->
-            <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-            <div class="import-action-row">
-              <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFileSelect">选择多个 PDF</el-button>
-              <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFolderSelect">选择文件夹</el-button>
+            <div class="erp-toolbar submit-footer sales-order-submit-row">
+              <el-button
+                v-permission="'market:rfq:import-sales-order'"
+                type="success"
+                size="large"
+                @click="submitSalesOrderImport"
+                :loading="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                class="submit-btn import-axis-button"
+              >
+                导入并同步 U9
+              </el-button>
             </div>
-            <input type="file" ref="drawingFileInput" accept=".pdf" multiple class="hidden-input" @change="handleDrawingFileSelect" />
-            <input type="file" ref="drawingFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleDrawingFolderSelect" />
-          </div>
 
-          <!-- 展示挖出来的 PDF 文件列表 -->
-          <div v-if="drawingFiles.length > 0" class="file-stats">
-            <h4>已成功提取待提交图纸（{{ drawingFiles.length }} 份）</h4>
-            <ul class="pdf-list">
-              <li v-for="(file, index) in drawingFiles" :key="index">
-                <span>{{ file.name }}</span>
-                <el-button v-permission="'market:rfq:upload-drawing'" link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
+            <section v-if="salesOrderImportResult" class="erp-table-surface sales-order-result-surface">
+              <div class="erp-toolbar sales-order-result-header">
+                <div>
+                  <h3>销售订单同步结果</h3>
+                  <p>批次号：{{ salesOrderImportResult.batchNo || '-' }}</p>
+                </div>
+                <div class="sales-order-result-summary">
+                  <el-tag type="info">合计 {{ salesOrderImportResult.totalOrderCount || 0 }}</el-tag>
+                  <el-tag type="success">成功 {{ salesOrderImportResult.successOrderCount || 0 }}</el-tag>
+                  <el-tag :type="salesOrderImportResult.failedOrderCount > 0 ? 'danger' : 'info'">
+                    失败 {{ salesOrderImportResult.failedOrderCount || 0 }}
+                  </el-tag>
+                </div>
+              </div>
 
-      <div class="erp-toolbar submit-footer">
-        <el-button
-          v-permission="'market:rfq:import'"
-          type="success"
-          size="large"
-          @click="submitRfqPackage"
-          :loading="isPending(IMPORT_RFQ_ACTION_KEY)"
-          :disabled="isPending(IMPORT_RFQ_ACTION_KEY)"
-          class="submit-btn import-axis-button"
-        >
-          确认无误，提交工程部评估
-        </el-button>
-      </div>
+              <el-alert
+                :title="salesOrderResultMessage"
+                :type="salesOrderResultType"
+                show-icon
+                :closable="false"
+                class="sales-order-result-alert"
+              />
+
+              <el-table
+                :data="salesOrderResultRows"
+                border
+                stripe
+                height="360"
+                empty-text="暂无同步明细"
+              >
+                <el-table-column prop="otherId" label="外部ID" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip />
+                <el-table-column prop="u9Code" label="U9销售订单号" min-width="160" show-overflow-tooltip />
+                <el-table-column prop="status" label="同步状态" width="120" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.success ? 'success' : 'danger'" effect="plain">
+                      {{ scope.row.success ? '成功' : (scope.row.status || '失败') }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="errorMessage" label="失败原因" min-width="240" show-overflow-tooltip>
+                  <template #default="scope">
+                    <span>{{ scope.row.errorMessage || '-' }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </section>
+          </section>
+        </el-tab-pane>
+      </el-tabs>
     </section>
+
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="rfqForm.customerName"
@@ -140,11 +258,11 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { importRfq } from '../services/marketApi'
+import { importRfq, importSalesOrder } from '../services/marketApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
 import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
@@ -156,11 +274,36 @@ const drawingFileInput = ref(null)
 const drawingFolderInput = ref(null)
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
+const activeImportMode = ref('rfq')
+const salesOrderFile = ref(null)
+const salesOrderUploadRef = ref(null)
+const salesOrderImportResult = ref(null)
 const IMPORT_RFQ_ACTION_KEY = 'market:rfq:import'
+const IMPORT_SALES_ORDER_ACTION_KEY = 'market:rfq:import-sales-order'
 const { isPending, runAction } = usePendingAction()
 
 const handleExcelChange = (uploadFile) => { excelFile.value = uploadFile.raw }
 const handleExcelRemove = () => { excelFile.value = null }
+
+const salesOrderResultRows = computed(() => salesOrderImportResult.value?.rows || [])
+const salesOrderResultType = computed(() => salesOrderImportResult.value?.success ? 'success' : 'warning')
+const salesOrderResultMessage = computed(() => {
+  const result = salesOrderImportResult.value
+  if (!result) return ''
+  if (result.errorMessage) return result.errorMessage
+  if (result.success) return '销售订单已成功导入并同步 U9。'
+  return '销售订单同步存在失败明细，请查看下方结果表。'
+})
+
+const handleSalesOrderExcelChange = (uploadFile) => {
+  salesOrderFile.value = uploadFile.raw
+  salesOrderImportResult.value = null
+}
+
+const handleSalesOrderExcelRemove = () => {
+  salesOrderFile.value = null
+  salesOrderImportResult.value = null
+}
 
 const selectExistingCustomer = (customer) => {
   rfqForm.customerName = customer
@@ -265,6 +408,31 @@ const buildDrawingReportHtml = (report) => {
   </div>`
 }
 
+const submitSalesOrderImport = async () => {
+  if (!salesOrderFile.value) return ElMessage.warning('请上传销售订单 Excel！')
+
+  return runAction(IMPORT_SALES_ORDER_ACTION_KEY, async () => {
+    const formData = new FormData()
+    formData.append('excelFile', salesOrderFile.value)
+
+    try {
+      const response = await importSalesOrder(formData)
+      salesOrderImportResult.value = response
+
+      if (response?.success) {
+        ElMessage.success(`销售订单已同步 U9，成功 ${response.successOrderCount || 0} 单`)
+        salesOrderFile.value = null
+        salesOrderUploadRef.value?.clearFiles?.()
+      } else {
+        ElMessage.warning(readActionError({ response: { data: response } }, '销售订单同步存在失败明细，请查看下方结果表。'))
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(readActionError(error, '销售订单导入或 U9 同步失败，请稍后重试。'))
+    }
+  })
+}
+
 // 提交询价单和图纸
 const submitRfqPackage = async () => {
   if (!rfqForm.customerName) return ElMessage.warning('请填写客户名称！')
@@ -319,7 +487,25 @@ const submitRfqPackage = async () => {
 </script>
 
 <style scoped>
-.import-workflow {
+.import-mode-shell {
+  padding: 0 var(--erp-space-5) var(--erp-space-5);
+}
+
+.import-mode-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--erp-space-4);
+}
+
+.import-mode-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--erp-border-soft);
+}
+
+.import-mode-tabs :deep(.el-tabs__item) {
+  min-width: 96px;
+  font-weight: 700;
+}
+
+.import-workflow,
+.sales-order-workflow {
   display: grid;
   gap: var(--erp-space-5);
   padding: var(--erp-space-5);
@@ -376,7 +562,6 @@ const submitRfqPackage = async () => {
 .customer-form :deep(.el-form-item) {
   margin-bottom: 0;
 }
-
 
 .customer-input-col {
   max-width: 560px;
@@ -441,6 +626,7 @@ const submitRfqPackage = async () => {
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
+
 .custom-dropzone:hover {
   border-color: var(--erp-primary);
   background: #f3f8fc;
@@ -481,9 +667,28 @@ const submitRfqPackage = async () => {
   background: #f4fbf5;
   color: var(--erp-success);
 }
-.pdf-list { list-style: none; padding: 0; margin: 8px 0 0; max-height: 190px; overflow-y: auto; }
-.pdf-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #dcefe0; color: #256b2b; }
-.pdf-list li:last-child { border-bottom: none; }
+
+.pdf-list {
+  max-height: 190px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pdf-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #dcefe0;
+  color: #256b2b;
+}
+
+.pdf-list li:last-child {
+  border-bottom: none;
+}
 
 .submit-footer {
   justify-content: center;
@@ -491,16 +696,60 @@ const submitRfqPackage = async () => {
   border-style: dashed;
   background: var(--erp-surface);
 }
-.submit-btn { width: auto; min-width: 260px; font-size: 14px; font-weight: 700; }
+
+.submit-btn {
+  width: auto;
+  min-width: 260px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sales-order-result-surface {
+  padding: var(--erp-space-4);
+}
+
+.sales-order-result-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--erp-space-3);
+}
+
+.sales-order-result-header h3 {
+  margin: 0;
+  color: var(--erp-text);
+  font-size: 15px;
+}
+
+.sales-order-result-header p {
+  margin: 4px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.sales-order-result-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.sales-order-result-alert {
+  margin: 12px 0;
+}
 
 @media (max-width: 900px) {
   .customer-input-col {
     max-width: 100%;
   }
 
-  .submit-footer {
+  .submit-footer,
+  .sales-order-result-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .sales-order-result-summary {
+    justify-content: flex-start;
   }
 
   .submit-btn {
