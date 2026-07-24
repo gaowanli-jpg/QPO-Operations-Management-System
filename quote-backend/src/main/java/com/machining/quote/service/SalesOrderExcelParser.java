@@ -75,6 +75,7 @@ public class SalesOrderExcelParser {
                     orderSequenceByCustomerOrderNo.put(key, orderSequence);
                     U9SalesOrderHeadDTO newOrder = new U9SalesOrderHeadDTO();
                     newOrder.setOtherID(safeBatchNo(batchNo) + "-" + orderSequence);
+                    newOrder.setCustomerOrderNo(customerOrderNo);
                     newOrder.setOrderBy(orderBy);
                     newOrder.setDocumentType(documentType);
                     newOrder.setBusinessDate(businessDate);

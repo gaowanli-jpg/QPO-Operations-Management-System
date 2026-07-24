@@ -1,5 +1,6 @@
 package com.machining.quote.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -40,4 +41,7 @@ public class U9SalesOrderHeadDTO {
     private String Memo;
     @JsonProperty("SOLineDTOList")
     private List<U9SalesOrderLineDTO> SOLineDTOList = new ArrayList<>();
+
+    @JsonIgnore
+    private String customerOrderNo;
 }
