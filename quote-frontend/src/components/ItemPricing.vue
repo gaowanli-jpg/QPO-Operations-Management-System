@@ -46,13 +46,33 @@
       </div>
       <div class="erp-toolbar-group pricing-toolbar-actions">
         <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
-        <el-button v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION" type="success" plain :disabled="!canExportPricingSheet" @click="exportPricingSheet">
+        <el-button
+          v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION"
+          type="success"
+          plain
+          :disabled="!canExportPricingSheet || exportPricingSheetLoading"
+          :loading="exportPricingSheetLoading"
+          @click="exportPricingSheet"
+        >
           生成核价单
         </el-button>
-        <el-button v-permission="'engineer:pricing:refresh'" type="warning" plain :disabled="!canRefreshQuotes" :loading="refreshLoading" @click="refreshOrderQuotes">
+        <el-button
+          v-permission="'engineer:pricing:refresh'"
+          type="warning"
+          plain
+          :disabled="!canRefreshQuotes || refreshLoading || completeLoading || repeatApplyLoading"
+          :loading="refreshLoading"
+          @click="refreshOrderQuotes"
+        >
           一键刷新核价
         </el-button>
-        <el-button v-permission="'engineer:pricing:complete-order'" type="primary" :disabled="!canCompleteQuote" :loading="completeLoading" @click="completeOrderQuote">
+        <el-button
+          v-permission="'engineer:pricing:complete-order'"
+          type="primary"
+          :disabled="!canCompleteQuote || completeLoading || refreshLoading || repeatApplyLoading"
+          :loading="completeLoading"
+          @click="completeOrderQuote"
+        >
           完成核价提交
         </el-button>
       </div>
@@ -134,6 +154,8 @@
                   type="primary"
                   size="small"
                   @click="openQuoteDialog(scope.row)"
+                  :loading="isItemQuoteSaving(scope.row)"
+                  :disabled="orderPricingActionPending"
                 >
                   去核价
                 </el-button>
@@ -433,7 +455,13 @@
       <template #footer>
         <div class="erp-dialog-footer pricing-dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:pricing:save-item'" type="success" @click="submitCurrentQuote" :loading="submitLoading">确认提交</el-button>
+          <el-button
+            v-permission="'engineer:pricing:save-item'"
+            type="success"
+            @click="submitCurrentQuote"
+            :loading="submitLoading"
+            :disabled="submitLoading || completeLoading || refreshLoading"
+          >确认提交</el-button>
         </div>
       </template>
     </el-dialog>
@@ -591,7 +619,7 @@ import {
   saveOrderConfig,
   submitQuote
 } from '../services/engineerApi'
-import { getTask, refreshEngineerQuotes } from '../services/taskApi'
+import { refreshEngineerQuotes } from '../services/taskApi'
 import { useAuthStore } from '../stores/authStore'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
@@ -605,6 +633,7 @@ import {
   CLIENT_PAGE_SIZES,
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
 const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'
@@ -616,13 +645,24 @@ const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
 const globalConfig = ref({ materialName: '45#', shape: '板材', processRoute: [] }) // 默认保底配置
+const { isPending, runAction } = usePendingAction()
+const pricingActionKeys = {
+  repeatApply: () => `engineer:pricing:repeat-quote:${rfqId.value || 'none'}`,
+  refreshOrder: () => `engineer:pricing:refresh:${rfqId.value || 'none'}`,
+  completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || 'none'}`,
+  exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || 'none'}`,
+  saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`
+}
 
 const quoteData = ref(null)
 const loading = ref(false)
-const completeLoading = ref(false)
-const refreshLoading = ref(false)
+const completeLoading = computed(() => isPending(pricingActionKeys.completeOrder()))
+const refreshLoading = computed(() => isPending(pricingActionKeys.refreshOrder()))
 const repeatApplyAttempted = ref(false)
-const repeatApplyLoading = ref(false)
+const repeatApplyLoading = computed(() => isPending(pricingActionKeys.repeatApply()))
+const exportPricingSheetLoading = computed(() => isPending(pricingActionKeys.exportSheet()))
+const orderPricingActionPending = computed(() => completeLoading.value || refreshLoading.value || repeatApplyLoading.value)
+const isItemQuoteSaving = (row) => isPending(pricingActionKeys.saveItem(row?.id))
 const pricingTableRef = ref(null)
 const pricingListPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const pricingItemTotal = ref(0)
@@ -817,19 +857,18 @@ const applyRepeatQuotesOnPricingLoad = async () => {
   if (!rfqId.value || repeatApplyAttempted.value) return
   if (!canApplyRepeatQuotes.value) return
   repeatApplyAttempted.value = true
-  repeatApplyLoading.value = true
-  try {
-    const response = await applyRepeatQuotes(rfqId.value)
-    if (response?.appliedCount > 0) {
-      ElMessage.success(`已自动套用 ${response.appliedCount} 个重复零件的历史核价。`)
-      await fetchQuoteData({ keepScroll: true, skipRepeatApply: true })
+  return runAction(pricingActionKeys.repeatApply(), async () => {
+    try {
+      const response = await applyRepeatQuotes(rfqId.value)
+      if (response?.appliedCount > 0) {
+        ElMessage.success(`已自动套用 ${response.appliedCount} 个重复零件的历史核价。`)
+        await fetchQuoteData({ keepScroll: true, skipRepeatApply: true })
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.warning('重复件自动核价失败，可继续手动核价。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.warning('重复件自动核价失败，可继续手动核价。')
-  } finally {
-    repeatApplyLoading.value = false
-  }
+  })
 }
 
 const loadRepeatAnalysis = async () => {
@@ -846,27 +885,29 @@ const exportPricingSheet = async () => {
   if (!rfqId.value) return ElMessage.warning('缺失订单 ID。')
   if (!canExportPricingSheet.value) return ElMessage.warning('只有已核价订单可以生成核价单。')
   const fallbackName = `${quoteData.value?.orderInfo?.rfqNo || `pricing-sheet-${rfqId.value}`}-核价单.xlsx`
-  const result = await downloadPricingSheet(rfqId.value, fallbackName)
-  if (!result.success) {
-    ElMessage.error(result.message || '核价单生成失败。')
-  }
+  return runAction(pricingActionKeys.exportSheet(), async () => {
+    const result = await downloadPricingSheet(rfqId.value, fallbackName)
+    if (!result.success) {
+      ElMessage.error(result.message || '核价单生成失败。')
+    }
+    return result
+  })
 }
 
 const completeOrderQuote = async () => {
   if (!canCompleteQuote.value) {
     return ElMessage.warning('只有未核价订单在所有有图零件完成核价后，才能提交到市场报价处理。')
   }
-  completeLoading.value = true
-  try {
-    const response = await completeOrderQuoteRequest(rfqId.value)
-    ElMessage.success(response.message || '订单核价已完成，已进入市场报价处理。')
-    await fetchQuoteData()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '完成核价提交失败。')
-  } finally {
-    completeLoading.value = false
-  }
+  return runAction(pricingActionKeys.completeOrder(), async () => {
+    try {
+      const response = await completeOrderQuoteRequest(rfqId.value)
+      ElMessage.success(response.message || '订单核价已完成，已进入市场报价处理。')
+      await fetchQuoteData()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '完成核价提交失败。')
+    }
+  })
 }
 
 const refreshOrderQuotes = async () => {
@@ -887,44 +928,20 @@ const refreshOrderQuotes = async () => {
     return
   }
 
-  refreshLoading.value = true
-  try {
-    const submitResponse = await refreshEngineerQuotes(rfqId.value)
-    const taskId = submitResponse?.task?.id
-    if (!taskId) {
-      throw new Error('任务提交失败')
+  return runAction(pricingActionKeys.refreshOrder(), async () => {
+    try {
+      const submitResponse = await refreshEngineerQuotes(rfqId.value)
+      const taskId = submitResponse?.task?.id
+      if (!taskId) {
+        throw new Error('任务提交失败')
+      }
+      ElMessage.info('一键刷新核价任务已提交，系统正在后台处理，可稍后刷新查看结果。')
+      return submitResponse
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '一键刷新核价失败，请检查后端服务。')
     }
-    ElMessage.info('一键刷新核价任务已提交，系统正在后台处理。')
-    const task = await waitSystemTask(taskId)
-    const data = task.resultJson || {}
-    await fetchDicts()
-    await fetchQuoteData({ keepScroll: true })
-    const skippedCount = Number(data.skippedCount || 0)
-    if (skippedCount > 0) {
-      ElMessage.warning(`${data.message || '一键刷新核价完成'} 有 ${skippedCount} 个零件未刷新，请查看控制台或逐件核价。`)
-    } else {
-      ElMessage.success(data.message || '一键刷新核价完成。')
-    }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || error.message || '一键刷新核价失败，请检查后端服务。')
-  } finally {
-    refreshLoading.value = false
-  }
-}
-
-const waitSystemTask = async (taskId) => {
-  for (let i = 0; i < 120; i++) {
-    const task = await getTask(taskId) || {}
-    if (task.status === 'SUCCESS') {
-      return task
-    }
-    if (task.status === 'FAILED') {
-      throw new Error(task.errorMessage || '后台任务执行失败')
-    }
-    await new Promise(resolve => setTimeout(resolve, 1500))
-  }
-  throw new Error('后台任务执行超时，请稍后查看结果。')
+  })
 }
 
 // 图纸预览核心逻辑
@@ -971,7 +988,7 @@ const dialogVisible = ref(false)
 const currentRow = ref(null)
 const currentDrawingSrc = ref('')
 const currentDrawingLoading = ref(false)
-const submitLoading = ref(false)
+const submitLoading = computed(() => isPending(pricingActionKeys.saveItem(currentRow.value?.id)))
 const quoteMode = ref('NORMAL')
 const assemblyFee = ref(null)
 const assemblyChildren = ref([])
@@ -1516,7 +1533,7 @@ const calculatedMaterialCost = computed(() => calculatedWeight.value * currentUn
 
 // 提交逻辑
 const submitCurrentQuote = async () => {
-  submitLoading.value = true
+  if (!currentRow.value?.id) return
   let payload
 
   if (quoteMode.value === 'ASSEMBLY') {
@@ -1528,12 +1545,10 @@ const submitCurrentQuote = async () => {
         sortNo: (index + 1) * PROCESS_SORT_STEP
       }))
     if (validChildren.length === 0) {
-      submitLoading.value = false
       return ElMessage.warning('组合件至少需要选择一个子件。')
     }
     const unquotedChildren = assemblyChildren.value.filter(child => child.childItemId && child.finalUnitPrice == null)
     if (unquotedChildren.length > 0) {
-      submitLoading.value = false
       return ElMessage.warning('组合件存在未核价子件，请先完成子件核价。')
     }
     payload = {
@@ -1580,34 +1595,34 @@ const submitCurrentQuote = async () => {
     }
   }
 
-  try {
-    await submitQuote(payload)
-    let globalSynced = true
-    let globalUpdated = false
-    if (quoteMode.value === 'NORMAL') {
-      try {
-        const syncResult = await syncCurrentRouteToGlobalConfig()
-        globalUpdated = !!syncResult.updated
-      } catch (syncError) {
-        console.error(syncError)
-        globalSynced = false
+  return runAction(pricingActionKeys.saveItem(currentRow.value.id), async () => {
+    try {
+      await submitQuote(payload)
+      let globalSynced = true
+      let globalUpdated = false
+      if (quoteMode.value === 'NORMAL') {
+        try {
+          const syncResult = await syncCurrentRouteToGlobalConfig()
+          globalUpdated = !!syncResult.updated
+        } catch (syncError) {
+          console.error(syncError)
+          globalSynced = false
+        }
       }
+      ElMessage[globalSynced ? 'success' : 'warning'](
+        quoteMode.value === 'ASSEMBLY'
+          ? '组合件核价成功。'
+          : globalSynced
+          ? (globalUpdated ? '核价成功，当前工艺路线已同步为订单全局设定。' : '核价成功，工艺路线未变化。')
+          : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
+      )
+      dialogVisible.value = false
+      await fetchQuoteData({ keepScroll: true }) // 刷新大表格，保留当前滚动位置
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '核价提交失败，请检查后端服务。')
     }
-    ElMessage[globalSynced ? 'success' : 'warning'](
-      quoteMode.value === 'ASSEMBLY'
-        ? '组合件核价成功。'
-        : globalSynced
-        ? (globalUpdated ? '核价成功，当前工艺路线已同步为订单全局设定。' : '核价成功，工艺路线未变化。')
-        : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
-    )
-    dialogVisible.value = false
-    await fetchQuoteData({ keepScroll: true }) // 刷新大表格，保留当前滚动位置
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '核价提交失败，请检查后端服务。')
-  } finally {
-    submitLoading.value = false
-  }
+  })
 }
 </script>
 

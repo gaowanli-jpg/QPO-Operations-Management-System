@@ -183,7 +183,15 @@
                 <strong>保存整单默认设定</strong>
                 <span>保存后进入逐件核价中心，逐个零件仍可覆盖材料、工艺和费用。</span>
               </div>
-              <el-button v-permission="'engineer:setup:save-config'" type="primary" size="large" @click="handleNext" class="submit-btn">
+              <el-button
+                v-permission="'engineer:setup:save-config'"
+                type="primary"
+                size="large"
+                @click="handleNext"
+                class="submit-btn"
+                :loading="setupSavePending"
+                :disabled="!orderInfo.id || setupSavePending || isLoading"
+              >
                 保存设定，进入逐件核价
               </el-button>
             </div>
@@ -258,6 +266,7 @@ import OrderPickerDialog from './OrderPickerDialog.vue'
 import { getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
+import { usePendingAction } from '../composables/usePendingAction'
 import {
   createAuthenticatedObjectUrl,
   openAuthenticatedFileInNewWindow,
@@ -269,6 +278,7 @@ const router = useRouter()
 const route = useRoute()
 const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
+const { isPending, runAction } = usePendingAction()
 
 const testRfqId = ref(null)
 
@@ -292,6 +302,10 @@ const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
 const repeatAnalysis = ref(null)
+const engineeringSetupActionKeys = {
+  saveSetup: () => `engineer:setup:save-config:${orderInfo.value.id || 'none'}`
+}
+const setupSavePending = computed(() => isPending(engineeringSetupActionKeys.saveSetup()))
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.rfqNo
@@ -486,22 +500,24 @@ const handleNext = async () => {
     return ElMessage.warning('请先选择订单并加载数据。')
   }
 
-  try {
-    assignProcessSortNos()
-    const nextConfig = JSON.parse(JSON.stringify(config))
-    await saveOrderConfig(orderInfo.value.id, nextConfig)
-    globalConfigStore.setConfig(orderInfo.value.id, nextConfig)
-  } catch (error) {
-    console.error(error)
-    return ElMessage.error('订单全局默认设定保存失败，请检查后端服务。')
-  }
+  return runAction(engineeringSetupActionKeys.saveSetup(), async () => {
+    try {
+      assignProcessSortNos()
+      const nextConfig = JSON.parse(JSON.stringify(config))
+      await saveOrderConfig(orderInfo.value.id, nextConfig)
+      globalConfigStore.setConfig(orderInfo.value.id, nextConfig)
+    } catch (error) {
+      console.error(error)
+      return ElMessage.error('订单全局默认设定保存失败，请检查后端服务。')
+    }
 
-  ElMessage.success('基础设定已保存，正在为您跳转至逐件核价中心...')
+    ElMessage.success('基础设定已保存，正在为您跳转至逐件核价中心...')
 
-  // 使用路由跳转到 /pricing 页面，并在网址栏里带上单号 ID，如：/pricing?rfqId=2
-  router.push({
-    path: '/pricing',
-    query: { rfqId: orderInfo.value.id }
+    // 使用路由跳转到 /pricing 页面，并在网址栏里带上单号 ID，如：/pricing?rfqId=2
+    router.push({
+      path: '/pricing',
+      query: { rfqId: orderInfo.value.id }
+    })
   })
 }
 
