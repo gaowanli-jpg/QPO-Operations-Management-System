@@ -77,6 +77,8 @@
                     type="danger"
                     plain
                     class="erp-danger-action"
+                    :loading="isHistoryOrderDeletePending(row)"
+                    :disabled="isHistoryOrderDeletePending(row)"
                     @click="deleteHistoryOrder(row)"
                   >
                     彻底删除
@@ -221,8 +223,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { useAuthStore } from '../stores/authStore'
 import { deleteOrder, getOrder, listOrderItems, listOrderProcessSheets, listOrderTickets, listOrders } from '../services/orderApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const authStore = useAuthStore()
+const { isPending, runAction } = usePendingAction()
 const orders = ref([])
 const selectedCustomer = ref('')
 const keyword = ref('')
@@ -248,6 +252,11 @@ const detailTicketTotal = ref(0)
 const detailProcessSheetTotal = ref(0)
 const customerPickerVisible = ref(false)
 const canDeleteHistoryOrders = computed(() => authStore.hasPermission('market:order:delete'))
+const historyOrderActionKeys = {
+  deleteOrder: (orderId) => `order:delete:${orderId || 'none'}`
+}
+
+const isHistoryOrderDeletePending = (row) => isPending(historyOrderActionKeys.deleteOrder(row?.id))
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {
@@ -427,14 +436,17 @@ const handleDetailTabChange = async () => {
 }
 
 const deleteHistoryOrder = async (row) => {
-  await ElMessageBox.confirm(
-    `确认彻底删除历史订单「${row.rfqNo || row.id} / ${row.customerName || '-'}」？订单数据和图纸文件将被删除。`,
-    '彻底删除历史订单',
-    { type: 'error', confirmButtonText: '彻底删除', cancelButtonText: '取消' }
-  )
-
-  loading.value = true
   try {
+    await ElMessageBox.confirm(
+      `确认彻底删除历史订单「${row.rfqNo || row.id} / ${row.customerName || '-'}」？订单数据和图纸文件将被删除。`,
+      '彻底删除历史订单',
+      { type: 'error', confirmButtonText: '彻底删除', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+
+  return runAction(historyOrderActionKeys.deleteOrder(row.id), async () => {
     const response = await deleteOrder(row.id, { deleteFiles: true })
     ElMessage.success(response.message || '历史订单已删除')
     if (orderDetail.value?.orderInfo?.id === row.id) {
@@ -442,12 +454,12 @@ const deleteHistoryOrder = async (row) => {
       detailVisible.value = false
     }
     await loadOrders()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '历史订单删除失败。')
-  } finally {
-    loading.value = false
-  }
+  }).catch((error) => {
+    if (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '历史订单删除失败。')
+    }
+  })
 }
 
 const formatRoute = (route) => {

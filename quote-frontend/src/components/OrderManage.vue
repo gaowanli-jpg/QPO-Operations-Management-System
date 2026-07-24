@@ -98,7 +98,8 @@
                   :type="action.type"
                   plain
                   class="status-action-button"
-                  :loading="statusActionLoadingKey === statusActionKey(scope.row, action)"
+                  :loading="isOrderStatusPending(scope.row)"
+                  :disabled="isOrderStatusPending(scope.row)"
                   @click="handleStatusAction(scope.row, action)"
                 >
                   {{ action.label }}
@@ -320,7 +321,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="supplementVisible = false">关闭</el-button>
-          <el-button v-permission="'market:order:supplement-drawing'" type="primary" :loading="supplementUploading" :disabled="supplementFiles.length === 0" @click="submitSupplementDrawings">
+          <el-button v-permission="'market:order:supplement-drawing'" type="primary" :loading="supplementUploadPending" :disabled="supplementFiles.length === 0 || supplementUploadPending" @click="submitSupplementDrawings">
             上传并匹配
           </el-button>
         </div>
@@ -342,6 +343,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
+import { usePendingAction } from '../composables/usePendingAction'
 import {
   discardOrder,
   getOrderDrawingSummary,
@@ -356,6 +358,8 @@ import {
   supplementDrawings
 } from '../services/orderApi'
 
+const { isPending, runAction } = usePendingAction()
+
 const orders = ref([])
 const selectedCustomer = ref('')
 const keyword = ref('')
@@ -364,7 +368,6 @@ const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
-const statusActionLoadingKey = ref('')
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const orderDetail = ref(null)
@@ -383,7 +386,6 @@ const detailItemTotal = ref(0)
 const detailTicketTotal = ref(0)
 const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
-const supplementUploading = ref(false)
 const supplementFiles = ref([])
 const supplementResult = ref(null)
 const supplementFileInput = ref(null)
@@ -392,6 +394,10 @@ const customerPickerVisible = ref(false)
 
 const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
 const RELEASED_ORDER_STATUSES = ['部分已提单', '已生成提单']
+const orderActionKeys = {
+  statusChange: (orderId) => `order:status-change:${orderId || 'none'}`,
+  supplementDrawings: (orderId) => `order:supplement-drawings:${orderId || 'none'}`
+}
 const ORDER_STATUS_ACTIONS = [
   {
     status: '已报价',
@@ -494,6 +500,9 @@ const ResultList = defineComponent({
 })
 
 const missingDrawingItems = computed(() => detailItemList.value.filter(item => !item.drawingUrl))
+const supplementUploadPending = computed(() => isPending(orderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
+
+const isOrderStatusPending = (row) => isPending(orderActionKeys.statusChange(row?.id))
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {
@@ -747,8 +756,6 @@ const rowStatusActions = (row) => {
   return ORDER_STATUS_ACTIONS.filter(action => action.status === row.status)
 }
 
-const statusActionKey = (row, action) => `${row?.id || 'unknown'}:${action.label}`
-
 const handleStatusAction = async (row, action) => {
   if (!row?.id || !action?.handler) return
   try {
@@ -768,45 +775,39 @@ const handleStatusAction = async (row, action) => {
 }
 
 const performStatusAction = async (row, action) => {
-  const loadingKey = statusActionKey(row, action)
-  statusActionLoadingKey.value = loadingKey
-  try {
+  return runAction(orderActionKeys.statusChange(row.id), async () => {
     const response = await action.handler(row.id, { reason: action.reason })
     ElMessage.success(response.message || action.successMessage)
     await loadOrders()
     await refreshCurrentDetail()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || action.errorMessage)
-  } finally {
-    if (statusActionLoadingKey.value === loadingKey) {
-      statusActionLoadingKey.value = ''
+  }).catch((error) => {
+    if (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || action.errorMessage)
     }
-  }
+  })
 }
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开订单详情。')
   if (supplementFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
 
-  supplementUploading.value = true
-  const formData = new FormData()
-  supplementFiles.value.forEach(file => formData.append('drawings', file))
-
-  try {
-    const rfqId = orderDetail.value.orderInfo.id
+  const rfqId = orderDetail.value.orderInfo.id
+  return runAction(orderActionKeys.supplementDrawings(rfqId), async () => {
+    const formData = new FormData()
+    supplementFiles.value.forEach(file => formData.append('drawings', file))
     const response = await supplementDrawings(rfqId, formData)
     supplementResult.value = response
     ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
     await refreshCurrentDetail()
     await loadOrders()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '补传图纸失败。')
-  } finally {
-    supplementUploading.value = false
-  }
+  }).catch((error) => {
+    if (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '补传图纸失败。')
+    }
+  })
 }
 
 const formatRoute = (route) => {

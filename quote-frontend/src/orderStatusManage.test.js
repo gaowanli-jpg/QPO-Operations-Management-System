@@ -1,13 +1,31 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { usePendingAction } from './composables/usePendingAction'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 const orderManage = readSource('components', 'OrderManage.vue')
+const historyOrderManage = readSource('components', 'HistoryOrderManage.vue')
 const orderApi = readSource('services', 'orderApi.js')
+
+const blockBetween = (source, start, end) => {
+  const startIndex = source.indexOf(start)
+  const endIndex = source.indexOf(end, startIndex)
+  expect(startIndex, `Expected source to include start marker ${start}`).toBeGreaterThanOrEqual(0)
+  expect(endIndex, `Expected source to include end marker ${end}`).toBeGreaterThan(startIndex)
+  return source.slice(startIndex, endIndex)
+}
+
+const deferred = () => {
+  let resolve
+  const promise = new Promise((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
 
 describe('order status management stage 0 guardrails', () => {
   test('freezes the six order management status filters', () => {
@@ -73,5 +91,56 @@ describe('order status management stage 0 guardrails', () => {
     expect(orderManage).toContain('await refreshCurrentDetail()')
     expect(orderManage).toContain('ElMessage.success(response.message')
     expect(orderManage).toContain('error.response?.data?.message || action.errorMessage')
+  })
+
+  test('uses order-scoped pending keys for status changes and supplement drawings', () => {
+    expect(orderManage).toContain("import { usePendingAction } from '../composables/usePendingAction'")
+    expect(orderManage).toContain('const { isPending, runAction } = usePendingAction()')
+    expect(orderManage).toContain("statusChange: (orderId) => `order:status-change:${orderId || 'none'}`")
+    expect(orderManage).toContain("supplementDrawings: (orderId) => `order:supplement-drawings:${orderId || 'none'}`")
+    expect(orderManage).toContain(':loading="isOrderStatusPending(scope.row)"')
+    expect(orderManage).toContain(':disabled="isOrderStatusPending(scope.row)"')
+    expect(orderManage).toContain(':loading="supplementUploadPending"')
+    expect(orderManage).toContain(':disabled="supplementFiles.length === 0 || supplementUploadPending"')
+  })
+
+  test('wraps order status changes and supplement uploads with runAction guards', () => {
+    const statusBlock = blockBetween(orderManage, 'const performStatusAction = async (row, action) =>', 'const submitSupplementDrawings = async () =>')
+    const supplementBlock = blockBetween(orderManage, 'const submitSupplementDrawings = async () =>', 'const formatRoute = (route) =>')
+
+    expect(statusBlock).toContain('return runAction(orderActionKeys.statusChange(row.id), async () =>')
+    expect(statusBlock).toContain('await action.handler(row.id, { reason: action.reason })')
+    expect(supplementBlock).toContain('return runAction(orderActionKeys.supplementDrawings(rfqId), async () =>')
+    expect(supplementBlock).toContain('await supplementDrawings(rfqId, formData)')
+  })
+
+  test('history delete uses an order-scoped pending key instead of full-page delete loading', () => {
+    const deleteBlock = blockBetween(historyOrderManage, 'const deleteHistoryOrder = async (row) =>', 'const formatRoute = (route) =>')
+
+    expect(historyOrderManage).toContain("import { usePendingAction } from '../composables/usePendingAction'")
+    expect(historyOrderManage).toContain('const { isPending, runAction } = usePendingAction()')
+    expect(historyOrderManage).toContain("deleteOrder: (orderId) => `order:delete:${orderId || 'none'}`")
+    expect(historyOrderManage).toContain(':loading="isHistoryOrderDeletePending(row)"')
+    expect(historyOrderManage).toContain(':disabled="isHistoryOrderDeletePending(row)"')
+    expect(deleteBlock).toContain('return runAction(historyOrderActionKeys.deleteOrder(row.id), async () =>')
+    expect(deleteBlock).toContain('await deleteOrder(row.id, { deleteFiles: true })')
+    expect(deleteBlock).not.toContain('loading.value = true')
+  })
+
+  test('status action key suppresses duplicate order status requests while pending', async () => {
+    const { runAction } = usePendingAction()
+    const pendingRequest = deferred()
+    const updateOrderStatus = vi.fn(() => pendingRequest.promise)
+
+    const firstClick = runAction('order:status-change:88', updateOrderStatus)
+    const secondClick = runAction('order:status-change:88', updateOrderStatus)
+
+    await expect(secondClick).resolves.toBeUndefined()
+    expect(updateOrderStatus).toHaveBeenCalledTimes(1)
+
+    pendingRequest.resolve({ message: 'ok' })
+
+    await expect(firstClick).resolves.toEqual({ message: 'ok' })
+    expect(updateOrderStatus).toHaveBeenCalledTimes(1)
   })
 })
