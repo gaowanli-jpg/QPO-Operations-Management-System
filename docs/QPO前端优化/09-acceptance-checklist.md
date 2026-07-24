@@ -15,6 +15,7 @@ Use this checklist after each UI refactor stage.
 ## Usability
 
 - [ ] Loading state appears for async actions.
+- [ ] Write actions and external-sync actions cannot be triggered repeatedly while pending.
 - [ ] Error state is visible and recoverable.
 - [ ] Empty state explains what to do next.
 - [ ] Destructive actions require confirmation.
@@ -44,4 +45,3 @@ Use this checklist after each UI refactor stage.
 - [ ] No new UI library is introduced.
 - [ ] `npm test` passes in `quote-frontend`.
 - [ ] `npm run build` passes in `quote-frontend`.
-

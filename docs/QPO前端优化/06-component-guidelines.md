@@ -87,6 +87,7 @@ Rules:
 - secondary actions use default or plain style;
 - destructive actions use danger and require confirmation;
 - loading state required for async submit;
+- write operations and external-sync actions must disable the triggering button while pending;
 - icon buttons need labels or tooltips.
 
 ## Dialogs
@@ -123,4 +124,3 @@ Examples:
 - "暂无订单，先导入新单。"
 - "字典加载失败，重试。"
 - "图纸预览失败，下载或重新打开。"
-

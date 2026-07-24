@@ -47,6 +47,8 @@ Use a **clean manufacturing QPO workbench** style:
 - `09-acceptance-checklist.md` - quality gate before each visual refactor is accepted.
 - `10-stage-0-baseline-audit.md` through `20-performance-code-splitting.md` - completed stage notes and verification history.
 - `21-stable-maintenance-baseline.md` - final freeze rules for future QPO UI work.
+- `22-action-loading-and-duplicate-guard.md` - loading, disabled state, duplicate-click protection, and async-task feedback rules.
+- `23-project-wide-duplicate-click-upgrade-development-doc.md` - project-wide implementation plan for preventing accidental repeated clicks.
 - `references/` - summarized notes from reference projects and docs.
 
 ## Non-Goals
