@@ -7,7 +7,8 @@
         size="small"
         plain
         class="workflow-soft-button"
-        :disabled="!exportable"
+        :loading="exportLoading"
+        :disabled="!exportable || exportLoading"
         @click="$emit('export')"
       >
         导出提单 Excel
@@ -79,6 +80,10 @@ defineProps({
     default: false
   },
   exportable: {
+    type: Boolean,
+    default: false
+  },
+  exportLoading: {
     type: Boolean,
     default: false
   },

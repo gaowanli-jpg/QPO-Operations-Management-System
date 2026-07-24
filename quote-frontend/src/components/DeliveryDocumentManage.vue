@@ -42,6 +42,7 @@
         :page-size="ticketPagination.pageSize"
         :loading="loadingTickets"
         :exportable="ticketExportable"
+        :export-loading="ticketExportLoading"
         @page-change="handleTicketPageChange"
         @page-size-change="handleTicketPageSizeChange"
         @export="exportDeliveryDocumentExcel('tickets')"
@@ -54,6 +55,7 @@
         :page-size="processSheetPagination.pageSize"
         :loading="loadingProcessSheets"
         :exportable="processSheetExportable"
+        :export-loading="processSheetExportLoading"
         @page-change="handleProcessSheetPageChange"
         @page-size-change="handleProcessSheetPageSizeChange"
         @export="exportDeliveryDocumentExcel('process')"
@@ -85,8 +87,10 @@ import {
   listDeliveryDocumentTickets
 } from '../services/marketApi'
 import { DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const DELIVERY_DOCUMENT_ALLOWED_STATUSES = ['部分已提单', '已生成提单']
+const { isPending, runAction } = usePendingAction()
 
 const orderPickerVisible = ref(false)
 const selectedRfqId = ref(null)
@@ -102,11 +106,16 @@ const processSheetPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE
 const loadingSummary = ref(false)
 const loadingTickets = ref(false)
 const loadingProcessSheets = ref(false)
-const exportingTickets = ref(false)
-const exportingProcessSheets = ref(false)
 
-const ticketExportable = computed(() => Boolean(selectedRfqId.value && ticketTotal.value > 0 && !exportingTickets.value))
-const processSheetExportable = computed(() => Boolean(selectedRfqId.value && processSheetTotal.value > 0 && !exportingProcessSheets.value))
+const deliveryDocumentActionKeys = {
+  exportTickets: () => `delivery:document:export:tickets:${selectedRfqId.value || 'none'}`,
+  exportProcessSheets: () => `delivery:document:export:process-sheets:${selectedRfqId.value || 'none'}`
+}
+
+const ticketExportLoading = computed(() => isPending(deliveryDocumentActionKeys.exportTickets()))
+const processSheetExportLoading = computed(() => isPending(deliveryDocumentActionKeys.exportProcessSheets()))
+const ticketExportable = computed(() => Boolean(selectedRfqId.value && ticketTotal.value > 0))
+const processSheetExportable = computed(() => Boolean(selectedRfqId.value && processSheetTotal.value > 0))
 
 const resetDocumentPagination = () => {
   ticketPagination.page = 1
@@ -211,10 +220,13 @@ const exportDeliveryDocumentExcel = async (type) => {
     tickets: 'tickets',
     process: 'process-sheets'
   }
+  const actionKeyMap = {
+    tickets: deliveryDocumentActionKeys.exportTickets,
+    process: deliveryDocumentActionKeys.exportProcessSheets
+  }
   const path = exportPathMap[type] || 'process-sheets'
-  const exportingFlag = type === 'tickets' ? exportingTickets : exportingProcessSheets
-  exportingFlag.value = true
-  try {
+  const actionKey = actionKeyMap[type] || deliveryDocumentActionKeys.exportProcessSheets
+  return runAction(actionKey(), async () => {
     const result = await downloadDeliveryDocumentExport(
       path,
       selectedRfqId.value,
@@ -223,9 +235,7 @@ const exportDeliveryDocumentExcel = async (type) => {
     if (!result.success) {
       ElMessage.error(result.message || 'Excel 导出失败。')
     }
-  } finally {
-    exportingFlag.value = false
-  }
+  })
 }
 </script>
 

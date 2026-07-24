@@ -114,8 +114,8 @@
                   v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"
                   size="small"
                   :type="mesSyncAction(row).type"
-                  :disabled="mesSyncAction(row).disabled"
-                  :loading="mesSyncLoadingId === row.id"
+                  :disabled="mesSyncAction(row).disabled || isDeliveredRowActionPending(row)"
+                  :loading="isMesSyncPending(row)"
                   plain
                   @click="handleMesSync(row)"
                 >
@@ -126,8 +126,8 @@
                   v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"
                   size="small"
                   :type="wmsAllocationAction(row).type"
-                  :disabled="wmsAllocationAction(row).disabled"
-                  :loading="wmsAllocationLoadingId === row.id"
+                  :disabled="wmsAllocationAction(row).disabled || isDeliveredRowActionPending(row)"
+                  :loading="isWmsAllocationPending(row)"
                   plain
                   @click="handleWmsAllocation(row)"
                 >
@@ -222,14 +222,21 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { getDeliveredItem, listDeliveredItems, submitWmsAllocation, syncMesMaterial } from '../services/deliveredItemApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const router = useRouter()
+const { isPending, runAction } = usePendingAction()
 
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 const DELIVERED_ITEM_FILE_PREVIEW_PERMISSION = 'market:delivered-item:file-preview'
 const DELIVERED_ITEM_MES_SYNC_PERMISSION = 'market:delivered-item:mes-sync'
 const DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION = 'market:delivered-item:wms-allocate'
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
+
+const deliveredActionKeys = {
+  mesSync: (ticketId) => `delivery:mes-sync:${ticketId}`,
+  wmsAllocation: (ticketId) => `delivery:wms-allocation:${ticketId}`
+}
 
 const filters = reactive({
   customerName: '',
@@ -251,8 +258,6 @@ const syncStatusOptions = [
 ]
 const items = ref([])
 const loading = ref(false)
-const mesSyncLoadingId = ref(null)
-const wmsAllocationLoadingId = ref(null)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -324,6 +329,12 @@ const openDrawingPreview = async (row) => {
   }
 }
 
+const isMesSyncPending = (row) => isPending(deliveredActionKeys.mesSync(row?.id))
+
+const isWmsAllocationPending = (row) => isPending(deliveredActionKeys.wmsAllocation(row?.id))
+
+const isDeliveredRowActionPending = (row) => isMesSyncPending(row) || isWmsAllocationPending(row)
+
 const mesSyncAction = (row) => {
   if (row.mesSyncStatus === 'SUCCESS') return null
   if (row.mesSyncStatus === 'PROCESSING') {
@@ -336,27 +347,27 @@ const mesSyncAction = (row) => {
 }
 
 const handleMesSync = async (row) => {
-  try {
-    await ElMessageBox.confirm('确认向 MES 获取该零件的物料号？', '获取MES物料号', {
-      confirmButtonText: '确认提交',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    return
-  }
-  mesSyncLoadingId.value = row.id
-  try {
-    const task = await syncMesMaterial(row.id)
-    const taskId = task?.id || task?.taskId || task?.task?.id
-    ElMessage.success(taskId ? `MES 物料号任务已提交，任务ID：${taskId}` : 'MES 物料号任务已提交')
-    await loadItems()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || error.message || 'MES 物料号任务提交失败。')
-  } finally {
-    mesSyncLoadingId.value = null
-  }
+  return runAction(deliveredActionKeys.mesSync(row.id), async () => {
+    try {
+      await ElMessageBox.confirm('确认向 MES 获取该零件的物料号？', '获取MES物料号', {
+        confirmButtonText: '确认提交',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+    } catch {
+      return
+    }
+
+    try {
+      const task = await syncMesMaterial(row.id)
+      const taskId = task?.id || task?.taskId || task?.task?.id
+      ElMessage.success(taskId ? `MES 物料号任务已提交，任务ID：${taskId}` : 'MES 物料号任务已提交')
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || 'MES 物料号任务提交失败。')
+    }
+  })
 }
 
 
@@ -383,27 +394,27 @@ const handleWmsAllocation = async (row) => {
     }
     return
   }
-  try {
-    await ElMessageBox.confirm('确认向 WMS 提交该零件锁库分配？', '提交WMS锁库', {
-      confirmButtonText: '确认提交',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    return
-  }
-  wmsAllocationLoadingId.value = row.id
-  try {
-    const task = await submitWmsAllocation(row.id)
-    const taskId = task?.id || task?.taskId || task?.task?.id
-    ElMessage.success(taskId ? `WMS 锁库任务已提交，任务ID：${taskId}` : 'WMS 锁库任务已提交')
-    await loadItems()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || error.message || 'WMS 锁库任务提交失败。')
-  } finally {
-    wmsAllocationLoadingId.value = null
-  }
+  return runAction(deliveredActionKeys.wmsAllocation(row.id), async () => {
+    try {
+      await ElMessageBox.confirm('确认向 WMS 提交该零件锁库分配？', '提交WMS锁库', {
+        confirmButtonText: '确认提交',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+    } catch {
+      return
+    }
+
+    try {
+      const task = await submitWmsAllocation(row.id)
+      const taskId = task?.id || task?.taskId || task?.task?.id
+      ElMessage.success(taskId ? `WMS 锁库任务已提交，任务ID：${taskId}` : 'WMS 锁库任务已提交')
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || 'WMS 锁库任务提交失败。')
+    }
+  })
 }
 
 const openLockedItems = (row) => {
