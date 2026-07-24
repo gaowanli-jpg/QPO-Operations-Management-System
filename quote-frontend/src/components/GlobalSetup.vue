@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="erp-page-actions engineering-header-actions">
-        <el-button v-permission="'engineer:setup:order-select'" type="primary" @click="openOrderPicker" :loading="isLoading">
+        <el-button v-permission="'engineer:setup:order-select'" :icon="DocumentChecked" type="primary" @click="openOrderPicker" :loading="isLoading">
           选择订单
         </el-button>
         <el-button @click="fetchOrderData" :disabled="!testRfqId" :loading="isLoading">
@@ -251,6 +251,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'

@@ -5,7 +5,7 @@
             <h2>市场部：议价确认与提单生成</h2>
             <p>选择客户最终通过的零件，生成正式提单和对应工艺表。</p>
           </div>
-          <div class="erp-page-actions release-page-actions"><el-button v-permission="'market:release:order-select'" type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
+          <div class="erp-page-actions release-page-actions"><el-button v-permission="'market:release:order-select'" :icon="DocumentChecked" type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
 
     </header>
 
@@ -465,7 +465,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {

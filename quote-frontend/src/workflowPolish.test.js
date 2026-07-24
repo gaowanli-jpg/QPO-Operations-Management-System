@@ -146,6 +146,17 @@ describe('QPO workflow page polish', () => {
     }
   })
 
+  test('uses a consistent order selection icon across workflow pages', () => {
+    const pages = ['QuoteProcess.vue', 'MarketRelease.vue', 'GlobalSetup.vue', 'DeliveryDocumentManage.vue']
+
+    for (const fileName of pages) {
+      const source = readComponent(fileName)
+
+      expect(source, `${fileName} should use the shared order selection icon`).toContain(':icon="DocumentChecked"')
+      expect(source, `${fileName} should import the shared order selection icon`).toContain('DocumentChecked')
+    }
+  })
+
   test('preserves the existing quote and release workflow handlers', () => {
     const quoteSource = readComponent('QuoteProcess.vue')
     const releaseSource = readComponent('MarketRelease.vue')

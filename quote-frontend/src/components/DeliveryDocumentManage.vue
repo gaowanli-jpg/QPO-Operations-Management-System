@@ -8,6 +8,7 @@
       <div class="erp-page-actions">
         <el-button
           v-permission="'market:delivery-document:order-select'"
+          :icon="DocumentChecked"
           type="primary"
           :loading="loadingSummary"
           @click="openOrderPicker"
@@ -73,6 +74,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { DocumentChecked } from '@element-plus/icons-vue'
 import DeliveryTicketRowsTable from './delivery-document/DeliveryTicketRowsTable.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import ProcessSheetRowsTable from './delivery-document/ProcessSheetRowsTable.vue'
