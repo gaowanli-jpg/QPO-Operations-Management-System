@@ -296,7 +296,7 @@
                 <el-col :span="3">
                   <el-tag :type="proc.calcType === '非工时费用' ? 'warning' : 'info'">{{ proc.calcType || '工时' }}</el-tag>
                 </el-col>
-                <el-col :span="8">
+                <el-col :span="6">
                   <el-input-number
                     v-model="proc.inputVal"
                     :min="0"
@@ -305,10 +305,13 @@
                     class="full-width"
                   />
                 </el-col>
-                <el-col :span="6">
+                <el-col :span="8">
                   <div class="erp-table-actions process-row-actions">
                     <el-tooltip content="在当前行前插入工序" placement="top">
                       <el-button size="small" plain :icon="Plus" @click="insertProcess(index)">插入</el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="index === 0 ? '第一道工艺无法上移' : '与上一道工艺交换顺序'" placement="top">
+                      <el-button size="small" plain :icon="Top" :disabled="index === 0" @click="moveProcessUp(index)">上移</el-button>
                     </el-tooltip>
                     <el-tooltip content="删除当前工序" placement="top">
                       <el-button size="small" type="danger" plain :icon="Delete" @click="removeProcess(index)">删除</el-button>
@@ -573,7 +576,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Plus } from '@element-plus/icons-vue'
+import { Delete, Plus, Top } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import {
@@ -1283,6 +1286,12 @@ const addProcess = () => {
 
 const insertProcess = (index) => {
   processRoute.value.splice(index, 0, createProcessRow())
+  assignProcessSortNos()
+}
+
+const moveProcessUp = (index) => {
+  if (index <= 0 || index >= processRoute.value.length) return
+  ;[processRoute.value[index - 1], processRoute.value[index]] = [processRoute.value[index], processRoute.value[index - 1]]
   assignProcessSortNos()
 }
 

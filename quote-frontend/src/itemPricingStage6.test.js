@@ -75,4 +75,16 @@ describe('QPO Stage 6 item pricing workbench redesign', () => {
     expect(source).toContain('query: { rfqId: rfqId.value }')
     expect(source).not.toContain('$router.back()')
   })
+
+  test('allows moving a process row upward while keeping the first row locked', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('与上一道工艺交换顺序')
+    expect(source).toContain('第一道工艺无法上移')
+    expect(source).toContain(':disabled="index === 0"')
+    expect(source).toContain('@click="moveProcessUp(index)"')
+    expect(source).toContain('const moveProcessUp = (index) =>')
+    expect(source).toContain('[processRoute.value[index - 1], processRoute.value[index]] = [processRoute.value[index], processRoute.value[index - 1]]')
+    expect(source).toContain('assignProcessSortNos()')
+  })
 })
