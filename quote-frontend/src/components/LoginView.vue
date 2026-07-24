@@ -16,7 +16,7 @@
         <el-form-item label="密码" prop="password">
           <el-input v-model="form.password" size="large" type="password" show-password placeholder="请输入密码" />
         </el-form-item>
-        <el-button type="primary" size="large" class="login-button" :loading="loading" @click="handleLogin">
+        <el-button type="primary" size="large" class="login-button" :loading="loading" :disabled="loading" @click="handleLogin">
           登录
         </el-button>
       </el-form>
@@ -53,6 +53,7 @@ const roleHome = {
 }
 
 const handleLogin = async () => {
+  if (loading.value) return
   await formRef.value?.validate()
   loading.value = true
   try {

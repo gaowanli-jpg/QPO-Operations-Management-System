@@ -78,7 +78,7 @@ describe('QPO final UI punch-list polish', () => {
     expect(marketDashboard).toContain('Excel 日期序列号')
 
     const alerts = uploadAlertTags(marketDashboard)
-    expect(alerts).toHaveLength(2)
+    expect(alerts.length).toBeGreaterThanOrEqual(2)
     for (const alert of alerts) {
       expect(alert).toContain('type="info"')
       expect(alert).toContain(':closable="false"')

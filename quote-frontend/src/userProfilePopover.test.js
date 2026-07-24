@@ -59,4 +59,19 @@ describe('personal profile entry target contract', () => {
     expect(userProfilePopover).toContain('ElMessage.success')
     expect(userProfilePopover).toContain('未填写')
   })
+
+  test('UserProfilePopover blocks duplicate contact saves while pending', () => {
+    const saveBlock = userProfilePopover.slice(userProfilePopover.indexOf('const saveProfile = async () =>'))
+
+    expect(userProfilePopover).toContain(':loading="profileSaving"')
+    expect(userProfilePopover).toContain(':disabled="profileSaving"')
+    expect(saveBlock).toContain('if (profileSaving.value) return')
+  })
+
+  test('UserProfilePopover exposes logout pending state to the logout button', () => {
+    expect(userProfilePopover).toContain('defineProps')
+    expect(userProfilePopover).toContain('logoutPending')
+    expect(userProfilePopover).toContain(':loading="logoutPending"')
+    expect(userProfilePopover).toContain(':disabled="logoutPending"')
+  })
 })

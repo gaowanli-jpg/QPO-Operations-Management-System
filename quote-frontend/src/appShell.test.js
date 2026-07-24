@@ -18,6 +18,26 @@ describe('QPO app shell polish', () => {
     expect(loginView).not.toContain('<div class="brand-mark">ERP</div>')
   })
 
+  test('login submit cannot be triggered repeatedly while pending', () => {
+    const loginBlock = loginView.slice(loginView.indexOf('const handleLogin = async () =>'))
+
+    expect(loginView).toContain(':loading="loading"')
+    expect(loginView).toContain(':disabled="loading"')
+    expect(loginBlock).toContain('if (loading.value) return')
+  })
+
+  test('shell password and logout writes cannot be triggered repeatedly while pending', () => {
+    const changePasswordBlock = appVue.slice(appVue.indexOf('const changePassword = async () =>'), appVue.indexOf('const logout = async () =>'))
+    const logoutBlock = appVue.slice(appVue.indexOf('const logout = async () =>'))
+
+    expect(appVue).toContain(':loading="passwordSaving"')
+    expect(appVue).toContain(':disabled="passwordSaving"')
+    expect(changePasswordBlock).toContain('if (passwordSaving.value) return')
+    expect(appVue).toContain(':logout-pending="logoutPending"')
+    expect(appVue).toContain('const logoutPending = ref(false)')
+    expect(logoutBlock).toContain('if (logoutPending.value) return')
+  })
+
   test('uses a compact sidebar width for dense workflow pages', () => {
     expect(appVue).toContain('const sidebarWidth = computed(() => isSidebarCollapsed.value ? \'72px\' : \'200px\')')
     expect(appVue).toContain(':width="sidebarWidth"')

@@ -44,6 +44,7 @@
           </div>
           <div class="header-right">
             <UserProfilePopover
+              :logout-pending="logoutPending"
               @change-password="openPasswordDialog(false)"
               @logout="logout"
             />
@@ -84,7 +85,7 @@
         </el-form>
         <template #footer>
           <el-button v-if="!forcePasswordMode" @click="passwordVisible = false">取消</el-button>
-          <el-button type="primary" :loading="passwordSaving" @click="changePassword">保存</el-button>
+          <el-button type="primary" :loading="passwordSaving" :disabled="passwordSaving" @click="changePassword">保存</el-button>
         </template>
       </el-dialog>
     </div>
@@ -248,6 +249,7 @@ const shellMeta = computed(() => shellMetaByPath[route.path] || {
 const passwordVisible = ref(false)
 const forcePasswordMode = ref(false)
 const passwordSaving = ref(false)
+const logoutPending = ref(false)
 const passwordFormRef = ref()
 const passwordForm = reactive({
   oldPassword: '',
@@ -300,6 +302,7 @@ watch(mustChangePassword, (value) => {
 }, { immediate: true })
 
 const changePassword = async () => {
+  if (passwordSaving.value) return
   await passwordFormRef.value?.validate()
   passwordSaving.value = true
   try {
@@ -320,8 +323,14 @@ const changePassword = async () => {
 }
 
 const logout = async () => {
-  await authStore.logout()
-  router.replace('/login')
+  if (logoutPending.value) return
+  logoutPending.value = true
+  try {
+    await authStore.logout()
+    router.replace('/login')
+  } finally {
+    logoutPending.value = false
+  }
 }
 </script>
 

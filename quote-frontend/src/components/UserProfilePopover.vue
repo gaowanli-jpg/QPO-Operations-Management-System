@@ -57,7 +57,7 @@
       <footer class="profile-actions">
         <el-button text type="primary" @click="openProfileDialog">编辑联系方式</el-button>
         <el-button text type="primary" @click="emit('change-password')">修改密码</el-button>
-        <el-button text type="danger" @click="emit('logout')">退出登录</el-button>
+        <el-button text type="danger" :loading="logoutPending" :disabled="logoutPending" @click="emit('logout')">退出登录</el-button>
       </footer>
     </section>
   </el-popover>
@@ -96,7 +96,7 @@
     </el-form>
     <template #footer>
       <el-button @click="profileDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="profileSaving" @click="saveProfile">保存</el-button>
+      <el-button type="primary" :loading="profileSaving" :disabled="profileSaving" @click="saveProfile">保存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -108,6 +108,12 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/authStore'
 
 const emit = defineEmits(['change-password', 'logout'])
+defineProps({
+  logoutPending: {
+    type: Boolean,
+    default: false
+  }
+})
 const authStore = useAuthStore()
 
 const profile = computed(() => authStore.user || {})
@@ -159,6 +165,7 @@ const openProfileDialog = () => {
 }
 
 const saveProfile = async () => {
+  if (profileSaving.value) return
   await profileFormRef.value?.validate()
   profileSaving.value = true
   try {
