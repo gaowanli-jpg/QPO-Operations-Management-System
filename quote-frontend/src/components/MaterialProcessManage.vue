@@ -47,8 +47,8 @@
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteMaterial(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialDeletePending(scope.row)" @click="openMaterialDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialDeletePending(scope.row)" :disabled="isMaterialDeletePending(scope.row)" @click="deleteMaterial(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -71,8 +71,8 @@
             <el-table-column label="操作" width="150" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" @click="openProcessDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:process-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteProcess(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" :disabled="isProcessDeletePending(scope.row)" @click="openProcessDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:process-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isProcessDeletePending(scope.row)" :disabled="isProcessDeletePending(scope.row)" @click="deleteProcess(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -96,8 +96,8 @@
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteMarkupFee(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isMarkupFeeDeletePending(scope.row)" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMarkupFeeDeletePending(scope.row)" :disabled="isMarkupFeeDeletePending(scope.row)" @click="deleteMarkupFee(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -121,8 +121,8 @@
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openAssemblyMarkupFeeDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteAssemblyMarkupFee(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="openAssemblyMarkupFeeDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isAssemblyMarkupFeeDeletePending(scope.row)" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="deleteAssemblyMarkupFee(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -144,8 +144,8 @@
             <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="scope">
                 <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" @click="deleteExtraFee(scope.row)">删除</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isExtraFeeDeletePending(scope.row)" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
+                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isExtraFeeDeletePending(scope.row)" :disabled="isExtraFeeDeletePending(scope.row)" @click="deleteExtraFee(scope.row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -230,7 +230,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="materialDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:material-manage'" type="primary" :loading="saving" @click="saveMaterial">保存</el-button>
+          <el-button v-permission="'engineer:dict:material-manage'" type="primary" :loading="isPending(dictActionKeys.saveMaterialDialog)" :disabled="isPending(dictActionKeys.saveMaterialDialog)" @click="saveMaterial">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -265,7 +265,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="processDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="saving" @click="saveProcess">保存</el-button>
+          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="isPending(dictActionKeys.saveProcessDialog)" :disabled="isPending(dictActionKeys.saveProcessDialog)" @click="saveProcess">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -288,7 +288,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="markupFeeDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="saving" @click="saveMarkupFee">保存</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="isPending(dictActionKeys.saveMarkupFeeDialog)" :disabled="isPending(dictActionKeys.saveMarkupFeeDialog)" @click="saveMarkupFee">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -311,7 +311,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="assemblyMarkupFeeDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="saving" @click="saveAssemblyMarkupFee">保存</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="isPending(dictActionKeys.saveAssemblyMarkupFeeDialog)" :disabled="isPending(dictActionKeys.saveAssemblyMarkupFeeDialog)" @click="saveAssemblyMarkupFee">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -334,7 +334,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="extraFeeDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="saving" @click="saveExtraFee">保存</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="isPending(dictActionKeys.saveExtraFeeDialog)" :disabled="isPending(dictActionKeys.saveExtraFeeDialog)" @click="saveExtraFee">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -357,6 +357,7 @@ import {
   saveProcess as saveProcessRequest
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const dictionaryStore = useDictionaryStore()
 const activeTab = ref('materials')
@@ -366,7 +367,26 @@ const markupFees = computed(() => dictionaryStore.markupFees)
 const assemblyMarkupFees = computed(() => dictionaryStore.assemblyMarkupFees)
 const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
 const loading = ref(false)
-const saving = ref(false)
+const { isPending, runAction } = usePendingAction()
+
+const dictActionKeys = {
+  saveMaterialDialog: 'engineer:dict:material-save-dialog',
+  saveProcessDialog: 'engineer:dict:process-save-dialog',
+  saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog',
+  saveAssemblyMarkupFeeDialog: 'engineer:dict:assembly-markup-fee-save-dialog',
+  saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
+  deleteMaterial: (materialId) => `engineer:dict:material-delete:${materialId || 'none'}`,
+  deleteProcess: (processId) => `engineer:dict:process-delete:${processId || 'none'}`,
+  deleteMarkupFee: (feeId) => `engineer:dict:markup-fee-delete:${feeId || 'none'}`,
+  deleteAssemblyMarkupFee: (feeId) => `engineer:dict:assembly-markup-fee-delete:${feeId || 'none'}`,
+  deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`
+}
+
+const isMaterialDeletePending = (row) => isPending(dictActionKeys.deleteMaterial(row?.id))
+const isProcessDeletePending = (row) => isPending(dictActionKeys.deleteProcess(row?.id))
+const isMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteMarkupFee(row?.id))
+const isAssemblyMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteAssemblyMarkupFee(row?.id))
+const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
 const materialDialogVisible = ref(false)
 const processDialogVisible = ref(false)
@@ -496,119 +516,124 @@ const openExtraFeeDialog = (row) => {
 
 const saveMaterial = async () => {
   if (!materialForm.materialName) return ElMessage.warning('请填写材料名称。')
-  saving.value = true
-  try {
-    const payload = { ...materialForm, density: materialForm.plateDensity || materialForm.barDensity || materialForm.tubeDensity || 0 }
-    const response = await saveMaterialRequest(payload)
-    ElMessage.success(response.message || '保存成功')
-    materialDialogVisible.value = false
-    await dictionaryStore.reloadAfterMutation()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('材料保存失败。')
-  } finally {
-    saving.value = false
-  }
+  return runAction(dictActionKeys.saveMaterialDialog, async () => {
+    try {
+      const payload = { ...materialForm, density: materialForm.plateDensity || materialForm.barDensity || materialForm.tubeDensity || 0 }
+      const response = await saveMaterialRequest(payload)
+      ElMessage.success(response.message || '保存成功')
+      materialDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('材料保存失败。')
+    }
+  })
 }
 
 const saveProcess = async () => {
   if (!processForm.processName) return ElMessage.warning('请填写工序名称。')
   processForm.calcType = '工时'
-  saving.value = true
-  try {
-    const response = await saveProcessRequest(processForm)
-    ElMessage.success(response.message || '保存成功')
-    processDialogVisible.value = false
-    await dictionaryStore.reloadAfterMutation()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('工艺保存失败。')
-  } finally {
-    saving.value = false
-  }
+  return runAction(dictActionKeys.saveProcessDialog, async () => {
+    try {
+      const response = await saveProcessRequest(processForm)
+      ElMessage.success(response.message || '保存成功')
+      processDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('工艺保存失败。')
+    }
+  })
 }
 
 const saveMarkupFee = async () => {
   if (!markupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
-  saving.value = true
-  try {
-    const response = await saveMarkupFeeRequest(markupFeeForm)
-    ElMessage.success(response.message || '保存成功')
-    markupFeeDialogVisible.value = false
-    await dictionaryStore.reloadAfterMutation()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('费用类保存失败。')
-  } finally {
-    saving.value = false
-  }
+  return runAction(dictActionKeys.saveMarkupFeeDialog, async () => {
+    try {
+      const response = await saveMarkupFeeRequest(markupFeeForm)
+      ElMessage.success(response.message || '保存成功')
+      markupFeeDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('费用类保存失败。')
+    }
+  })
 }
 
 const saveAssemblyMarkupFee = async () => {
   if (!assemblyMarkupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
-  saving.value = true
-  try {
-    const response = await saveAssemblyMarkupFeeRequest(assemblyMarkupFeeForm)
-    ElMessage.success(response.message || '保存成功')
-    assemblyMarkupFeeDialogVisible.value = false
-    await dictionaryStore.reloadAfterMutation()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('组装件费用类保存失败。')
-  } finally {
-    saving.value = false
-  }
+  return runAction(dictActionKeys.saveAssemblyMarkupFeeDialog, async () => {
+    try {
+      const response = await saveAssemblyMarkupFeeRequest(assemblyMarkupFeeForm)
+      ElMessage.success(response.message || '保存成功')
+      assemblyMarkupFeeDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('组装件费用类保存失败。')
+    }
+  })
 }
 
 const saveExtraFee = async () => {
   if (!extraFeeForm.feeName) return ElMessage.warning('请填写工艺名称。')
-  saving.value = true
-  try {
-    const response = await saveExtraFeeItem(extraFeeForm)
-    ElMessage.success(response.message || '保存成功')
-    extraFeeDialogVisible.value = false
-    await dictionaryStore.reloadAfterMutation()
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('非工时费用工艺保存失败。')
-  } finally {
-    saving.value = false
-  }
+  return runAction(dictActionKeys.saveExtraFeeDialog, async () => {
+    try {
+      const response = await saveExtraFeeItem(extraFeeForm)
+      ElMessage.success(response.message || '保存成功')
+      extraFeeDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('非工时费用工艺保存失败。')
+    }
+  })
 }
 
 const deleteMaterial = async (row) => {
-  await ElMessageBox.confirm(`确认删除材料「${row.materialName}」？`, '删除确认', { type: 'warning' })
-  await deleteMaterialRequest(row.id)
-  ElMessage.success('材料已删除')
-  await dictionaryStore.reloadAfterMutation()
+  return runAction(dictActionKeys.deleteMaterial(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除材料「${row.materialName}」？`, '删除确认', { type: 'warning' })
+    await deleteMaterialRequest(row.id)
+    ElMessage.success('材料已删除')
+    await dictionaryStore.reloadAfterMutation()
+  })
 }
 
 const deleteProcess = async (row) => {
-  await ElMessageBox.confirm(`确认删除工艺「${row.processName}」？`, '删除确认', { type: 'warning' })
-  await deleteProcessRequest(row.id)
-  ElMessage.success('工艺已删除')
-  await dictionaryStore.reloadAfterMutation()
+  return runAction(dictActionKeys.deleteProcess(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除工艺「${row.processName}」？`, '删除确认', { type: 'warning' })
+    await deleteProcessRequest(row.id)
+    ElMessage.success('工艺已删除')
+    await dictionaryStore.reloadAfterMutation()
+  })
 }
 
 const deleteMarkupFee = async (row) => {
-  await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
-  await deleteMarkupFeeRequest(row.id)
-  ElMessage.success('费用类已删除')
-  await dictionaryStore.reloadAfterMutation()
+  return runAction(dictActionKeys.deleteMarkupFee(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
+    await deleteMarkupFeeRequest(row.id)
+    ElMessage.success('费用类已删除')
+    await dictionaryStore.reloadAfterMutation()
+  })
 }
 
 const deleteAssemblyMarkupFee = async (row) => {
-  await ElMessageBox.confirm(`确认删除组装件费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
-  await deleteAssemblyMarkupFeeRequest(row.id)
-  ElMessage.success('组装件费用类已删除')
-  await dictionaryStore.reloadAfterMutation()
+  return runAction(dictActionKeys.deleteAssemblyMarkupFee(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除组装件费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
+    await deleteAssemblyMarkupFeeRequest(row.id)
+    ElMessage.success('组装件费用类已删除')
+    await dictionaryStore.reloadAfterMutation()
+  })
 }
 
 const deleteExtraFee = async (row) => {
-  await ElMessageBox.confirm(`确认删除非工时费用工艺「${row.feeName}」？`, '删除确认', { type: 'warning' })
-  await deleteExtraFeeItem(row.id)
-  ElMessage.success('非工时费用工艺已删除')
-  await dictionaryStore.reloadAfterMutation()
+  return runAction(dictActionKeys.deleteExtraFee(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除非工时费用工艺「${row.feeName}」？`, '删除确认', { type: 'warning' })
+    await deleteExtraFeeItem(row.id)
+    ElMessage.success('非工时费用工艺已删除')
+    await dictionaryStore.reloadAfterMutation()
+  })
 }
 
 onMounted(loadAll)

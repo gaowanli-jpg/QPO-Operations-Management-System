@@ -7,7 +7,7 @@
       </div>
       <div class="erp-page-actions">
         <el-button v-permission="'system:audit:retention'" @click="openRetentionSetting">日志保留策略</el-button>
-        <el-button v-permission="'system:audit:export'" :loading="exporting" @click="exportLogs">导出 CSV</el-button>
+        <el-button v-permission="'system:audit:export'" :loading="isPending(auditActionKeys.exportLogs)" :disabled="isPending(auditActionKeys.exportLogs)" @click="exportLogs">导出 CSV</el-button>
         <el-button :loading="loading" @click="loadLogs">刷新</el-button>
       </div>
     </header>
@@ -229,8 +229,8 @@
 
         <div class="retention-footer">
           <el-button @click="retentionVisible = false">取消</el-button>
-          <el-button v-permission="'system:audit:retention'" :loading="cleanupRunning" @click="runRetentionCleanup">立即执行一次</el-button>
-          <el-button v-permission="'system:audit:retention'" type="primary" :loading="retentionSaving" @click="saveRetentionSetting">保存设置</el-button>
+          <el-button v-permission="'system:audit:retention'" :loading="isPending(auditActionKeys.cleanupRetention)" :disabled="isPending(auditActionKeys.cleanupRetention)" @click="runRetentionCleanup">立即执行一次</el-button>
+          <el-button v-permission="'system:audit:retention'" type="primary" :loading="isPending(auditActionKeys.saveRetention)" :disabled="isPending(auditActionKeys.saveRetention)" @click="saveRetentionSetting">保存设置</el-button>
         </div>
       </div>
     </el-drawer>
@@ -250,6 +250,7 @@ import {
   updateAuditLogRetentionSetting
 } from '../services/auditApi'
 import { auditDataRows, formatAuditJson } from '../utils/auditLogFormat'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const MODULE_LABELS = {
   AUTH: '认证',
@@ -269,14 +270,18 @@ const ROLE_LABELS = {
 }
 
 const loading = ref(false)
-const exporting = ref(false)
 const retentionVisible = ref(false)
 const retentionLoading = ref(false)
-const retentionSaving = ref(false)
-const cleanupRunning = ref(false)
 const detailVisible = ref(false)
 const currentLog = ref(null)
 const logs = ref([])
+const { isPending, runAction } = usePendingAction()
+
+const auditActionKeys = {
+  exportLogs: 'system:audit:export',
+  saveRetention: 'system:audit:retention-save',
+  cleanupRetention: 'system:audit:retention-cleanup'
+}
 const pagination = reactive({
   page: 1,
   pageSize: 20,
@@ -361,58 +366,53 @@ const loadRetentionSetting = async () => {
 }
 
 const exportLogs = async () => {
-  exporting.value = true
-  try {
+  return runAction(auditActionKeys.exportLogs, async () => {
     const result = await exportAuditLogs(buildExportParams())
     if (result?.success === false) {
       ElMessage.error(result.message || '操作日志导出失败。')
       return
     }
     ElMessage.success('操作日志 CSV 已开始下载。')
-  } finally {
-    exporting.value = false
-  }
+  })
 }
 
 const saveRetentionSetting = async () => {
-  retentionSaving.value = true
-  try {
-    const response = await updateAuditLogRetentionSetting(buildRetentionPayload())
-    applyRetentionSetting(response?.data || response)
-    ElMessage.success(response?.message || '操作日志保留策略已更新。')
-  } catch (error) {
-    ElMessage.error(error.response?.data?.message || error.message || '操作日志保留策略保存失败。')
-  } finally {
-    retentionSaving.value = false
-  }
+  return runAction(auditActionKeys.saveRetention, async () => {
+    try {
+      const response = await updateAuditLogRetentionSetting(buildRetentionPayload())
+      applyRetentionSetting(response?.data || response)
+      ElMessage.success(response?.message || '操作日志保留策略已更新。')
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || error.message || '操作日志保留策略保存失败。')
+    }
+  })
 }
 
 const runRetentionCleanup = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '系统会按当前策略归档并清理到期操作日志。是否立即执行一次？',
-      '立即执行日志清理',
-      { type: 'warning', confirmButtonText: '执行', cancelButtonText: '取消' }
-    )
-  } catch {
-    return
-  }
-  cleanupRunning.value = true
-  try {
-    const response = await runAuditLogRetentionCleanup()
-    const result = response?.data || response
-    retentionForm.lastRunAt = result?.runAt || ''
-    retentionForm.lastRunDeletedCount = result?.deletedCount || 0
-    retentionForm.lastRunStatus = result?.status || retentionForm.lastRunStatus
-    retentionForm.lastRunMessage = result?.message || response?.message || ''
-    retentionForm.lastArchiveFile = result?.archiveFile || ''
-    ElMessage.success(response?.message || result?.message || '操作日志清理已执行。')
-    await loadLogs()
-  } catch (error) {
-    ElMessage.error(error.response?.data?.message || error.message || '操作日志清理执行失败。')
-  } finally {
-    cleanupRunning.value = false
-  }
+  return runAction(auditActionKeys.cleanupRetention, async () => {
+    try {
+      await ElMessageBox.confirm(
+        '系统会按当前策略归档并清理到期操作日志。是否立即执行一次？',
+        '立即执行日志清理',
+        { type: 'warning', confirmButtonText: '执行', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
+    try {
+      const response = await runAuditLogRetentionCleanup()
+      const result = response?.data || response
+      retentionForm.lastRunAt = result?.runAt || ''
+      retentionForm.lastRunDeletedCount = result?.deletedCount || 0
+      retentionForm.lastRunStatus = result?.status || retentionForm.lastRunStatus
+      retentionForm.lastRunMessage = result?.message || response?.message || ''
+      retentionForm.lastArchiveFile = result?.archiveFile || ''
+      ElMessage.success(response?.message || result?.message || '操作日志清理已执行。')
+      await loadLogs()
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || error.message || '操作日志清理执行失败。')
+    }
+  })
 }
 const searchLogs = () => {
   pagination.page = 1

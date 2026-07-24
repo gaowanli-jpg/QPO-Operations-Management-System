@@ -45,12 +45,14 @@
                 <el-table-column label="操作" width="280" fixed="right">
                   <template #default="{ row }">
                     <div class="erp-table-actions system-org-actions">
-                      <el-button v-permission="'system:dept:manage'" size="small" @click="openDepartmentDialog(row)">编辑</el-button>
-                      <el-button v-permission="'system:dept:manage'" size="small" @click="openDepartmentDialog({ parentId: row.id })">新增下级</el-button>
+                      <el-button v-permission="'system:dept:manage'" size="small" :disabled="isDepartmentRowActionPending(row)" @click="openDepartmentDialog(row)">编辑</el-button>
+                      <el-button v-permission="'system:dept:manage'" size="small" :disabled="isDepartmentRowActionPending(row)" @click="openDepartmentDialog({ parentId: row.id })">新增下级</el-button>
                       <el-button
                         v-permission="'system:dept:manage'"
                         size="small"
                         :type="row.enabled ? 'warning' : 'success'"
+                        :loading="isDepartmentStatusPending(row)"
+                        :disabled="isDepartmentRowActionPending(row)"
                         @click="toggleDepartmentStatus(row)"
                       >
                         {{ row.enabled ? '禁用' : '启用' }}
@@ -61,6 +63,8 @@
                         type="danger"
                         plain
                         class="erp-danger-action"
+                        :loading="isDepartmentDeletePending(row)"
+                        :disabled="isDepartmentRowActionPending(row)"
                         @click="deleteDepartment(row)"
                       >
                         删除
@@ -99,11 +103,13 @@
                 <el-table-column label="操作" width="220" fixed="right">
                   <template #default="{ row }">
                     <div class="erp-table-actions system-org-actions">
-                      <el-button v-permission="'system:post:manage'" size="small" @click="openPostDialog(row)">编辑</el-button>
+                      <el-button v-permission="'system:post:manage'" size="small" :disabled="isPostRowActionPending(row)" @click="openPostDialog(row)">编辑</el-button>
                       <el-button
                         v-permission="'system:post:manage'"
                         size="small"
                         :type="row.enabled ? 'warning' : 'success'"
+                        :loading="isPostStatusPending(row)"
+                        :disabled="isPostRowActionPending(row)"
                         @click="togglePostStatus(row)"
                       >
                         {{ row.enabled ? '禁用' : '启用' }}
@@ -114,6 +120,8 @@
                         type="danger"
                         plain
                         class="erp-danger-action"
+                        :loading="isPostDeletePending(row)"
+                        :disabled="isPostRowActionPending(row)"
                         @click="deletePost(row)"
                       >
                         删除
@@ -160,7 +168,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="departmentDialogVisible = false">取消</el-button>
-          <el-button v-permission="'system:dept:manage'" type="primary" :loading="saving" @click="submitDepartment">保存</el-button>
+          <el-button v-permission="'system:dept:manage'" type="primary" :loading="isPending(orgActionKeys.saveDepartmentDialog)" :disabled="isPending(orgActionKeys.saveDepartmentDialog)" @click="submitDepartment">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -183,7 +191,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="postDialogVisible = false">取消</el-button>
-          <el-button v-permission="'system:post:manage'" type="primary" :loading="saving" @click="submitPost">保存</el-button>
+          <el-button v-permission="'system:post:manage'" type="primary" :loading="isPending(orgActionKeys.savePostDialog)" :disabled="isPending(orgActionKeys.savePostDialog)" @click="submitPost">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -203,15 +211,32 @@ import {
   updateDepartmentStatus,
   updatePostStatus
 } from '../services/adminApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const activeTab = ref('departments')
 const departmentTree = ref([])
 const postRows = ref([])
 const departmentLoading = ref(false)
 const postLoading = ref(false)
-const saving = ref(false)
 const departmentDialogVisible = ref(false)
 const postDialogVisible = ref(false)
+const { isPending, runAction } = usePendingAction()
+
+const orgActionKeys = {
+  saveDepartmentDialog: 'system:org:department-save-dialog',
+  savePostDialog: 'system:org:post-save-dialog',
+  departmentStatus: (deptId) => `system:org:department-status:${deptId || 'none'}`,
+  departmentDelete: (deptId) => `system:org:department-delete:${deptId || 'none'}`,
+  postStatus: (postId) => `system:org:post-status:${postId || 'none'}`,
+  postDelete: (postId) => `system:org:post-delete:${postId || 'none'}`
+}
+
+const isDepartmentStatusPending = (row) => isPending(orgActionKeys.departmentStatus(row?.id))
+const isDepartmentDeletePending = (row) => isPending(orgActionKeys.departmentDelete(row?.id))
+const isDepartmentRowActionPending = (row) => isDepartmentStatusPending(row) || isDepartmentDeletePending(row)
+const isPostStatusPending = (row) => isPending(orgActionKeys.postStatus(row?.id))
+const isPostDeletePending = (row) => isPending(orgActionKeys.postDelete(row?.id))
+const isPostRowActionPending = (row) => isPostStatusPending(row) || isPostDeletePending(row)
 
 const departmentForm = reactive({
   id: null,
@@ -325,8 +350,7 @@ const submitDepartment = async () => {
     ElMessage.warning('请填写部门编码和部门名称')
     return
   }
-  saving.value = true
-  try {
+  return runAction(orgActionKeys.saveDepartmentDialog, async () => {
     const response = await saveDepartment({
       ...departmentForm,
       parentId: departmentForm.parentId || 0,
@@ -336,40 +360,42 @@ const submitDepartment = async () => {
     ElMessage.success(response?.message || '部门已保存')
     departmentDialogVisible.value = false
     await loadDepartments()
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 const toggleDepartmentStatus = async (row) => {
   const nextEnabled = !row.enabled
-  await ElMessageBox.confirm(
-    `确认${nextEnabled ? '启用' : '禁用'}部门 ${row.deptName || row.deptCode}？`,
-    '确认操作',
-    {
-      type: 'warning',
-      confirmButtonText: nextEnabled ? '启用' : '禁用',
-      cancelButtonText: '取消'
-    }
-  )
-  await updateDepartmentStatus(row.id, nextEnabled)
-  ElMessage.success('部门状态已更新')
-  await loadDepartments()
+  return runAction(orgActionKeys.departmentStatus(row.id), async () => {
+    await ElMessageBox.confirm(
+      `确认${nextEnabled ? '启用' : '禁用'}部门 ${row.deptName || row.deptCode}？`,
+      '确认操作',
+      {
+        type: 'warning',
+        confirmButtonText: nextEnabled ? '启用' : '禁用',
+        cancelButtonText: '取消'
+      }
+    )
+    await updateDepartmentStatus(row.id, nextEnabled)
+    ElMessage.success('部门状态已更新')
+    await loadDepartments()
+  })
 }
 
 const deleteDepartment = async (row) => {
-  await ElMessageBox.confirm(
-    `确认删除部门 ${row.deptName || row.deptCode}？删除后无法作为新用户归属使用。`,
-    '删除部门确认',
-    {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    }
-  )
-  await deleteDepartmentRequest(row.id)
-  ElMessage.success('部门已删除')
-  await loadDepartments()
+  return runAction(orgActionKeys.departmentDelete(row.id), async () => {
+    await ElMessageBox.confirm(
+      `确认删除部门 ${row.deptName || row.deptCode}？删除后无法作为新用户归属使用。`,
+      '删除部门确认',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消'
+      }
+    )
+    await deleteDepartmentRequest(row.id)
+    ElMessage.success('部门已删除')
+    await loadDepartments()
+  })
 }
 
 const resetPostForm = () => {
@@ -397,8 +423,7 @@ const submitPost = async () => {
     ElMessage.warning('请填写岗位编码和岗位名称')
     return
   }
-  saving.value = true
-  try {
+  return runAction(orgActionKeys.savePostDialog, async () => {
     const response = await savePost({
       ...postForm,
       sortOrder: postForm.sortOrder || 0
@@ -406,40 +431,42 @@ const submitPost = async () => {
     ElMessage.success(response?.message || '岗位已保存')
     postDialogVisible.value = false
     await loadPosts()
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 const togglePostStatus = async (row) => {
   const nextEnabled = !row.enabled
-  await ElMessageBox.confirm(
-    `确认${nextEnabled ? '启用' : '禁用'}岗位 ${row.postName || row.postCode}？`,
-    '确认操作',
-    {
-      type: 'warning',
-      confirmButtonText: nextEnabled ? '启用' : '禁用',
-      cancelButtonText: '取消'
-    }
-  )
-  await updatePostStatus(row.id, nextEnabled)
-  ElMessage.success('岗位状态已更新')
-  await loadPosts()
+  return runAction(orgActionKeys.postStatus(row.id), async () => {
+    await ElMessageBox.confirm(
+      `确认${nextEnabled ? '启用' : '禁用'}岗位 ${row.postName || row.postCode}？`,
+      '确认操作',
+      {
+        type: 'warning',
+        confirmButtonText: nextEnabled ? '启用' : '禁用',
+        cancelButtonText: '取消'
+      }
+    )
+    await updatePostStatus(row.id, nextEnabled)
+    ElMessage.success('岗位状态已更新')
+    await loadPosts()
+  })
 }
 
 const deletePost = async (row) => {
-  await ElMessageBox.confirm(
-    `确认删除岗位 ${row.postName || row.postCode}？删除后无法作为新用户岗位使用。`,
-    '删除岗位确认',
-    {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    }
-  )
-  await deletePostRequest(row.id)
-  ElMessage.success('岗位已删除')
-  await loadPosts()
+  return runAction(orgActionKeys.postDelete(row.id), async () => {
+    await ElMessageBox.confirm(
+      `确认删除岗位 ${row.postName || row.postCode}？删除后无法作为新用户岗位使用。`,
+      '删除岗位确认',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消'
+      }
+    )
+    await deletePostRequest(row.id)
+    ElMessage.success('岗位已删除')
+    await loadPosts()
+  })
 }
 
 onMounted(async () => {

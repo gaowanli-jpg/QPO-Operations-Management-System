@@ -34,13 +34,29 @@
           <el-table-column label="操作" width="340" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions">
-                <el-button v-permission="'system:role:update'" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-permission="'system:role:assign-permission'" size="small" @click="openPermissionDrawer(row)">授权</el-button>
-                <el-button v-permission="'system:role:assign-data-scope'" size="small" @click="openDataScopeDrawer(row)">数据范围</el-button>
-                <el-button v-permission="'system:role:update'" size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleRole(row)">
+                <el-button v-permission="'system:role:update'" size="small" :disabled="isRoleRowActionPending(row)" @click="openEdit(row)">编辑</el-button>
+                <el-button v-permission="'system:role:assign-permission'" size="small" :disabled="isRoleRowActionPending(row)" @click="openPermissionDrawer(row)">授权</el-button>
+                <el-button v-permission="'system:role:assign-data-scope'" size="small" :disabled="isRoleRowActionPending(row)" @click="openDataScopeDrawer(row)">数据范围</el-button>
+                <el-button
+                  v-permission="'system:role:update'"
+                  size="small"
+                  :type="row.enabled ? 'warning' : 'success'"
+                  :loading="isRoleStatusPending(row)"
+                  :disabled="isRoleRowActionPending(row)"
+                  @click="toggleRole(row)"
+                >
                   {{ row.enabled ? '禁用' : '启用' }}
                 </el-button>
-                <el-button v-permission="'system:role:delete'" size="small" type="danger" plain class="erp-danger-action" :disabled="row.superAdmin" @click="removeRole(row)">
+                <el-button
+                  v-permission="'system:role:delete'"
+                  size="small"
+                  type="danger"
+                  plain
+                  class="erp-danger-action"
+                  :loading="isRoleDeletePending(row)"
+                  :disabled="row.superAdmin || isRoleRowActionPending(row)"
+                  @click="removeRole(row)"
+                >
                   删除
                 </el-button>
               </div>
@@ -75,7 +91,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button v-permission="['system:role:create', 'system:role:update']" type="primary" :loading="saving" @click="saveRoleForm">保存</el-button>
+          <el-button v-permission="['system:role:create', 'system:role:update']" type="primary" :loading="isPending(roleActionKeys.saveDialog)" :disabled="isPending(roleActionKeys.saveDialog)" @click="saveRoleForm">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -121,7 +137,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="permissionDrawerVisible = false">取消</el-button>
-          <el-button v-permission="'system:role:assign-permission'" type="primary" :loading="saving" @click="savePermissions">保存授权</el-button>
+          <el-button v-permission="'system:role:assign-permission'" type="primary" :loading="permissionDrawerSavePending" :disabled="permissionDrawerSavePending" @click="savePermissions">保存授权</el-button>
         </div>
       </template>
     </el-drawer>
@@ -167,7 +183,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="dataScopeDrawerVisible = false">取消</el-button>
-          <el-button v-permission="'system:role:assign-data-scope'" type="primary" :loading="saving" @click="saveDataScope">保存数据范围</el-button>
+          <el-button v-permission="'system:role:assign-data-scope'" type="primary" :loading="dataScopeDrawerSavePending" :disabled="dataScopeDrawerSavePending" @click="saveDataScope">保存数据范围</el-button>
         </div>
       </template>
     </el-drawer>
@@ -188,11 +204,11 @@ import {
   listRoles,
   saveRole
 } from '../services/adminApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const roles = ref([])
 const permissionTree = ref([])
 const loading = ref(false)
-const saving = ref(false)
 const dialogVisible = ref(false)
 const permissionDrawerVisible = ref(false)
 const dataScopeDrawerVisible = ref(false)
@@ -203,6 +219,21 @@ const showSelectedOnly = ref(false)
 const customerOptions = ref([])
 const permissionTreeRef = ref(null)
 const permissionTreeProps = { label: 'label', children: 'children', disabled: 'disabled' }
+const { isPending, runAction } = usePendingAction()
+
+const roleActionKeys = {
+  saveDialog: 'system:role:save-dialog',
+  permissionsDrawer: (roleId) => `system:role:permissions-drawer:${roleId || 'none'}`,
+  dataScopeDrawer: (roleId) => `system:role:data-scope-drawer:${roleId || 'none'}`,
+  status: (roleId) => `system:role:status:${roleId || 'none'}`,
+  delete: (roleId) => `system:role:delete:${roleId || 'none'}`
+}
+
+const permissionDrawerSavePending = computed(() => isPending(roleActionKeys.permissionsDrawer(currentRole.value?.id)))
+const dataScopeDrawerSavePending = computed(() => isPending(roleActionKeys.dataScopeDrawer(currentRole.value?.id)))
+const isRoleStatusPending = (row) => isPending(roleActionKeys.status(row?.id))
+const isRoleDeletePending = (row) => isPending(roleActionKeys.delete(row?.id))
+const isRoleRowActionPending = (row) => isRoleStatusPending(row) || isRoleDeletePending(row)
 
 const form = reactive({
   id: null,
@@ -277,29 +308,30 @@ const saveRoleForm = async () => {
     ElMessage.warning('请填写角色编码和角色名称')
     return
   }
-  saving.value = true
-  try {
+  return runAction(roleActionKeys.saveDialog, async () => {
     await saveRole({ ...form })
     ElMessage.success('角色已保存')
     dialogVisible.value = false
     await loadAll()
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 const toggleRole = async (row) => {
-  await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}角色 ${row.roleName || row.roleCode}？`, '确认操作')
-  await saveRole({ ...row, enabled: !row.enabled })
-  ElMessage.success('角色状态已更新')
-  await loadAll()
+  return runAction(roleActionKeys.status(row.id), async () => {
+    await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}角色 ${row.roleName || row.roleCode}？`, '确认操作')
+    await saveRole({ ...row, enabled: !row.enabled })
+    ElMessage.success('角色状态已更新')
+    await loadAll()
+  })
 }
 
 const removeRole = async (row) => {
-  await ElMessageBox.confirm(`确认删除角色 ${row.roleName || row.roleCode}？`, '删除角色确认', { type: 'warning' })
-  await deleteRole(row.id)
-  ElMessage.success('角色已删除')
-  await loadAll()
+  return runAction(roleActionKeys.delete(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除角色 ${row.roleName || row.roleCode}？`, '删除角色确认', { type: 'warning' })
+    await deleteRole(row.id)
+    ElMessage.success('角色已删除')
+    await loadAll()
+  })
 }
 
 const openPermissionDrawer = async (row) => {
@@ -312,17 +344,14 @@ const openPermissionDrawer = async (row) => {
 }
 
 const savePermissions = async () => {
-  saving.value = true
-  try {
+  return runAction(roleActionKeys.permissionsDrawer(currentRole.value?.id), async () => {
     const checkedKeys = permissionTreeRef.value?.getCheckedKeys(false) || []
     const halfCheckedKeys = permissionTreeRef.value?.getHalfCheckedKeys() || []
     permissionCodes.value = collectPermissionCodes([...checkedKeys, ...halfCheckedKeys])
     await assignRolePermissions(currentRole.value.id, permissionCodes.value)
     ElMessage.success('角色权限已更新')
     permissionDrawerVisible.value = false
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 const collectPermissionCodes = (keys = []) => {
@@ -447,16 +476,13 @@ const buildDataScopePayload = (formState) => {
 }
 
 const saveDataScope = async () => {
-  saving.value = true
-  try {
+  return runAction(roleActionKeys.dataScopeDrawer(currentRole.value?.id), async () => {
     const payload = buildDataScopePayload(dataScopeForm)
     await assignRoleDataScope(currentRole.value.id, payload)
     ElMessage.success('数据范围已更新')
     dataScopeDrawerVisible.value = false
     await loadAll()
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 watch([permissionTreeSearch, showSelectedOnly, permissionCodes], () => {

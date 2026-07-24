@@ -59,12 +59,28 @@
           <el-table-column label="操作" width="330" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions user-row-actions">
-                <el-button v-permission="'system:user:update'" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-permission="'system:user:reset-password'" size="small" @click="openPassword(row)">重置密码</el-button>
-                <el-button v-permission="'system:user:disable'" size="small" :type="row.enabled ? 'warning' : 'success'" @click="toggleEnabled(row)">
+                <el-button v-permission="'system:user:update'" size="small" :disabled="isUserRowActionPending(row)" @click="openEdit(row)">编辑</el-button>
+                <el-button v-permission="'system:user:reset-password'" size="small" :disabled="isUserRowActionPending(row)" @click="openPassword(row)">重置密码</el-button>
+                <el-button
+                  v-permission="'system:user:disable'"
+                  size="small"
+                  :type="row.enabled ? 'warning' : 'success'"
+                  :loading="isUserStatusPending(row)"
+                  :disabled="isUserRowActionPending(row)"
+                  @click="toggleEnabled(row)"
+                >
                   {{ row.enabled ? '禁用' : '启用' }}
                 </el-button>
-                <el-button v-permission="'system:user:delete'" size="small" type="danger" plain class="erp-danger-action" :disabled="isProtectedUser(row)" @click="deleteUser(row)">
+                <el-button
+                  v-permission="'system:user:delete'"
+                  size="small"
+                  type="danger"
+                  plain
+                  class="erp-danger-action"
+                  :loading="isUserDeletePending(row)"
+                  :disabled="isProtectedUser(row) || isUserRowActionPending(row)"
+                  @click="deleteUser(row)"
+                >
                   删除
                 </el-button>
               </div>
@@ -132,7 +148,7 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button v-permission="['system:user:create', 'system:user:update']" type="primary" :loading="saving" @click="saveUser">保存</el-button>
+          <el-button v-permission="['system:user:create', 'system:user:update']" type="primary" :loading="isPending(userActionKeys.saveDialog)" :disabled="isPending(userActionKeys.saveDialog)" @click="saveUser">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -149,14 +165,14 @@
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="passwordVisible = false">取消</el-button>
-          <el-button v-permission="'system:user:reset-password'" type="primary" :loading="saving" @click="resetPassword">确定</el-button>
+          <el-button v-permission="'system:user:reset-password'" type="primary" :loading="resetPasswordPending" :disabled="resetPasswordPending" @click="resetPassword">确定</el-button>
         </div>
       </template>
     </el-dialog>
   </div>
 </template>
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   changeUserPassword,
@@ -168,18 +184,31 @@ import {
   saveUser as saveUserRequest,
   updateUserStatus
 } from '../services/adminApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const users = ref([])
 const roleOptions = ref([])
 const departmentOptions = ref([])
 const postOptions = ref([])
 const loading = ref(false)
-const saving = ref(false)
 const dialogVisible = ref(false)
 const passwordVisible = ref(false)
 const editingId = ref(null)
 const passwordTarget = ref(null)
 const newPassword = ref('')
+const { isPending, runAction } = usePendingAction()
+
+const userActionKeys = {
+  saveDialog: 'system:user:save-dialog',
+  resetPasswordDialog: (userId) => `system:user:reset-password:${userId || 'none'}`,
+  status: (userId) => `system:user:status:${userId || 'none'}`,
+  delete: (userId) => `system:user:delete:${userId || 'none'}`
+}
+
+const resetPasswordPending = computed(() => isPending(userActionKeys.resetPasswordDialog(passwordTarget.value?.id)))
+const isUserStatusPending = (row) => isPending(userActionKeys.status(row?.id))
+const isUserDeletePending = (row) => isPending(userActionKeys.delete(row?.id))
+const isUserRowActionPending = (row) => isUserStatusPending(row) || isUserDeletePending(row)
 
 const form = reactive({
   username: '',
@@ -310,8 +339,7 @@ const saveUser = async () => {
     ElMessage.warning('手机号格式不正确')
     return
   }
-  saving.value = true
-  try {
+  return runAction(userActionKeys.saveDialog, async () => {
     const payload = {
       username: form.username,
       displayName: form.displayName,
@@ -328,9 +356,7 @@ const saveUser = async () => {
     ElMessage.success(response.message || '保存成功')
     dialogVisible.value = false
     await loadUsers()
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 const openPassword = (row) => {
@@ -344,24 +370,23 @@ const resetPassword = async () => {
     ElMessage.warning('新密码至少 8 位')
     return
   }
-  saving.value = true
-  try {
+  return runAction(userActionKeys.resetPasswordDialog(passwordTarget.value?.id), async () => {
     await changeUserPassword(passwordTarget.value.id, {
       password: newPassword.value
     })
     ElMessage.success('密码已重置，用户下次登录必须修改密码')
     passwordVisible.value = false
     await loadUsers()
-  } finally {
-    saving.value = false
-  }
+  })
 }
 
 const toggleEnabled = async (row) => {
-  await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}账号 ${row.username}？`, '确认操作')
-  await updateUserStatus(row.id, !row.enabled)
-  ElMessage.success('状态已更新')
-  await loadUsers()
+  return runAction(userActionKeys.status(row.id), async () => {
+    await ElMessageBox.confirm(`确认${row.enabled ? '禁用' : '启用'}账号 ${row.username}？`, '确认操作')
+    await updateUserStatus(row.id, !row.enabled)
+    ElMessage.success('状态已更新')
+    await loadUsers()
+  })
 }
 
 const deleteUser = async (row) => {
@@ -369,18 +394,20 @@ const deleteUser = async (row) => {
     ElMessage.warning('初始账号不可删除')
     return
   }
-  await ElMessageBox.confirm(
-    `确认彻底删除账号 ${row.username}？删除后无法恢复。`,
-    '删除用户确认',
-    {
-      type: 'warning',
-      confirmButtonText: '彻底删除',
-      cancelButtonText: '取消'
-    }
-  )
-  await deleteUserRequest(row.id)
-  ElMessage.success('用户已删除')
-  await loadUsers()
+  return runAction(userActionKeys.delete(row.id), async () => {
+    await ElMessageBox.confirm(
+      `确认彻底删除账号 ${row.username}？删除后无法恢复。`,
+      '删除用户确认',
+      {
+        type: 'warning',
+        confirmButtonText: '彻底删除',
+        cancelButtonText: '取消'
+      }
+    )
+    await deleteUserRequest(row.id)
+    ElMessage.success('用户已删除')
+    await loadUsers()
+  })
 }
 
 const isLocked = (row) => row.lockedUntil && new Date(row.lockedUntil).getTime() > Date.now()

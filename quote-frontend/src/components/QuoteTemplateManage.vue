@@ -71,7 +71,7 @@
                 </el-upload>
               </div>
               <div class="erp-dialog-footer template-actions">
-                <el-button v-permission="'market:template:upload'" type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadTemplate">
+                <el-button v-permission="'market:template:upload'" type="primary" :disabled="!selectedFile || isPending(quoteTemplateActionKeys.upload)" :loading="isPending(quoteTemplateActionKeys.upload)" @click="uploadTemplate">
                   上传并替换模板
                 </el-button>
               </div>
@@ -87,11 +87,16 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, UploadFilled } from '@element-plus/icons-vue'
 import { getQuoteTemplate, saveQuoteTemplate } from '../services/adminApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const loading = ref(false)
-const uploading = ref(false)
 const uploadRef = ref()
 const selectedFile = ref(null)
+const { isPending, runAction } = usePendingAction()
+
+const quoteTemplateActionKeys = {
+  upload: 'market:template:upload'
+}
 const templateStatus = reactive({
   exists: false,
   fileName: '',
@@ -146,18 +151,17 @@ const uploadTemplate = async () => {
   }
   const formData = new FormData()
   formData.append('templateFile', selectedFile.value)
-  uploading.value = true
-  try {
-    const response = await saveQuoteTemplate(formData)
-    ElMessage.success(response.message || '报价单模板已更新。')
-    selectedFile.value = null
-    uploadRef.value?.clearFiles()
-    await loadStatus()
-  } catch (error) {
-    ElMessage.error(error.response?.data?.message || '报价单模板上传失败。')
-  } finally {
-    uploading.value = false
-  }
+  return runAction(quoteTemplateActionKeys.upload, async () => {
+    try {
+      const response = await saveQuoteTemplate(formData)
+      ElMessage.success(response.message || '报价单模板已更新。')
+      selectedFile.value = null
+      uploadRef.value?.clearFiles()
+      await loadStatus()
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || '报价单模板上传失败。')
+    }
+  })
 }
 
 const formatDateTime = (value) => {
