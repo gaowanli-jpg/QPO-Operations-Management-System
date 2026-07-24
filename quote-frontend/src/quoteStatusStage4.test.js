@@ -22,10 +22,10 @@ describe('quote status stage 4 quote process frontend flow', () => {
     expect(source).toContain('const canEditQuoteLeadTime = computed(() => orderInfo.value.status === \'已核价\')')
     expect(source).toContain('const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)')
     expect(source).toContain('const canExportQuoteSheet = computed(() => orderInfo.value.status === \'已报价\')')
-    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0"')
-    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate"')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"')
     expect(source).toContain(':disabled="!canEditQuoteLeadTime"')
-    expect(source).toContain(':disabled="!canExportQuoteSheet"')
+    expect(source).toContain(':disabled="!canExportQuoteSheet || isQuoteExporting(\'exportDetail\')"')
   })
 
   test('calls save quote API and refreshes status after market confirmation', () => {

@@ -42,7 +42,7 @@
                   :icon="Plus"
                   plain
                   class="workflow-soft-button"
-                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"
                   :loading="adjusting"
                   @click="applyShift(1)"
                 >
@@ -52,7 +52,7 @@
                   :icon="Minus"
                   plain
                   class="workflow-soft-button"
-                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"
                   :loading="adjusting"
                   @click="applyShift(-1)"
                 >
@@ -73,7 +73,7 @@
                 <el-button v-permission="'market:quote-process:update-lead-time'"
                   plain
                   class="workflow-soft-button quote-manual-date-button"
-                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"
                   :loading="settingQuoteDate"
                   @click="setQuoteLeadTime"
                 >
@@ -95,7 +95,7 @@
                     :icon="Upload"
                     plain
                     class="workflow-soft-button"
-                    :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0"
+                    :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet"
                     :loading="importSelecting"
                   >
                     导入表格锁定
@@ -112,7 +112,7 @@
                 type="primary"
                 size="large"
                 class="workflow-primary-action download-btn"
-                :disabled="!canSaveQuoteSheet"
+                :disabled="!canSaveQuoteSheet || savingQuoteSheet || quoteLeadTimeBatchPending || importSelecting"
                 :loading="savingQuoteSheet"
                 @click="saveMarketQuoteSheet"
               >
@@ -123,7 +123,8 @@
                 type="primary"
                 size="large"
                 class="workflow-primary-action download-btn"
-                :disabled="!canExportQuoteSheet"
+                :disabled="!canExportQuoteSheet || isQuoteExporting('exportDetail')"
+                :loading="isQuoteExporting('exportDetail')"
                 @click="exportQuote"
               >
                 生成详细报价单
@@ -133,7 +134,8 @@
                 plain
                 size="large"
                 class="workflow-soft-button download-btn secondary"
-                :disabled="!canExportQuoteSheet"
+                :disabled="!canExportQuoteSheet || isQuoteExporting('exportSimple')"
+                :loading="isQuoteExporting('exportSimple')"
                 @click="exportSimpleQuote"
               >
                 生成简化报价单
@@ -143,7 +145,8 @@
                 plain
                 size="large"
                 class="workflow-soft-button download-btn secondary"
-                :disabled="!canExportQuoteSheet"
+                :disabled="!canExportQuoteSheet || isQuoteExporting('exportTemplateDetail')"
+                :loading="isQuoteExporting('exportTemplateDetail')"
                 @click="exportTemplateQuote"
               >
                 生成客户模板详细报价单
@@ -153,7 +156,8 @@
                 plain
                 size="large"
                 class="workflow-soft-button download-btn secondary"
-                :disabled="!canExportQuoteSheet"
+                :disabled="!canExportQuoteSheet || isQuoteExporting('exportTemplateSimple')"
+                :loading="isQuoteExporting('exportTemplateSimple')"
                 @click="exportTemplateSimpleQuote"
               >
                 生成客户模板简化报价单
@@ -237,8 +241,8 @@
                     type="primary"
                     size="small"
                     plain
-                    :disabled="!canEditQuoteLeadTime"
-                    :loading="!!savingRowMap[row.id]"
+                    :disabled="!canEditQuoteLeadTime || isLeadTimeRowSaving(row) || quoteLeadTimeBatchPending || savingQuoteSheet"
+                    :loading="isLeadTimeRowSaving(row)"
                     @click="saveLeadTime(row)"
                   >
                     保存
@@ -296,6 +300,7 @@ import {
   CLIENT_PAGE_SIZES,
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价']
 const QUOTE_PROCESS_SAVE_QUOTE_PERMISSION = 'market:quote-process:save-quote'
@@ -311,14 +316,27 @@ const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE
 const orderPickerVisible = ref(false)
 const shiftDays = ref(0)
 const manualQuoteDate = ref('')
-const savingRowMap = reactive({})
 
 const loadingItems = ref(false)
-const adjusting = ref(false)
-const settingQuoteDate = ref(false)
-const savingQuoteSheet = ref(false)
-const importSelecting = ref(false)
 let syncingQuoteProcessSelection = false
+const { isPending, runAction } = usePendingAction()
+const quoteProcessActionKeys = {
+  saveQuote: () => `market:quote-process:save-quote:${selectedRfqId.value || 'none'}`,
+  leadTimeBatch: () => `market:quote-process:lead-time-batch:${selectedRfqId.value || 'none'}`,
+  importSelection: () => `market:quote-process:import-selection:${selectedRfqId.value || 'none'}`,
+  exportDetail: () => `market:quote-process:export-detail:${selectedRfqId.value || 'none'}`,
+  exportSimple: () => `market:quote-process:export-simple:${selectedRfqId.value || 'none'}`,
+  exportTemplateDetail: () => `market:quote-process:export-template-detail:${selectedRfqId.value || 'none'}`,
+  exportTemplateSimple: () => `market:quote-process:export-template-simple:${selectedRfqId.value || 'none'}`,
+  leadTimeRow: (itemId) => `market:quote-process:lead-time:${itemId}`
+}
+const quoteLeadTimeBatchPending = computed(() => isPending(quoteProcessActionKeys.leadTimeBatch()))
+const adjusting = quoteLeadTimeBatchPending
+const settingQuoteDate = quoteLeadTimeBatchPending
+const savingQuoteSheet = computed(() => isPending(quoteProcessActionKeys.saveQuote()))
+const importSelecting = computed(() => isPending(quoteProcessActionKeys.importSelection()))
+const isQuoteExporting = (action) => isPending(quoteProcessActionKeys[action]())
+const isLeadTimeRowSaving = (row) => isPending(quoteProcessActionKeys.leadTimeRow(row?.id))
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.id
@@ -446,33 +464,33 @@ const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
 
   const formData = new FormData()
   formData.append('excelFile', file)
-  importSelecting.value = true
-  try {
-    const response = await parseQuoteProcessPartSelection(selectedRfqId.value, formData)
-    const importedIds = (response?.data || [])
-      .map(row => row.id)
-      .filter(id => id !== null && id !== undefined)
-    selectedQuoteProcessItemIds.value = new Set(importedIds)
-    await syncQuoteProcessPageSelection()
 
-    const importedCount = Number(response?.importedCount ?? 0)
-    const matchedCount = Number(response?.matchedCount ?? 0)
-    const selectedCount = Number(response?.selectedCount ?? importedIds.length)
-    const skippedCount = Number(response?.skippedCount ?? 0)
-    if (importedCount === 0) {
-      ElMessage.warning('表格中未读取到有效的图号+版本。')
-    } else if (selectedCount === 0) {
-      ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单的报价零件。`)
-    } else {
-      const skippedText = skippedCount > 0 ? `，${skippedCount} 项未锁定` : ''
-      ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已锁定 ${selectedCount} 项${skippedText}。`)
+  return runAction(quoteProcessActionKeys.importSelection(), async () => {
+    try {
+      const response = await parseQuoteProcessPartSelection(selectedRfqId.value, formData)
+      const importedIds = (response?.data || [])
+        .map(row => row.id)
+        .filter(id => id !== null && id !== undefined)
+      selectedQuoteProcessItemIds.value = new Set(importedIds)
+      await syncQuoteProcessPageSelection()
+
+      const importedCount = Number(response?.importedCount ?? 0)
+      const matchedCount = Number(response?.matchedCount ?? 0)
+      const selectedCount = Number(response?.selectedCount ?? importedIds.length)
+      const skippedCount = Number(response?.skippedCount ?? 0)
+      if (importedCount === 0) {
+        ElMessage.warning('表格中未读取到有效的图号+版本。')
+      } else if (selectedCount === 0) {
+        ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单的报价零件。`)
+      } else {
+        const skippedText = skippedCount > 0 ? `，${skippedCount} 项未锁定` : ''
+        ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已锁定 ${selectedCount} 项${skippedText}。`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '导入表格锁定失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '导入表格锁定失败。')
-  } finally {
-    importSelecting.value = false
-  }
+  })
 }
 
 const applyShift = async (direction) => {
@@ -482,27 +500,26 @@ const applyShift = async (direction) => {
   const days = Math.abs(Number(shiftDays.value || 0)) * direction
   if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
 
-  adjusting.value = true
-  try {
-    const response = await shiftQuoteProcessLeadTime({
-      rfqId: selectedRfqId.value,
-      itemIds: selectedQuoteProcessIdsForSubmit(),
-      days
-    })
-    await refreshQuoteProcessWorkspace({ clearSelection: true })
-    const adjusted = response.adjustedCount || 0
-    const skipped = response.skippedCount || 0
-    if (skipped > 0) {
-      ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
-    } else {
-      ElMessage.success(`已调整 ${adjusted} 项。`)
+  return runAction(quoteProcessActionKeys.leadTimeBatch(), async () => {
+    try {
+      const response = await shiftQuoteProcessLeadTime({
+        rfqId: selectedRfqId.value,
+        itemIds: selectedQuoteProcessIdsForSubmit(),
+        days
+      })
+      await refreshQuoteProcessWorkspace({ clearSelection: true })
+      const adjusted = response.adjustedCount || 0
+      const skipped = response.skippedCount || 0
+      if (skipped > 0) {
+        ElMessage.warning(`已调整 ${adjusted} 项，${skipped} 项无法自动调整。`)
+      } else {
+        ElMessage.success(`已调整 ${adjusted} 项。`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '交期调整失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '交期调整失败。')
-  } finally {
-    adjusting.value = false
-  }
+  })
 }
 
 const setQuoteLeadTime = async () => {
@@ -511,110 +528,106 @@ const setQuoteLeadTime = async () => {
   if (selectedQuoteProcessItemIds.value.size === 0) return ElMessage.warning('请至少选择一个零件。')
   if (!manualQuoteDate.value) return ElMessage.warning('请先选择报价交期。')
 
-  settingQuoteDate.value = true
-  try {
-    const response = await setQuoteProcessLeadTime({
-      rfqId: selectedRfqId.value,
-      itemIds: selectedQuoteProcessIdsForSubmit(),
-      quoteLeadTime: manualQuoteDate.value
-    })
-    await refreshQuoteProcessWorkspace({ clearSelection: true })
-    const adjusted = response.adjustedCount || 0
-    const skipped = response.skippedCount || 0
-    if (skipped > 0) {
-      ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
-    } else {
-      ElMessage.success(`已指定 ${adjusted} 项报价交期。`)
+  return runAction(quoteProcessActionKeys.leadTimeBatch(), async () => {
+    try {
+      const response = await setQuoteProcessLeadTime({
+        rfqId: selectedRfqId.value,
+        itemIds: selectedQuoteProcessIdsForSubmit(),
+        quoteLeadTime: manualQuoteDate.value
+      })
+      await refreshQuoteProcessWorkspace({ clearSelection: true })
+      const adjusted = response.adjustedCount || 0
+      const skipped = response.skippedCount || 0
+      if (skipped > 0) {
+        ElMessage.warning(`已指定 ${adjusted} 项，${skipped} 项未处理。`)
+      } else {
+        ElMessage.success(`已指定 ${adjusted} 项报价交期。`)
+      }
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '指定报价交期失败。')
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '指定报价交期失败。')
-  } finally {
-    settingQuoteDate.value = false
-  }
+  })
 }
 
 const saveLeadTime = async (row) => {
   if (!selectedRfqId.value || !row?.id) return
   if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再保存。')
-  savingRowMap[row.id] = true
-  try {
-    const response = await updateQuoteProcessLeadTime({
-      rfqId: selectedRfqId.value,
-      itemId: row.id,
-      quoteLeadTime: row.quoteLeadTimeDraft
-    })
-    const saved = normalizeRows([response.data || {}])[0]
-    const index = itemList.value.findIndex(item => item.id === row.id)
-    if (index >= 0) {
-      itemList.value.splice(index, 1, saved)
+  return runAction(quoteProcessActionKeys.leadTimeRow(row.id), async () => {
+    try {
+      const response = await updateQuoteProcessLeadTime({
+        rfqId: selectedRfqId.value,
+        itemId: row.id,
+        quoteLeadTime: row.quoteLeadTimeDraft
+      })
+      const saved = normalizeRows([response.data || {}])[0]
+      const index = itemList.value.findIndex(item => item.id === row.id)
+      if (index >= 0) {
+        itemList.value.splice(index, 1, saved)
+      }
+      await fetchQuoteProcessSummary()
+      ElMessage.success('报价交期已保存。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '报价交期保存失败。')
     }
-    await fetchQuoteProcessSummary()
-    ElMessage.success('报价交期已保存。')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '报价交期保存失败。')
-  } finally {
-    savingRowMap[row.id] = false
-  }
+  })
 }
 
 const saveMarketQuoteSheet = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
   if (!canSaveQuoteSheet.value) return ElMessage.warning('只有已核价订单可以保存报价单。')
 
-  savingQuoteSheet.value = true
-  try {
-    const response = await saveQuoteSheetApi(selectedRfqId.value)
-    orderInfo.value = response.orderInfo || orderInfo.value
-    await refreshQuoteProcessWorkspace({ clearSelection: true })
-    ElMessage.success('报价单已保存，可导出。')
-  } catch (error) {
-    console.error(error)
-    ElMessage.error(error.response?.data?.message || '保存报价单失败。')
-  } finally {
-    savingQuoteSheet.value = false
-  }
+  return runAction(quoteProcessActionKeys.saveQuote(), async () => {
+    try {
+      const response = await saveQuoteSheetApi(selectedRfqId.value)
+      orderInfo.value = response.orderInfo || orderInfo.value
+      await refreshQuoteProcessWorkspace({ clearSelection: true })
+      ElMessage.success('报价单已保存，可导出。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '保存报价单失败。')
+    }
+  })
+}
+
+const runQuoteExport = async (actionKey, fallbackName, downloadAction, errorMessage) => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  if (!canExportQuoteSheet.value) return ElMessage.warning('请先保存报价单后再导出。')
+
+  return runAction(actionKey(), async () => {
+    try {
+      const result = await downloadAction(selectedRfqId.value, fallbackName)
+      if (!result.success) {
+        ElMessage.error(result.message || errorMessage)
+      }
+      return result
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || errorMessage)
+      return { success: false, message: error.message }
+    }
+  })
 }
 
 const exportQuote = async () => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canExportQuoteSheet.value) return ElMessage.warning('请先保存报价单后再导出。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-详细报价单.xlsx`
-  const result = await downloadQuote(selectedRfqId.value, fallbackName)
-  if (!result.success) {
-    ElMessage.error(result.message || '报价单导出失败。')
-  }
+  return runQuoteExport(quoteProcessActionKeys.exportDetail, fallbackName, downloadQuote, '报价单导出失败。')
 }
 
 const exportSimpleQuote = async () => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canExportQuoteSheet.value) return ElMessage.warning('请先保存报价单后再导出。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-简化报价单.xlsx`
-  const result = await downloadSimpleQuote(selectedRfqId.value, fallbackName)
-  if (!result.success) {
-    ElMessage.error(result.message || '简化报价单导出失败。')
-  }
+  return runQuoteExport(quoteProcessActionKeys.exportSimple, fallbackName, downloadSimpleQuote, '简化报价单导出失败。')
 }
 
 const exportTemplateQuote = async () => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canExportQuoteSheet.value) return ElMessage.warning('请先保存报价单后再导出。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板详细报价单.xlsx`
-  const result = await downloadQuoteTemplateDetail(selectedRfqId.value, fallbackName)
-  if (!result.success) {
-    ElMessage.error(result.message || '客户模板详细报价单导出失败。')
-  }
+  return runQuoteExport(quoteProcessActionKeys.exportTemplateDetail, fallbackName, downloadQuoteTemplateDetail, '客户模板详细报价单导出失败。')
 }
 
 const exportTemplateSimpleQuote = async () => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canExportQuoteSheet.value) return ElMessage.warning('请先保存报价单后再导出。')
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板简化报价单.xlsx`
-  const result = await downloadQuoteTemplateSimple(selectedRfqId.value, fallbackName)
-  if (!result.success) {
-    ElMessage.error(result.message || '客户模板简化报价单导出失败。')
-  }
+  return runQuoteExport(quoteProcessActionKeys.exportTemplateSimple, fallbackName, downloadQuoteTemplateSimple, '客户模板简化报价单导出失败。')
 }
 
 </script>
