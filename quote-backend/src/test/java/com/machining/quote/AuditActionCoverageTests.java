@@ -18,6 +18,7 @@ import com.machining.quote.service.JwtService;
 import com.machining.quote.service.QuoteProcessService;
 import com.machining.quote.service.QuoteTemplateService;
 import com.machining.quote.service.RfqNumberService;
+import com.machining.quote.service.SystemTaskGuardService;
 import com.machining.quote.service.SystemTaskService;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -256,6 +257,21 @@ class AuditActionCoverageTests {
                 contains("99"),
                 isNull()
         );
+    }
+
+    @Test
+    void quoteRefreshTaskSubmitRejectsWhenSameOrderTaskIsActive() {
+        AuditService auditService = mock(AuditService.class);
+        SystemTaskService service = systemTaskService(auditService);
+        SystemTaskGuardService taskGuardService = mock(SystemTaskGuardService.class);
+        ReflectionTestUtils.setField(service, "taskGuardService", taskGuardService);
+        doAnswer(invocation -> {
+            throw new RuntimeException("一键刷新核价任务正在执行，请等待刷新核价任务完成后再继续操作");
+        }).when(taskGuardService).assertNoActiveRefreshQuotesTask(33);
+
+        assertThatThrownBy(() -> service.submitRefreshQuotesTask(33))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("刷新核价任务正在执行");
     }
 
     @Test

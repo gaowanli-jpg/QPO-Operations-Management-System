@@ -44,6 +44,8 @@ public class SystemTaskService {
     private WmsAllocationService wmsAllocationService;
     @Autowired(required = false)
     private OrderDeliveryTicketMapper orderDeliveryTicketMapper;
+    @Autowired(required = false)
+    private SystemTaskGuardService taskGuardService;
     @Autowired
     @Qualifier("systemTaskExecutor")
     private ThreadPoolTaskExecutor taskExecutor;
@@ -59,6 +61,7 @@ public class SystemTaskService {
             throw new RuntimeException("订单 ID 不能为空");
         }
         assertOrderDataScope(rfqId);
+        assertNoActiveRefreshQuotesTask(rfqId);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("rfqId", rfqId);
         SystemTask task = createTask("REFRESH_ORDER_QUOTES", request);
@@ -219,6 +222,13 @@ public class SystemTaskService {
             dataScopeService.assertCanAccessOrder(rfqId, null);
         }
     }
+
+    private void assertNoActiveRefreshQuotesTask(Integer rfqId) {
+        if (taskGuardService != null) {
+            taskGuardService.assertNoActiveRefreshQuotesTask(rfqId);
+        }
+    }
+
     private SystemTask createTask(String taskType, Object requestJson) {
         AuthContext.SessionUser current = AuthContext.get();
         SystemTask task = new SystemTask();
