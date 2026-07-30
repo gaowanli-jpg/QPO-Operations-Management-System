@@ -1,4 +1,4 @@
-package com.machining.quote.dto;
+package com.machining.quote.dto.u9;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

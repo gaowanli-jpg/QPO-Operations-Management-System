@@ -6,6 +6,8 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
+import com.machining.quote.service.mes.MesMaterialSyncService;
+import com.machining.quote.service.wms.WmsAllocationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

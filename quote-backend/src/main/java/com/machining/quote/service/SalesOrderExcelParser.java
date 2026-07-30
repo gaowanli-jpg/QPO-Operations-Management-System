@@ -2,9 +2,9 @@ package com.machining.quote.service;
 
 import com.alibaba.excel.EasyExcel;
 import com.machining.quote.dto.SalesOrderExcelParseResult;
-import com.machining.quote.dto.U9SalesOrderHeadDTO;
-import com.machining.quote.dto.U9SalesOrderLineDTO;
-import com.machining.quote.dto.U9SalesOrderShipLineDTO;
+import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
+import com.machining.quote.dto.u9.U9SalesOrderLineDTO;
+import com.machining.quote.dto.u9.U9SalesOrderShipLineDTO;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;

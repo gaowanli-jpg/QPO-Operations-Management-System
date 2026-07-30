@@ -1,7 +1,7 @@
 package com.machining.quote;
 
-import com.machining.quote.dto.MesMaterialResolveReq;
-import com.machining.quote.dto.MesMaterialResolveResp;
+import com.machining.quote.dto.mes.MesMaterialResolveReq;
+import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -13,8 +13,8 @@ import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
-import com.machining.quote.service.MesMaterialClient;
-import com.machining.quote.service.MesMaterialSyncService;
+import com.machining.quote.service.mes.MesMaterialClient;
+import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.SystemTaskService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -49,11 +49,11 @@ class MesMaterialSyncTest {
     private static final Path SYSTEM_TASK_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
     private static final Path MES_SYNC_SERVICE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "service", "MesMaterialSyncService.java");
+            "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialSyncService.java");
     private static final Path MES_REQ = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "dto", "MesMaterialResolveReq.java");
+            "src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesMaterialResolveReq.java");
     private static final Path MES_RESP = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "dto", "MesMaterialResolveResp.java");
+            "src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesMaterialResolveResp.java");
 
     @Test
     void submitMesMaterialSyncTaskCreatesSystemTaskAndDispatchesAsyncWork() {

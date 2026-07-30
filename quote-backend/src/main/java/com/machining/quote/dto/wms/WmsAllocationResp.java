@@ -1,4 +1,4 @@
-package com.machining.quote.dto;
+package com.machining.quote.dto.wms;
 
 import lombok.Data;
 

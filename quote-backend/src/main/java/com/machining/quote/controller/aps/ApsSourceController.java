@@ -1,9 +1,9 @@
-package com.machining.quote.controller;
+package com.machining.quote.controller.aps;
 
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.aps.ApsDeliveryItemBatchDTO;
 import com.machining.quote.dto.aps.ApsProcessDTO;
-import com.machining.quote.service.ApsSourceService;
+import com.machining.quote.service.aps.ApsSourceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

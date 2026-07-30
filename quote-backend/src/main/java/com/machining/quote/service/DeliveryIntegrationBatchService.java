@@ -2,6 +2,8 @@ package com.machining.quote.service;
 
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.service.mes.MesMaterialSyncService;
+import com.machining.quote.service.wms.WmsAllocationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

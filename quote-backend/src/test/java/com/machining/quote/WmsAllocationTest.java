@@ -1,6 +1,6 @@
 package com.machining.quote;
 
-import com.machining.quote.dto.WmsAllocationResp;
+import com.machining.quote.dto.wms.WmsAllocationResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.OrderRfq;
@@ -12,8 +12,8 @@ import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SystemTaskService;
-import com.machining.quote.service.WmsAllocationClient;
-import com.machining.quote.service.WmsAllocationService;
+import com.machining.quote.service.wms.WmsAllocationClient;
+import com.machining.quote.service.wms.WmsAllocationService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -60,7 +60,7 @@ class WmsAllocationTest {
     private static final Path SYSTEM_TASK_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
     private static final Path WMS_ALLOCATION_SERVICE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "service", "WmsAllocationService.java");
+            "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsAllocationService.java");
 
     @Test
     @SuppressWarnings("unchecked")

@@ -1,7 +1,7 @@
-package com.machining.quote.service;
+package com.machining.quote.service.wms;
 
-import com.machining.quote.dto.MesMaterialResolveReq;
-import com.machining.quote.dto.MesMaterialResolveResp;
+import com.machining.quote.dto.wms.WmsAllocationReq;
+import com.machining.quote.dto.wms.WmsAllocationResp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,23 +17,23 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 @Service
-public class MesMaterialClient {
-    private static final Logger log = LoggerFactory.getLogger(MesMaterialClient.class);
+public class WmsAllocationClient {
+    private static final Logger log = LoggerFactory.getLogger(WmsAllocationClient.class);
 
-    @Value("${erp.mes.base-url:}")
-    private String mesBaseUrl;
-    @Value("${erp.mes.auth-token:}")
-    private String mesAuthToken;
-    @Value("${erp.mes.material-path:/api/mes/materials/resolve}")
-    private String mesMaterialPath;
-    @Value("${erp.mes.timeout-ms:10000}")
-    private Integer mesTimeoutMs;
+    @Value("${erp.wms.base-url:}")
+    private String wmsBaseUrl;
+    @Value("${erp.wms.auth-token:}")
+    private String wmsAuthToken;
+    @Value("${erp.wms.allocation-path:/api/wms/inventory/allocate}")
+    private String wmsAllocationPath;
+    @Value("${erp.wms.timeout-ms:10000}")
+    private Integer wmsTimeoutMs;
 
-    public MesMaterialResolveResp resolveMaterial(MesMaterialResolveReq req) {
-        if (isBlank(mesBaseUrl)) {
-            throw new RuntimeException("MES base URL is not configured");
+    public WmsAllocationResp allocate(WmsAllocationReq req) {
+        if (isBlank(wmsBaseUrl)) {
+            throw new RuntimeException("WMS base URL is not configured");
         }
-        int timeout = mesTimeoutMs == null || mesTimeoutMs <= 0 ? 10000 : mesTimeoutMs;
+        int timeout = wmsTimeoutMs == null || wmsTimeoutMs <= 0 ? 10000 : wmsTimeoutMs;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout);
         requestFactory.setReadTimeout(timeout);
@@ -41,33 +41,34 @@ public class MesMaterialClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (!isBlank(mesAuthToken)) {
-            headers.set("Authorization", "Bearer " + mesAuthToken.trim());
+        if (!isBlank(wmsAuthToken)) {
+            headers.set("Authorization", "Bearer " + wmsAuthToken.trim());
         }
-        HttpEntity<MesMaterialResolveReq> entity = new HttpEntity<>(req, headers);
-        String url = trimRight(mesBaseUrl) + normalizePath(mesMaterialPath);
-        log.debug("MES material resolve request ticketId={} rfqId={} partNo={}",
+        HttpEntity<WmsAllocationReq> entity = new HttpEntity<>(req, headers);
+        String url = trimRight(wmsBaseUrl) + normalizePath(wmsAllocationPath);
+        log.debug("WMS allocation request ticketId={} rfqId={} materialNo={} demandQty={}",
                 req == null ? null : req.getTicketId(),
                 req == null ? null : req.getRfqId(),
-                req == null ? null : req.getPartNo());
+                req == null ? null : req.getMaterialNo(),
+                req == null ? null : req.getDemandQty());
         try {
-            ResponseEntity<MesMaterialResolveResp> response = restTemplate.exchange(
+            ResponseEntity<WmsAllocationResp> response = restTemplate.exchange(
                     url,
                     HttpMethod.POST,
                     entity,
-                    MesMaterialResolveResp.class
+                    WmsAllocationResp.class
             );
             return response.getBody();
         } catch (HttpStatusCodeException error) {
-            throw new RuntimeException("MES material resolve failed status=" + error.getStatusCode().value()
+            throw new RuntimeException("WMS allocation failed status=" + error.getStatusCode().value()
                     + " message=" + abbreviate(error.getResponseBodyAsString()), error);
         } catch (ResourceAccessException error) {
-            throw new RuntimeException("MES material resolve failed message=" + abbreviate(error.getMessage()), error);
+            throw new RuntimeException("WMS allocation failed message=" + abbreviate(error.getMessage()), error);
         }
     }
 
     private String normalizePath(String value) {
-        String path = isBlank(value) ? "/api/mes/materials/resolve" : value.trim();
+        String path = isBlank(value) ? "/api/wms/inventory/allocate" : value.trim();
         return path.startsWith("/") ? path : "/" + path;
     }
 

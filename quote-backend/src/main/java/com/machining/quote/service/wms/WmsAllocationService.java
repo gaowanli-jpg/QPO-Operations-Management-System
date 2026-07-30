@@ -1,15 +1,16 @@
-package com.machining.quote.service;
+package com.machining.quote.service.wms;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.machining.quote.dto.WmsAllocationReq;
-import com.machining.quote.dto.WmsAllocationResp;
+import com.machining.quote.dto.wms.WmsAllocationReq;
+import com.machining.quote.dto.wms.WmsAllocationResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.AuditService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

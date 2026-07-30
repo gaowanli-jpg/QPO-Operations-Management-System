@@ -1,10 +1,10 @@
-package com.machining.quote.service;
+package com.machining.quote.service.u9;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.machining.quote.dto.U9ApiResult;
-import com.machining.quote.dto.U9ResultDTO;
-import com.machining.quote.dto.U9SalesOrderHeadDTO;
+import com.machining.quote.dto.u9.U9ApiResult;
+import com.machining.quote.dto.u9.U9ResultDTO;
+import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;

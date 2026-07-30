@@ -1,8 +1,8 @@
 package com.machining.quote;
 
-import com.machining.quote.dto.WmsAllocationReq;
-import com.machining.quote.dto.WmsAllocationResp;
-import com.machining.quote.service.WmsAllocationClient;
+import com.machining.quote.dto.wms.WmsAllocationReq;
+import com.machining.quote.dto.wms.WmsAllocationResp;
+import com.machining.quote.service.wms.WmsAllocationClient;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
@@ -232,7 +232,7 @@ class WmsAllocationClientTest {
     @Test
     void wmsClientFailureContractAvoidsTokenAndFullPayloadLogging() throws IOException {
         String source = Files.readString(Path.of(
-                "src", "main", "java", "com", "machining", "quote", "service", "WmsAllocationClient.java"), StandardCharsets.UTF_8);
+                "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsAllocationClient.java"), StandardCharsets.UTF_8);
 
         assertThat(source)
                 .contains("log.debug(\"WMS allocation request ticketId={}")

@@ -1,4 +1,4 @@
-package com.machining.quote.service;
+package com.machining.quote.service.aps;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;

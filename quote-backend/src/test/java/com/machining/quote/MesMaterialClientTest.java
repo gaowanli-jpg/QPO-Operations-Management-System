@@ -1,8 +1,8 @@
 package com.machining.quote;
 
-import com.machining.quote.dto.MesMaterialResolveReq;
-import com.machining.quote.dto.MesMaterialResolveResp;
-import com.machining.quote.service.MesMaterialClient;
+import com.machining.quote.dto.mes.MesMaterialResolveReq;
+import com.machining.quote.dto.mes.MesMaterialResolveResp;
+import com.machining.quote.service.mes.MesMaterialClient;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
@@ -146,7 +146,7 @@ class MesMaterialClientTest {
     @Test
     void mesClientFailureContractAvoidsTokenAndFullPayloadLogging() throws IOException {
         String source = Files.readString(Path.of(
-                "src", "main", "java", "com", "machining", "quote", "service", "MesMaterialClient.java"), StandardCharsets.UTF_8);
+                "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialClient.java"), StandardCharsets.UTF_8);
 
         assertThat(source)
                 .contains("log.debug(\"MES material resolve request ticketId={}")
