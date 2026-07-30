@@ -1,11 +1,15 @@
 import { describe, expect, test, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { usePendingAction } from './composables/usePendingAction'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+const readOptionalSource = (...segments) => {
+  const file = resolve(currentDir, ...segments)
+  return existsSync(file) ? readFileSync(file, 'utf8') : ''
+}
 
 const sources = {
   users: readSource('components', 'UserManage.vue'),
@@ -14,7 +18,11 @@ const sources = {
   dict: readSource('components', 'MaterialProcessManage.vue'),
   template: readSource('components', 'QuoteTemplateManage.vue'),
   audit: readSource('components', 'AuditLogManage.vue'),
-  systemConfig: readSource('components', 'SystemConfigManage.vue')
+  systemConfig: [
+    readSource('components', 'SystemConfigManage.vue'),
+    readOptionalSource('components', 'system-config', 'SystemStorageConfigPanel.vue'),
+    readOptionalSource('components', 'system-config', 'SystemIntegrationConfigPanel.vue')
+  ].join('\n')
 }
 
 const blockBetween = (source, start, end) => {
@@ -35,8 +43,12 @@ const deferred = () => {
 
 describe('admin duplicate click guards', () => {
   test('system management pages register pending action keys for dialog, drawer, row and button writes', () => {
-    for (const source of Object.values(sources)) {
-      expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
+    for (const [key, source] of Object.entries(sources)) {
+      if (key === 'systemConfig') {
+        expect(source).toContain("import { usePendingAction } from '../../composables/usePendingAction'")
+      } else {
+        expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
+      }
       expect(source).toContain('const { isPending, runAction } = usePendingAction()')
     }
 
@@ -70,6 +82,10 @@ describe('admin duplicate click guards', () => {
     expect(sources.systemConfig).toContain("test: (configId) => `system:config:storage:test:${configId || 'none'}`")
     expect(sources.systemConfig).toContain("activate: (configId) => `system:config:storage:activate:${configId || 'none'}`")
     expect(sources.systemConfig).toContain("disable: (configId) => `system:config:storage:disable:${configId || 'none'}`")
+    expect(sources.systemConfig).toContain("saveDialog: 'system:config:integration:save-dialog'")
+    expect(sources.systemConfig).toContain("test: (configId) => `system:config:integration:test:${configId || 'none'}`")
+    expect(sources.systemConfig).toContain("activate: (configId) => `system:config:integration:activate:${configId || 'none'}`")
+    expect(sources.systemConfig).toContain("disable: (configId) => `system:config:integration:disable:${configId || 'none'}`")
   })
 
   test('user management uses dialog and row pending states for save, reset, status and delete', () => {
@@ -186,6 +202,24 @@ describe('admin duplicate click guards', () => {
     expect(testBlock).toContain('return runAction(systemConfigActionKeys.test(row.id), async () =>')
     expect(activateBlock).toContain('return runAction(systemConfigActionKeys.activate(row.id), async () =>')
     expect(disableBlock).toContain('return runAction(systemConfigActionKeys.disable(row.id), async () =>')
+  })
+
+  test('system config page uses dialog and row pending states for integration writes', () => {
+    const saveBlock = blockBetween(sources.systemConfig, 'const saveIntegrationConfigForm = async () =>', 'const testIntegrationConfigRow = async (row) =>')
+    const testBlock = blockBetween(sources.systemConfig, 'const testIntegrationConfigRow = async (row) =>', 'const activateIntegrationConfigRow = async (row) =>')
+    const activateBlock = blockBetween(sources.systemConfig, 'const activateIntegrationConfigRow = async (row) =>', 'const disableIntegrationConfigRow = async (row) =>')
+    const disableBlock = blockBetween(sources.systemConfig, 'const disableIntegrationConfigRow = async (row) =>', 'const isIntegrationRowPending = (row) =>')
+
+    expect(sources.systemConfig).toContain(':loading="isPending(integrationActionKeys.saveDialog)"')
+    expect(sources.systemConfig).toContain(':disabled="isPending(integrationActionKeys.saveDialog)"')
+    expect(sources.systemConfig).toContain(':loading="isPending(integrationActionKeys.test(row.id))"')
+    expect(sources.systemConfig).toContain(':disabled="isIntegrationRowPending(row)"')
+    expect(sources.systemConfig).toContain(':loading="isPending(integrationActionKeys.activate(row.id))"')
+    expect(sources.systemConfig).toContain(':loading="isPending(integrationActionKeys.disable(row.id))"')
+    expect(saveBlock).toContain('return runAction(integrationActionKeys.saveDialog, async () =>')
+    expect(testBlock).toContain('return runAction(integrationActionKeys.test(row.id), async () =>')
+    expect(activateBlock).toContain('return runAction(integrationActionKeys.activate(row.id), async () =>')
+    expect(disableBlock).toContain('return runAction(integrationActionKeys.disable(row.id), async () =>')
   })
 
   test('admin row action key suppresses duplicate API calls while pending', async () => {

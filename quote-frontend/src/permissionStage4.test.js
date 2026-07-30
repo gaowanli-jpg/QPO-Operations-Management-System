@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+const readOptionalSource = (...segments) => {
+  const file = resolve(currentDir, ...segments)
+  return existsSync(file) ? readFileSync(file, 'utf8') : ''
+}
 
 const routerSource = readSource('router', 'index.js')
 const appVue = readSource('App.vue')
@@ -37,6 +41,11 @@ const routePermissionEntries = () => {
 }
 
 const componentSource = (name) => readSource('components', `${name}.vue`)
+const systemConfigSources = () => [
+  componentSource('SystemConfigManage'),
+  readOptionalSource('components', 'system-config', 'SystemStorageConfigPanel.vue'),
+  readOptionalSource('components', 'system-config', 'SystemIntegrationConfigPanel.vue')
+].join('\n')
 
 describe('QPO permission stage 4 menu and button permissions', () => {
   test('protects frontend routes with permission codes instead of legacy roles', () => {
@@ -90,11 +99,18 @@ describe('QPO permission stage 4 menu and button permissions', () => {
       ['SystemOrgManage', ['system:dept:manage', 'system:post:manage']],
       ['CustomerManage', ['system:customer:create', 'system:customer:update', 'system:customer:delete']],
       ['AuditLogManage', ['system:audit:export', 'system:audit:retention']],
-      ['SystemConfigManage', ['system:config:storage:update', 'system:config:storage:test', 'system:config:storage:activate']]
+      ['SystemConfigManage', [
+        'system:config:storage:update',
+        'system:config:storage:test',
+        'system:config:storage:activate',
+        'system:config:integration:update',
+        'system:config:integration:test',
+        'system:config:integration:activate'
+      ]]
     ]
 
     for (const [component, permissions] of expectations) {
-      const source = componentSource(component)
+      const source = component === 'SystemConfigManage' ? systemConfigSources() : componentSource(component)
       for (const permission of permissions) {
         expect(source, `${component} should reference ${permission}`).toContain(permission)
       }
