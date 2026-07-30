@@ -86,6 +86,22 @@ public class DataScopeService {
         throw new RuntimeException("No data permission for order " + order.getId());
     }
 
+    public void assertCanAccessCustomer(CustomerMaster customer) {
+        if (customer == null) {
+            return;
+        }
+        DataScopeSnapshot snapshot = currentSnapshot();
+        if (snapshot.noContext() || snapshot.allAccess() || snapshot.selfOnly()) {
+            return;
+        }
+        if (!snapshot.noAccess()
+                && !isBlank(customer.getCustomerName())
+                && snapshot.customerNames().contains(customer.getCustomerName())) {
+            return;
+        }
+        throw new RuntimeException("No data permission for customer " + customer.getCustomerName());
+    }
+
     public void assertCanAccessOrder(Integer rfqId, OrderRfqMapper mapper) {
         OrderRfqMapper effectiveMapper = mapper == null ? orderRfqMapper : mapper;
         if (rfqId == null || effectiveMapper == null) {

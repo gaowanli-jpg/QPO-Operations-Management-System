@@ -6,6 +6,8 @@ import lombok.Data;
 public class SalesOrderQpoImportResultRow {
     private boolean success;
     private String status;
+    private Long salesOrderId;
+    private String salesOrderNo;
     private Integer rfqId;
     private String rfqNo;
     private String customerOrderNo;
