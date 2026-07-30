@@ -34,6 +34,8 @@ notepad erp.env
 - `DB_POOL_MAX_SIZE`：后端数据库连接池最大连接数。单后端容器默认 `15` 即可，不要在未评估PostgreSQL连接上限和服务器容量前调太高。
 - `DB_POOL_MIN_IDLE`：保留的空闲连接数。普通内网使用默认 `3` 即可。
 - `ERP_TASK_CORE_POOL_SIZE` / `ERP_TASK_MAX_POOL_SIZE`：报价刷新、大文件导出等后台任务线程池。默认 `2` / `4` 即可，调大前要评估CPU和数据库能力。
+- `ERP_FILE_STORAGE_TYPE`：本地开发默认 LOCAL，现有上传目录继续使用 `ERP_UPLOAD_DIR`。
+- `ERP_MINIO_*`：仅在初始化、测试或连接 MinIO 文件存储策略时使用；真实密钥只写 `erp.env`，不要写入代码、示例文件或文档。
 
 连接池经验公式：
 
@@ -54,6 +56,41 @@ openssl rand -base64 48
 ```
 
 Compose文件已经配置容器健康检查、日志轮转、保守的CPU/内存限制，以及应用容器的 `no-new-privileges`。
+
+## 文件存储与 MinIO
+本地开发默认 LOCAL，不需要安装或启动 MinIO。默认配置：
+
+```env
+ERP_FILE_STORAGE_TYPE=LOCAL
+```
+
+这个模式下，图纸仍写入后端容器的 `/data/uploads/`，并由 Compose 的 `uploads_data` 卷持久化；系统日志、错误日志、数据库备份不放入 MinIO。
+
+需要验证 MinIO 存储逻辑时，先在 `erp.env` 填写本机 MinIO 管理员密码：
+
+```env
+MINIO_ROOT_USER=qpo_minio_admin
+MINIO_ROOT_PASSWORD=change-to-a-local-strong-password
+MINIO_BIND=127.0.0.1
+MINIO_API_PORT=9000
+MINIO_CONSOLE_PORT=9001
+```
+
+如 Docker Hub 拉取受限，可把 `MINIO_IMAGE` 改成公司或国内镜像源中的 MinIO 镜像地址。只启动 MinIO 容器：
+
+```powershell
+docker compose --env-file erp.env --profile minio up -d minio
+```
+
+连同 QPO 一起验证：
+
+```powershell
+docker compose --env-file erp.env --profile minio up -d --build
+```
+
+MinIO 控制台默认地址为 `http://localhost:9001`。启动后进入 QPO 的“系统配置 > 文件存储”，新增 MINIO 配置，填入 endpoint、bucket、access key、secret，先点击测试连接，再激活；激活只影响之后上传的新图纸，历史图纸仍按原存储位置读取。
+
+测试/生产如果已有公司统一 MinIO，不需要启动 QPO 自带的 MinIO profile。由管理员在系统配置页填入公司统一 MinIO 的 endpoint、bucket 和账号，并确认 QPO 后端、MES 所在网络均可访问该地址。
 
 ## HTTPS反向代理
 可参考 `deploy/nginx/quote-backend.https.example.conf` 作为服务器级Nginx配置示例。

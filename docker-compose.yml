@@ -68,6 +68,15 @@ services:
       DB_POOL_VALIDATION_TIMEOUT_MS: ${DB_POOL_VALIDATION_TIMEOUT_MS:-3000}
       ERP_UPLOAD_DIR: /data/uploads/
       ERP_BACKUP_DIR: /data/backups/
+      # File storage strategy defaults to LOCAL. MINIO values are used when a MinIO config is initialized or tested.
+      ERP_FILE_STORAGE_TYPE: ${ERP_FILE_STORAGE_TYPE:-LOCAL}
+      ERP_MINIO_ENDPOINT: ${ERP_MINIO_ENDPOINT:-}
+      ERP_MINIO_BUCKET: ${ERP_MINIO_BUCKET:-}
+      ERP_MINIO_ACCESS_KEY: ${ERP_MINIO_ACCESS_KEY:-}
+      ERP_MINIO_SECRET_KEY: ${ERP_MINIO_SECRET_KEY:-}
+      ERP_MINIO_REGION: ${ERP_MINIO_REGION:-us-east-1}
+      ERP_MINIO_PATH_STYLE: ${ERP_MINIO_PATH_STYLE:-true}
+      ERP_CONFIG_SECRET_KEY: ${ERP_CONFIG_SECRET_KEY:-}
       ERP_CORS_ALLOWED_ORIGINS: ${ERP_CORS_ALLOWED_ORIGINS:-http://localhost:8088,http://127.0.0.1:8088}
       ERP_AUTH_ENABLED: true
       ERP_JWT_SECRET: ${ERP_JWT_SECRET:?Set ERP_JWT_SECRET in erp.env before starting}
@@ -152,7 +161,30 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    container_name: quote-minio
+    profiles:
+      - minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-qpo_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in erp.env before starting MinIO}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MINIO_BIND:-127.0.0.1}:${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    logging: *default-logging
+    mem_limit: ${MINIO_MEM_LIMIT:-512m}
+    cpus: "${MINIO_CPUS:-0.5}"
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   postgres_data:
   uploads_data:
   backups_data:
+  minio_data:
