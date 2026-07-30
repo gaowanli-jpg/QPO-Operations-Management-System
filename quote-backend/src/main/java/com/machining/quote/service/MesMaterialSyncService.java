@@ -12,7 +12,6 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -34,10 +33,10 @@ public class MesMaterialSyncService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private MesMaterialClient mesMaterialClient;
+    @Autowired
+    private BusinessFileService businessFileService;
     @Autowired(required = false)
     private AuditService auditService;
-    @Value("${erp.public-base-url:http://localhost:8088}")
-    private String publicBaseUrl;
 
     public Map<String, Object> syncMaterialNo(Integer ticketId, Long taskId) {
         long startedAt = System.currentTimeMillis();
@@ -103,7 +102,7 @@ public class MesMaterialSyncService {
             ItemQuoteVersion item = itemMapper.selectById(ticket.getItemId());
             drawingUrl = item == null ? null : item.getDrawingUrl();
         }
-        req.setDrawingUrl(toAbsoluteUrl(required(drawingUrl, "图纸不能为空")));
+        req.setDrawingUrl(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空")));
         return req;
     }
 
@@ -184,17 +183,6 @@ public class MesMaterialSyncService {
             summary.put("materialNo", materialNo);
         }
         return summary;
-    }
-
-    private String toAbsoluteUrl(String value) {
-        if (value.startsWith("http://") || value.startsWith("https://")) {
-            return value;
-        }
-        String base = isBlank(publicBaseUrl) ? "http://localhost:8088" : publicBaseUrl.trim();
-        while (base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        return base + (value.startsWith("/") ? value : "/" + value);
     }
 
     private String required(String value, String message) {

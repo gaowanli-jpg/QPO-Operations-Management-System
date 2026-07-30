@@ -11,6 +11,7 @@ import com.machining.quote.storage.StoredFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,9 @@ public class BusinessFileService {
     private final OrderFilePathService orderFilePathService;
     private final FileStorageRouter fileStorageRouter;
     private final SystemFileObjectMapper fileObjectMapper;
+
+    @Value("${erp.public-base-url:http://localhost:8088}")
+    private String publicBaseUrl;
 
     @Autowired
     public BusinessFileService(
@@ -107,6 +111,44 @@ public class BusinessFileService {
             return Optional.of(openStoredObject(fileObject));
         }
         return openLegacyLocalFile(publicPath);
+    }
+
+    public String externalReadableUrl(String rawPublicPath) {
+        if (isBlank(rawPublicPath)) {
+            throw new IllegalArgumentException("Business file external URL cannot be blank");
+        }
+        String value = rawPublicPath.trim();
+        if (isExternalUrl(value) && !externalUrlContainsUploadMapping(value)) {
+            return value;
+        }
+        Optional<String> normalized = normalizePublicPath(value);
+        if (normalized.isEmpty()) {
+            if (isExternalUrl(value)) {
+                return value;
+            }
+            throw new IllegalArgumentException("Business file external URL is unavailable");
+        }
+        String publicPath = normalized.get();
+        SystemFileObject fileObject = findByPublicPath(publicPath);
+        if (fileObject == null) {
+            return toAbsolutePublicUrl(publicPath);
+        }
+        String storedExternalUrl = blankToNull(fileObject.getExternalUrl());
+        if (storedExternalUrl != null) {
+            return storedExternalUrl;
+        }
+        StorageType storageType = StorageType.fromCode(fileObject.getStorageType());
+        Optional<String> generatedUrl = fileStorageRouter.externalReadUrl(
+                storageType,
+                fileObject.getStorageConfigId(),
+                fileObject.getObjectKey());
+        if (generatedUrl.isPresent()) {
+            return generatedUrl.get();
+        }
+        if (storageType == StorageType.LOCAL) {
+            return toAbsolutePublicUrl(publicPath);
+        }
+        throw new IllegalStateException("Business file external URL is unavailable publicPath=" + publicPath);
     }
 
     public boolean deleteByPublicPath(String rawPublicPath) {
@@ -193,6 +235,30 @@ public class BusinessFileService {
         UpdateWrapper<SystemFileObject> wrapper = new UpdateWrapper<>();
         wrapper.eq("public_path", publicPath);
         fileObjectMapper.delete(wrapper);
+    }
+
+    private String toAbsolutePublicUrl(String publicPath) {
+        if (isExternalUrl(publicPath)) {
+            return publicPath;
+        }
+        String base = isBlank(publicBaseUrl) ? "http://localhost:8088" : publicBaseUrl.trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + (publicPath.startsWith("/") ? publicPath : "/" + publicPath);
+    }
+
+    private boolean isExternalUrl(String value) {
+        return value != null && (value.startsWith("http://") || value.startsWith("https://"));
+    }
+
+    private boolean externalUrlContainsUploadMapping(String value) {
+        try {
+            String path = URI.create(value).getPath();
+            return path != null && path.contains(UPLOAD_PREFIX);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private Optional<String> normalizePublicPath(String rawPublicPath) {
@@ -285,6 +351,10 @@ public class BusinessFileService {
 
     private String blankToNull(String value) {
         return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     public record StoredBusinessFile(

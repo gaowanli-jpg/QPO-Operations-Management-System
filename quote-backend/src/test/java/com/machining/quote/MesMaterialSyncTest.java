@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.machining.quote.dto.MesMaterialResolveReq;
 import com.machining.quote.dto.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -10,6 +11,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.MesMaterialClient;
 import com.machining.quote.service.MesMaterialSyncService;
@@ -150,6 +152,37 @@ class MesMaterialSyncTest {
                 contains("ticketId=123 taskId=9001"),
                 isNull()
         );
+    }
+
+    @Test
+    void syncMaterialNoSendsExternalReadableDrawingUrlToMesWithoutRenamingField() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        when(ticketMapper.selectById(123)).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
+        when(businessFileService.externalReadableUrl("/uploads/drawings/p100.pdf"))
+                .thenReturn("http://minio-public/qpo-drawings/drawings/p100.pdf");
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(true);
+        response.setMaterialNo("MES-7788");
+        when(client.resolveMaterial(any())).thenReturn(response);
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService, businessFileService);
+
+        service.syncMaterialNo(123, 9004L);
+
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(client).resolveMaterial(reqCaptor.capture());
+        assertThat(reqCaptor.getValue().getDrawingUrl())
+                .isEqualTo("http://minio-public/qpo-drawings/drawings/p100.pdf");
+        verify(businessFileService).externalReadableUrl("/uploads/drawings/p100.pdf");
+        assertThat(readQuietly(MES_REQ)).contains("private String drawingUrl;");
     }
 
     @Test
@@ -294,9 +327,7 @@ class MesMaterialSyncTest {
     }
 
     private MesMaterialSyncService syncService() {
-        MesMaterialSyncService service = new MesMaterialSyncService();
-        ReflectionTestUtils.setField(service, "publicBaseUrl", "http://qpo.local");
-        return service;
+        return new MesMaterialSyncService();
     }
 
     private void wireSyncService(
@@ -306,11 +337,39 @@ class MesMaterialSyncTest {
             ItemQuoteVersionMapper itemMapper,
             MesMaterialClient client,
             AuditService auditService) {
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        when(businessFileService.externalReadableUrl(anyString())).thenAnswer(invocation -> {
+            String drawingUrl = invocation.getArgument(0);
+            if (drawingUrl.startsWith("http://") || drawingUrl.startsWith("https://")) {
+                return drawingUrl;
+            }
+            return "http://qpo.local" + (drawingUrl.startsWith("/") ? drawingUrl : "/" + drawingUrl);
+        });
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService, businessFileService);
+    }
+
+    private void wireSyncService(
+            MesMaterialSyncService service,
+            OrderDeliveryTicketMapper ticketMapper,
+            OrderRfqMapper orderMapper,
+            ItemQuoteVersionMapper itemMapper,
+            MesMaterialClient client,
+            AuditService auditService,
+            BusinessFileService businessFileService) {
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "mesMaterialClient", client);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
+    }
+
+    private String readQuietly(Path path) {
+        try {
+            return read(path);
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private OrderDeliveryTicket ticket() {

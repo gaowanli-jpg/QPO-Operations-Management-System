@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class FileStorageRouter {
@@ -48,6 +49,11 @@ public class FileStorageRouter {
 
     public StorageTestResult test(FileStorageConfig config) {
         return provider(config.storageType()).test(config);
+    }
+
+    public Optional<String> externalReadUrl(StorageType storageType, Long storageConfigId, String objectKey) {
+        FileStorageConfig config = config(storageType, storageConfigId);
+        return provider(config.storageType()).externalReadUrl(config, objectKey);
     }
 
     private FileStorageConfig config(StorageType expectedType, Long storageConfigId) {
