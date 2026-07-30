@@ -1,0 +1,74 @@
+package com.machining.quote.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.machining.quote.config.JsonbTypeHandler;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+@TableName(value = "sales_order_item", autoResultMap = true)
+public class SalesOrderItem {
+    @TableId(type = IdType.AUTO)
+    private Long id;
+
+    private Long salesOrderId;
+    private Integer lineNo;
+    private String partNo;
+    private String description;
+    private Integer qty;
+    private String version;
+    private String orderType;
+    private String customerOrderNo;
+    private String customerProjectNo;
+    private String internalProjectNo;
+    private String salesMaterialNo;
+    private String materialNo;
+    private LocalDate customerDeliveryDate;
+    private LocalDate internalDeliveryDate;
+    private String materialName;
+    private String engineeringMaterialName;
+    private String surfaceTreatment;
+    private BigDecimal taxIncludedUnitPrice;
+    private BigDecimal untaxedUnitPrice;
+    private BigDecimal taxIncludedTotalPrice;
+    private BigDecimal untaxedTotalPrice;
+    private BigDecimal finalUnitPrice;
+    private BigDecimal finalTotalPrice;
+    private Integer shippedQty;
+    private Integer unshippedQty;
+    private Integer releasedQty;
+    private Integer remainingQty;
+    private LocalDate actualShipDate;
+    private String drawingUrl;
+    private Boolean hasDrawing;
+    private Double materialGrossWeight;
+    private Double partNetWeight;
+    private String quoteMode;
+    private BigDecimal assemblyFee;
+    private BigDecimal baseCost;
+    private String itemType;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object materialData;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object processRoute;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private Object feeData;
+
+    private Integer matchedRfqId;
+    private Integer matchedItemId;
+    private String matchStatus;
+    private String matchMessage;
+    private String remark;
+    private String status;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}

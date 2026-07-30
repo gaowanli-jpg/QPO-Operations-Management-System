@@ -29,16 +29,27 @@ public class OrderRfq {
     private Long ownerDeptId;
 
     private String orderType;
+    @Deprecated
     private String sourceType;
+    @Deprecated
     private String customerCode;
+    @Deprecated
     private String customerShortName;
+    @Deprecated
     private String salesDocumentTypeCode;
+    @Deprecated
     private LocalDate salesOrderDate;
+    @Deprecated
     private String customerOrderNo;
+    @Deprecated
     private String customerProjectNo;
+    @Deprecated
     private String customerOrderTitle;
+    @Deprecated
     private String internalProjectNo;
+    @Deprecated
     private Long salesOrderImportBatchId;
+    @Deprecated
     private Long salesOrderImportRecordId;
 
     private LocalDateTime createdAt;

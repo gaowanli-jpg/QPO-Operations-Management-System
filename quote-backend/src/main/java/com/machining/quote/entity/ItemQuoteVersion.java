@@ -20,12 +20,19 @@ public class ItemQuoteVersion {
     private Integer qty;            // 数量
     private String version;         // 版本 (保留你原有的)
     private String orderType;       // 订单类型 (保留你原有的)
+    @Deprecated
     private Integer salesOrderLineNo;
+    @Deprecated
     private String customerOrderNo;
+    @Deprecated
     private String customerProjectNo;
+    @Deprecated
     private String internalProjectNo;
+    @Deprecated
     private String salesMaterialNo;
+    @Deprecated
     private LocalDate customerDeliveryDate;
+    @Deprecated
     private LocalDate internalDeliveryDate;
 
     // 👇 市场部 Excel 导入新增的 5 个业务字段 👇
@@ -60,9 +67,13 @@ public class ItemQuoteVersion {
     private Double untaxedUnitPrice;
     private Double taxIncludedTotalPrice;
     private Double untaxedTotalPrice;
+    @Deprecated
     private Integer shippedQty;
+    @Deprecated
     private Integer unshippedQty;
+    @Deprecated
     private LocalDate actualShipDate;
+    @Deprecated
     private Long salesOrderImportRecordId;
     private String status; // 状态：未核价 / 已核价 / 已报价 / 已提单 / 无图
 

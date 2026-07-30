@@ -30,8 +30,14 @@ public class SalesOrderImportRecord {
     private String u9Id;
     private String u9Code;
     private String u9ErrorMsg;
+    private Long salesOrderId;
+    private String salesOrderNo;
+    private Integer itemCount;
+    @Deprecated
     private Integer rfqId;
+    @Deprecated
     private String rfqNo;
+    @Deprecated
     private String qpoStatus;
     private Integer matchedItemCount;
     private Integer unmatchedItemCount;

@@ -263,7 +263,7 @@ public class AuditService {
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_U9" -> "导入销售订单并同步U9";
-            case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单进入QPO主流程";
+            case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单到独立主表";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";
             case "QUOTE_REFRESH_TASK_SUBMIT" -> "提交一键刷新核价任务";
             case "AUDIT_RETENTION_CONFIG_UPDATE" -> "更新操作日志保留策略";

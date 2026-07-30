@@ -7,7 +7,6 @@ import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
-import com.machining.quote.service.AuditService;
 import com.machining.quote.service.EngineerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -28,87 +27,116 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SalesOrderQpoImportStage1Test {
-    private static final Path MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V63__sales_order_qpo_import_fields.sql");
+    private static final Path INDEPENDENT_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V65__sales_order_independent_tables.sql");
     private static final Path SCHEMA = Path.of("src", "main", "resources", "schema.sql");
     private static final Path ORDER_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "OrderRfq.java");
     private static final Path ITEM_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "ItemQuoteVersion.java");
-    private static final Path BATCH_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderImportBatch.java");
-    private static final Path RECORD_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderImportRecord.java");
-    private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
-    private static final Path LOG_DOC = Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md");
-    private static final Path DISCUSSION_DOC = Path.of("..", "docs", "QPO报价状态流转", "10-销售订单直提流程方案讨论文档.md");
+    private static final Path SALES_ORDER_HEADER_ENTITY = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderHeader.java");
+    private static final Path SALES_ORDER_ITEM_ENTITY = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderItem.java");
+    private static final Path SALES_ORDER_HEADER_MAPPER = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "mapper", "SalesOrderHeaderMapper.java");
+    private static final Path SALES_ORDER_ITEM_MAPPER = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "mapper", "SalesOrderItemMapper.java");
+    private static final Path BATCH_ENTITY = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderImportBatch.java");
+    private static final Path RECORD_ENTITY = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "entity", "SalesOrderImportRecord.java");
+    private static final Path PERMISSION_DOC = Path.of(
+            "..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
+    private static final Path LOG_DOC = Path.of(
+            "..", "docs", "QPO\u65e5\u5fd7\u6a21\u5757", "03-\u65e5\u5fd7\u8fd0\u7ef4\u8bf4\u660e.md");
+    private static final Path DISCUSSION_DOC = Path.of(
+            "..", "docs", "QPO\u62a5\u4ef7\u72b6\u6001\u6d41\u8f6c", "10-\u9500\u552e\u8ba2\u5355\u76f4\u63d0\u6d41\u7a0b\u65b9\u6848\u8ba8\u8bba\u6587\u6863.md");
 
     @Test
-    void migrationAndSchemaCarrySalesOrderQpoFields() throws IOException {
-        String migration = read(MIGRATION);
+    void migrationAndSchemaCreateIndependentSalesOrderTables() throws IOException {
+        String migration = read(INDEPENDENT_MIGRATION);
         String schema = read(SCHEMA);
 
         assertThat(migration)
-                .contains("ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ'")
-                .contains("ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS customer_code VARCHAR(200)")
-                .contains("ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS sales_document_type_code VARCHAR(50)")
-                .contains("ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS sales_order_import_batch_id BIGINT")
-                .contains("ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS tax_included_unit_price NUMERIC(12, 2)")
-                .contains("ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS untaxed_unit_price NUMERIC(12, 2)")
-                .contains("ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS tax_included_total_price NUMERIC(12, 2)")
-                .contains("ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS untaxed_total_price NUMERIC(12, 2)")
-                .contains("ALTER TABLE sales_order_import_batch ADD COLUMN IF NOT EXISTS import_mode VARCHAR(20) DEFAULT 'U9'")
-                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS rfq_id INTEGER")
-                .contains("CREATE INDEX IF NOT EXISTS idx_order_rfq_source_status_created")
-                .contains("CREATE INDEX IF NOT EXISTS idx_item_quote_version_sales_order_record");
+                .contains("CREATE TABLE IF NOT EXISTS sales_order_header")
+                .contains("sales_order_no VARCHAR(100) NOT NULL")
+                .contains("document_type_code VARCHAR(50) NOT NULL DEFAULT 'SO01'")
+                .contains("customer_id BIGINT")
+                .contains("customer_name VARCHAR(200)")
+                .contains("status VARCHAR(30) NOT NULL DEFAULT '\u5df2\u62a5\u4ef7'")
+                .contains("CREATE TABLE IF NOT EXISTS sales_order_item")
+                .contains("sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id) ON DELETE CASCADE")
+                .contains("sales_material_no VARCHAR(120)")
+                .contains("material_no VARCHAR(120)")
+                .contains("u9_sync_status VARCHAR(30)")
+                .contains("tax_included_unit_price NUMERIC(14, 4)")
+                .contains("untaxed_total_price NUMERIC(14, 2)")
+                .contains("has_drawing BOOLEAN DEFAULT FALSE")
+                .contains("ALTER TABLE sales_order_import_batch ADD COLUMN IF NOT EXISTS import_mode VARCHAR(30) DEFAULT 'U9'")
+                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_id BIGINT")
+                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_no VARCHAR(100)")
+                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0")
+                .contains("COMMENT ON COLUMN order_rfq.source_type IS 'DEPRECATED:")
+                .contains("COMMENT ON COLUMN item_quote_version.sales_order_import_record_id IS 'DEPRECATED:");
         assertThat(schema)
-                .contains("source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ'")
-                .contains("tax_included_unit_price NUMERIC(12, 2)")
-                .contains("untaxed_total_price NUMERIC(12, 2)")
-                .contains("import_mode VARCHAR(20) DEFAULT 'U9'");
+                .contains("CREATE TABLE IF NOT EXISTS sales_order_header")
+                .contains("CREATE TABLE IF NOT EXISTS sales_order_item")
+                .contains("sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id) ON DELETE CASCADE")
+                .contains("material_no VARCHAR(120)")
+                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_id BIGINT");
     }
 
     @Test
-    void entitiesExposeSalesOrderQpoCarrierFields() throws IOException {
-        String order = read(ORDER_ENTITY);
-        String item = read(ITEM_ENTITY);
+    void entitiesExposeIndependentTablesAndDeprecateLegacyRfqCarrierFields() throws IOException {
+        String header = read(SALES_ORDER_HEADER_ENTITY);
+        String item = read(SALES_ORDER_ITEM_ENTITY);
+        String headerMapper = read(SALES_ORDER_HEADER_MAPPER);
+        String itemMapper = read(SALES_ORDER_ITEM_MAPPER);
         String batch = read(BATCH_ENTITY);
         String record = read(RECORD_ENTITY);
+        String order = read(ORDER_ENTITY);
+        String rfqItem = read(ITEM_ENTITY);
 
-        assertThat(order)
-                .contains("import java.time.LocalDate;")
-                .contains("private String sourceType;")
-                .contains("private String customerCode;")
-                .contains("private String customerShortName;")
-                .contains("private String salesDocumentTypeCode;")
-                .contains("private LocalDate salesOrderDate;")
-                .contains("private String customerOrderNo;")
-                .contains("private String customerProjectNo;")
-                .contains("private String customerOrderTitle;")
-                .contains("private String internalProjectNo;")
-                .contains("private Long salesOrderImportBatchId;")
-                .contains("private Long salesOrderImportRecordId;");
+        assertThat(header)
+                .contains("@TableName(\"sales_order_header\")")
+                .contains("private String salesOrderNo;")
+                .contains("private String documentTypeCode;")
+                .contains("private Long customerId;")
+                .contains("private String customerName;")
+                .contains("private String status;")
+                .contains("private String u9SyncStatus;");
         assertThat(item)
-                .contains("import java.time.LocalDate;")
-                .contains("private Integer salesOrderLineNo;")
+                .contains("@TableName(value = \"sales_order_item\", autoResultMap = true)")
+                .contains("private Long salesOrderId;")
+                .contains("private String partNo;")
                 .contains("private String salesMaterialNo;")
-                .contains("private LocalDate customerDeliveryDate;")
-                .contains("private LocalDate internalDeliveryDate;")
-                .contains("private Double taxIncludedUnitPrice;")
-                .contains("private Double untaxedUnitPrice;")
-                .contains("private Double taxIncludedTotalPrice;")
-                .contains("private Double untaxedTotalPrice;")
-                .contains("private Integer shippedQty;")
-                .contains("private Integer unshippedQty;")
-                .contains("private LocalDate actualShipDate;")
-                .contains("private Long salesOrderImportRecordId;");
+                .contains("private String materialNo;")
+                .contains("private BigDecimal taxIncludedUnitPrice;")
+                .contains("private BigDecimal untaxedTotalPrice;")
+                .contains("private Boolean hasDrawing;")
+                .contains("@TableField(typeHandler = JsonbTypeHandler.class)")
+                .contains("private String status;");
+        assertThat(headerMapper).contains("extends BaseMapper<SalesOrderHeader>");
+        assertThat(itemMapper).contains("extends BaseMapper<SalesOrderItem>");
         assertThat(batch).contains("private String importMode;");
         assertThat(record)
+                .contains("private Long salesOrderId;")
+                .contains("private String salesOrderNo;")
+                .contains("private Integer itemCount;")
+                .contains("@Deprecated")
                 .contains("private Integer rfqId;")
-                .contains("private String rfqNo;")
-                .contains("private String qpoStatus;")
-                .contains("private Integer matchedItemCount;")
-                .contains("private Integer unmatchedItemCount;")
-                .contains("private String warningMessage;");
+                .contains("private String rfqNo;");
+        assertThat(order)
+                .contains("@Deprecated")
+                .contains("private String sourceType;")
+                .contains("private Long salesOrderImportRecordId;");
+        assertThat(rfqItem)
+                .contains("@Deprecated")
+                .contains("private Integer salesOrderLineNo;")
+                .contains("private Long salesOrderImportRecordId;");
     }
 
     @Test
-    void existingEngineerQuoteSaveWritesTraceableTaxAndUntaxedPrices() {
+    void existingEngineerQuoteSaveStillWritesTraceableTaxAndUntaxedPrices() {
         EngineerService service = new EngineerService();
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         ItemAssemblyRelationMapper assemblyRelationMapper = mock(ItemAssemblyRelationMapper.class);
@@ -118,7 +146,7 @@ class SalesOrderQpoImportStage1Test {
         ReflectionTestUtils.setField(service, "assemblyRelationMapper", assemblyRelationMapper);
         ReflectionTestUtils.setField(service, "markupFeeMapper", markupFeeMapper);
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", extraFeeItemMapper);
-        when(markupFeeMapper.selectList(any())).thenReturn(List.of(markup("利润", 10.0), markup("税费", 13.0)));
+        when(markupFeeMapper.selectList(any())).thenReturn(List.of(markup("\u5229\u6da6", 10.0), markup("\u7a0e\u8d39", 13.0)));
         when(extraFeeItemMapper.selectList(any())).thenReturn(List.of());
 
         ItemQuoteVersion item = new ItemQuoteVersion();
@@ -148,25 +176,24 @@ class SalesOrderQpoImportStage1Test {
     }
 
     @Test
-    void auditAndDocsDescribeQpoImportSeparatelyFromU9Sync() throws IOException {
-        assertThat(AuditService.inferModule("SALES_ORDER_IMPORT_QPO")).isEqualTo("MARKET");
-        assertThat(AuditService.labelForAction("SALES_ORDER_IMPORT_QPO")).isEqualTo("导入销售订单进入QPO主流程");
-
+    void docsDescribeIndependentSalesOrderBoundary() throws IOException {
         String permissionDoc = read(PERMISSION_DOC);
         String logDoc = read(LOG_DOC);
         String discussionDoc = read(DISCUSSION_DOC);
         assertThat(permissionDoc)
-                .contains("`market:rfq:import-sales-order`")
-                .contains("销售订单导入进入 QPO 主流程")
-                .contains("不调用 U9");
+                .contains("sales_order_header")
+                .contains("sales_order_item")
+                .contains("\u4e0d\u518d\u521b\u5efa QPO `order_rfq`")
+                .contains("\u4e0d\u518d\u521b\u5efa QPO `item_quote_version`");
         assertThat(logDoc)
                 .contains("SALES_ORDER_IMPORT_QPO")
-                .contains("Sales order QPO import")
-                .contains("不记录完整 Excel");
+                .contains("\u72ec\u7acb\u4e3b\u8868")
+                .contains("\u4e0d\u8bb0\u5f55\u5b8c\u6574 Excel");
         assertThat(discussionDoc)
-                .contains("untaxed_unit_price")
-                .contains("tax_included_total_price")
-                .contains("第一步不调用 U9");
+                .contains("sales_order_header")
+                .contains("sales_order_item")
+                .contains("\u9500\u552e\u8ba2\u5355\u5bfc\u5165\u4e0d\u518d\u521b\u5efa `order_rfq`")
+                .contains("\u9500\u552e\u8ba2\u5355\u5bfc\u5165\u4e0d\u518d\u521b\u5efa `item_quote_version`");
     }
 
     private DictMarkupFee markup(String name, double ratePercent) {
