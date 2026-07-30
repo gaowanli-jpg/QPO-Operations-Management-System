@@ -43,6 +43,18 @@ describe('marketApi', () => {
     })
   })
 
+  test('importSalesOrderToQpo uploads sales order form data to QPO flow endpoint', async () => {
+    const formData = new FormData()
+
+    await marketApi.importSalesOrderToQpo(formData)
+
+    expect(request).toHaveBeenCalledWith('/api/market/sales-orders/import-qpo', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  })
+
   test('downloads RFQ and sales order import templates', async () => {
     await marketApi.downloadRfqImportTemplate()
     await marketApi.downloadSalesOrderImportTemplate()

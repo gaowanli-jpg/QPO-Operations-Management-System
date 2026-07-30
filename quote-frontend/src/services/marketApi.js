@@ -19,6 +19,8 @@ export const downloadRfqImportTemplate = () => downloadFile('/api/market/import-
 
 export const importSalesOrder = (formData) => multipartPost('/api/market/sales-orders/import', formData)
 
+export const importSalesOrderToQpo = (formData) => multipartPost('/api/market/sales-orders/import-qpo', formData)
+
 export const downloadSalesOrderImportTemplate = () => downloadFile('/api/market/sales-orders/import/template', '销售订单导入模板.xlsx')
 
 const MARKET_ORDER_ENDPOINTS = {

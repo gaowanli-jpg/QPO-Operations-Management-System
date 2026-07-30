@@ -3,7 +3,7 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">市场部：新单导入中心</h1>
-        <p class="erp-page-description">上传客户询价表和关联图纸，或导入销售订单并同步 U9。</p>
+        <p class="erp-page-description">上传客户询价表和关联图纸，或导入销售订单进入 QPO 主流程。</p>
       </div>
     </header>
 
@@ -151,14 +151,56 @@
 
         <el-tab-pane label="销售订单" name="sales-order">
           <section class="sales-order-workflow">
-            <div class="import-step import-step-sales-order">
+            <div class="import-step import-step-sales-order-meta">
               <div class="section-title">
                 <span class="step-index">01</span>
+                <span>客户与单据类型</span>
+              </div>
+              <div class="form-box step-panel">
+                <el-form :model="salesOrderForm" label-width="120px" class="customer-form sales-order-form">
+                  <el-row :gutter="20" justify="center">
+                    <el-col :xs="24" :md="14" :lg="10" class="customer-input-col">
+                      <el-form-item label="客户" required>
+                        <el-input
+                          :model-value="salesOrderCustomerLabel"
+                          readonly
+                          placeholder="请选择客户主数据"
+                        >
+                          <template #append>
+                            <el-button
+                              v-permission="'market:rfq:customer-select'"
+                              class="existing-customer-button"
+                              @click="openSalesOrderCustomerPicker"
+                            >
+                              选择客户
+                            </el-button>
+                          </template>
+                        </el-input>
+                      </el-form-item>
+                    </el-col>
+                    <el-col :xs="24" :md="10" :lg="6" class="document-type-col">
+                      <el-form-item label="单据类型编码" required>
+                        <el-input
+                          v-model.trim="salesOrderForm.documentTypeCode"
+                          placeholder="SO01"
+                          maxlength="50"
+                          clearable
+                        />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                </el-form>
+              </div>
+            </div>
+
+            <div class="import-step import-step-sales-order">
+              <div class="section-title">
+                <span class="step-index">02</span>
                 <span>上传销售订单（Excel）</span>
               </div>
               <div class="upload-box step-panel">
                 <el-alert
-                  title="销售订单 Excel 需包含客户编码、单据类型编码、客户订单号、业务日期、U9料号、数量、销售单位、计价单位、单价、交期等表头；字段校验以后端返回为准。"
+                  title="销售订单 Excel 按市场实际模板导入，客户和单据类型在页面选择；导入后生成已报价 QPO 订单和零件，字段校验以后端返回为准。"
                   type="info"
                   show-icon
                   :closable="false"
@@ -203,7 +245,7 @@
                       </el-button>
                     </template>
                     <template #tip>
-                      <div class="el-upload__tip">只能上传 1 份销售订单 Excel，导入后将直接同步 U9。</div>
+                      <div class="el-upload__tip">只能上传 1 份销售订单 Excel，导入后创建 QPO 销售订单。</div>
                     </template>
                   </el-upload>
                 </div>
@@ -220,14 +262,14 @@
                 :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                 class="submit-btn import-axis-button"
               >
-                导入并同步 U9
+                导入销售订单
               </el-button>
             </div>
 
             <section v-if="salesOrderImportResult" class="erp-table-surface sales-order-result-surface">
               <div class="erp-toolbar sales-order-result-header">
                 <div>
-                  <h3>销售订单同步结果</h3>
+                  <h3>销售订单导入结果</h3>
                   <p>批次号：{{ salesOrderImportResult.batchNo || '-' }}</p>
                 </div>
                 <div class="sales-order-result-summary">
@@ -252,21 +294,24 @@
                 border
                 stripe
                 height="360"
-                empty-text="暂无同步明细"
+                empty-text="暂无导入明细"
               >
-                <el-table-column prop="otherId" label="外部ID" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
                 <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip />
-                <el-table-column prop="u9Code" label="U9销售订单号" min-width="160" show-overflow-tooltip />
-                <el-table-column prop="status" label="同步状态" width="120" align="center">
+                <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
+                <el-table-column prop="lineCount" label="零件数" width="90" align="right" />
+                <el-table-column prop="matchedItemCount" label="历史匹配数" width="120" align="right" />
+                <el-table-column prop="unmatchedItemCount" label="未匹配数" width="110" align="right" />
+                <el-table-column prop="status" label="状态" width="120" align="center">
                   <template #default="scope">
                     <el-tag :type="scope.row.success ? 'success' : 'danger'" effect="plain">
                       {{ scope.row.success ? '成功' : (scope.row.status || '失败') }}
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="errorMessage" label="失败原因" min-width="240" show-overflow-tooltip>
+                <el-table-column prop="warningMessage" label="提示信息" min-width="240" show-overflow-tooltip>
                   <template #default="scope">
-                    <span>{{ scope.row.errorMessage || '-' }}</span>
+                    <span>{{ scope.row.warningMessage || scope.row.errorMessage || '-' }}</span>
                   </template>
                 </el-table-column>
               </el-table>
@@ -282,6 +327,12 @@
       customer-scope="market-rfq"
       @select="selectExistingCustomer"
     />
+    <CustomerPickerDialog
+      v-model="salesOrderCustomerPickerVisible"
+      :current-customer="salesOrderForm.customerName"
+      customer-scope="market-rfq"
+      @select="selectSalesOrderCustomer"
+    />
   </div>
 </template>
 
@@ -294,7 +345,7 @@ import {
   downloadRfqImportTemplate,
   downloadSalesOrderImportTemplate,
   importRfq,
-  importSalesOrder
+  importSalesOrderToQpo
 } from '../services/marketApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
@@ -308,8 +359,16 @@ const drawingFolderInput = ref(null)
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 const activeImportMode = ref('rfq')
+const salesOrderForm = reactive({
+  customerId: null,
+  customerCode: '',
+  customerShortName: '',
+  customerName: '',
+  documentTypeCode: 'SO01'
+})
 const salesOrderFile = ref(null)
 const salesOrderUploadRef = ref(null)
+const salesOrderCustomerPickerVisible = ref(false)
 const salesOrderImportResult = ref(null)
 const IMPORT_RFQ_ACTION_KEY = 'market:rfq:import'
 const IMPORT_SALES_ORDER_ACTION_KEY = 'market:rfq:import-sales-order'
@@ -335,8 +394,16 @@ const salesOrderResultMessage = computed(() => {
   const result = salesOrderImportResult.value
   if (!result) return ''
   if (result.errorMessage) return result.errorMessage
-  if (result.success) return '销售订单已成功导入并同步 U9。'
-  return '销售订单同步存在失败明细，请查看下方结果表。'
+  if (result.success) return '销售订单已成功导入 QPO 主流程。'
+  return '销售订单导入存在失败明细，请查看下方结果表。'
+})
+const salesOrderCustomerLabel = computed(() => {
+  const parts = [
+    salesOrderForm.customerCode,
+    salesOrderForm.customerShortName,
+    salesOrderForm.customerName
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : ''
 })
 
 const handleSalesOrderExcelChange = (uploadFile) => {
@@ -362,6 +429,18 @@ const resolveCustomerName = (customer) => typeof customer === 'string' ? custome
 
 const selectExistingCustomer = (customer) => {
   rfqForm.customerName = resolveCustomerName(customer)
+}
+
+const openSalesOrderCustomerPicker = () => {
+  salesOrderCustomerPickerVisible.value = true
+}
+
+const selectSalesOrderCustomer = (customer) => {
+  salesOrderForm.customerId = customer?.id || null
+  salesOrderForm.customerCode = customer?.customerCode || ''
+  salesOrderForm.customerShortName = customer?.customerShortName || ''
+  salesOrderForm.customerName = resolveCustomerName(customer)
+  salesOrderImportResult.value = null
 }
 
 const addDrawingFiles = (files, sourceLabel) => {
@@ -464,26 +543,31 @@ const buildDrawingReportHtml = (report) => {
 }
 
 const submitSalesOrderImport = async () => {
+  if (!salesOrderForm.customerId) return ElMessage.warning('请选择销售订单客户！')
   if (!salesOrderFile.value) return ElMessage.warning('请上传销售订单 Excel！')
 
   return runAction(IMPORT_SALES_ORDER_ACTION_KEY, async () => {
     const formData = new FormData()
+    const documentTypeCode = salesOrderForm.documentTypeCode.trim() || 'SO01'
+    formData.append('customerId', String(salesOrderForm.customerId))
+    formData.append('documentTypeCode', documentTypeCode)
     formData.append('excelFile', salesOrderFile.value)
 
     try {
-      const response = await importSalesOrder(formData)
+      const response = await importSalesOrderToQpo(formData)
       salesOrderImportResult.value = response
 
       if (response?.success) {
-        ElMessage.success(`销售订单已同步 U9，成功 ${response.successOrderCount || 0} 单`)
+        salesOrderForm.documentTypeCode = documentTypeCode
+        ElMessage.success(`销售订单已导入 QPO，成功 ${response.successOrderCount || 0} 单`)
         salesOrderFile.value = null
         salesOrderUploadRef.value?.clearFiles?.()
       } else {
-        ElMessage.warning(readActionError({ response: { data: response } }, '销售订单同步存在失败明细，请查看下方结果表。'))
+        ElMessage.warning(readActionError({ response: { data: response } }, '销售订单导入存在失败明细，请查看下方结果表。'))
       }
     } catch (error) {
       console.error(error)
-      ElMessage.error(readActionError(error, '销售订单导入或 U9 同步失败，请稍后重试。'))
+      ElMessage.error(readActionError(error, '销售订单导入 QPO 失败，请稍后重试。'))
     }
   })
 }

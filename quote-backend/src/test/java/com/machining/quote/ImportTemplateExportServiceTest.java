@@ -77,16 +77,16 @@ class ImportTemplateExportServiceTest {
             Sheet helpSheet = workbook.getSheet("字段说明");
 
             assertThat(headers(dataSheet.getRow(0))).containsExactly(
-                    "客户编码", "单据类型编码", "客户订单号", "业务日期", "U9料号", "客户料号", "客户品名",
-                    "数量", "销售单位", "计价单位", "单价", "交期", "业务员编码", "部门编码", "交易币编码",
-                    "核币编码", "收货位置编码", "立账位置编码", "付款客户编码", "付款位置编码", "备注",
-                    "料品版本", "项目编码", "任务编码", "税组合编码", "存储地点编码"
+                    "序号", "下单日期", "客户订单号", "客户项目号", "客户下单抬头", "订单类型", "料号",
+                    "内部项目号", "客户交期", "内部交期(给生产的交期)", "图号", "订单数量", "已出数量",
+                    "未出数量", "描述", "材料", "表面处理", "版本", "VAT单价-含税", "未税单价(CNY)",
+                    "（未税）金额", "实际出货日期", "备注"
             );
             assertThat(styleAt(dataSheet, 0).getFillPattern()).isEqualTo(FillPatternType.SOLID_FOREGROUND);
-            assertThat(styleAt(dataSheet, 0).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 11).getFillForegroundColor());
-            assertThat(styleAt(dataSheet, 0).getFillForegroundColor()).isNotEqualTo(styleAt(dataSheet, 12).getFillForegroundColor());
-            assertThat(helpSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("必填");
-            assertThat(helpSheet.getRow(13).getCell(1).getStringCellValue()).isEqualTo("选填");
+            assertThat(styleAt(dataSheet, 1).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 19).getFillForegroundColor());
+            assertThat(styleAt(dataSheet, 0).getFillForegroundColor()).isNotEqualTo(styleAt(dataSheet, 1).getFillForegroundColor());
+            assertThat(helpSheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("必填");
+            assertThat(helpSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("选填");
         }
     }
 
