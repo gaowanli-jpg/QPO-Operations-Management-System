@@ -27,6 +27,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CustomerMasterBackendStage2Test {
@@ -85,7 +86,8 @@ class CustomerMasterBackendStage2Test {
     @Test
     void serviceRejectsDuplicateFieldsAndSupportsFieldSearchOptions() {
         CustomerMasterMapper mapper = mock(CustomerMasterMapper.class);
-        CustomerMasterService service = service(mapper, mock(AuditService.class));
+        AuditService auditService = mock(AuditService.class);
+        CustomerMasterService service = service(mapper, auditService);
 
         CustomerMasterSaveReq duplicate = new CustomerMasterSaveReq();
         duplicate.setCustomerCode("C001");
@@ -109,6 +111,7 @@ class CustomerMasterBackendStage2Test {
         assertThat(page.getTotal()).isEqualTo(2);
         assertThat(page.getRecords()).extracting(CustomerMasterDTO::getCustomerShortName).containsExactly("A", "B");
         assertThat(options).extracting(CustomerOptionDTO::getCustomerName).containsExactly("Alpha", "Beta");
+        verifyNoInteractions(auditService);
     }
 
     @Test

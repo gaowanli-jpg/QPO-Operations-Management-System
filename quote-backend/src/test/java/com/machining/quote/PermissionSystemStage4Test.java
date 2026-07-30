@@ -31,6 +31,7 @@ class PermissionSystemStage4Test {
                         "/roles",
                         "/organization",
                         "/customers",
+                        "/system-config",
                         "/audit-logs"
                 );
     }

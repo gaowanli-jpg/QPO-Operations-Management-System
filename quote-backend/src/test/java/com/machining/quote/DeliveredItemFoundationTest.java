@@ -168,6 +168,6 @@ class DeliveredItemFoundationTest {
         assertThat(Files.exists(path))
                 .as("%s should exist", path)
                 .isTrue();
-        return Files.readString(path, StandardCharsets.UTF_8);
+        return Files.readString(path, StandardCharsets.UTF_8).replace("\r\n", "\n");
     }
 }
