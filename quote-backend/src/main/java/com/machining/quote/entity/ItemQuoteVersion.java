@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.machining.quote.config.JsonbTypeHandler;
 import lombok.Data;
+import java.time.LocalDate;
 
 @Data
 @TableName(value = "item_quote_version", autoResultMap = true) // 必须加 autoResultMap 开启黑魔法
@@ -19,6 +20,13 @@ public class ItemQuoteVersion {
     private Integer qty;            // 数量
     private String version;         // 版本 (保留你原有的)
     private String orderType;       // 订单类型 (保留你原有的)
+    private Integer salesOrderLineNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
+    private String internalProjectNo;
+    private String salesMaterialNo;
+    private LocalDate customerDeliveryDate;
+    private LocalDate internalDeliveryDate;
 
     // 👇 市场部 Excel 导入新增的 5 个业务字段 👇
     private String materialName;      // 材料名称
@@ -48,6 +56,14 @@ public class ItemQuoteVersion {
     private Double baseCost;
     private Double finalUnitPrice;
     private Double finalTotalPrice;
+    private Double taxIncludedUnitPrice;
+    private Double untaxedUnitPrice;
+    private Double taxIncludedTotalPrice;
+    private Double untaxedTotalPrice;
+    private Integer shippedQty;
+    private Integer unshippedQty;
+    private LocalDate actualShipDate;
+    private Long salesOrderImportRecordId;
     private String status; // 状态：未核价 / 已核价 / 已报价 / 已提单 / 无图
 
     // MyBatis-Plus 会自动把驼峰命名 drawingUrl 映射到数据库的 drawing_url

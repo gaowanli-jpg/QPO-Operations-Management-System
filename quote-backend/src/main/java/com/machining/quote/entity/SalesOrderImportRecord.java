@@ -30,6 +30,12 @@ public class SalesOrderImportRecord {
     private String u9Id;
     private String u9Code;
     private String u9ErrorMsg;
+    private Integer rfqId;
+    private String rfqNo;
+    private String qpoStatus;
+    private Integer matchedItemCount;
+    private Integer unmatchedItemCount;
+    private String warningMessage;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

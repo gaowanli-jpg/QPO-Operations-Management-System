@@ -15,6 +15,7 @@ public class SalesOrderImportBatch {
 
     private String batchNo;
     private String sourceFileName;
+    private String importMode;
     private String status;
     private Integer totalOrderCount;
     private Integer successOrderCount;

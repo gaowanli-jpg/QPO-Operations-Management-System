@@ -4,6 +4,17 @@ CREATE TABLE IF NOT EXISTS order_rfq (
     customer_name VARCHAR(200),
     project_name VARCHAR(255),
     order_type VARCHAR(20),
+    source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ',
+    customer_code VARCHAR(200),
+    customer_short_name VARCHAR(200),
+    sales_document_type_code VARCHAR(50),
+    sales_order_date DATE,
+    customer_order_no VARCHAR(120),
+    customer_project_no VARCHAR(120),
+    customer_order_title VARCHAR(200),
+    internal_project_no VARCHAR(120),
+    sales_order_import_batch_id BIGINT,
+    sales_order_import_record_id BIGINT,
     status VARCHAR(50),
     engineer_config JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -17,6 +28,17 @@ CREATE TABLE IF NOT EXISTS rfq_no_sequence (
 
 ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS engineer_config JSONB;
 ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS order_type VARCHAR(20);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ';
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS customer_code VARCHAR(200);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS customer_short_name VARCHAR(200);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS sales_document_type_code VARCHAR(50);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS sales_order_date DATE;
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(120);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(120);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS customer_order_title VARCHAR(200);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(120);
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS sales_order_import_batch_id BIGINT;
+ALTER TABLE order_rfq ADD COLUMN IF NOT EXISTS sales_order_import_record_id BIGINT;
 ALTER TABLE order_rfq
     ALTER COLUMN engineer_config TYPE JSONB USING NULLIF(engineer_config::TEXT, '')::JSONB;
 
@@ -28,6 +50,13 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     qty INTEGER NOT NULL,
     version VARCHAR(20) DEFAULT 'V1',
     order_type VARCHAR(20),
+    sales_order_line_no INTEGER,
+    customer_order_no VARCHAR(120),
+    customer_project_no VARCHAR(120),
+    internal_project_no VARCHAR(120),
+    sales_material_no VARCHAR(120),
+    customer_delivery_date DATE,
+    internal_delivery_date DATE,
     material_name VARCHAR(255),
     surface_treatment VARCHAR(255),
     unit VARCHAR(50),
@@ -43,6 +72,14 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     base_cost NUMERIC(12, 2),
     final_unit_price NUMERIC(12, 2),
     final_total_price NUMERIC(12, 2),
+    tax_included_unit_price NUMERIC(12, 2),
+    untaxed_unit_price NUMERIC(12, 2),
+    tax_included_total_price NUMERIC(12, 2),
+    untaxed_total_price NUMERIC(12, 2),
+    shipped_qty INTEGER DEFAULT 0,
+    unshipped_qty INTEGER DEFAULT 0,
+    actual_ship_date DATE,
+    sales_order_import_record_id BIGINT,
     status VARCHAR(50),
     drawing_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -53,6 +90,21 @@ ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS quote_lead_time VARCHAR(
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_target_lead_time VARCHAR(50);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4) DEFAULT 0;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_order_line_no INTEGER;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(120);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(120);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(120);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_material_no VARCHAR(120);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_delivery_date DATE;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_delivery_date DATE;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS tax_included_unit_price NUMERIC(12, 2);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS untaxed_unit_price NUMERIC(12, 2);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS tax_included_total_price NUMERIC(12, 2);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS untaxed_total_price NUMERIC(12, 2);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS shipped_qty INTEGER DEFAULT 0;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS unshipped_qty INTEGER DEFAULT 0;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS actual_ship_date DATE;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_order_import_record_id BIGINT;
 ALTER TABLE item_quote_version
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB,
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
@@ -73,6 +125,68 @@ CREATE INDEX IF NOT EXISTS idx_item_quote_version_rfq_status_id
 
 CREATE INDEX IF NOT EXISTS idx_item_quote_version_rfq_part_version_id
     ON item_quote_version(rfq_id, part_no, version, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_rfq_source_status_created
+    ON order_rfq(source_type, status, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_order_rfq_customer_order_no
+    ON order_rfq(customer_order_no);
+
+CREATE INDEX IF NOT EXISTS idx_item_quote_version_sales_order_record
+    ON item_quote_version(sales_order_import_record_id);
+
+CREATE TABLE IF NOT EXISTS sales_order_import_batch (
+    id BIGSERIAL PRIMARY KEY,
+    batch_no VARCHAR(80) NOT NULL UNIQUE,
+    source_file_name VARCHAR(255),
+    import_mode VARCHAR(20) DEFAULT 'U9',
+    status VARCHAR(30) NOT NULL,
+    total_order_count INTEGER DEFAULT 0,
+    success_order_count INTEGER DEFAULT 0,
+    failed_order_count INTEGER DEFAULT 0,
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sales_order_import_record (
+    id BIGSERIAL PRIMARY KEY,
+    batch_id BIGINT NOT NULL REFERENCES sales_order_import_batch(id) ON DELETE CASCADE,
+    other_id VARCHAR(100),
+    customer_order_no VARCHAR(120),
+    order_by VARCHAR(120),
+    document_type VARCHAR(50),
+    line_count INTEGER DEFAULT 0,
+    request_summary_json JSONB,
+    u9_res_code INTEGER,
+    u9_success BOOLEAN,
+    u9_id VARCHAR(120),
+    u9_code VARCHAR(120),
+    u9_error_msg TEXT,
+    rfq_id INTEGER,
+    rfq_no VARCHAR(100),
+    qpo_status VARCHAR(30),
+    matched_item_count INTEGER DEFAULT 0,
+    unmatched_item_count INTEGER DEFAULT 0,
+    warning_message TEXT,
+    status VARCHAR(30) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE sales_order_import_batch ADD COLUMN IF NOT EXISTS import_mode VARCHAR(20) DEFAULT 'U9';
+ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS rfq_id INTEGER;
+ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
+ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS qpo_status VARCHAR(30);
+ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS matched_item_count INTEGER DEFAULT 0;
+ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS unmatched_item_count INTEGER DEFAULT 0;
+ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS warning_message TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_import_record_batch_id
+    ON sales_order_import_record(batch_id);
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_import_record_customer_order_no
+    ON sales_order_import_record(customer_order_no);
 
 CREATE TABLE IF NOT EXISTS dict_material (
     id SERIAL PRIMARY KEY,

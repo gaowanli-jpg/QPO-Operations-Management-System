@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.machining.quote.config.JsonbTypeHandler;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -28,6 +29,17 @@ public class OrderRfq {
     private Long ownerDeptId;
 
     private String orderType;
+    private String sourceType;
+    private String customerCode;
+    private String customerShortName;
+    private String salesDocumentTypeCode;
+    private LocalDate salesOrderDate;
+    private String customerOrderNo;
+    private String customerProjectNo;
+    private String customerOrderTitle;
+    private String internalProjectNo;
+    private Long salesOrderImportBatchId;
+    private Long salesOrderImportRecordId;
 
     private LocalDateTime createdAt;
 }

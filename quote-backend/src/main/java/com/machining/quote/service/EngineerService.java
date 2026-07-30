@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -213,6 +214,8 @@ public class EngineerService {
                 .sum();
         double finalUnitPrice = baseCost + markupCost;
         double finalTotalPrice = finalUnitPrice * qty;
+        double untaxedUnitPrice = untaxedUnitPrice(finalUnitPrice, feeBreakdown);
+        double untaxedTotalPrice = untaxedUnitPrice * qty;
 
         item.setMaterialData(materialData);
         item.setEngineeringMaterialName(engineeringMaterialName);
@@ -225,6 +228,10 @@ public class EngineerService {
         item.setBaseCost(baseCost);
         item.setFinalUnitPrice(finalUnitPrice);
         item.setFinalTotalPrice(finalTotalPrice);
+        item.setTaxIncludedUnitPrice(finalUnitPrice);
+        item.setTaxIncludedTotalPrice(finalTotalPrice);
+        item.setUntaxedUnitPrice(untaxedUnitPrice);
+        item.setUntaxedTotalPrice(untaxedTotalPrice);
         item.setStatus(QuoteStatusWorkflow.PRICED);
 
         deleteAssemblyRelations(item.getId());
@@ -271,6 +278,9 @@ public class EngineerService {
         double baseCost = childrenTotal + safeAssemblyFee;
         double finalUnitPrice = baseCost + assemblyFeeMarkupCost;
         int parentQty = parent.getQty() == null ? 0 : parent.getQty();
+        double finalTotalPrice = finalUnitPrice * parentQty;
+        double untaxedUnitPrice = untaxedUnitPrice(finalUnitPrice, assemblyFeeBreakdown);
+        double untaxedTotalPrice = untaxedUnitPrice * parentQty;
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("quoteMode", QUOTE_MODE_ASSEMBLY);
@@ -312,7 +322,11 @@ public class EngineerService {
         parent.setPartNetWeight(0.0);
         parent.setBaseCost(baseCost);
         parent.setFinalUnitPrice(finalUnitPrice);
-        parent.setFinalTotalPrice(finalUnitPrice * parentQty);
+        parent.setFinalTotalPrice(finalTotalPrice);
+        parent.setTaxIncludedUnitPrice(finalUnitPrice);
+        parent.setTaxIncludedTotalPrice(finalTotalPrice);
+        parent.setUntaxedUnitPrice(untaxedUnitPrice);
+        parent.setUntaxedTotalPrice(untaxedTotalPrice);
         parent.setStatus(QuoteStatusWorkflow.PRICED);
         itemMapper.updateById(parent);
         log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} finalUnitPrice={} toStatus={}",
@@ -847,6 +861,14 @@ public class EngineerService {
         copy.setDescription(source.getDescription());
         copy.setQty(source.getQty());
         copy.setVersion(source.getVersion());
+        copy.setOrderType(source.getOrderType());
+        copy.setSalesOrderLineNo(source.getSalesOrderLineNo());
+        copy.setCustomerOrderNo(source.getCustomerOrderNo());
+        copy.setCustomerProjectNo(source.getCustomerProjectNo());
+        copy.setInternalProjectNo(source.getInternalProjectNo());
+        copy.setSalesMaterialNo(source.getSalesMaterialNo());
+        copy.setCustomerDeliveryDate(source.getCustomerDeliveryDate());
+        copy.setInternalDeliveryDate(source.getInternalDeliveryDate());
         copy.setMaterialName(source.getMaterialName());
         copy.setSurfaceTreatment(source.getSurfaceTreatment());
         copy.setUnit(source.getUnit());
@@ -864,6 +886,14 @@ public class EngineerService {
         copy.setBaseCost(source.getBaseCost());
         copy.setFinalUnitPrice(source.getFinalUnitPrice());
         copy.setFinalTotalPrice(source.getFinalTotalPrice());
+        copy.setTaxIncludedUnitPrice(source.getTaxIncludedUnitPrice());
+        copy.setTaxIncludedTotalPrice(source.getTaxIncludedTotalPrice());
+        copy.setUntaxedUnitPrice(source.getUntaxedUnitPrice());
+        copy.setUntaxedTotalPrice(source.getUntaxedTotalPrice());
+        copy.setShippedQty(source.getShippedQty());
+        copy.setUnshippedQty(source.getUnshippedQty());
+        copy.setActualShipDate(source.getActualShipDate());
+        copy.setSalesOrderImportRecordId(source.getSalesOrderImportRecordId());
         copy.setStatus(source.getStatus());
         copy.setDrawingUrl(source.getDrawingUrl());
         return copy;
@@ -1271,6 +1301,41 @@ public class EngineerService {
                     return cost == null ? 0.0 : cost;
                 })
                 .sum();
+    }
+
+    private double untaxedUnitPrice(double finalUnitPrice, List<Map<String, Object>> feeRows) {
+        double taxCost = sumTaxFeeCosts(feeRows);
+        if (taxCost <= 0) {
+            return finalUnitPrice;
+        }
+        return Math.max(0.0, finalUnitPrice - taxCost);
+    }
+
+    private double sumTaxFeeCosts(List<Map<String, Object>> feeRows) {
+        if (feeRows == null) {
+            return 0.0;
+        }
+        return feeRows.stream()
+                .filter(this::isTaxFeeRow)
+                .mapToDouble(row -> {
+                    Double cost = doubleValue(row.get("cost"));
+                    return cost == null ? 0.0 : cost;
+                })
+                .sum();
+    }
+
+    private boolean isTaxFeeRow(Map<String, Object> row) {
+        if (row == null) {
+            return false;
+        }
+        String feeName = stringValue(row.get("feeName"));
+        if (feeName == null) {
+            return false;
+        }
+        String normalized = feeName.toLowerCase(Locale.ROOT);
+        return normalized.contains("税")
+                || normalized.contains("tax")
+                || normalized.contains("vat");
     }
 
     private double getTieredRate(DictProcess dp, int qty) {
