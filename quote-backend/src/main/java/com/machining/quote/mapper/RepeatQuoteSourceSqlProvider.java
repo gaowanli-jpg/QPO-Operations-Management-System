@@ -21,6 +21,7 @@ public class RepeatQuoteSourceSqlProvider {
         }
 
         String releasedStatus = QuoteStatusWorkflow.ITEM_RELEASED.replace("'", "''");
+        String currentRfqFilter = params.get("currentRfqId") == null ? "" : "\n                      AND h.rfq_id <> #{currentRfqId}";
         return """
                 WITH current_keys(part_no, version) AS (
                     VALUES %s
@@ -32,7 +33,7 @@ public class RepeatQuoteSourceSqlProvider {
                     FROM item_quote_version h
                     WHERE h.part_no = k.part_no
                       AND h.version = k.version
-                      AND h.rfq_id <> #{currentRfqId}
+                      %s
                       AND h.status = '%s'
                       AND h.final_unit_price IS NOT NULL
                       AND h.material_data IS NOT NULL
@@ -41,6 +42,6 @@ public class RepeatQuoteSourceSqlProvider {
                     LIMIT 1
                 ) h ON true
                 ORDER BY h.id DESC
-                """.formatted(values, releasedStatus);
+                """.formatted(values, currentRfqFilter, releasedStatus);
     }
 }

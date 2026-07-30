@@ -7,6 +7,7 @@ import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
+import com.machining.quote.dto.SalesOrderRepeatEnrichmentResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderImportBatch;
@@ -26,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +56,8 @@ public class SalesOrderQpoImportService {
     private SalesOrderHeaderMapper headerMapper;
     @Autowired
     private SalesOrderItemMapper itemMapper;
+    @Autowired(required = false)
+    private SalesOrderRepeatEnrichmentService repeatEnrichmentService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired
@@ -173,10 +177,16 @@ public class SalesOrderQpoImportService {
         headerMapper.updateById(update);
         header.setImportRecordId(record.getId());
 
+        List<SalesOrderItem> insertedItems = new ArrayList<>();
         for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
-            itemMapper.insert(toItem(header, line, now));
+            SalesOrderItem item = toItem(header, line, now);
+            itemMapper.insert(item);
+            insertedItems.add(item);
         }
-        return new CreatedSalesOrder(header.getId(), header.getSalesOrderNo());
+
+        SalesOrderRepeatEnrichmentResult enrichmentResult = enrichSalesOrderItems(insertedItems);
+        updateImportSnapshotResult(header, record, enrichmentResult);
+        return new CreatedSalesOrder(header.getId(), header.getSalesOrderNo(), enrichmentResult);
     }
 
     private SalesOrderImportRecord createRecord(
@@ -284,10 +294,42 @@ public class SalesOrderQpoImportService {
         row.setCustomerOrderNo(group.getCustomerOrderNo());
         row.setInternalProjectNo(group.getInternalProjectNo());
         row.setLineCount(group.getLines().size());
-        row.setMatchedItemCount(0);
-        row.setUnmatchedItemCount(group.getLines().size());
-        row.setWarningMessage(WAITING_SNAPSHOT_MESSAGE);
+        row.setMatchedItemCount(created.matchedItemCount());
+        row.setUnmatchedItemCount(created.unmatchedItemCount());
+        row.setWarningMessage(created.warningMessage());
         return row;
+    }
+
+    private SalesOrderRepeatEnrichmentResult enrichSalesOrderItems(List<SalesOrderItem> insertedItems) {
+        if (repeatEnrichmentService == null) {
+            SalesOrderRepeatEnrichmentResult result = new SalesOrderRepeatEnrichmentResult();
+            result.setMatchedItemCount(0);
+            result.setUnmatchedItemCount(insertedItems == null ? 0 : insertedItems.size());
+            result.setWarningMessage(result.getUnmatchedItemCount() > 0 ? WAITING_SNAPSHOT_MESSAGE : "");
+            return result;
+        }
+        return repeatEnrichmentService.enrich(insertedItems);
+    }
+
+    private void updateImportSnapshotResult(
+            SalesOrderHeader header,
+            SalesOrderImportRecord record,
+            SalesOrderRepeatEnrichmentResult result) {
+        SalesOrderHeader headerUpdate = new SalesOrderHeader();
+        headerUpdate.setId(header.getId());
+        headerUpdate.setMatchedItemCount(result.getMatchedItemCount());
+        headerUpdate.setUnmatchedItemCount(result.getUnmatchedItemCount());
+        headerUpdate.setWarningMessage(result.getWarningMessage());
+        headerUpdate.setUpdatedAt(LocalDateTime.now());
+        headerMapper.updateById(headerUpdate);
+
+        SalesOrderImportRecord recordUpdate = new SalesOrderImportRecord();
+        recordUpdate.setId(record.getId());
+        recordUpdate.setMatchedItemCount(result.getMatchedItemCount());
+        recordUpdate.setUnmatchedItemCount(result.getUnmatchedItemCount());
+        recordUpdate.setWarningMessage(result.getWarningMessage());
+        recordUpdate.setUpdatedAt(LocalDateTime.now());
+        recordMapper.updateById(recordUpdate);
     }
 
     private Map<String, Object> requestSummary(SalesOrderQpoOrderGroupDTO group, String salesOrderNo) {
@@ -392,6 +434,20 @@ public class SalesOrderQpoImportService {
         return isBlank(value) ? "Sales order independent import failed" : value.replaceAll("\\s+", " ").trim();
     }
 
-    private record CreatedSalesOrder(Long salesOrderId, String salesOrderNo) {
+    private record CreatedSalesOrder(
+            Long salesOrderId,
+            String salesOrderNo,
+            SalesOrderRepeatEnrichmentResult enrichmentResult) {
+        private int matchedItemCount() {
+            return enrichmentResult == null ? 0 : enrichmentResult.getMatchedItemCount();
+        }
+
+        private int unmatchedItemCount() {
+            return enrichmentResult == null ? 0 : enrichmentResult.getUnmatchedItemCount();
+        }
+
+        private String warningMessage() {
+            return enrichmentResult == null ? "" : enrichmentResult.getWarningMessage();
+        }
     }
 }
