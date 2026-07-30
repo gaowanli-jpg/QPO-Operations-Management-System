@@ -32,6 +32,7 @@ public class AuditService {
             "confirmpassword",
             "passwordhash",
             "token",
+            "authtoken",
             "jwttoken",
             "clientsecret",
             "accesssecret",
@@ -188,6 +189,7 @@ public class AuditService {
         if (startsWith(action, "AUDIT_")) return "SYSTEM";
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_STORAGE_CONFIG_")) return "SYSTEM";
+        if (startsWith(action, "SYSTEM_INTEGRATION_CONFIG_")) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_U9".equalsIgnoreCase(action)) return "MARKET";
@@ -252,6 +254,12 @@ public class AuditService {
             case "SYSTEM_STORAGE_CONFIG_TEST_FAILED" -> "测试文件存储配置失败";
             case "SYSTEM_STORAGE_CONFIG_ACTIVATE" -> "激活文件存储配置";
             case "SYSTEM_STORAGE_CONFIG_DISABLE" -> "停用文件存储配置";
+            case "SYSTEM_INTEGRATION_CONFIG_CREATE" -> "新增系统对接配置";
+            case "SYSTEM_INTEGRATION_CONFIG_UPDATE" -> "编辑系统对接配置";
+            case "SYSTEM_INTEGRATION_CONFIG_TEST" -> "测试系统对接配置";
+            case "SYSTEM_INTEGRATION_CONFIG_TEST_FAILED" -> "测试系统对接配置失败";
+            case "SYSTEM_INTEGRATION_CONFIG_ACTIVATE" -> "激活系统对接配置";
+            case "SYSTEM_INTEGRATION_CONFIG_DISABLE" -> "停用系统对接配置";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_U9" -> "导入销售订单并同步U9";
