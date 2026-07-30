@@ -18,12 +18,13 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.BusinessFileService;
+import com.machining.quote.service.BusinessFileService.StoredBusinessFile;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.service.ImportTemplateExportService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
-import com.machining.quote.service.OrderFilePathService;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.PartSelectionImportService;
 import com.machining.quote.service.QuoteTemplateExportService;
@@ -39,8 +40,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
@@ -48,7 +47,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/market")
@@ -83,7 +81,7 @@ public class MarketController {
     private ItemQuoteVersionMapper itemQuoteVersionMapper;
 
     @Autowired
-    private OrderFilePathService orderFilePathService;
+    private BusinessFileService businessFileService;
 
     @Autowired
     private RfqNumberService rfqNumberService;
@@ -409,13 +407,10 @@ public class MarketController {
 
             Map<String, DrawingFileInfo> drawingMap = new LinkedHashMap<>();
             List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
-            Path projectDir = null;
             if (drawings != null && !drawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
                 pathOrder.setCustomerName(customerName);
                 pathOrder.setRfqNo(autoRfqNo);
-                projectDir = orderFilePathService.orderDrawingDirectory(pathOrder);
-                Files.createDirectories(projectDir);
 
                 for (MultipartFile drawing : drawings) {
                     String originalFilename = drawing.getOriginalFilename();
@@ -428,15 +423,9 @@ public class MarketController {
                         log.debug("RFQ import drawing parsed rfqNo={} fileName={} partNo={}",
                                 autoRfqNo, cleanFileName, partNoFromFileName);
 
-                        String newFilename = UUID.randomUUID().toString() + ".pdf";
-
-                        Path dest = projectDir.resolve(newFilename).normalize();
-                        if (!dest.startsWith(projectDir)) {
-                            throw new IOException("图纸保存路径非法：" + cleanFileName);
-                        }
-                        drawing.transferTo(dest);
-
-                        String fileUrl = orderFilePathService.drawingUrl(pathOrder, newFilename);
+                        StoredBusinessFile storedFile = businessFileService.saveDrawing(
+                                pathOrder, drawing, "RFQ_IMPORT_DRAWING", autoRfqNo);
+                        String fileUrl = storedFile.publicPath();
                         DrawingFileInfo drawingFileInfo = new DrawingFileInfo(partNoFromFileName, cleanFileName, fileUrl);
                         uploadedDrawings.add(drawingFileInfo);
                         drawingMap.put(partNoFromFileName, drawingFileInfo);

@@ -26,11 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -38,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 public class InternalTargetLeadTimeService {
@@ -58,7 +52,7 @@ public class InternalTargetLeadTimeService {
     @Autowired
     private AuditService auditService;
     @Autowired
-    private OrderFilePathService orderFilePathService;
+    private BusinessFileService businessFileService;
     @Autowired
     private OrderItemPageService orderItemPageService;
     @Autowired(required = false)
@@ -251,13 +245,8 @@ public class InternalTargetLeadTimeService {
                                 releaseMutationBlockedReason(item, Math.max(0, safeInt(item.getQty()) - itemTicketedQty))));
                         continue;
                     }
-                    String fileUrl = newUrlByRfqId.computeIfAbsent(item.getRfqId(), ignored -> {
-                        try {
-                            return saveReleaseDrawing(drawing, cleanFileName, orderById.get(item.getRfqId()));
-                        } catch (IOException e) {
-                            throw new ReleaseDrawingSaveException("图纸保存失败：" + cleanFileName, e);
-                        }
-                    });
+                    String fileUrl = newUrlByRfqId.computeIfAbsent(item.getRfqId(),
+                            ignored -> saveReleaseDrawing(drawing, cleanFileName, orderById.get(item.getRfqId())));
                     item.setDrawingUrl(fileUrl);
                     itemMapper.updateById(item);
                     replacedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName, "已替换"));
@@ -812,21 +801,17 @@ public class InternalTargetLeadTimeService {
         return "零件不可修改";
     }
 
-    private String saveReleaseDrawing(MultipartFile drawing, String cleanFileName, OrderRfq order) throws IOException {
+    private String saveReleaseDrawing(MultipartFile drawing, String cleanFileName, OrderRfq order) {
         if (order == null) {
-            throw new IOException("订单不存在");
+            throw new RuntimeException("订单不存在");
         }
-        Path projectDir = orderFilePathService.orderDrawingDirectory(order);
-        Files.createDirectories(projectDir);
-        String newFilename = UUID.randomUUID() + ".pdf";
-        Path dest = projectDir.resolve(newFilename).normalize();
-        if (!dest.startsWith(projectDir)) {
-            throw new IOException("图纸保存路径非法：" + cleanFileName);
+        try {
+            return businessFileService
+                    .saveDrawing(order, drawing, "RELEASE_DRAWING_REPLACE", String.valueOf(order.getId()))
+                    .publicPath();
+        } catch (RuntimeException e) {
+            throw new ReleaseDrawingSaveException("图纸保存失败：" + cleanFileName, e);
         }
-        try (InputStream inputStream = drawing.getInputStream()) {
-            Files.copy(inputStream, dest, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return orderFilePathService.drawingUrl(order, newFilename);
     }
 
     private String cleanFilename(String originalFilename) {

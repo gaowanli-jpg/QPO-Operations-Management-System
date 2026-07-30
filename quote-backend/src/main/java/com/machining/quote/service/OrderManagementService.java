@@ -19,20 +19,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -48,6 +39,8 @@ public class OrderManagementService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private OrderFilePathService orderFilePathService;
+    @Autowired
+    private BusinessFileService businessFileService;
     @Autowired
     private AuditService auditService;
     @Autowired
@@ -269,11 +262,6 @@ public class OrderManagementService {
             }
         }
 
-        File projectDir = orderFilePathService.orderDrawingDirectory(order).toFile();
-        if (!projectDir.exists() && !projectDir.mkdirs()) {
-            throw new RuntimeException("图纸目录创建失败：" + projectDir.getAbsolutePath());
-        }
-
         List<Map<String, Object>> boundItems = new ArrayList<>();
         List<Map<String, Object>> alreadyBoundItems = new ArrayList<>();
         List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
@@ -300,15 +288,9 @@ public class OrderManagementService {
                 continue;
             }
 
-            String newFilename = UUID.randomUUID() + ".pdf";
-            File dest = new File(projectDir, newFilename);
-            try {
-                drawing.transferTo(dest);
-            } catch (IOException e) {
-                throw new RuntimeException("图纸保存失败：" + cleanFileName, e);
-            }
-
-            String fileUrl = orderFilePathService.drawingUrl(order, newFilename);
+            String fileUrl = businessFileService
+                    .saveDrawing(order, drawing, "ORDER_SUPPLEMENT_DRAWING", String.valueOf(rfqId))
+                    .publicPath();
             for (ItemQuoteVersion item : matchedItems) {
                 if (!isBlank(item.getDrawingUrl())) {
                     alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
@@ -569,87 +551,8 @@ public class OrderManagementService {
 
     private void deleteOrderFiles(OrderRfq order, List<ItemQuoteVersion> items) {
         for (ItemQuoteVersion item : items) {
-            deleteDrawingByUrl(item.getDrawingUrl());
+            businessFileService.deleteByPublicPath(item.getDrawingUrl());
         }
-        deleteDirectoryIfInsideUploadRoot(orderFilePathService.uploadRoot().resolve("orders").resolve(String.valueOf(order.getId())));
-        if (!isBlank(order.getCustomerName()) && !isBlank(order.getProjectName())) {
-            deleteDirectoryIfInsideUploadRoot(orderFilePathService.orderDrawingDirectory(order));
-        }
-    }
-
-    private List<Map<String, Object>> listMissingDrawingFiles(List<ItemQuoteVersion> items) {
-        List<Map<String, Object>> missingFiles = new ArrayList<>();
-        for (ItemQuoteVersion item : items) {
-            if (isBlank(item.getDrawingUrl())) {
-                continue;
-            }
-            try {
-                String pathText = URI.create(item.getDrawingUrl()).getPath();
-                if (!pathText.contains("/uploads/")) {
-                    continue;
-                }
-                String relative = pathText.substring(pathText.indexOf("/uploads/") + "/uploads/".length());
-                Path file = orderFilePathService.uploadRoot().resolve(URLDecoder.decode(relative, StandardCharsets.UTF_8)).normalize();
-                if (isInsideUploadRoot(file) && !Files.isRegularFile(file)) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("itemId", item.getId());
-                    row.put("partNo", item.getPartNo());
-                    row.put("version", item.getVersion());
-                    row.put("drawingUrl", item.getDrawingUrl());
-                    row.put("expectedPath", file.toString());
-                    missingFiles.add(row);
-                }
-            } catch (Exception ignored) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("itemId", item.getId());
-                row.put("partNo", item.getPartNo());
-                row.put("version", item.getVersion());
-                row.put("drawingUrl", item.getDrawingUrl());
-                row.put("expectedPath", "");
-                missingFiles.add(row);
-            }
-        }
-        return missingFiles;
-    }
-
-    private void deleteDrawingByUrl(String drawingUrl) {
-        if (isBlank(drawingUrl) || !drawingUrl.contains("/uploads/")) {
-            return;
-        }
-        try {
-            String pathText = URI.create(drawingUrl).getPath();
-            String relative = pathText.substring(pathText.indexOf("/uploads/") + "/uploads/".length());
-            Path file = orderFilePathService.uploadRoot().resolve(URLDecoder.decode(relative, StandardCharsets.UTF_8)).normalize();
-            if (isInsideUploadRoot(file) && Files.isRegularFile(file)) {
-                Files.deleteIfExists(file);
-            }
-        } catch (Exception e) {
-            log.warn("Order drawing delete skipped drawingUrl={} reason={}", drawingUrl, e.getMessage());
-        }
-    }
-
-    private void deleteDirectoryIfInsideUploadRoot(Path directory) {
-        Path normalized = directory.normalize();
-        if (!isInsideUploadRoot(normalized) || !Files.exists(normalized)) {
-            return;
-        }
-        try {
-            Files.walk(normalized)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (IOException e) {
-                            log.warn("Order directory file delete skipped path={} reason={}", path, e.getMessage());
-                        }
-                    });
-        } catch (IOException e) {
-            log.warn("Order directory delete skipped path={} reason={}", normalized, e.getMessage());
-        }
-    }
-
-    private boolean isInsideUploadRoot(Path path) {
-        return path.toAbsolutePath().normalize().startsWith(orderFilePathService.uploadRoot());
     }
 
     private String buildOrderFileRoot(OrderRfq order) {

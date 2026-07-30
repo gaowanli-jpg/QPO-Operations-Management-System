@@ -9,14 +9,14 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.LeadTimeService;
-import com.machining.quote.service.OrderFilePathService;
 import com.machining.quote.service.OrderItemPageService;
+import com.machining.quote.storage.StorageType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -113,9 +113,8 @@ class ReleaseVersionDrawingStage1Test {
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         AuditService auditService = mock(AuditService.class);
         InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, auditService, null);
-        OrderFilePathService filePathService = new OrderFilePathService();
-        ReflectionTestUtils.setField(filePathService, "uploadDir", tempDir.toString());
-        ReflectionTestUtils.setField(service, "orderFilePathService", filePathService);
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
 
         OrderRfq firstOrder = releaseOrder(101, "RFQ-101");
         OrderRfq secondOrder = releaseOrder(102, "RFQ-102");
@@ -134,6 +133,20 @@ class ReleaseVersionDrawingStage1Test {
                 "application/pdf",
                 "%PDF-1.4 replacement".getBytes(StandardCharsets.UTF_8)
         );
+        when(businessFileService.saveDrawing(any(OrderRfq.class), eq(drawing), eq("RELEASE_DRAWING_REPLACE"), any()))
+                .thenAnswer(invocation -> {
+                    OrderRfq order = invocation.getArgument(0);
+                    String publicPath = "/uploads/ACME/" + order.getRfqNo() + "/replacement-" + order.getId() + ".pdf";
+                    return new BusinessFileService.StoredBusinessFile(
+                            publicPath,
+                            StorageType.LOCAL,
+                            1L,
+                            publicPath.substring("/uploads/".length()),
+                            "DRW-001.pdf",
+                            "application/pdf",
+                            drawing.getSize(),
+                            null);
+                });
 
         Map<String, Object> result = service.replaceReleaseDrawings(List.of(101, 102), List.of(drawing));
         List<Map<String, Object>> replacedItems = (List<Map<String, Object>>) result.get("replacedItems");
@@ -150,7 +163,8 @@ class ReleaseVersionDrawingStage1Test {
         assertThat(secondItem.getDrawingUrl()).contains("/uploads/ACME/RFQ-102/");
         assertThat(firstItem.getDrawingUrl()).isNotEqualTo("/uploads/old-a.pdf");
         assertThat(secondItem.getDrawingUrl()).isNotEqualTo("/uploads/old-b.pdf");
-        assertThat(Files.walk(tempDir).filter(Files::isRegularFile).count()).isEqualTo(2);
+        verify(businessFileService).saveDrawing(eq(firstOrder), eq(drawing), eq("RELEASE_DRAWING_REPLACE"), eq("101"));
+        verify(businessFileService).saveDrawing(eq(secondOrder), eq(drawing), eq("RELEASE_DRAWING_REPLACE"), eq("102"));
         verify(itemMapper).updateById(firstItem);
         verify(itemMapper).updateById(secondItem);
         verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("item_quote_version"), eq("101,102"),
@@ -196,6 +210,7 @@ class ReleaseVersionDrawingStage1Test {
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "orderItemPageService", mock(OrderItemPageService.class));
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
+        ReflectionTestUtils.setField(service, "businessFileService", mock(BusinessFileService.class));
         return service;
     }
 
