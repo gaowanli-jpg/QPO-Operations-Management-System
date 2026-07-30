@@ -19,6 +19,8 @@ public class DeliveredItemService {
     private OrderRfqMapper orderRfqMapper;
     @Autowired
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private CustomerMasterService customerMasterService;
 
     public PageResult<DeliveredItemDTO> listTickets(DeliveredItemQueryReq req) {
         DeliveredItemQueryReq effectiveReq = req == null ? new DeliveredItemQueryReq() : req;
@@ -50,6 +52,9 @@ public class DeliveredItemService {
     }
 
     public List<String> listCustomers() {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerNamesForCurrentScope();
+        }
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
         query.isNotNull("COALESCE(ticket.customer_name, rfq.customer_name)");
         query.ne("COALESCE(ticket.customer_name, rfq.customer_name)", "");

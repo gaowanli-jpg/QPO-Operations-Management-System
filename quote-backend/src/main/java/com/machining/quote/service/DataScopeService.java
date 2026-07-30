@@ -3,9 +3,11 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.entity.AuditLog;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
@@ -30,6 +32,8 @@ public class DataScopeService {
     private SystemRoleDataScopeCustomerMapper dataScopeCustomerMapper;
     @Autowired(required = false)
     private OrderRfqMapper orderRfqMapper;
+    @Autowired(required = false)
+    private CustomerMasterMapper customerMasterMapper;
 
     public void applyOrderScope(QueryWrapper<OrderRfq> query) {
         applyScopeSql(query, currentOrderScopeSql(""));
@@ -114,6 +118,21 @@ public class DataScopeService {
     }
 
     public List<String> listCustomerOptions() {
+        if (customerMasterMapper != null) {
+            QueryWrapper<CustomerMaster> query = new QueryWrapper<>();
+            query.select("customer_name");
+            query.eq("enabled", true);
+            query.isNotNull("customer_name");
+            query.ne("customer_name", "");
+            // Customer options now come from customer_master while preserving order data-scope filtering.
+            applyCustomerMasterScope(query);
+            query.orderByAsc("customer_name").orderByAsc("id");
+            return customerMasterMapper.selectList(query).stream()
+                    .map(CustomerMaster::getCustomerName)
+                    .filter(value -> !isBlank(value))
+                    .distinct()
+                    .toList();
+        }
         if (orderRfqMapper == null) {
             return List.of();
         }
@@ -128,6 +147,19 @@ public class DataScopeService {
                 .filter(value -> !isBlank(value))
                 .distinct()
                 .toList();
+    }
+
+    private void applyCustomerMasterScope(QueryWrapper<CustomerMaster> query) {
+        ScopeSql scopeSql = currentOrderScopeSql("");
+        if (scopeSql.allAccess()) {
+            return;
+        }
+        if (scopeSql.noAccess()) {
+            query.apply("1 = 0");
+            return;
+        }
+        query.apply("customer_name IN (SELECT DISTINCT customer_name FROM order_rfq WHERE " + scopeSql.sql() + ")",
+                scopeSql.params().toArray());
     }
 
     private void applyScopeSql(QueryWrapper<?> query, ScopeSql scopeSql) {

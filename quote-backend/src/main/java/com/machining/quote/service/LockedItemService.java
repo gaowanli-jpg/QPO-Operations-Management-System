@@ -19,6 +19,8 @@ public class LockedItemService {
     private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private CustomerMasterService customerMasterService;
 
     public LockedItemPageDTO listAllocations(LockedItemQueryReq req) {
         LockedItemQueryReq effectiveReq = req == null ? new LockedItemQueryReq() : req;
@@ -46,6 +48,9 @@ public class LockedItemService {
     }
 
     public List<String> listCustomers() {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerNamesForCurrentScope();
+        }
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         query.isNotNull("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)");
         query.ne("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");

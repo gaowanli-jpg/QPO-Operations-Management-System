@@ -30,6 +30,7 @@ class PermissionSystemStage4Test {
                         "/users",
                         "/roles",
                         "/organization",
+                        "/customers",
                         "/audit-logs"
                 );
     }
@@ -69,6 +70,9 @@ class PermissionSystemStage4Test {
                 "system:role:assign-data-scope",
                 "system:dept:manage",
                 "system:post:manage",
+                "system:customer:create",
+                "system:customer:update",
+                "system:customer:delete",
                 "system:audit:export",
                 "system:audit:retention"
         );

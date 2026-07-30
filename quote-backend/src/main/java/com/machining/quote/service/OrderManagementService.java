@@ -53,6 +53,8 @@ public class OrderManagementService {
     private DeliveryService deliveryService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private CustomerMasterService customerMasterService;
 
     public List<Map<String, Object>> listOrderSummaries(String customerName) {
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
@@ -151,6 +153,9 @@ public class OrderManagementService {
     }
 
     public List<String> listCustomers() {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerNamesForCurrentScope();
+        }
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
         applyOrderDataScope(qw);
         qw.select("DISTINCT customer_name");
