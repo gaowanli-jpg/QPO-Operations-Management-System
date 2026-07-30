@@ -2,6 +2,10 @@ package com.machining.quote;
 
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
+import com.machining.quote.integration.ExternalAuthType;
+import com.machining.quote.integration.ExternalIntegrationConfig;
+import com.machining.quote.integration.ExternalIntegrationConfigService;
+import com.machining.quote.integration.ExternalSystemCode;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -65,6 +69,58 @@ class MesMaterialClientTest {
             assertThat(response.getMaterialNo()).isEqualTo("MES-002");
             assertThat(captured.path.get()).isEqualTo("/api/material");
             assertThat(captured.authorization.get()).isEqualTo("Bearer token-abc");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void resolveMaterialUsesActiveIntegrationConfigServiceConfig() throws IOException {
+        CapturedRequest captured = new CapturedRequest();
+        HttpServer server = server(exchange -> {
+            captured.capture(exchange);
+            respond(exchange, 200, "{\"success\":true,\"materialNo\":\"MES-DB\"}");
+        });
+        try {
+            MesMaterialClient client = client("http://legacy-mes.invalid", "legacy-token", "/legacy", 1000);
+            ReflectionTestUtils.setField(client, "externalIntegrationConfigService", configService(mesConfig(
+                    baseUrl(server),
+                    "/db/material",
+                    "db-token",
+                    1000
+            )));
+
+            MesMaterialResolveResp response = client.resolveMaterial(request());
+
+            assertThat(response.getMaterialNo()).isEqualTo("MES-DB");
+            assertThat(captured.path.get()).isEqualTo("/db/material");
+            assertThat(captured.authorization.get()).isEqualTo("Bearer db-token");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void resolveMaterialUsesEnvironmentFallbackFromConfigService() throws IOException {
+        CapturedRequest captured = new CapturedRequest();
+        HttpServer server = server(exchange -> {
+            captured.capture(exchange);
+            respond(exchange, 200, "{\"success\":true,\"materialNo\":\"MES-ENV\"}");
+        });
+        try {
+            ExternalIntegrationConfigService configService = new ExternalIntegrationConfigService(null);
+            ReflectionTestUtils.setField(configService, "mesBaseUrl", baseUrl(server));
+            ReflectionTestUtils.setField(configService, "mesAuthToken", "env-token");
+            ReflectionTestUtils.setField(configService, "mesMaterialPath", "/env/material");
+            ReflectionTestUtils.setField(configService, "mesTimeoutMs", 1000);
+            MesMaterialClient client = client("", "", "/legacy", 1000);
+            ReflectionTestUtils.setField(client, "externalIntegrationConfigService", configService);
+
+            MesMaterialResolveResp response = client.resolveMaterial(request());
+
+            assertThat(response.getMaterialNo()).isEqualTo("MES-ENV");
+            assertThat(captured.path.get()).isEqualTo("/env/material");
+            assertThat(captured.authorization.get()).isEqualTo("Bearer env-token");
         } finally {
             server.stop(0);
         }
@@ -167,6 +223,41 @@ class MesMaterialClientTest {
         return client;
     }
 
+    private ExternalIntegrationConfigService configService(ExternalIntegrationConfig config) {
+        return new ExternalIntegrationConfigService(null) {
+            @Override
+            public ExternalIntegrationConfig activeConfig(ExternalSystemCode systemCode) {
+                return config;
+            }
+        };
+    }
+
+    private ExternalIntegrationConfig mesConfig(String baseUrl, String materialPath, String authToken, Integer timeoutMs) {
+        return new ExternalIntegrationConfig(
+                101L,
+                "MES active",
+                ExternalSystemCode.MES,
+                true,
+                true,
+                isBlank(authToken) ? ExternalAuthType.NONE : ExternalAuthType.BEARER_TOKEN,
+                baseUrl,
+                materialPath,
+                null,
+                authToken,
+                timeoutMs,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
     private MesMaterialResolveReq request() {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
         req.setTicketId(123);
@@ -207,6 +298,10 @@ class MesMaterialClientTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private interface ExchangeHandler {

@@ -2,6 +2,10 @@ package com.machining.quote;
 
 import com.machining.quote.dto.wms.WmsAllocationReq;
 import com.machining.quote.dto.wms.WmsAllocationResp;
+import com.machining.quote.integration.ExternalAuthType;
+import com.machining.quote.integration.ExternalIntegrationConfig;
+import com.machining.quote.integration.ExternalIntegrationConfigService;
+import com.machining.quote.integration.ExternalSystemCode;
 import com.machining.quote.service.wms.WmsAllocationClient;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -179,6 +183,58 @@ class WmsAllocationClientTest {
     }
 
     @Test
+    void allocateUsesActiveIntegrationConfigServiceConfig() throws IOException {
+        CapturedRequest captured = new CapturedRequest();
+        HttpServer server = server(exchange -> {
+            captured.capture(exchange);
+            respond(exchange, 200, "{\"success\":true,\"materialNo\":\"MAT-DB\"}");
+        });
+        try {
+            WmsAllocationClient client = client("http://legacy-wms.invalid", "legacy-token", "/legacy", 1000);
+            ReflectionTestUtils.setField(client, "externalIntegrationConfigService", configService(wmsConfig(
+                    baseUrl(server),
+                    "/db/allocate",
+                    "db-token",
+                    1000
+            )));
+
+            WmsAllocationResp response = client.allocate(request());
+
+            assertThat(response.getMaterialNo()).isEqualTo("MAT-DB");
+            assertThat(captured.path.get()).isEqualTo("/db/allocate");
+            assertThat(captured.authorization.get()).isEqualTo("Bearer db-token");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void allocateUsesEnvironmentFallbackFromConfigService() throws IOException {
+        CapturedRequest captured = new CapturedRequest();
+        HttpServer server = server(exchange -> {
+            captured.capture(exchange);
+            respond(exchange, 200, "{\"success\":true,\"materialNo\":\"MAT-ENV\"}");
+        });
+        try {
+            ExternalIntegrationConfigService configService = new ExternalIntegrationConfigService(null);
+            ReflectionTestUtils.setField(configService, "wmsBaseUrl", baseUrl(server));
+            ReflectionTestUtils.setField(configService, "wmsAuthToken", "env-token");
+            ReflectionTestUtils.setField(configService, "wmsAllocationPath", "/env/allocate");
+            ReflectionTestUtils.setField(configService, "wmsTimeoutMs", 1000);
+            WmsAllocationClient client = client("", "", "/legacy", 1000);
+            ReflectionTestUtils.setField(client, "externalIntegrationConfigService", configService);
+
+            WmsAllocationResp response = client.allocate(request());
+
+            assertThat(response.getMaterialNo()).isEqualTo("MAT-ENV");
+            assertThat(captured.path.get()).isEqualTo("/env/allocate");
+            assertThat(captured.authorization.get()).isEqualTo("Bearer env-token");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void allocateReturnsWmsFailureResponseForBusinessFailure() throws IOException {
         HttpServer server = server(exchange ->
                 respond(exchange, 200, "{\"success\":false,\"message\":\"inventory unavailable\",\"externalTraceId\":\"WMS-T-2\"}"));
@@ -260,6 +316,41 @@ class WmsAllocationClientTest {
         return client;
     }
 
+    private ExternalIntegrationConfigService configService(ExternalIntegrationConfig config) {
+        return new ExternalIntegrationConfigService(null) {
+            @Override
+            public ExternalIntegrationConfig activeConfig(ExternalSystemCode systemCode) {
+                return config;
+            }
+        };
+    }
+
+    private ExternalIntegrationConfig wmsConfig(String baseUrl, String allocationPath, String authToken, Integer timeoutMs) {
+        return new ExternalIntegrationConfig(
+                201L,
+                "WMS active",
+                ExternalSystemCode.WMS,
+                true,
+                true,
+                isBlank(authToken) ? ExternalAuthType.NONE : ExternalAuthType.BEARER_TOKEN,
+                baseUrl,
+                null,
+                allocationPath,
+                authToken,
+                timeoutMs,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
     private WmsAllocationReq request() {
         WmsAllocationReq req = new WmsAllocationReq();
         req.setTicketId(123);
@@ -301,6 +392,10 @@ class WmsAllocationClientTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private interface ExchangeHandler {
