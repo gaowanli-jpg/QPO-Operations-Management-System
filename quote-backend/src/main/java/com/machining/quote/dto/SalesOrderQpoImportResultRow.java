@@ -11,6 +11,8 @@ public class SalesOrderQpoImportResultRow {
     private String customerOrderNo;
     private String internalProjectNo;
     private Integer lineCount;
+    private Integer matchedItemCount;
+    private Integer unmatchedItemCount;
     private String warningMessage;
     private String errorMessage;
 }

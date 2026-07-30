@@ -6,6 +6,7 @@ import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
+import com.machining.quote.dto.SalesOrderRepeatEnrichmentResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -57,6 +59,8 @@ public class SalesOrderQpoImportService {
     private RfqNumberService rfqNumberService;
     @Autowired
     private AuditService auditService;
+    @Autowired(required = false)
+    private SalesOrderRepeatEnrichmentService repeatEnrichmentService;
 
     @Transactional
     public SalesOrderQpoImportResp importQpo(MultipartFile excelFile, Long customerId, String documentTypeCode) {
@@ -140,10 +144,15 @@ public class SalesOrderQpoImportService {
         update.setSalesOrderImportRecordId(record.getId());
         orderMapper.updateById(update);
 
+        List<ItemQuoteVersion> importedItems = new ArrayList<>();
         for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
-            itemMapper.insert(toItem(order, record, line));
+            ItemQuoteVersion item = toItem(order, record, line);
+            itemMapper.insert(item);
+            importedItems.add(item);
         }
-        return new CreatedOrder(order.getId(), order.getRfqNo(), record.getId());
+        SalesOrderRepeatEnrichmentResult enrichment = enrichImportedItems(order.getId(), importedItems);
+        updateRecordWithEnrichment(record, enrichment);
+        return new CreatedOrder(order.getId(), order.getRfqNo(), record.getId(), enrichment);
     }
 
     private SalesOrderImportBatch createBatch(
@@ -246,7 +255,34 @@ public class SalesOrderQpoImportService {
         row.setCustomerOrderNo(group.getCustomerOrderNo());
         row.setInternalProjectNo(group.getInternalProjectNo());
         row.setLineCount(group.getLines().size());
+        row.setMatchedItemCount(created.enrichment().getMatchedItemCount());
+        row.setUnmatchedItemCount(created.enrichment().getUnmatchedItemCount());
+        row.setWarningMessage(created.enrichment().getWarningMessage());
         return row;
+    }
+
+    private SalesOrderRepeatEnrichmentResult enrichImportedItems(Integer rfqId, List<ItemQuoteVersion> importedItems) {
+        if (repeatEnrichmentService == null) {
+            SalesOrderRepeatEnrichmentResult result = new SalesOrderRepeatEnrichmentResult();
+            result.setUnmatchedItemCount(importedItems == null ? 0 : importedItems.size());
+            return result;
+        }
+        return repeatEnrichmentService.enrich(rfqId, importedItems);
+    }
+
+    private void updateRecordWithEnrichment(SalesOrderImportRecord record, SalesOrderRepeatEnrichmentResult enrichment) {
+        if (record == null || record.getId() == null || enrichment == null) {
+            return;
+        }
+        SalesOrderImportRecord update = new SalesOrderImportRecord();
+        update.setId(record.getId());
+        update.setMatchedItemCount(enrichment.getMatchedItemCount());
+        update.setUnmatchedItemCount(enrichment.getUnmatchedItemCount());
+        update.setWarningMessage(enrichment.getWarningMessage());
+        recordMapper.updateById(update);
+        record.setMatchedItemCount(enrichment.getMatchedItemCount());
+        record.setUnmatchedItemCount(enrichment.getUnmatchedItemCount());
+        record.setWarningMessage(enrichment.getWarningMessage());
     }
 
     private Map<String, Object> requestSummary(SalesOrderQpoOrderGroupDTO group, String rfqNo) {
@@ -279,6 +315,12 @@ public class SalesOrderQpoImportService {
                 .filter(rfqNo -> !isBlank(rfqNo))
                 .limit(10)
                 .toList());
+        summary.put("matchedItemCount", resp.getRows().stream()
+                .mapToInt(row -> row.getMatchedItemCount() == null ? 0 : row.getMatchedItemCount())
+                .sum());
+        summary.put("unmatchedItemCount", resp.getRows().stream()
+                .mapToInt(row -> row.getUnmatchedItemCount() == null ? 0 : row.getUnmatchedItemCount())
+                .sum());
         summary.put("durationMs", System.currentTimeMillis() - startedAt);
         auditService.record(
                 ACTION,
@@ -344,6 +386,6 @@ public class SalesOrderQpoImportService {
         return value == null || value.trim().isEmpty();
     }
 
-    private record CreatedOrder(Integer rfqId, String rfqNo, Long recordId) {
+    private record CreatedOrder(Integer rfqId, String rfqNo, Long recordId, SalesOrderRepeatEnrichmentResult enrichment) {
     }
 }
