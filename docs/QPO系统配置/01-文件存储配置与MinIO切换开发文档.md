@@ -595,6 +595,15 @@ WMS 库存/锁库不需要图纸文件。文件存储切换对 WMS 请求、并�
 - 补充部署说明：本地开发默认 LOCAL，验证 MinIO 时启动 MinIO 容器；测试/生产可以接公司统一 MinIO。
 - 跑后端单元/集成测试和前端测试。
 
+### 阶段 7：后端管理接口闭环（补充）
+
+阶段 5 的前端页面依赖 `/api/system/storage-configs` 系列后端接口。阶段 1-4 已完成表、权限、存储抽象和文件读写链路，但仍需要补齐配置管理 Controller 与管理服务，详见 `docs/QPO系统配置/02-文件存储配置后端管理接口补充开发文档.md`。
+
+- 新增 `SystemStorageConfigController`，暴露配置列表、当前激活配置、新增、编辑、测试、激活、停用接口。
+- 新增 `SystemStorageConfigManageService`，处理字段校验、密钥脱敏、编辑留空沿用旧 secret、测试状态落库、激活互斥和停用保护。
+- 扩展 `AuditService` 敏感字段脱敏和 `SYSTEM_STORAGE_CONFIG_*` 操作标签。
+- 补充后端阶段 7 测试，确保权限、接口、审计和脱敏完整。
+
 ## 15. 测试清单
 
 后端测试：

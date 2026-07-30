@@ -34,6 +34,11 @@ public class AuditService {
             "token",
             "jwttoken",
             "clientsecret",
+            "accesssecret",
+            "secretkey",
+            "miniosecret",
+            "erpminiokey",
+            "erpminiosecretkey",
             "authorization",
             "authorizationheader",
             "xauthtoken",
@@ -182,6 +187,7 @@ public class AuditService {
     public static String inferModule(String action) {
         if (startsWith(action, "AUDIT_")) return "SYSTEM";
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
+        if (startsWith(action, "SYSTEM_STORAGE_CONFIG_")) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_U9".equalsIgnoreCase(action)) return "MARKET";
@@ -239,6 +245,12 @@ public class AuditService {
             case "CUSTOMER_MASTER_CREATE" -> "新增客户资料";
             case "CUSTOMER_MASTER_UPDATE" -> "更新客户资料";
             case "CUSTOMER_MASTER_DELETE" -> "删除客户资料";
+            case "SYSTEM_STORAGE_CONFIG_CREATE" -> "新增文件存储配置";
+            case "SYSTEM_STORAGE_CONFIG_UPDATE" -> "编辑文件存储配置";
+            case "SYSTEM_STORAGE_CONFIG_TEST" -> "测试文件存储配置";
+            case "SYSTEM_STORAGE_CONFIG_TEST_FAILED" -> "测试文件存储配置失败";
+            case "SYSTEM_STORAGE_CONFIG_ACTIVATE" -> "激活文件存储配置";
+            case "SYSTEM_STORAGE_CONFIG_DISABLE" -> "停用文件存储配置";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_U9" -> "导入销售订单并同步U9";
