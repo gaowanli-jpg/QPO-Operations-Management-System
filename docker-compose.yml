@@ -84,17 +84,20 @@ services:
       # Legacy APS compatibility. Backend uses this only for /api/aps/source token validation.
       # APS_ERP_* stays in env files for old local bridge tools and is not injected here.
       ERP_APS_SOURCE_TOKEN: ${ERP_APS_SOURCE_TOKEN:-}
-      # MES material-number sync configuration.
+      # External integration fallback configuration.
+      # Backend still receives ERP_MES/ERP_WMS/ERP_U9 so local development and emergency fallback
+      # work when System Config > System Integration has no active DB config. Active DB config wins.
+      # MES material-number sync fallback configuration.
       ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
       ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
       ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
       ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
-      # WMS inventory allocation configuration.
+      # WMS inventory allocation fallback configuration.
       ERP_WMS_BASE_URL: ${ERP_WMS_BASE_URL:-}
       ERP_WMS_AUTH_TOKEN: ${ERP_WMS_AUTH_TOKEN:-}
       ERP_WMS_ALLOCATION_PATH: ${ERP_WMS_ALLOCATION_PATH:-/api/wms/inventory/allocate}
       ERP_WMS_TIMEOUT_MS: ${ERP_WMS_TIMEOUT_MS:-10000}
-      # U9 sales order sync configuration.
+      # U9 sales order sync fallback configuration.
       ERP_U9_BASE_URL: ${ERP_U9_BASE_URL:-}
       ERP_U9_USER_CODE: ${ERP_U9_USER_CODE:-}
       ERP_U9_ENT_CODE: ${ERP_U9_ENT_CODE:-}
