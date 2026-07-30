@@ -192,7 +192,8 @@ public class AuditService {
                 || startsWith(action, "SYSTEM_USER_")
                 || startsWith(action, "SYSTEM_ROLE_")
                 || startsWith(action, "SYSTEM_DEPT_")
-                || startsWith(action, "SYSTEM_POST_")) return "SYSTEM";
+                || startsWith(action, "SYSTEM_POST_")
+                || startsWith(action, "CUSTOMER_MASTER_")) return "SYSTEM";
         if (startsWith(action, "ORDER_")) return "ORDER";
         if (startsWith(action, "DELIVERY_") || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
         if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_") || startsWith(action, "RELEASE_")) return "MARKET";
@@ -235,6 +236,9 @@ public class AuditService {
             case "SYSTEM_POST_ENABLE" -> "启用岗位";
             case "SYSTEM_POST_DISABLE" -> "禁用岗位";
             case "SYSTEM_POST_DELETE" -> "删除岗位";
+            case "CUSTOMER_MASTER_CREATE" -> "新增客户资料";
+            case "CUSTOMER_MASTER_UPDATE" -> "更新客户资料";
+            case "CUSTOMER_MASTER_DELETE" -> "删除客户资料";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_U9" -> "导入销售订单并同步U9";
