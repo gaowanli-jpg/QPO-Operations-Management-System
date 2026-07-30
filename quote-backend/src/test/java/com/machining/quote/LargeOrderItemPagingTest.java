@@ -8,6 +8,7 @@ import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -482,7 +483,7 @@ class LargeOrderItemPagingTest {
         createItem(unrelatedOrder, "SHARED-IMPORT-01", QuoteStatusWorkflow.QUOTED, 12.0, "/import-c.pdf");
 
         Map<String, Object> result = internalTargetLeadTimeService.matchPartSelectionBatch(
-                List.of(firstOrder.getId(), secondOrder.getId()),
+                List.of(ReleaseOrderSource.rfq(firstOrder.getId()), ReleaseOrderSource.rfq(secondOrder.getId())),
                 List.of(importedSelection("", "SHARED-IMPORT-01", "A")));
         List<Map<String, Object>> selectedRows = (List<Map<String, Object>>) result.get("data");
 
@@ -508,7 +509,7 @@ class LargeOrderItemPagingTest {
         ItemQuoteVersion secondItem = createItem(secondOrder, "RFQ-SPECIFIC-01", QuoteStatusWorkflow.QUOTED, 11.0, "/rfq-b.pdf");
 
         Map<String, Object> result = internalTargetLeadTimeService.matchPartSelectionBatch(
-                List.of(firstOrder.getId(), secondOrder.getId()),
+                List.of(ReleaseOrderSource.rfq(firstOrder.getId()), ReleaseOrderSource.rfq(secondOrder.getId())),
                 List.of(importedSelection(secondOrder.getRfqNo(), "RFQ-SPECIFIC-01", "A")));
         List<Map<String, Object>> selectedRows = (List<Map<String, Object>>) result.get("data");
 

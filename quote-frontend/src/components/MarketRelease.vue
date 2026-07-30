@@ -24,7 +24,7 @@
               empty-text="请在右上角选择订单"
             >
               <el-table-column prop="customerName" label="客户" min-width="86" show-overflow-tooltip />
-              <el-table-column prop="rfqNo" label="RFQ号" min-width="122" show-overflow-tooltip />
+              <el-table-column prop="sourceOrderNo" label="来源单号" min-width="122" show-overflow-tooltip />
               <el-table-column prop="status" label="订单状态" width="94" align="center">
                 <template #default="{ row }">
                   <el-tag :type="statusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
@@ -196,7 +196,7 @@
               ref="itemTableRef"
               class="release-selection-table"
               :data="pagedReleaseItems"
-              row-key="id"
+              :row-key="rowKey"
               border
               stripe
               height="640"
@@ -205,7 +205,8 @@
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />
-              <el-table-column prop="rfqNo" label="RFQ号" width="150" fixed show-overflow-tooltip />
+              <el-table-column prop="sourceType" label="来源" width="90" fixed show-overflow-tooltip />
+              <el-table-column prop="sourceOrderNo" label="来源单号" width="150" fixed show-overflow-tooltip />
               <el-table-column prop="customerName" label="客户" width="130" show-overflow-tooltip />
               <el-table-column prop="orderStatus" label="订单状态" width="110" align="center">
                 <template #default="{ row }">
@@ -293,7 +294,7 @@
               <el-table-column label="通过数量" width="130" align="center">
                 <template #default="scope">
                   <el-input-number
-                    v-model="acceptedQtyMap[scope.row.id]"
+                    v-model="acceptedQtyMap[rowKey(scope.row)]"
                     :min="remainingQtyFor(scope.row) > 0 ? 1 : 0"
                     :max="remainingQtyFor(scope.row)"
                     :disabled="!canSelectItem(scope.row)"
@@ -456,7 +457,7 @@
       :allowed-statuses="RELEASE_ALLOWED_STATUSES"
       :multiple="true"
       :locked-customer-name="selectedCustomerName"
-      :selected-order-ids="selectedOrderIds"
+      :selected-order-ids="selectedOrderKeys"
       @select="handleOrderSelected"
     />
   </div>
@@ -509,7 +510,18 @@ let syncingReleaseItemSelection = false
 
 const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
 
-const selectedOrderIds = computed(() => selectedOrders.value.map(order => order.id))
+const toReleaseOrderSource = (order) => ({
+  sourceType: order?.sourceType || 'RFQ',
+  sourceOrderId: Number(order?.sourceOrderId ?? order?.id)
+})
+const sourceKey = (source) => `${source?.sourceType || 'RFQ'}:${source?.sourceOrderId ?? source?.id ?? ''}`
+const rowKey = (row) => row?.releaseItemKey || `${row?.sourceType || 'RFQ'}:${row?.sourceItemId ?? row?.id ?? ''}`
+const isSalesOrderSource = (source) => source?.sourceType === 'SALES_ORDER'
+const selectedOrderSources = computed(() => selectedOrders.value.map(toReleaseOrderSource))
+const selectedOrderKeys = computed(() => selectedOrderSources.value.map(sourceKey))
+const selectedRfqIds = computed(() => selectedOrderSources.value
+  .filter(source => source.sourceType === 'RFQ')
+  .map(source => source.sourceOrderId))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
 const { isPending, runAction } = usePendingAction()
 const releaseActionKeys = {
@@ -519,7 +531,7 @@ const releaseActionKeys = {
   setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
   version: (itemId) => `market:release:version:${itemId}`,
   internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`,
-  generateTicket: () => `market:release:generate-ticket:${selectedOrderIds.value.join(',') || 'none'}`
+  generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join(',') || 'none'}`
 }
 const submitting = computed(() => isPending(releaseActionKeys.generateTicket()))
 const adjustingInternalLeadTime = computed(() => isPending(releaseActionKeys.shiftInternalLeadTime))
@@ -541,7 +553,7 @@ const releaseForm = reactive({
 
 const pagedReleaseItems = computed(() => itemList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
-const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => row.id)))
+const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => rowKey(row))))
 const replacementReplacedItems = computed(() => replacementDrawingResult.value?.replacedItems || [])
 const replacementUnmatchedDrawings = computed(() => replacementDrawingResult.value?.unmatchedDrawings || [])
 const replacementSkippedFiles = computed(() => replacementDrawingResult.value?.skippedFiles || [])
@@ -563,7 +575,7 @@ const syncReleaseItemTableSelection = async () => {
   await nextTick()
   itemTableRef.value?.clearSelection()
   pagedReleaseItems.value.forEach(row => {
-    if (selectedReleaseItemIds.value.has(row.id)) {
+    if (selectedReleaseItemIds.value.has(rowKey(row))) {
       itemTableRef.value?.toggleRowSelection(row, true)
     }
   })
@@ -584,21 +596,34 @@ const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
+const firstSelectedRfqId = () => selectedOrderSources.value
+  .find(source => source.sourceType === 'RFQ')?.sourceOrderId || null
+
+const applyReleaseDefaultsFromOrder = (order) => {
+  const wasEmpty = selectedOrders.value.length === 0
+  if (!wasEmpty || !isSalesOrderSource(order)) return
+  releaseForm.orderType = order.orderType || releaseForm.orderType
+  releaseForm.internalProjectNo = order.internalProjectNo || releaseForm.internalProjectNo
+  releaseForm.customerOrderNo = order.customerOrderNo || releaseForm.customerOrderNo
+  releaseForm.customerProjectNo = order.customerProjectNo || releaseForm.customerProjectNo
+}
+
 const handleOrderSelected = async (orderOrOrders) => {
   const incomingOrders = Array.isArray(orderOrOrders) ? orderOrOrders : [orderOrOrders]
-  const existingIds = new Set(selectedOrderIds.value)
+  const existingKeys = new Set(selectedOrderKeys.value)
   const nextOrders = incomingOrders
-    .filter(order => order?.id && !existingIds.has(order.id))
+    .filter(order => order?.id && !existingKeys.has(sourceKey(toReleaseOrderSource(order))))
   if (nextOrders.length === 0) return
 
   const wasEmpty = selectedOrders.value.length === 0
-  selectedOrders.value = [...selectedOrders.value, ...nextOrders]
-  selectedRfqId.value = selectedOrders.value[0]?.id || null
-  resetReleasePagination()
   if (wasEmpty) {
     resetReleaseFormForOrders()
     clearSelectedRows()
   }
+  applyReleaseDefaultsFromOrder(nextOrders[0])
+  selectedOrders.value = [...selectedOrders.value, ...nextOrders]
+  selectedRfqId.value = firstSelectedRfqId()
+  resetReleasePagination()
   loading.value = true
   try {
     await fetchReleaseItemsBatch()
@@ -608,25 +633,24 @@ const handleOrderSelected = async (orderOrOrders) => {
 }
 
 const removeSelectedOrder = async (order) => {
-  const orderId = order?.id
-  if (!orderId) return
-  const orderIdText = String(orderId)
+  const orderKey = sourceKey(toReleaseOrderSource(order))
+  if (!orderKey) return
 
   const relatedRows = [
     ...itemList.value,
     ...Object.values(selectedItemIdMap)
-  ].filter(row => (
-    String(row?.rfqId || '') === orderIdText
-    || (row?.rfqId == null && String(selectedRfqId.value || '') === orderIdText)
-  ))
+  ].filter(row => sourceKey({
+    sourceType: row?.sourceType || 'RFQ',
+    sourceOrderId: row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value
+  }) === orderKey)
 
   relatedRows.forEach(row => {
-    delete selectedItemIdMap[row.id]
-    delete acceptedQtyMap[row.id]
+    delete selectedItemIdMap[rowKey(row)]
+    delete acceptedQtyMap[rowKey(row)]
   })
 
-  selectedOrders.value = selectedOrders.value.filter(item => item.id !== orderId)
-  selectedRfqId.value = selectedOrders.value[0]?.id || null
+  selectedOrders.value = selectedOrders.value.filter(item => sourceKey(toReleaseOrderSource(item)) !== orderKey)
+  selectedRfqId.value = firstSelectedRfqId()
   resetReleasePagination()
 
   if (selectedOrders.value.length === 0) {
@@ -652,7 +676,7 @@ const loadOrder = async (rfqId) => {
     const response = await getReleaseSummary(rfqId)
     const refreshedOrder = response.orderInfo || {}
     selectedOrders.value = selectedOrders.value.map(order => order.id === rfqId ? { ...order, ...refreshedOrder } : order)
-    selectedRfqId.value = selectedOrders.value[0]?.id || null
+    selectedRfqId.value = firstSelectedRfqId()
     await fetchReleaseItemsBatch()
     clearSelectedRows()
     await nextTick()
@@ -666,13 +690,14 @@ const loadOrder = async (rfqId) => {
 }
 
 const fetchReleaseItemsBatch = async () => {
-  if (selectedOrderIds.value.length === 0) {
+  if (selectedOrderSources.value.length === 0) {
     setItemList([])
     releaseItemTotal.value = 0
     return
   }
   const response = await listReleaseItemsBatch({
-    rfqIds: selectedOrderIds.value,
+    sources: selectedOrderSources.value,
+    rfqIds: selectedRfqIds.value,
     page: releaseItemPagination.page,
     pageSize: releaseItemPagination.pageSize
   })
@@ -695,12 +720,13 @@ const setItemList = (rows) => {
     versionDraft: row.version || ''
   }))
   itemList.value.forEach(item => {
+    const key = rowKey(item)
     const remainingQty = remainingQtyFor(item)
-    if (!acceptedQtyMap[item.id] || acceptedQtyMap[item.id] > remainingQty) {
-      acceptedQtyMap[item.id] = remainingQty > 0 ? remainingQty : 0
+    if (!acceptedQtyMap[key] || acceptedQtyMap[key] > remainingQty) {
+      acceptedQtyMap[key] = remainingQty > 0 ? remainingQty : 0
     }
-    if (selectedItemIdMap[item.id]) {
-      selectedItemIdMap[item.id] = { ...selectedItemIdMap[item.id], ...item }
+    if (selectedItemIdMap[key]) {
+      selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...item }
     }
   })
 }
@@ -740,8 +766,8 @@ const saveReleaseItemVersion = async (row) => {
       if (index >= 0) {
         itemList.value.splice(index, 1, saved)
       }
-      if (selectedItemIdMap[row.id]) {
-        selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
+      if (selectedItemIdMap[rowKey(row)]) {
+        selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }
       }
       ElMessage.success('版本已保存。')
     } catch (error) {
@@ -753,11 +779,11 @@ const saveReleaseItemVersion = async (row) => {
 
 const handleSelectionChange = (rows) => {
   if (syncingReleaseItemSelection) return
-  const currentPageIds = new Set(itemList.value.map(row => row.id))
+  const currentPageIds = new Set(itemList.value.map(row => rowKey(row)))
   currentPageIds.forEach(id => delete selectedItemIdMap[id])
   rows.forEach(row => {
     if (canSelectItem(row)) {
-      selectedItemIdMap[row.id] = row
+      selectedItemIdMap[rowKey(row)] = row
     }
   })
 }
@@ -770,12 +796,16 @@ const selectedRowsInItemOrder = () => {
 }
 
 const selectedRowsRfqIds = () => {
-  return [...new Set(selectedRows.value.map(row => row.rfqId || selectedRfqId.value).filter(Boolean))]
+  return [...new Set(selectedRows.value
+    .filter(row => (row?.sourceType || 'RFQ') === 'RFQ')
+    .map(row => row.rfqId || row.sourceOrderId || selectedRfqId.value)
+    .filter(Boolean))]
 }
 
 const groupSelectedRowsByRfqId = (rows) => {
   const groups = new Map()
   ;(rows || []).forEach(row => {
+    if ((row?.sourceType || 'RFQ') !== 'RFQ') return
     const rfqId = row.rfqId || selectedRfqId.value
     if (!rfqId) return
     if (!groups.has(rfqId)) {
@@ -799,7 +829,7 @@ const formatGenerationFailures = (failedResults) => {
 
 const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) => {
   successItemIds.forEach(id => delete selectedItemIdMap[id])
-  const refreshedOrders = await Promise.all(selectedOrderIds.value.map(async (rfqId) => {
+  const refreshedOrders = await Promise.all(selectedRfqIds.value.map(async (rfqId) => {
     try {
       const response = await getReleaseSummary(rfqId)
       return { rfqId, orderInfo: response.orderInfo || {} }
@@ -812,7 +842,7 @@ const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) 
     const refreshed = refreshedOrders.find(item => item.rfqId === order.id)
     return refreshed?.orderInfo ? { ...order, ...refreshed.orderInfo } : order
   })
-  selectedRfqId.value = selectedOrders.value[0]?.id || null
+  selectedRfqId.value = firstSelectedRfqId()
   await fetchReleaseItemsBatch()
 }
 
@@ -832,7 +862,7 @@ const requireSingleSelectedRowsRfqId = (actionText) => {
 const handleSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
   selectionUploadRef.value?.clearFiles()
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择询价单。')
+  if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择询价单。')
   if (!file) return
 
   const fileName = String(file.name || '').toLowerCase()
@@ -842,15 +872,16 @@ const handleSelectionExcelChange = async (uploadFile) => {
 
   const formData = new FormData()
   formData.append('excelFile', file)
-  formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))
+  formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))
+  formData.append('sources', JSON.stringify(selectedOrderSources.value))
   return runAction(releaseActionKeys.importSelection, async () => {
     try {
       const response = await parsePartSelectionBatch(formData)
       clearSelectedRows()
       ;(response?.data || []).forEach(row => {
-        selectedItemIdMap[row.id] = row
+        selectedItemIdMap[rowKey(row)] = row
         const remainingQty = remainingQtyFor(row)
-        acceptedQtyMap[row.id] = remainingQty > 0 ? remainingQty : 0
+        acceptedQtyMap[rowKey(row)] = remainingQty > 0 ? remainingQty : 0
       })
       await syncReleaseItemTableSelection()
 
@@ -948,11 +979,12 @@ const removeReplacementDrawingFile = (index) => {
 }
 
 const submitReplacementDrawings = async () => {
-  if (selectedOrderIds.value.length === 0) return ElMessage.warning('请先选择询价单。')
+  if (selectedRfqIds.value.length === 0) return ElMessage.warning('请先选择询价单。')
   if (replacementDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
 
   const formData = new FormData()
-  formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))
+  formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))
+  formData.append('sources', JSON.stringify(selectedOrderSources.value))
   replacementDrawingFiles.value.forEach(file => formData.append('drawings', file))
 
   return runAction(releaseActionKeys.replaceDrawings, async () => {
@@ -1060,8 +1092,8 @@ const saveInternalTargetLeadTime = async (row) => {
       if (index >= 0) {
         itemList.value.splice(index, 1, saved)
       }
-      if (selectedItemIdMap[row.id]) {
-        selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }
+      if (selectedItemIdMap[rowKey(row)]) {
+        selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }
       }
       ElMessage.success('内部目标交期已保存。')
     } catch (error) {
@@ -1087,7 +1119,7 @@ const submitTicket = async () => {
     return ElMessage.warning(`仍有 ${unquoted.length} 个零件未报价，暂不生成提单。`)
   }
 
-  const overRemaining = orderedSelectedRows.filter(row => Number(acceptedQtyMap[row.id] || 0) > remainingQtyFor(row))
+  const overRemaining = orderedSelectedRows.filter(row => Number(acceptedQtyMap[rowKey(row)] || 0) > remainingQtyFor(row))
   if (overRemaining.length > 0) {
     return ElMessage.warning(`有 ${overRemaining.length} 个零件的通过数量超过剩余可提数量。`)
   }
@@ -1119,14 +1151,14 @@ const submitTicket = async () => {
           arrangeType: releaseForm.arrangeType,
           items: rows.map(row => ({
             itemId: row.id,
-            acceptedQty: acceptedQtyMap[row.id] || remainingQtyFor(row)
+            acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)
           }))
         }
         try {
           const response = await generateTicket(payload)
           if (response.success) {
             successfulResults.push({ rfqId, rows, response })
-            rows.forEach(row => successItemIds.add(row.id))
+            rows.forEach(row => successItemIds.add(rowKey(row)))
           } else {
             failedResults.push({ rfqId, rows, message: response.message || '提单生成失败。' })
           }

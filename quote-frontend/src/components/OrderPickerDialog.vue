@@ -72,13 +72,13 @@
           <el-table-column label="操作" width="90" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
-                :type="isOrderSelected(row.id) ? 'success' : 'primary'"
+                :type="isOrderSelected(row) ? 'success' : 'primary'"
                 size="small"
-                :plain="!isOrderSelected(row.id)"
-                :disabled="isOrderAlreadySelected(row.id)"
+                :plain="!isOrderSelected(row)"
+                :disabled="isOrderAlreadySelected(row)"
                 @click.stop="selectOrder(row)"
               >
-                {{ isOrderSelected(row.id) ? '已选择' : '选择' }}
+                {{ isOrderSelected(row) ? '已选择' : '选择' }}
               </el-button>
             </template>
           </el-table-column>
@@ -201,6 +201,7 @@ let keywordTimer = null
 const multiple = computed(() => props.multiple)
 const lockedCustomerName = computed(() => props.lockedCustomerName || '')
 const pendingSelectedOrderCount = computed(() => Object.keys(pendingSelectedOrders).length)
+const orderSourceKey = (order) => `${order?.sourceType || 'RFQ'}:${order?.sourceOrderId ?? order?.id ?? ''}`
 
 const statusOptions = computed(() => {
   const allowed = props.allowedStatuses.filter(Boolean)
@@ -261,7 +262,7 @@ const submitOrder = () => {
     visible.value = false
     return
   }
-  const order = selectedOrder.value || orders.value.find(item => item.id === selectedOrderId.value)
+  const order = selectedOrder.value || orders.value.find(item => orderSourceKey(item) === selectedOrderId.value)
   if (!order) return
   emit('select', order)
   visible.value = false
@@ -278,16 +279,17 @@ const resetPicker = () => {
 }
 
 const selectOrder = (order) => {
+  const key = orderSourceKey(order)
   if (props.multiple) {
-    if (isOrderAlreadySelected(order.id)) return
-    if (pendingSelectedOrders[order.id]) {
-      delete pendingSelectedOrders[order.id]
+    if (isOrderAlreadySelected(order)) return
+    if (pendingSelectedOrders[key]) {
+      delete pendingSelectedOrders[key]
     } else {
-      pendingSelectedOrders[order.id] = order
+      pendingSelectedOrders[orderSourceKey(order)] = order
     }
     return
   }
-  selectedOrderId.value = order.id
+  selectedOrderId.value = key
   selectedOrder.value = order
 }
 
@@ -336,17 +338,18 @@ const loadOrders = async () => {
 }
 
 const resolveRowClassName = ({ row }) => {
-  return isOrderSelected(row.id) ? 'selected-order-row' : ''
+  return isOrderSelected(row) ? 'selected-order-row' : ''
 }
 
-const isOrderAlreadySelected = (orderId) => {
-  return props.selectedOrderIds.includes(orderId)
+const isOrderAlreadySelected = (row) => {
+  return props.selectedOrderIds.includes(orderSourceKey(row))
 }
 
-const isOrderSelected = (orderId) => {
+const isOrderSelected = (row) => {
+  const key = orderSourceKey(row)
   return props.multiple
-    ? isOrderAlreadySelected(orderId) || Boolean(pendingSelectedOrders[orderId])
-    : orderId === selectedOrderId.value
+    ? isOrderAlreadySelected(row) || Boolean(pendingSelectedOrders[key])
+    : key === selectedOrderId.value
 }
 
 const statusTagType = (status) => {

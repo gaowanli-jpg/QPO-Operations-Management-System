@@ -6,6 +6,7 @@ import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -203,7 +204,7 @@ class MarketReleaseBatchPagingTest {
         when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
 
         Map<String, Object> result = service.matchPartSelectionBatch(
-                List.of(101, 102),
+                List.of(ReleaseOrderSource.rfq(101), ReleaseOrderSource.rfq(102)),
                 List.of(importedSelection("", "SHARED-IMPORT-01", "A")));
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("data");
 
@@ -236,7 +237,7 @@ class MarketReleaseBatchPagingTest {
         when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
 
         Map<String, Object> result = service.matchPartSelectionBatch(
-                List.of(101, 102),
+                List.of(ReleaseOrderSource.rfq(101), ReleaseOrderSource.rfq(102)),
                 List.of(importedSelection("RFQ-BATCH-B", "RFQ-SPECIFIC-01", "A")));
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("data");
 

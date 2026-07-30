@@ -55,7 +55,7 @@ describe('market release stage 5 cleanup', () => {
       'order-scope="release"',
       ':allowed-statuses="RELEASE_ALLOWED_STATUSES"',
       ':multiple="true"',
-      ':selected-order-ids="selectedOrderIds"',
+      ':selected-order-ids="selectedOrderKeys"',
       ':locked-customer-name="selectedCustomerName"',
       ':data="pagedReleaseItems"',
       'releaseItemPagination',

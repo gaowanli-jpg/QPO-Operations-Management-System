@@ -29,7 +29,7 @@ describe('release drawing replacement stage 4', () => {
     expect(source).toContain('clientSkippedReplacementFiles')
     expect(source).toContain('仅支持 PDF 图纸')
 
-    expect(submitBlock).toContain("formData.append('rfqIds', JSON.stringify(selectedOrderIds.value))")
+    expect(submitBlock).toContain("formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))")
     expect(submitBlock).toContain("formData.append('drawings', file)")
     expect(submitBlock).toContain('const response = await replaceReleaseDrawings(formData)')
     expect(submitBlock).toContain('await fetchReleaseItemsBatch()')
@@ -58,7 +58,7 @@ describe('release drawing replacement stage 4', () => {
 
     expect(inquiryPanel).toContain('selected-orders-mini-table')
     expect(inquiryPanel).toContain('prop="customerName"')
-    expect(inquiryPanel).toContain('prop="rfqNo"')
+    expect(inquiryPanel).toContain('prop="sourceOrderNo"')
     expect(inquiryPanel).toContain('prop="status"')
     expect(inquiryPanel).toContain('height="132"')
     expect(inquiryPanel).not.toContain('order-picker-row')

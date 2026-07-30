@@ -47,7 +47,7 @@ describe('market duplicate click guards', () => {
     expect(source).toContain("setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time'")
     expect(source).toContain('version: (itemId) => `market:release:version:${itemId}`')
     expect(source).toContain('internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`')
-    expect(source).toContain('generateTicket: () => `market:release:generate-ticket:${selectedOrderIds.value.join')
+    expect(source).toContain('generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join')
   })
 
   test('market release wraps write actions with runAction duplicate guards', () => {

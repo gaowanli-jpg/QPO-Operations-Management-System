@@ -6,6 +6,7 @@ import java.util.List;
 
 @Data
 public class ReleaseItemBatchQueryReq {
+    private List<ReleaseOrderSource> sources;
     private List<Integer> rfqIds;
     private Integer page;
     private Integer pageSize;

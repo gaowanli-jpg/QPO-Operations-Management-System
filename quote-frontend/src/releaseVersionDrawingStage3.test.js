@@ -34,7 +34,7 @@ describe('release version edit stage 3', () => {
     expect(saveBlock).toContain('rfqId: rowRfqId')
     expect(saveBlock).toContain('version: row.versionDraft')
     expect(saveBlock).toContain('itemList.value.splice(index, 1, saved)')
-    expect(saveBlock).toContain('selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }')
+    expect(saveBlock).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
     expect(saveBlock).not.toContain('clearSelectedRows()')
     expect(saveBlock).not.toContain('fetchReleaseItemsBatch()')
   })
@@ -47,7 +47,7 @@ describe('release version edit stage 3', () => {
     )
 
     expect(source).toContain('const selectedRows = computed(() => Object.values(selectedItemIdMap))')
-    expect(source).toContain('selectedItemIdMap[row.id] = { ...selectedItemIdMap[row.id], ...saved }')
+    expect(source).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
     expect(submitBlock).toContain('const orderedSelectedRows = selectedRowsInItemOrder()')
     expect(submitBlock).toContain('items: rows.map(row => ({')
   })

@@ -11,6 +11,7 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
+import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -128,13 +129,13 @@ public class MarketController {
 
     @GetMapping("/release/orders")
     @RequirePermission("market:release:order-select")
-    public PageResult<OrderRfq> listReleaseOrders(
+    public PageResult<Map<String, Object>> listReleaseOrders(
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listReleaseOrderSources(customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/tickets/{rfqId}")
@@ -278,9 +279,10 @@ public class MarketController {
     @RequirePermission("market:release:create")
     public Map<String, Object> parsePartSelectionForOrders(
             @RequestParam("excelFile") MultipartFile excelFile,
-            @RequestParam("rfqIds") String rfqIdsJson) {
+            @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
+            @RequestParam(value = "sources", required = false) String sourcesJson) {
         return internalTargetLeadTimeService.matchPartSelectionBatch(
-                parseRfqIds(rfqIdsJson),
+                parseReleaseSources(sourcesJson, rfqIdsJson),
                 partSelectionImportService.readPartSelectionRows(excelFile));
     }
 
@@ -622,6 +624,20 @@ public class MarketController {
         } catch (Exception e) {
             throw new IllegalArgumentException("rfqIds must be a JSON integer array", e);
         }
+    }
+
+    private List<ReleaseOrderSource> parseReleaseSources(String sourcesJson, String rfqIdsJson) {
+        if (sourcesJson != null && !sourcesJson.isBlank()) {
+            try {
+                return OBJECT_MAPPER.readValue(sourcesJson, new TypeReference<List<ReleaseOrderSource>>() {
+                });
+            } catch (Exception e) {
+                throw new IllegalArgumentException("sources must be a JSON release source array", e);
+            }
+        }
+        return parseRfqIds(rfqIdsJson).stream()
+                .map(ReleaseOrderSource::rfq)
+                .toList();
     }
 
     private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {

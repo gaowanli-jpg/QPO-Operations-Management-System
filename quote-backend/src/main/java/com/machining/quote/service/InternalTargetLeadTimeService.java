@@ -11,17 +11,24 @@ import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
+import com.machining.quote.dto.ReleaseOrderSource;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.util.DrawingPartNoResolver;
 import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,6 +56,12 @@ public class InternalTargetLeadTimeService {
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
+    @Autowired
+    private SalesOrderItemMapper salesOrderItemMapper;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
     private LeadTimeService leadTimeService;
     @Autowired
     private AuditService auditService;
@@ -62,11 +76,11 @@ public class InternalTargetLeadTimeService {
     public Map<String, Object> shiftLeadTimes(InternalTargetLeadTimeShiftReq req) {
         requireOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
-            throw new RuntimeException("请至少选择一个零件");
+            throw new RuntimeException("Please select at least one item.");
         }
         int days = req.getDays() == null ? 0 : req.getDays();
         if (days == 0) {
-            throw new RuntimeException("调整天数不能为 0");
+            throw new RuntimeException("閻犲鍟弳锝嗗緞閳哄倹娈跺☉鎾崇Х閸忔ɑ绋?0");
         }
 
         List<Map<String, Object>> skipped = new ArrayList<>();
@@ -74,7 +88,7 @@ public class InternalTargetLeadTimeService {
         for (Integer itemId : req.getItemIds()) {
             ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
-                skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
+                skipped.add(skipRow(itemId, "", "", "闂傚棙婀瑰▎銏＄▔瀹ュ懐鎽犻柛锔哄妽閸ㄣ劍绋夊鍛剑濞存粌楠哥紞瀣礈?RFQ"));
                 continue;
             }
 
@@ -108,7 +122,7 @@ public class InternalTargetLeadTimeService {
     public Map<String, Object> setLeadTimes(InternalTargetLeadTimeSetReq req) {
         requireOrderForUpdate(req.getRfqId());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
-            throw new RuntimeException("请至少选择一个零件");
+            throw new RuntimeException("Please select at least one item.");
         }
         String normalizedDate = leadTimeService.normalizeRequiredDate(req.getInternalTargetLeadTime());
 
@@ -117,7 +131,7 @@ public class InternalTargetLeadTimeService {
         for (Integer itemId : req.getItemIds()) {
             ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
-                skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
+                skipped.add(skipRow(itemId, "", "", "闂傚棙婀瑰▎銏＄▔瀹ュ懐鎽犻柛锔哄妽閸ㄣ劍绋夊鍛剑濞存粌楠哥紞瀣礈?RFQ"));
                 continue;
             }
 
@@ -146,11 +160,11 @@ public class InternalTargetLeadTimeService {
     public Map<String, Object> updateLeadTime(InternalTargetLeadTimeUpdateReq req) {
         requireOrderForUpdate(req.getRfqId());
         if (req.getItemId() == null) {
-            throw new RuntimeException("零件 ID 不能为空");
+            throw new RuntimeException("Item ID is required");
         }
         ItemQuoteVersion item = itemMapper.selectByIdForUpdate(req.getItemId());
         if (item == null || !req.getRfqId().equals(item.getRfqId())) {
-            throw new RuntimeException("零件不存在或不属于当前 RFQ");
+            throw new RuntimeException("闂傚棙婀瑰▎銏＄▔瀹ュ懐鎽犻柛锔哄妽閸ㄣ劍绋夊鍛剑濞存粌楠哥紞瀣礈?RFQ");
         }
 
         Object before = buildItemRow(item);
@@ -173,11 +187,11 @@ public class InternalTargetLeadTimeService {
         Integer rfqId = req == null ? null : req.getRfqId();
         requireOrderForUpdate(rfqId);
         if (itemId == null) {
-            throw new RuntimeException("零件 ID 不能为空");
+            throw new RuntimeException("Item ID is required");
         }
         ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
         if (item == null || !Objects.equals(rfqId, item.getRfqId())) {
-            throw new RuntimeException("零件不存在或不属于当前 RFQ");
+            throw new RuntimeException("闂傚棙婀瑰▎銏＄▔瀹ュ懐鎽犻柛锔哄妽閸ㄣ劍绋夊鍛剑濞存粌楠哥紞瀣礈?RFQ");
         }
         assertReleaseItemMutable(item, listTicketsForItems(rfqId, List.of(item)));
 
@@ -200,7 +214,7 @@ public class InternalTargetLeadTimeService {
     public Map<String, Object> replaceReleaseDrawings(List<Integer> rfqIds, List<MultipartFile> drawings) {
         List<OrderRfq> orders = requireOrdersForUpdate(rfqIds);
         if (drawings == null || drawings.isEmpty()) {
-            throw new RuntimeException("请至少上传一个 PDF 图纸");
+            throw new RuntimeException("Please upload at least one PDF drawing.");
         }
 
         Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
@@ -225,14 +239,14 @@ public class InternalTargetLeadTimeService {
             for (MultipartFile drawing : drawings) {
                 String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
                 if (drawing == null || cleanFileName.isEmpty() || !cleanFileName.toLowerCase().endsWith(".pdf")) {
-                    skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+                    skippedFiles.add(buildFileResult(cleanFileName, "", "Not a PDF file"));
                     continue;
                 }
 
                 String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemsByPartNo.keySet());
                 List<ItemQuoteVersion> matchedItems = itemsByPartNo.get(partNoFromFileName);
                 if (matchedItems == null || matchedItems.isEmpty()) {
-                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到所选订单对应零件"));
+                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "No matching item in selected orders"));
                     continue;
                 }
 
@@ -249,7 +263,7 @@ public class InternalTargetLeadTimeService {
                             ignored -> saveReleaseDrawing(drawing, cleanFileName, orderById.get(item.getRfqId())));
                     item.setDrawingUrl(fileUrl);
                     itemMapper.updateById(item);
-                    replacedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName, "已替换"));
+                    replacedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName, "Replaced"));
                 }
             }
         } catch (ReleaseDrawingSaveException e) {
@@ -289,7 +303,7 @@ public class InternalTargetLeadTimeService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "图纸替换完成，成功替换 " + replacedItems.size() + " 项。");
+        result.put("message", "Drawing replacement completed, replaced " + replacedItems.size() + " items.");
         result.put("uploadCount", drawings.size());
         result.put("matchedCount", matchedCount);
         result.put("replacedCount", replacedItems.size());
@@ -347,7 +361,16 @@ public class InternalTargetLeadTimeService {
     }
 
     public PageResult<Map<String, Object>> pageItemRowsBatch(ReleaseItemBatchQueryReq req) {
-        List<OrderRfq> orders = requireOrders(req == null ? null : req.getRfqIds());
+        List<ReleaseOrderSource> sources = normalizeReleaseSources(req);
+        if (sources.stream().anyMatch(source -> source.getSourceType() == ReleaseSourceType.SALES_ORDER)) {
+            return pageMixedSourceItemRows(req, sources);
+        }
+
+        List<OrderRfq> orders = requireOrders(sources.stream()
+                .map(ReleaseOrderSource::getSourceOrderId)
+                .filter(Objects::nonNull)
+                .map(Long::intValue)
+                .toList());
         if (orders.isEmpty()) {
             return PageResult.of(
                     List.of(),
@@ -374,6 +397,221 @@ public class InternalTargetLeadTimeService {
                 .filter(row -> !Boolean.TRUE.equals(queryReq.getRemainingOnly()) || safeInt(row.get("remainingQty")) > 0)
                 .toList();
         return PageResult.of(rows, itemPage.getTotal(), itemPage.getPage(), itemPage.getPageSize());
+    }
+
+    private PageResult<Map<String, Object>> pageMixedSourceItemRows(
+            ReleaseItemBatchQueryReq req,
+            List<ReleaseOrderSource> sources) {
+        int page = safePage(req == null ? null : req.getPage());
+        int pageSize = safePageSize(req == null ? null : req.getPageSize());
+        long offset = (long) (page - 1) * pageSize;
+
+        Map<Integer, OrderRfq> rfqOrders = accessibleRfqOrderMap(sourceRfqIds(sources));
+        Map<Long, SalesOrderHeader> salesOrders = accessibleSalesOrderMap(sourceSalesOrderIds(sources));
+        if (rfqOrders.isEmpty() && salesOrders.isEmpty()) {
+            return PageResult.of(List.of(), 0, page, pageSize);
+        }
+
+        FilteredReleaseSql filteredSql = buildMixedReleaseItemSql(rfqOrders.keySet(), salesOrders.keySet(), req);
+        if (filteredSql.sql().isBlank()) {
+            return PageResult.of(List.of(), 0, page, pageSize);
+        }
+
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM (" + filteredSql.sql() + ") release_items",
+                Long.class,
+                filteredSql.params().toArray());
+        String pageSql = "SELECT * FROM (" + filteredSql.sql()
+                + ") release_items ORDER BY source_type ASC, source_order_id ASC, source_item_id ASC "
+                + "LIMIT " + pageSize + " OFFSET " + offset;
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(pageSql, filteredSql.params().toArray()).stream()
+                .map(this::normalizeMixedReleaseRow)
+                .filter(row -> !Boolean.TRUE.equals(req == null ? null : req.getRemainingOnly())
+                        || safeInt(row.get("remainingQty")) > 0)
+                .toList();
+        return PageResult.of(rows, total == null ? 0L : total, page, pageSize);
+    }
+
+    private FilteredReleaseSql buildMixedReleaseItemSql(
+            Set<Integer> rfqIds,
+            Set<Long> salesOrderIds,
+            ReleaseItemBatchQueryReq req) {
+        List<String> branches = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        if (rfqIds != null && !rfqIds.isEmpty()) {
+            String ticketedQtySql = """
+                    COALESCE((
+                        SELECT SUM(ticket.qty)
+                        FROM order_delivery_ticket ticket
+                        WHERE ticket.rfq_id = item.rfq_id
+                          AND (
+                              ticket.item_id = item.id
+                              OR (
+                                  ticket.item_id IS NULL
+                                  AND UPPER(BTRIM(COALESCE(ticket.part_no, ''))) = UPPER(BTRIM(COALESCE(item.part_no, '')))
+                                  AND UPPER(BTRIM(COALESCE(ticket.version, ''))) = UPPER(BTRIM(COALESCE(item.version, '')))
+                              )
+                          )
+                    ), 0)
+                    """;
+            StringBuilder sql = new StringBuilder("""
+                    SELECT
+                        'RFQ' AS source_type,
+                        item.rfq_id AS source_order_id,
+                        item.id AS source_item_id,
+                        rfq.rfq_no AS source_order_no,
+                        rfq.rfq_no AS rfq_no,
+                        rfq.customer_name AS customer_name,
+                        rfq.status AS order_status,
+                        item.part_no,
+                        item.version,
+                        item.drawing_url,
+                        item.description,
+                        item.qty,
+                        """);
+            sql.append(ticketedQtySql).append(" AS ticketed_qty,\n")
+                    .append("GREATEST(COALESCE(item.qty, 0) - ").append(ticketedQtySql).append(", 0) AS remaining_qty,\n")
+                    .append("""
+                        item.material_name,
+                        item.engineering_material_name,
+                        item.surface_treatment,
+                        item.lead_time,
+                        item.quote_lead_time,
+                        item.internal_target_lead_time,
+                        item.final_unit_price,
+                        item.final_total_price,
+                        item.status,
+                        item.remark,
+                        item.quote_mode,
+                        item.assembly_fee
+                    FROM item_quote_version item
+                    JOIN order_rfq rfq ON rfq.id = item.rfq_id
+                    WHERE item.rfq_id IN (
+                    """)
+                    .append(placeholders(params, rfqIds))
+                    .append(")");
+            appendMixedItemFilters(sql, params, req, "item");
+            branches.add(sql.toString());
+        }
+        if (salesOrderIds != null && !salesOrderIds.isEmpty()) {
+            StringBuilder sql = new StringBuilder("""
+                    SELECT
+                        'SALES_ORDER' AS source_type,
+                        item.sales_order_id AS source_order_id,
+                        item.id AS source_item_id,
+                        header.sales_order_no AS source_order_no,
+                        header.sales_order_no AS rfq_no,
+                        header.customer_name AS customer_name,
+                        header.status AS order_status,
+                        item.part_no,
+                        item.version,
+                        item.drawing_url,
+                        item.description,
+                        item.qty,
+                        COALESCE(item.released_qty, 0) AS ticketed_qty,
+                        GREATEST(
+                            COALESCE(NULLIF(item.remaining_qty, 0), item.qty - COALESCE(item.released_qty, 0), item.qty),
+                            0
+                        ) AS remaining_qty,
+                        item.material_name,
+                        item.engineering_material_name,
+                        item.surface_treatment,
+                        CAST(item.customer_delivery_date AS VARCHAR) AS lead_time,
+                        CAST(item.internal_delivery_date AS VARCHAR) AS quote_lead_time,
+                        CAST(NULL AS VARCHAR) AS internal_target_lead_time,
+                        item.final_unit_price,
+                        item.final_total_price,
+                        item.status,
+                        item.remark,
+                        item.quote_mode,
+                        item.assembly_fee
+                    FROM sales_order_item item
+                    JOIN sales_order_header header ON header.id = item.sales_order_id
+                    WHERE item.sales_order_id IN (
+                    """);
+            sql.append(placeholders(params, salesOrderIds)).append(")");
+            appendMixedItemFilters(sql, params, req, "item");
+            branches.add(sql.toString());
+        }
+        return new FilteredReleaseSql(String.join("\nUNION ALL\n", branches), params);
+    }
+
+    private void appendMixedItemFilters(
+            StringBuilder sql,
+            List<Object> params,
+            ReleaseItemBatchQueryReq req,
+            String itemAlias) {
+        if (req == null) {
+            return;
+        }
+        if (!isBlank(req.getKeyword())) {
+            String keyword = "%" + req.getKeyword().trim() + "%";
+            sql.append(" AND (")
+                    .append(itemAlias).append(".part_no LIKE ? OR ")
+                    .append(itemAlias).append(".version LIKE ? OR ")
+                    .append(itemAlias).append(".description LIKE ?)");
+            params.add(keyword);
+            params.add(keyword);
+            params.add(keyword);
+        }
+        if (!isBlank(req.getStatus())) {
+            sql.append(" AND ").append(itemAlias).append(".status = ?");
+            params.add(req.getStatus().trim());
+        }
+    }
+
+    private Map<String, Object> normalizeMixedReleaseRow(Map<String, Object> raw) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        String sourceType = text(raw, "source_type");
+        Long sourceOrderId = longValue(raw, "source_order_id");
+        Long sourceItemId = longValue(raw, "source_item_id");
+        int ticketedQty = number(raw, "ticketed_qty");
+        int remainingQty = number(raw, "remaining_qty");
+        Object finalUnitPrice = value(raw, "final_unit_price");
+        String status = text(raw, "status");
+
+        row.put("id", sourceItemId);
+        row.put("sourceType", sourceType);
+        row.put("sourceOrderId", sourceOrderId);
+        row.put("sourceItemId", sourceItemId);
+        row.put("releaseItemKey", sourceType + ":" + sourceItemId);
+        row.put("rfqId", ReleaseSourceType.RFQ.name().equals(sourceType) ? sourceOrderId : null);
+        row.put("rfqNo", text(raw, "rfq_no"));
+        row.put("sourceOrderNo", text(raw, "source_order_no"));
+        row.put("customerName", text(raw, "customer_name"));
+        row.put("orderStatus", text(raw, "order_status"));
+        row.put("partNo", text(raw, "part_no"));
+        row.put("version", text(raw, "version"));
+        String drawingUrl = text(raw, "drawing_url");
+        row.put("drawingUrl", drawingUrl);
+        row.put("hasDrawing", !isBlank(drawingUrl));
+        row.put("description", value(raw, "description"));
+        row.put("qty", number(raw, "qty"));
+        row.put("ticketedQty", ticketedQty);
+        row.put("remainingQty", remainingQty);
+        row.put("materialName", value(raw, "material_name"));
+        row.put("engineeringMaterialName", value(raw, "engineering_material_name"));
+        row.put("surfaceTreatment", value(raw, "surface_treatment"));
+        row.put("leadTime", value(raw, "lead_time"));
+        row.put("quoteLeadTime", value(raw, "quote_lead_time"));
+        row.put("internalTargetLeadTime", value(raw, "internal_target_lead_time"));
+        row.put("effectiveDeliveryLeadTime", value(raw, "internal_target_lead_time") != null
+                ? value(raw, "internal_target_lead_time")
+                : value(raw, "quote_lead_time"));
+        row.put("finalUnitPrice", finalUnitPrice);
+        row.put("finalTotalPrice", value(raw, "final_total_price"));
+        row.put("status", status);
+        row.put("remark", value(raw, "remark"));
+        row.put("quoteMode", value(raw, "quote_mode"));
+        row.put("assemblyFee", value(raw, "assembly_fee"));
+        boolean canSelect = finalUnitPrice != null
+                && remainingQty > 0
+                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
+                && !QuoteStatusWorkflow.RELEASED.equals(status)
+                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(status);
+        row.put("canSelect", canSelect);
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(finalUnitPrice, remainingQty, status));
+        return row;
     }
 
     public Map<String, Object> matchPartSelection(Integer rfqId, List<Map<String, String>> importedItems) {
@@ -414,7 +652,16 @@ public class InternalTargetLeadTimeService {
         return result;
     }
 
-    public Map<String, Object> matchPartSelectionBatch(List<Integer> rfqIds, List<Map<String, String>> importedItems) {
+    public Map<String, Object> matchPartSelectionBatch(List<ReleaseOrderSource> sources, List<Map<String, String>> importedItems) {
+        sources = normalizeReleaseSourcesFromInput(sources);
+        if (sources.stream().anyMatch(source -> source.getSourceType() == ReleaseSourceType.SALES_ORDER)) {
+            return matchMixedPartSelection(sources, importedItems);
+        }
+        List<Integer> rfqIds = sources.stream()
+                .map(ReleaseOrderSource::getSourceOrderId)
+                .filter(Objects::nonNull)
+                .map(Long::intValue)
+                .toList();
         List<OrderRfq> orders = requireOrders(rfqIds);
         Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
         orders.forEach(order -> orderById.put(order.getId(), order));
@@ -469,13 +716,226 @@ public class InternalTargetLeadTimeService {
         return result;
     }
 
+    private Map<String, Object> matchMixedPartSelection(
+            List<ReleaseOrderSource> sources,
+            List<Map<String, String>> importedItems) {
+        Map<Integer, OrderRfq> orderById = accessibleRfqOrderMap(sourceRfqIds(sources));
+        Map<Long, SalesOrderHeader> salesOrderById = accessibleSalesOrderMap(sourceSalesOrderIds(sources));
+
+        Set<String> importedKeys = new HashSet<>();
+        Map<String, Set<String>> importedKeysByOrderNo = new LinkedHashMap<>();
+        for (Map<String, String> item : importedItems == null ? List.<Map<String, String>>of() : importedItems) {
+            String key = itemKey(item.getOrDefault("normalizedPartNo", item.get("partNo")),
+                    item.getOrDefault("normalizedVersion", item.get("version")));
+            if ("||".equals(key)) {
+                continue;
+            }
+            String orderNo = normalizeRfqNo(item.getOrDefault("normalizedRfqNo", item.get("rfqNo")));
+            if (orderNo.isEmpty()) {
+                importedKeys.add(key);
+            } else {
+                importedKeysByOrderNo.computeIfAbsent(orderNo, ignored -> new HashSet<>()).add(key);
+            }
+        }
+
+        List<Map<String, Object>> selectedRows = new ArrayList<>();
+        List<Map<String, Object>> skippedRows = new ArrayList<>();
+        int matchedCount = matchRfqPartSelection(orderById, importedKeys, importedKeysByOrderNo, selectedRows, skippedRows);
+        matchedCount += matchSalesOrderPartSelection(salesOrderById, importedKeys, importedKeysByOrderNo, selectedRows, skippedRows);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("importedCount", importedKeys.size() + importedKeysByOrderNo.values().stream().mapToInt(Set::size).sum());
+        result.put("matchedCount", matchedCount);
+        result.put("selectedCount", selectedRows.size());
+        result.put("skippedCount", skippedRows.size());
+        result.put("data", selectedRows);
+        result.put("skippedItems", skippedRows);
+        return result;
+    }
+
+    private int matchRfqPartSelection(
+            Map<Integer, OrderRfq> orderById,
+            Set<String> importedKeys,
+            Map<String, Set<String>> importedKeysByOrderNo,
+            List<Map<String, Object>> selectedRows,
+            List<Map<String, Object>> skippedRows) {
+        if (orderById.isEmpty()) {
+            return 0;
+        }
+        List<ItemQuoteVersion> items = listItemsBatch(orderById.keySet().stream().toList());
+        List<OrderDeliveryTicket> tickets = listTicketsForItems(items);
+        int matchedCount = 0;
+        for (ItemQuoteVersion item : items) {
+            OrderRfq order = orderById.get(item.getRfqId());
+            String key = itemKey(item.getPartNo(), item.getVersion());
+            String orderNo = order == null ? "" : normalizeRfqNo(order.getRfqNo());
+            if (!importedKeys.contains(key) && !importedKeysByOrderNo.getOrDefault(orderNo, Set.of()).contains(key)) {
+                continue;
+            }
+            matchedCount++;
+            Map<String, Object> row = buildBatchItemRow(item, ticketedQty(item, tickets), orderById);
+            if (Boolean.TRUE.equals(row.get("canSelect"))) {
+                selectedRows.add(row);
+            } else {
+                skippedRows.add(row);
+            }
+        }
+        return matchedCount;
+    }
+
+    private int matchSalesOrderPartSelection(
+            Map<Long, SalesOrderHeader> salesOrderById,
+            Set<String> importedKeys,
+            Map<String, Set<String>> importedKeysByOrderNo,
+            List<Map<String, Object>> selectedRows,
+            List<Map<String, Object>> skippedRows) {
+        if (salesOrderById.isEmpty()) {
+            return 0;
+        }
+        int matchedCount = 0;
+        for (SalesOrderItem item : listSalesOrderItemsBatch(salesOrderById.keySet().stream().toList())) {
+            SalesOrderHeader order = salesOrderById.get(item.getSalesOrderId());
+            String key = itemKey(item.getPartNo(), item.getVersion());
+            String salesOrderNo = order == null ? "" : normalizeRfqNo(order.getSalesOrderNo());
+            String customerOrderNo = order == null ? "" : normalizeRfqNo(order.getCustomerOrderNo());
+            boolean matchesAnySelectedOrder = importedKeys.contains(key);
+            boolean matchesSpecifiedOrder = importedKeysByOrderNo.getOrDefault(salesOrderNo, Set.of()).contains(key)
+                    || importedKeysByOrderNo.getOrDefault(customerOrderNo, Set.of()).contains(key);
+            if (!matchesAnySelectedOrder && !matchesSpecifiedOrder) {
+                continue;
+            }
+            matchedCount++;
+            Map<String, Object> row = buildSalesOrderItemRow(item, order);
+            if (Boolean.TRUE.equals(row.get("canSelect"))) {
+                selectedRows.add(row);
+            } else {
+                skippedRows.add(row);
+            }
+        }
+        return matchedCount;
+    }
+
+    private List<ReleaseOrderSource> normalizeReleaseSources(ReleaseItemBatchQueryReq req) {
+        if (req == null) {
+            return List.of();
+        }
+        if (req.getSources() != null && !req.getSources().isEmpty()) {
+            return normalizeReleaseSourcesFromInput(new ArrayList<>(req.getSources()));
+        }
+        return normalizeReleaseSourcesFromInput(req.getRfqIds());
+    }
+
+    private List<ReleaseOrderSource> normalizeReleaseSourcesFromInput(List<?> input) {
+        List<ReleaseOrderSource> sources = new ArrayList<>();
+        for (Object value : input == null ? List.of() : input) {
+            ReleaseOrderSource source = normalizeReleaseSource(value);
+            if (source != null && source.getSourceOrderId() != null) {
+                sources.add(source);
+            }
+        }
+        Map<String, ReleaseOrderSource> deduped = new LinkedHashMap<>();
+        for (ReleaseOrderSource source : sources) {
+            deduped.put(source.getSourceType() + ":" + source.getSourceOrderId(), source);
+        }
+        return new ArrayList<>(deduped.values());
+    }
+
+    private ReleaseOrderSource normalizeReleaseSource(Object value) {
+        if (value instanceof ReleaseOrderSource source) {
+            ReleaseOrderSource normalized = new ReleaseOrderSource();
+            normalized.setSourceType(source.getSourceType() == null ? ReleaseSourceType.RFQ : source.getSourceType());
+            normalized.setSourceOrderId(source.getSourceOrderId());
+            return normalized;
+        }
+        if (value instanceof Number number) {
+            return ReleaseOrderSource.rfq(number.intValue());
+        }
+        if (value instanceof Map<?, ?> map) {
+            Object rawType = map.get("sourceType");
+            Object rawOrderId = map.get("sourceOrderId");
+            if (rawOrderId == null) {
+                rawOrderId = map.get("id");
+            }
+            ReleaseOrderSource source = new ReleaseOrderSource();
+            source.setSourceType(parseSourceType(rawType));
+            source.setSourceOrderId(rawOrderId instanceof Number number ? number.longValue() : parseLong(rawOrderId));
+            return source;
+        }
+        return null;
+    }
+
+    private ReleaseSourceType parseSourceType(Object rawType) {
+        if (rawType instanceof ReleaseSourceType type) {
+            return type;
+        }
+        String value = rawType == null ? "" : rawType.toString().trim();
+        if (ReleaseSourceType.SALES_ORDER.name().equalsIgnoreCase(value)) {
+            return ReleaseSourceType.SALES_ORDER;
+        }
+        return ReleaseSourceType.RFQ;
+    }
+
+    private Set<Integer> sourceRfqIds(List<ReleaseOrderSource> sources) {
+        return sources == null ? Set.of() : sources.stream()
+                .filter(source -> source.getSourceType() == ReleaseSourceType.RFQ)
+                .map(ReleaseOrderSource::getSourceOrderId)
+                .filter(Objects::nonNull)
+                .map(Long::intValue)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Set<Long> sourceSalesOrderIds(List<ReleaseOrderSource> sources) {
+        return sources == null ? Set.of() : sources.stream()
+                .filter(source -> source.getSourceType() == ReleaseSourceType.SALES_ORDER)
+                .map(ReleaseOrderSource::getSourceOrderId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+    private Map<Integer, OrderRfq> accessibleRfqOrderMap(Set<Integer> rfqIds) {
+        Map<Integer, OrderRfq> result = new LinkedHashMap<>();
+        for (OrderRfq order : requireOrders(new ArrayList<>(rfqIds == null ? Set.of() : rfqIds))) {
+            result.put(order.getId(), order);
+        }
+        return result;
+    }
+
+    private Map<Long, SalesOrderHeader> accessibleSalesOrderMap(Set<Long> salesOrderIds) {
+        if (salesOrderIds == null || salesOrderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, SalesOrderHeader> byId = new LinkedHashMap<>();
+        salesOrderHeaderMapper.selectBatchIds(new ArrayList<>(salesOrderIds))
+                .forEach(order -> byId.put(order.getId(), order));
+        Map<Long, SalesOrderHeader> result = new LinkedHashMap<>();
+        for (Long id : salesOrderIds) {
+            SalesOrderHeader order = byId.get(id);
+            if (order == null || !canAccessSalesOrder(order)) {
+                continue;
+            }
+            assertCanReadSalesOrderReleaseWorkspace(order);
+            result.put(id, order);
+        }
+        return result;
+    }
+
+    private List<SalesOrderItem> listSalesOrderItemsBatch(List<Long> salesOrderIds) {
+        if (salesOrderIds == null || salesOrderIds.isEmpty()) {
+            return List.of();
+        }
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.in("sales_order_id", salesOrderIds)
+                .orderByAsc("sales_order_id")
+                .orderByAsc("id");
+        return salesOrderItemMapper.selectList(query);
+    }
     private OrderRfq requireOrder(Integer rfqId) {
         if (rfqId == null) {
-            throw new RuntimeException("RFQ ID 不能为空");
+            throw new RuntimeException("RFQ ID is required");
         }
         OrderRfq order = orderRfqMapper.selectById(rfqId);
         if (order == null) {
-            throw new RuntimeException("RFQ 订单不存在");
+            throw new RuntimeException("RFQ order does not exist");
         }
         assertOrderDataScope(order);
         assertCanReadReleaseWorkspace(order);
@@ -510,7 +970,7 @@ public class InternalTargetLeadTimeService {
                         .filter(id -> id != null)
                         .toList()));
         if (normalizedIds.isEmpty()) {
-            throw new RuntimeException("RFQ ID 不能为空");
+            throw new RuntimeException("RFQ ID is required");
         }
         List<OrderRfq> orders = new ArrayList<>();
         for (Integer rfqId : normalizedIds) {
@@ -521,11 +981,11 @@ public class InternalTargetLeadTimeService {
 
     private OrderRfq requireOrderForUpdate(Integer rfqId) {
         if (rfqId == null) {
-            throw new RuntimeException("RFQ ID 不能为空");
+            throw new RuntimeException("RFQ ID is required");
         }
         OrderRfq order = orderRfqMapper.selectByIdForUpdate(rfqId);
         if (order == null) {
-            throw new RuntimeException("RFQ 订单不存在");
+            throw new RuntimeException("RFQ order does not exist");
         }
         assertOrderDataScope(order);
         assertCanGenerateRelease(order);
@@ -558,14 +1018,44 @@ public class InternalTargetLeadTimeService {
         return message != null && message.startsWith("No data permission for order ");
     }
 
+    private boolean canAccessSalesOrder(SalesOrderHeader order) {
+        if (dataScopeService == null || order == null) {
+            return true;
+        }
+        try {
+            dataScopeService.assertCanAccessOrder(toOrderScopeProxy(order));
+            return true;
+        } catch (RuntimeException e) {
+            if (isDataScopeDenied(e)) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    private OrderRfq toOrderScopeProxy(SalesOrderHeader order) {
+        OrderRfq proxy = new OrderRfq();
+        proxy.setId(order.getId() == null ? null : order.getId().intValue());
+        proxy.setCustomerName(order.getCustomerName());
+        proxy.setCreatedBy(order.getCreatedBy() == null ? null : order.getCreatedBy().intValue());
+        proxy.setOwnerUserId(order.getOwnerUserId());
+        return proxy;
+    }
+
+    private void assertCanReadSalesOrderReleaseWorkspace(SalesOrderHeader order) {
+        if (order == null || QuoteStatusWorkflow.canReadReleaseWorkspace(order.getStatus())) {
+            return;
+        }
+        throw new RuntimeException("Only quoted sales orders can enter release workspace");
+    }
     private void assertCanReadReleaseWorkspace(OrderRfq order) {
         if (order == null || QuoteStatusWorkflow.canReadReleaseWorkspace(order.getStatus())) {
             return;
         }
         if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
-            throw new RuntimeException("请先在报价处理模块保存报价单后再进入议价提单");
+            throw new RuntimeException("Please save quote sheet before entering release workspace");
         }
-        throw new RuntimeException("只有已报价、部分已提单或已生成提单订单可以进入议价提单");
+        throw new RuntimeException("Only quoted, partially released, or released orders can enter release workspace");
     }
 
     private void assertCanGenerateRelease(OrderRfq order) {
@@ -573,9 +1063,9 @@ public class InternalTargetLeadTimeService {
             return;
         }
         if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
-            throw new RuntimeException("请先在报价处理模块保存报价单后再进入议价提单");
+            throw new RuntimeException("Please save quote sheet before entering release workspace");
         }
-        throw new RuntimeException("只有已报价订单可以进入议价提单");
+        throw new RuntimeException("Only quoted, partially released, or released orders can enter release workspace");
     }
 
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
@@ -675,6 +1165,10 @@ public class InternalTargetLeadTimeService {
         int sourceQty = safeInt(item.getQty());
         int remainingQty = Math.max(0, sourceQty - ticketedQty);
         row.put("id", item.getId());
+        row.put("sourceType", "RFQ");
+        row.put("sourceOrderId", item.getRfqId());
+        row.put("sourceItemId", item.getId());
+        row.put("releaseItemKey", "RFQ:" + item.getId());
         row.put("rfqId", item.getRfqId());
         row.put("partNo", item.getPartNo());
         row.put("version", item.getVersion());
@@ -715,26 +1209,171 @@ public class InternalTargetLeadTimeService {
         Map<String, Object> row = buildItemRow(item, ticketedQty);
         OrderRfq order = orderById.get(item.getRfqId());
         row.put("rfqNo", order == null ? "" : order.getRfqNo());
+        row.put("sourceOrderNo", order == null ? "" : order.getRfqNo());
         row.put("customerName", order == null ? "" : order.getCustomerName());
         row.put("orderStatus", order == null ? "" : order.getStatus());
         return row;
     }
 
+    private Map<String, Object> buildSalesOrderItemRow(SalesOrderItem item, SalesOrderHeader order) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        int sourceQty = safeInt(item.getQty());
+        int ticketedQty = safeInt(item.getReleasedQty());
+        int remainingQty = item.getRemainingQty() == null || item.getRemainingQty() <= 0
+                ? Math.max(0, sourceQty - ticketedQty)
+                : item.getRemainingQty();
+        row.put("id", item.getId());
+        row.put("sourceType", "SALES_ORDER");
+        row.put("sourceOrderId", item.getSalesOrderId());
+        row.put("sourceItemId", item.getId());
+        row.put("releaseItemKey", "SALES_ORDER:" + item.getId());
+        row.put("rfqId", null);
+        row.put("rfqNo", order == null ? "" : order.getSalesOrderNo());
+        row.put("sourceOrderNo", order == null ? "" : order.getSalesOrderNo());
+        row.put("customerName", order == null ? "" : order.getCustomerName());
+        row.put("orderStatus", order == null ? "" : order.getStatus());
+        row.put("partNo", item.getPartNo());
+        row.put("version", item.getVersion());
+        row.put("drawingUrl", item.getDrawingUrl());
+        row.put("hasDrawing", Boolean.TRUE.equals(item.getHasDrawing()) || !isBlank(item.getDrawingUrl()));
+        row.put("description", item.getDescription());
+        row.put("qty", item.getQty());
+        row.put("ticketedQty", ticketedQty);
+        row.put("remainingQty", remainingQty);
+        row.put("materialName", item.getMaterialName());
+        row.put("engineeringMaterialName", item.getEngineeringMaterialName());
+        row.put("surfaceTreatment", item.getSurfaceTreatment());
+        row.put("leadTime", item.getCustomerDeliveryDate() == null ? null : item.getCustomerDeliveryDate().toString());
+        row.put("quoteLeadTime", item.getInternalDeliveryDate() == null ? null : item.getInternalDeliveryDate().toString());
+        row.put("internalTargetLeadTime", null);
+        row.put("effectiveDeliveryLeadTime", item.getInternalDeliveryDate() == null ? null : item.getInternalDeliveryDate().toString());
+        row.put("finalUnitPrice", item.getFinalUnitPrice());
+        row.put("finalTotalPrice", item.getFinalTotalPrice());
+        row.put("status", item.getStatus());
+        row.put("remark", item.getRemark());
+        row.put("quoteMode", item.getQuoteMode());
+        row.put("assemblyFee", item.getAssemblyFee());
+        boolean canSelect = item.getFinalUnitPrice() != null
+                && remainingQty > 0
+                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+        row.put("canSelect", canSelect);
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(item.getFinalUnitPrice(), remainingQty, item.getStatus()));
+        return row;
+    }
     private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
         if (item.getFinalUnitPrice() == null) {
-            return "零件未报价";
+            return "Item is not quoted";
         }
         if (remainingQty <= 0) {
-            return "零件已全部提单";
+            return "Item is fully released";
         }
         if (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
                 || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
                 || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus())) {
-            return "零件已提单";
+            return "Item is released";
         }
         return "";
     }
 
+    private String releaseBlockedReasonFromValues(Object finalUnitPrice, int remainingQty, String status) {
+        if (finalUnitPrice == null) {
+            return "Item is not quoted";
+        }
+        if (remainingQty <= 0) {
+            return "Item is fully released";
+        }
+        if (QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
+                || QuoteStatusWorkflow.RELEASED.equals(status)
+                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(status)) {
+            return "Item is released";
+        }
+        return "";
+    }
+
+    private String placeholders(List<Object> params, Iterable<?> values) {
+        List<String> placeholders = new ArrayList<>();
+        for (Object value : values) {
+            placeholders.add("?");
+            params.add(value);
+        }
+        return String.join(", ", placeholders);
+    }
+
+    private Object value(Map<String, Object> row, String key) {
+        if (row == null || key == null) {
+            return null;
+        }
+        if (row.containsKey(key)) {
+            return row.get(key);
+        }
+        String camel = toCamelCase(key);
+        if (row.containsKey(camel)) {
+            return row.get(camel);
+        }
+        String upper = key.toUpperCase(java.util.Locale.ROOT);
+        if (row.containsKey(upper)) {
+            return row.get(upper);
+        }
+        return null;
+    }
+
+    private String text(Map<String, Object> row, String key) {
+        Object value = value(row, key);
+        return value == null ? "" : value.toString();
+    }
+
+    private int number(Map<String, Object> row, String key) {
+        Object value = value(row, key);
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private Long longValue(Map<String, Object> row, String key) {
+        Object value = value(row, key);
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return parseLong(value);
+    }
+
+    private Long parseLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String toCamelCase(String key) {
+        StringBuilder result = new StringBuilder();
+        boolean uppercaseNext = false;
+        for (char current : key.toCharArray()) {
+            if (current == '_') {
+                uppercaseNext = true;
+            } else if (uppercaseNext) {
+                result.append(Character.toUpperCase(current));
+                uppercaseNext = false;
+            } else {
+                result.append(current);
+            }
+        }
+        return result.toString();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private record FilteredReleaseSql(String sql, List<Object> params) {
+    }
     private String normalizePartNo(String partNo) {
         return partNo == null ? "" : partNo.trim().toUpperCase();
     }
@@ -791,26 +1430,26 @@ public class InternalTargetLeadTimeService {
 
     private String releaseMutationBlockedReason(ItemQuoteVersion item, int remainingQty) {
         if (remainingQty <= 0) {
-            return "零件已全部提单";
+            return "Item is fully released";
         }
         if (item != null && (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
                 || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
                 || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus()))) {
-            return "零件已提单";
+            return "Item is released";
         }
-        return "零件不可修改";
+        return "Item cannot be updated";
     }
 
     private String saveReleaseDrawing(MultipartFile drawing, String cleanFileName, OrderRfq order) {
         if (order == null) {
-            throw new RuntimeException("订单不存在");
+            throw new RuntimeException("Order does not exist");
         }
         try {
             return businessFileService
                     .saveDrawing(order, drawing, "RELEASE_DRAWING_REPLACE", String.valueOf(order.getId()))
                     .publicPath();
         } catch (RuntimeException e) {
-            throw new ReleaseDrawingSaveException("图纸保存失败：" + cleanFileName, e);
+            throw new ReleaseDrawingSaveException("Drawing save failed: " + cleanFileName, e);
         }
     }
 
