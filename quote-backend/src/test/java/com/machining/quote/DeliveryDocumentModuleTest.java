@@ -77,7 +77,7 @@ class DeliveryDocumentModuleTest {
                         "@RequirePermission(\"market:delivery-document:order-select\")",
                         "@RequirePermission(\"market:delivery-document:view\")",
                         "@RequirePermission(\"market:delivery-document:export\")",
-                        "return deliveryDocumentService.listDocumentCustomers()",
+                        "return deliveryDocumentService.listDocumentCustomers(field, keyword)",
                         "return deliveryDocumentService.listDocumentOrders(customerName, keyword, status, page, pageSize)",
                         "return deliveryDocumentService.documentSummary(rfqId)",
                         "return deliveryDocumentService.pageTickets(rfqId, page, pageSize)",

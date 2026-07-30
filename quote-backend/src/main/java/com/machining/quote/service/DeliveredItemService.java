@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
 import com.machining.quote.dto.PageResult;
@@ -64,6 +65,16 @@ public class DeliveredItemService {
                 .toList();
     }
 
+    public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerOptions(field, keyword);
+        }
+        return listCustomers().stream()
+                .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+    }
+
     private QueryWrapper<DeliveredItemDTO> buildQuery(DeliveredItemQueryReq req) {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
         applyEquals(query, "ticket.customer_name", req.getCustomerName());
@@ -111,5 +122,24 @@ public class DeliveredItemService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean matchesCustomerKeyword(String customerName, String field, String keyword) {
+        if (!hasText(keyword)) {
+            return true;
+        }
+        String normalizedField = field == null ? "all" : field.replace("_", "").replace("-", "").trim().toLowerCase();
+        if (!"all".equals(normalizedField) && !"name".equals(normalizedField)) {
+            return false;
+        }
+        return customerName != null && customerName.toLowerCase().contains(keyword.trim().toLowerCase());
+    }
+
+    private CustomerOptionDTO toCustomerOption(String customerName) {
+        CustomerOptionDTO option = new CustomerOptionDTO();
+        option.setCustomerCode(customerName);
+        option.setCustomerShortName(customerName);
+        option.setCustomerName(customerName);
+        return option;
     }
 }

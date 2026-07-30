@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.LockedItemQueryReq;
@@ -60,6 +61,16 @@ public class LockedItemService {
                 .toList();
     }
 
+    public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerOptions(field, keyword);
+        }
+        return listCustomers().stream()
+                .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+    }
+
     private QueryWrapper<LockedItemDTO> buildQuery(LockedItemQueryReq req) {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         applyEquals(query, "alloc.customer_name", req.getCustomerName());
@@ -112,5 +123,24 @@ public class LockedItemService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean matchesCustomerKeyword(String customerName, String field, String keyword) {
+        if (!hasText(keyword)) {
+            return true;
+        }
+        String normalizedField = field == null ? "all" : field.replace("_", "").replace("-", "").trim().toLowerCase(Locale.ROOT);
+        if (!"all".equals(normalizedField) && !"name".equals(normalizedField)) {
+            return false;
+        }
+        return customerName != null && customerName.toLowerCase(Locale.ROOT).contains(keyword.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private CustomerOptionDTO toCustomerOption(String customerName) {
+        CustomerOptionDTO option = new CustomerOptionDTO();
+        option.setCustomerCode(customerName);
+        option.setCustomerShortName(customerName);
+        option.setCustomerName(customerName);
+        return option;
     }
 }

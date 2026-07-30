@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -44,8 +45,8 @@ public class DeliveryDocumentService {
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
-    public List<String> listDocumentCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listDocumentCustomers(String field, String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     public PageResult<OrderRfq> listDocumentOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {

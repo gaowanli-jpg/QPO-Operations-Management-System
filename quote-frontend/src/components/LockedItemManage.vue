@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="erp-page locked-item-page" v-permission="LOCKED_ITEM_VIEW_PERMISSION">
     <header class="erp-page-header">
       <div>
@@ -218,8 +218,10 @@ const handleSearch = async () => {
   await loadItems()
 }
 
+const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+
 const handleCustomerSelected = async (customer) => {
-  filters.customerName = customer
+  filters.customerName = resolveCustomerName(customer)
   await handleSearch()
 }
 

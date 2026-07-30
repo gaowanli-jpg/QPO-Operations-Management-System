@@ -157,9 +157,9 @@ class CustomerMasterBackendStage2Test {
                 .contains("@RequirePermission(\"market:delivered-item:customer-select\")")
                 .contains("@RequirePermission(\"market:locked-item:customer-select\")");
 
-        assertThat(orderService).contains("CustomerMasterService").contains("listCustomerNamesForCurrentScope()");
-        assertThat(deliveredService).contains("CustomerMasterService").contains("listCustomerNamesForCurrentScope()");
-        assertThat(lockedService).contains("CustomerMasterService").contains("listCustomerNamesForCurrentScope()");
+        assertThat(orderService).contains("CustomerMasterService").contains("listCustomerOptions(field, keyword)");
+        assertThat(deliveredService).contains("CustomerMasterService").contains("listCustomerOptions(field, keyword)");
+        assertThat(lockedService).contains("CustomerMasterService").contains("listCustomerOptions(field, keyword)");
         assertThat(dataScopeService).contains("CustomerMasterMapper").contains("customer_master");
     }
 

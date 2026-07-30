@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -26,8 +27,10 @@ public class DeliveryDocumentController {
 
     @GetMapping("/customers")
     @RequirePermission("market:delivery-document:customer-select")
-    public List<String> listDocumentCustomers() {
-        return deliveryDocumentService.listDocumentCustomers();
+    public List<CustomerOptionDTO> listDocumentCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return deliveryDocumentService.listDocumentCustomers(field, keyword);
     }
 
     @GetMapping("/orders")

@@ -17,6 +17,14 @@ describe('orderApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-management/customers')
   })
 
+  test('listCustomers forwards customer master field filters', async () => {
+    const params = { field: 'shortName', keyword: 'ACME' }
+
+    await orderApi.listCustomers('market-order', params)
+
+    expect(request).toHaveBeenCalledWith('/api/order-management/customers', { params })
+  })
+
   test('listCustomers uses module-scoped customer selection endpoints', async () => {
     await orderApi.listCustomers('market-rfq')
     await orderApi.listCustomers('quote-process')

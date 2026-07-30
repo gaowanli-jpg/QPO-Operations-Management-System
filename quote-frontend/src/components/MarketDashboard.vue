@@ -358,8 +358,10 @@ const downloadSalesOrderTemplate = () => runAction(DOWNLOAD_SALES_ORDER_TEMPLATE
   }
 })
 
+const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+
 const selectExistingCustomer = (customer) => {
-  rfqForm.customerName = customer
+  rfqForm.customerName = resolveCustomerName(customer)
 }
 
 const addDrawingFiles = (files, sourceLabel) => {

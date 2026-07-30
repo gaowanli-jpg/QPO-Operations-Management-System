@@ -12,9 +12,11 @@ const CUSTOMER_ENDPOINTS = {
   'locked-item': '/api/order-delivery/allocations/customers'
 }
 
-export const listCustomers = (scope = 'market-order') => request(
-  CUSTOMER_ENDPOINTS[scope] || CUSTOMER_ENDPOINTS['market-order']
-)
+export const listCustomers = (scope = 'market-order', params = undefined) => {
+  const endpoint = CUSTOMER_ENDPOINTS[scope] || CUSTOMER_ENDPOINTS['market-order']
+  const hasParams = params && Object.keys(params).some(key => params[key] !== undefined && params[key] !== '')
+  return hasParams ? request(endpoint, { params }) : request(endpoint)
+}
 
 export const listOrders = (params = {}) => request('/api/order-management/orders', { params })
 

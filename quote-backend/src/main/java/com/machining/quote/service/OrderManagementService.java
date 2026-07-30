@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -165,6 +166,16 @@ public class OrderManagementService {
         return orderMapper.selectList(qw).stream()
                 .map(OrderRfq::getCustomerName)
                 .filter(customerName -> !isBlank(customerName))
+                .toList();
+    }
+
+    public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerOptions(field, keyword);
+        }
+        return listCustomers().stream()
+                .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
+                .map(this::toCustomerOption)
                 .toList();
     }
 
@@ -680,5 +691,24 @@ public class OrderManagementService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private boolean matchesCustomerKeyword(String customerName, String field, String keyword) {
+        if (isBlank(keyword)) {
+            return true;
+        }
+        String normalizedField = field == null ? "all" : field.replace("_", "").replace("-", "").trim().toLowerCase();
+        if (!"all".equals(normalizedField) && !"name".equals(normalizedField)) {
+            return false;
+        }
+        return customerName != null && customerName.toLowerCase().contains(keyword.trim().toLowerCase());
+    }
+
+    private CustomerOptionDTO toCustomerOption(String customerName) {
+        CustomerOptionDTO option = new CustomerOptionDTO();
+        option.setCustomerCode(customerName);
+        option.setCustomerShortName(customerName);
+        option.setCustomerName(customerName);
+        return option;
     }
 }

@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
@@ -77,14 +78,18 @@ public class OrderManagementController {
 
     @GetMapping("/customers")
     @RequirePermission("market:order:customer-select")
-    public List<String> listCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/history-orders/customers")
     @RequirePermission("market:history-order:customer-select")
-    public List<String> listHistoryCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listHistoryCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     @PostMapping(value = "/orders/{rfqId}/supplement-drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

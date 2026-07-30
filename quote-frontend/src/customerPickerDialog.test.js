@@ -9,7 +9,7 @@ const componentPath = (...segments) => resolve(currentDir, 'components', ...segm
 const readComponent = fileName => readSource('components', fileName)
 
 describe('QPO customer picker dialog', () => {
-  test('provides a reusable customer table picker with live local search', () => {
+  test('provides a reusable customer master picker with server field search', () => {
     const pickerFile = componentPath('CustomerPickerDialog.vue')
 
     expect(existsSync(pickerFile)).toBe(true)
@@ -18,10 +18,17 @@ describe('QPO customer picker dialog', () => {
 
     expect(source).toContain("import { listCustomers } from '../services/orderApi'")
     expect(source).toContain('customerScope')
-    expect(source).toContain('listCustomers(props.customerScope)')
+    expect(source).toContain('listCustomers(props.customerScope, customerQueryParams())')
     expect(source).toContain('v-model="keyword"')
-    expect(source).toContain('filteredCustomers')
-    expect(source).toContain(':data="filteredCustomers"')
+    expect(source).toContain('v-model="field"')
+    expect(source).toContain('value="all"')
+    expect(source).toContain('value="code"')
+    expect(source).toContain('value="shortName"')
+    expect(source).toContain('value="name"')
+    expect(source).toContain('prop="customerCode"')
+    expect(source).toContain('prop="customerShortName"')
+    expect(source).toContain('prop="customerName"')
+    expect(source).toContain(':data="customers"')
     expect(source).toContain('@row-click="selectCustomer"')
     expect(source).toContain("emit('select', customer)")
     expect(source).not.toContain('搜索按钮')
@@ -47,6 +54,8 @@ describe('QPO customer picker dialog', () => {
     expect(orderPicker).toContain(':customer-scope="customerScope"')
     expect(orderPicker).toContain('listMarketOrders(params, props.orderScope)')
     expect(orderPicker).toContain('props.orderScope')
+    expect(orderPicker).toContain('resolveCustomerName(customer)')
+    expect(orderPicker).toContain('customer?.customerName')
   })
 
   test('keeps manual customer entry on RFQ import while adding existing customer selection', () => {
@@ -56,7 +65,7 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain('v-model="rfqForm.customerName"')
     expect(source).toContain('选择已有客户')
     expect(source).toContain('@select="selectExistingCustomer"')
-    expect(source).toContain('rfqForm.customerName = customer')
+    expect(source).toContain('rfqForm.customerName = resolveCustomerName(customer)')
     expect(source).toContain('customer-scope="market-rfq"')
     expect(source).toContain('v-permission="\'market:rfq:customer-select\'"')
   })
@@ -104,11 +113,13 @@ describe('QPO customer picker dialog', () => {
     expect(deliveredManage).toContain('customer-scope="delivered-item"')
     expect(deliveredManage).toContain('v-permission="\'market:delivered-item:customer-select\'"')
     expect(deliveredManage).toContain('@select="handleCustomerSelected"')
+    expect(deliveredManage).toContain('filters.customerName = resolveCustomerName(customer)')
 
     expect(lockedManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(lockedManage).toContain('customer-scope="locked-item"')
     expect(lockedManage).toContain('v-permission="\'market:locked-item:customer-select\'"')
     expect(lockedManage).toContain('@select="handleCustomerSelected"')
+    expect(lockedManage).toContain('filters.customerName = resolveCustomerName(customer)')
   })
 
   test('order workspaces use module-scoped summary APIs instead of common market summary', () => {

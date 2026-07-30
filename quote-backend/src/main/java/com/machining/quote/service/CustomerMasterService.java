@@ -52,6 +52,13 @@ public class CustomerMasterService {
         return customerMapper.selectList(query).stream().map(this::toOption).toList();
     }
 
+    public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
+        if (dataScopeService != null) {
+            return dataScopeService.listCustomerOptions(field, keyword);
+        }
+        return listOptions(field, keyword);
+    }
+
     public List<String> listCustomerNames() {
         QueryWrapper<CustomerMaster> query = new QueryWrapper<>();
         query.select("customer_name");
@@ -67,10 +74,11 @@ public class CustomerMasterService {
     }
 
     public List<String> listCustomerNamesForCurrentScope() {
-        if (dataScopeService != null) {
-            return dataScopeService.listCustomerOptions();
-        }
-        return listCustomerNames();
+        return listCustomerOptions("all", null).stream()
+                .map(CustomerOptionDTO::getCustomerName)
+                .filter(this::hasText)
+                .distinct()
+                .toList();
     }
 
     @Transactional

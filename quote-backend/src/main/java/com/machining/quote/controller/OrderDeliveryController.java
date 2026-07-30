@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
 import com.machining.quote.dto.DeliveryTicketBatchReq;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -41,8 +43,10 @@ public class OrderDeliveryController {
 
     @GetMapping("/tickets/customers")
     @RequirePermission("market:delivered-item:customer-select")
-    public List<String> listTicketCustomers() {
-        return deliveredItemService.listCustomers();
+    public List<CustomerOptionDTO> listTicketCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return deliveredItemService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/tickets/{ticketId}")
@@ -83,8 +87,10 @@ public class OrderDeliveryController {
 
     @GetMapping("/allocations/customers")
     @RequirePermission("market:locked-item:customer-select")
-    public List<String> listAllocationCustomers() {
-        return lockedItemService.listCustomers();
+    public List<CustomerOptionDTO> listAllocationCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return lockedItemService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/tickets/{ticketId}/allocations")

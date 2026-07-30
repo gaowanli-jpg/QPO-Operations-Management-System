@@ -570,8 +570,10 @@ const handleCustomerChange = async () => {
   await loadOrders()
 }
 
+const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+
 const handleCustomerSelected = async (customer) => {
-  selectedCustomer.value = customer
+  selectedCustomer.value = resolveCustomerName(customer)
   await handleCustomerChange()
 }
 

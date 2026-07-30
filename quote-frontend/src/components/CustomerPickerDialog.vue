@@ -1,24 +1,30 @@
-<template>
+﻿<template>
   <el-dialog
     v-model="visible"
     :title="title"
-    width="720px"
+    width="820px"
     class="customer-picker-dialog"
     @open="loadCustomers"
     @closed="resetSearch"
   >
     <div class="customer-picker-toolbar">
+      <el-select v-model="field" class="customer-picker-field" placeholder="筛选字段">
+        <el-option label="全部字段" value="all" />
+        <el-option label="客户编码" value="code" />
+        <el-option label="客户简称" value="shortName" />
+        <el-option label="客户名称" value="name" />
+      </el-select>
       <el-input
         v-model="keyword"
         clearable
-        placeholder="搜索客户名称/代码"
+        placeholder="输入客户编码 / 简称 / 名称"
         class="customer-picker-search"
       />
-      <span class="customer-picker-count">共 {{ filteredCustomers.length }} 个客户</span>
+      <span class="customer-picker-count">共 {{ customers.length }} 个客户</span>
     </div>
 
     <el-table
-      :data="filteredCustomers"
+      :data="customers"
       border
       stripe
       height="360"
@@ -28,17 +34,19 @@
       :row-class-name="resolveRowClassName"
       @row-click="selectCustomer"
     >
-      <el-table-column type="index" label="#" width="70" align="center" />
-      <el-table-column prop="name" label="客户名称/代码" min-width="320" show-overflow-tooltip />
+      <el-table-column type="index" label="#" width="64" align="center" />
+      <el-table-column prop="customerCode" label="客户编码" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="customerShortName" label="客户简称" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="customerName" label="客户名称" min-width="220" show-overflow-tooltip />
       <el-table-column label="操作" width="110" align="center" fixed="right">
         <template #default="{ row }">
           <el-button
-            :type="row.name === currentCustomer ? 'success' : 'primary'"
+            :type="isCurrentCustomer(row) ? 'success' : 'primary'"
             size="small"
-            :plain="row.name !== currentCustomer"
+            :plain="!isCurrentCustomer(row)"
             @click.stop="selectCustomer(row)"
           >
-            {{ row.name === currentCustomer ? '已选择' : '选择' }}
+            {{ isCurrentCustomer(row) ? '已选择' : '选择' }}
           </el-button>
         </template>
       </el-table-column>
@@ -53,7 +61,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listCustomers } from '../services/orderApi'
 
@@ -84,21 +92,37 @@ const visible = computed({
 })
 
 const customers = ref([])
+const field = ref('all')
 const keyword = ref('')
 const loading = ref(false)
+let searchTimer = null
 
-const customerRows = computed(() => customers.value.map(name => ({ name })))
-const filteredCustomers = computed(() => {
-  const text = keyword.value.trim().toLowerCase()
-  if (!text) return customerRows.value
-  return customerRows.value.filter(customer => customer.name.toLowerCase().includes(text))
+const customerQueryParams = () => ({
+  field: field.value,
+  keyword: keyword.value.trim() || undefined
 })
+
+const normalizeCustomer = (customer) => {
+  if (typeof customer === 'string') {
+    return {
+      customerCode: customer,
+      customerShortName: customer,
+      customerName: customer
+    }
+  }
+  return {
+    id: customer?.id,
+    customerCode: customer?.customerCode || customer?.code || customer?.customerName || '',
+    customerShortName: customer?.customerShortName || customer?.shortName || customer?.customerName || '',
+    customerName: customer?.customerName || customer?.name || customer?.customerShortName || customer?.customerCode || ''
+  }
+}
 
 const loadCustomers = async () => {
   loading.value = true
   try {
-    const response = await listCustomers(props.customerScope)
-    customers.value = response || []
+    const response = await listCustomers(props.customerScope, customerQueryParams())
+    customers.value = (response || []).map(normalizeCustomer).filter(customer => customer.customerName)
   } catch (error) {
     console.error(error)
     ElMessage.error('客户列表加载失败。')
@@ -107,19 +131,33 @@ const loadCustomers = async () => {
   }
 }
 
+watch([field, keyword], () => {
+  if (!visible.value) return
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(loadCustomers, 250)
+})
+
 const resetSearch = () => {
+  field.value = 'all'
   keyword.value = ''
+  customers.value = []
+  clearTimeout(searchTimer)
 }
 
 const selectCustomer = (row) => {
-  const customer = typeof row === 'string' ? row : row?.name
-  if (!customer) return
+  const customer = normalizeCustomer(row)
+  if (!customer.customerName) return
   emit('select', customer)
   visible.value = false
 }
 
+const isCurrentCustomer = (row) => {
+  const customer = normalizeCustomer(row)
+  return Boolean(props.currentCustomer) && customer.customerName === props.currentCustomer
+}
+
 const resolveRowClassName = ({ row }) => {
-  return row.name === props.currentCustomer ? 'selected-customer-row' : ''
+  return isCurrentCustomer(row) ? 'selected-customer-row' : ''
 }
 </script>
 
@@ -130,6 +168,11 @@ const resolveRowClassName = ({ row }) => {
   justify-content: space-between;
   gap: var(--erp-space-3);
   margin-bottom: var(--erp-space-3);
+}
+
+.customer-picker-field {
+  width: 130px;
+  flex: none;
 }
 
 .customer-picker-search {
@@ -161,6 +204,7 @@ const resolveRowClassName = ({ row }) => {
     flex-direction: column;
   }
 
+  .customer-picker-field,
   .customer-picker-search {
     width: 100%;
   }

@@ -301,8 +301,10 @@ const resetPageAndRows = () => {
   orders.value = []
 }
 
+const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+
 const handleCustomerSelected = (customer) => {
-  selectedCustomer.value = customer
+  selectedCustomer.value = resolveCustomerName(customer)
 }
 
 const loadOrders = async () => {

@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderRfq;
@@ -149,6 +150,26 @@ public class DataScopeService {
                 .toList();
     }
 
+    public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
+        if (customerMasterMapper != null) {
+            QueryWrapper<CustomerMaster> query = new QueryWrapper<>();
+            query.eq("enabled", true);
+            query.isNotNull("customer_name");
+            query.ne("customer_name", "");
+            applyCustomerKeyword(query, field, keyword);
+            applyCustomerMasterScope(query);
+            query.orderByAsc("customer_name").orderByAsc("id");
+            query.last("LIMIT 200");
+            return customerMasterMapper.selectList(query).stream()
+                    .map(this::toCustomerOption)
+                    .toList();
+        }
+        return listCustomerOptions().stream()
+                .filter(name -> matchesCustomerKeyword(name, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+    }
+
     private void applyCustomerMasterScope(QueryWrapper<CustomerMaster> query) {
         ScopeSql scopeSql = currentOrderScopeSql("");
         if (scopeSql.allAccess()) {
@@ -160,6 +181,52 @@ public class DataScopeService {
         }
         query.apply("customer_name IN (SELECT DISTINCT customer_name FROM order_rfq WHERE " + scopeSql.sql() + ")",
                 scopeSql.params().toArray());
+    }
+
+    private void applyCustomerKeyword(QueryWrapper<CustomerMaster> query, String field, String keyword) {
+        if (isBlank(keyword)) {
+            return;
+        }
+        String value = keyword.trim();
+        switch (normalizeField(field)) {
+            case "code" -> query.like("customer_code", value);
+            case "shortname" -> query.like("customer_short_name", value);
+            case "name" -> query.like("customer_name", value);
+            default -> query.and(wrapper -> wrapper
+                    .like("customer_code", value)
+                    .or()
+                    .like("customer_short_name", value)
+                    .or()
+                    .like("customer_name", value));
+        }
+    }
+
+    private boolean matchesCustomerKeyword(String name, String field, String keyword) {
+        if (isBlank(keyword)) {
+            return true;
+        }
+        String normalizedField = normalizeField(field);
+        if (!"all".equals(normalizedField) && !"name".equals(normalizedField)) {
+            return false;
+        }
+        return name != null && name.toLowerCase(Locale.ROOT).contains(keyword.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private CustomerOptionDTO toCustomerOption(CustomerMaster customer) {
+        CustomerOptionDTO dto = new CustomerOptionDTO();
+        dto.setId(customer.getId());
+        dto.setCustomerCode(customer.getCustomerCode());
+        dto.setCustomerShortName(customer.getCustomerShortName());
+        dto.setCustomerName(customer.getCustomerName());
+        return dto;
+    }
+
+    private CustomerOptionDTO toCustomerOption(String customerName) {
+        CustomerOptionDTO dto = new CustomerOptionDTO();
+        dto.setCustomerCode(customerName);
+        dto.setCustomerShortName(customerName);
+        dto.setCustomerName(customerName);
+        return dto;
     }
 
     private void applyScopeSql(QueryWrapper<?> query, ScopeSql scopeSql) {
@@ -293,6 +360,10 @@ public class DataScopeService {
 
     private String normalize(String value) {
         return value == null ? "NONE" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeField(String value) {
+        return value == null ? "all" : value.replace("_", "").replace("-", "").trim().toLowerCase(Locale.ROOT);
     }
 
     private boolean isBlank(String value) {

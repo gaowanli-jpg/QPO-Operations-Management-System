@@ -2,6 +2,7 @@ package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
@@ -55,8 +56,10 @@ public class EngineerController {
 
     @GetMapping("/setup/customers")
     @RequirePermission("engineer:setup:customer-select")
-    public List<String> listSetupCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listSetupCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/setup/orders")

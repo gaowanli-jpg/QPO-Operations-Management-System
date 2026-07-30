@@ -205,7 +205,7 @@ class LockedItemQueryTest {
                         "@RequirePermission(\"market:locked-item:view\")",
                         "@GetMapping(\"/allocations/customers\")",
                         "@RequirePermission(\"market:locked-item:customer-select\")",
-                        "return lockedItemService.listCustomers()"
+                        "return lockedItemService.listCustomerOptions(field, keyword)"
                 );
     }
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
@@ -94,14 +95,18 @@ public class MarketController {
 
     @GetMapping("/rfq/customers")
     @RequirePermission("market:rfq:customer-select")
-    public List<String> listRfqCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listRfqCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/quote-process/customers")
     @RequirePermission("market:quote-process:customer-select")
-    public List<String> listQuoteProcessCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listQuoteProcessCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/quote-process/orders")
@@ -117,8 +122,10 @@ public class MarketController {
 
     @GetMapping("/release/customers")
     @RequirePermission("market:release:customer-select")
-    public List<String> listReleaseCustomers() {
-        return orderManagementService.listCustomers();
+    public List<CustomerOptionDTO> listReleaseCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return orderManagementService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/release/orders")

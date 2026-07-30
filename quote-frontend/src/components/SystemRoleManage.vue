@@ -175,7 +175,7 @@
               placeholder="请选择客户"
               style="width: 100%"
             >
-              <el-option v-for="customer in customerOptions" :key="customer" :label="customer" :value="customer" />
+              <el-option v-for="customer in customerOptions" :key="customer.customerName" :label="formatCustomerOption(customer)" :value="customer.customerName" />
             </el-select>
           </el-form-item>
         </el-form>
@@ -205,6 +205,7 @@ import {
   saveRole
 } from '../services/adminApi'
 import { usePendingAction } from '../composables/usePendingAction'
+import { listCustomerOptions } from '../services/customerApi'
 
 const roles = ref([])
 const permissionTree = ref([])
@@ -441,8 +442,35 @@ const permissionTypeLabel = (type) => {
   return labels[type] || type
 }
 
+const normalizeCustomerOption = (customer) => {
+  if (typeof customer === 'string') {
+    return {
+      customerCode: customer,
+      customerShortName: customer,
+      customerName: customer
+    }
+  }
+  return {
+    customerCode: customer?.customerCode || customer?.customerName || '',
+    customerShortName: customer?.customerShortName || customer?.customerName || '',
+    customerName: customer?.customerName || ''
+  }
+}
+
+const formatCustomerOption = (customer) => {
+  const option = normalizeCustomerOption(customer)
+  return [option.customerCode, option.customerShortName, option.customerName].filter(Boolean).join(' / ')
+}
+
 const loadDataScopeOptions = async () => {
-  customerOptions.value = await listDataScopeCustomers() || []
+  try {
+    const options = await listCustomerOptions({ field: 'all' })
+    customerOptions.value = (options || []).map(normalizeCustomerOption).filter(customer => customer.customerName)
+  } catch (error) {
+    console.error(error)
+    const names = await listDataScopeCustomers() || []
+    customerOptions.value = names.map(normalizeCustomerOption).filter(customer => customer.customerName)
+  }
 }
 
 const openDataScopeDrawer = async (row) => {
