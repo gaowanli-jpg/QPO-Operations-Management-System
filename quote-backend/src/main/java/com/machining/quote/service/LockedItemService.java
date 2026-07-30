@@ -55,7 +55,7 @@ public class LockedItemService {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         query.isNotNull("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)");
         query.ne("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");
-        dataScopeService.applyRfqScope(query, "alloc.rfq_id");
+        dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return allocationMapper.selectLockedItemCustomers(query).stream()
                 .filter(this::hasText)
                 .toList();
@@ -90,7 +90,7 @@ public class LockedItemService {
         if (req.getDateTo() != null) {
             query.le("alloc.delivery_date", req.getDateTo());
         }
-        dataScopeService.applyRfqScope(query, "alloc.rfq_id");
+        dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
     }
 

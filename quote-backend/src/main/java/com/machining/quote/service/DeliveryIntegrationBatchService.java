@@ -47,7 +47,7 @@ public class DeliveryIntegrationBatchService {
                 continue;
             }
             if (dataScopeService != null) {
-                dataScopeService.assertCanAccessOrder(ticket.getRfqId(), null);
+                dataScopeService.assertCanAccessDeliveryTicket(ticket);
             }
         }
     }

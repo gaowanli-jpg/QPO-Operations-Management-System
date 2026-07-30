@@ -5,11 +5,15 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
 import com.machining.quote.mapper.CustomerMasterMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
 import com.machining.quote.mapper.SystemUserMapper;
@@ -35,6 +39,10 @@ public class DataScopeService {
     private OrderRfqMapper orderRfqMapper;
     @Autowired(required = false)
     private CustomerMasterMapper customerMasterMapper;
+    @Autowired(required = false)
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
+    @Autowired(required = false)
+    private OrderDeliveryTicketMapper orderDeliveryTicketMapper;
 
     public void applyOrderScope(QueryWrapper<OrderRfq> query) {
         applyScopeSql(query, currentOrderScopeSql(""));
@@ -51,6 +59,28 @@ public class DataScopeService {
             return;
         }
         query.apply(safeColumn + " IN (SELECT id FROM order_rfq WHERE " + scopeSql.sql() + ")", scopeSql.params().toArray());
+    }
+
+    public void applyDeliveryTicketScope(QueryWrapper<?> query, String ticketAlias) {
+        ScopeSql baseScope = currentOrderScopeSql("");
+        if (baseScope.allAccess()) {
+            return;
+        }
+        if (baseScope.noAccess()) {
+            query.apply("1 = 0");
+            return;
+        }
+        List<Object> params = new ArrayList<>();
+        String rfqScope = rebaseScopeSql(currentOrderScopeSql("rfq"), params);
+        String salesOrderScope = rebaseScopeSql(currentOrderScopeSql("so"), params);
+        String alias = isBlank(ticketAlias) ? "" : ticketAlias.trim() + ".";
+        query.apply("("
+                        + alias + "rfq_id IN (SELECT rfq.id FROM order_rfq rfq WHERE " + rfqScope + ")"
+                        + " OR ("
+                        + alias + "source_type = 'SALES_ORDER' AND "
+                        + alias + "source_order_id IN (SELECT so.id FROM sales_order_header so WHERE " + salesOrderScope + ")"
+                        + "))",
+                params.toArray());
     }
 
     public void applyAuditScope(QueryWrapper<AuditLog> query) {
@@ -112,6 +142,62 @@ public class DataScopeService {
             throw new RuntimeException("Order does not exist");
         }
         assertCanAccessOrder(order);
+    }
+
+    public void assertCanAccessSalesOrder(SalesOrderHeader header) {
+        if (header == null) {
+            return;
+        }
+        DataScopeSnapshot snapshot = currentSnapshot();
+        if (snapshot.noContext() || snapshot.allAccess()) {
+            return;
+        }
+        if (matchesSalesOrder(snapshot, header)) {
+            return;
+        }
+        throw new RuntimeException("No data permission for sales order " + header.getId());
+    }
+
+    public void assertCanAccessDeliveryTicket(OrderDeliveryTicket ticket) {
+        if (ticket == null) {
+            return;
+        }
+        DataScopeSnapshot snapshot = currentSnapshot();
+        if (snapshot.noContext() || snapshot.allAccess()) {
+            return;
+        }
+        if ("SALES_ORDER".equalsIgnoreCase(ticket.getSourceType()) && ticket.getSourceOrderId() != null) {
+            if (salesOrderHeaderMapper == null) {
+                throw new RuntimeException("Sales order data permission service is unavailable");
+            }
+            SalesOrderHeader header = salesOrderHeaderMapper.selectById(ticket.getSourceOrderId());
+            if (header == null) {
+                throw new RuntimeException("Sales order does not exist");
+            }
+            assertCanAccessSalesOrder(header);
+            return;
+        }
+        if (ticket.getRfqId() != null) {
+            assertCanAccessOrder(ticket.getRfqId(), orderRfqMapper);
+            return;
+        }
+        if (!snapshot.noAccess()
+                && !isBlank(ticket.getCustomerName())
+                && snapshot.customerNames().contains(ticket.getCustomerName())) {
+            return;
+        }
+        throw new RuntimeException("No data permission for delivery ticket " + ticket.getId());
+    }
+
+    public void assertCanAccessDeliveryTicket(Integer ticketId) {
+        if (ticketId == null || orderDeliveryTicketMapper == null) {
+            throw new RuntimeException("Delivery ticket ID is required");
+        }
+        OrderDeliveryTicket ticket = orderDeliveryTicketMapper.selectById(ticketId);
+        if (ticket == null) {
+            throw new RuntimeException("Delivery ticket does not exist");
+        }
+        assertCanAccessDeliveryTicket(ticket);
     }
 
     public void assignCurrentOwnership(OrderRfq order) {
@@ -328,6 +414,28 @@ public class DataScopeService {
             return true;
         }
         return !isBlank(order.getCustomerName()) && snapshot.customerNames().contains(order.getCustomerName());
+    }
+
+    private boolean matchesSalesOrder(DataScopeSnapshot snapshot, SalesOrderHeader header) {
+        if (snapshot.noAccess()) {
+            return false;
+        }
+        Long currentUserId = snapshot.legacyUserId() == null ? null : snapshot.legacyUserId().longValue();
+        if (snapshot.selfOnly()
+                && (Objects.equals(header.getCreatedBy(), currentUserId)
+                || Objects.equals(header.getOwnerUserId(), snapshot.legacyUserId()))) {
+            return true;
+        }
+        return !isBlank(header.getCustomerName()) && snapshot.customerNames().contains(header.getCustomerName());
+    }
+
+    private String rebaseScopeSql(ScopeSql scopeSql, List<Object> targetParams) {
+        String sql = scopeSql.sql();
+        for (int i = 0; i < scopeSql.params().size(); i++) {
+            sql = sql.replace("{" + i + "}", "{" + targetParams.size() + "}");
+            targetParams.add(scopeSql.params().get(i));
+        }
+        return sql;
     }
 
     private SystemUser loadSystemUser(Integer legacyUserId) {

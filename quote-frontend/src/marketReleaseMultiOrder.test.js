@@ -74,17 +74,17 @@ describe('market release multi-order stage 2', () => {
     expect(source).not.toContain('parsePartSelection(selectedRfqId.value, formData)')
   })
 
-  test('market release groups generated tickets by rfq id and refreshes selected orders', () => {
+  test('market release groups generated tickets by source and refreshes selected orders', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const submitBlock = source.slice(
       source.indexOf('const submitTicket = async () =>'),
       source.indexOf('const resolveDeliveryLeadTime')
     )
 
-    expect(source).toContain('const groupSelectedRowsByRfqId = (rows) =>')
+    expect(source).toContain('const groupSelectedRowsBySource = (rows) =>')
     expect(source).toContain('const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) =>')
-    expect(submitBlock).toContain('const releaseGroups = groupSelectedRowsByRfqId(orderedSelectedRows)')
-    expect(submitBlock).toContain('for (const [rfqId, rows] of releaseGroups)')
+    expect(submitBlock).toContain('const releaseGroups = groupSelectedRowsBySource(orderedSelectedRows)')
+    expect(submitBlock).toContain('for (const { source, rows } of releaseGroups.values())')
     expect(submitBlock).toContain('const response = await generateTicket(payload)')
     expect(submitBlock).toContain('successfulResults')
     expect(submitBlock).toContain('failedResults')

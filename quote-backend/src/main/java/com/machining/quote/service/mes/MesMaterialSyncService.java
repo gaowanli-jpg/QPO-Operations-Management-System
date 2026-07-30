@@ -1,14 +1,17 @@
 package com.machining.quote.service.mes;
 
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import org.slf4j.Logger;
@@ -33,6 +36,8 @@ public class MesMaterialSyncService {
     private OrderRfqMapper orderRfqMapper;
     @Autowired(required = false)
     private ItemQuoteVersionMapper itemMapper;
+    @Autowired(required = false)
+    private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
     private MesMaterialClient mesMaterialClient;
     @Autowired
@@ -97,13 +102,9 @@ public class MesMaterialSyncService {
         req.setVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
         req.setInternalProjectNo(required(ticket.getInternalProjectNo(), "内部项目号不能为空"));
         OrderRfq order = orderRfqMapper == null || ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
-        req.setRfqNo(order == null ? null : order.getRfqNo());
-        req.setCustomerName(order == null ? null : order.getCustomerName());
-        String drawingUrl = null;
-        if (itemMapper != null && ticket.getItemId() != null) {
-            ItemQuoteVersion item = itemMapper.selectById(ticket.getItemId());
-            drawingUrl = item == null ? null : item.getDrawingUrl();
-        }
+        req.setRfqNo(order == null ? ticket.getRfqNo() : order.getRfqNo());
+        req.setCustomerName(order == null ? ticket.getCustomerName() : order.getCustomerName());
+        String drawingUrl = resolveDrawingUrl(ticket);
         req.setDrawingUrl(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空")));
         return req;
     }
@@ -146,6 +147,39 @@ public class MesMaterialSyncService {
         update.setMesSyncMessage(isBlank(message) ? "MES material resolved" : message.trim());
         update.setMesSyncedAt(LocalDateTime.now());
         ticketMapper.updateById(update);
+        syncSalesOrderItemMaterialNo(ticket, materialNo);
+    }
+
+    private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo) {
+        if (salesOrderItemMapper == null
+                || ticket == null
+                || ticket.getSourceItemId() == null
+                || !ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())) {
+            return;
+        }
+        SalesOrderItem update = new SalesOrderItem();
+        update.setId(ticket.getSourceItemId());
+        update.setMaterialNo(materialNo);
+        salesOrderItemMapper.updateById(update);
+    }
+
+    private String resolveDrawingUrl(OrderDeliveryTicket ticket) {
+        if (!isBlank(ticket.getDrawingUrl())) {
+            return ticket.getDrawingUrl();
+        }
+        if (ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())
+                && salesOrderItemMapper != null
+                && ticket.getSourceItemId() != null) {
+            SalesOrderItem item = salesOrderItemMapper.selectById(ticket.getSourceItemId());
+            if (item != null && !isBlank(item.getDrawingUrl())) {
+                return item.getDrawingUrl();
+            }
+        }
+        if (itemMapper != null && ticket.getItemId() != null) {
+            ItemQuoteVersion item = itemMapper.selectById(ticket.getItemId());
+            return item == null ? null : item.getDrawingUrl();
+        }
+        return null;
     }
 
     private void markFailed(OrderDeliveryTicket ticket, String message) {
@@ -178,6 +212,9 @@ public class MesMaterialSyncService {
         summary.put("ticketId", ticket.getId());
         summary.put("taskId", taskId);
         summary.put("rfqId", ticket.getRfqId());
+        summary.put("sourceType", ticket.getSourceType());
+        summary.put("sourceOrderId", ticket.getSourceOrderId());
+        summary.put("sourceItemId", ticket.getSourceItemId());
         summary.put("partNo", ticket.getPartNo());
         summary.put("version", ticket.getVersion());
         summary.put("internalProjectNo", ticket.getInternalProjectNo());

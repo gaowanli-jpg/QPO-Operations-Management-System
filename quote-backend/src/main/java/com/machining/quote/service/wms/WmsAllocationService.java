@@ -210,6 +210,9 @@ public class WmsAllocationService {
         row.setTicketId(ticket.getId());
         row.setRfqId(ticket.getRfqId());
         row.setItemId(ticket.getItemId());
+        row.setSourceType(ticket.getSourceType());
+        row.setSourceOrderId(ticket.getSourceOrderId());
+        row.setSourceItemId(ticket.getSourceItemId());
         row.setAllocationType(type);
         row.setQty(qty);
         row.setMaterialNo(ticket.getMaterialNo());
@@ -337,6 +340,9 @@ public class WmsAllocationService {
         summary.put("taskId", taskId);
         summary.put("rfqId", ticket.getRfqId());
         summary.put("itemId", ticket.getItemId());
+        summary.put("sourceType", ticket.getSourceType());
+        summary.put("sourceOrderId", ticket.getSourceOrderId());
+        summary.put("sourceItemId", ticket.getSourceItemId());
         summary.put("partNo", ticket.getPartNo());
         summary.put("version", ticket.getVersion());
         summary.put("materialNo", ticket.getMaterialNo());

@@ -80,7 +80,7 @@ class DeliveredItemQueryBackendTest {
                         "COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name",
                         "ticket.order_type AS order_type",
                         "ticket.remark",
-                        "item.drawing_url AS drawing_url"
+                        "COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url"
                 );
         assertThat(source)
                 .as("Delivered-item order type is the immutable delivery-ticket batch type, not an RFQ/item fallback")
@@ -93,11 +93,11 @@ class DeliveredItemQueryBackendTest {
 
         assertThat(source)
                 .contains(
-                        "dataScopeService.applyRfqScope(query, \"ticket.rfq_id\")",
+                        "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")",
                         "countDeliveredItems",
                         "return PageResult.of(List.of(), 0, safePage, safePageSize)",
                         "selectDeliveredItems",
-                        "dataScopeService.assertCanAccessOrder(item.getRfqId(), orderRfqMapper)"
+                        "dataScopeService.assertCanAccessDeliveryTicket(ticketId)"
                 );
         assertThat(source)
                 .as("Common delivered-item filters must cover customer order/project numbers and delivery date")

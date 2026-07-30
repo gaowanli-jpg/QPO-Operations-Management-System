@@ -12,6 +12,9 @@ public class DeliveredItemDTO {
     private String rfqNo;
     private String customerName;
     private Integer itemId;
+    private String sourceType;
+    private Long sourceOrderId;
+    private Long sourceItemId;
     private String partNo;
     private String version;
     private String description;

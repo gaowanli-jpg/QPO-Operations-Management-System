@@ -374,6 +374,9 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     rfq_no VARCHAR(100),
     customer_name VARCHAR(255),
     item_id INTEGER REFERENCES item_quote_version(id),
+    source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ',
+    source_order_id BIGINT,
+    source_item_id BIGINT,
     order_type VARCHAR(20),
     internal_project_no VARCHAR(100),
     customer_order_no VARCHAR(100),
@@ -391,6 +394,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     delivery_date DATE,
     remark TEXT,
     arrange_type VARCHAR(50),
+    drawing_url VARCHAR(500),
     process_route JSONB DEFAULT '[]'::jsonb,
     material_data JSONB DEFAULT '{}'::jsonb,
     material_gross_weight NUMERIC(14, 4),
@@ -407,8 +411,12 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES item_quote_version(id);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255);
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ';
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS source_order_id BIGINT;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS source_item_id BIGINT;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS drawing_url VARCHAR(500);
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS process_route JSONB;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_data JSONB;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
@@ -432,6 +440,9 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id),
     rfq_id INTEGER REFERENCES order_rfq(id),
     item_id INTEGER REFERENCES item_quote_version(id),
+    source_type VARCHAR(30),
+    source_order_id BIGINT,
+    source_item_id BIGINT,
     allocation_type VARCHAR(40) NOT NULL,
     qty INTEGER NOT NULL,
     material_no VARCHAR(100),
@@ -466,6 +477,9 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
 );
 
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS rfq_no VARCHAR(100);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS source_type VARCHAR(30);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS source_order_id BIGINT;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS source_item_id BIGINT;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS order_type VARCHAR(20);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS item_type VARCHAR(20) DEFAULT '普通件';
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(100);
@@ -496,8 +510,14 @@ CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_id_id
 CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_item_id
     ON order_delivery_ticket(rfq_id, item_id);
 
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_source
+    ON order_delivery_ticket(source_type, source_order_id, source_item_id);
+
 CREATE INDEX IF NOT EXISTS idx_delivery_allocation_item_type
     ON order_delivery_ticket_allocation(item_type, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_source
+    ON order_delivery_ticket_allocation(source_type, source_order_id, source_item_id);
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,

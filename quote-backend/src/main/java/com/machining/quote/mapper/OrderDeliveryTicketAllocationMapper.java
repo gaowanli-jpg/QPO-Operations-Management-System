@@ -25,6 +25,9 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.rfq_no,
                 alloc.customer_name,
                 alloc.item_id,
+                alloc.source_type,
+                alloc.source_order_id,
+                alloc.source_item_id,
                 alloc.allocation_type,
                 alloc.qty,
                 alloc.material_no,
@@ -74,6 +77,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             SELECT COUNT(*)
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
+            LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id
             ${ew.customSqlSegment}
             </script>
             """)

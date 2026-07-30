@@ -101,7 +101,7 @@ class WmsAllocationTest {
                 .containsEntry("rfqId", 88)
                 .containsEntry("materialNo", "MAT-001")
                 .containsEntry("demandQty", 10);
-        verify(dataScopeService).assertCanAccessOrder(88, null);
+        verify(dataScopeService).assertCanAccessDeliveryTicket(ticket);
         verify(auditService).record(
                 eq("DELIVERY_WMS_ALLOCATION_SUBMIT"),
                 eq("system_task"),
@@ -291,7 +291,7 @@ class WmsAllocationTest {
                         "WMS_ALLOCATION",
                         "submitWmsAllocationTask",
                         "DELIVERY_WMS_ALLOCATION_SUBMIT",
-                        "dataScopeService.assertCanAccessOrder"
+                        "dataScopeService.assertCanAccessDeliveryTicket"
                 );
         assertThat(allocationService)
                 .as("Ticket status transitions and audit actions must be stable")

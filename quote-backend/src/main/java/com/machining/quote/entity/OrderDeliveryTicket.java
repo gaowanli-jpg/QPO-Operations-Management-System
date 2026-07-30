@@ -20,6 +20,9 @@ public class OrderDeliveryTicket {
     private String rfqNo;
     private String customerName;
     private Integer itemId;
+    private String sourceType;
+    private Long sourceOrderId;
+    private Long sourceItemId;
     private String orderType;
     private String internalProjectNo;
     private String customerOrderNo;
@@ -37,6 +40,7 @@ public class OrderDeliveryTicket {
     private LocalDate deliveryDate;
     private String remark;
     private String arrangeType;
+    private String drawingUrl;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private Object processRoute;
     @TableField(typeHandler = JsonbTypeHandler.class)

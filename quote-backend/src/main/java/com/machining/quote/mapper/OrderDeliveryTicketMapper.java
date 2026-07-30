@@ -25,6 +25,9 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no,
                 COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name,
                 ticket.item_id,
+                ticket.source_type,
+                ticket.source_order_id,
+                ticket.source_item_id,
                 ticket.part_no,
                 ticket.version,
                 ticket.description,
@@ -39,7 +42,7 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 COALESCE(ticket.material_name, item.material_name) AS material_name,
                 COALESCE(ticket.engineering_material_name, item.engineering_material_name) AS engineering_material_name,
                 COALESCE(ticket.surface_treatment, item.surface_treatment) AS surface_treatment,
-                item.drawing_url AS drawing_url,
+                COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url,
                 ticket.process_route,
                 ticket.material_data,
                 ticket.material_gross_weight,
@@ -55,6 +58,7 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
+            LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id
             ${ew.customSqlSegment}
             ORDER BY ticket.id DESC
             LIMIT #{limit} OFFSET #{offset}
@@ -76,6 +80,7 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
+            LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id
             ${ew.customSqlSegment}
             </script>
             """)
@@ -100,6 +105,9 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 COALESCE(ticket.rfq_no, rfq.rfq_no) AS rfq_no,
                 COALESCE(ticket.customer_name, rfq.customer_name) AS customer_name,
                 ticket.item_id,
+                ticket.source_type,
+                ticket.source_order_id,
+                ticket.source_item_id,
                 ticket.part_no,
                 ticket.version,
                 ticket.description,
@@ -114,7 +122,7 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 COALESCE(ticket.material_name, item.material_name) AS material_name,
                 COALESCE(ticket.engineering_material_name, item.engineering_material_name) AS engineering_material_name,
                 COALESCE(ticket.surface_treatment, item.surface_treatment) AS surface_treatment,
-                item.drawing_url AS drawing_url,
+                COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url,
                 ticket.process_route,
                 ticket.material_data,
                 ticket.material_gross_weight,
@@ -130,6 +138,7 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
             LEFT JOIN item_quote_version item ON item.id = ticket.item_id
+            LEFT JOIN sales_order_item sales_item ON sales_item.id = ticket.source_item_id
             ${ew.customSqlSegment}
             LIMIT 1
             </script>

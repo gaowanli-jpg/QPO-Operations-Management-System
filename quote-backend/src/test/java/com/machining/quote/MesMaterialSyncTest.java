@@ -91,7 +91,7 @@ class MesMaterialSyncTest {
                 .containsEntry("ticketId", 123)
                 .containsEntry("rfqId", 88)
                 .containsEntry("partNo", "P-100");
-        verify(dataScopeService).assertCanAccessOrder(88, null);
+        verify(dataScopeService).assertCanAccessDeliveryTicket(ticket);
         verify(auditService).record(
                 eq("DELIVERY_MES_MATERIAL_SYNC_SUBMIT"),
                 eq("system_task"),
@@ -277,7 +277,7 @@ class MesMaterialSyncTest {
                         "MES_MATERIAL_SYNC",
                         "submitMesMaterialSyncTask",
                         "DELIVERY_MES_MATERIAL_SYNC_SUBMIT",
-                        "dataScopeService.assertCanAccessOrder"
+                        "dataScopeService.assertCanAccessDeliveryTicket"
                 );
         assertThat(syncService)
                 .as("Ticket status transitions and audit actions must be stable before implementation continues")

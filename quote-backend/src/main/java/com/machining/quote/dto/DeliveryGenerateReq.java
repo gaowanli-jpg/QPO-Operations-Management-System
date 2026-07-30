@@ -20,6 +20,9 @@ public class DeliveryGenerateReq {
     @Data
     public static class DeliveryItemReq {
         private Integer itemId;
+        private ReleaseSourceType sourceType;
+        private Long sourceOrderId;
+        private Long sourceItemId;
         private Integer acceptedQty;
     }
 }

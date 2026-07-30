@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -190,8 +191,7 @@ class DeliveryIntegrationBatchTaskTest {
 
         service.assertCanAccessTickets(List.of(1, 2, 3));
 
-        verify(dataScopeService).assertCanAccessOrder(88, null);
-        verify(dataScopeService).assertCanAccessOrder(89, null);
+        verify(dataScopeService, times(2)).assertCanAccessDeliveryTicket(any(OrderDeliveryTicket.class));
     }
 
     private void wireTaskService(

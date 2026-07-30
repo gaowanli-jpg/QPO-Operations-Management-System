@@ -140,8 +140,8 @@ class PermissionSystemStage6Test {
         assertSourceContains("service/QuoteProcessService.java", "dataScopeService.assertCanAccessOrder");
         assertSourceContains("service/DeliveryService.java", "dataScopeService.assertCanAccessOrder");
         assertSourceContains("service/InternalTargetLeadTimeService.java", "dataScopeService.assertCanAccessOrder");
-        assertSourceContains("service/DeliveredItemService.java", "dataScopeService.applyRfqScope");
-        assertSourceContains("service/DeliveredItemService.java", "dataScopeService.assertCanAccessOrder");
+        assertSourceContains("service/DeliveredItemService.java", "dataScopeService.applyDeliveryTicketScope");
+        assertSourceContains("service/DeliveredItemService.java", "dataScopeService.assertCanAccessDeliveryTicket");
         assertSourceContains("service/AuditLogQueryService.java", "dataScopeService.applyAuditScope");
         assertSourceContains("service/AuditLogQueryService.java", "applyAuditDataScope(qw);");
         assertSourceContains("service/AuditLogQueryService.java", "applyAuditDataScope(actionQuery);");

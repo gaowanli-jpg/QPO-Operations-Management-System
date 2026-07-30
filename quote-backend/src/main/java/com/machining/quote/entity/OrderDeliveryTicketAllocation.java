@@ -19,6 +19,9 @@ public class OrderDeliveryTicketAllocation {
     private Integer ticketId;
     private Integer rfqId;
     private Integer itemId;
+    private String sourceType;
+    private Long sourceOrderId;
+    private Long sourceItemId;
     private String allocationType;
     private Integer qty;
     private String materialNo;

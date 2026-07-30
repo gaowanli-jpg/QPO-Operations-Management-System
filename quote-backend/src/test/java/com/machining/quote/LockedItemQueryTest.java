@@ -152,7 +152,7 @@ class LockedItemQueryTest {
                 .contains(
                         "listAllocations",
                         "listTicketAllocations",
-                        "dataScopeService.applyRfqScope(query, \"alloc.rfq_id\")",
+                        "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")",
                         "applyEquals(query, \"alloc.customer_name\", req.getCustomerName())",
                         "applyLike(query, \"alloc.customer_order_no\", req.getCustomerOrderNo())",
                         "applyLike(query, \"alloc.customer_project_no\", req.getCustomerProjectNo())",

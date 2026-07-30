@@ -66,7 +66,7 @@ describe('market release stage 5 cleanup', () => {
       'releaseForm.arrangeType',
       '@click="submitTicket"',
       'generateTicket(payload)',
-      'groupSelectedRowsByRfqId(orderedSelectedRows)',
+      'groupSelectedRowsBySource(orderedSelectedRows)',
       'await refreshSelectedOrdersAfterGeneration(successItemIds)'
     ])
   })

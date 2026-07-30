@@ -113,7 +113,7 @@ public class SystemTaskService {
             throw new RuntimeException("提单行不存在");
         }
         if (dataScopeService != null) {
-            dataScopeService.assertCanAccessOrder(ticket.getRfqId(), null);
+            dataScopeService.assertCanAccessDeliveryTicket(ticket);
         }
         if ("SUCCESS".equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
             throw new RuntimeException("该提单行已获取 MES 物料号，不能重复提交");
@@ -164,7 +164,7 @@ public class SystemTaskService {
             throw new RuntimeException("提单行不存在");
         }
         if (dataScopeService != null) {
-            dataScopeService.assertCanAccessOrder(ticket.getRfqId(), null);
+            dataScopeService.assertCanAccessDeliveryTicket(ticket);
         }
         if (isBlank(ticket.getMaterialNo())) {
             throw new RuntimeException("该提单行缺少物料号，请先获取 MES 物料号");

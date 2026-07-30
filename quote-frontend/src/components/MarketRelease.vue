@@ -790,8 +790,10 @@ const handleSelectionChange = (rows) => {
 
 const selectedRowsInItemOrder = () => {
   return selectedRows.value.slice().sort((left, right) => {
-    const rfqCompare = Number(left.rfqId || 0) - Number(right.rfqId || 0)
-    return rfqCompare !== 0 ? rfqCompare : Number(left.id || 0) - Number(right.id || 0)
+    const leftSource = `${left?.sourceType || 'RFQ'}:${Number(left?.sourceOrderId ?? left?.rfqId ?? 0)}`
+    const rightSource = `${right?.sourceType || 'RFQ'}:${Number(right?.sourceOrderId ?? right?.rfqId ?? 0)}`
+    const sourceCompare = leftSource.localeCompare(rightSource)
+    return sourceCompare !== 0 ? sourceCompare : Number(left.id || 0) - Number(right.id || 0)
   })
 }
 
@@ -802,28 +804,31 @@ const selectedRowsRfqIds = () => {
     .filter(Boolean))]
 }
 
-const groupSelectedRowsByRfqId = (rows) => {
+const groupSelectedRowsBySource = (rows) => {
   const groups = new Map()
   ;(rows || []).forEach(row => {
-    if ((row?.sourceType || 'RFQ') !== 'RFQ') return
-    const rfqId = row.rfqId || selectedRfqId.value
-    if (!rfqId) return
-    if (!groups.has(rfqId)) {
-      groups.set(rfqId, [])
+    const sourceType = row?.sourceType || 'RFQ'
+    const sourceOrderId = Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value)
+    if (!sourceOrderId) return
+    const source = { sourceType, sourceOrderId }
+    const key = sourceKey(source)
+    if (!groups.has(key)) {
+      groups.set(key, { source, rows: [] })
     }
-    groups.get(rfqId).push(row)
+    groups.get(key).rows.push(row)
   })
   return groups
 }
 
-const orderLabelById = (rfqId) => {
-  const order = selectedOrders.value.find(item => item.id === rfqId)
-  return order?.rfqNo || rfqId
+const orderLabelBySource = (source) => {
+  const key = sourceKey(source)
+  const order = selectedOrders.value.find(item => sourceKey(toReleaseOrderSource(item)) === key)
+  return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || key
 }
 
 const formatGenerationFailures = (failedResults) => {
   return failedResults
-    .map(result => `${orderLabelById(result.rfqId)}：${result.message}`)
+    .map(result => `${orderLabelBySource(result.source)}：${result.message}`)
     .join('；')
 }
 
@@ -1124,7 +1129,7 @@ const submitTicket = async () => {
     return ElMessage.warning(`有 ${overRemaining.length} 个零件的通过数量超过剩余可提数量。`)
   }
 
-  const releaseGroups = groupSelectedRowsByRfqId(orderedSelectedRows)
+  const releaseGroups = groupSelectedRowsBySource(orderedSelectedRows)
   if (releaseGroups.size === 0) {
     return ElMessage.warning('已选零件缺少订单信息，无法生成正式提单。')
   }
@@ -1140,9 +1145,9 @@ const submitTicket = async () => {
       const successfulResults = []
       const failedResults = []
       const successItemIds = new Set()
-      for (const [rfqId, rows] of releaseGroups) {
+      for (const { source, rows } of releaseGroups.values()) {
         const payload = {
-          rfqId,
+          ...(source.sourceType === 'RFQ' ? { rfqId: source.sourceOrderId } : {}),
           orderType: releaseForm.orderType,
           internalProjectNo,
           customerOrderNo,
@@ -1150,22 +1155,25 @@ const submitTicket = async () => {
           startDate: releaseForm.startDate,
           arrangeType: releaseForm.arrangeType,
           items: rows.map(row => ({
-            itemId: row.id,
+            sourceType: row?.sourceType || 'RFQ',
+            sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value),
+            sourceItemId: Number(row?.sourceItemId ?? row?.id),
+            itemId: (row?.sourceType || 'RFQ') === 'RFQ' ? row.id : undefined,
             acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)
           }))
         }
         try {
           const response = await generateTicket(payload)
           if (response.success) {
-            successfulResults.push({ rfqId, rows, response })
+            successfulResults.push({ source, rows, response })
             rows.forEach(row => successItemIds.add(rowKey(row)))
           } else {
-            failedResults.push({ rfqId, rows, message: response.message || '提单生成失败。' })
+            failedResults.push({ source, rows, message: response.message || '提单生成失败。' })
           }
         } catch (error) {
           console.error(error)
           failedResults.push({
-            rfqId,
+            source,
             rows,
             message: error.response?.data?.message || error.message || '提单生成请求失败。'
           })

@@ -48,7 +48,7 @@ public class DeliveredItemService {
         if (item == null) {
             throw new RuntimeException("Delivered item does not exist");
         }
-        dataScopeService.assertCanAccessOrder(item.getRfqId(), orderRfqMapper);
+        dataScopeService.assertCanAccessDeliveryTicket(ticketId);
         return item;
     }
 
@@ -59,7 +59,7 @@ public class DeliveredItemService {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
         query.isNotNull("COALESCE(ticket.customer_name, rfq.customer_name)");
         query.ne("COALESCE(ticket.customer_name, rfq.customer_name)", "");
-        dataScopeService.applyRfqScope(query, "ticket.rfq_id");
+        dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return ticketMapper.selectDeliveredItemCustomers(query).stream()
                 .filter(this::hasText)
                 .toList();
@@ -93,7 +93,7 @@ public class DeliveredItemService {
         if (req.getDateTo() != null) {
             query.le("ticket.delivery_date", req.getDateTo());
         }
-        dataScopeService.applyRfqScope(query, "ticket.rfq_id");
+        dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
     }
 
