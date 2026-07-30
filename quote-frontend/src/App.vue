@@ -118,7 +118,7 @@ const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
-  { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs'] }
+  { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
 ]
 
 const menuMetaByPath = {
@@ -137,7 +137,8 @@ const menuMetaByPath = {
   '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
   '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
   '/customers': { title: '客户资料', permission: 'system:customer:view', icon: User },
-  '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document }
+  '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document },
+  '/system-config': { title: '系统配置', permission: 'system:config:view', icon: Setting }
 }
 
 const flattenMenus = (menus = []) => menus.flatMap((menu) => [
@@ -239,6 +240,10 @@ const shellMetaByPath = {
   '/audit-logs': {
     title: '操作日志',
     description: '追踪账号、报价、订单、字典和系统配置的关键变更。'
+  },
+  '/system-config': {
+    title: '系统配置',
+    description: '管理文件存储策略和 MinIO 连接。'
   },
   '/quote-template': {
     title: '报价模板',

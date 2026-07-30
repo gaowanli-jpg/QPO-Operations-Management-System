@@ -27,6 +27,7 @@ const protectedRoutePermissions = {
   '/organization': 'system:org:view',
   '/customers': 'system:customer:view',
   '/audit-logs': 'system:audit:view',
+  '/system-config': 'system:config:view',
   '/quote-template': 'market:template:view',
   '/pricing': 'engineer:pricing:view'
 }
@@ -47,7 +48,8 @@ const visibleMenuPermissions = {
   '/roles': 'system:role:view',
   '/organization': 'system:org:view',
   '/customers': 'system:customer:view',
-  '/audit-logs': 'system:audit:view'
+  '/audit-logs': 'system:audit:view',
+  '/system-config': 'system:config:view'
 }
 
 const routePermissionEntries = () => {

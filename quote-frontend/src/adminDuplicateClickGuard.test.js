@@ -13,7 +13,8 @@ const sources = {
   org: readSource('components', 'SystemOrgManage.vue'),
   dict: readSource('components', 'MaterialProcessManage.vue'),
   template: readSource('components', 'QuoteTemplateManage.vue'),
-  audit: readSource('components', 'AuditLogManage.vue')
+  audit: readSource('components', 'AuditLogManage.vue'),
+  systemConfig: readSource('components', 'SystemConfigManage.vue')
 }
 
 const blockBetween = (source, start, end) => {
@@ -64,6 +65,11 @@ describe('admin duplicate click guards', () => {
     expect(sources.audit).toContain("exportLogs: 'system:audit:export'")
     expect(sources.audit).toContain("saveRetention: 'system:audit:retention-save'")
     expect(sources.audit).toContain("cleanupRetention: 'system:audit:retention-cleanup'")
+
+    expect(sources.systemConfig).toContain("saveDialog: 'system:config:storage:save-dialog'")
+    expect(sources.systemConfig).toContain("test: (configId) => `system:config:storage:test:${configId || 'none'}`")
+    expect(sources.systemConfig).toContain("activate: (configId) => `system:config:storage:activate:${configId || 'none'}`")
+    expect(sources.systemConfig).toContain("disable: (configId) => `system:config:storage:disable:${configId || 'none'}`")
   })
 
   test('user management uses dialog and row pending states for save, reset, status and delete', () => {
@@ -161,6 +167,25 @@ describe('admin duplicate click guards', () => {
     expect(cleanupBlock).toContain('return runAction(auditActionKeys.cleanupRetention, async () =>')
     expect(cleanupBlock).toContain('await ElMessageBox.confirm')
     expect(cleanupBlock).toContain('await runAuditLogRetentionCleanup()')
+  })
+
+  test('system config page uses dialog and row pending states for storage writes', () => {
+    const saveBlock = blockBetween(sources.systemConfig, 'const saveConfig = async () =>', 'const testConfig = async (row) =>')
+    const testBlock = blockBetween(sources.systemConfig, 'const testConfig = async (row) =>', 'const activateConfig = async (row) =>')
+    const activateBlock = blockBetween(sources.systemConfig, 'const activateConfig = async (row) =>', 'const disableConfig = async (row) =>')
+    const disableBlock = blockBetween(sources.systemConfig, 'const disableConfig = async (row) =>', 'const isRowPending = (row) =>')
+
+    expect(sources.systemConfig).toContain(':loading="isPending(systemConfigActionKeys.saveDialog)"')
+    expect(sources.systemConfig).toContain(':disabled="isPending(systemConfigActionKeys.saveDialog)"')
+    expect(sources.systemConfig).toContain(':loading="isPending(systemConfigActionKeys.test(row.id))"')
+    expect(sources.systemConfig).toContain(':disabled="isRowPending(row)"')
+    expect(sources.systemConfig).toContain(':loading="isPending(systemConfigActionKeys.activate(row.id))"')
+    expect(sources.systemConfig).toContain(':disabled="row.active || row.enabled === false || isRowPending(row)"')
+    expect(sources.systemConfig).toContain(':loading="isPending(systemConfigActionKeys.disable(row.id))"')
+    expect(saveBlock).toContain('return runAction(systemConfigActionKeys.saveDialog, async () =>')
+    expect(testBlock).toContain('return runAction(systemConfigActionKeys.test(row.id), async () =>')
+    expect(activateBlock).toContain('return runAction(systemConfigActionKeys.activate(row.id), async () =>')
+    expect(disableBlock).toContain('return runAction(systemConfigActionKeys.disable(row.id), async () =>')
   })
 
   test('admin row action key suppresses duplicate API calls while pending', async () => {

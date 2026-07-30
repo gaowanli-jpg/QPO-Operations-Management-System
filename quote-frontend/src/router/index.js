@@ -19,6 +19,7 @@ const SystemOrgManage = () => import('../components/SystemOrgManage.vue')
 const CustomerManage = () => import('../components/CustomerManage.vue')
 const QuoteTemplateManage = () => import('../components/QuoteTemplateManage.vue')
 const AuditLogManage = () => import('../components/AuditLogManage.vue')
+const SystemConfigManage = () => import('../components/SystemConfigManage.vue')
 
 const routes = [
   { path: '/login', component: LoginView },
@@ -38,6 +39,7 @@ const routes = [
   { path: '/organization', component: SystemOrgManage, meta: { permission: 'system:org:view' } },
   { path: '/customers', component: CustomerManage, meta: { permission: 'system:customer:view' } },
   { path: '/audit-logs', component: AuditLogManage, meta: { permission: 'system:audit:view' } },
+  { path: '/system-config', component: SystemConfigManage, meta: { permission: 'system:config:view' } },
   { path: '/quote-template', component: QuoteTemplateManage, meta: { permission: 'market:template:view' } },
   { path: '/pricing', component: ItemPricing, meta: { permission: 'engineer:pricing:view' } }
 ]
