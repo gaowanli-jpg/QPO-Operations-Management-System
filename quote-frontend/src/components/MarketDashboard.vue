@@ -3,7 +3,7 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">市场部：新单导入中心</h1>
-        <p class="erp-page-description">上传客户询价表和关联图纸，或导入销售订单进入 QPO 主流程。</p>
+        <p class="erp-page-description">上传客户询价表和关联图纸，或导入销售订单到独立主表。</p>
       </div>
     </header>
 
@@ -200,7 +200,7 @@
               </div>
               <div class="upload-box step-panel">
                 <el-alert
-                  title="销售订单 Excel 按市场实际模板导入，客户和单据类型在页面选择；导入后生成已报价 QPO 订单和零件，字段校验以后端返回为准。"
+                  title="销售订单 Excel 按市场实际模板导入，客户和单据类型在页面选择；导入后生成已报价销售订单和零件，字段校验以后端返回为准。"
                   type="info"
                   show-icon
                   :closable="false"
@@ -245,7 +245,7 @@
                       </el-button>
                     </template>
                     <template #tip>
-                      <div class="el-upload__tip">只能上传 1 份销售订单 Excel，导入后创建 QPO 销售订单。</div>
+                      <div class="el-upload__tip">只能上传 1 份销售订单 Excel，导入后创建独立销售订单。</div>
                     </template>
                   </el-upload>
                 </div>
@@ -296,7 +296,7 @@
                 height="360"
                 empty-text="暂无导入明细"
               >
-                <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="salesOrderNo" label="销售订单号" min-width="170" show-overflow-tooltip />
                 <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip />
                 <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
                 <el-table-column prop="lineCount" label="零件数" width="90" align="right" />
@@ -394,7 +394,7 @@ const salesOrderResultMessage = computed(() => {
   const result = salesOrderImportResult.value
   if (!result) return ''
   if (result.errorMessage) return result.errorMessage
-  if (result.success) return '销售订单已成功导入 QPO 主流程。'
+  if (result.success) return '销售订单已成功导入独立销售订单主表。'
   return '销售订单导入存在失败明细，请查看下方结果表。'
 })
 const salesOrderCustomerLabel = computed(() => {
@@ -559,7 +559,7 @@ const submitSalesOrderImport = async () => {
 
       if (response?.success) {
         salesOrderForm.documentTypeCode = documentTypeCode
-        ElMessage.success(`销售订单已导入 QPO，成功 ${response.successOrderCount || 0} 单`)
+        ElMessage.success(`销售订单已导入独立主表，成功 ${response.successOrderCount || 0} 单`)
         salesOrderFile.value = null
         salesOrderUploadRef.value?.clearFiles?.()
       } else {
@@ -567,7 +567,7 @@ const submitSalesOrderImport = async () => {
       }
     } catch (error) {
       console.error(error)
-      ElMessage.error(readActionError(error, '销售订单导入 QPO 失败，请稍后重试。'))
+      ElMessage.error(readActionError(error, '销售订单导入失败，请稍后重试。'))
     }
   })
 }
