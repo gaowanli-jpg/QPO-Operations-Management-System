@@ -25,6 +25,7 @@ const protectedRoutePermissions = {
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/organization': 'system:org:view',
+  '/customers': 'system:customer:view',
   '/audit-logs': 'system:audit:view',
   '/quote-template': 'market:template:view',
   '/pricing': 'engineer:pricing:view'
@@ -45,6 +46,7 @@ const visibleMenuPermissions = {
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/organization': 'system:org:view',
+  '/customers': 'system:customer:view',
   '/audit-logs': 'system:audit:view'
 }
 

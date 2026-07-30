@@ -118,7 +118,7 @@ const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
-  { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/audit-logs'] }
+  { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs'] }
 ]
 
 const menuMetaByPath = {
@@ -136,6 +136,7 @@ const menuMetaByPath = {
   '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
   '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
+  '/customers': { title: '客户资料', permission: 'system:customer:view', icon: User },
   '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document }
 }
 
@@ -230,6 +231,10 @@ const shellMetaByPath = {
   '/organization': {
     title: '组织档案',
     description: '维护部门和岗位这两类用户身份属性。'
+  },
+  '/customers': {
+    title: '客户资料',
+    description: '维护客户编码、简称和名称，作为全系统客户选择来源。'
   },
   '/audit-logs': {
     title: '操作日志',

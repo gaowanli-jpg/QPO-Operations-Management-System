@@ -16,6 +16,7 @@ const LockedItemManage = () => import('../components/LockedItemManage.vue')
 const UserManage = () => import('../components/UserManage.vue')
 const SystemRoleManage = () => import('../components/SystemRoleManage.vue')
 const SystemOrgManage = () => import('../components/SystemOrgManage.vue')
+const CustomerManage = () => import('../components/CustomerManage.vue')
 const QuoteTemplateManage = () => import('../components/QuoteTemplateManage.vue')
 const AuditLogManage = () => import('../components/AuditLogManage.vue')
 
@@ -35,6 +36,7 @@ const routes = [
   { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },
   { path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } },
   { path: '/organization', component: SystemOrgManage, meta: { permission: 'system:org:view' } },
+  { path: '/customers', component: CustomerManage, meta: { permission: 'system:customer:view' } },
   { path: '/audit-logs', component: AuditLogManage, meta: { permission: 'system:audit:view' } },
   { path: '/quote-template', component: QuoteTemplateManage, meta: { permission: 'market:template:view' } },
   { path: '/pricing', component: ItemPricing, meta: { permission: 'engineer:pricing:view' } }

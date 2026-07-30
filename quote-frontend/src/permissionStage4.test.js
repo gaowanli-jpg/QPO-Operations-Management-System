@@ -24,6 +24,7 @@ const protectedRoutePermissions = {
   '/users': 'system:user:view',
   '/roles': 'system:role:view',
   '/organization': 'system:org:view',
+  '/customers': 'system:customer:view',
   '/audit-logs': 'system:audit:view',
   '/quote-template': 'market:template:view',
   '/pricing': 'engineer:pricing:view'
@@ -86,6 +87,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
       ['UserManage', ['system:user:create', 'system:user:update', 'system:user:disable', 'system:user:reset-password', 'system:user:delete']],
       ['SystemRoleManage', ['system:role:create', 'system:role:update', 'system:role:delete', 'system:role:assign-permission', 'system:role:assign-data-scope']],
       ['SystemOrgManage', ['system:dept:manage', 'system:post:manage']],
+      ['CustomerManage', ['system:customer:create', 'system:customer:update', 'system:customer:delete']],
       ['AuditLogManage', ['system:audit:export', 'system:audit:retention']]
     ]
 
