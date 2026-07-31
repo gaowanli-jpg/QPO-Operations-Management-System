@@ -820,10 +820,18 @@ const groupSelectedRowsBySource = (rows) => {
   return groups
 }
 
+const orderSourceNo = (order, source) => {
+  const sourceType = source?.sourceType || order?.sourceType || 'RFQ'
+  if (sourceType === 'SALES_ORDER') {
+    return order?.sourceOrderNo || order?.salesOrderNo || source?.sourceOrderId || sourceKey(source)
+  }
+  return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || sourceKey(source)
+}
+
 const orderLabelBySource = (source) => {
   const key = sourceKey(source)
   const order = selectedOrders.value.find(item => sourceKey(toReleaseOrderSource(item)) === key)
-  return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || key
+  return orderSourceNo(order, source)
 }
 
 const formatGenerationFailures = (failedResults) => {

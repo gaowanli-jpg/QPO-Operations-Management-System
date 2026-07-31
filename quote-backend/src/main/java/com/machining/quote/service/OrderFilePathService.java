@@ -38,6 +38,15 @@ public class OrderFilePathService {
                 + safeFilename;
     }
 
+    public String salesOrderImportDrawingUrl(String customerName, String batchNo, String filename) {
+        return "/uploads/"
+                + safePathSegment(customerName)
+                + "/"
+                + safePathSegment(batchNo)
+                + "/"
+                + safePathSegment(filename);
+    }
+
     private String orderFolderName(OrderRfq order) {
         if (!isBlank(order.getRfqNo())) {
             return order.getRfqNo();

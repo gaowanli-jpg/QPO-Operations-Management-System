@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class SalesOrderQpoImportResp {
@@ -15,5 +16,6 @@ public class SalesOrderQpoImportResp {
     private Integer failedOrderCount;
     private Integer totalLineCount;
     private String errorMessage;
+    private Map<String, Object> drawingReport;
     private List<SalesOrderQpoImportResultRow> rows = new ArrayList<>();
 }

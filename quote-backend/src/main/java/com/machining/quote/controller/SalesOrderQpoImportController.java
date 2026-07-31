@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/market/sales-orders")
 public class SalesOrderQpoImportController {
@@ -27,8 +29,9 @@ public class SalesOrderQpoImportController {
     public SalesOrderQpoImportResp importQpo(
             @RequestParam("customerId") Long customerId,
             @RequestParam(value = "documentTypeCode", required = false) String documentTypeCode,
-            @RequestParam("excelFile") MultipartFile excelFile) {
-        return salesOrderQpoImportService.importQpo(excelFile, customerId, documentTypeCode);
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
+        return salesOrderQpoImportService.importQpo(excelFile, customerId, documentTypeCode, drawings);
     }
 
     @PostMapping("/u9-sync")

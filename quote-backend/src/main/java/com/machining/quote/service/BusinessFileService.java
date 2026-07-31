@@ -54,12 +54,33 @@ public class BusinessFileService {
         if (order == null) {
             throw new IllegalArgumentException("订单不能为空");
         }
+        String originalFilename = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+        String newFilename = UUID.randomUUID() + extension(originalFilename);
+        String publicPath = orderFilePathService.drawingUrl(order, newFilename);
+        return saveDrawingAtPublicPath(publicPath, drawing, originalFilename, bizType, bizId);
+    }
+
+    public StoredBusinessFile saveSalesOrderImportDrawing(
+            String customerName,
+            String batchNo,
+            MultipartFile drawing,
+            String bizType,
+            String bizId) {
+        String originalFilename = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+        String newFilename = UUID.randomUUID() + extension(originalFilename);
+        String publicPath = orderFilePathService.salesOrderImportDrawingUrl(customerName, batchNo, newFilename);
+        return saveDrawingAtPublicPath(publicPath, drawing, originalFilename, bizType, bizId);
+    }
+
+    private StoredBusinessFile saveDrawingAtPublicPath(
+            String publicPath,
+            MultipartFile drawing,
+            String originalFilename,
+            String bizType,
+            String bizId) {
         if (drawing == null || drawing.isEmpty()) {
             throw new IllegalArgumentException("图纸文件不能为空");
         }
-        String originalFilename = cleanFilename(drawing.getOriginalFilename());
-        String newFilename = UUID.randomUUID() + extension(originalFilename);
-        String publicPath = orderFilePathService.drawingUrl(order, newFilename);
         String objectKey = objectKeyFromPublicPath(publicPath);
 
         try (InputStream inputStream = drawing.getInputStream()) {

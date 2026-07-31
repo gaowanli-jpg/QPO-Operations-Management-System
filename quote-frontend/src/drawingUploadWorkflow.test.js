@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { collectPdfFilesFromFileList, mergePdfFiles } from './utils/drawingUpload'
@@ -8,24 +8,43 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 const readComponent = (fileName) => readSource('components', fileName)
+const importDrawingPanelPath = resolve(currentDir, 'components', 'import', 'ImportDrawingUploadPanel.vue')
 
 describe('drawing upload workflow parity', () => {
+  test('market RFQ and sales order imports share the same drawing upload panel component', () => {
+    const source = readComponent('MarketDashboard.vue')
+
+    expect(existsSync(importDrawingPanelPath)).toBe(true)
+    expect(source).toContain("import ImportDrawingUploadPanel from './import/ImportDrawingUploadPanel.vue'")
+    expect(source.match(/<ImportDrawingUploadPanel/g) || []).toHaveLength(2)
+    expect(source).toContain('v-model="drawingFiles"')
+    expect(source).toContain('v-model="salesOrderDrawingFiles"')
+  })
+
+  test('shared drawing upload panel exposes drop, file, folder, and remove controls', () => {
+    expect(existsSync(importDrawingPanelPath)).toBe(true)
+    const source = readFileSync(importDrawingPanelPath, 'utf8')
+
+    expect(source).toContain('@drop.prevent="handleDrop"')
+    expect(source).toContain('ref="fileInput"')
+    expect(source).toContain('ref="folderInput"')
+    expect(source).toContain('accept=".pdf"')
+    expect(source).toContain('webkitdirectory directory multiple')
+    expect(source).toContain('@change="handleFileSelect"')
+    expect(source).toContain('@change="handleFolderSelect"')
+    expect(source).toContain('@click="triggerFileSelect"')
+    expect(source).toContain('@click="triggerFolderSelect"')
+    expect(source).toContain('collectPdfFilesFromDataTransfer')
+    expect(source).toContain('mergePdfFiles')
+    expect(source).toContain('emit(\'update:modelValue\'')
+  })
+
   test('market import supports dropping folders, choosing folders, and choosing multiple PDFs', () => {
     const source = readComponent('MarketDashboard.vue')
 
-    expect(source).toContain('@drop.prevent="handleDrawingDrop"')
-    expect(source).toContain('ref="drawingFileInput"')
-    expect(source).toContain('ref="drawingFolderInput"')
-    expect(source).toContain('accept=".pdf"')
-    expect(source).toContain('webkitdirectory directory multiple')
-    expect(source).toContain('@change="handleDrawingFileSelect"')
-    expect(source).toContain('@change="handleDrawingFolderSelect"')
-    expect(source).toContain('@click="triggerDrawingFileSelect"')
-    expect(source).toContain('@click="triggerDrawingFolderSelect"')
-    expect(source).toContain('选择多个 PDF')
-    expect(source).toContain('选择文件夹')
-    expect(source).toContain('collectPdfFilesFromDataTransfer')
-    expect(source).toContain('mergePdfFiles')
+    expect(source).toContain('<ImportDrawingUploadPanel')
+    expect(source).toContain('v-model="drawingFiles"')
+    expect(source).toContain('permission="market:rfq:upload-drawing"')
   })
 
   test('order supplement supports dropping folders, choosing folders, and choosing multiple PDFs', () => {

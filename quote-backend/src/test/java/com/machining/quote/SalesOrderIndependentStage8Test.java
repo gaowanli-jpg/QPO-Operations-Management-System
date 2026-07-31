@@ -68,6 +68,10 @@ class SalesOrderIndependentStage8Test {
     void salesOrderImportKeepsLegacyRfqTablesOutOfWritePathAndProtectsOldFlowTests() throws IOException {
         String importService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderQpoImportService.java")));
         String enrichmentService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderRepeatEnrichmentService.java")));
+        String importResultRow = read(MAIN_JAVA.resolve(Path.of("dto", "SalesOrderQpoImportResultRow.java")));
+        String orderService = read(MAIN_JAVA.resolve(Path.of("service", "OrderManagementService.java")));
+        String releaseService = read(MAIN_JAVA.resolve(Path.of("service", "InternalTargetLeadTimeService.java")));
+        String dataScopeService = read(MAIN_JAVA.resolve(Path.of("service", "DataScopeService.java")));
         String marketController = read(MAIN_JAVA.resolve(Path.of("controller", "MarketController.java")));
         String coreWorkflowTests = read(TEST_JAVA.resolve("CoreWorkflowIntegrationTests.java"));
         String auditActionTests = read(TEST_JAVA.resolve("AuditActionCoverageTests.java"));
@@ -90,11 +94,33 @@ class SalesOrderIndependentStage8Test {
                 .doesNotContain("ItemQuoteVersionMapper")
                 .doesNotContain("new OrderRfq")
                 .doesNotContain("new ItemQuoteVersion");
+        assertThat(importResultRow)
+                .contains("private Long salesOrderId;", "private String salesOrderNo;")
+                .doesNotContain("rfqId")
+                .doesNotContain("rfqNo");
+        assertThat(orderService)
+                .contains("row.put(\"sourceType\", \"SALES_ORDER\")")
+                .contains("row.put(\"sourceOrderNo\", order.getSalesOrderNo())")
+                .contains("row.put(\"salesOrderNo\", order.getSalesOrderNo())")
+                .doesNotContain("row.put(\"rfqNo\", order.getSalesOrderNo())");
+        assertThat(releaseService)
+                .contains("header.sales_order_no AS source_order_no")
+                .contains("row.put(\"rfqNo\", ReleaseSourceType.RFQ.name().equals(sourceType)")
+                .contains("row.put(\"sourceOrderNo\", order == null ? \"\" : order.getSalesOrderNo())")
+                .contains("row.put(\"rfqNo\", \"\")")
+                .doesNotContain("row.put(\"rfqNo\", order == null ? \"\" : order.getSalesOrderNo())")
+                .doesNotContain("header.sales_order_no AS rfq_no");
         assertThat(enrichmentService)
                 .contains("ItemQuoteVersionMapper")
                 .contains("selectLatestReleasedRepeatSources")
                 .contains("salesOrderItemMapper.updateById(item)")
+                .contains("releasedProductionSnapshotsByKey")
+                .doesNotContain("public SalesOrderRepeatEnrichmentResult enrich(Integer rfqId")
                 .doesNotContain("salesOrderItemMapper.insert");
+        assertThat(dataScopeService)
+                .contains("FROM sales_order_header")
+                .contains("FROM order_rfq")
+                .contains("snapshot.customerNames()");
 
         assertThat(auditActionTests).contains("importRfq");
         assertThat(coreWorkflowTests)

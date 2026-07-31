@@ -46,6 +46,10 @@ describe('market release sales order source stage 5', () => {
     expect(source).toContain('releaseForm.internalProjectNo = order.internalProjectNo || releaseForm.internalProjectNo')
     expect(source).toContain('releaseForm.customerOrderNo = order.customerOrderNo || releaseForm.customerOrderNo')
     expect(source).toContain('releaseForm.customerProjectNo = order.customerProjectNo || releaseForm.customerProjectNo')
+    expect(source).toContain("const orderSourceNo = (order, source) => {")
+    expect(source).toContain("return order?.sourceOrderNo || order?.salesOrderNo || source?.sourceOrderId || sourceKey(source)")
+    expect(source).toContain("return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || sourceKey(source)")
+    expect(source).not.toContain("return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || key")
   })
 
   test('order picker supports source-aware release rows while keeping reusable scopes', () => {

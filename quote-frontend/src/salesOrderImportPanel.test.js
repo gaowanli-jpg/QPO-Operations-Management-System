@@ -45,6 +45,38 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain("formData.append('documentTypeCode'")
   })
 
+  test('sales order mode follows RFQ step rhythm with document type and drawing upload separated', () => {
+    expect(salesOrderPane).toContain('步骤 1：客户基础信息')
+    expect(salesOrderPane).toContain('步骤 2：单据类型编码')
+    expect(salesOrderPane).toContain('步骤 3：上传销售订单（Excel）')
+    expect(salesOrderPane).toContain('步骤 4：上传关联图纸（PDF）')
+
+    const customerStep = salesOrderPane.slice(
+      salesOrderPane.indexOf('步骤 1：客户基础信息'),
+      salesOrderPane.indexOf('步骤 2：单据类型编码')
+    )
+    expect(customerStep).toContain(':model-value="salesOrderCustomerLabel"')
+    expect(customerStep).not.toContain('documentTypeCode')
+
+    expect(salesOrderPane.indexOf('步骤 1：客户基础信息')).toBeLessThan(salesOrderPane.indexOf('步骤 2：单据类型编码'))
+    expect(salesOrderPane.indexOf('步骤 2：单据类型编码')).toBeLessThan(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）'))
+    expect(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）')).toBeLessThan(salesOrderPane.indexOf('步骤 4：上传关联图纸（PDF）'))
+  })
+
+  test('sales order import submits drawing files and uses RFQ-style success interaction', () => {
+    const submitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitSalesOrderImport'),
+      marketDashboard.indexOf('// 提交询价单和图纸')
+    )
+
+    expect(marketDashboard).toContain('salesOrderDrawingFiles')
+    expect(submitBlock).toContain('salesOrderDrawingFiles.value.forEach')
+    expect(submitBlock).toContain("formData.append('drawings', file)")
+    expect(submitBlock).toContain('buildDrawingReportHtml(response.drawingReport)')
+    expect(submitBlock).toContain('ElMessageBox.alert')
+    expect(submitBlock).toContain('销售订单导入成功')
+  })
+
   test('adds template download actions to both import modes', () => {
     expect(marketDashboard).toContain('downloadRfqTemplate')
     expect(marketDashboard).toContain('downloadSalesOrderTemplate')
@@ -63,6 +95,8 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain('prop="lineCount"')
     expect(marketDashboard).toContain('prop="matchedItemCount"')
     expect(marketDashboard).toContain('prop="unmatchedItemCount"')
+    expect(marketDashboard).toContain('prop="matchedDrawingCount"')
+    expect(marketDashboard).toContain('prop="missingDrawingCount"')
     expect(marketDashboard).toContain('prop="status"')
     expect(marketDashboard).toContain('prop="warningMessage"')
     expect(marketDashboard).toContain('successOrderCount')

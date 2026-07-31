@@ -500,7 +500,7 @@ public class InternalTargetLeadTimeService {
                         item.sales_order_id AS source_order_id,
                         item.id AS source_item_id,
                         header.sales_order_no AS source_order_no,
-                        header.sales_order_no AS rfq_no,
+                        CAST(NULL AS VARCHAR) AS rfq_no,
                         header.customer_name AS customer_name,
                         header.status AS order_status,
                         item.part_no,
@@ -576,7 +576,7 @@ public class InternalTargetLeadTimeService {
         row.put("sourceItemId", sourceItemId);
         row.put("releaseItemKey", sourceType + ":" + sourceItemId);
         row.put("rfqId", ReleaseSourceType.RFQ.name().equals(sourceType) ? sourceOrderId : null);
-        row.put("rfqNo", text(raw, "rfq_no"));
+        row.put("rfqNo", ReleaseSourceType.RFQ.name().equals(sourceType) ? text(raw, "rfq_no") : "");
         row.put("sourceOrderNo", text(raw, "source_order_no"));
         row.put("customerName", text(raw, "customer_name"));
         row.put("orderStatus", text(raw, "order_status"));
@@ -1228,7 +1228,7 @@ public class InternalTargetLeadTimeService {
         row.put("sourceItemId", item.getId());
         row.put("releaseItemKey", "SALES_ORDER:" + item.getId());
         row.put("rfqId", null);
-        row.put("rfqNo", order == null ? "" : order.getSalesOrderNo());
+        row.put("rfqNo", "");
         row.put("sourceOrderNo", order == null ? "" : order.getSalesOrderNo());
         row.put("customerName", order == null ? "" : order.getCustomerName());
         row.put("orderStatus", order == null ? "" : order.getStatus());

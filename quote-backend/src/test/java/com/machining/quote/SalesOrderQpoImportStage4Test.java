@@ -120,6 +120,27 @@ class SalesOrderQpoImportStage4Test {
         assertThat(rfqLookupSql).contains("h.rfq_id <> #{currentRfqId}");
     }
 
+    @Test
+    void enrichmentKeepsUploadedSalesOrderDrawingWhenHistoricalSnapshotAlsoHasDrawing() {
+        ItemQuoteVersionMapper sourceMapper = mock(ItemQuoteVersionMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderRepeatEnrichmentService service = new SalesOrderRepeatEnrichmentService();
+        ReflectionTestUtils.setField(service, "itemMapper", sourceMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        SalesOrderItem current = currentSalesOrderItem(501L, "P-001", "A");
+        current.setDrawingUrl("/uploads/ACME/SOQPO/P-001.pdf");
+        current.setHasDrawing(true);
+        when(sourceMapper.selectLatestReleasedRepeatSources(isNull(), any()))
+                .thenReturn(List.of(releasedSource(900, 50, "P-001", "A", "new-material")));
+
+        service.enrich(List.of(current));
+
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(salesOrderItemMapper).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getDrawingUrl()).isEqualTo("/uploads/ACME/SOQPO/P-001.pdf");
+        assertThat(itemCaptor.getValue().getHasDrawing()).isTrue();
+    }
+
     private SalesOrderItem currentSalesOrderItem(Long id, String partNo, String version) {
         SalesOrderItem item = new SalesOrderItem();
         item.setId(id);

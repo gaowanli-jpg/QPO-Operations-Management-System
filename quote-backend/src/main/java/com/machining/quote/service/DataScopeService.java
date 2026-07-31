@@ -273,16 +273,32 @@ public class DataScopeService {
     }
 
     private void applyCustomerMasterScope(QueryWrapper<CustomerMaster> query) {
-        ScopeSql scopeSql = currentOrderScopeSql("");
-        if (scopeSql.allAccess()) {
+        DataScopeSnapshot snapshot = currentSnapshot();
+        if (snapshot.noContext() || snapshot.allAccess()) {
             return;
         }
-        if (scopeSql.noAccess()) {
+        if (snapshot.noAccess()) {
             query.apply("1 = 0");
             return;
         }
-        query.apply("customer_name IN (SELECT DISTINCT customer_name FROM order_rfq WHERE " + scopeSql.sql() + ")",
-                scopeSql.params().toArray());
+        List<Object> params = new ArrayList<>();
+        List<String> clauses = new ArrayList<>();
+        if (snapshot.selfOnly()) {
+            int userIndex = params.size();
+            params.add(snapshot.legacyUserId());
+            clauses.add("customer_name IN (SELECT DISTINCT customer_name FROM order_rfq WHERE (created_by = {"
+                    + userIndex + "} OR owner_user_id = {" + userIndex + "}))");
+            clauses.add("customer_name IN (SELECT DISTINCT customer_name FROM sales_order_header WHERE (created_by = {"
+                    + userIndex + "} OR owner_user_id = {" + userIndex + "}))");
+        }
+        if (!snapshot.customerNames().isEmpty()) {
+            clauses.add("customer_name IN (" + placeholders(params, snapshot.customerNames()) + ")");
+        }
+        if (clauses.isEmpty()) {
+            query.apply("1 = 0");
+            return;
+        }
+        query.apply("(" + String.join(" OR ", clauses) + ")", params.toArray());
     }
 
     private void applyCustomerKeyword(QueryWrapper<CustomerMaster> query, String field, String keyword) {

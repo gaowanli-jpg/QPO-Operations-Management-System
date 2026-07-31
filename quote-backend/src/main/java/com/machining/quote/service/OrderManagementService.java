@@ -462,7 +462,6 @@ public class OrderManagementService {
         row.put("sourceType", "SALES_ORDER");
         row.put("sourceOrderId", order.getId());
         row.put("sourceOrderNo", order.getSalesOrderNo());
-        row.put("rfqNo", order.getSalesOrderNo());
         row.put("salesOrderNo", order.getSalesOrderNo());
         row.put("customerName", order.getCustomerName());
         row.put("customerOrderNo", order.getCustomerOrderNo());

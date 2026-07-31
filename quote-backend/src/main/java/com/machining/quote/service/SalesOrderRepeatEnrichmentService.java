@@ -37,7 +37,7 @@ public class SalesOrderRepeatEnrichmentService {
         }
 
         List<String> keys = salesOrderItemKeys(currentItems);
-        Map<String, ItemQuoteVersion> sourceByKey = repeatSourcesByKey(null, keys);
+        Map<String, ItemQuoteVersion> sourceByKey = releasedProductionSnapshotsByKey(keys);
         int matchedCount = 0;
         int unmatchedCount = 0;
         for (SalesOrderItem current : currentItems) {
@@ -64,39 +64,6 @@ public class SalesOrderRepeatEnrichmentService {
         return result;
     }
 
-    public SalesOrderRepeatEnrichmentResult enrich(Integer rfqId, List<ItemQuoteVersion> currentItems) {
-        SalesOrderRepeatEnrichmentResult result = new SalesOrderRepeatEnrichmentResult();
-        if (rfqId == null || currentItems == null || currentItems.isEmpty()) {
-            return result;
-        }
-
-        Map<String, ItemQuoteVersion> currentByKey = currentItemsByKey(currentItems);
-        if (currentByKey.isEmpty()) {
-            result.setUnmatchedItemCount(currentItems.size());
-            result.setWarningMessage(warningMessage(result.getUnmatchedItemCount()));
-            return result;
-        }
-
-        Map<String, ItemQuoteVersion> sourceByKey = repeatSourcesByKey(rfqId, new ArrayList<>(currentByKey.keySet()));
-        int matchedCount = 0;
-        int unmatchedCount = 0;
-        for (Map.Entry<String, ItemQuoteVersion> entry : currentByKey.entrySet()) {
-            ItemQuoteVersion current = entry.getValue();
-            ItemQuoteVersion source = sourceByKey.get(entry.getKey());
-            if (source == null) {
-                unmatchedCount++;
-                continue;
-            }
-            enrichItem(current, source);
-            itemMapper.updateById(current);
-            matchedCount++;
-        }
-        result.setMatchedItemCount(matchedCount);
-        result.setUnmatchedItemCount(unmatchedCount);
-        result.setWarningMessage(warningMessage(unmatchedCount));
-        return result;
-    }
-
     private List<String> salesOrderItemKeys(List<SalesOrderItem> items) {
         LinkedHashSet<String> keys = new LinkedHashSet<>();
         for (SalesOrderItem item : items) {
@@ -107,25 +74,14 @@ public class SalesOrderRepeatEnrichmentService {
         return new ArrayList<>(keys);
     }
 
-    private Map<String, ItemQuoteVersion> currentItemsByKey(List<ItemQuoteVersion> items) {
-        Map<String, ItemQuoteVersion> result = new LinkedHashMap<>();
-        for (ItemQuoteVersion item : items) {
-            if (item == null || item.getId() == null || isBlank(item.getPartNo()) || isBlank(item.getVersion())) {
-                continue;
-            }
-            result.putIfAbsent(itemKey(item.getPartNo(), item.getVersion()), item);
-        }
-        return result;
-    }
-
-    private Map<String, ItemQuoteVersion> repeatSourcesByKey(Integer rfqId, List<String> keys) {
+    private Map<String, ItemQuoteVersion> releasedProductionSnapshotsByKey(List<String> keys) {
         Map<String, ItemQuoteVersion> result = new LinkedHashMap<>();
         List<PartVersionKey> partVersionKeys = keys.stream()
                 .map(this::toPartVersionKey)
                 .toList();
         for (int start = 0; start < partVersionKeys.size(); start += REPEAT_SOURCE_KEY_BATCH_SIZE) {
             int end = Math.min(start + REPEAT_SOURCE_KEY_BATCH_SIZE, partVersionKeys.size());
-            List<ItemQuoteVersion> sources = itemMapper.selectLatestReleasedRepeatSources(rfqId, partVersionKeys.subList(start, end));
+            List<ItemQuoteVersion> sources = itemMapper.selectLatestReleasedRepeatSources(null, partVersionKeys.subList(start, end));
             for (ItemQuoteVersion source : sources) {
                 if (source != null && !isBlank(source.getPartNo()) && !isBlank(source.getVersion())) {
                     result.putIfAbsent(itemKey(source.getPartNo(), source.getVersion()), source);
@@ -140,22 +96,9 @@ public class SalesOrderRepeatEnrichmentService {
         return new PartVersionKey(parts[0], parts.length > 1 ? parts[1] : "");
     }
 
-    private void enrichItem(ItemQuoteVersion current, ItemQuoteVersion source) {
-        current.setMaterialName(source.getMaterialName());
-        current.setEngineeringMaterialName(source.getEngineeringMaterialName());
-        current.setSurfaceTreatment(source.getSurfaceTreatment());
-        current.setMaterialGrossWeight(source.getMaterialGrossWeight());
-        current.setPartNetWeight(source.getPartNetWeight());
-        current.setQuoteMode(source.getQuoteMode());
-        current.setAssemblyFee(source.getAssemblyFee());
-        current.setMaterialData(source.getMaterialData());
-        current.setProcessRoute(source.getProcessRoute());
-        current.setFeeData(source.getFeeData());
-        current.setDrawingUrl(source.getDrawingUrl());
-        current.setBaseCost(source.getBaseCost());
-    }
-
     private void enrichSalesOrderItem(SalesOrderItem current, ItemQuoteVersion source) {
+        String uploadedDrawingUrl = current.getDrawingUrl();
+        boolean hasUploadedDrawing = !isBlank(uploadedDrawingUrl);
         current.setMaterialName(source.getMaterialName());
         current.setEngineeringMaterialName(source.getEngineeringMaterialName());
         current.setSurfaceTreatment(source.getSurfaceTreatment());
@@ -167,8 +110,13 @@ public class SalesOrderRepeatEnrichmentService {
         current.setMaterialData(source.getMaterialData());
         current.setProcessRoute(source.getProcessRoute());
         current.setFeeData(source.getFeeData());
-        current.setDrawingUrl(source.getDrawingUrl());
-        current.setHasDrawing(!isBlank(source.getDrawingUrl()));
+        if (hasUploadedDrawing) {
+            current.setDrawingUrl(uploadedDrawingUrl);
+            current.setHasDrawing(true);
+        } else {
+            current.setDrawingUrl(source.getDrawingUrl());
+            current.setHasDrawing(!isBlank(source.getDrawingUrl()));
+        }
         current.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "\u7ec4\u5408\u4ef6" : "\u666e\u901a\u4ef6");
         current.setMatchedRfqId(source.getRfqId());
         current.setMatchedItemId(source.getId());

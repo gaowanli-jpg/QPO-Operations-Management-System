@@ -90,47 +90,10 @@
                 <span class="step-index">03</span>
                 <span>步骤 3：上传关联图纸（PDF）</span>
               </div>
-              <div class="upload-box step-panel">
-                <el-alert
-                  title="请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
-                  type="info"
-                  show-icon
-                  :closable="false"
-                  class="upload-alert"
-                />
-
-                <!-- 覆盖原生拖拽事件，接管控制权 -->
-                <div v-permission="'market:rfq:upload-drawing'"
-                  class="custom-dropzone"
-                  @dragover.prevent
-                  @drop.prevent="handleDrawingDrop"
-                >
-                  <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
-                  <div class="el-upload__text dropzone-text">
-                    将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
-                  </div>
-
-                  <!-- 备用的点击选择按钮 -->
-                  <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-                  <div class="import-action-row">
-                    <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFileSelect">选择多个 PDF</el-button>
-                    <el-button v-permission="'market:rfq:upload-drawing'" plain class="workflow-soft-button folder-select-button import-axis-button" @click="triggerDrawingFolderSelect">选择文件夹</el-button>
-                  </div>
-                  <input type="file" ref="drawingFileInput" accept=".pdf" multiple class="hidden-input" @change="handleDrawingFileSelect" />
-                  <input type="file" ref="drawingFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleDrawingFolderSelect" />
-                </div>
-
-                <!-- 展示挖出来的 PDF 文件列表 -->
-                <div v-if="drawingFiles.length > 0" class="file-stats">
-                  <h4>已成功提取待提交图纸（{{ drawingFiles.length }} 份）</h4>
-                  <ul class="pdf-list">
-                    <li v-for="(file, index) in drawingFiles" :key="index">
-                      <span>{{ file.name }}</span>
-                      <el-button v-permission="'market:rfq:upload-drawing'" link type="danger" size="small" @click="removeDrawing(index)">移除</el-button>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+              <ImportDrawingUploadPanel
+                v-model="drawingFiles"
+                permission="market:rfq:upload-drawing"
+              />
             </div>
 
             <div class="erp-toolbar submit-footer">
@@ -151,10 +114,10 @@
 
         <el-tab-pane label="销售订单" name="sales-order">
           <section class="sales-order-workflow">
-            <div class="import-step import-step-sales-order-meta">
+            <div class="import-step import-step-sales-order-customer">
               <div class="section-title">
                 <span class="step-index">01</span>
-                <span>客户与单据类型</span>
+                <span>步骤 1：客户基础信息</span>
               </div>
               <div class="form-box step-panel">
                 <el-form :model="salesOrderForm" label-width="120px" class="customer-form sales-order-form">
@@ -178,7 +141,20 @@
                         </el-input>
                       </el-form-item>
                     </el-col>
-                    <el-col :xs="24" :md="10" :lg="6" class="document-type-col">
+                  </el-row>
+                </el-form>
+              </div>
+            </div>
+
+            <div class="import-step import-step-sales-order-document">
+              <div class="section-title">
+                <span class="step-index">02</span>
+                <span>步骤 2：单据类型编码</span>
+              </div>
+              <div class="form-box step-panel">
+                <el-form :model="salesOrderForm" label-width="120px" class="customer-form sales-order-form">
+                  <el-row :gutter="20" justify="center">
+                    <el-col :xs="24" :sm="18" :md="10" :lg="7" class="document-type-col">
                       <el-form-item label="单据类型编码" required>
                         <el-input
                           v-model.trim="salesOrderForm.documentTypeCode"
@@ -195,12 +171,12 @@
 
             <div class="import-step import-step-sales-order">
               <div class="section-title">
-                <span class="step-index">02</span>
-                <span>上传销售订单（Excel）</span>
+                <span class="step-index">03</span>
+                <span>步骤 3：上传销售订单（Excel）</span>
               </div>
               <div class="upload-box step-panel">
                 <el-alert
-                  title="销售订单 Excel 按市场实际模板导入，客户和单据类型在页面选择；导入后生成已报价销售订单和零件，字段校验以后端返回为准。"
+                  title="销售订单 Excel 按市场实际模板导入，客户和单据类型在前两步选择；导入后生成已报价销售订单和零件，字段校验以后端返回为准。"
                   type="info"
                   show-icon
                   :closable="false"
@@ -252,6 +228,19 @@
               </div>
             </div>
 
+            <div class="import-step import-step-sales-order-drawings">
+              <div class="section-title">
+                <span class="step-index">04</span>
+                <span>步骤 4：上传关联图纸（PDF）</span>
+              </div>
+              <ImportDrawingUploadPanel
+                v-model="salesOrderDrawingFiles"
+                permission="market:rfq:import-sales-order"
+                :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                selected-title="已成功提取销售订单待绑定图纸"
+              />
+            </div>
+
             <div class="erp-toolbar submit-footer sales-order-submit-row">
               <el-button
                 v-permission="'market:rfq:import-sales-order'"
@@ -275,6 +264,10 @@
                 <div class="sales-order-result-summary">
                   <el-tag type="info">合计 {{ salesOrderImportResult.totalOrderCount || 0 }}</el-tag>
                   <el-tag type="success">成功 {{ salesOrderImportResult.successOrderCount || 0 }}</el-tag>
+                  <el-tag type="success">图纸绑定 {{ salesOrderImportResult.drawingReport?.matchedItemCount || 0 }}</el-tag>
+                  <el-tag :type="salesOrderImportResult.drawingReport?.missingDrawingCount > 0 ? 'warning' : 'info'">
+                    缺图 {{ salesOrderImportResult.drawingReport?.missingDrawingCount || 0 }}
+                  </el-tag>
                   <el-tag :type="salesOrderImportResult.failedOrderCount > 0 ? 'danger' : 'info'">
                     失败 {{ salesOrderImportResult.failedOrderCount || 0 }}
                   </el-tag>
@@ -302,6 +295,8 @@
                 <el-table-column prop="lineCount" label="零件数" width="90" align="right" />
                 <el-table-column prop="matchedItemCount" label="历史匹配数" width="120" align="right" />
                 <el-table-column prop="unmatchedItemCount" label="未匹配数" width="110" align="right" />
+                <el-table-column prop="matchedDrawingCount" label="图纸绑定数" width="120" align="right" />
+                <el-table-column prop="missingDrawingCount" label="缺图数" width="100" align="right" />
                 <el-table-column prop="status" label="状态" width="120" align="center">
                   <template #default="scope">
                     <el-tag :type="scope.row.success ? 'success' : 'danger'" effect="plain">
@@ -339,8 +334,9 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, UploadFilled } from '@element-plus/icons-vue'
+import { Download } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import ImportDrawingUploadPanel from './import/ImportDrawingUploadPanel.vue'
 import {
   downloadRfqImportTemplate,
   downloadSalesOrderImportTemplate,
@@ -349,13 +345,10 @@ import {
 } from '../services/marketApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
-import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
 
 const rfqForm = reactive({ customerName: '' })
 const excelFile = ref(null)
 const drawingFiles = ref([])
-const drawingFileInput = ref(null)
-const drawingFolderInput = ref(null)
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 const activeImportMode = ref('rfq')
@@ -367,6 +360,7 @@ const salesOrderForm = reactive({
   documentTypeCode: 'SO01'
 })
 const salesOrderFile = ref(null)
+const salesOrderDrawingFiles = ref([])
 const salesOrderUploadRef = ref(null)
 const salesOrderCustomerPickerVisible = ref(false)
 const salesOrderImportResult = ref(null)
@@ -443,45 +437,6 @@ const selectSalesOrderCustomer = (customer) => {
   salesOrderImportResult.value = null
 }
 
-const addDrawingFiles = (files, sourceLabel) => {
-  const beforeCount = drawingFiles.value.length
-  drawingFiles.value = mergePdfFiles(drawingFiles.value, files)
-  const addedCount = drawingFiles.value.length - beforeCount
-  if (addedCount > 0) {
-    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF！`)
-  } else {
-    ElMessage.warning('未找到新的 PDF 文件！')
-  }
-}
-
-const handleDrawingDrop = async (e) => {
-  const pdfs = await collectPdfFilesFromDataTransfer(e.dataTransfer)
-  addDrawingFiles(pdfs, '提取')
-}
-
-const triggerDrawingFileSelect = () => {
-  drawingFileInput.value?.click()
-}
-
-const triggerDrawingFolderSelect = () => {
-  drawingFolderInput.value?.click()
-}
-
-const handleDrawingFileSelect = (e) => {
-  addDrawingFiles(e.target.files, '选择')
-  e.target.value = ''
-}
-
-const handleDrawingFolderSelect = (e) => {
-  addDrawingFiles(e.target.files, '从选中的文件夹中提取')
-  e.target.value = ''
-}
-
-// 移除不需要的图纸
-const removeDrawing = (index) => {
-  drawingFiles.value.splice(index, 1)
-}
-
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -552,16 +507,37 @@ const submitSalesOrderImport = async () => {
     formData.append('customerId', String(salesOrderForm.customerId))
     formData.append('documentTypeCode', documentTypeCode)
     formData.append('excelFile', salesOrderFile.value)
+    salesOrderDrawingFiles.value.forEach(file => {
+      formData.append('drawings', file)
+    })
 
     try {
       const response = await importSalesOrderToQpo(formData)
       salesOrderImportResult.value = response
 
       if (response?.success) {
+        const drawingReportHtml = buildDrawingReportHtml(response.drawingReport)
         salesOrderForm.documentTypeCode = documentTypeCode
-        ElMessage.success(`销售订单已导入独立主表，成功 ${response.successOrderCount || 0} 单`)
-        salesOrderFile.value = null
-        salesOrderUploadRef.value?.clearFiles?.()
+        ElMessageBox.alert(
+          `<div style="font-size: 15px; line-height: 1.5;">销售订单已导入独立主表，成功 ${response.successOrderCount || 0} 单。</div>
+           ${drawingReportHtml}`,
+          '销售订单导入成功',
+          {
+            dangerouslyUseHTMLString: true,
+            confirmButtonText: '开启下一单',
+            type: 'success',
+            center: true,
+          }
+        ).then(() => {
+          salesOrderForm.customerId = null
+          salesOrderForm.customerCode = ''
+          salesOrderForm.customerShortName = ''
+          salesOrderForm.customerName = ''
+          salesOrderForm.documentTypeCode = 'SO01'
+          salesOrderFile.value = null
+          salesOrderDrawingFiles.value = []
+          salesOrderUploadRef.value?.clearFiles?.()
+        })
       } else {
         ElMessage.warning(readActionError({ response: { data: response } }, '销售订单导入存在失败明细，请查看下方结果表。'))
       }
@@ -761,80 +737,6 @@ const submitRfqPackage = async () => {
   width: 100%;
   border-radius: 8px;
   background: var(--erp-surface-soft);
-}
-
-/* 自定义拖拽框样式 */
-.custom-dropzone {
-  border: 1px dashed #aab6c8;
-  border-radius: 8px;
-  background: var(--erp-surface-soft);
-  text-align: center;
-  padding: 34px 16px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.custom-dropzone:hover {
-  border-color: var(--erp-primary);
-  background: #f3f8fc;
-}
-
-.dropzone-icon {
-  margin-bottom: 14px;
-  color: #8c98aa;
-  font-size: 44px;
-}
-
-.dropzone-text {
-  color: var(--erp-text-secondary);
-  font-size: 15px;
-}
-
-.folder-select-row {
-  margin-top: 14px;
-  color: var(--erp-text-secondary);
-  font-size: var(--erp-font-size-sm);
-  text-align: center;
-}
-
-.folder-select-button {
-  min-height: 32px;
-  padding-inline: 14px;
-}
-
-.hidden-input {
-  display: none;
-}
-
-.file-stats {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid #cfe8d2;
-  border-radius: 8px;
-  background: #f4fbf5;
-  color: var(--erp-success);
-}
-
-.pdf-list {
-  max-height: 190px;
-  margin: 8px 0 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.pdf-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid #dcefe0;
-  color: #256b2b;
-}
-
-.pdf-list li:last-child {
-  border-bottom: none;
 }
 
 .submit-footer {

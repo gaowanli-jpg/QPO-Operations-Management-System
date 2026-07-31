@@ -24,27 +24,30 @@ describe('QPO final UI punch-list polish', () => {
 
   test('uses quiet shared styling for the market folder-select fallback action', () => {
     const marketDashboard = readSource('components', 'MarketDashboard.vue')
+    const drawingPanel = readSource('components', 'import', 'ImportDrawingUploadPanel.vue')
 
-    expect(marketDashboard).toContain('workflow-soft-button')
-    expect(marketDashboard).toContain('folder-select-button')
-    expect(marketDashboard).toContain('@click="triggerDrawingFileSelect"')
-    expect(marketDashboard).toContain('@click="triggerDrawingFolderSelect"')
-    expect(marketDashboard).not.toContain('<el-button size="small" @click="triggerFolderSelect"')
-    expect(marketDashboard).toContain('.folder-select-button')
+    expect(marketDashboard).toContain('<ImportDrawingUploadPanel')
+    expect(drawingPanel).toContain('workflow-soft-button')
+    expect(drawingPanel).toContain('folder-select-button')
+    expect(drawingPanel).toContain('@click="triggerFileSelect"')
+    expect(drawingPanel).toContain('@click="triggerFolderSelect"')
+    expect(drawingPanel).not.toContain('<el-button size="small" @click="triggerFolderSelect"')
+    expect(drawingPanel).toContain('.folder-select-button')
   })
 
   test('keeps market import workflow visually unified with centered action buttons', () => {
     const marketDashboard = readSource('components', 'MarketDashboard.vue')
+    const drawingPanel = readSource('components', 'import', 'ImportDrawingUploadPanel.vue')
 
     expect(marketDashboard).toContain('class="import-step import-step-customer"')
     expect(marketDashboard).toContain('class="import-step import-step-excel"')
     expect(marketDashboard).toContain('class="import-step import-step-drawings"')
     expect(marketDashboard).toContain('class="import-action-row"')
     expect(marketDashboard).toContain('class="workflow-primary-action import-axis-button"')
-    expect(marketDashboard).toContain('class="workflow-soft-button folder-select-button import-axis-button"')
+    expect(drawingPanel).toContain('class="workflow-soft-button folder-select-button import-axis-button"')
     expect(marketDashboard).toContain('class="submit-btn import-axis-button"')
-    expect(marketDashboard).toContain('.import-axis-button')
-    expect(marketDashboard).toContain('justify-content: center')
+    expect(marketDashboard + drawingPanel).toContain('.import-axis-button')
+    expect(marketDashboard + drawingPanel).toContain('justify-content: center')
   })
 
   test('keeps RFQ import free of order type and moves order type selection to release generation', () => {
