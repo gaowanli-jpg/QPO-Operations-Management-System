@@ -75,7 +75,8 @@ class DeliveryDocumentDocumentationTest {
                 .contains(
                         "DELIVERY_TICKET_EXPORT",
                         "DELIVERY_PROCESS_SHEET_EXPORT",
-                        "targetType` 为 `order_rfq",
+                        "RFQ 来源 `targetType` 为 `order_rfq`",
+                        "销售订单来源 `targetType` 为 `sales_order_header`",
                         "提单表据页面打开、客户/订单选择、摘要和分页查询不新增操作日志",
                         "Delivery document export"
                 );
@@ -85,7 +86,7 @@ class DeliveryDocumentDocumentationTest {
                         "Delivery document export completed",
                         "Delivery document export rejected",
                         "Delivery document export failed",
-                        "rfqId={} exportType={} rowCount={} durationMs={}"
+                        "sourceType={} sourceOrderId={} exportType={} rowCount={} durationMs={}"
                 );
     }
 

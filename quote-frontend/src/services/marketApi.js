@@ -45,15 +45,18 @@ export const listTickets = (rfqId, params = {}) => request(`/api/market/tickets/
 
 export const listProcessSheets = (rfqId, params = {}) => request(`/api/market/process-sheets/${rfqId}`, { params })
 
-export const getDeliveryDocumentSummary = (rfqId) => request(`/api/market/delivery-documents/summary/${rfqId}`)
-
-export const listDeliveryDocumentTickets = (rfqId, params = {}) => request(
-  `/api/market/delivery-documents/tickets/${rfqId}`,
+export const getDeliveryDocumentSummary = (sourceOrderId, params = {}) => request(
+  `/api/market/delivery-documents/summary/${sourceOrderId}`,
   { params }
 )
 
-export const listDeliveryDocumentProcessSheets = (rfqId, params = {}) => request(
-  `/api/market/delivery-documents/process-sheets/${rfqId}`,
+export const listDeliveryDocumentTickets = (sourceOrderId, params = {}) => request(
+  `/api/market/delivery-documents/tickets/${sourceOrderId}`,
+  { params }
+)
+
+export const listDeliveryDocumentProcessSheets = (sourceOrderId, params = {}) => request(
+  `/api/market/delivery-documents/process-sheets/${sourceOrderId}`,
   { params }
 )
 
@@ -108,10 +111,13 @@ export const downloadMarketExport = (path, rfqId, fallbackName = `${path}-${rfqI
   fallbackName
 )
 
-export const downloadDeliveryDocumentExport = (path, rfqId, fallbackName = `${path}-${rfqId}.xlsx`) => downloadFile(
-  `/api/market/delivery-documents/export/${path}/${rfqId}`,
-  fallbackName
-)
+export const downloadDeliveryDocumentExport = (path, sourceOrderId, fallbackName = `${path}-${sourceOrderId}.xlsx`, params = {}) => {
+  const query = params.sourceType ? `?sourceType=${encodeURIComponent(params.sourceType)}` : ''
+  return downloadFile(
+    `/api/market/delivery-documents/export/${path}/${sourceOrderId}${query}`,
+    fallbackName
+  )
+}
 
 export const downloadQuote = (rfqId, fallbackName = `quote-${rfqId}.xlsx`) => downloadFile(
   `/api/market/export/quote/${rfqId}`,

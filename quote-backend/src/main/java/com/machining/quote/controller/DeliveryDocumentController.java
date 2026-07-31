@@ -5,7 +5,6 @@ import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.service.DeliveryDocumentService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +34,7 @@ public class DeliveryDocumentController {
 
     @GetMapping("/orders")
     @RequirePermission("market:delivery-document:order-select")
-    public PageResult<OrderRfq> listDocumentOrders(
+    public PageResult<Map<String, Object>> listDocumentOrders(
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
@@ -44,39 +43,49 @@ public class DeliveryDocumentController {
         return deliveryDocumentService.listDocumentOrders(customerName, keyword, status, page, pageSize);
     }
 
-    @GetMapping("/summary/{rfqId}")
+    @GetMapping("/summary/{sourceOrderId}")
     @RequirePermission("market:delivery-document:view")
-    public Map<String, Object> documentSummary(@PathVariable Integer rfqId) {
-        return deliveryDocumentService.documentSummary(rfqId);
+    public Map<String, Object> documentSummary(
+            @PathVariable Long sourceOrderId,
+            @RequestParam(value = "sourceType", required = false) String sourceType) {
+        return deliveryDocumentService.documentSummary(sourceType, sourceOrderId);
     }
 
-    @GetMapping("/tickets/{rfqId}")
+    @GetMapping("/tickets/{sourceOrderId}")
     @RequirePermission("market:delivery-document:view")
     public PageResult<OrderDeliveryTicket> pageTickets(
-            @PathVariable Integer rfqId,
+            @PathVariable Long sourceOrderId,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return deliveryDocumentService.pageTickets(rfqId, page, pageSize);
+        return deliveryDocumentService.pageTickets(sourceType, sourceOrderId, page, pageSize);
     }
 
-    @GetMapping("/process-sheets/{rfqId}")
+    @GetMapping("/process-sheets/{sourceOrderId}")
     @RequirePermission("market:delivery-document:view")
     public PageResult<ProcessSheetDTO> pageProcessSheets(
-            @PathVariable Integer rfqId,
+            @PathVariable Long sourceOrderId,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return deliveryDocumentService.pageProcessSheets(rfqId, page, pageSize);
+        return deliveryDocumentService.pageProcessSheets(sourceType, sourceOrderId, page, pageSize);
     }
 
-    @GetMapping("/export/tickets/{rfqId}")
+    @GetMapping("/export/tickets/{sourceOrderId}")
     @RequirePermission("market:delivery-document:export")
-    public void exportTickets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
-        deliveryDocumentService.exportTickets(rfqId, response);
+    public void exportTickets(
+            @PathVariable Long sourceOrderId,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
+            HttpServletResponse response) throws IOException {
+        deliveryDocumentService.exportTickets(sourceType, sourceOrderId, response);
     }
 
-    @GetMapping("/export/process-sheets/{rfqId}")
+    @GetMapping("/export/process-sheets/{sourceOrderId}")
     @RequirePermission("market:delivery-document:export")
-    public void exportProcessSheets(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
-        deliveryDocumentService.exportProcessSheets(rfqId, response);
+    public void exportProcessSheets(
+            @PathVariable Long sourceOrderId,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
+            HttpServletResponse response) throws IOException {
+        deliveryDocumentService.exportProcessSheets(sourceType, sourceOrderId, response);
     }
 }

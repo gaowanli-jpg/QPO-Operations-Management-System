@@ -28,19 +28,23 @@ describe('delivery document page assembly', () => {
       'getDeliveryDocumentSummary',
       'listDeliveryDocumentTickets',
       'listDeliveryDocumentProcessSheets',
-      'const selectedRfqId = ref(null)',
+      'const selectedSource = ref(null)',
+      'const toDocumentSource = (order) => ({',
+      "sourceType: order?.sourceType || 'RFQ'",
+      'sourceOrderId: Number(order?.sourceOrderId ?? order?.id)',
+      'sourceParams',
       'const ticketPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })',
       'const processSheetPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })',
       'const handleOrderSelected = async (order) =>',
-      'selectedRfqId.value = order.id',
+      'selectedSource.value = toDocumentSource(order)',
       'resetDocumentPagination()',
-      'await loadDeliveryDocumentWorkspace(order.id)',
-      'const loadDeliveryDocumentWorkspace = async (rfqId) =>',
+      'await loadDeliveryDocumentWorkspace(selectedSource.value)',
+      'const loadDeliveryDocumentWorkspace = async (source = selectedSource.value) =>',
       'await Promise.all([',
-      'loadDocumentSummary(rfqId)',
-      'loadTicketRows(rfqId)',
-      'loadProcessSheetRows(rfqId)',
-      'const response = await getDeliveryDocumentSummary(rfqId)',
+      'loadDocumentSummary(source)',
+      'loadTicketRows(source)',
+      'loadProcessSheetRows(source)',
+      'const response = await getDeliveryDocumentSummary(source.sourceOrderId, sourceParams(source))',
       'orderInfo.value = response.orderInfo || selectedOrder.value || {}',
       'ticketRows.value = response.records || []',
       'ticketTotal.value = Number(response.total ?? 0)',
@@ -51,7 +55,7 @@ describe('delivery document page assembly', () => {
 
   test('renders empty state before selection and table components after selection', () => {
     expectIncludes([
-      'v-if="!selectedRfqId"',
+      'v-if="!selectedSource"',
       '请先选择部分已提单或已生成提单订单',
       'v-else class="delivery-document-results"',
       '<DeliveryTicketRowsTable',
@@ -87,8 +91,9 @@ describe('delivery document page assembly', () => {
       "process: 'process-sheets'",
       'const result = await downloadDeliveryDocumentExport(',
       'path,',
-      'selectedRfqId.value,',
-      '`${path}-${selectedRfqId.value}.xlsx`'
+      'selectedSource.value.sourceOrderId,',
+      '`${path}-${sourceKey.value}.xlsx`',
+      'sourceParams()'
     ])
     expect(source).not.toContain('downloadMarketExport')
   })

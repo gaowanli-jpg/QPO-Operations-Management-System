@@ -18,7 +18,7 @@
       </div>
     </header>
 
-    <section v-if="!selectedRfqId" class="erp-table-surface delivery-document-empty">
+    <section v-if="!selectedSource" class="erp-table-surface delivery-document-empty">
       <el-empty description="请先选择部分已提单或已生成提单订单" />
     </section>
 
@@ -27,7 +27,7 @@
         <div class="delivery-document-summary-title">订单摘要</div>
         <el-descriptions :column="3" border>
           <el-descriptions-item label="客户">{{ orderInfo.customerName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="RFQ号">{{ orderInfo.rfqNo || orderInfo.id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="来源单号">{{ orderInfo.sourceOrderNo || orderInfo.rfqNo || orderInfo.salesOrderNo || orderInfo.id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderInfo.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="提单行数">{{ ticketTotal }}</el-descriptions-item>
           <el-descriptions-item label="提单数量">{{ documentSummary.ticketQty ?? 0 }}</el-descriptions-item>
@@ -93,7 +93,7 @@ const DELIVERY_DOCUMENT_ALLOWED_STATUSES = ['部分已提单', '已生成提单'
 const { isPending, runAction } = usePendingAction()
 
 const orderPickerVisible = ref(false)
-const selectedRfqId = ref(null)
+const selectedSource = ref(null)
 const selectedOrder = ref({})
 const orderInfo = ref({})
 const documentSummary = ref({})
@@ -107,15 +107,22 @@ const loadingSummary = ref(false)
 const loadingTickets = ref(false)
 const loadingProcessSheets = ref(false)
 
+const sourceKey = computed(() => selectedSource.value
+  ? `${selectedSource.value.sourceType}:${selectedSource.value.sourceOrderId}`
+  : 'none')
+const sourceParams = (source = selectedSource.value) => ({
+  sourceType: source?.sourceType || 'RFQ'
+})
+
 const deliveryDocumentActionKeys = {
-  exportTickets: () => `delivery:document:export:tickets:${selectedRfqId.value || 'none'}`,
-  exportProcessSheets: () => `delivery:document:export:process-sheets:${selectedRfqId.value || 'none'}`
+  exportTickets: () => `delivery:document:export:tickets:${sourceKey.value}`,
+  exportProcessSheets: () => `delivery:document:export:process-sheets:${sourceKey.value}`
 }
 
 const ticketExportLoading = computed(() => isPending(deliveryDocumentActionKeys.exportTickets()))
 const processSheetExportLoading = computed(() => isPending(deliveryDocumentActionKeys.exportProcessSheets()))
-const ticketExportable = computed(() => Boolean(selectedRfqId.value && ticketTotal.value > 0))
-const processSheetExportable = computed(() => Boolean(selectedRfqId.value && processSheetTotal.value > 0))
+const ticketExportable = computed(() => Boolean(selectedSource.value && ticketTotal.value > 0))
+const processSheetExportable = computed(() => Boolean(selectedSource.value && processSheetTotal.value > 0))
 
 const resetDocumentPagination = () => {
   ticketPagination.page = 1
@@ -126,26 +133,32 @@ const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
+const toDocumentSource = (order) => ({
+  sourceType: order?.sourceType || 'RFQ',
+  sourceOrderId: Number(order?.sourceOrderId ?? order?.id)
+})
+
 const handleOrderSelected = async (order) => {
   selectedOrder.value = order || {}
-  selectedRfqId.value = order.id
+  selectedSource.value = toDocumentSource(order)
   resetDocumentPagination()
-  await loadDeliveryDocumentWorkspace(order.id)
+  await loadDeliveryDocumentWorkspace(selectedSource.value)
 }
 
-const loadDeliveryDocumentWorkspace = async (rfqId) => {
-  if (!rfqId) return
+const loadDeliveryDocumentWorkspace = async (source = selectedSource.value) => {
+  if (!source?.sourceOrderId) return
   await Promise.all([
-    loadDocumentSummary(rfqId),
-    loadTicketRows(rfqId),
-    loadProcessSheetRows(rfqId)
+    loadDocumentSummary(source),
+    loadTicketRows(source),
+    loadProcessSheetRows(source)
   ])
 }
 
-const loadDocumentSummary = async (rfqId) => {
+const loadDocumentSummary = async (source = selectedSource.value) => {
+  if (!source?.sourceOrderId) return
   loadingSummary.value = true
   try {
-    const response = await getDeliveryDocumentSummary(rfqId)
+    const response = await getDeliveryDocumentSummary(source.sourceOrderId, sourceParams(source))
     documentSummary.value = response || {}
     orderInfo.value = response.orderInfo || selectedOrder.value || {}
     ticketTotal.value = Number(response.ticketCount ?? ticketTotal.value ?? 0)
@@ -158,10 +171,12 @@ const loadDocumentSummary = async (rfqId) => {
   }
 }
 
-const loadTicketRows = async (rfqId) => {
+const loadTicketRows = async (source = selectedSource.value) => {
+  if (!source?.sourceOrderId) return
   loadingTickets.value = true
   try {
-    const response = await listDeliveryDocumentTickets(rfqId, {
+    const response = await listDeliveryDocumentTickets(source.sourceOrderId, {
+      ...sourceParams(source),
       page: ticketPagination.page,
       pageSize: ticketPagination.pageSize
     })
@@ -175,10 +190,12 @@ const loadTicketRows = async (rfqId) => {
   }
 }
 
-const loadProcessSheetRows = async (rfqId) => {
+const loadProcessSheetRows = async (source = selectedSource.value) => {
+  if (!source?.sourceOrderId) return
   loadingProcessSheets.value = true
   try {
-    const response = await listDeliveryDocumentProcessSheets(rfqId, {
+    const response = await listDeliveryDocumentProcessSheets(source.sourceOrderId, {
+      ...sourceParams(source),
       page: processSheetPagination.page,
       pageSize: processSheetPagination.pageSize
     })
@@ -194,8 +211,8 @@ const loadProcessSheetRows = async (rfqId) => {
 
 const handleTicketPageChange = async (value) => {
   ticketPagination.page = value
-  if (selectedRfqId.value) {
-    await loadTicketRows(selectedRfqId.value)
+  if (selectedSource.value) {
+    await loadTicketRows()
   }
 }
 
@@ -205,8 +222,8 @@ const handleTicketPageSizeChange = (value) => {
 
 const handleProcessSheetPageChange = async (value) => {
   processSheetPagination.page = value
-  if (selectedRfqId.value) {
-    await loadProcessSheetRows(selectedRfqId.value)
+  if (selectedSource.value) {
+    await loadProcessSheetRows()
   }
 }
 
@@ -215,7 +232,7 @@ const handleProcessSheetPageSizeChange = (value) => {
 }
 
 const exportDeliveryDocumentExcel = async (type) => {
-  if (!selectedRfqId.value) return ElMessage.warning('请先选择提单表据订单。')
+  if (!selectedSource.value?.sourceOrderId) return ElMessage.warning('请先选择提单表据订单。')
   const exportPathMap = {
     tickets: 'tickets',
     process: 'process-sheets'
@@ -229,8 +246,9 @@ const exportDeliveryDocumentExcel = async (type) => {
   return runAction(actionKey(), async () => {
     const result = await downloadDeliveryDocumentExport(
       path,
-      selectedRfqId.value,
-      `${path}-${selectedRfqId.value}.xlsx`
+      selectedSource.value.sourceOrderId,
+      `${path}-${sourceKey.value}.xlsx`,
+      sourceParams()
     )
     if (!result.success) {
       ElMessage.error(result.message || 'Excel 导出失败。')

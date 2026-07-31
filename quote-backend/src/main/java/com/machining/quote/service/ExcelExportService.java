@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -58,12 +59,20 @@ public class ExcelExportService {
         QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(qw);
+        exportDeliveryTickets(rfqId, resolveRfqNo(rfqId), tickets, response);
+    }
 
+    public void exportDeliveryTickets(ReleaseSourceType sourceType, Long sourceOrderId, String sourceOrderNo, HttpServletResponse response) throws IOException {
+        List<OrderDeliveryTicket> tickets = deliveryService.listTickets(sourceType, sourceOrderId);
+        exportDeliveryTickets(sourceOrderId, sourceOrderNo, tickets, response);
+    }
+
+    private void exportDeliveryTickets(Object sourceOrderId, String sourceOrderNo, List<OrderDeliveryTicket> tickets, HttpServletResponse response) throws IOException {
         List<List<String>> head = List.of(
                 List.of("序号"),
                 List.of("订单类型"),
                 List.of("内部项目号"),
-                List.of("RFQ号"),
+                List.of("来源单号"),
                 List.of("类型"),
                 List.of("图号"),
                 List.of("数量"),
@@ -83,7 +92,7 @@ public class ExcelExportService {
                     i + 1,
                     safe(ticket.getOrderType()),
                     safe(ticket.getInternalProjectNo()),
-                    safe(ticket.getProjectNo()),
+                    safeText(sourceOrderNo, ticket.getProjectNo()),
                     safe(ticket.getItemType()),
                     safe(ticket.getPartNo()),
                     safeInt(ticket.getQty()),
@@ -97,16 +106,24 @@ public class ExcelExportService {
             ));
         }
 
-        write(response, buildFileName(rfqId, "提单表"), "提单表", head, rows);
+        write(response, buildFileName(sourceOrderNo, sourceOrderId, "提单表"), "提单表", head, rows);
     }
 
     public void exportProcessSheets(Integer rfqId, HttpServletResponse response) throws IOException {
         assertOrderDataScope(rfqId);
         List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(rfqId);
         String rfqNo = resolveRfqNo(rfqId);
+        exportProcessSheets(rfqId, rfqNo, sheets, response);
+    }
 
+    public void exportProcessSheets(ReleaseSourceType sourceType, Long sourceOrderId, String sourceOrderNo, HttpServletResponse response) throws IOException {
+        List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(sourceType, sourceOrderId);
+        exportProcessSheets(sourceOrderId, sourceOrderNo, sheets, response);
+    }
+
+    private void exportProcessSheets(Object sourceOrderId, String sourceOrderNo, List<ProcessSheetDTO> sheets, HttpServletResponse response) throws IOException {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "内部项目号", "RFQ号", "类型", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
+        for (String title : List.of("序号", "内部项目号", "来源单号", "类型", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(List.of(title));
         }
         head.add(9, List.of("毛重(kg)"));
@@ -122,7 +139,7 @@ public class ExcelExportService {
             List<Object> row = new ArrayList<>();
             row.add(i + 1);
             row.add(safe(sheet.getInternalProjectNo()));
-            row.add(rfqNo);
+            row.add(safe(sourceOrderNo));
             row.add(safe(sheet.getItemType()));
             row.add(safe(sheet.getPartNo()));
             row.add(safe(sheet.getVersion()));
@@ -151,7 +168,7 @@ public class ExcelExportService {
             rows.add(row);
         }
 
-        write(response, buildFileName(rfqId, "工艺表"), "工艺表", head, rows);
+        write(response, buildFileName(sourceOrderNo, sourceOrderId, "工艺表"), "工艺表", head, rows);
     }
 
     public void exportQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
@@ -499,6 +516,12 @@ public class ExcelExportService {
         return prefix + "-" + suffix;
     }
 
+    private String buildFileName(String sourceOrderNo, Object sourceOrderId, String suffix) {
+        String fallback = sourceOrderId == null ? "source" : "source-" + sourceOrderId;
+        String prefix = safeText(sourceOrderNo, fallback);
+        return prefix + "-" + suffix;
+    }
+
     private Path uniqueExportFile(Path outputDir, String baseName) {
         String cleanName = sanitizeFileName(baseName);
         Path file = outputDir.resolve(cleanName + ".xlsx");
@@ -644,6 +667,10 @@ public class ExcelExportService {
 
     private String safe(Object value) {
         return value == null ? "" : value.toString();
+    }
+
+    private String safeText(String value, Object fallback) {
+        return safe(value).trim().isEmpty() ? safe(fallback) : value.trim();
     }
 
     private String displayTicketText(Object value) {

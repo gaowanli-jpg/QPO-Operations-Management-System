@@ -5,7 +5,9 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -45,6 +48,7 @@ class DeliveryDocumentModuleTest {
     private static final Path DELIVERY_DOCUMENT_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
     private OrderRfqMapper orderRfqMapper;
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
     private DeliveryService deliveryService;
     private ExcelExportService excelExportService;
     private AuditService auditService;
@@ -54,12 +58,14 @@ class DeliveryDocumentModuleTest {
     @BeforeEach
     void setUp() {
         orderRfqMapper = mock(OrderRfqMapper.class);
+        salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
         deliveryService = mock(DeliveryService.class);
         excelExportService = mock(ExcelExportService.class);
         auditService = mock(AuditService.class);
         dataScopeService = mock(DataScopeService.class);
         service = new DeliveryDocumentService();
         ReflectionTestUtils.setField(service, "orderRfqMapper", orderRfqMapper);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
         ReflectionTestUtils.setField(service, "deliveryService", deliveryService);
         ReflectionTestUtils.setField(service, "excelExportService", excelExportService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
@@ -79,11 +85,12 @@ class DeliveryDocumentModuleTest {
                         "@RequirePermission(\"market:delivery-document:export\")",
                         "return deliveryDocumentService.listDocumentCustomers(field, keyword)",
                         "return deliveryDocumentService.listDocumentOrders(customerName, keyword, status, page, pageSize)",
-                        "return deliveryDocumentService.documentSummary(rfqId)",
-                        "return deliveryDocumentService.pageTickets(rfqId, page, pageSize)",
-                        "return deliveryDocumentService.pageProcessSheets(rfqId, page, pageSize)",
-                        "deliveryDocumentService.exportTickets(rfqId, response)",
-                        "deliveryDocumentService.exportProcessSheets(rfqId, response)"
+                        "@RequestParam(value = \"sourceType\", required = false) String sourceType",
+                        "return deliveryDocumentService.documentSummary(sourceType, sourceOrderId)",
+                        "return deliveryDocumentService.pageTickets(sourceType, sourceOrderId, page, pageSize)",
+                        "return deliveryDocumentService.pageProcessSheets(sourceType, sourceOrderId, page, pageSize)",
+                        "deliveryDocumentService.exportTickets(sourceType, sourceOrderId, response)",
+                        "deliveryDocumentService.exportProcessSheets(sourceType, sourceOrderId, response)"
                 )
                 .doesNotContain(
                         "@RequirePermission(\"market:release:view\")",
@@ -143,12 +150,14 @@ class DeliveryDocumentModuleTest {
     @Test
     void documentOrderListUsesDataScopeAndOnlyAllowedStatuses() {
         when(orderRfqMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+        when(salesOrderHeaderMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
 
-        PageResult<OrderRfq> result = service.listDocumentOrders(null, null, null, 1, 20);
+        PageResult<Map<String, Object>> result = service.listDocumentOrders(null, null, null, 1, 20);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<QueryWrapper<OrderRfq>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
         verify(dataScopeService).applyOrderScope(any(QueryWrapper.class));
+        verify(dataScopeService).applySalesOrderScope(any(QueryWrapper.class));
         verify(orderRfqMapper).selectCount(queryCaptor.capture());
         verify(orderRfqMapper, never()).selectList(any(QueryWrapper.class));
         QueryWrapper<OrderRfq> capturedQuery = queryCaptor.getValue();
@@ -166,7 +175,7 @@ class DeliveryDocumentModuleTest {
                 QuoteStatusWorkflow.PRICED,
                 QuoteStatusWorkflow.QUOTED,
                 QuoteStatusWorkflow.DISCARDED)) {
-            PageResult<OrderRfq> result = service.listDocumentOrders(null, null, status, 2, 50);
+            PageResult<Map<String, Object>> result = service.listDocumentOrders(null, null, status, 2, 50);
 
             assertThat(result.getRecords()).isEmpty();
             assertThat(result.getTotal()).isZero();
@@ -184,12 +193,99 @@ class DeliveryDocumentModuleTest {
             return null;
         }).when(dataScopeService).applyOrderScope(any(QueryWrapper.class));
         when(orderRfqMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+        when(salesOrderHeaderMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
 
-        PageResult<OrderRfq> result = service.listDocumentOrders(null, null, null, 1, 20);
+        PageResult<Map<String, Object>> result = service.listDocumentOrders(null, null, null, 1, 20);
 
         assertThat(result.getRecords()).isEmpty();
         assertThat(result.getTotal()).isZero();
         verify(orderRfqMapper, never()).selectList(any(QueryWrapper.class));
+    }
+
+    @Test
+    void documentOrderListReturnsSourceAwareRfqAndSalesOrderRows() {
+        OrderRfq rfq = order(42, QuoteStatusWorkflow.PARTIALLY_RELEASED);
+        SalesOrderHeader salesOrder = salesOrder(9001L, QuoteStatusWorkflow.RELEASED);
+        when(orderRfqMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(orderRfqMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(rfq));
+        when(salesOrderHeaderMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(salesOrderHeaderMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(salesOrder));
+
+        PageResult<Map<String, Object>> result = service.listDocumentOrders("ACME", null, null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(2);
+        assertThat(result.getRecords())
+                .extracting(row -> row.get("sourceType"))
+                .containsExactly("SALES_ORDER", "RFQ");
+        assertThat(result.getRecords().get(0))
+                .containsEntry("sourceOrderId", 9001L)
+                .containsEntry("sourceOrderNo", "SO-9001")
+                .containsEntry("salesOrderNo", "SO-9001")
+                .containsEntry("status", QuoteStatusWorkflow.RELEASED);
+        assertThat(result.getRecords().get(1))
+                .containsEntry("sourceOrderId", 42L)
+                .containsEntry("sourceOrderNo", "RFQ-42")
+                .containsEntry("rfqNo", "RFQ-42");
+    }
+
+    @Test
+    void salesOrderDocumentRowsAndExportsUseSourceIdentity() throws IOException {
+        SalesOrderHeader released = salesOrder(9001L, QuoteStatusWorkflow.RELEASED);
+        PageResult<com.machining.quote.entity.OrderDeliveryTicket> ticketPage =
+                PageResult.of(List.of(), 3, 2, 10);
+        PageResult<ProcessSheetDTO> processSheetPage = PageResult.of(List.of(), 2, 1, 5);
+        when(salesOrderHeaderMapper.selectById(9001L)).thenReturn(released);
+        when(deliveryService.pageTickets(com.machining.quote.dto.ReleaseSourceType.SALES_ORDER, 9001L, 2, 10))
+                .thenReturn(ticketPage);
+        when(deliveryService.pageProcessSheets(com.machining.quote.dto.ReleaseSourceType.SALES_ORDER, 9001L, 1, 5))
+                .thenReturn(processSheetPage);
+        when(deliveryService.pageTickets(com.machining.quote.dto.ReleaseSourceType.SALES_ORDER, 9001L, 1, 1))
+                .thenReturn(PageResult.of(List.of(), 3, 1, 1));
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        assertThat(service.pageTickets("SALES_ORDER", 9001L, 2, 10)).isSameAs(ticketPage);
+        assertThat(service.pageProcessSheets("SALES_ORDER", 9001L, 1, 5)).isSameAs(processSheetPage);
+        service.exportTickets("SALES_ORDER", 9001L, response);
+
+        verify(dataScopeService, atLeastOnce()).assertCanAccessSalesOrder(released);
+        verify(excelExportService).exportDeliveryTickets(
+                com.machining.quote.dto.ReleaseSourceType.SALES_ORDER,
+                9001L,
+                "SO-9001",
+                response);
+        verify(auditService).record(eq("DELIVERY_TICKET_EXPORT"), eq("sales_order_header"), eq(9001L), isNull(), any());
+    }
+
+    @Test
+    void salesOrderDocumentSourceValidationUsesReadableMessages() {
+        assertThatThrownBy(() -> service.pageTickets("SALES_ORDER", null, 1, 20))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("订单 ID 不能为空");
+
+        when(salesOrderHeaderMapper.selectById(9001L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.pageTickets("SALES_ORDER", 9001L, 1, 20))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("订单不存在");
+    }
+
+    @Test
+    void documentOrderListRequestsEnoughRowsForRequestedMixedSourcePage() {
+        when(orderRfqMapper.selectCount(any(QueryWrapper.class))).thenReturn(150L);
+        when(salesOrderHeaderMapper.selectCount(any(QueryWrapper.class))).thenReturn(150L);
+        when(orderRfqMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(salesOrderHeaderMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        service.listDocumentOrders(null, null, null, 6, 20);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<QueryWrapper<OrderRfq>> rfqQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<QueryWrapper<SalesOrderHeader>> salesOrderQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(orderRfqMapper).selectList(rfqQueryCaptor.capture());
+        verify(salesOrderHeaderMapper).selectList(salesOrderQueryCaptor.capture());
+        assertThat(rfqQueryCaptor.getValue().getSqlSegment()).contains("LIMIT 120");
+        assertThat(salesOrderQueryCaptor.getValue().getSqlSegment()).contains("LIMIT 120");
     }
 
     @Test
@@ -199,14 +295,14 @@ class DeliveryDocumentModuleTest {
                 PageResult.of(List.of(), 12, 3, 50);
         PageResult<ProcessSheetDTO> processSheetPage = PageResult.of(List.of(), 9, 4, 25);
         when(orderRfqMapper.selectById(42)).thenReturn(released);
-        when(deliveryService.pageTickets(42, 3, 50)).thenReturn(ticketPage);
-        when(deliveryService.pageProcessSheets(42, 4, 25)).thenReturn(processSheetPage);
+        when(deliveryService.pageTickets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, 3, 50)).thenReturn(ticketPage);
+        when(deliveryService.pageProcessSheets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, 4, 25)).thenReturn(processSheetPage);
 
         assertThat(service.pageTickets(42, 3, 50)).isSameAs(ticketPage);
         assertThat(service.pageProcessSheets(42, 4, 25)).isSameAs(processSheetPage);
 
-        verify(deliveryService).pageTickets(42, 3, 50);
-        verify(deliveryService).pageProcessSheets(42, 4, 25);
+        verify(deliveryService).pageTickets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, 3, 50);
+        verify(deliveryService).pageProcessSheets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, 4, 25);
     }
 
     @Test
@@ -228,15 +324,15 @@ class DeliveryDocumentModuleTest {
     void processSheetExportRecordsProcessSheetRowCount() throws IOException {
         OrderRfq released = order(42, QuoteStatusWorkflow.RELEASED);
         when(orderRfqMapper.selectById(42)).thenReturn(released);
-        when(deliveryService.pageProcessSheets(42, 1, 1))
+        when(deliveryService.pageProcessSheets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, 1, 1))
                 .thenReturn(PageResult.<ProcessSheetDTO>of(List.of(), 7, 1, 1));
         HttpServletResponse response = mock(HttpServletResponse.class);
 
         service.exportProcessSheets(42, response);
 
-        verify(deliveryService).pageProcessSheets(42, 1, 1);
+        verify(deliveryService).pageProcessSheets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, 1, 1);
         verify(deliveryService, never()).pageTickets(42, 1, 1);
-        verify(excelExportService).exportProcessSheets(42, response);
+        verify(excelExportService).exportProcessSheets(com.machining.quote.dto.ReleaseSourceType.RFQ, 42L, "RFQ-42", response);
         ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("DELIVERY_PROCESS_SHEET_EXPORT"), eq("order_rfq"), eq(42), isNull(), afterDataCaptor.capture());
         @SuppressWarnings("unchecked")
@@ -267,6 +363,8 @@ class DeliveryDocumentModuleTest {
                         "exportProcessSheets",
                         "QuoteStatusWorkflow.PARTIALLY_RELEASED",
                         "QuoteStatusWorkflow.RELEASED",
+                        "ReleaseSourceType.SALES_ORDER",
+                        "salesOrderHeaderMapper",
                         "auditService.record(\"DELIVERY_TICKET_EXPORT\"",
                         "auditService.record(\"DELIVERY_PROCESS_SHEET_EXPORT\""
                 )
@@ -277,6 +375,15 @@ class DeliveryDocumentModuleTest {
         OrderRfq order = new OrderRfq();
         order.setId(id);
         order.setRfqNo("RFQ-" + id);
+        order.setCustomerName("ACME");
+        order.setStatus(status);
+        return order;
+    }
+
+    private SalesOrderHeader salesOrder(Long id, String status) {
+        SalesOrderHeader order = new SalesOrderHeader();
+        order.setId(id);
+        order.setSalesOrderNo("SO-" + id);
         order.setCustomerName("ACME");
         order.setStatus(status);
         return order;

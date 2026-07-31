@@ -101,16 +101,16 @@ describe('marketApi', () => {
   test('delivery document helpers use the independent backend namespace', async () => {
     const params = { page: 2, pageSize: 50 }
 
-    await marketApi.getDeliveryDocumentSummary(18)
+    await marketApi.getDeliveryDocumentSummary(18, { sourceType: 'SALES_ORDER' })
     await marketApi.listDeliveryDocumentTickets(18, params)
     await marketApi.listDeliveryDocumentProcessSheets(18, params)
-    await marketApi.downloadDeliveryDocumentExport('tickets', 18, 'delivery-tickets-18.xlsx')
+    await marketApi.downloadDeliveryDocumentExport('tickets', 18, 'delivery-tickets-18.xlsx', { sourceType: 'SALES_ORDER' })
 
-    expect(request).toHaveBeenNthCalledWith(1, '/api/market/delivery-documents/summary/18')
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/delivery-documents/summary/18', { params: { sourceType: 'SALES_ORDER' } })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/delivery-documents/tickets/18', { params })
     expect(request).toHaveBeenNthCalledWith(3, '/api/market/delivery-documents/process-sheets/18', { params })
     expect(downloadFile).toHaveBeenCalledWith(
-      '/api/market/delivery-documents/export/tickets/18',
+      '/api/market/delivery-documents/export/tickets/18?sourceType=SALES_ORDER',
       'delivery-tickets-18.xlsx'
     )
   })

@@ -55,8 +55,8 @@ describe('delivery duplicate click guards', () => {
     const exportBlock = blockBetween(source, 'const exportDeliveryDocumentExcel = async (type) =>', '</script>')
 
     expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
-    expect(source).toContain('exportTickets: () => `delivery:document:export:tickets:${selectedRfqId.value || \'none\'}`')
-    expect(source).toContain('exportProcessSheets: () => `delivery:document:export:process-sheets:${selectedRfqId.value || \'none\'}`')
+    expect(source).toContain('exportTickets: () => `delivery:document:export:tickets:${sourceKey.value}`')
+    expect(source).toContain('exportProcessSheets: () => `delivery:document:export:process-sheets:${sourceKey.value}`')
     expect(source).toContain(':export-loading="ticketExportLoading"')
     expect(source).toContain(':export-loading="processSheetExportLoading"')
     expect(exportBlock).toContain('return runAction(actionKey(), async () =>')

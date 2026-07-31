@@ -46,8 +46,9 @@ describe('sales order independent stage 8 regression', () => {
     expect(marketApi).toContain("listReleaseItemsBatch = (payload) => postJson('/api/market/release/items/batch', payload)")
     expect(marketRelease).not.toContain('fetchAllReleaseItems')
 
-    expect(deliveryDocument).toContain('listDeliveryDocumentTickets(rfqId, {')
-    expect(deliveryDocument).toContain('listDeliveryDocumentProcessSheets(rfqId, {')
+    expect(deliveryDocument).toContain('listDeliveryDocumentTickets(source.sourceOrderId, {')
+    expect(deliveryDocument).toContain('listDeliveryDocumentProcessSheets(source.sourceOrderId, {')
+    expect(deliveryDocument).toContain('...sourceParams(source),')
     expect(deliveredItem).toContain('listDeliveredItems(buildParams())')
     expect(lockedItem).toContain('listLockedItems(buildParams())')
     expect(deliveredItemApi).toContain("request('/api/order-delivery/tickets', { params })")

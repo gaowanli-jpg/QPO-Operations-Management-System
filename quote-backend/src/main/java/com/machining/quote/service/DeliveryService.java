@@ -194,6 +194,13 @@ public class DeliveryService {
         return ticketMapper.selectList(qw);
     }
 
+    public List<OrderDeliveryTicket> listTickets(ReleaseSourceType sourceType, Long sourceOrderId) {
+        assertSourceOrderDataScope(sourceType, sourceOrderId);
+        QueryWrapper<OrderDeliveryTicket> qw = ticketQuery(sourceType, sourceOrderId)
+                .orderByAsc("id");
+        return ticketMapper.selectList(qw);
+    }
+
     public PageResult<OrderDeliveryTicket> pageTickets(Integer rfqId, Integer page, Integer pageSize) {
         assertOrderDataScope(rfqId);
         int safePage = safePage(page);
@@ -202,6 +209,19 @@ public class DeliveryService {
         QueryWrapper<OrderDeliveryTicket> countQuery = ticketQuery(rfqId);
         Long total = ticketMapper.selectCount(countQuery);
         QueryWrapper<OrderDeliveryTicket> pageQuery = ticketQuery(rfqId)
+                .orderByAsc("id")
+                .last("LIMIT " + safePageSize + " OFFSET " + offset);
+        return PageResult.of(ticketMapper.selectList(pageQuery), total == null ? 0L : total, safePage, safePageSize);
+    }
+
+    public PageResult<OrderDeliveryTicket> pageTickets(ReleaseSourceType sourceType, Long sourceOrderId, Integer page, Integer pageSize) {
+        assertSourceOrderDataScope(sourceType, sourceOrderId);
+        int safePage = safePage(page);
+        int safePageSize = safePageSize(pageSize);
+        long offset = (long) (safePage - 1) * safePageSize;
+        QueryWrapper<OrderDeliveryTicket> countQuery = ticketQuery(sourceType, sourceOrderId);
+        Long total = ticketMapper.selectCount(countQuery);
+        QueryWrapper<OrderDeliveryTicket> pageQuery = ticketQuery(sourceType, sourceOrderId)
                 .orderByAsc("id")
                 .last("LIMIT " + safePageSize + " OFFSET " + offset);
         return PageResult.of(ticketMapper.selectList(pageQuery), total == null ? 0L : total, safePage, safePageSize);
@@ -219,8 +239,22 @@ public class DeliveryService {
                 .toList();
     }
 
+    public List<ProcessSheetDTO> listProcessSheets(ReleaseSourceType sourceType, Long sourceOrderId) {
+        return listTickets(sourceType, sourceOrderId).stream()
+                .map(this::buildProcessSheet)
+                .toList();
+    }
+
     public PageResult<ProcessSheetDTO> pageProcessSheets(Integer rfqId, Integer page, Integer pageSize) {
         PageResult<OrderDeliveryTicket> ticketPage = pageTickets(rfqId, page, pageSize);
+        List<ProcessSheetDTO> records = ticketPage.getRecords().stream()
+                .map(this::buildProcessSheet)
+                .toList();
+        return PageResult.of(records, ticketPage.getTotal(), ticketPage.getPage(), ticketPage.getPageSize());
+    }
+
+    public PageResult<ProcessSheetDTO> pageProcessSheets(ReleaseSourceType sourceType, Long sourceOrderId, Integer page, Integer pageSize) {
+        PageResult<OrderDeliveryTicket> ticketPage = pageTickets(sourceType, sourceOrderId, page, pageSize);
         List<ProcessSheetDTO> records = ticketPage.getRecords().stream()
                 .map(this::buildProcessSheet)
                 .toList();
@@ -235,9 +269,41 @@ public class DeliveryService {
         return qw;
     }
 
+    private QueryWrapper<OrderDeliveryTicket> ticketQuery(ReleaseSourceType sourceType, Long sourceOrderId) {
+        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
+        if (sourceOrderId == null) {
+            return qw.apply("1 = 0");
+        }
+        ReleaseSourceType effectiveType = sourceType == null ? ReleaseSourceType.RFQ : sourceType;
+        if (effectiveType == ReleaseSourceType.SALES_ORDER) {
+            return qw.eq("source_type", ReleaseSourceType.SALES_ORDER.name())
+                    .eq("source_order_id", sourceOrderId);
+        }
+        Integer rfqId = sourceOrderId > Integer.MAX_VALUE || sourceOrderId < Integer.MIN_VALUE
+                ? null
+                : sourceOrderId.intValue();
+        if (rfqId == null) {
+            return qw.apply("1 = 0");
+        }
+        return qw.and(wrapper -> wrapper
+                .eq("source_type", ReleaseSourceType.RFQ.name())
+                .eq("source_order_id", sourceOrderId)
+                .or()
+                .eq("rfq_id", rfqId));
+    }
+
     private void assertOrderDataScope(Integer rfqId) {
         if (rfqId != null && dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
+        }
+    }
+
+    private void assertSourceOrderDataScope(ReleaseSourceType sourceType, Long sourceOrderId) {
+        if (sourceType == ReleaseSourceType.SALES_ORDER || sourceOrderId == null) {
+            return;
+        }
+        if (sourceOrderId <= Integer.MAX_VALUE && sourceOrderId >= Integer.MIN_VALUE) {
+            assertOrderDataScope(sourceOrderId.intValue());
         }
     }
 
