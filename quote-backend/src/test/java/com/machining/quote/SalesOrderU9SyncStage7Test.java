@@ -191,8 +191,12 @@ class SalesOrderU9SyncStage7Test {
                 .contains("@PostMapping(\"/sync\")")
                 .contains("@RequirePermission(\"market:u9-sync:submit\")");
         assertThat(readSource("controller/SalesOrderQpoImportController.java"))
+                .doesNotContain("@PostMapping(\"/u9-sync\")");
+        assertThat(readSource("controller/SalesOrderU9SyncCompatibilityController.java"))
+                .contains("@Deprecated")
+                .contains("@RequestMapping(\"/api/market/sales-orders\")")
                 .contains("@PostMapping(\"/u9-sync\")")
-                .contains("@RequirePermission(\"market:rfq:import-sales-order\")");
+                .contains("@RequirePermission(\"market:u9-sync:submit\")");
     }
 
     private Fixture fixture() {
