@@ -73,6 +73,14 @@ export const previewSalesOrderMatch = (payload) => postJson('/api/market/sales-m
 
 export const applySalesOrderMatch = (payload) => postJson('/api/market/sales-match/apply', payload)
 
+export const listSalesOrderU9SyncOrders = (params = {}) => request('/api/market/u9-sync/orders', { params })
+
+export const previewSalesOrderU9Sync = (salesOrderId) => request(`/api/market/u9-sync/orders/${salesOrderId}/preview`)
+
+export const syncSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/sync`)
+
+export const syncSalesOrdersU9 = (salesOrderIds = []) => postJson('/api/market/u9-sync/sync', { salesOrderIds })
+
 export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/market/release/parse-part-selection/${rfqId}`, formData)
 
 export const parsePartSelectionBatch = (formData) => multipartPost('/api/market/release/parse-part-selection/batch', formData)

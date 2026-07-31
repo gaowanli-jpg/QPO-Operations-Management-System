@@ -138,6 +138,34 @@ describe('marketApi', () => {
     })
   })
 
+  test('sales order U9 sync helpers use the independent whole-order sync namespace', async () => {
+    const params = {
+      customerName: 'ACME',
+      keyword: 'SO-2026',
+      status: '已生成提单',
+      u9SyncStatus: '未同步',
+      materialReadyStatus: 'READY',
+      page: 2,
+      pageSize: 50
+    }
+
+    await marketApi.listSalesOrderU9SyncOrders(params)
+    await marketApi.previewSalesOrderU9Sync(101)
+    await marketApi.syncSalesOrderU9(101)
+    await marketApi.syncSalesOrdersU9([101, 102])
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/u9-sync/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/u9-sync/orders/101/preview')
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/u9-sync/orders/101/sync', {
+      method: 'POST',
+      data: undefined
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/u9-sync/sync', {
+      method: 'POST',
+      data: { salesOrderIds: [101, 102] }
+    })
+  })
+
   test('release workspace helpers use split paging endpoints', async () => {
     const params = { page: 2, pageSize: 50, keyword: 'PN' }
 
