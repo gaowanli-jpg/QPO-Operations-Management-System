@@ -8,6 +8,10 @@ const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments
 
 const marketDashboard = readSource('components', 'MarketDashboard.vue')
 const marketApi = readSource('services', 'marketApi.js')
+const rfqPane = marketDashboard.slice(
+  marketDashboard.indexOf('name="rfq"'),
+  marketDashboard.indexOf('</el-tab-pane>', marketDashboard.indexOf('name="rfq"'))
+)
 const salesOrderPane = marketDashboard.slice(
   marketDashboard.indexOf('name="sales-order"'),
   marketDashboard.indexOf('</el-tab-pane>', marketDashboard.indexOf('name="sales-order"'))
@@ -61,6 +65,12 @@ describe('sales order import panel', () => {
     expect(salesOrderPane.indexOf('步骤 1：客户基础信息')).toBeLessThan(salesOrderPane.indexOf('步骤 2：单据类型编码'))
     expect(salesOrderPane.indexOf('步骤 2：单据类型编码')).toBeLessThan(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）'))
     expect(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）')).toBeLessThan(salesOrderPane.indexOf('步骤 4：上传关联图纸（PDF）'))
+  })
+
+  test('RFQ import uses the same clean step workflow surface as sales order import', () => {
+    expect(rfqPane).toContain('<section class="import-workflow">')
+    expect(rfqPane).not.toContain('<section class="erp-surface import-workflow">')
+    expect(salesOrderPane).toContain('<section class="sales-order-workflow">')
   })
 
   test('sales order import submits drawing files and uses RFQ-style success interaction', () => {

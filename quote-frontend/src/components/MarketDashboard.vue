@@ -10,7 +10,7 @@
     <section class="erp-surface import-mode-shell">
       <el-tabs v-model="activeImportMode" class="import-mode-tabs">
         <el-tab-pane label="询价单" name="rfq">
-          <section class="erp-surface import-workflow">
+          <section class="import-workflow">
             <div class="import-step import-step-customer">
               <div class="section-title">
                 <span class="step-index">01</span>
