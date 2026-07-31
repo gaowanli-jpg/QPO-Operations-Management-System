@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS sales_order_item (
     assembly_fee NUMERIC(12, 2),
     base_cost NUMERIC(12, 2),
     item_type VARCHAR(20),
+    assembly_relation_status VARCHAR(30) DEFAULT '不适用',
     material_data JSONB DEFAULT '{}'::jsonb,
     process_route JSONB DEFAULT '[]'::jsonb,
     fee_data JSONB DEFAULT '[]'::jsonb,
@@ -303,6 +304,29 @@ CREATE INDEX IF NOT EXISTS idx_sales_order_item_material_no_id
 
 CREATE INDEX IF NOT EXISTS idx_sales_order_import_record_sales_order_id
     ON sales_order_import_record(sales_order_id);
+
+CREATE TABLE IF NOT EXISTS sales_order_item_assembly_relation (
+    id BIGSERIAL PRIMARY KEY,
+    sales_order_id BIGINT NOT NULL,
+    parent_item_id BIGINT NOT NULL REFERENCES sales_order_item(id) ON DELETE CASCADE,
+    child_item_id BIGINT NOT NULL REFERENCES sales_order_item(id) ON DELETE CASCADE,
+    qty_per_parent NUMERIC(14, 4) NOT NULL DEFAULT 1,
+    sort_no INTEGER DEFAULT 0,
+    source_parent_item_id INTEGER,
+    source_child_item_id INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_sales_order_assembly_distinct_items CHECK (parent_item_id <> child_item_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_sales_order_item_assembly_parent_child
+    ON sales_order_item_assembly_relation(parent_item_id, child_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_item_assembly_sales_order
+    ON sales_order_item_assembly_relation(sales_order_id, parent_item_id, sort_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_item_assembly_child
+    ON sales_order_item_assembly_relation(child_item_id);
 
 CREATE TABLE IF NOT EXISTS dict_material (
     id SERIAL PRIMARY KEY,

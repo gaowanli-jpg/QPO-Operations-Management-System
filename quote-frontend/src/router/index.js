@@ -3,6 +3,7 @@ import LoginView from '../components/LoginView.vue'
 import { useAuthStore } from '../stores/authStore'
 
 const MarketDashboard = () => import('../components/MarketDashboard.vue')
+const SalesMatch = () => import('../components/SalesMatch.vue')
 const MarketRelease = () => import('../components/MarketRelease.vue')
 const DeliveryDocumentManage = () => import('../components/DeliveryDocumentManage.vue')
 const QuoteProcess = () => import('../components/QuoteProcess.vue')
@@ -25,6 +26,7 @@ const routes = [
   { path: '/login', component: LoginView },
   { path: '/', redirect: '/market' },
   { path: '/market', component: MarketDashboard, meta: { permission: 'market:rfq:view' } },
+  { path: '/sales-match', component: SalesMatch, meta: { permission: 'market:sales-match:view' } },
   { path: '/quote-process', component: QuoteProcess, meta: { permission: 'market:quote-process:view' } },
   { path: '/release', component: MarketRelease, meta: { permission: 'market:release:view' } },
   { path: '/delivery-documents', component: DeliveryDocumentManage, meta: { permission: 'market:delivery-document:view' } },

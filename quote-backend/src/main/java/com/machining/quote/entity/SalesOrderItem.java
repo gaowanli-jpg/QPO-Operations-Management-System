@@ -53,6 +53,7 @@ public class SalesOrderItem {
     private BigDecimal assemblyFee;
     private BigDecimal baseCost;
     private String itemType;
+    private String assemblyRelationStatus;
 
     @TableField(typeHandler = JsonbTypeHandler.class)
     private Object materialData;

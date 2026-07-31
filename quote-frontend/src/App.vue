@@ -115,7 +115,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
 const menuGroups = [
-  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/delivery-documents', '/quote-template'] },
+  { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
@@ -123,6 +123,7 @@ const menuGroups = [
 
 const menuMetaByPath = {
   '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
+  '/sales-match': { title: '销售匹配', permission: 'market:sales-match:view', icon: Files },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
   '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
   '/delivery-documents': { title: '提单表据', permission: 'market:delivery-document:view', icon: Document },
@@ -180,6 +181,10 @@ const shellMetaByPath = {
   '/market': {
     title: '新单导入',
     description: '导入客户询价表和图纸，推送工程评估。'
+  },
+  '/sales-match': {
+    title: '销售匹配',
+    description: '选择销售订单，预览并补全历史生产快照。'
   },
   '/quote-process': {
     title: '报价处理',
