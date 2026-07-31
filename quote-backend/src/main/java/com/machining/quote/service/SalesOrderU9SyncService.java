@@ -1,7 +1,12 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
+import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
+import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.dto.SalesOrderU9SyncResultRow;
 import com.machining.quote.dto.u9.U9ApiResult;
@@ -28,6 +33,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -40,9 +46,11 @@ public class SalesOrderU9SyncService {
     private static final String STATUS_SYNCING = "同步中";
     private static final String STATUS_SYNCED = "已同步";
     private static final String STATUS_FAILED = "同步失败";
+    private static final String MATERIAL_CONFIRMED = "已确认";
     private static final String RESP_SUCCESS = "SUCCESS";
     private static final String RESP_FAILED = "FAILED";
     private static final String RESP_PARTIAL = "PARTIAL_SUCCESS";
+    private static final int MAX_PAGE_SIZE = 100;
 
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
@@ -56,6 +64,60 @@ public class SalesOrderU9SyncService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+
+    public PageResult<SalesOrderU9SyncOrderRow> listOrders(
+            String customerName,
+            String keyword,
+            String status,
+            String u9SyncStatus,
+            String materialReadyStatus,
+            Integer page,
+            Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
+        applySalesOrderScope(query);
+        applyListFilters(query, customerName, keyword, status, u9SyncStatus, materialReadyStatus);
+        Long total = headerMapper.selectCount(query);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        query.orderByDesc("id");
+        query.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        List<SalesOrderU9SyncOrderRow> records = safeList(headerMapper.selectList(query)).stream()
+                .map(this::toOrderRow)
+                .toList();
+        return PageResult.of(records, total, safePage, safePageSize);
+    }
+
+    public SalesOrderU9SyncPreviewResp previewSalesOrder(Long salesOrderId) {
+        SalesOrderHeader header = requireSalesOrder(salesOrderId);
+        List<SalesOrderItem> items = loadItems(header.getId());
+        MaterialStats stats = materialStats(items);
+        SalesOrderU9SyncPreviewResp resp = new SalesOrderU9SyncPreviewResp();
+        resp.setSalesOrderId(header.getId());
+        resp.setSalesOrderNo(header.getSalesOrderNo());
+        resp.setDocumentNo(header.getDocumentNo());
+        resp.setCustomerName(header.getCustomerName());
+        resp.setCustomerCode(header.getCustomerCode());
+        resp.setOrderBy(header.getCustomerCode());
+        resp.setCustomerOrderNo(header.getCustomerOrderNo());
+        resp.setInternalProjectNo(header.getInternalProjectNo());
+        resp.setCustomerProjectNo(header.getCustomerProjectNo());
+        resp.setDocumentTypeCode(header.getDocumentTypeCode());
+        resp.setStatus(header.getStatus());
+        resp.setU9SyncStatus(header.getU9SyncStatus());
+        resp.setU9OrderCode(header.getU9OrderCode());
+        resp.setU9SyncMessage(header.getU9SyncMessage());
+        resp.setItemCount(stats.total());
+        resp.setMaterialConfirmedItemCount(stats.confirmed());
+        resp.setMissingMaterialItemCount(stats.missingOrUnconfirmed());
+        String blockedReason = syncBlockedReason(header, items, stats);
+        resp.setBlockedReason(blockedReason);
+        resp.setSyncReady(isBlank(blockedReason));
+        resp.setLines(items.stream().map(this::toPreviewLine).toList());
+        return resp;
+    }
 
     @Transactional
     public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds) {
@@ -240,6 +302,212 @@ public class SalesOrderU9SyncService {
         return tickets == null ? List.of() : tickets;
     }
 
+    private SalesOrderHeader requireSalesOrder(Long salesOrderId) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        SalesOrderHeader header = headerMapper.selectById(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        return header;
+    }
+
+    private SalesOrderU9SyncOrderRow toOrderRow(SalesOrderHeader header) {
+        List<SalesOrderItem> items = loadItems(header.getId());
+        MaterialStats stats = materialStats(items);
+        SalesOrderU9SyncOrderRow row = new SalesOrderU9SyncOrderRow();
+        row.setSalesOrderId(header.getId());
+        row.setSalesOrderNo(header.getSalesOrderNo());
+        row.setCustomerName(header.getCustomerName());
+        row.setCustomerCode(header.getCustomerCode());
+        row.setCustomerOrderNo(header.getCustomerOrderNo());
+        row.setInternalProjectNo(header.getInternalProjectNo());
+        row.setCustomerProjectNo(header.getCustomerProjectNo());
+        row.setDocumentTypeCode(header.getDocumentTypeCode());
+        row.setStatus(header.getStatus());
+        row.setU9SyncStatus(header.getU9SyncStatus());
+        row.setU9OrderCode(header.getU9OrderCode());
+        row.setU9SyncMessage(header.getU9SyncMessage());
+        row.setItemCount(stats.total());
+        row.setMaterialConfirmedItemCount(stats.confirmed());
+        row.setMissingMaterialItemCount(stats.missingOrUnconfirmed());
+        String blockedReason = syncBlockedReason(header, items, stats);
+        row.setBlockedReason(blockedReason);
+        row.setSyncReady(isBlank(blockedReason));
+        row.setUpdatedAt(header.getUpdatedAt());
+        return row;
+    }
+
+    private SalesOrderU9SyncPreviewLine toPreviewLine(SalesOrderItem item) {
+        SalesOrderU9SyncPreviewLine line = new SalesOrderU9SyncPreviewLine();
+        line.setSalesOrderItemId(item.getId());
+        line.setMaterialNoSourceTicketId(item.getMaterialNoSourceTicketId());
+        line.setLineNo(item.getLineNo());
+        line.setPartNo(item.getPartNo());
+        line.setVersion(item.getVersion());
+        line.setSalesMaterialNo(item.getSalesMaterialNo());
+        line.setDescription(item.getDescription());
+        line.setMaterialNo(item.getMaterialNo());
+        line.setMaterialNoStatus(item.getMaterialNoStatus());
+        line.setMaterialNoSource(item.getMaterialNoSource());
+        line.setQty(item.getQty());
+        line.setFinalUnitPrice(preferredPrice(item));
+        line.setDeliveryDate(preferredDeliveryDate(item));
+        boolean ready = isConfirmedMaterialNo(item);
+        line.setReady(ready);
+        line.setItemCode(ready ? item.getMaterialNo() : null);
+        line.setBlockedReason(ready ? "" : materialBlockedReason(item));
+        return line;
+    }
+
+    private void applyListFilters(
+            QueryWrapper<SalesOrderHeader> query,
+            String customerName,
+            String keyword,
+            String status,
+            String u9SyncStatus,
+            String materialReadyStatus) {
+        if (!isBlank(customerName)) {
+            query.eq("customer_name", customerName.trim());
+        }
+        if (!isBlank(status)) {
+            query.eq("status", status.trim());
+        } else {
+            query.and(wrapper -> wrapper.ne("status", QuoteStatusWorkflow.DISCARDED).or().isNull("status"));
+        }
+        if (!isBlank(u9SyncStatus)) {
+            query.eq("u9_sync_status", u9SyncStatus.trim());
+        }
+        if (!isBlank(keyword)) {
+            String text = keyword.trim();
+            query.and(wrapper -> wrapper
+                    .like("sales_order_no", text)
+                    .or()
+                    .like("document_no", text)
+                    .or()
+                    .like("customer_order_no", text)
+                    .or()
+                    .like("internal_project_no", text)
+                    .or()
+                    .like("customer_project_no", text));
+        }
+        applyMaterialReadyFilter(query, materialReadyStatus);
+    }
+
+    private void applyMaterialReadyFilter(QueryWrapper<SalesOrderHeader> query, String materialReadyStatus) {
+        if (isBlank(materialReadyStatus)) {
+            return;
+        }
+        String normalized = materialReadyStatus.trim().toUpperCase(Locale.ROOT);
+        if ("READY".equals(normalized) || "已就绪".equals(materialReadyStatus.trim())) {
+            query.apply("""
+                    EXISTS (SELECT 1 FROM sales_order_item soi WHERE soi.sales_order_id = sales_order_header.id)
+                    AND NOT EXISTS (
+                        SELECT 1 FROM sales_order_item soi
+                        WHERE soi.sales_order_id = sales_order_header.id
+                        AND (soi.material_no IS NULL OR TRIM(soi.material_no) = '' OR COALESCE(soi.material_no_status, '') <> '已确认')
+                    )
+                    """);
+        } else if ("BLOCKED".equals(normalized) || "MISSING".equals(normalized)
+                || "未就绪".equals(materialReadyStatus.trim()) || "缺物料号".equals(materialReadyStatus.trim())) {
+            query.apply("""
+                    EXISTS (
+                        SELECT 1 FROM sales_order_item soi
+                        WHERE soi.sales_order_id = sales_order_header.id
+                        AND (soi.material_no IS NULL OR TRIM(soi.material_no) = '' OR COALESCE(soi.material_no_status, '') <> '已确认')
+                    )
+                    """);
+        }
+    }
+
+    private void applySalesOrderScope(QueryWrapper<SalesOrderHeader> query) {
+        if (dataScopeService != null) {
+            dataScopeService.applySalesOrderScope(query);
+        }
+    }
+
+    private MaterialStats materialStats(List<SalesOrderItem> items) {
+        int total = safeList(items).size();
+        int confirmed = (int) safeList(items).stream()
+                .filter(this::isConfirmedMaterialNo)
+                .count();
+        return new MaterialStats(total, confirmed, total - confirmed);
+    }
+
+    private String syncBlockedReason(SalesOrderHeader header, List<SalesOrderItem> items, MaterialStats stats) {
+        if (QuoteStatusWorkflow.DISCARDED.equals(header.getStatus())) {
+            return "销售订单已废弃，不能同步 U9";
+        }
+        if (QuoteStatusWorkflow.QUOTED.equals(header.getStatus())) {
+            return "销售订单尚未生成 QPO 提单，不能同步 U9";
+        }
+        if (QuoteStatusWorkflow.PARTIALLY_RELEASED.equals(header.getStatus())) {
+            return "销售订单仍存在未提单数量，需全部生成提单后再同步 U9";
+        }
+        if (!QuoteStatusWorkflow.RELEASED.equals(header.getStatus())) {
+            return "销售订单状态暂不可同步 U9";
+        }
+        if (STATUS_SYNCED.equals(header.getU9SyncStatus())) {
+            return "销售订单已同步，不能重复创建 U9 订单";
+        }
+        if (STATUS_SYNCING.equals(header.getU9SyncStatus())) {
+            return "U9 同步处理中，请稍后刷新";
+        }
+        if (isBlank(header.getCustomerCode())) {
+            return "客户编码不能为空，不能同步 U9";
+        }
+        if (isBlank(header.getDocumentTypeCode())) {
+            return "单据类型编码不能为空，不能同步 U9";
+        }
+        if (stats.total() == 0) {
+            return "销售订单没有可同步零件";
+        }
+        if (hasUnreleasedQty(items)) {
+            return "销售订单仍存在未提单数量，需全部生成提单后再同步 U9";
+        }
+        if (stats.missingOrUnconfirmed() > 0) {
+            return "存在未取得或未确认物料号的销售订单零件：" + stats.missingOrUnconfirmed();
+        }
+        return "";
+    }
+
+    private boolean hasUnreleasedQty(List<SalesOrderItem> items) {
+        return safeList(items).stream().anyMatch(item ->
+                item.getRemainingQty() != null && item.getRemainingQty() > 0);
+    }
+
+    private boolean isConfirmedMaterialNo(SalesOrderItem item) {
+        return item != null
+                && !isBlank(item.getMaterialNo())
+                && MATERIAL_CONFIRMED.equals(item.getMaterialNoStatus());
+    }
+
+    private String materialBlockedReason(SalesOrderItem item) {
+        if (item == null || isBlank(item.getMaterialNo())) {
+            return "缺少物料号";
+        }
+        if (!MATERIAL_CONFIRMED.equals(item.getMaterialNoStatus())) {
+            return "物料号未确认";
+        }
+        return "";
+    }
+
+    private BigDecimal preferredPrice(SalesOrderItem item) {
+        if (item.getFinalUnitPrice() != null) {
+            return item.getFinalUnitPrice();
+        }
+        if (item.getTaxIncludedUnitPrice() != null) {
+            return item.getTaxIncludedUnitPrice();
+        }
+        return item.getUntaxedUnitPrice();
+    }
+
+    private LocalDate preferredDeliveryDate(SalesOrderItem item) {
+        return item.getInternalDeliveryDate() == null ? item.getCustomerDeliveryDate() : item.getInternalDeliveryDate();
+    }
+
     private void failPreparedOrders(List<PreparedOrder> preparedOrders, SalesOrderU9SyncResp resp, String message) {
         for (PreparedOrder prepared : preparedOrders) {
             markFailed(prepared.header(), message);
@@ -373,6 +641,21 @@ public class SalesOrderU9SyncService {
                 .toList();
     }
 
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
+    }
+
     private boolean alreadySynced(SalesOrderHeader header) {
         return STATUS_SYNCED.equals(header.getU9SyncStatus())
                 && (!isBlank(header.getU9OrderId()) || !isBlank(header.getU9OrderCode()));
@@ -455,5 +738,8 @@ public class SalesOrderU9SyncService {
     }
 
     private record PreparedOrder(SalesOrderHeader header, U9SalesOrderHeadDTO request) {
+    }
+
+    private record MaterialStats(int total, int confirmed, int missingOrUnconfirmed) {
     }
 }
