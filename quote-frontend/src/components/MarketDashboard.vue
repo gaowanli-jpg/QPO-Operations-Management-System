@@ -293,8 +293,8 @@
                 <el-table-column prop="customerOrderNo" label="客户订单号" min-width="160" show-overflow-tooltip />
                 <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
                 <el-table-column prop="lineCount" label="零件数" width="90" align="right" />
-                <el-table-column prop="matchedItemCount" label="历史匹配数" width="120" align="right" />
-                <el-table-column prop="unmatchedItemCount" label="未匹配数" width="110" align="right" />
+                <el-table-column prop="matchedItemCount" label="已补全数" width="110" align="right" />
+                <el-table-column prop="unmatchedItemCount" label="待销售匹配" width="130" align="right" />
                 <el-table-column prop="matchedDrawingCount" label="图纸绑定数" width="120" align="right" />
                 <el-table-column prop="missingDrawingCount" label="缺图数" width="100" align="right" />
                 <el-table-column prop="status" label="状态" width="120" align="center">

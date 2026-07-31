@@ -7,7 +7,6 @@ import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
-import com.machining.quote.dto.SalesOrderRepeatEnrichmentResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderImportBatch;
@@ -60,8 +59,6 @@ public class SalesOrderQpoImportService {
     private SalesOrderHeaderMapper headerMapper;
     @Autowired
     private SalesOrderItemMapper itemMapper;
-    @Autowired(required = false)
-    private SalesOrderRepeatEnrichmentService repeatEnrichmentService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired
@@ -268,20 +265,16 @@ public class SalesOrderQpoImportService {
         headerMapper.updateById(update);
         header.setImportRecordId(record.getId());
 
-        List<SalesOrderItem> insertedItems = new ArrayList<>();
         for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
             SalesOrderItem item = toItem(header, line, now);
             applyDrawingBinding(item, line, drawingBinding);
             itemMapper.insert(item);
-            insertedItems.add(item);
         }
 
-        SalesOrderRepeatEnrichmentResult enrichmentResult = enrichSalesOrderItems(insertedItems);
-        updateImportSnapshotResult(header, record, enrichmentResult);
         return new CreatedSalesOrder(
                 header.getId(),
                 header.getSalesOrderNo(),
-                enrichmentResult,
+                group.getLines().size(),
                 drawingBinding.groupSummary(group));
     }
 
@@ -402,38 +395,6 @@ public class SalesOrderQpoImportService {
         row.setUnmatchedDrawingCount(created.drawingSummary().unmatchedDrawingCount());
         row.setWarningMessage(created.warningMessage());
         return row;
-    }
-
-    private SalesOrderRepeatEnrichmentResult enrichSalesOrderItems(List<SalesOrderItem> insertedItems) {
-        if (repeatEnrichmentService == null) {
-            SalesOrderRepeatEnrichmentResult result = new SalesOrderRepeatEnrichmentResult();
-            result.setMatchedItemCount(0);
-            result.setUnmatchedItemCount(insertedItems == null ? 0 : insertedItems.size());
-            result.setWarningMessage(result.getUnmatchedItemCount() > 0 ? WAITING_SNAPSHOT_MESSAGE : "");
-            return result;
-        }
-        return repeatEnrichmentService.enrich(insertedItems);
-    }
-
-    private void updateImportSnapshotResult(
-            SalesOrderHeader header,
-            SalesOrderImportRecord record,
-            SalesOrderRepeatEnrichmentResult result) {
-        SalesOrderHeader headerUpdate = new SalesOrderHeader();
-        headerUpdate.setId(header.getId());
-        headerUpdate.setMatchedItemCount(result.getMatchedItemCount());
-        headerUpdate.setUnmatchedItemCount(result.getUnmatchedItemCount());
-        headerUpdate.setWarningMessage(result.getWarningMessage());
-        headerUpdate.setUpdatedAt(LocalDateTime.now());
-        headerMapper.updateById(headerUpdate);
-
-        SalesOrderImportRecord recordUpdate = new SalesOrderImportRecord();
-        recordUpdate.setId(record.getId());
-        recordUpdate.setMatchedItemCount(result.getMatchedItemCount());
-        recordUpdate.setUnmatchedItemCount(result.getUnmatchedItemCount());
-        recordUpdate.setWarningMessage(result.getWarningMessage());
-        recordUpdate.setUpdatedAt(LocalDateTime.now());
-        recordMapper.updateById(recordUpdate);
     }
 
     private Map<String, Object> requestSummary(SalesOrderQpoOrderGroupDTO group, String salesOrderNo) {
@@ -711,18 +672,18 @@ public class SalesOrderQpoImportService {
     private record CreatedSalesOrder(
             Long salesOrderId,
             String salesOrderNo,
-            SalesOrderRepeatEnrichmentResult enrichmentResult,
+            int itemCount,
             DrawingSummary drawingSummary) {
         private int matchedItemCount() {
-            return enrichmentResult == null ? 0 : enrichmentResult.getMatchedItemCount();
+            return 0;
         }
 
         private int unmatchedItemCount() {
-            return enrichmentResult == null ? 0 : enrichmentResult.getUnmatchedItemCount();
+            return itemCount;
         }
 
         private String warningMessage() {
-            return enrichmentResult == null ? "" : enrichmentResult.getWarningMessage();
+            return itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "";
         }
 
         public DrawingSummary drawingSummary() {

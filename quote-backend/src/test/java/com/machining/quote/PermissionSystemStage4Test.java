@@ -18,6 +18,7 @@ class PermissionSystemStage4Test {
                 .containsExactly(
                         "/market",
                         "/orders",
+                        "/sales-match",
                         "/history-orders",
                         "/delivered-items",
                         "/locked-items",
@@ -45,6 +46,10 @@ class PermissionSystemStage4Test {
         assertThat(info.getPermissions()).contains(
                 "market:rfq:import",
                 "market:rfq:upload-drawing",
+                "market:sales-match:view",
+                "market:sales-match:customer-select",
+                "market:sales-match:order-select",
+                "market:sales-match:apply",
                 "market:quote-process:update-lead-time",
                 "market:quote-process:save-quote",
                 "market:quote-process:export",

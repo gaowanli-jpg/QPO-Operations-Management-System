@@ -21,7 +21,6 @@ import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
-import com.machining.quote.service.SalesOrderRepeatEnrichmentService;
 import com.machining.quote.storage.StorageType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -44,10 +43,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -85,7 +82,6 @@ class SalesOrderQpoImportStage3Test {
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         DataScopeService dataScopeService = mock(DataScopeService.class);
         AuditService auditService = mock(AuditService.class);
-        SalesOrderRepeatEnrichmentService repeatEnrichmentService = mock(SalesOrderRepeatEnrichmentService.class);
         SalesOrderQpoImportService service = service(
                 parser,
                 customerMapper,
@@ -94,8 +90,7 @@ class SalesOrderQpoImportStage3Test {
                 headerMapper,
                 itemMapper,
                 dataScopeService,
-                auditService,
-                repeatEnrichmentService
+                auditService
         );
         AuthContext.set(new AuthContext.SessionUser(5, "market01", "Market One", "MARKET_USER"));
         when(customerMapper.selectById(7L)).thenReturn(customer());
@@ -121,10 +116,6 @@ class SalesOrderQpoImportStage3Test {
             item.setId(item.getPartNo().equals("P-001") ? 501L : 502L);
             return 1;
         }).when(itemMapper).insert(any(SalesOrderItem.class));
-        when(repeatEnrichmentService.enrich(anyList()))
-                .thenReturn(enrichmentResult(1, 1, "\u672a\u5339\u914d\u5386\u53f2\u751f\u4ea7\u5feb\u7167\u7684\u9500\u552e\u8ba2\u5355\u96f6\u4ef6\u6570\uff1a1"))
-                .thenReturn(enrichmentResult(0, 1, "\u672a\u5339\u914d\u5386\u53f2\u751f\u4ea7\u5feb\u7167\u7684\u9500\u552e\u8ba2\u5355\u96f6\u4ef6\u6570\uff1a1"));
-
         SalesOrderQpoImportResp resp = service.importQpo(
                 new MockMultipartFile(
                         "excelFile",
@@ -146,9 +137,14 @@ class SalesOrderQpoImportStage3Test {
         assertThat(resp.getRows().get(0).getSalesOrderId()).isEqualTo(301L);
         assertThat(resp.getRows().get(0).getSalesOrderNo()).startsWith("SOQPO");
         assertThat(resp.getRows().get(0).getLineCount()).isEqualTo(2);
-        assertThat(resp.getRows().get(0).getMatchedItemCount()).isEqualTo(1);
-        assertThat(resp.getRows().get(0).getUnmatchedItemCount()).isEqualTo(1);
-        assertThat(resp.getRows().get(0).getWarningMessage()).contains("1");
+        assertThat(resp.getRows().get(0).getMatchedItemCount()).isZero();
+        assertThat(resp.getRows().get(0).getUnmatchedItemCount()).isEqualTo(2);
+        assertThat(resp.getRows().get(0).getWarningMessage())
+                .contains("\u672a\u8865\u9f50\u5386\u53f2\u751f\u4ea7\u5feb\u7167");
+        assertThat(resp.getRows().get(1).getMatchedItemCount()).isZero();
+        assertThat(resp.getRows().get(1).getUnmatchedItemCount()).isEqualTo(1);
+        assertThat(resp.getRows().get(1).getWarningMessage())
+                .contains("\u672a\u8865\u9f50\u5386\u53f2\u751f\u4ea7\u5feb\u7167");
 
         ArgumentCaptor<SalesOrderImportBatch> batchCaptor = ArgumentCaptor.forClass(SalesOrderImportBatch.class);
         verify(batchMapper).insert(batchCaptor.capture());
@@ -171,7 +167,10 @@ class SalesOrderQpoImportStage3Test {
         assertThat(firstHeader.getStatus()).isEqualTo("已报价");
         assertThat(firstHeader.getImportBatchId()).isEqualTo(201L);
         assertThat(firstHeader.getTotalItemCount()).isEqualTo(2);
+        assertThat(firstHeader.getMatchedItemCount()).isZero();
         assertThat(firstHeader.getUnmatchedItemCount()).isEqualTo(2);
+        assertThat(firstHeader.getWarningMessage())
+                .contains("\u672a\u8865\u9f50\u5386\u53f2\u751f\u4ea7\u5feb\u7167");
         assertThat(firstHeader.getCreatedBy()).isEqualTo(5L);
         assertThat(firstHeader.getOwnerUserId()).isEqualTo(5);
 
@@ -204,37 +203,19 @@ class SalesOrderQpoImportStage3Test {
         assertThat(firstRecord.getSalesOrderId()).isEqualTo(301L);
         assertThat(firstRecord.getSalesOrderNo()).isEqualTo(firstHeader.getSalesOrderNo());
         assertThat(firstRecord.getItemCount()).isEqualTo(2);
+        assertThat(firstRecord.getMatchedItemCount()).isZero();
+        assertThat(firstRecord.getUnmatchedItemCount()).isEqualTo(2);
+        assertThat(firstRecord.getWarningMessage())
+                .contains("\u672a\u8865\u9f50\u5386\u53f2\u751f\u4ea7\u5feb\u7167");
         assertThat(firstRecord.getRfqId()).isNull();
         assertThat(firstRecord.getRfqNo()).isNull();
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<SalesOrderItem>> enrichmentCaptor = ArgumentCaptor.forClass(List.class);
-        verify(repeatEnrichmentService, org.mockito.Mockito.times(2)).enrich(enrichmentCaptor.capture());
-        assertThat(enrichmentCaptor.getAllValues().get(0))
-                .extracting(SalesOrderItem::getId)
-                .containsExactly(501L, 502L);
-        assertThat(enrichmentCaptor.getAllValues().get(0))
-                .extracting(SalesOrderItem::getPartNo)
-                .containsExactly("P-001", "P-002");
-
         ArgumentCaptor<SalesOrderHeader> headerUpdateCaptor = ArgumentCaptor.forClass(SalesOrderHeader.class);
-        verify(headerMapper, atLeast(2)).updateById(headerUpdateCaptor.capture());
+        verify(headerMapper, org.mockito.Mockito.times(2)).updateById(headerUpdateCaptor.capture());
         assertThat(headerUpdateCaptor.getAllValues())
-                .anySatisfy(update -> {
-                    assertThat(update.getId()).isEqualTo(301L);
-                    assertThat(update.getMatchedItemCount()).isEqualTo(1);
-                    assertThat(update.getUnmatchedItemCount()).isEqualTo(1);
-                    assertThat(update.getWarningMessage()).contains("1");
-                });
-        ArgumentCaptor<SalesOrderImportRecord> recordUpdateCaptor = ArgumentCaptor.forClass(SalesOrderImportRecord.class);
-        verify(recordMapper, atLeast(1)).updateById(recordUpdateCaptor.capture());
-        assertThat(recordUpdateCaptor.getAllValues())
-                .anySatisfy(update -> {
-                    assertThat(update.getId()).isEqualTo(401L);
-                    assertThat(update.getMatchedItemCount()).isEqualTo(1);
-                    assertThat(update.getUnmatchedItemCount()).isEqualTo(1);
-                    assertThat(update.getWarningMessage()).contains("1");
-                });
+                .extracting(SalesOrderHeader::getImportRecordId)
+                .containsExactly(401L, 402L);
+        verify(recordMapper, never()).updateById(any(SalesOrderImportRecord.class));
         verify(dataScopeService).assertCanAccessCustomer(customer());
         verify(auditService).record(
                 eq("SALES_ORDER_IMPORT_QPO"),
@@ -437,6 +418,22 @@ class SalesOrderQpoImportStage3Test {
     }
 
     @Test
+    void serviceSourceKeepsProductionSnapshotOutOfImportPath() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/com/machining/quote/service/SalesOrderQpoImportService.java"),
+                StandardCharsets.UTF_8);
+
+        assertThat(source)
+                .contains("WAITING_SNAPSHOT_MESSAGE")
+                .contains("item.setMatchStatus(UNMATCHED)")
+                .contains("item.setMatchMessage(WAITING_SNAPSHOT_MESSAGE)")
+                .doesNotContain("SalesOrderRepeatEnrichmentService")
+                .doesNotContain("repeatEnrichmentService")
+                .doesNotContain("enrichSalesOrderItems")
+                .doesNotContain("SalesOrderRepeatEnrichmentResult");
+    }
+
+    @Test
     void serviceRejectsMissingCustomerBeforeIndependentImportWork() {
         CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
         SalesOrderQpoImportService service = service(
@@ -469,29 +466,6 @@ class SalesOrderQpoImportStage3Test {
             SalesOrderItemMapper itemMapper,
             DataScopeService dataScopeService,
             AuditService auditService) {
-        return service(
-                parser,
-                customerMapper,
-                batchMapper,
-                recordMapper,
-                headerMapper,
-                itemMapper,
-                dataScopeService,
-                auditService,
-                null
-        );
-    }
-
-    private SalesOrderQpoImportService service(
-            SalesOrderQpoExcelParser parser,
-            CustomerMasterMapper customerMapper,
-            SalesOrderImportBatchMapper batchMapper,
-            SalesOrderImportRecordMapper recordMapper,
-            SalesOrderHeaderMapper headerMapper,
-            SalesOrderItemMapper itemMapper,
-            DataScopeService dataScopeService,
-            AuditService auditService,
-            SalesOrderRepeatEnrichmentService repeatEnrichmentService) {
         SalesOrderQpoImportService service = new SalesOrderQpoImportService();
         ReflectionTestUtils.setField(service, "excelParser", parser);
         ReflectionTestUtils.setField(service, "customerMapper", customerMapper);
@@ -501,22 +475,7 @@ class SalesOrderQpoImportStage3Test {
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
-        if (repeatEnrichmentService != null) {
-            ReflectionTestUtils.setField(service, "repeatEnrichmentService", repeatEnrichmentService);
-        }
         return service;
-    }
-
-    private com.machining.quote.dto.SalesOrderRepeatEnrichmentResult enrichmentResult(
-            int matchedCount,
-            int unmatchedCount,
-            String warningMessage) {
-        com.machining.quote.dto.SalesOrderRepeatEnrichmentResult result =
-                new com.machining.quote.dto.SalesOrderRepeatEnrichmentResult();
-        result.setMatchedItemCount(matchedCount);
-        result.setUnmatchedItemCount(unmatchedCount);
-        result.setWarningMessage(warningMessage);
-        return result;
     }
 
     private CustomerMaster customer() {

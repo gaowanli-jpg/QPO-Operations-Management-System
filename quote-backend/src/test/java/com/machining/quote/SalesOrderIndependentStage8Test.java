@@ -68,6 +68,7 @@ class SalesOrderIndependentStage8Test {
     void salesOrderImportKeepsLegacyRfqTablesOutOfWritePathAndProtectsOldFlowTests() throws IOException {
         String importService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderQpoImportService.java")));
         String enrichmentService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderRepeatEnrichmentService.java")));
+        String salesMatchService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderMatchService.java")));
         String importResultRow = read(MAIN_JAVA.resolve(Path.of("dto", "SalesOrderQpoImportResultRow.java")));
         String orderService = read(MAIN_JAVA.resolve(Path.of("service", "OrderManagementService.java")));
         String releaseService = read(MAIN_JAVA.resolve(Path.of("service", "InternalTargetLeadTimeService.java")));
@@ -92,6 +93,10 @@ class SalesOrderIndependentStage8Test {
                 )
                 .doesNotContain("OrderRfqMapper")
                 .doesNotContain("ItemQuoteVersionMapper")
+                .doesNotContain("SalesOrderRepeatEnrichmentService")
+                .doesNotContain("repeatEnrichmentService")
+                .doesNotContain("enrichSalesOrderItems")
+                .doesNotContain("SalesOrderRepeatEnrichmentResult")
                 .doesNotContain("new OrderRfq")
                 .doesNotContain("new ItemQuoteVersion");
         assertThat(importResultRow)
@@ -117,6 +122,13 @@ class SalesOrderIndependentStage8Test {
                 .contains("releasedProductionSnapshotsByKey")
                 .doesNotContain("public SalesOrderRepeatEnrichmentResult enrich(Integer rfqId")
                 .doesNotContain("salesOrderItemMapper.insert");
+        assertThat(salesMatchService)
+                .contains("public SalesOrderMatchPreviewResp preview")
+                .contains("public SalesOrderMatchApplyResp apply")
+                .contains("selectLatestReleasedRepeatSources")
+                .contains("salesOrderItemMapper.updateById(item)")
+                .doesNotContain("orderRfqMapper.insert")
+                .doesNotContain("itemQuoteVersionMapper.insert");
         assertThat(dataScopeService)
                 .contains("FROM sales_order_header")
                 .contains("FROM order_rfq")
