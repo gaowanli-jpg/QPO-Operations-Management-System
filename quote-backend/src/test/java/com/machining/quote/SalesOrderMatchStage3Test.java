@@ -1,0 +1,335 @@
+package com.machining.quote;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.SalesOrderMatchApplyReq;
+import com.machining.quote.dto.SalesOrderMatchApplyResp;
+import com.machining.quote.entity.ItemAssemblyRelation;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.SalesOrderItemAssemblyRelation;
+import com.machining.quote.mapper.ItemAssemblyRelationMapper;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.service.AuditService;
+import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SalesOrderMatchService;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class SalesOrderMatchStage3Test {
+    @Test
+    void controllerExposesApplyEndpointWithApplyPermission() throws Exception {
+        String controller = Files.readString(Path.of(
+                "src/main/java/com/machining/quote/controller/SalesOrderMatchController.java"), StandardCharsets.UTF_8);
+
+        assertThat(controller)
+                .contains("@PostMapping(\"/apply\")")
+                .contains("@RequirePermission(\"market:sales-match:apply\")")
+                .contains("SalesOrderMatchApplyReq")
+                .contains("salesOrderMatchService.apply");
+    }
+
+    @Test
+    void applyCopiesProductionSnapshotWithoutOverwritingSalesOrderFactsAndRecordsAudit() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setMaterialName("模板材料");
+        item.setSurfaceTreatment("模板表处");
+        item.setDrawingUrl("/sales-order/uploaded/P-001.pdf");
+        item.setHasDrawing(true);
+        fixture.withLockedItems(header, List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyResp resp = fixture.service.apply(applyReq(List.of(item.getId())));
+
+        assertThat(resp.getMatchedItemCount()).isEqualTo(1);
+        assertThat(resp.getUnmatchedItemCount()).isZero();
+        assertThat(resp.getUpdatedItemCount()).isEqualTo(1);
+        assertThat(resp.getRows()).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getSalesOrderItemId()).isEqualTo(item.getId());
+                    assertThat(row.getMatched()).isTrue();
+                    assertThat(row.getAssemblyRelationStatus()).isEqualTo("不适用");
+                });
+
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getMaterialName()).isEqualTo("模板材料");
+        assertThat(updated.getSurfaceTreatment()).isEqualTo("模板表处");
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-历史材料");
+        assertThat(updated.getMaterialGrossWeight()).isEqualTo(1.25);
+        assertThat(updated.getPartNetWeight()).isEqualTo(0.80);
+        assertThat(updated.getQuoteMode()).isEqualTo("NORMAL");
+        assertThat(updated.getItemType()).isEqualTo("普通件");
+        assertThat(updated.getMaterialData()).isEqualTo(source.getMaterialData());
+        assertThat(updated.getProcessRoute()).isEqualTo(source.getProcessRoute());
+        assertThat(updated.getFeeData()).isEqualTo(source.getFeeData());
+        assertThat(updated.getDrawingUrl()).isEqualTo("/sales-order/uploaded/P-001.pdf");
+        assertThat(updated.getHasDrawing()).isTrue();
+        assertThat(updated.getMatchedRfqId()).isEqualTo(21);
+        assertThat(updated.getMatchedItemId()).isEqualTo(901);
+        assertThat(updated.getMatchStatus()).isEqualTo("已匹配");
+
+        assertThat(updated.getQty()).isEqualTo(10);
+        assertThat(updated.getMaterialNo()).isEqualTo("MES-MAT-501");
+        assertThat(updated.getTaxIncludedUnitPrice()).isEqualByComparingTo("11.30");
+        assertThat(updated.getUntaxedUnitPrice()).isEqualByComparingTo("10.00");
+        assertThat(updated.getTaxIncludedTotalPrice()).isEqualByComparingTo("113.00");
+        assertThat(updated.getUntaxedTotalPrice()).isEqualByComparingTo("100.00");
+        assertThat(updated.getFinalUnitPrice()).isEqualByComparingTo("11.30");
+        assertThat(updated.getFinalTotalPrice()).isEqualByComparingTo("113.00");
+        assertThat(updated.getCustomerOrderNo()).isEqualTo("PO-101");
+        assertThat(updated.getCustomerProjectNo()).isEqualTo("CP-101");
+        assertThat(updated.getInternalProjectNo()).isEqualTo("IP-101");
+        assertThat(updated.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+        assertThat(updated.getInternalDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 5));
+
+        SalesOrderHeader summary = fixture.lastHeaderUpdate();
+        assertThat(summary.getMatchedItemCount()).isEqualTo(1);
+        assertThat(summary.getUnmatchedItemCount()).isZero();
+        assertThat(summary.getWarningMessage()).isEmpty();
+        verify(fixture.auditService).record(eq("SALES_ORDER_MATCH_APPLY"), eq("sales_order_header"), eq(header.getId()), isNull(), any());
+    }
+
+    @Test
+    void applyMarksUnmatchedRowsWithoutBlockingMatchedRows() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem matched = salesOrderItem(501L, header.getId(), "P-001", "A");
+        SalesOrderItem unmatched = salesOrderItem(502L, header.getId(), "P-404", "A");
+        fixture.withLockedItems(header, List.of(matched, unmatched));
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any()))
+                .thenReturn(List.of(releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL")));
+
+        SalesOrderMatchApplyResp resp = fixture.service.apply(applyReq(List.of(matched.getId(), unmatched.getId())));
+
+        assertThat(resp.getMatchedItemCount()).isEqualTo(1);
+        assertThat(resp.getUnmatchedItemCount()).isEqualTo(1);
+        assertThat(fixture.itemUpdates()).anySatisfy(item -> {
+            assertThat(item.getId()).isEqualTo(unmatched.getId());
+            assertThat(item.getMatchStatus()).isEqualTo("未匹配");
+            assertThat(item.getMatchMessage()).contains("未命中历史已提单生产快照");
+        });
+        SalesOrderHeader summary = fixture.lastHeaderUpdate();
+        assertThat(summary.getMatchedItemCount()).isEqualTo(1);
+        assertThat(summary.getUnmatchedItemCount()).isEqualTo(1);
+        assertThat(summary.getWarningMessage()).contains("1");
+    }
+
+    @Test
+    void completeAssemblyMatchRebuildsSalesOrderAssemblyRelationsOnly() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem parent = salesOrderItem(501L, header.getId(), "ASM-001", "A");
+        SalesOrderItem child = salesOrderItem(502L, header.getId(), "CH-001", "A");
+        fixture.withLockedItems(header, List.of(parent));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(child));
+        ItemQuoteVersion parentSource = releasedSource(901, 21, "ASM-001", "A", "历史组合材料", "ASSEMBLY");
+        ItemQuoteVersion childSource = releasedSource(902, 21, "CH-001", "A", "历史子件材料", "NORMAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(parentSource));
+        when(fixture.sourceMapper.selectBatchIds(any())).thenReturn(List.of(childSource));
+        when(fixture.historyRelationMapper.selectList(any())).thenReturn(List.of(historyRelation(901, 902, 2.5, 7)));
+
+        fixture.service.apply(applyReq(List.of(parent.getId())));
+
+        SalesOrderItem updatedParent = fixture.lastItemUpdate();
+        assertThat(updatedParent.getMatchStatus()).isEqualTo("已匹配");
+        assertThat(updatedParent.getAssemblyRelationStatus()).isEqualTo("已指定父子关系");
+        verify(fixture.salesOrderAssemblyRelationMapper).delete(any(QueryWrapper.class));
+        ArgumentCaptor<SalesOrderItemAssemblyRelation> relationCaptor =
+                ArgumentCaptor.forClass(SalesOrderItemAssemblyRelation.class);
+        verify(fixture.salesOrderAssemblyRelationMapper).insert(relationCaptor.capture());
+        assertThat(relationCaptor.getValue()).satisfies(relation -> {
+            assertThat(relation.getSalesOrderId()).isEqualTo(header.getId());
+            assertThat(relation.getParentItemId()).isEqualTo(parent.getId());
+            assertThat(relation.getChildItemId()).isEqualTo(child.getId());
+            assertThat(relation.getQtyPerParent()).isEqualByComparingTo("2.5");
+            assertThat(relation.getSortNo()).isEqualTo(7);
+            assertThat(relation.getSourceParentItemId()).isEqualTo(901);
+            assertThat(relation.getSourceChildItemId()).isEqualTo(902);
+        });
+        verify(fixture.historyRelationMapper, never()).insert(any());
+        verify(fixture.sourceMapper, never()).insert(any());
+    }
+
+    @Test
+    void incompleteAssemblyMatchDoesNotWritePartialSalesOrderRelations() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem parent = salesOrderItem(501L, header.getId(), "ASM-001", "A");
+        fixture.withLockedItems(header, List.of(parent));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of());
+        ItemQuoteVersion parentSource = releasedSource(901, 21, "ASM-001", "A", "历史组合材料", "ASSEMBLY");
+        ItemQuoteVersion missingChildSource = releasedSource(902, 21, "CH-MISSING", "A", "历史子件材料", "NORMAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(parentSource));
+        when(fixture.sourceMapper.selectBatchIds(any())).thenReturn(List.of(missingChildSource));
+        when(fixture.historyRelationMapper.selectList(any())).thenReturn(List.of(historyRelation(901, 902, 1.0, 1)));
+
+        fixture.service.apply(applyReq(List.of(parent.getId())));
+
+        SalesOrderItem updatedParent = fixture.lastItemUpdate();
+        assertThat(updatedParent.getMatchStatus()).isEqualTo("已匹配");
+        assertThat(updatedParent.getAssemblyRelationStatus()).isEqualTo("未指定父子关系");
+        verify(fixture.salesOrderAssemblyRelationMapper).delete(any(QueryWrapper.class));
+        verify(fixture.salesOrderAssemblyRelationMapper, never()).insert(any());
+    }
+
+    @Test
+    void auditActionIsMarketActionWithReadableLabel() {
+        assertThat(AuditService.inferModule("SALES_ORDER_MATCH_APPLY")).isEqualTo("MARKET");
+        assertThat(AuditService.labelForAction("SALES_ORDER_MATCH_APPLY")).contains("销售匹配").contains("补全");
+    }
+
+    private Fixture fixture() {
+        Fixture fixture = new Fixture();
+        ReflectionTestUtils.setField(fixture.service, "headerMapper", fixture.headerMapper);
+        ReflectionTestUtils.setField(fixture.service, "salesOrderItemMapper", fixture.salesOrderItemMapper);
+        ReflectionTestUtils.setField(fixture.service, "itemQuoteVersionMapper", fixture.sourceMapper);
+        ReflectionTestUtils.setField(fixture.service, "historyAssemblyRelationMapper", fixture.historyRelationMapper);
+        ReflectionTestUtils.setField(fixture.service, "salesOrderAssemblyRelationMapper", fixture.salesOrderAssemblyRelationMapper);
+        ReflectionTestUtils.setField(fixture.service, "dataScopeService", fixture.dataScopeService);
+        ReflectionTestUtils.setField(fixture.service, "auditService", fixture.auditService);
+        return fixture;
+    }
+
+    private SalesOrderMatchApplyReq applyReq(List<Long> itemIds) {
+        SalesOrderMatchApplyReq req = new SalesOrderMatchApplyReq();
+        req.setSalesOrderItemIds(itemIds);
+        return req;
+    }
+
+    private SalesOrderHeader header(Long id, String salesOrderNo) {
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setId(id);
+        header.setSalesOrderNo(salesOrderNo);
+        header.setCustomerName("客户A");
+        header.setCustomerOrderNo("PO-" + id);
+        header.setCustomerProjectNo("CP-" + id);
+        header.setInternalProjectNo("IP-" + id);
+        header.setDocumentTypeCode("SO01");
+        header.setStatus(QuoteStatusWorkflow.QUOTED);
+        return header;
+    }
+
+    private SalesOrderItem salesOrderItem(Long id, Long salesOrderId, String partNo, String version) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(id);
+        item.setSalesOrderId(salesOrderId);
+        item.setLineNo(id.intValue());
+        item.setPartNo(partNo);
+        item.setVersion(version);
+        item.setDescription("零件 " + partNo);
+        item.setQty(10);
+        item.setCustomerOrderNo("PO-" + salesOrderId);
+        item.setCustomerProjectNo("CP-" + salesOrderId);
+        item.setInternalProjectNo("IP-" + salesOrderId);
+        item.setSalesMaterialNo("SALES-MAT-" + id);
+        item.setMaterialNo("MES-MAT-" + id);
+        item.setCustomerDeliveryDate(LocalDate.of(2026, 8, 1));
+        item.setInternalDeliveryDate(LocalDate.of(2026, 8, 5));
+        item.setTaxIncludedUnitPrice(new BigDecimal("11.30"));
+        item.setUntaxedUnitPrice(new BigDecimal("10.00"));
+        item.setTaxIncludedTotalPrice(new BigDecimal("113.00"));
+        item.setUntaxedTotalPrice(new BigDecimal("100.00"));
+        item.setFinalUnitPrice(new BigDecimal("11.30"));
+        item.setFinalTotalPrice(new BigDecimal("113.00"));
+        item.setStatus(QuoteStatusWorkflow.QUOTED);
+        item.setMatchStatus("待匹配");
+        item.setAssemblyRelationStatus("不适用");
+        return item;
+    }
+
+    private ItemQuoteVersion releasedSource(Integer id, Integer rfqId, String partNo, String version, String materialName, String quoteMode) {
+        ItemQuoteVersion source = new ItemQuoteVersion();
+        source.setId(id);
+        source.setRfqId(rfqId);
+        source.setPartNo(partNo);
+        source.setVersion(version);
+        source.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
+        source.setMaterialName(materialName);
+        source.setEngineeringMaterialName("ENG-" + materialName);
+        source.setSurfaceTreatment("历史表处-" + materialName);
+        source.setMaterialData(Map.of("name", materialName, "cost", 50));
+        source.setProcessRoute(List.of(Map.of("sortNo", 10, "processName", "CNC", "inputVal", 1.5)));
+        source.setFeeData(List.of(Map.of("feeName", "profit", "ratePercent", 10)));
+        source.setDrawingUrl("history/" + partNo + ".pdf");
+        source.setMaterialGrossWeight(1.25);
+        source.setPartNetWeight(0.80);
+        source.setQuoteMode(quoteMode);
+        source.setAssemblyFee(12.5);
+        source.setBaseCost(99.75);
+        source.setFinalUnitPrice(999.0);
+        return source;
+    }
+
+    private ItemAssemblyRelation historyRelation(Integer parentItemId, Integer childItemId, double qtyPerParent, int sortNo) {
+        ItemAssemblyRelation relation = new ItemAssemblyRelation();
+        relation.setRfqId(21);
+        relation.setParentItemId(parentItemId);
+        relation.setChildItemId(childItemId);
+        relation.setChildQtyPerParent(qtyPerParent);
+        relation.setSortNo(sortNo);
+        return relation;
+    }
+
+    private static final class Fixture {
+        private final SalesOrderMatchService service = new SalesOrderMatchService();
+        private final SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        private final SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        private final ItemQuoteVersionMapper sourceMapper = mock(ItemQuoteVersionMapper.class);
+        private final ItemAssemblyRelationMapper historyRelationMapper = mock(ItemAssemblyRelationMapper.class);
+        private final SalesOrderItemAssemblyRelationMapper salesOrderAssemblyRelationMapper =
+                mock(SalesOrderItemAssemblyRelationMapper.class);
+        private final DataScopeService dataScopeService = mock(DataScopeService.class);
+        private final AuditService auditService = mock(AuditService.class);
+
+        private void withLockedItems(SalesOrderHeader header, List<SalesOrderItem> items) {
+            when(headerMapper.selectByIdForUpdate(header.getId())).thenReturn(header);
+            when(headerMapper.selectById(header.getId())).thenReturn(header);
+            for (SalesOrderItem item : items) {
+                when(salesOrderItemMapper.selectByIdForUpdate(item.getId())).thenReturn(item);
+            }
+        }
+
+        private SalesOrderItem lastItemUpdate() {
+            List<SalesOrderItem> updates = itemUpdates();
+            return updates.get(updates.size() - 1);
+        }
+
+        private List<SalesOrderItem> itemUpdates() {
+            ArgumentCaptor<SalesOrderItem> captor = ArgumentCaptor.forClass(SalesOrderItem.class);
+            verify(salesOrderItemMapper, atLeastOnce()).updateById(captor.capture());
+            return captor.getAllValues();
+        }
+
+        private SalesOrderHeader lastHeaderUpdate() {
+            ArgumentCaptor<SalesOrderHeader> captor = ArgumentCaptor.forClass(SalesOrderHeader.class);
+            verify(headerMapper, atLeastOnce()).updateById(captor.capture());
+            return captor.getAllValues().get(captor.getAllValues().size() - 1);
+        }
+    }
+}

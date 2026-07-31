@@ -3,6 +3,8 @@ package com.machining.quote.controller;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.SalesOrderMatchApplyReq;
+import com.machining.quote.dto.SalesOrderMatchApplyResp;
 import com.machining.quote.dto.SalesOrderMatchItemRow;
 import com.machining.quote.dto.SalesOrderMatchOrderRow;
 import com.machining.quote.dto.SalesOrderMatchPreviewReq;
@@ -59,5 +61,11 @@ public class SalesOrderMatchController {
     @RequirePermission("market:sales-match:view")
     public SalesOrderMatchPreviewResp preview(@RequestBody(required = false) SalesOrderMatchPreviewReq req) {
         return salesOrderMatchService.preview(req == null ? new SalesOrderMatchPreviewReq() : req);
+    }
+
+    @PostMapping("/apply")
+    @RequirePermission("market:sales-match:apply")
+    public SalesOrderMatchApplyResp apply(@RequestBody(required = false) SalesOrderMatchApplyReq req) {
+        return salesOrderMatchService.apply(req == null ? new SalesOrderMatchApplyReq() : req);
     }
 }

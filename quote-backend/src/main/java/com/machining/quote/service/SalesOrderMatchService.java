@@ -5,21 +5,32 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PartVersionKey;
+import com.machining.quote.dto.SalesOrderMatchApplyReq;
+import com.machining.quote.dto.SalesOrderMatchApplyResp;
+import com.machining.quote.dto.SalesOrderMatchApplyRow;
 import com.machining.quote.dto.SalesOrderMatchItemRow;
 import com.machining.quote.dto.SalesOrderMatchOrderRow;
 import com.machining.quote.dto.SalesOrderMatchPreviewReq;
 import com.machining.quote.dto.SalesOrderMatchPreviewResp;
 import com.machining.quote.dto.SalesOrderMatchPreviewRow;
+import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.SalesOrderItemAssemblyRelation;
+import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -27,19 +38,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class SalesOrderMatchService {
+    private static final Logger log = LoggerFactory.getLogger(SalesOrderMatchService.class);
     private static final int MAX_PAGE_SIZE = 100;
     private static final int REPEAT_SOURCE_KEY_BATCH_SIZE = 200;
     private static final String SOURCE_TYPE_SALES_ORDER = "SALES_ORDER";
+    private static final String ACTION = "SALES_ORDER_MATCH_APPLY";
     private static final String MATCHED = "已匹配";
     private static final String UNMATCHED = "未匹配";
+    private static final String SKIPPED = "跳过";
     private static final String MATCH_STATUS_PENDING = "待匹配";
     private static final String DISCARDED = "废弃";
     private static final String QUOTE_MODE_ASSEMBLY = "ASSEMBLY";
+    private static final String ASSEMBLY_RELATION_NOT_APPLICABLE = "不适用";
+    private static final String ASSEMBLY_RELATION_UNSPECIFIED = "未指定父子关系";
+    private static final String ASSEMBLY_RELATION_SPECIFIED = "已指定父子关系";
 
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
@@ -47,6 +63,12 @@ public class SalesOrderMatchService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
     private ItemQuoteVersionMapper itemQuoteVersionMapper;
+    @Autowired
+    private ItemAssemblyRelationMapper historyAssemblyRelationMapper;
+    @Autowired
+    private SalesOrderItemAssemblyRelationMapper salesOrderAssemblyRelationMapper;
+    @Autowired(required = false)
+    private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
@@ -126,6 +148,63 @@ public class SalesOrderMatchService {
         return resp;
     }
 
+    @Transactional
+    public SalesOrderMatchApplyResp apply(SalesOrderMatchApplyReq req) {
+        long startedAt = System.currentTimeMillis();
+        List<SalesOrderItem> items = loadApplyItems(req);
+        SalesOrderMatchApplyResp resp = new SalesOrderMatchApplyResp();
+        resp.setTotalItemCount(items.size());
+        if (items.isEmpty()) {
+            resp.setSuccess(true);
+            resp.setMessage("没有需要补全的销售订单零件");
+            return resp;
+        }
+        log.info("Sales order match apply started itemCount={}", items.size());
+
+        Map<Long, SalesOrderHeader> headers = loadLockedAuthorizedHeaders(items);
+        Map<String, ItemQuoteVersion> sourceByKey = releasedProductionSnapshotsByKey(items);
+        int matchedCount = 0;
+        int unmatchedCount = 0;
+        int skippedCount = 0;
+        int updatedCount = 0;
+        for (SalesOrderItem item : items) {
+            SalesOrderHeader header = headers.get(item.getSalesOrderId());
+            ItemQuoteVersion source = sourceByKey.get(itemKey(item.getPartNo(), item.getVersion()));
+            SalesOrderMatchApplyRow row;
+            if (shouldSkipApply(item)) {
+                markSkipped(item);
+                row = toApplyRow(header, item, source, false, false, true);
+                skippedCount++;
+            } else if (source == null) {
+                markUnmatched(item);
+                salesOrderItemMapper.updateById(item);
+                row = toApplyRow(header, item, null, false, true, false);
+                unmatchedCount++;
+                updatedCount++;
+            } else {
+                applyProductionSnapshot(item, source, req);
+                salesOrderItemMapper.updateById(item);
+                row = toApplyRow(header, item, source, true, true, false);
+                matchedCount++;
+                updatedCount++;
+            }
+            resp.getRows().add(row);
+        }
+
+        updateHeaderSummaries(headers, items);
+        resp.setMatchedItemCount(matchedCount);
+        resp.setUnmatchedItemCount(unmatchedCount);
+        resp.setSkippedItemCount(skippedCount);
+        resp.setUpdatedItemCount(updatedCount);
+        resp.setWarningMessage(unmatchedCount <= 0 ? "" : "未匹配历史生产快照的销售订单零件数：" + unmatchedCount);
+        resp.setSuccess(true);
+        resp.setMessage("销售匹配补全完成，匹配 " + matchedCount + " 个，未匹配 " + unmatchedCount + " 个，跳过 " + skippedCount + " 个。");
+        recordApplyAudit(headers, resp, startedAt);
+        log.info("Sales order match apply completed orderCount={} itemCount={} matched={} unmatched={} skipped={} durationMs={}",
+                headers.size(), items.size(), matchedCount, unmatchedCount, skippedCount, System.currentTimeMillis() - startedAt);
+        return resp;
+    }
+
     private SalesOrderHeader requireSalesOrder(Long salesOrderId) {
         if (salesOrderId == null) {
             throw new RuntimeException("销售订单 ID 不能为空");
@@ -136,6 +215,55 @@ public class SalesOrderMatchService {
         }
         assertSalesOrderScope(header);
         return header;
+    }
+
+    private List<SalesOrderItem> loadApplyItems(SalesOrderMatchApplyReq req) {
+        List<Long> itemIds = normalizeIds(req == null ? null : req.getSalesOrderItemIds());
+        List<Long> orderIds = normalizeIds(req == null ? null : req.getSalesOrderIds());
+        LinkedHashMap<Long, SalesOrderItem> result = new LinkedHashMap<>();
+        for (Long itemId : itemIds) {
+            SalesOrderItem item = salesOrderItemMapper.selectByIdForUpdate(itemId);
+            if (item == null) {
+                throw new RuntimeException("销售订单零件不存在：" + itemId);
+            }
+            result.put(item.getId(), item);
+        }
+        if (!orderIds.isEmpty()) {
+            QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+            query.in("sales_order_id", orderIds);
+            if (req != null && req.isApplyAllMatchedInSelectedOrders()) {
+                query.and(wrapper -> wrapper.isNull("match_status").or().ne("match_status", MATCHED));
+            }
+            query.orderByAsc("sales_order_id").orderByAsc("line_no").orderByAsc("id");
+            List<SalesOrderItem> candidates = safeList(salesOrderItemMapper.selectList(query));
+            for (SalesOrderItem candidate : candidates) {
+                if (candidate == null || candidate.getId() == null || result.containsKey(candidate.getId())) {
+                    continue;
+                }
+                SalesOrderItem locked = salesOrderItemMapper.selectByIdForUpdate(candidate.getId());
+                if (locked != null) {
+                    result.put(locked.getId(), locked);
+                }
+            }
+        }
+        return new ArrayList<>(result.values());
+    }
+
+    private Map<Long, SalesOrderHeader> loadLockedAuthorizedHeaders(List<SalesOrderItem> items) {
+        LinkedHashSet<Long> headerIds = items.stream()
+                .map(SalesOrderItem::getSalesOrderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, SalesOrderHeader> result = new LinkedHashMap<>();
+        for (Long headerId : headerIds) {
+            SalesOrderHeader header = headerMapper.selectByIdForUpdate(headerId);
+            if (header == null) {
+                throw new RuntimeException("销售订单不存在：" + headerId);
+            }
+            assertSalesOrderScope(header);
+            result.put(headerId, header);
+        }
+        return result;
     }
 
     private List<SalesOrderItem> loadPreviewItems(SalesOrderMatchPreviewReq req) {
@@ -194,6 +322,140 @@ public class SalesOrderMatchService {
             }
         }
         return result;
+    }
+
+    private void applyProductionSnapshot(SalesOrderItem item, ItemQuoteVersion source, SalesOrderMatchApplyReq req) {
+        boolean overwriteSnapshot = req != null && req.isOverwriteExistingProductionSnapshot();
+        boolean overwriteTemplate = req != null && req.isOverwriteTemplateMaterial();
+        if ((overwriteTemplate || isBlank(item.getMaterialName())) && !isBlank(source.getMaterialName())) {
+            item.setMaterialName(source.getMaterialName());
+        }
+        if ((overwriteTemplate || isBlank(item.getSurfaceTreatment())) && !isBlank(source.getSurfaceTreatment())) {
+            item.setSurfaceTreatment(source.getSurfaceTreatment());
+        }
+        if (overwriteSnapshot || isBlank(item.getEngineeringMaterialName())) {
+            item.setEngineeringMaterialName(source.getEngineeringMaterialName());
+        }
+        if (overwriteSnapshot || item.getMaterialGrossWeight() == null) {
+            item.setMaterialGrossWeight(source.getMaterialGrossWeight());
+        }
+        if (overwriteSnapshot || item.getPartNetWeight() == null) {
+            item.setPartNetWeight(source.getPartNetWeight());
+        }
+        if (overwriteSnapshot || isBlank(item.getQuoteMode())) {
+            item.setQuoteMode(source.getQuoteMode());
+        }
+        if (overwriteSnapshot || item.getAssemblyFee() == null) {
+            item.setAssemblyFee(toBigDecimal(source.getAssemblyFee()));
+        }
+        if (overwriteSnapshot || item.getBaseCost() == null) {
+            item.setBaseCost(toBigDecimal(source.getBaseCost()));
+        }
+        if (overwriteSnapshot || isBlank(item.getItemType())) {
+            item.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
+        }
+        if (overwriteSnapshot || item.getMaterialData() == null) {
+            item.setMaterialData(source.getMaterialData());
+        }
+        if (overwriteSnapshot || item.getProcessRoute() == null) {
+            item.setProcessRoute(source.getProcessRoute());
+        }
+        if (overwriteSnapshot || item.getFeeData() == null) {
+            item.setFeeData(source.getFeeData());
+        }
+        if (isBlank(item.getDrawingUrl()) && !isBlank(source.getDrawingUrl())) {
+            item.setDrawingUrl(source.getDrawingUrl());
+            item.setHasDrawing(true);
+        } else if (!isBlank(item.getDrawingUrl())) {
+            item.setHasDrawing(true);
+        }
+        item.setMatchedRfqId(source.getRfqId());
+        item.setMatchedItemId(source.getId());
+        item.setMatchStatus(MATCHED);
+        item.setMatchMessage("已补全历史生产快照：RFQ " + source.getRfqId() + " / item " + source.getId());
+        item.setAssemblyRelationStatus(resolveAssemblyRelationStatus(item, source));
+        item.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private String resolveAssemblyRelationStatus(SalesOrderItem item, ItemQuoteVersion source) {
+        if (!QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode())) {
+            deleteSalesOrderAssemblyRelations(item.getId());
+            return ASSEMBLY_RELATION_NOT_APPLICABLE;
+        }
+        List<ItemAssemblyRelation> historyRelations = listHistoryAssemblyRelations(source.getId());
+        if (historyRelations.isEmpty()) {
+            deleteSalesOrderAssemblyRelations(item.getId());
+            return ASSEMBLY_RELATION_UNSPECIFIED;
+        }
+        Map<Integer, ItemQuoteVersion> childSourceById = loadHistoryChildSources(historyRelations);
+        Map<String, SalesOrderItem> currentChildByKey = listSalesOrderItems(item.getSalesOrderId()).stream()
+                .filter(candidate -> candidate != null && candidate.getId() != null && !Objects.equals(candidate.getId(), item.getId()))
+                .collect(Collectors.toMap(
+                        candidate -> itemKey(candidate.getPartNo(), candidate.getVersion()),
+                        candidate -> candidate,
+                        (left, ignored) -> left,
+                        LinkedHashMap::new));
+        List<SalesOrderItemAssemblyRelation> relationsToWrite = new ArrayList<>();
+        for (ItemAssemblyRelation historyRelation : historyRelations) {
+            ItemQuoteVersion childSource = childSourceById.get(historyRelation.getChildItemId());
+            if (childSource == null) {
+                deleteSalesOrderAssemblyRelations(item.getId());
+                return ASSEMBLY_RELATION_UNSPECIFIED;
+            }
+            SalesOrderItem currentChild = currentChildByKey.get(itemKey(childSource.getPartNo(), childSource.getVersion()));
+            if (currentChild == null) {
+                deleteSalesOrderAssemblyRelations(item.getId());
+                return ASSEMBLY_RELATION_UNSPECIFIED;
+            }
+            SalesOrderItemAssemblyRelation relation = new SalesOrderItemAssemblyRelation();
+            relation.setSalesOrderId(item.getSalesOrderId());
+            relation.setParentItemId(item.getId());
+            relation.setChildItemId(currentChild.getId());
+            relation.setQtyPerParent(toBigDecimal(historyRelation.getChildQtyPerParent()));
+            relation.setSortNo(historyRelation.getSortNo());
+            relation.setSourceParentItemId(historyRelation.getParentItemId());
+            relation.setSourceChildItemId(historyRelation.getChildItemId());
+            relation.setCreatedAt(LocalDateTime.now());
+            relation.setUpdatedAt(LocalDateTime.now());
+            relationsToWrite.add(relation);
+        }
+        deleteSalesOrderAssemblyRelations(item.getId());
+        for (SalesOrderItemAssemblyRelation relation : relationsToWrite) {
+            salesOrderAssemblyRelationMapper.insert(relation);
+        }
+        return ASSEMBLY_RELATION_SPECIFIED;
+    }
+
+    private List<ItemAssemblyRelation> listHistoryAssemblyRelations(Integer sourceParentItemId) {
+        if (sourceParentItemId == null) {
+            return List.of();
+        }
+        QueryWrapper<ItemAssemblyRelation> query = new QueryWrapper<>();
+        query.eq("parent_item_id", sourceParentItemId).orderByAsc("sort_no").orderByAsc("id");
+        return safeList(historyAssemblyRelationMapper.selectList(query));
+    }
+
+    private Map<Integer, ItemQuoteVersion> loadHistoryChildSources(List<ItemAssemblyRelation> relations) {
+        List<Integer> ids = relations.stream()
+                .map(ItemAssemblyRelation::getChildItemId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return safeList(itemQuoteVersionMapper.selectBatchIds(ids)).stream()
+                .filter(source -> source != null && source.getId() != null)
+                .collect(Collectors.toMap(ItemQuoteVersion::getId, source -> source, (left, ignored) -> left));
+    }
+
+    private void deleteSalesOrderAssemblyRelations(Long parentItemId) {
+        if (parentItemId == null) {
+            return;
+        }
+        QueryWrapper<SalesOrderItemAssemblyRelation> query = new QueryWrapper<>();
+        query.eq("parent_item_id", parentItemId);
+        salesOrderAssemblyRelationMapper.delete(query);
     }
 
     private ItemQuoteVersion newerSource(ItemQuoteVersion left, ItemQuoteVersion right) {
@@ -349,6 +611,105 @@ public class SalesOrderMatchService {
         return row;
     }
 
+    private SalesOrderMatchApplyRow toApplyRow(
+            SalesOrderHeader header,
+            SalesOrderItem item,
+            ItemQuoteVersion source,
+            boolean matched,
+            boolean updated,
+            boolean skipped) {
+        SalesOrderMatchApplyRow row = new SalesOrderMatchApplyRow();
+        row.setSalesOrderId(item.getSalesOrderId());
+        row.setSalesOrderItemId(item.getId());
+        row.setSalesOrderNo(header == null ? null : header.getSalesOrderNo());
+        row.setPartNo(item.getPartNo());
+        row.setVersion(item.getVersion());
+        row.setMatched(matched);
+        row.setUpdated(updated);
+        row.setSkipped(skipped);
+        row.setSourceRfqId(source == null ? null : source.getRfqId());
+        row.setSourceItemId(source == null ? null : source.getId());
+        row.setMatchStatus(item.getMatchStatus());
+        row.setMatchMessage(item.getMatchMessage());
+        row.setAssemblyRelationStatus(defaultText(item.getAssemblyRelationStatus(), ASSEMBLY_RELATION_NOT_APPLICABLE));
+        return row;
+    }
+
+    private boolean shouldSkipApply(SalesOrderItem item) {
+        return QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                || (item.getRemainingQty() != null && item.getRemainingQty() == 0);
+    }
+
+    private void markSkipped(SalesOrderItem item) {
+        item.setMatchStatus(SKIPPED);
+        item.setMatchMessage("零件已生成提单或无剩余数量，跳过补全");
+        item.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void markUnmatched(SalesOrderItem item) {
+        item.setMatchedRfqId(null);
+        item.setMatchedItemId(null);
+        item.setMatchStatus(UNMATCHED);
+        item.setMatchMessage("未命中历史已提单生产快照");
+        item.setAssemblyRelationStatus(ASSEMBLY_RELATION_NOT_APPLICABLE);
+        item.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void updateHeaderSummaries(Map<Long, SalesOrderHeader> headers, List<SalesOrderItem> affectedItems) {
+        for (SalesOrderHeader header : headers.values()) {
+            List<SalesOrderItem> allItems = mergeAffectedItems(listSalesOrderItems(header.getId()), affectedItems, header.getId());
+            long matched = allItems.stream().filter(item -> MATCHED.equals(item.getMatchStatus())).count();
+            long unmatched = allItems.stream().filter(item -> UNMATCHED.equals(item.getMatchStatus())).count();
+            header.setTotalItemCount(allItems.size());
+            header.setMatchedItemCount((int) matched);
+            header.setUnmatchedItemCount((int) unmatched);
+            header.setWarningMessage(unmatched <= 0 ? "" : "未匹配历史生产快照的销售订单零件数：" + unmatched);
+            header.setUpdatedAt(LocalDateTime.now());
+            headerMapper.updateById(header);
+        }
+    }
+
+    private List<SalesOrderItem> listSalesOrderItems(Long salesOrderId) {
+        if (salesOrderId == null) {
+            return List.of();
+        }
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId).orderByAsc("line_no").orderByAsc("id");
+        return safeList(salesOrderItemMapper.selectList(query));
+    }
+
+    private List<SalesOrderItem> mergeAffectedItems(List<SalesOrderItem> persistedItems, List<SalesOrderItem> affectedItems, Long salesOrderId) {
+        LinkedHashMap<Long, SalesOrderItem> rows = new LinkedHashMap<>();
+        for (SalesOrderItem item : safeList(persistedItems)) {
+            if (item != null && item.getId() != null) {
+                rows.put(item.getId(), item);
+            }
+        }
+        for (SalesOrderItem item : safeList(affectedItems)) {
+            if (item != null && item.getId() != null && Objects.equals(item.getSalesOrderId(), salesOrderId)) {
+                rows.put(item.getId(), item);
+            }
+        }
+        return new ArrayList<>(rows.values());
+    }
+
+    private void recordApplyAudit(Map<Long, SalesOrderHeader> headers, SalesOrderMatchApplyResp resp, long startedAt) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderIds", new ArrayList<>(headers.keySet()));
+        summary.put("salesOrderNos", headers.values().stream().map(SalesOrderHeader::getSalesOrderNo).toList());
+        summary.put("selectedItemCount", resp.getTotalItemCount());
+        summary.put("matchedItemCount", resp.getMatchedItemCount());
+        summary.put("unmatchedItemCount", resp.getUnmatchedItemCount());
+        summary.put("skippedItemCount", resp.getSkippedItemCount());
+        summary.put("updatedItemCount", resp.getUpdatedItemCount());
+        summary.put("durationMs", System.currentTimeMillis() - startedAt);
+        Object targetId = headers.size() == 1 ? headers.keySet().iterator().next() : new ArrayList<>(headers.keySet()).toString();
+        auditService.record(ACTION, "sales_order_header", targetId, null, summary);
+    }
+
     private void applyOrderFilters(
             QueryWrapper<SalesOrderHeader> query,
             String customerName,
@@ -454,6 +815,9 @@ public class SalesOrderMatchService {
         return isBlank(first) ? second : first;
     }
 
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
+    }
     private String defaultText(String value, String fallback) {
         return isBlank(value) ? fallback : value;
     }
