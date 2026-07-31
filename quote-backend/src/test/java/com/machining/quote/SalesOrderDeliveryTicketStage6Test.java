@@ -213,7 +213,10 @@ class SalesOrderDeliveryTicketStage6Test {
                 .contains(
                         "SalesOrderItemMapper",
                         "salesOrderItemMapper",
-                        "syncSalesOrderItemMaterialNo(ticket, materialNo)",
+                        "syncSalesOrderItemMaterialNo(ticket, materialNo, update.getMesSyncMessage())",
+                        "update.setMaterialNoStatus(MATERIAL_CONFIRMED)",
+                        "update.setMaterialNoSource(MATERIAL_SOURCE_MES_TICKET)",
+                        "update.setMaterialNoSourceTicketId(ticket.getId() == null ? null : ticket.getId().longValue())",
                         "ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())",
                         "salesOrderItemMapper.updateById(update)"
                 );

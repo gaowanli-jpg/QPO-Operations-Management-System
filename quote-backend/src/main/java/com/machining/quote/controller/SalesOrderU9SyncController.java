@@ -4,13 +4,19 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
+import com.machining.quote.dto.SalesOrderU9SyncReq;
+import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.service.SalesOrderU9SyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/market/u9-sync")
@@ -36,5 +42,17 @@ public class SalesOrderU9SyncController {
     @RequirePermission("market:u9-sync:view")
     public SalesOrderU9SyncPreviewResp preview(@PathVariable Long salesOrderId) {
         return salesOrderU9SyncService.previewSalesOrder(salesOrderId);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/sync")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9SyncResp syncOne(@PathVariable Long salesOrderId) {
+        return salesOrderU9SyncService.syncSalesOrders(List.of(salesOrderId));
+    }
+
+    @PostMapping("/sync")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9SyncResp sync(@RequestBody(required = false) SalesOrderU9SyncReq req) {
+        return salesOrderU9SyncService.syncSalesOrders(req == null ? List.of() : req.getSalesOrderIds());
     }
 }

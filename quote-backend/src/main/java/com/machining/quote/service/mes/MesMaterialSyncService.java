@@ -29,6 +29,8 @@ public class MesMaterialSyncService {
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String MATERIAL_CONFIRMED = "已确认";
+    private static final String MATERIAL_SOURCE_MES_TICKET = "MES_TICKET";
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -147,10 +149,10 @@ public class MesMaterialSyncService {
         update.setMesSyncMessage(isBlank(message) ? "MES material resolved" : message.trim());
         update.setMesSyncedAt(LocalDateTime.now());
         ticketMapper.updateById(update);
-        syncSalesOrderItemMaterialNo(ticket, materialNo);
+        syncSalesOrderItemMaterialNo(ticket, materialNo, update.getMesSyncMessage());
     }
 
-    private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo) {
+    private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
         if (salesOrderItemMapper == null
                 || ticket == null
                 || ticket.getSourceItemId() == null
@@ -160,6 +162,11 @@ public class MesMaterialSyncService {
         SalesOrderItem update = new SalesOrderItem();
         update.setId(ticket.getSourceItemId());
         update.setMaterialNo(materialNo);
+        update.setMaterialNoStatus(MATERIAL_CONFIRMED);
+        update.setMaterialNoSource(MATERIAL_SOURCE_MES_TICKET);
+        update.setMaterialNoSourceTicketId(ticket.getId() == null ? null : ticket.getId().longValue());
+        update.setMaterialNoSyncedAt(LocalDateTime.now());
+        update.setMaterialNoMessage(abbreviate(message));
         salesOrderItemMapper.updateById(update);
     }
 

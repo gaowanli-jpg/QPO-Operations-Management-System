@@ -3,7 +3,6 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
-import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
@@ -14,10 +13,8 @@ import com.machining.quote.dto.u9.U9ResultDTO;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.dto.u9.U9SalesOrderLineDTO;
 import com.machining.quote.dto.u9.U9SalesOrderShipLineDTO;
-import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.u9.U9SalesOrderClient;
@@ -56,8 +53,6 @@ public class SalesOrderU9SyncService {
     private SalesOrderHeaderMapper headerMapper;
     @Autowired
     private SalesOrderItemMapper itemMapper;
-    @Autowired
-    private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private U9SalesOrderClient u9SalesOrderClient;
     @Autowired
@@ -217,12 +212,10 @@ public class SalesOrderU9SyncService {
         String customerCode = required(header.getCustomerCode(), "客户编码不能为空，不能同步 U9");
         String documentTypeCode = required(header.getDocumentTypeCode(), "单据类型编码不能为空，不能同步 U9");
         List<SalesOrderItem> items = loadItems(header.getId());
-        Map<Long, SalesOrderItem> itemById = items.stream()
-                .filter(item -> item.getId() != null)
-                .collect(Collectors.toMap(SalesOrderItem::getId, Function.identity(), (left, right) -> left));
-        List<OrderDeliveryTicket> tickets = loadTickets(header.getId());
-        if (tickets.isEmpty()) {
-            throw new RuntimeException("销售订单尚未生成 QPO 提单，不能同步 U9");
+        MaterialStats stats = materialStats(items);
+        String blockedReason = syncBlockedReason(header, items, stats);
+        if (!isBlank(blockedReason)) {
+            throw new RuntimeException(firstDetailedBlockedReason(items, blockedReason));
         }
 
         U9SalesOrderHeadDTO head = new U9SalesOrderHeadDTO();
@@ -234,20 +227,16 @@ public class SalesOrderU9SyncService {
         head.setCustomerOrderNo(header.getCustomerOrderNo());
         head.setIsPriceIncludeTax(true);
         int lineNo = 1;
-        for (OrderDeliveryTicket ticket : tickets) {
-            Long sourceItemId = ticket.getSourceItemId();
-            SalesOrderItem item = sourceItemId == null ? null : itemById.get(sourceItemId);
-            if (item == null) {
-                throw new RuntimeException("提单行 " + ticket.getId() + " 未匹配销售订单零件，不能同步 U9");
-            }
-            head.getSOLineDTOList().add(toU9Line(item, ticket, lineNo++));
+        for (SalesOrderItem item : items) {
+            validateSyncableItem(item);
+            head.getSOLineDTOList().add(toU9Line(header, item, lineNo++));
         }
         return new PreparedOrder(header, head);
     }
 
-    private U9SalesOrderLineDTO toU9Line(SalesOrderItem item, OrderDeliveryTicket ticket, int sequence) {
-        String materialNo = required(ticket.getMaterialNo(), "提单行 " + ticket.getId() + " 未取得物料号，不能同步 U9");
-        BigDecimal qty = requiredQty(ticket);
+    private U9SalesOrderLineDTO toU9Line(SalesOrderHeader header, SalesOrderItem item, int sequence) {
+        String materialNo = required(item.getMaterialNo(), "销售订单零件 " + itemLabel(item) + " 未取得物料号，不能同步 U9");
+        BigDecimal qty = requiredQty(item);
         BigDecimal price = requiredPrice(item);
         String unit = "PCS";
 
@@ -259,7 +248,7 @@ public class SalesOrderU9SyncService {
         line.setItemVersion(item.getVersion());
         line.setFreeType(-1);
         line.setFreeReason(-1);
-        line.setProject(firstNonBlank(ticket.getProjectNo(), ticket.getInternalProjectNo(), item.getInternalProjectNo()));
+        line.setProject(firstNonBlank(item.getInternalProjectNo(), header.getInternalProjectNo()));
         line.setOrderByQtyTU(qty);
         line.setOrderByQtyPU(qty);
         line.setTU(unit);
@@ -273,7 +262,7 @@ public class SalesOrderU9SyncService {
         U9SalesOrderShipLineDTO shipLine = new U9SalesOrderShipLineDTO();
         shipLine.setDocSubLineNo(1);
         shipLine.setItemCode(materialNo);
-        shipLine.setRequireDate(formatDate(ticket.getDeliveryDate(), firstDate(item.getInternalDeliveryDate(), item.getCustomerDeliveryDate(), LocalDate.now())));
+        shipLine.setRequireDate(formatDate(preferredDeliveryDate(item), LocalDate.now()));
         shipLine.setDeliveryDate(shipLine.getRequireDate());
         shipLine.setPlanDate(shipLine.getRequireDate());
         shipLine.setShipPlanQtyTU(qty);
@@ -281,7 +270,7 @@ public class SalesOrderU9SyncService {
         shipLine.setTU(unit);
         shipLine.setPU(unit);
         shipLine.setTUBaseToPUBaseRate(BigDecimal.ONE);
-        shipLine.setMemo(ticket.getRemark());
+        shipLine.setMemo(item.getRemark());
         line.getSOShiplineDTOList().add(shipLine);
         return line;
     }
@@ -291,15 +280,6 @@ public class SalesOrderU9SyncService {
         query.eq("sales_order_id", salesOrderId).orderByAsc("id");
         List<SalesOrderItem> items = itemMapper.selectList(query);
         return items == null ? List.of() : items;
-    }
-
-    private List<OrderDeliveryTicket> loadTickets(Long salesOrderId) {
-        QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
-        query.eq("source_type", ReleaseSourceType.SALES_ORDER.name())
-                .eq("source_order_id", salesOrderId)
-                .orderByAsc("id");
-        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(query);
-        return tickets == null ? List.of() : tickets;
     }
 
     private SalesOrderHeader requireSalesOrder(Long salesOrderId) {
@@ -474,8 +454,20 @@ public class SalesOrderU9SyncService {
     }
 
     private boolean hasUnreleasedQty(List<SalesOrderItem> items) {
-        return safeList(items).stream().anyMatch(item ->
-                item.getRemainingQty() != null && item.getRemainingQty() > 0);
+        return safeList(items).stream().anyMatch(item -> !isFullyReleased(item));
+    }
+
+    private boolean isFullyReleased(SalesOrderItem item) {
+        if (item == null) {
+            return false;
+        }
+        if (item.getRemainingQty() != null && item.getRemainingQty() > 0) {
+            return false;
+        }
+        if (item.getQty() != null && item.getReleasedQty() != null && item.getReleasedQty() < item.getQty()) {
+            return false;
+        }
+        return isBlank(item.getStatus()) || QuoteStatusWorkflow.RELEASED.equals(item.getStatus());
     }
 
     private boolean isConfirmedMaterialNo(SalesOrderItem item) {
@@ -667,11 +659,11 @@ public class SalesOrderU9SyncService {
         }
     }
 
-    private BigDecimal requiredQty(OrderDeliveryTicket ticket) {
-        if (ticket.getQty() == null || ticket.getQty() <= 0) {
-            throw new RuntimeException("提单行 " + ticket.getId() + " 数量不能为空，不能同步 U9");
+    private BigDecimal requiredQty(SalesOrderItem item) {
+        if (item.getQty() == null || item.getQty() <= 0) {
+            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 数量不能为空，不能同步 U9");
         }
-        return BigDecimal.valueOf(ticket.getQty());
+        return BigDecimal.valueOf(item.getQty());
     }
 
     private BigDecimal requiredPrice(SalesOrderItem item) {
@@ -692,13 +684,42 @@ public class SalesOrderU9SyncService {
         return value.trim();
     }
 
-    private LocalDate firstDate(LocalDate... values) {
-        for (LocalDate value : values) {
-            if (value != null) {
-                return value;
+    private void validateSyncableItem(SalesOrderItem item) {
+        if (!isFullyReleased(item)) {
+            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 尚未全部生成提单，不能同步 U9");
+        }
+        if (!isConfirmedMaterialNo(item)) {
+            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 未取得或未确认物料号，不能同步 U9");
+        }
+    }
+
+    private String firstDetailedBlockedReason(List<SalesOrderItem> items, String fallback) {
+        for (SalesOrderItem item : safeList(items)) {
+            if (!isFullyReleased(item)) {
+                return "销售订单零件 " + itemLabel(item) + " 尚未全部生成提单，不能同步 U9";
+            }
+            if (!isConfirmedMaterialNo(item)) {
+                return "销售订单零件 " + itemLabel(item) + " 未取得或未确认物料号，不能同步 U9";
             }
         }
-        return LocalDate.now();
+        return fallback;
+    }
+
+    private String itemLabel(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        List<String> parts = new ArrayList<>();
+        if (item.getId() != null) {
+            parts.add("ID=" + item.getId());
+        }
+        if (!isBlank(item.getPartNo())) {
+            parts.add("图号=" + item.getPartNo());
+        }
+        if (!isBlank(item.getVersion())) {
+            parts.add("版本=" + item.getVersion());
+        }
+        return parts.isEmpty() ? "" : String.join(" ", parts);
     }
 
     private String formatDate(LocalDate preferred, LocalDate fallback) {

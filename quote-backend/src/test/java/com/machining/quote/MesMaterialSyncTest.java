@@ -5,10 +5,12 @@ import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
@@ -152,6 +154,55 @@ class MesMaterialSyncTest {
                 contains("ticketId=123 taskId=9001"),
                 isNull()
         );
+    }
+
+    @Test
+    void syncMaterialNoWritesConfirmedMaterialBackToSalesOrderItemForSalesOrderTicket() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setRfqId(null);
+        ticket.setItemId(null);
+        ticket.setRfqNo("SOQPO-001");
+        ticket.setCustomerName("客户A");
+        ticket.setSourceType("SALES_ORDER");
+        ticket.setSourceOrderId(9001L);
+        ticket.setSourceItemId(5001L);
+        SalesOrderItem salesItem = new SalesOrderItem();
+        salesItem.setId(5001L);
+        salesItem.setDrawingUrl("/uploads/sales-order/p100.pdf");
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        when(salesOrderItemMapper.selectById(5001L)).thenReturn(salesItem);
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(true);
+        response.setMaterialNo("MES-SO-7788");
+        response.setMessage("created");
+        when(client.resolveMaterial(any())).thenReturn(response);
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+
+        Map<String, Object> result = service.syncMaterialNo(123, 9005L);
+
+        assertThat(result)
+                .containsEntry("sourceType", "SALES_ORDER")
+                .containsEntry("sourceItemId", 5001L)
+                .containsEntry("materialNo", "MES-SO-7788");
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(salesOrderItemMapper).updateById(itemCaptor.capture());
+        SalesOrderItem update = itemCaptor.getValue();
+        assertThat(update.getId()).isEqualTo(5001L);
+        assertThat(update.getMaterialNo()).isEqualTo("MES-SO-7788");
+        assertThat(update.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(update.getMaterialNoSource()).isEqualTo("MES_TICKET");
+        assertThat(update.getMaterialNoSourceTicketId()).isEqualTo(123L);
+        assertThat(update.getMaterialNoSyncedAt()).isNotNull();
+        assertThat(update.getMaterialNoMessage()).isEqualTo("created");
     }
 
     @Test

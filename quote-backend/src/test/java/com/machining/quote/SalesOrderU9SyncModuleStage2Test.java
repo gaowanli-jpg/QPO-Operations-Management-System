@@ -8,7 +8,6 @@ import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
@@ -83,7 +82,6 @@ class SalesOrderU9SyncModuleStage2Test {
                 });
         assertThat(result.getRecords().get(1).getBlockedReason()).contains("尚未生成 QPO 提单");
         verify(fixture.dataScopeService).applySalesOrderScope(any());
-        verify(fixture.ticketMapper, never()).selectList(any());
         verify(fixture.u9Client, never()).create(any());
     }
 
@@ -129,7 +127,6 @@ class SalesOrderU9SyncModuleStage2Test {
                         SalesOrderU9SyncPreviewLine::getBlockedReason)
                 .containsExactly(null, false, "物料号未确认");
         verify(fixture.dataScopeService).assertCanAccessSalesOrder(header);
-        verify(fixture.ticketMapper, never()).selectList(any());
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());
         verify(fixture.u9Client, never()).create(any());
@@ -165,7 +162,6 @@ class SalesOrderU9SyncModuleStage2Test {
                 .contains("仍存在未提单数量");
         assertThat(fixture.service.previewSalesOrder(synced.getId()).getBlockedReason())
                 .contains("已同步");
-        verify(fixture.ticketMapper, never()).selectList(any());
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());
         verify(fixture.u9Client, never()).create(any());
@@ -176,7 +172,6 @@ class SalesOrderU9SyncModuleStage2Test {
         Fixture fixture = new Fixture(service);
         ReflectionTestUtils.setField(service, "headerMapper", fixture.headerMapper);
         ReflectionTestUtils.setField(service, "itemMapper", fixture.itemMapper);
-        ReflectionTestUtils.setField(service, "ticketMapper", fixture.ticketMapper);
         ReflectionTestUtils.setField(service, "u9SalesOrderClient", fixture.u9Client);
         ReflectionTestUtils.setField(service, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(service, "dataScopeService", fixture.dataScopeService);
@@ -229,7 +224,6 @@ class SalesOrderU9SyncModuleStage2Test {
         private final SalesOrderU9SyncService service;
         private final SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         private final SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
-        private final OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         private final U9SalesOrderClient u9Client = mock(U9SalesOrderClient.class);
         private final AuditService auditService = mock(AuditService.class);
         private final DataScopeService dataScopeService = mock(DataScopeService.class);

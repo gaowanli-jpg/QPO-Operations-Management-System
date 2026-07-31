@@ -1,13 +1,12 @@
 package com.machining.quote;
 
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.dto.u9.U9ApiResult;
 import com.machining.quote.dto.u9.U9ResultDTO;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
-import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
@@ -24,8 +23,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -38,8 +35,9 @@ class SalesOrderU9SyncStage7Test {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
         SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
-        OrderDeliveryTicket ticket = ticket(3001, header, item, null, 4);
-        fixture.withOrder(header, List.of(item), List.of(ticket));
+        item.setMaterialNo(null);
+        item.setMaterialNoStatus("未确认");
+        fixture.withOrder(header, List.of(item));
 
         SalesOrderU9SyncResp resp = fixture.service.syncSalesOrders(List.of(header.getId()));
 
@@ -51,7 +49,7 @@ class SalesOrderU9SyncStage7Test {
                     assertThat(row.isSuccess()).isFalse();
                     assertThat(row.getSalesOrderId()).isEqualTo(header.getId());
                     assertThat(row.getErrorMessage()).contains("物料号");
-                });
+        });
         verify(fixture.u9Client, never()).create(any());
 
         SalesOrderHeader failureUpdate = fixture.lastHeaderUpdate();
@@ -61,14 +59,14 @@ class SalesOrderU9SyncStage7Test {
     }
 
     @Test
-    void successfulSyncBuildsU9RequestFromIndependentOrderTicketsAndWritesU9Codes() {
+    void successfulSyncBuildsU9RequestFromSalesOrderItemsAndWritesU9Codes() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
         header.setDocumentTypeCode("SO88");
         header.setCustomerCode("CUST-001");
         SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
-        OrderDeliveryTicket ticket = ticket(3001, header, item, "MAT-CONFIRMED-001", 4);
-        fixture.withOrder(header, List.of(item), List.of(ticket));
+        markConfirmed(item, "MAT-CONFIRMED-001", 4);
+        fixture.withOrder(header, List.of(item));
         when(fixture.u9Client.create(any())).thenReturn(apiResult(0,
                 u9Row(header.getSalesOrderNo(), true, "U9-ID-1", "U9-SO-001", "")
         ));
@@ -112,19 +110,17 @@ class SalesOrderU9SyncStage7Test {
     }
 
     @Test
-    void partialU9FailureUpdatesEachSalesOrderIndependentlyWithoutChangingTickets() {
+    void partialU9FailureUpdatesEachSalesOrderIndependently() {
         Fixture fixture = fixture();
         SalesOrderHeader first = header(9001L, "SOQPO-001", "未同步");
         SalesOrderHeader second = header(9002L, "SOQPO-002", "未同步");
         SalesOrderItem firstItem = item(5001L, first.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
         SalesOrderItem secondItem = item(5002L, second.getId(), "SALES-MAT-002", new BigDecimal("21.00"));
+        markConfirmed(firstItem, "MAT-001", 2);
+        markConfirmed(secondItem, "MAT-002", 3);
         fixture.withOrders(
                 List.of(first, second),
-                List.of(List.of(firstItem), List.of(secondItem)),
-                List.of(
-                        List.of(ticket(3001, first, firstItem, "MAT-001", 2)),
-                        List.of(ticket(3002, second, secondItem, "MAT-002", 3))
-                )
+                List.of(List.of(firstItem), List.of(secondItem))
         );
         when(fixture.u9Client.create(any())).thenReturn(apiResult(0,
                 u9Row(first.getSalesOrderNo(), true, "U9-ID-1", "U9-SO-001", ""),
@@ -151,8 +147,6 @@ class SalesOrderU9SyncStage7Test {
             assertThat(update.getU9SyncStatus()).isEqualTo("同步失败");
             assertThat(update.getU9SyncMessage()).contains("U9 item unavailable");
         });
-        verify(fixture.ticketMapper, never()).updateById(any());
-        verify(fixture.ticketMapper, never()).delete(any());
     }
 
     @Test
@@ -164,10 +158,10 @@ class SalesOrderU9SyncStage7Test {
         synced.setU9OrderId("OLD-ID");
         synced.setU9OrderCode("OLD-CODE");
         SalesOrderItem item = item(5001L, failed.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
+        markConfirmed(item, "MAT-001", 1);
         fixture.withOrders(
                 List.of(failed, synced),
-                List.of(List.of(item), List.of()),
-                List.of(List.of(ticket(3001, failed, item, "MAT-001", 1)), List.of())
+                List.of(List.of(item), List.of())
         );
         when(fixture.u9Client.create(any())).thenReturn(apiResult(0,
                 u9Row(failed.getSalesOrderNo(), true, "NEW-ID", "NEW-CODE", "")
@@ -190,6 +184,12 @@ class SalesOrderU9SyncStage7Test {
     void auditActionsAndControllerPermissionCloseStageSevenBoundary() {
         assertThat(AuditService.inferModule("SALES_ORDER_U9_SYNC")).isEqualTo("MARKET");
         assertThat(AuditService.labelForAction("SALES_ORDER_U9_SYNC")).contains("销售订单").contains("U9");
+        assertThat(readSource("service/SalesOrderU9SyncService.java"))
+                .doesNotContain("OrderDeliveryTicketMapper", "loadTickets(", "ticketMapper.selectList", "order_delivery_ticket");
+        assertThat(readSource("controller/SalesOrderU9SyncController.java"))
+                .contains("@PostMapping(\"/orders/{salesOrderId}/sync\")")
+                .contains("@PostMapping(\"/sync\")")
+                .contains("@RequirePermission(\"market:u9-sync:submit\")");
         assertThat(readSource("controller/SalesOrderQpoImportController.java"))
                 .contains("@PostMapping(\"/u9-sync\")")
                 .contains("@RequirePermission(\"market:rfq:import-sales-order\")");
@@ -200,7 +200,6 @@ class SalesOrderU9SyncStage7Test {
         Fixture fixture = new Fixture(service);
         ReflectionTestUtils.setField(service, "headerMapper", fixture.headerMapper);
         ReflectionTestUtils.setField(service, "itemMapper", fixture.itemMapper);
-        ReflectionTestUtils.setField(service, "ticketMapper", fixture.ticketMapper);
         ReflectionTestUtils.setField(service, "u9SalesOrderClient", fixture.u9Client);
         ReflectionTestUtils.setField(service, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(service, "dataScopeService", fixture.dataScopeService);
@@ -218,6 +217,7 @@ class SalesOrderU9SyncStage7Test {
         header.setCustomerProjectNo("CP-" + id);
         header.setInternalProjectNo("IP-" + id);
         header.setSalesOrderDate(LocalDate.of(2026, 7, 30));
+        header.setStatus(QuoteStatusWorkflow.RELEASED);
         header.setU9SyncStatus(u9Status);
         return header;
     }
@@ -233,27 +233,22 @@ class SalesOrderU9SyncStage7Test {
         item.setFinalUnitPrice(price);
         item.setTaxIncludedUnitPrice(price);
         item.setVersion("A");
+        item.setQty(1);
+        item.setReleasedQty(1);
+        item.setRemainingQty(0);
+        item.setInternalDeliveryDate(LocalDate.of(2026, 8, 8));
+        item.setCustomerDeliveryDate(LocalDate.of(2026, 8, 9));
+        item.setStatus(QuoteStatusWorkflow.RELEASED);
         return item;
     }
 
-    private OrderDeliveryTicket ticket(Integer id, SalesOrderHeader header, SalesOrderItem item, String materialNo, int qty) {
-        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
-        ticket.setId(id);
-        ticket.setSourceType("SALES_ORDER");
-        ticket.setSourceOrderId(header.getId());
-        ticket.setSourceItemId(item.getId());
-        ticket.setRfqNo(header.getSalesOrderNo());
-        ticket.setCustomerName(header.getCustomerName());
-        ticket.setPartNo(item.getPartNo());
-        ticket.setDescription(item.getDescription());
-        ticket.setVersion(item.getVersion());
-        ticket.setQty(qty);
-        ticket.setMaterialNo(materialNo);
-        ticket.setDeliveryDate(LocalDate.of(2026, 8, 8));
-        ticket.setInternalProjectNo(header.getInternalProjectNo());
-        ticket.setCustomerOrderNo(header.getCustomerOrderNo());
-        ticket.setCustomerProjectNo(header.getCustomerProjectNo());
-        return ticket;
+    private void markConfirmed(SalesOrderItem item, String materialNo, int qty) {
+        item.setMaterialNo(materialNo);
+        item.setMaterialNoStatus("已确认");
+        item.setMaterialNoSource("MES_TICKET");
+        item.setQty(qty);
+        item.setReleasedQty(qty);
+        item.setRemainingQty(0);
     }
 
     @SafeVarargs
@@ -290,7 +285,6 @@ class SalesOrderU9SyncStage7Test {
         private final SalesOrderU9SyncService service;
         private final SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         private final SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
-        private final OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         private final U9SalesOrderClient u9Client = mock(U9SalesOrderClient.class);
         private final AuditService auditService = mock(AuditService.class);
         private final DataScopeService dataScopeService = mock(DataScopeService.class);
@@ -299,19 +293,17 @@ class SalesOrderU9SyncStage7Test {
             this.service = service;
         }
 
-        private void withOrder(SalesOrderHeader header, List<SalesOrderItem> items, List<OrderDeliveryTicket> tickets) {
-            withOrders(List.of(header), List.of(items), List.of(tickets));
+        private void withOrder(SalesOrderHeader header, List<SalesOrderItem> items) {
+            withOrders(List.of(header), List.of(items));
         }
 
         private void withOrders(
                 List<SalesOrderHeader> headers,
-                List<List<SalesOrderItem>> items,
-                List<List<OrderDeliveryTicket>> tickets) {
+                List<List<SalesOrderItem>> items) {
             for (SalesOrderHeader header : headers) {
                 when(headerMapper.selectByIdForUpdate(header.getId())).thenReturn(header);
             }
             when(itemMapper.selectList(any())).thenReturn(items.get(0), items.subList(1, items.size()).toArray(List[]::new));
-            when(ticketMapper.selectList(any())).thenReturn(tickets.get(0), tickets.subList(1, tickets.size()).toArray(List[]::new));
         }
 
         private List<U9SalesOrderHeadDTO> capturedU9Orders() {
