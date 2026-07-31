@@ -68,13 +68,13 @@ public class DeliveryService {
             throw new RuntimeException("提单参数不能为空");
         }
         if (req.getItems() == null || req.getItems().isEmpty()) {
-            throw new RuntimeException("请至少选择一个通过议价的零�?);
+            throw new RuntimeException("请至少选择一个通过议价的零件");
         }
         if (isSalesOrderRequest(req)) {
             return generateSalesOrderTickets(req, startedAt);
         }
         if (req.getRfqId() == null) {
-            throw new RuntimeException("询价�?ID 不能为空");
+            throw new RuntimeException("询价单 ID 不能为空");
         }
 
         OrderRfq order = orderRfqMapper.selectByIdForUpdate(req.getRfqId());
@@ -87,28 +87,28 @@ public class DeliveryService {
             if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
                 throw new RuntimeException("请先在报价处理模块保存报价单后再生成提单");
             }
-            throw new RuntimeException("只有已报价订单可以生成提�?);
+            throw new RuntimeException("只有已报价订单可以生成提单");
         }
         String orderType = normalizeOrderType(req.getOrderType());
         LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
         String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
         String internalProjectNo = req.getInternalProjectNo() == null ? "" : req.getInternalProjectNo().trim();
         if (internalProjectNo.isEmpty()) {
-            throw new RuntimeException("内部项目号不能为�?);
+            throw new RuntimeException("内部项目号不能为空");
         }
         if (internalProjectNo.length() > 100) {
-            throw new RuntimeException("内部项目号不能超�?100 个字�?);
+            throw new RuntimeException("内部项目号不能超过 100 个字符");
         }
         String customerOrderNo = req.getCustomerOrderNo() == null ? "" : req.getCustomerOrderNo().trim();
         if (customerOrderNo.isEmpty()) {
-            throw new RuntimeException("客户订单号不能为�?);
+            throw new RuntimeException("客户订单号不能为空");
         }
         if (customerOrderNo.length() > 100) {
-            throw new RuntimeException("客户订单号不能超�?100 个字�?);
+            throw new RuntimeException("客户订单号不能超过 100 个字符");
         }
         String customerProjectNo = req.getCustomerProjectNo() == null ? "" : req.getCustomerProjectNo().trim();
         if (customerProjectNo.length() > 100) {
-            throw new RuntimeException("客户项目号不能超�?100 个字�?);
+            throw new RuntimeException("客户项目号不能超过 100 个字符");
         }
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
@@ -136,10 +136,10 @@ public class DeliveryService {
         for (DemandLine demand : demandByItemId.values()) {
             ItemQuoteVersion item = demand.item();
             if (item.getFinalUnitPrice() == null) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 尚未核价，不能生成提�?);
+                throw new RuntimeException("零件 " + itemLabel(item) + " 尚未核价，不能生成提单");
             }
             if (demand.qty() > safeInt(item.getQty())) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数�?" + demand.qty() + " 超过询价数量 " + safeInt(item.getQty()));
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty() + " 超过询价数量 " + safeInt(item.getQty()));
             }
             int ticketedQty = ticketedQty(item);
             int remainingQty = remainingQty(item, ticketedQty);
@@ -149,7 +149,7 @@ public class DeliveryService {
             if (demand.qty() > remainingQty) {
                 log.warn("Delivery ticket quantity exceeds remaining rfqId={} itemId={} partNo={} requestedQty={} ticketedQty={} remainingQty={}",
                         item.getRfqId(), item.getId(), item.getPartNo(), demand.qty(), ticketedQty, remainingQty);
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数�?" + demand.qty()
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty()
                         + " 超过剩余可提数量 " + remainingQty);
             }
         }
@@ -276,7 +276,7 @@ public class DeliveryService {
         }
         assertSalesOrderDataScope(header);
         if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(header.getStatus())) {
-            throw new RuntimeException("只有已报价或部分已提单的销售订单可以生成提�?);
+            throw new RuntimeException("只有已报价或部分已提单的销售订单可以生成提单");
         }
 
         String orderType = normalizeOrderType(firstText(req.getOrderType(), header.getOrderType()));
@@ -284,21 +284,21 @@ public class DeliveryService {
         String projectNo = isBlank(req.getProjectNo()) ? resolveSalesOrderProjectNo(header) : req.getProjectNo().trim();
         String internalProjectNo = firstText(req.getInternalProjectNo(), header.getInternalProjectNo());
         if (isBlank(internalProjectNo)) {
-            throw new RuntimeException("内部项目号不能为�?);
+            throw new RuntimeException("内部项目号不能为空");
         }
         if (internalProjectNo.length() > 100) {
-            throw new RuntimeException("内部项目号不能超�?100 个字�?);
+            throw new RuntimeException("内部项目号不能超过 100 个字符");
         }
         String customerOrderNo = firstText(req.getCustomerOrderNo(), header.getCustomerOrderNo());
         if (isBlank(customerOrderNo)) {
-            throw new RuntimeException("客户订单号不能为�?);
+            throw new RuntimeException("客户订单号不能为空");
         }
         if (customerOrderNo.length() > 100) {
-            throw new RuntimeException("客户订单号不能超�?100 个字�?);
+            throw new RuntimeException("客户订单号不能超过 100 个字符");
         }
         String customerProjectNo = firstText(req.getCustomerProjectNo(), header.getCustomerProjectNo());
         if (customerProjectNo.length() > 100) {
-            throw new RuntimeException("客户项目号不能超�?100 个字�?);
+            throw new RuntimeException("客户项目号不能超过 100 个字符");
         }
         String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
@@ -306,7 +306,7 @@ public class DeliveryService {
         Map<Long, SalesOrderDemandLine> demandByItemId = new LinkedHashMap<>();
         for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
             if (!ReleaseSourceType.SALES_ORDER.equals(line.getSourceType())) {
-                throw new RuntimeException("销售订单提单请求不能混�?RFQ 零件");
+                throw new RuntimeException("销售订单提单请求不能混入 RFQ 零件");
             }
             Long sourceItemId = resolveSourceItemId(line);
             SalesOrderItem item = lockedItemMap.get(sourceItemId);
@@ -314,14 +314,14 @@ public class DeliveryService {
                 throw new RuntimeException("销售订单零件不存在，ID=" + sourceItemId);
             }
             if (!salesOrderId.equals(item.getSalesOrderId())) {
-                throw new RuntimeException("销售订单零�?" + salesOrderItemLabel(item) + " 不属于当前销售订�?);
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 不属于当前销售订单");
             }
             int acceptedQty = line.getAcceptedQty() == null ? salesOrderRemainingQty(item) : line.getAcceptedQty();
             if (acceptedQty <= 0) {
-                throw new RuntimeException("销售订单零�?" + salesOrderItemLabel(item) + " 的通过数量必须大于 0");
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 的通过数量必须大于 0");
             }
             if (acceptedQty > safeInt(item.getQty())) {
-                throw new RuntimeException("销售订单零�?" + salesOrderItemLabel(item) + " 的通过数量不能超过订单数量");
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 的通过数量不能超过订单数量");
             }
             demandByItemId.merge(sourceItemId, new SalesOrderDemandLine(item, acceptedQty),
                     (left, right) -> new SalesOrderDemandLine(left.item(), left.qty() + right.qty()));
@@ -330,14 +330,14 @@ public class DeliveryService {
         for (SalesOrderDemandLine demand : demandByItemId.values()) {
             SalesOrderItem item = demand.item();
             if (item.getFinalUnitPrice() == null) {
-                throw new RuntimeException("销售订单零�?" + salesOrderItemLabel(item) + " 尚未报价，不能生成提�?);
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 尚未报价，不能生成提单");
             }
             int remainingQty = salesOrderRemainingQty(item);
             if (remainingQty <= 0) {
-                throw new RuntimeException("销售订单零�?" + salesOrderItemLabel(item) + " 已全部提单，不能重复生成");
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 已全部提单，不能重复生成");
             }
             if (demand.qty() > remainingQty) {
-                throw new RuntimeException("销售订单零�?" + salesOrderItemLabel(item) + " 的提单数�?" + demand.qty()
+                throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 的提单数量 " + demand.qty()
                         + " 超过剩余可提数量 " + remainingQty);
             }
         }
@@ -372,15 +372,15 @@ public class DeliveryService {
                 continue;
             }
             if (line.getSourceOrderId() == null) {
-                throw new RuntimeException("销售订单来�?ID 不能为空");
+                throw new RuntimeException("销售订单来源 ID 不能为空");
             }
             if (salesOrderId != null && !salesOrderId.equals(line.getSourceOrderId())) {
-                throw new RuntimeException("一次提单请求只能包含同一个销售订�?);
+                throw new RuntimeException("一次提单请求只能包含同一个销售订单");
             }
             salesOrderId = line.getSourceOrderId();
         }
         if (salesOrderId == null) {
-            throw new RuntimeException("销售订单来�?ID 不能为空");
+            throw new RuntimeException("销售订单来源 ID 不能为空");
         }
         return salesOrderId;
     }
@@ -407,7 +407,7 @@ public class DeliveryService {
                 ? line.getSourceItemId()
                 : (line.getItemId() == null ? null : line.getItemId().longValue());
         if (sourceItemId == null) {
-            throw new RuntimeException("销售订单零件来�?ID 不能为空");
+            throw new RuntimeException("销售订单零件来源 ID 不能为空");
         }
         return sourceItemId;
     }
@@ -514,7 +514,7 @@ public class DeliveryService {
         if (!isBlank(item.getItemType())) {
             return item.getItemType().trim();
         }
-        return "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode()) ? "组合�? : "普通件";
+        return "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode()) ? "组合件" : "普通件";
     }
 
     private String resolveSalesOrderEngineeringMaterialName(SalesOrderItem item) {
@@ -655,7 +655,7 @@ public class DeliveryService {
                 .filter(item -> item.getFinalUnitPrice() != null)
                 .toList();
         if (quotedItems.isEmpty()) {
-            order.setStatus("部分已提�?);
+            order.setStatus("部分已提单");
             orderRfqMapper.updateById(order);
             return;
         }
@@ -665,7 +665,7 @@ public class DeliveryService {
                     + legacyQtyByPartVersion.getOrDefault(itemKey(item.getPartNo(), item.getVersion()), 0);
             return generatedQty >= safeInt(item.getQty());
         });
-        order.setStatus(allQuotedItemsTicketed ? "已生成提�? : "部分已提�?);
+        order.setStatus(allQuotedItemsTicketed ? "已生成提单" : "部分已提单");
         orderRfqMapper.updateById(order);
     }
 
@@ -738,7 +738,7 @@ public class DeliveryService {
     }
 
     private String resolveItemType(ItemQuoteVersion item) {
-        return "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode()) ? "组合�? : "普通件";
+        return "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode()) ? "组合件" : "普通件";
     }
 
     private String normalizePartNo(String partNo) {

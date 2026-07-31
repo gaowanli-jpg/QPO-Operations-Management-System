@@ -31,6 +31,7 @@ public class SalesOrderHeader {
     private String u9SyncStatus;
     private String u9OrderId;
     private String u9OrderCode;
+    private String u9SyncMessage;
     private Long importBatchId;
     private Long importRecordId;
     private Integer totalItemCount;

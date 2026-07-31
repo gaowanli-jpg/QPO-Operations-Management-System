@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS sales_order_header (
     u9_sync_status VARCHAR(30),
     u9_order_id VARCHAR(100),
     u9_order_code VARCHAR(100),
+    u9_sync_message TEXT,
     import_batch_id BIGINT,
     import_record_id BIGINT,
     total_item_count INTEGER DEFAULT 0,
