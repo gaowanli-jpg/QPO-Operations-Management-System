@@ -24,6 +24,7 @@ class PermissionSystemStage4Test {
                         "/locked-items",
                         "/quote-process",
                         "/release",
+                        "/u9-sync",
                         "/delivery-documents",
                         "/quote-template",
                         "/engineering",

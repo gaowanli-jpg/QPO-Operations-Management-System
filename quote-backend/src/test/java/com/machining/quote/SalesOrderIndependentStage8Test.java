@@ -30,15 +30,20 @@ class SalesOrderIndependentStage8Test {
 
         assertThat(permissionDoc)
                 .contains(
-                        "\u9500\u552e\u8ba2\u5355\u72ec\u7acb\u4e3b\u8868\u9636\u6bb5 8 \u6536\u53e3",
-                        "\u4e0d\u65b0\u589e\u5de6\u4fa7\u9500\u552e\u8ba2\u5355\u6a21\u5757",
                         "`market:rfq:import-sales-order`",
+                        "`market:u9-sync:view`",
+                        "`market:u9-sync:submit`",
                         "sales_order_header",
                         "sales_order_item",
-                        "\u9500\u552e\u8ba2\u5355\u6570\u636e\u4e0d\u8fdb\u5165 `order_rfq` / `item_quote_version`",
-                        "\u4e0d\u65b0\u589e\u53ef\u5206\u914d\u7684 `common:*` \u6743\u9650"
+                        "\u9500\u552e\u8ba2\u5355\u5bfc\u5165\u3001\u6a21\u677f\u4e0b\u8f7d\u4ecd\u6cbf\u7528 `market:rfq:import-sales-order`",
+                        "\u540e\u7eed U9 \u6574\u5355\u540c\u6b65\u5165\u53e3\u6539\u4e3a\u72ec\u7acb `market:u9-sync:*`",
+                        "\u540c\u6b65\u8bf7\u6c42\u4ece `sales_order_header` / `sales_order_item` \u7ec4\u88c5",
+                        "`ItemCode` \u4f7f\u7528 `sales_order_item.material_no`",
+                        "`material_no_status = \u5df2\u786e\u8ba4`",
+                        "\u4e0d\u65b0\u589e\u53ef\u5206\u914d `common:*` \u6743\u9650"
                 )
-                .doesNotContain("`market:sales-order:view` |");
+                .doesNotContain("`market:sales-order:view` |")
+                .doesNotContain("ItemCode` \u4f7f\u7528 `order_delivery_ticket.material_no`");
         assertThat(logDoc)
                 .contains(
                         "\u9500\u552e\u8ba2\u5355\u72ec\u7acb\u4e3b\u8868\u9636\u6bb5 8 \u56de\u5f52\u6536\u53e3",

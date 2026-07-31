@@ -30,22 +30,27 @@ class SalesOrderU9ImportStage5Test {
 
         assertThat(permissionList)
                 .contains(
-                        "销售订单 U9 同步阶段 5 收口",
+                        "销售订单 U9 同步已从新单导入拆为独立左侧模块",
+                        "U9 同步独立模块口径",
                         "`market:rfq:import-sales-order`",
                         "挂在 `market:rfq:view` 下",
-                        "不新增左侧模块",
                         "不能复用 `market:rfq:import`",
-                        "只同步 U9，不创建 QPO `order_rfq`",
-                        "不进入 `议价提单`"
+                        "`market:u9-sync:view`",
+                        "`market:u9-sync:submit`",
+                        "`market:u9-sync:*`",
+                        "`sales_order_header` / `sales_order_item`",
+                        "`material_no_status = 已确认`"
                 )
-                .doesNotContain("`market:sales-order:view`");
+                .doesNotContain("`market:sales-order:view`")
+                .doesNotContain("ItemCode` 使用 `order_delivery_ticket.material_no`");
         assertThat(adminGuide)
                 .contains(
-                        "销售订单 U9 同步阶段 5 收口",
+                        "销售订单 U9 同步独立模块",
                         "`market:rfq:import-sales-order`",
-                        "第一阶段只同步 U9",
-                        "不创建 QPO 订单或零件",
-                        "不进入议价提单"
+                        "`market:u9-sync:view`",
+                        "`market:u9-sync:submit`",
+                        "`sales_order_header` / `sales_order_item`",
+                        "`sales_order_item.material_no_status = 已确认`"
                 );
     }
 

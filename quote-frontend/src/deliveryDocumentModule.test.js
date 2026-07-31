@@ -21,19 +21,21 @@ describe('delivery document module stage 2 wiring', () => {
     expect(routerSource).not.toContain("'/delivery-documents', component: MarketRelease")
   })
 
-  test('places delivery document immediately after release in the market menu', () => {
-    expect(appVue).toContain("{ key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/delivery-documents', '/quote-template'] }")
+  test('places delivery document after U9 sync in the market menu', () => {
+    expect(appVue).toContain("{ key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] }")
     expect(appVue).toContain("'/delivery-documents': { title: '提单表据', permission: 'market:delivery-document:view'")
     expect(appVue).toContain("'/delivery-documents': {\n    title: '提单表据'")
     expect(appVue).not.toContain("'/delivery-documents': { title: '提单表据', permission: 'market:release:view'")
 
     const marketGroupIndex = appVue.indexOf("{ key: 'market'")
     const releaseIndex = appVue.indexOf("'/release'", marketGroupIndex)
+    const u9SyncIndex = appVue.indexOf("'/u9-sync'", marketGroupIndex)
     const documentIndex = appVue.indexOf("'/delivery-documents'", marketGroupIndex)
     const templateIndex = appVue.indexOf("'/quote-template'", marketGroupIndex)
 
     expect(releaseIndex).toBeGreaterThan(-1)
-    expect(documentIndex).toBeGreaterThan(releaseIndex)
+    expect(u9SyncIndex).toBeGreaterThan(releaseIndex)
+    expect(documentIndex).toBeGreaterThan(u9SyncIndex)
     expect(templateIndex).toBeGreaterThan(documentIndex)
   })
 

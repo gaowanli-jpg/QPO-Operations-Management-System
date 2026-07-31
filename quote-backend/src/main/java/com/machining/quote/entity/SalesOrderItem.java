@@ -29,6 +29,11 @@ public class SalesOrderItem {
     private String internalProjectNo;
     private String salesMaterialNo;
     private String materialNo;
+    private String materialNoStatus;
+    private String materialNoSource;
+    private Long materialNoSourceTicketId;
+    private LocalDateTime materialNoSyncedAt;
+    private String materialNoMessage;
     private LocalDate customerDeliveryDate;
     private LocalDate internalDeliveryDate;
     private String materialName;

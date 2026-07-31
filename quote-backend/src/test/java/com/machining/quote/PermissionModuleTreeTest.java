@@ -142,14 +142,16 @@ class PermissionModuleTreeTest {
                 );
         assertThat(source)
                 .contains(
-                        "permission(165L, \"MENU\", \"market:delivery-document:view\", \"提单表据\", \"/delivery-documents\", \"DeliveryDocumentManage\", true, 146)",
-                        "permission(166L, \"API\", \"market:delivery-document:customer-select\", \"提单表据选择客户\", null, null, false, 147, 165L)",
-                        "permission(167L, \"API\", \"market:delivery-document:order-select\", \"提单表据选择订单\", null, null, false, 148, 165L)",
-                        "permission(168L, \"BUTTON\", \"market:delivery-document:export\", \"导出提单表据\", null, null, false, 149, 165L)",
+                        "permission(165L, \"MENU\", \"market:delivery-document:view\", \"提单表据\", \"/delivery-documents\", \"DeliveryDocumentManage\", true, 150)",
+                        "permission(166L, \"API\", \"market:delivery-document:customer-select\", \"提单表据选择客户\", null, null, false, 151, 165L)",
+                        "permission(167L, \"API\", \"market:delivery-document:order-select\", \"提单表据选择订单\", null, null, false, 152, 165L)",
+                        "permission(168L, \"BUTTON\", \"market:delivery-document:export\", \"导出提单表据\", null, null, false, 153, 165L)",
                         "Map.entry(\"market:delivery-document:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
                         "Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
                 )
                 .doesNotContain("Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+        assertThat(source.indexOf("\"market:u9-sync:view\""))
+                .isBetween(source.indexOf("\"market:release:view\""), source.indexOf("\"market:delivery-document:view\""));
         assertThat(migration)
                 .contains(
                         "('market:delivery-document:view', 'API', 'market:delivery-document:customer-select'",

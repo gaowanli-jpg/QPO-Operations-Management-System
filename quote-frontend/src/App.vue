@@ -115,7 +115,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
 const menuGroups = [
-  { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/delivery-documents', '/quote-template'] },
+  { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
@@ -126,6 +126,7 @@ const menuMetaByPath = {
   '/sales-match': { title: '销售匹配', permission: 'market:sales-match:view', icon: Files },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
   '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
+  '/u9-sync': { title: 'U9同步', permission: 'market:u9-sync:view', icon: Document },
   '/delivery-documents': { title: '提单表据', permission: 'market:delivery-document:view', icon: Document },
   '/quote-template': { title: '报价模板', permission: 'market:template:view', icon: Files },
   '/engineering': { title: '零件核价', permission: 'engineer:setup:view', icon: Setting },
@@ -193,6 +194,10 @@ const shellMetaByPath = {
   '/release': {
     title: '议价提单',
     description: '处理议价结果并生成生产交付资料。'
+  },
+  '/u9-sync': {
+    title: 'U9同步',
+    description: '按销售订单整单预览和同步已确认物料号到 U9。'
   },
   '/delivery-documents': {
     title: '提单表据',

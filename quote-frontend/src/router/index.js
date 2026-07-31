@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 const MarketDashboard = () => import('../components/MarketDashboard.vue')
 const SalesMatch = () => import('../components/SalesMatch.vue')
 const MarketRelease = () => import('../components/MarketRelease.vue')
+const SalesOrderU9Sync = () => import('../components/SalesOrderU9Sync.vue')
 const DeliveryDocumentManage = () => import('../components/DeliveryDocumentManage.vue')
 const QuoteProcess = () => import('../components/QuoteProcess.vue')
 const GlobalSetup = () => import('../components/GlobalSetup.vue')
@@ -29,6 +30,7 @@ const routes = [
   { path: '/sales-match', component: SalesMatch, meta: { permission: 'market:sales-match:view' } },
   { path: '/quote-process', component: QuoteProcess, meta: { permission: 'market:quote-process:view' } },
   { path: '/release', component: MarketRelease, meta: { permission: 'market:release:view' } },
+  { path: '/u9-sync', component: SalesOrderU9Sync, meta: { permission: 'market:u9-sync:view' } },
   { path: '/delivery-documents', component: DeliveryDocumentManage, meta: { permission: 'market:delivery-document:view' } },
   { path: '/engineering', component: GlobalSetup, meta: { permission: 'engineer:setup:view' } },
   { path: '/material-process', component: MaterialProcessManage, meta: { permission: 'engineer:dict:view' } },
