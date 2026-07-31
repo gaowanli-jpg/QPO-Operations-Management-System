@@ -115,6 +115,29 @@ describe('marketApi', () => {
     )
   })
 
+  test('sales match helpers use independent sales-order endpoints with backend paging', async () => {
+    const params = { customerName: 'ACME', keyword: 'SO-2026', page: 2, pageSize: 50 }
+    const payload = { salesOrderIds: [101], salesOrderItemIds: [9001], onlyUnmatched: true }
+
+    await marketApi.listSalesMatchCustomers({ keyword: 'ACME' })
+    await marketApi.listSalesMatchOrders(params)
+    await marketApi.listSalesMatchItems(101, params)
+    await marketApi.previewSalesOrderMatch(payload)
+    await marketApi.applySalesOrderMatch({ ...payload, applyAllMatchedInSelectedOrders: false })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-match/customers', { params: { keyword: 'ACME' } })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-match/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/sales-match/orders/101/items', { params })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/sales-match/preview', {
+      method: 'POST',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-match/apply', {
+      method: 'POST',
+      data: { ...payload, applyAllMatchedInSelectedOrders: false }
+    })
+  })
+
   test('release workspace helpers use split paging endpoints', async () => {
     const params = { page: 2, pageSize: 50, keyword: 'PN' }
 

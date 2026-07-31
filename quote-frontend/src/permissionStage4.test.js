@@ -16,6 +16,7 @@ const mainSource = readSource('main.js')
 
 const protectedRoutePermissions = {
   '/market': 'market:rfq:view',
+  '/sales-match': 'market:sales-match:view',
   '/quote-process': 'market:quote-process:view',
   '/release': 'market:release:view',
   '/delivery-documents': 'market:delivery-document:view',

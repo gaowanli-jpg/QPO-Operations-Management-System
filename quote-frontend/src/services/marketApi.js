@@ -57,6 +57,19 @@ export const listDeliveryDocumentProcessSheets = (rfqId, params = {}) => request
   { params }
 )
 
+export const listSalesMatchCustomers = (params = {}) => request('/api/market/sales-match/customers', { params })
+
+export const listSalesMatchOrders = (params = {}) => request('/api/market/sales-match/orders', { params })
+
+export const listSalesMatchItems = (salesOrderId, params = {}) => request(
+  `/api/market/sales-match/orders/${salesOrderId}/items`,
+  { params }
+)
+
+export const previewSalesOrderMatch = (payload) => postJson('/api/market/sales-match/preview', payload)
+
+export const applySalesOrderMatch = (payload) => postJson('/api/market/sales-match/apply', payload)
+
 export const parsePartSelection = (rfqId, formData) => multipartPost(`/api/market/release/parse-part-selection/${rfqId}`, formData)
 
 export const parsePartSelectionBatch = (formData) => multipartPost('/api/market/release/parse-part-selection/batch', formData)
