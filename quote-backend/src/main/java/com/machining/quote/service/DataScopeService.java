@@ -48,6 +48,10 @@ public class DataScopeService {
         applyScopeSql(query, currentOrderScopeSql(""));
     }
 
+    public void applySalesOrderScope(QueryWrapper<SalesOrderHeader> query) {
+        applyScopeSql(query, currentOrderScopeSql(""));
+    }
+
     public void applyRfqScope(QueryWrapper<?> query, String rfqColumn) {
         String safeColumn = isBlank(rfqColumn) ? "rfq_id" : rfqColumn;
         ScopeSql scopeSql = currentOrderScopeSql("");
