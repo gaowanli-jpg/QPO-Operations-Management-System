@@ -62,7 +62,7 @@ class PermissionSystemStage5Test {
         String audit = source("AuditLogController.java");
         String internalLeadTime = source("InternalTargetLeadTimeController.java");
         String systemTask = source("SystemTaskController.java");
-        String apsSource = source("ApsSourceController.java");
+        String apsSource = source("aps/ApsSourceController.java");
 
         assertThat(market)
                 .contains("@RequirePermission(\"market:rfq:import\")")

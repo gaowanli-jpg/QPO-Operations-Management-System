@@ -78,7 +78,7 @@ class QuoteStatusWorkflowStage1Test {
         String migration = Files.readString(DELIVERY_BATCH_MIGRATION, StandardCharsets.UTF_8);
         String ticketEntity = Files.readString(MAIN_JAVA.resolve("entity/OrderDeliveryTicket.java"), StandardCharsets.UTF_8);
         String deliveryService = Files.readString(MAIN_JAVA.resolve("service/DeliveryService.java"), StandardCharsets.UTF_8);
-        String apsSourceService = Files.readString(MAIN_JAVA.resolve("service/ApsSourceService.java"), StandardCharsets.UTF_8);
+        String apsSourceService = Files.readString(MAIN_JAVA.resolve("service/aps/ApsSourceService.java"), StandardCharsets.UTF_8);
 
         assertThat(migration)
                 .contains("ADD COLUMN IF NOT EXISTS process_route JSONB")

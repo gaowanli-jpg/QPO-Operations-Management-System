@@ -23,7 +23,7 @@ class ProcessSheetDecommissionTest {
     private static final Path QPO_MAIN_JAVA = Path.of("src", "main", "java", "com", "machining", "quote");
     private static final Path QPO_MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
     private static final Path QPO_SNAPSHOT_DEFAULTS_MIGRATION = QPO_MIGRATIONS.resolve("V37__delivery_ticket_snapshot_defaults.sql");
-    private static final Path APS_SOURCE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "ApsSourceService.java");
+    private static final Path APS_SOURCE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "aps", "ApsSourceService.java");
     private static final Path APS_LEGACY_SOURCE_ROOT = Path.of("..", "aps" + "-system");
 
     @Autowired

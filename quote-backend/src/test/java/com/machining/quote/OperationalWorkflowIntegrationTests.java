@@ -7,10 +7,12 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.AuthService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -36,6 +38,29 @@ class OperationalWorkflowIntegrationTests {
     private OrderManagementService orderManagementService;
     @Autowired
     private AuthService authService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void forceLocalStorageForWorkflowTests() {
+        Path uploadRoot = Path.of(System.getProperty("java.io.tmpdir"), "quote-test", "uploads");
+        jdbcTemplate.update("UPDATE system_file_storage_config SET active = FALSE WHERE active = TRUE");
+        jdbcTemplate.update("""
+                INSERT INTO system_file_storage_config (
+                    name, storage_type, active, enabled, config_json, remark, created_by, updated_by
+                )
+                VALUES (
+                    'Workflow test local storage',
+                    'LOCAL',
+                    TRUE,
+                    TRUE,
+                    CAST(? AS jsonb),
+                    'Transactional local storage override for workflow integration tests.',
+                    'test',
+                    'test'
+                )
+                """, "{\"rootDir\":\"" + uploadRoot.toString().replace("\\", "\\\\") + "\"}");
+    }
 
     @Test
     void supplementDrawingsAndDeleteOrderWorkTogether() throws Exception {
