@@ -7,7 +7,6 @@ const CUSTOMER_ENDPOINTS = {
   'delivery-document': '/api/market/delivery-documents/customers',
   'engineer-setup': '/api/engineer/setup/customers',
   'market-order': '/api/order-management/customers',
-  'history-order': '/api/order-management/history-orders/customers',
   'sales-order': '/api/market/sales-order-management/customers',
   'delivered-item': '/api/order-delivery/tickets/customers',
   'locked-item': '/api/order-delivery/allocations/customers'
@@ -30,11 +29,6 @@ export const listOrderTickets = (rfqId, params = {}) => request(`/api/order-mana
 export const listOrderProcessSheets = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/process-sheets`, { params })
 
 export const getOrderDrawingSummary = (rfqId) => request(`/api/order-management/orders/${rfqId}/drawing-summary`)
-
-export const deleteOrder = (orderId, { deleteFiles = false } = {}) => request(`/api/order-management/orders/${orderId}`, {
-  method: 'DELETE',
-  params: { deleteFiles }
-})
 
 export const rollbackQuotedOrder = (rfqId, payload = {}) => request(`/api/order-management/orders/${rfqId}/rollback-quoted`, {
   method: 'POST',

@@ -84,6 +84,10 @@ public class OrderManagementController {
         return orderManagementService.listCustomerOptions(field, keyword);
     }
 
+    /**
+     * @deprecated history-order UI has been retired; use the sales-order management customer API.
+     */
+    @Deprecated
     @GetMapping("/history-orders/customers")
     @RequirePermission("market:history-order:customer-select")
     public List<CustomerOptionDTO> listHistoryCustomers(
@@ -100,6 +104,11 @@ public class OrderManagementController {
         return orderManagementService.supplementDrawings(rfqId, drawings);
     }
 
+    /**
+     * @deprecated physical order deletion is retained only for legacy compatibility.
+     * New inquiry-order and sales-order pages must use discard/restore governance instead.
+     */
+    @Deprecated
     @DeleteMapping("/orders/{rfqId}")
     @RequirePermission("market:order:delete")
     public Map<String, Object> deleteOrder(

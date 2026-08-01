@@ -32,7 +32,7 @@ describe('orderApi', () => {
     await orderApi.listCustomers('delivery-document')
     await orderApi.listCustomers('engineer-setup')
     await orderApi.listCustomers('market-order')
-    await orderApi.listCustomers('history-order')
+    await orderApi.listCustomers('sales-order')
     await orderApi.listCustomers('delivered-item')
     await orderApi.listCustomers('locked-item')
 
@@ -42,7 +42,7 @@ describe('orderApi', () => {
     expect(request).toHaveBeenNthCalledWith(4, '/api/market/delivery-documents/customers')
     expect(request).toHaveBeenNthCalledWith(5, '/api/engineer/setup/customers')
     expect(request).toHaveBeenNthCalledWith(6, '/api/order-management/customers')
-    expect(request).toHaveBeenNthCalledWith(7, '/api/order-management/history-orders/customers')
+    expect(request).toHaveBeenNthCalledWith(7, '/api/market/sales-order-management/customers')
     expect(request).toHaveBeenNthCalledWith(8, '/api/order-delivery/tickets/customers')
     expect(request).toHaveBeenNthCalledWith(9, '/api/order-delivery/allocations/customers')
   })
@@ -75,13 +75,8 @@ describe('orderApi', () => {
     expect(request).toHaveBeenNthCalledWith(4, '/api/order-management/orders/12/drawing-summary')
   })
 
-  test('deleteOrder preserves delete files query option', async () => {
-    await orderApi.deleteOrder(12, { deleteFiles: true })
-
-    expect(request).toHaveBeenCalledWith('/api/order-management/orders/12', {
-      method: 'DELETE',
-      params: { deleteFiles: true }
-    })
+  test('does not expose physical delete helper after history orders are retired', () => {
+    expect('deleteOrder' in orderApi).toBe(false)
   })
 
   test('exposes order status management actions with dedicated endpoints', async () => {

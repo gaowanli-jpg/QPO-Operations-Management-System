@@ -184,8 +184,8 @@ describe('large order item paging contracts', () => {
     expect(source).not.toContain('orderDetail.value = await getOrder(currentId)')
   })
 
-  test('history order detail drawer lazy-loads read-only paged tab data', () => {
-    const source = readSource('components', 'HistoryOrderManage.vue')
+  test('sales order detail drawer lazy-loads read-only paged tab data', () => {
+    const source = readSource('components', 'SalesOrderManage.vue')
 
     expect(source).toContain('activeDetailTab')
     expect(source).toContain('@tab-change="handleDetailTabChange"')

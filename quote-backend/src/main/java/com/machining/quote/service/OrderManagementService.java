@@ -352,6 +352,10 @@ public class OrderManagementService {
         return result;
     }
 
+    /**
+     * @deprecated physical RFQ deletion is a legacy compatibility path. New order governance uses discard/restore.
+     */
+    @Deprecated
     @Transactional
     public void deleteOrderCompletely(Integer rfqId, boolean deleteFiles) {
         OrderRfq order = requireOrderForUpdate(rfqId);

@@ -416,7 +416,7 @@ class PermissionModuleTreeTest {
                         "market:rfq:customer-select",
                         "market:quote-process:order-select",
                         "market:release:order-select",
-                        "market:history-order:customer-select",
+                        "market:sales-order:customer-select",
                         "engineer:setup:order-select"
                 );
         assertThat(source)

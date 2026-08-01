@@ -8,7 +8,6 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 const orderManage = readSource('components', 'OrderManage.vue')
-const historyOrderManage = readSource('components', 'HistoryOrderManage.vue')
 const orderApi = readSource('services', 'orderApi.js')
 
 const blockBetween = (source, start, end) => {
@@ -114,17 +113,10 @@ describe('order status management stage 0 guardrails', () => {
     expect(supplementBlock).toContain('await supplementDrawings(rfqId, formData)')
   })
 
-  test('history delete uses an order-scoped pending key instead of full-page delete loading', () => {
-    const deleteBlock = blockBetween(historyOrderManage, 'const deleteHistoryOrder = async (row) =>', 'const formatRoute = (route) =>')
-
-    expect(historyOrderManage).toContain("import { usePendingAction } from '../composables/usePendingAction'")
-    expect(historyOrderManage).toContain('const { isPending, runAction } = usePendingAction()')
-    expect(historyOrderManage).toContain("deleteOrder: (orderId) => `order:delete:${orderId || 'none'}`")
-    expect(historyOrderManage).toContain(':loading="isHistoryOrderDeletePending(row)"')
-    expect(historyOrderManage).toContain(':disabled="isHistoryOrderDeletePending(row)"')
-    expect(deleteBlock).toContain('return runAction(historyOrderActionKeys.deleteOrder(row.id), async () =>')
-    expect(deleteBlock).toContain('await deleteOrder(row.id, { deleteFiles: true })')
-    expect(deleteBlock).not.toContain('loading.value = true')
+  test('does not ship frontend helpers for retired history-order delete', () => {
+    expect(orderApi).not.toContain('export const deleteOrder')
+    expect(orderApi).not.toContain('/api/order-management/history-orders/customers')
+    expect(orderApi).not.toContain("'history-order'")
   })
 
   test('status action key suppresses duplicate order status requests while pending', async () => {

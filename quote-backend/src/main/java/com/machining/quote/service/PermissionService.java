@@ -200,7 +200,7 @@ public class PermissionService {
             permission(185L, "API", "market:sales-match:file-preview", "销售匹配预览图纸", null, null, false, 124, 181L),
             permission(3L, "MENU", "market:order:view", "询价订单", "/orders", "OrderManage", true, 120),
             permission(102L, "BUTTON", "market:order:supplement-drawing", "补传图纸", null, null, false, 121, 3L),
-            permission(103L, "BUTTON", "market:order:delete", "删除订单", null, null, false, 122, 3L),
+            deprecatedPermission(103L, "BUTTON", "market:order:delete", "删除订单兼容接口（已废弃）", null, null, 122, 3L),
             permission(132L, "API", "market:order:customer-select", "询价订单选择客户", null, null, false, 123, 3L),
             permission(133L, "API", "market:order:file-preview", "询价订单预览文件", null, null, false, 124, 3L),
             permission(190L, "MENU", "market:sales-order:view", "销售订单", "/sales-orders", "SalesOrderManage", true, 125),
@@ -213,9 +213,9 @@ public class PermissionService {
             permission(154L, "BUTTON", "market:order:rollback-priced", "已核价退回未核价", null, null, false, 129, 3L),
             permission(155L, "BUTTON", "market:order:discard", "废弃订单", null, null, false, 130, 3L),
             permission(156L, "BUTTON", "market:order:restore", "恢复废弃订单", null, null, false, 131, 3L),
-            permission(15L, "MENU", "market:history-order:view", "历史订单", "/history-orders", "HistoryOrderManage", false, 125),
-            permission(134L, "API", "market:history-order:customer-select", "历史订单选择客户", null, null, false, 126, 15L),
-            permission(135L, "API", "market:history-order:file-preview", "历史订单预览文件", null, null, false, 127, 15L),
+            deprecatedPermission(15L, "MENU", "market:history-order:view", "历史订单兼容权限（已废弃）", "/history-orders", null, 125, 0L),
+            deprecatedPermission(134L, "API", "market:history-order:customer-select", "历史订单客户选择兼容接口（已废弃）", null, null, 126, 15L),
+            deprecatedPermission(135L, "API", "market:history-order:file-preview", "历史订单文件预览兼容接口（已废弃）", null, null, 127, 15L),
             permission(158L, "MENU", "market:delivered-item:view", "已提零件", "/delivered-items", "DeliveredItemManage", true, 126),
             permission(159L, "API", "market:delivered-item:file-preview", "已提零件预览图纸", null, null, false, 127, 158L),
             permission(160L, "BUTTON", "market:delivered-item:mes-sync", "获取MES物料号", null, null, false, 128, 158L),
@@ -457,6 +457,20 @@ public class PermissionService {
         permission.setEnabled(true);
         permission.setAssignable(assignable);
         permission.setSortOrder(sortOrder);
+        return permission;
+    }
+
+    private static SystemPermission deprecatedPermission(
+            Long id,
+            String type,
+            String code,
+            String name,
+            String path,
+            String componentKey,
+            int sortOrder,
+            Long parentId) {
+        SystemPermission permission = permission(id, type, code, name, path, componentKey, false, sortOrder, parentId);
+        permission.setAssignable(false);
         return permission;
     }
 }

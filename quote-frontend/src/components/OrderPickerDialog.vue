@@ -130,8 +130,7 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
   'delivery-document': 'market:delivery-document:customer-select',
   'u9-sync': 'market:u9-sync:customer-select',
   'engineer-setup': 'engineer:setup:customer-select',
-  'market-order': 'market:order:customer-select',
-  'history-order': 'market:history-order:customer-select'
+  'market-order': 'market:order:customer-select'
 }
 
 const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单']

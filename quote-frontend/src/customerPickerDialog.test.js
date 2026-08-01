@@ -37,9 +37,9 @@ describe('QPO customer picker dialog', () => {
   test('replaces customer dropdowns in existing order selection flows', () => {
     const orderPicker = readComponent('OrderPickerDialog.vue')
     const orderManage = readComponent('OrderManage.vue')
-    const historyManage = readComponent('HistoryOrderManage.vue')
+    const salesOrderManage = readComponent('SalesOrderManage.vue')
 
-    for (const source of [orderPicker, orderManage, historyManage]) {
+    for (const source of [orderPicker, orderManage, salesOrderManage]) {
       expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
       expect(source).toContain('<CustomerPickerDialog')
       expect(source).toContain('@select="handleCustomerSelected"')
@@ -48,7 +48,7 @@ describe('QPO customer picker dialog', () => {
 
     expect(orderPicker).not.toContain('import { listCustomers }')
     expect(orderManage).not.toContain('listCustomers,')
-    expect(historyManage).not.toContain('listCustomers,')
+    expect(salesOrderManage).not.toContain('listCustomers,')
     expect(orderPicker).toContain('customerScope')
     expect(orderPicker).toContain('orderScope')
     expect(orderPicker).toContain(':customer-scope="customerScope"')

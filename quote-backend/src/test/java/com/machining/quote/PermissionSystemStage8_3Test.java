@@ -59,7 +59,8 @@ class PermissionSystemStage8_3Test {
         when(permissionMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
                 permission(1L, 0L, "MENU", "market:rfq:view", "新单导入", true, true, 110),
                 permission(2L, 1L, "BUTTON", "market:rfq:import", "导入 RFQ", false, true, 111),
-                permission(15L, 0L, "MENU", "market:history-order:view", "历史订单", true, true, 125),
+                permission(190L, 0L, "MENU", "market:sales-order:view", "销售订单", true, true, 125),
+                permission(15L, 0L, "MENU", "market:history-order:view", "历史订单兼容权限（已废弃）", false, false, 126),
                 permission(901L, 0L, "API", "common:task:view", "查看异步任务", false, false, 910)
         ));
 
@@ -71,9 +72,10 @@ class PermissionSystemStage8_3Test {
         assertThat(findNode(marketGroup.getChildren(), "market:rfq:view").getChildren())
                 .extracting(PermissionTreeNodeDTO::getPermissionCode)
                 .containsExactly("market:rfq:import");
-        assertThat(findNode(orderGroup.getChildren(), "market:history-order:view").getPermissionName())
-                .isEqualTo("历史订单");
-        assertThat(flattenCodes(tree)).doesNotContain("common:task:view");
+        assertThat(findNode(orderGroup.getChildren(), "market:sales-order:view").getPermissionName())
+                .isEqualTo("销售订单");
+        assertThat(flattenCodes(tree))
+                .doesNotContain("common:task:view", "market:history-order:view");
     }
 
     @Test
