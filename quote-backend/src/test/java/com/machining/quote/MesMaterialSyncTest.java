@@ -4,11 +4,13 @@ import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
@@ -112,6 +114,7 @@ class MesMaterialSyncTest {
     void syncMaterialNoWritesMaterialNumberAndSuccessStatus() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketMesRequestMapper mesRequestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         MesMaterialClient client = mock(MesMaterialClient.class);
@@ -123,36 +126,136 @@ class MesMaterialSyncTest {
         response.setSuccess(true);
         response.setMaterialNo("  MES-7788  ");
         response.setMessage("created");
-        when(client.resolveMaterial(any())).thenReturn(response);
+        when(client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            response.setExternalTraceId("MES-TASK-7788");
+            return response;
+        });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+        ReflectionTestUtils.setField(service, "mesRequestMapper", mesRequestMapper);
 
         Map<String, Object> result = service.syncMaterialNo(123, 9001L);
 
         assertThat(result)
                 .containsEntry("ticketId", 123)
                 .containsEntry("taskId", 9001L)
+                .containsEntry("status", "SUCCESS")
                 .containsEntry("materialNo", "MES-7788");
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(client).resolveMaterial(reqCaptor.capture());
+        MesMaterialResolveReq req = reqCaptor.getValue();
+        assertThat(req.getMesRequestId()).isNotBlank();
+        assertThat(req.getSourceType()).isEqualTo("RFQ");
+        assertThat(req.getSourceOrderId()).isEqualTo(88L);
+        assertThat(req.getSourceItemId()).isEqualTo(77L);
+        assertThat(req.getOrderNo()).isEqualTo("RFQ-88");
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(mesRequestMapper).insert(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());
+        assertThat(requestCaptor.getValue().getRequestStatus()).isEqualTo("PROCESSING");
         ArgumentCaptor<OrderDeliveryTicket> processing = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(ticketMapper).update(processing.capture(), any());
         assertThat(processing.getValue().getMesSyncStatus()).isEqualTo("PROCESSING");
+        assertThat(processing.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());
         ArgumentCaptor<OrderDeliveryTicket> successCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(ticketMapper).updateById(successCaptor.capture());
         OrderDeliveryTicket success = successCaptor.getValue();
         assertThat(success.getMaterialNo()).isEqualTo("MES-7788");
         assertThat(success.getMesSyncStatus()).isEqualTo("SUCCESS");
         assertThat(success.getMesSyncMessage()).isEqualTo("created");
+        assertThat(success.getMesRequestId()).isEqualTo(req.getMesRequestId());
+        assertThat(success.getMesExternalTaskId()).isEqualTo("MES-TASK-7788");
         assertThat(success.getMesSyncedAt()).isNotNull();
+        ArgumentCaptor<Object> auditSummaryCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(
                 eq("DELIVERY_MES_MATERIAL_SYNC_SUCCESS"),
                 eq("order_delivery_ticket"),
                 eq(123),
                 isNull(),
-                any(),
+                auditSummaryCaptor.capture(),
                 eq("DELIVERY"),
                 eq("SUCCESS"),
                 contains("ticketId=123 taskId=9001"),
                 isNull()
+        );
+        Map<String, Object> auditSummary = (Map<String, Object>) auditSummaryCaptor.getValue();
+        assertThat(auditSummary)
+                .containsEntry("status", "SUCCESS")
+                .containsEntry("mesRequestId", req.getMesRequestId())
+                .containsEntry("externalTraceId", "MES-TASK-7788");
+    }
+
+    @Test
+    void syncMaterialNoMarksCallbackPendingWhenMesAcceptsWithoutMaterialNumber() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketMesRequestMapper mesRequestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        when(ticketMapper.selectById(123)).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(true);
+        response.setCallbackRequired(true);
+        response.setStatus("CALLBACK_PENDING");
+        response.setExternalTraceId("MES-TASK-PENDING");
+        response.setMessage("MES已受理，后续回调");
+        when(client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            return response;
+        });
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+        ReflectionTestUtils.setField(service, "mesRequestMapper", mesRequestMapper);
+
+        Map<String, Object> result = service.syncMaterialNo(123, 9006L);
+
+        assertThat(result)
+                .containsEntry("ticketId", 123)
+                .containsEntry("taskId", 9006L)
+                .containsEntry("status", "CALLBACK_PENDING")
+                .containsEntry("externalTraceId", "MES-TASK-PENDING");
+        assertThat(result).doesNotContainKey("materialNo");
+        ArgumentCaptor<OrderDeliveryTicket> updateCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).updateById(updateCaptor.capture());
+        OrderDeliveryTicket update = updateCaptor.getValue();
+        assertThat(update.getMesSyncStatus()).isEqualTo("CALLBACK_PENDING");
+        assertThat(update.getMesSyncMessage()).isEqualTo("MES已受理，后续回调");
+        assertThat(update.getMesExternalTaskId()).isEqualTo("MES-TASK-PENDING");
+        assertThat(update.getMesRequestId()).isNotBlank();
+        ArgumentCaptor<Object> auditSummaryCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_ACCEPTED"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                auditSummaryCaptor.capture(),
+                eq("DELIVERY"),
+                eq("CALLBACK_PENDING"),
+                contains("ticketId=123 taskId=9006"),
+                isNull()
+        );
+        Map<String, Object> auditSummary = (Map<String, Object>) auditSummaryCaptor.getValue();
+        assertThat(auditSummary)
+                .containsEntry("status", "CALLBACK_PENDING")
+                .containsEntry("mesRequestId", update.getMesRequestId())
+                .containsEntry("externalTraceId", "MES-TASK-PENDING");
+        verify(auditService, never()).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_FAILED"),
+                anyString(),
+                any(),
+                any(),
+                any(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any()
         );
     }
 
@@ -182,7 +285,11 @@ class MesMaterialSyncTest {
         response.setSuccess(true);
         response.setMaterialNo("MES-SO-7788");
         response.setMessage("created");
-        when(client.resolveMaterial(any())).thenReturn(response);
+        when(client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            return response;
+        });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
@@ -222,7 +329,11 @@ class MesMaterialSyncTest {
         MesMaterialResolveResp response = new MesMaterialResolveResp();
         response.setSuccess(true);
         response.setMaterialNo("MES-7788");
-        when(client.resolveMaterial(any())).thenReturn(response);
+        when(client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            return response;
+        });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService, businessFileService);
 
@@ -280,6 +391,44 @@ class MesMaterialSyncTest {
     }
 
     @Test
+    void syncMaterialNoRejectsSuccessfulMesResponseWithoutRequestId() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        when(ticketMapper.selectById(123)).thenReturn(ticket());
+        when(orderMapper.selectById(88)).thenReturn(order());
+        when(itemMapper.selectById(77)).thenReturn(item("http://qpo.local/p100.pdf"));
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setSuccess(true);
+        response.setMaterialNo("MES-7788");
+        when(client.resolveMaterial(any())).thenReturn(response);
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+
+        assertThatThrownBy(() -> service.syncMaterialNo(123, 9008L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("请求ID");
+
+        ArgumentCaptor<OrderDeliveryTicket> failedCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(ticketMapper).updateById(failedCaptor.capture());
+        assertThat(failedCaptor.getValue().getMesSyncStatus()).isEqualTo("FAILED");
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_SYNC_FAILED"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(),
+                eq("DELIVERY"),
+                eq("FAILED"),
+                contains("ticketId=123 taskId=9008"),
+                contains("请求ID")
+        );
+    }
+
+    @Test
     void syncMaterialNoRejectsAlreadySuccessfulTicketWithoutOverwritingMaterialNumber() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
@@ -301,6 +450,29 @@ class MesMaterialSyncTest {
         verify(ticketMapper, never()).update(any(OrderDeliveryTicket.class), any());
         verify(client, never()).resolveMaterial(any());
         verify(auditService, never()).record(anyString(), anyString(), any(), any(), any(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void syncMaterialNoRejectsCallbackPendingTicketWithoutCallingMesAgain() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        MesMaterialClient client = mock(MesMaterialClient.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = ticket();
+        ticket.setMesSyncStatus("CALLBACK_PENDING");
+        ticket.setMesRequestId("MES-OLD-123");
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
+
+        assertThatThrownBy(() -> service.syncMaterialNo(123, 9007L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("callback");
+
+        verify(ticketMapper, never()).updateById(any());
+        verify(ticketMapper, never()).update(any(OrderDeliveryTicket.class), any());
+        verify(client, never()).resolveMaterial(any());
     }
 
     @Test
@@ -338,9 +510,11 @@ class MesMaterialSyncTest {
                         "FAILED",
                         "setMesSyncStatus",
                         "DELIVERY_MES_MATERIAL_SYNC_SUCCESS",
+                        "DELIVERY_MES_MATERIAL_SYNC_ACCEPTED",
                         "DELIVERY_MES_MATERIAL_SYNC_FAILED",
                         "MES material sync started",
                         "MES material sync completed",
+                        "MES material sync accepted",
                         "MES material sync failed",
                         "log.error(\"MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}\""
                 );
@@ -351,8 +525,13 @@ class MesMaterialSyncTest {
         assertThat(read(MES_REQ))
                 .contains(
                         "class MesMaterialResolveReq",
+                        "private String mesRequestId;",
                         "private Integer ticketId;",
                         "private Integer rfqId;",
+                        "private String sourceType;",
+                        "private Long sourceOrderId;",
+                        "private Long sourceItemId;",
+                        "private String orderNo;",
                         "private String rfqNo;",
                         "private String customerName;",
                         "private String partNo;",
@@ -364,6 +543,9 @@ class MesMaterialSyncTest {
                 .contains(
                         "class MesMaterialResolveResp",
                         "private Boolean success;",
+                        "private String mesRequestId;",
+                        "private String status;",
+                        "private Boolean callbackRequired;",
                         "private String materialNo;",
                         "private String message;",
                         "private String externalTraceId;"

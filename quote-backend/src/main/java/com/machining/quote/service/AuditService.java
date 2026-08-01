@@ -311,6 +311,7 @@ public class AuditService {
             case "DELIVERY_PROCESS_SHEET_EXPORT" -> "导出工艺表";
             case "DELIVERY_MES_MATERIAL_SYNC_SUBMIT" -> "提交MES物料号同步";
             case "DELIVERY_MES_MATERIAL_SYNC_SUCCESS" -> "MES物料号同步成功";
+            case "DELIVERY_MES_MATERIAL_SYNC_ACCEPTED" -> "MES物料号已受理待回调";
             case "DELIVERY_MES_MATERIAL_SYNC_FAILED" -> "MES物料号同步失败";
             case "DELIVERY_WMS_ALLOCATION_SUBMIT" -> "提交WMS锁库";
             case "DELIVERY_WMS_ALLOCATION_SUCCESS" -> "WMS锁库成功";

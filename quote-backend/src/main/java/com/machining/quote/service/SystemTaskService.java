@@ -121,6 +121,9 @@ public class SystemTaskService {
         if ("PROCESSING".equalsIgnoreCase(ticket.getMesSyncStatus())) {
             throw new RuntimeException("该提单行 MES 物料号任务正在处理中");
         }
+        if ("CALLBACK_PENDING".equalsIgnoreCase(ticket.getMesSyncStatus())) {
+            throw new RuntimeException("该提单行 MES 物料号等待回调，不能重复提交");
+        }
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("ticketId", ticket.getId());
         request.put("rfqId", ticket.getRfqId());

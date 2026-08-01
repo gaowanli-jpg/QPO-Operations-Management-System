@@ -59,6 +59,10 @@ public class DeliveryIntegrationBatchService {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Integer ticketId : normalizeTicketIds(ticketIds)) {
             OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
+            if (isMesCallbackPending(ticket)) {
+                rows.add(row(ticketId, "CALLBACK_PENDING", "MES 物料号等待回调", null));
+                continue;
+            }
             String skipReason = mesSkipReason(ticket);
             if (skipReason != null) {
                 rows.add(row(ticketId, "SKIPPED", skipReason, null));
@@ -66,7 +70,11 @@ public class DeliveryIntegrationBatchService {
             }
             try {
                 Object result = mesMaterialSyncService.syncMaterialNo(ticketId, taskId);
-                rows.add(row(ticketId, "SUCCESS", "MES 物料号同步成功", result));
+                if (isCallbackPendingResult(result)) {
+                    rows.add(row(ticketId, "CALLBACK_PENDING", "MES 已受理，等待回调", result));
+                } else {
+                    rows.add(row(ticketId, "SUCCESS", "MES 物料号同步成功", result));
+                }
             } catch (RuntimeException error) {
                 rows.add(row(ticketId, "FAILED", safeMessage(error), null));
             }
@@ -145,6 +153,7 @@ public class DeliveryIntegrationBatchService {
         summary.put("taskId", taskId);
         summary.put("totalCount", rows.size());
         summary.put("successCount", count(rows, "SUCCESS"));
+        summary.put("callbackPendingCount", count(rows, "CALLBACK_PENDING"));
         summary.put("failedCount", count(rows, "FAILED"));
         summary.put("skippedCount", count(rows, "SKIPPED"));
         summary.put("results", rows);
@@ -153,6 +162,18 @@ public class DeliveryIntegrationBatchService {
 
     private int count(List<Map<String, Object>> rows, String status) {
         return Math.toIntExact(rows.stream().filter(row -> status.equals(row.get("status"))).count());
+    }
+
+    private boolean isCallbackPendingResult(Object result) {
+        if (!(result instanceof Map<?, ?> raw)) {
+            return false;
+        }
+        Object status = raw.get("status");
+        return status != null && "CALLBACK_PENDING".equalsIgnoreCase(String.valueOf(status));
+    }
+
+    private boolean isMesCallbackPending(OrderDeliveryTicket ticket) {
+        return ticket != null && "CALLBACK_PENDING".equalsIgnoreCase(ticket.getMesSyncStatus());
     }
 
     private String safeMessage(RuntimeException error) {
