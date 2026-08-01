@@ -2,17 +2,23 @@ package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.OrderStatusChangeReq;
+import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.service.SalesOrderManageService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -74,5 +80,35 @@ public class SalesOrderManageController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return salesOrderManageService.pageDynamicProcessSheets(salesOrderId, page, pageSize);
+    }
+
+    @GetMapping("/orders/{salesOrderId}/drawing-summary")
+    @RequirePermission("market:sales-order:view")
+    public Map<String, Object> getDrawingSummary(@PathVariable Long salesOrderId) {
+        return salesOrderManageService.getDrawingSummary(salesOrderId);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/discard")
+    @RequirePermission("market:sales-order:discard")
+    public OrderStatusChangeResult discard(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderManageService.discard(salesOrderId, req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/restore")
+    @RequirePermission("market:sales-order:restore")
+    public OrderStatusChangeResult restore(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) OrderStatusChangeReq req) {
+        return salesOrderManageService.restore(salesOrderId, req == null ? new OrderStatusChangeReq() : req);
+    }
+
+    @PostMapping(value = "/items/{itemId}/drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:sales-order:supplement-drawing")
+    public Map<String, Object> supplementItemDrawings(
+            @PathVariable Long itemId,
+            @RequestParam("drawings") List<MultipartFile> drawings) {
+        return salesOrderManageService.supplementItemDrawings(itemId, drawings);
     }
 }

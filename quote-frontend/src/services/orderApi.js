@@ -61,3 +61,31 @@ export const supplementDrawings = (rfqId, formData) => request(`/api/order-manag
   data: formData,
   headers: { 'Content-Type': 'multipart/form-data' }
 })
+
+export const listSalesOrders = (params = {}) => request('/api/market/sales-order-management/orders', { params })
+
+export const getSalesOrder = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}`)
+
+export const listSalesOrderItems = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/items`, { params })
+
+export const listSalesOrderTickets = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/tickets`, { params })
+
+export const listSalesOrderProcessSheets = (salesOrderId, params = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/process-sheets`, { params })
+
+export const getSalesOrderDrawingSummary = (salesOrderId) => request(`/api/market/sales-order-management/orders/${salesOrderId}/drawing-summary`)
+
+export const discardSalesOrder = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreSalesOrder = (salesOrderId, payload = {}) => request(`/api/market/sales-order-management/orders/${salesOrderId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
+export const supplementSalesOrderItemDrawings = (itemId, formData) => request(`/api/market/sales-order-management/items/${itemId}/drawings`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})

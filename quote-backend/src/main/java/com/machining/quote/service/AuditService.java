@@ -196,6 +196,9 @@ public class AuditService {
         if ("SALES_ORDER_IMPORT_QPO".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_MATCH_APPLY".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_SYNC".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_DISCARD".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_RESTORE".equalsIgnoreCase(action)) return "MARKET";
+        if ("SALES_ORDER_DRAWING_SUPPLEMENT".equalsIgnoreCase(action)) return "MARKET";
         if ("ORDER_QUOTE_COMPLETE".equalsIgnoreCase(action)) return "ENGINEER";
         if ("PRICING_SHEET_EXPORT".equalsIgnoreCase(action)) return "ENGINEER";
         if (startsWith(action, "DICT_")) return "DICT";
@@ -268,6 +271,9 @@ public class AuditService {
             case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单到独立主表";
             case "SALES_ORDER_MATCH_APPLY" -> "销售匹配确认补全";
             case "SALES_ORDER_U9_SYNC" -> "销售订单同步U9";
+            case "SALES_ORDER_DISCARD" -> "废弃销售订单";
+            case "SALES_ORDER_RESTORE" -> "恢复销售订单";
+            case "SALES_ORDER_DRAWING_SUPPLEMENT" -> "补传销售订单图纸";
             case "QUOTE_EXPORT_TASK_SUBMIT" -> "提交报价单导出任务";
             case "QUOTE_REFRESH_TASK_SUBMIT" -> "提交一键刷新核价任务";
             case "AUDIT_RETENTION_CONFIG_UPDATE" -> "更新操作日志保留策略";

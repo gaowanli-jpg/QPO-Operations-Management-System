@@ -6,6 +6,8 @@ import lombok.Data;
 public class OrderStatusChangeResult {
     private Integer rfqId;
     private String rfqNo;
+    private Long salesOrderId;
+    private String salesOrderNo;
     private String fromStatus;
     private String toStatus;
     private Integer updatedItemCount;
