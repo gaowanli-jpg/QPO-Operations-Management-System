@@ -313,6 +313,9 @@ public class AuditService {
             case "DELIVERY_MES_MATERIAL_SYNC_SUCCESS" -> "MES物料号同步成功";
             case "DELIVERY_MES_MATERIAL_SYNC_ACCEPTED" -> "MES物料号已受理待回调";
             case "DELIVERY_MES_MATERIAL_SYNC_FAILED" -> "MES物料号同步失败";
+            case "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS" -> "MES物料号回调成功";
+            case "DELIVERY_MES_MATERIAL_CALLBACK_FAILED" -> "MES物料号回调失败";
+            case "DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT" -> "MES物料号回调冲突";
             case "DELIVERY_WMS_ALLOCATION_SUBMIT" -> "提交WMS锁库";
             case "DELIVERY_WMS_ALLOCATION_SUCCESS" -> "WMS锁库成功";
             case "DELIVERY_WMS_ALLOCATION_FAILED" -> "WMS锁库失败";

@@ -92,6 +92,8 @@ services:
       ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
       ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
       ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
+      ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
+      ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
       # WMS inventory allocation fallback configuration.
       ERP_WMS_BASE_URL: ${ERP_WMS_BASE_URL:-}
       ERP_WMS_AUTH_TOKEN: ${ERP_WMS_AUTH_TOKEN:-}

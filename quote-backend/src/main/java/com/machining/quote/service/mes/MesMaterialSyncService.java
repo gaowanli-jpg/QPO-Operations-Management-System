@@ -1,7 +1,10 @@
 package com.machining.quote.service.mes;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.mes.MesMaterialCallbackReq;
+import com.machining.quote.dto.mes.MesMaterialCallbackResp;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -18,12 +21,14 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -52,6 +57,60 @@ public class MesMaterialSyncService {
     private BusinessFileService businessFileService;
     @Autowired(required = false)
     private AuditService auditService;
+
+    public MesMaterialCallbackResp handleMaterialCallback(MesMaterialCallbackReq req) {
+        long startedAt = System.currentTimeMillis();
+        String mesRequestId = trimToNull(req == null ? null : req.getMesRequestId());
+        if (mesRequestId == null) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "MES 请求ID不能为空");
+        }
+        Integer ticketId = req == null ? null : req.getTicketId();
+        if (ticketId == null) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "ticketId 不能为空");
+        }
+        String externalTraceId = trimToNull(req.getExternalTraceId());
+        log.info("MES material callback received ticketId={} mesRequestId={} externalTraceId={}",
+                ticketId, mesRequestId, externalTraceId);
+        OrderDeliveryTicketMesRequest request = loadMesRequest(mesRequestId);
+        if (!Objects.equals(request.getTicketId(), ticketId)) {
+            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", null, request, req, STATUS_FAILED,
+                    "MES 回调 ticketId 与请求流水不匹配");
+            throw callbackError(HttpStatus.CONFLICT, "MES 回调 ticketId 与请求流水不匹配");
+        }
+        OrderDeliveryTicket ticket = loadTicket(ticketId);
+        if (!mesRequestId.equals(trimToNull(ticket.getMesRequestId()))) {
+            updateMesRequestFromCallback(mesRequestId, "STALE", null, externalTraceId, "旧 MES 回调已拒绝", false);
+            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, request, req, STATUS_FAILED,
+                    "旧 MES 回调不能覆盖当前请求");
+            throw callbackError(HttpStatus.CONFLICT, "旧 MES 回调不能覆盖当前请求");
+        }
+        String materialNo = normalizeMaterialNo(req.getMaterialNo());
+        if (!STATUS_SUCCESS.equalsIgnoreCase(trimToNull(req.getStatus()))) {
+            markFailed(ticket, mesRequestId, isBlank(req.getMessage()) ? "MES 回调失败" : req.getMessage());
+            updateMesRequestFromCallback(mesRequestId, STATUS_FAILED, null, externalTraceId, req.getMessage(), true);
+            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", ticket, request, req, STATUS_FAILED, req.getMessage());
+            return callbackResponse(false, "MES 回调失败", ticketId, mesRequestId, null);
+        }
+        if (isBlank(materialNo)) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "MES 回调物料号不能为空");
+        }
+        if (STATUS_SUCCESS.equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
+            if (materialNo.equals(ticket.getMaterialNo().trim())) {
+                return callbackResponse(true, "MES 回调已处理", ticketId, mesRequestId, materialNo);
+            }
+            recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, request, req, STATUS_FAILED,
+                    "MES 回调物料号冲突");
+            throw callbackError(HttpStatus.CONFLICT, "MES 回调物料号冲突，不能覆盖已确认物料号");
+        }
+        assertSalesOrderItemMaterialWritable(ticket, materialNo);
+        markCallbackSuccess(ticket, mesRequestId, materialNo, req.getMessage(), externalTraceId);
+        updateMesRequestFromCallback(mesRequestId, STATUS_SUCCESS, materialNo, externalTraceId, req.getMessage(), true);
+        syncSalesOrderItemMaterialNo(ticket, materialNo, req.getMessage());
+        recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS", ticket, request, req, STATUS_SUCCESS, null);
+        log.info("MES material callback completed ticketId={} mesRequestId={} materialNo={} durationMs={}",
+                ticketId, mesRequestId, materialNo, System.currentTimeMillis() - startedAt);
+        return callbackResponse(true, "QPO已接收物料号回调", ticketId, mesRequestId, materialNo);
+    }
 
     public Map<String, Object> syncMaterialNo(Integer ticketId, Long taskId) {
         long startedAt = System.currentTimeMillis();
@@ -173,7 +232,11 @@ public class MesMaterialSyncService {
     }
 
     private String normalizeMaterialNo(MesMaterialResolveResp resp) {
-        String materialNo = resp == null || resp.getMaterialNo() == null ? "" : resp.getMaterialNo().trim();
+        return normalizeMaterialNo(resp == null ? null : resp.getMaterialNo());
+    }
+
+    private String normalizeMaterialNo(String value) {
+        String materialNo = value == null ? "" : value.trim();
         if (materialNo.isEmpty()) {
             return "";
         }
@@ -241,6 +304,40 @@ public class MesMaterialSyncService {
         ticketMapper.updateById(update);
     }
 
+    private void markCallbackSuccess(OrderDeliveryTicket ticket, String mesRequestId, String materialNo, String message, String externalTraceId) {
+        OrderDeliveryTicket update = new OrderDeliveryTicket();
+        update.setId(ticket.getId());
+        update.setMaterialNo(materialNo);
+        update.setMesSyncStatus(STATUS_SUCCESS);
+        update.setMesSyncMessage(isBlank(message) ? "MES material callback resolved" : message.trim());
+        update.setMesSyncedAt(LocalDateTime.now());
+        update.setMesRequestId(mesRequestId);
+        update.setMesExternalTaskId(trimToNull(externalTraceId));
+        update.setMesCallbackReceivedAt(LocalDateTime.now());
+        update.setMesCallbackMessage(abbreviate(message));
+        ticketMapper.updateById(update);
+    }
+
+    private void assertSalesOrderItemMaterialWritable(OrderDeliveryTicket ticket, String materialNo) {
+        if (salesOrderItemMapper == null
+                || ticket == null
+                || ticket.getSourceItemId() == null
+                || !ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())) {
+            return;
+        }
+        SalesOrderItem item = salesOrderItemMapper.selectById(ticket.getSourceItemId());
+        if (item == null || isBlank(item.getMaterialNo())) {
+            return;
+        }
+        if (materialNo.equals(item.getMaterialNo().trim())) {
+            return;
+        }
+        if (MATERIAL_CONFIRMED.equals(item.getMaterialNoStatus())) {
+            throw callbackError(HttpStatus.CONFLICT, "销售订单零件已确认不同物料号，不能覆盖");
+        }
+        throw callbackError(HttpStatus.CONFLICT, "销售订单零件已有不同物料号，不能覆盖");
+    }
+
     private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
         if (salesOrderItemMapper == null
                 || ticket == null
@@ -287,6 +384,44 @@ public class MesMaterialSyncService {
         ticketMapper.updateById(update);
     }
 
+    private OrderDeliveryTicketMesRequest loadMesRequest(String mesRequestId) {
+        if (mesRequestMapper == null) {
+            throw callbackError(HttpStatus.INTERNAL_SERVER_ERROR, "MES 请求流水服务不可用");
+        }
+        QueryWrapper<OrderDeliveryTicketMesRequest> wrapper = new QueryWrapper<>();
+        wrapper.eq("mes_request_id", mesRequestId);
+        OrderDeliveryTicketMesRequest request = mesRequestMapper.selectOne(wrapper);
+        if (request == null) {
+            throw callbackError(HttpStatus.NOT_FOUND, "MES 请求流水不存在");
+        }
+        return request;
+    }
+
+    private void updateMesRequestFromCallback(
+            String mesRequestId,
+            String status,
+            String materialNo,
+            String externalTraceId,
+            String message,
+            boolean completed) {
+        if (mesRequestMapper == null || isBlank(mesRequestId)) {
+            return;
+        }
+        OrderDeliveryTicketMesRequest update = new OrderDeliveryTicketMesRequest();
+        update.setRequestStatus(status);
+        update.setMaterialNo(trimToNull(materialNo));
+        update.setMesExternalTaskId(trimToNull(externalTraceId));
+        update.setCallbackMessage(abbreviate(message));
+        update.setCallbackReceivedAt(LocalDateTime.now());
+        update.setUpdatedAt(LocalDateTime.now());
+        if (completed) {
+            update.setCompletedAt(LocalDateTime.now());
+        }
+        UpdateWrapper<OrderDeliveryTicketMesRequest> wrapper = new UpdateWrapper<>();
+        wrapper.eq("mes_request_id", mesRequestId);
+        mesRequestMapper.update(update, wrapper);
+    }
+
     private void recordAudit(
             String action,
             OrderDeliveryTicket ticket,
@@ -307,9 +442,65 @@ public class MesMaterialSyncService {
                 summary(ticket, taskId, mesRequestId, materialNo, result, externalTraceId),
                 "DELIVERY",
                 result,
-                AuditService.labelForAction(action) + " ticketId=" + ticket.getId() + " taskId=" + taskId,
+                AuditService.labelForAction(action) + " ticketId=" + ticket.getId() + " taskId=" + taskId + " mesRequestId=" + mesRequestId,
                 errorMessage
         );
+    }
+
+    private void recordCallbackAudit(
+            String action,
+            OrderDeliveryTicket ticket,
+            OrderDeliveryTicketMesRequest request,
+            MesMaterialCallbackReq req,
+            String result,
+            String errorMessage) {
+        if (auditService == null) {
+            return;
+        }
+        Integer ticketId = ticket == null ? (req == null ? null : req.getTicketId()) : ticket.getId();
+        String mesRequestId = req == null ? null : req.getMesRequestId();
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("ticketId", ticketId);
+        summary.put("mesRequestId", mesRequestId);
+        summary.put("externalTraceId", req == null ? null : req.getExternalTraceId());
+        summary.put("status", result);
+        summary.put("materialNo", req == null ? null : req.getMaterialNo());
+        if (ticket != null) {
+            summary.put("sourceType", ticket.getSourceType());
+            summary.put("sourceOrderId", ticket.getSourceOrderId());
+            summary.put("sourceItemId", ticket.getSourceItemId());
+            summary.put("partNo", ticket.getPartNo());
+            summary.put("version", ticket.getVersion());
+        }
+        if (request != null) {
+            summary.put("requestStatus", request.getRequestStatus());
+        }
+        auditService.record(
+                action,
+                "order_delivery_ticket",
+                ticketId,
+                null,
+                summary,
+                "DELIVERY",
+                result,
+                AuditService.labelForAction(action) + " ticketId=" + ticketId + " mesRequestId=" + mesRequestId,
+                errorMessage
+        );
+    }
+
+    private MesMaterialCallbackResp callbackResponse(
+            boolean success,
+            String message,
+            Integer ticketId,
+            String mesRequestId,
+            String materialNo) {
+        MesMaterialCallbackResp resp = new MesMaterialCallbackResp();
+        resp.setSuccess(success);
+        resp.setMessage(message);
+        resp.setTicketId(ticketId);
+        resp.setMesRequestId(mesRequestId);
+        resp.setMaterialNo(trimToNull(materialNo));
+        return resp;
     }
 
     private Map<String, Object> summary(OrderDeliveryTicket ticket, Long taskId, String mesRequestId, String materialNo, String status, String externalTraceId) {
@@ -394,6 +585,10 @@ public class MesMaterialSyncService {
             return rfqNo.trim();
         }
         return isBlank(ticket.getRfqNo()) ? null : ticket.getRfqNo().trim();
+    }
+
+    private MesMaterialCallbackException callbackError(HttpStatus status, String message) {
+        return new MesMaterialCallbackException(status, message);
     }
 
     private String required(String value, String message) {

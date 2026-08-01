@@ -68,6 +68,8 @@ erp:
     auth-token: ${ERP_MES_AUTH_TOKEN:}
     material-path: ${ERP_MES_MATERIAL_PATH:/api/mes/materials/resolve}
     timeout-ms: ${ERP_MES_TIMEOUT_MS:10000}
+    callback-token: ${ERP_MES_CALLBACK_TOKEN:}
+    callback-token-enabled: ${ERP_MES_CALLBACK_TOKEN_ENABLED:true}
   wms:
     base-url: ${ERP_WMS_BASE_URL:}
     auth-token: ${ERP_WMS_AUTH_TOKEN:}
