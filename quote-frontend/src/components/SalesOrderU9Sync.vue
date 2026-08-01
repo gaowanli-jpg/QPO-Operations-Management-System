@@ -3,13 +3,18 @@
     <header class="erp-page-header sales-order-u9-sync-header">
       <div>
         <h1 class="erp-page-title">U9同步</h1>
-        <p class="erp-page-description">选择已完成提单并确认物料号的销售订单，按整单同步到 U9。</p>
+        <p class="erp-page-description">选择已提单销售订单，查看零件物料号状态后按整单同步到 U9。</p>
       </div>
       <div class="erp-page-actions sales-order-u9-sync-header-actions">
-        <el-button :loading="orderLoading" @click="refreshCurrentState">刷新</el-button>
-        <el-button type="primary" :loading="previewLoading" :disabled="!selectedOrder" @click="previewSelectedOrder()">
-          预览U9同步
+        <el-button
+          v-permission="U9_SYNC_ORDER_SELECT_PERMISSION"
+          :icon="DocumentChecked"
+          type="primary"
+          @click="openOrderPicker"
+        >
+          选择销售订单
         </el-button>
+        <el-button :loading="previewLoading" @click="refreshCurrentState">刷新</el-button>
         <el-tooltip :disabled="!syncDisabledReason" :content="syncDisabledReason" placement="top">
           <span class="sales-order-u9-sync-action-wrap">
             <el-button
@@ -26,290 +31,245 @@
       </div>
     </header>
 
-    <section class="erp-toolbar">
-      <div class="sales-order-u9-sync-toolbar">
-        <label v-permission="U9_SYNC_CUSTOMER_SELECT_PERMISSION" class="sales-order-u9-sync-filter">
-          <span>客户</span>
-          <el-input v-model.trim="filters.customerName" clearable placeholder="输入客户名称" @keyup.enter="searchOrders" />
-        </label>
-        <label class="sales-order-u9-sync-filter sales-order-u9-sync-keyword-filter">
-          <span>销售订单筛选</span>
-          <el-input v-model.trim="filters.keyword" clearable placeholder="销售订单号 / 客户订单号 / 内部项目号" @keyup.enter="searchOrders" />
-        </label>
-        <label class="sales-order-u9-sync-filter">
-          <span>订单状态</span>
-          <el-select v-model="filters.status" clearable placeholder="全部状态">
-            <el-option label="已报价" value="已报价" />
-            <el-option label="部分已提单" value="部分已提单" />
-            <el-option label="已生成提单" value="已生成提单" />
-          </el-select>
-        </label>
-        <label class="sales-order-u9-sync-filter">
-          <span>U9 状态</span>
-          <el-select v-model="filters.u9SyncStatus" clearable placeholder="全部状态">
-            <el-option label="未同步" value="未同步" />
-            <el-option label="同步中" value="同步中" />
-            <el-option label="已同步" value="已同步" />
-            <el-option label="同步失败" value="同步失败" />
-          </el-select>
-        </label>
-        <label class="sales-order-u9-sync-filter">
-          <span>物料号就绪</span>
-          <el-select v-model="filters.materialReadyStatus" clearable placeholder="全部">
-            <el-option label="已就绪" value="READY" />
-            <el-option label="未就绪" value="BLOCKED" />
-          </el-select>
-        </label>
-        <div class="sales-order-u9-sync-toolbar-actions">
-          <el-button type="primary" :loading="orderLoading" @click="searchOrders">查询</el-button>
-          <el-button @click="resetFilters">重置</el-button>
-        </div>
-      </div>
-    </section>
-
-    <section class="erp-surface">
-      <div class="sales-order-u9-sync-summary-grid">
-        <div class="sales-order-u9-sync-summary-card">
-          <strong>{{ orderPagination.total }}</strong>
-          <span>销售订单</span>
-        </div>
-        <div class="sales-order-u9-sync-summary-card">
-          <strong>{{ selectedOrder ? selectedOrder.salesOrderNo || '-' : '-' }}</strong>
-          <span>当前选择</span>
-        </div>
-        <div class="sales-order-u9-sync-summary-card">
-          <strong>{{ readySummary.itemCount }}</strong>
-          <span>零件数</span>
-        </div>
-        <div class="sales-order-u9-sync-summary-card success">
-          <strong>{{ readySummary.materialConfirmedItemCount }}</strong>
-          <span>已确认物料号</span>
-        </div>
-        <div class="sales-order-u9-sync-summary-card warning">
-          <strong>{{ readySummary.missingMaterialItemCount }}</strong>
-          <span>缺失/未确认</span>
-        </div>
-        <div class="sales-order-u9-sync-summary-card" :class="readySummary.syncReady ? 'success' : 'warning'">
-          <strong>{{ readySummary.syncReady ? '已就绪' : '不可同步' }}</strong>
-          <span>同步就绪摘要</span>
-        </div>
-      </div>
-      <el-alert
-        v-if="syncDisabledReason"
-        class="sales-order-u9-sync-alert"
-        :title="syncDisabledReason"
-        type="warning"
-        :closable="false"
-        show-icon
-      />
-    </section>
-
-    <section class="erp-table-surface">
-      <div class="sales-order-u9-sync-section-header">
-        <div>
-          <h2>销售订单列表</h2>
-          <p>只读取独立销售订单主表，列表筛选和翻页均由后端处理。</p>
-        </div>
-        <el-tag :type="selectedOrder ? 'success' : 'info'">{{ selectedOrderTitle }}</el-tag>
-      </div>
-      <div class="erp-table-body">
+    <section class="erp-surface sales-order-u9-sync-workspace">
+      <aside class="erp-surface sales-order-u9-sync-side-panel">
+        <div class="panel-title">已选销售订单</div>
         <el-table
-          :data="orders"
-          :row-key="orderRowKey"
+          class="selected-order-mini-table"
+          :data="selectedOrderRows"
+          height="132"
+          size="small"
           border
           stripe
-          height="360"
-          v-loading="orderLoading"
-          empty-text="暂无销售订单"
-          highlight-current-row
-          @row-click="selectOrder"
+          empty-text="请先选择销售订单"
         >
-          <el-table-column width="52" align="center">
-            <template #default="{ row }">
-              <el-radio :model-value="selectedOrderId" :label="row.salesOrderId" @change="selectOrder(row)">
-                <span class="sales-order-u9-sync-radio-label">选择</span>
-              </el-radio>
-            </template>
-          </el-table-column>
-          <el-table-column prop="salesOrderNo" label="销售订单号" min-width="150" fixed show-overflow-tooltip />
-          <el-table-column prop="customerName" label="客户" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="documentTypeCode" label="单据类型" width="96" align="center" />
-          <el-table-column prop="status" label="状态" width="112" align="center">
+          <el-table-column prop="salesOrderNo" label="销售订单号" min-width="128" show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="orderStatusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="零件数" width="88" align="right">
-            <template #default="{ row }">{{ numberOrZero(row.itemCount) }}</template>
-          </el-table-column>
-          <el-table-column label="已确认物料号" width="122" align="right">
-            <template #default="{ row }">
-              {{ numberOrZero(row.materialConfirmedItemCount) }} / {{ numberOrZero(row.itemCount) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="u9SyncStatus" label="U9状态" width="112" align="center">
-            <template #default="{ row }">
-              <el-tag :type="u9StatusTagType(row.u9SyncStatus)" size="small">{{ row.u9SyncStatus || '未同步' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="u9OrderCode" label="U9编码" min-width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.u9OrderCode || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="blockedReason" label="阻断原因" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.blockedReason || row.u9SyncMessage || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="updatedAt" label="更新时间" min-width="160">
-            <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
-          </el-table-column>
         </el-table>
-      </div>
-      <div class="erp-pagination">
-        <el-pagination
-          v-model:current-page="orderPagination.page"
-          v-model:page-size="orderPagination.pageSize"
-          :total="orderPagination.total"
-          :page-sizes="PAGE_SIZES"
-          layout="total, sizes, prev, pager, next, jumper"
-          :pager-count="7"
-          background
-          @size-change="handleOrderPageSizeChange"
-          @current-change="handleOrderPageChange"
-        />
-      </div>
-    </section>
 
-    <section class="erp-table-surface">
-      <div class="sales-order-u9-sync-section-header">
-        <div>
-          <h2>U9同步预览</h2>
-          <p>预览只展示销售订单头和销售订单零件中的同步字段，不调用 U9。</p>
+        <div class="sync-condition-panel">
+          <div class="panel-title compact">同步条件</div>
+          <div class="condition-row">
+            <span>订单状态</span>
+            <el-tag :type="orderStatusTagType(selectedOrder?.status)" size="small">
+              {{ selectedOrder?.status || '未选择' }}
+            </el-tag>
+          </div>
+          <div class="condition-row">
+            <span>U9状态</span>
+            <el-tag :type="u9StatusTagType(currentU9Status)" size="small">{{ currentU9Status }}</el-tag>
+          </div>
+          <div class="condition-row">
+            <span>零件数</span>
+            <strong>{{ readySummary.itemCount }}</strong>
+          </div>
+          <div class="condition-row">
+            <span>已确认物料号</span>
+            <strong>{{ readySummary.materialConfirmedItemCount }} / {{ readySummary.itemCount }}</strong>
+          </div>
+          <div class="condition-row">
+            <span>缺失/未确认</span>
+            <strong class="warning-text">{{ readySummary.missingMaterialItemCount }}</strong>
+          </div>
+          <div class="condition-row">
+            <span>同步就绪</span>
+            <el-tag :type="readySummary.syncReady ? 'success' : 'warning'" size="small">
+              {{ readySummary.syncReady ? '可同步' : '不可同步' }}
+            </el-tag>
+          </div>
+          <el-alert
+            v-if="syncDisabledReason"
+            class="sales-order-u9-sync-alert"
+            :title="syncDisabledReason"
+            type="warning"
+            :closable="false"
+            show-icon
+          />
         </div>
-        <el-tag :type="previewData?.syncReady ? 'success' : 'warning'">
-          {{ previewData ? (previewData.syncReady ? '可同步' : '不可同步') : '待预览' }}
-        </el-tag>
-      </div>
-      <el-alert
-        v-if="previewData?.blockedReason"
-        class="sales-order-u9-sync-alert"
-        :title="previewData.blockedReason"
-        type="warning"
-        :closable="false"
-        show-icon
-      />
-      <div v-if="previewData" class="sales-order-u9-sync-preview-meta">
-        <span>销售订单号：{{ previewData.salesOrderNo || '-' }}</span>
-        <span>OrderBy：{{ previewData.orderBy || previewData.customerCode || '-' }}</span>
-        <span>DocumentType：{{ previewData.documentTypeCode || '-' }}</span>
-        <span>客户订单号：{{ previewData.customerOrderNo || '-' }}</span>
-        <span>内部项目号：{{ previewData.internalProjectNo || '-' }}</span>
-        <span>U9状态：{{ previewData.u9SyncStatus || '未同步' }}</span>
-      </div>
-      <div class="erp-table-body">
+
+        <div class="selected-order-meta">
+          <div class="panel-title compact">订单信息</div>
+          <dl>
+            <div>
+              <dt>客户</dt>
+              <dd>{{ customerDisplay }}</dd>
+            </div>
+            <div>
+              <dt>单据类型编码</dt>
+              <dd>{{ orderField('documentTypeCode') }}</dd>
+            </div>
+            <div>
+              <dt>客户订单号</dt>
+              <dd>{{ orderField('customerOrderNo') }}</dd>
+            </div>
+            <div>
+              <dt>客户项目号</dt>
+              <dd>{{ orderField('customerProjectNo') }}</dd>
+            </div>
+            <div>
+              <dt>订单类型</dt>
+              <dd>{{ orderField('orderType') }}</dd>
+            </div>
+            <div>
+              <dt>内部项目号</dt>
+              <dd>{{ orderField('internalProjectNo') }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="sync-result-panel">
+          <div class="panel-title compact">同步结果</div>
+          <div class="sync-result-code-row">
+            <span>当前U9编码</span>
+            <strong>{{ currentU9OrderCode }}</strong>
+          </div>
+          <el-empty v-if="!syncResult" description="暂无同步结果" :image-size="64" />
+          <template v-else>
+            <div class="sync-result-summary">
+              <el-tag :type="syncResult.success ? 'success' : 'danger'">{{ syncResult.status || '-' }}</el-tag>
+              <span>成功 {{ numberOrZero(syncResult.successOrderCount) }}</span>
+              <span>失败 {{ numberOrZero(syncResult.failedOrderCount) }}</span>
+            </div>
+            <el-alert
+              v-if="syncResult.message"
+              class="sales-order-u9-sync-result-alert"
+              :title="syncResult.message"
+              :type="syncResult.success ? 'success' : 'warning'"
+              :closable="false"
+              show-icon
+            />
+            <el-table :data="syncRows" border stripe max-height="180" empty-text="暂无返回明细">
+              <el-table-column prop="salesOrderNo" label="销售订单号" min-width="128" show-overflow-tooltip />
+              <el-table-column prop="u9OrderCode" label="U9编码" min-width="110" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.u9OrderCode || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="errorMessage" label="失败明细" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
+              </el-table-column>
+            </el-table>
+          </template>
+        </div>
+      </aside>
+
+      <main class="erp-table-surface sales-order-u9-sync-main-panel">
+        <div class="erp-table-header panel-title-row">
+          <div>
+            <div class="panel-title">销售订单零件</div>
+            <p class="panel-subtitle">{{ itemPanelTitle }}</p>
+          </div>
+          <div class="sales-order-u9-sync-result-tags">
+            <el-tag :type="previewData?.syncReady ? 'success' : 'warning'">
+              {{ previewData ? (previewData.syncReady ? '可同步' : '不可同步') : '待选择' }}
+            </el-tag>
+            <el-tag type="info">U9同步使用已确认物料号</el-tag>
+          </div>
+        </div>
+        <el-alert
+          v-if="previewData?.blockedReason"
+          class="sales-order-u9-sync-alert inline"
+          :title="previewData.blockedReason"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
         <el-table
           :data="previewLines"
           border
           stripe
-          height="360"
+          height="640"
           v-loading="previewLoading"
-          empty-text="请选择销售订单并点击预览U9同步"
+          empty-text="请先选择销售订单"
         >
-          <el-table-column prop="lineNo" label="行号" width="72" align="center" />
           <el-table-column prop="partNo" label="图号" min-width="130" fixed show-overflow-tooltip />
+          <el-table-column prop="lineNo" label="行号" width="72" align="center" />
           <el-table-column prop="version" label="版本" width="88" align="center" show-overflow-tooltip />
-          <el-table-column prop="salesMaterialNo" label="销售料号" min-width="130" show-overflow-tooltip />
-          <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="qty" label="数量" width="82" align="right" />
-          <el-table-column prop="finalUnitPrice" label="单价" width="104" align="right">
-            <template #default="{ row }">{{ formatMoney(row.finalUnitPrice) }}</template>
-          </el-table-column>
-          <el-table-column prop="deliveryDate" label="交期" width="118">
-            <template #default="{ row }">{{ formatDate(row.deliveryDate) }}</template>
-          </el-table-column>
-          <el-table-column prop="itemCode" label="ItemCode" min-width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.itemCode || row.materialNo || '-' }}</template>
+          <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.materialNo || '-' }}</template>
           </el-table-column>
           <el-table-column prop="materialNoStatus" label="物料号状态" width="116" align="center">
             <template #default="{ row }">
-              <el-tag :type="materialStatusTagType(row.materialNoStatus)" size="small">{{ row.materialNoStatus || '未确认' }}</el-tag>
+              <el-tag :type="materialStatusTagType(row.materialNoStatus)" size="small">
+                {{ row.materialNoStatus || '未确认' }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="materialNoSource" label="物料号来源" width="118" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.materialNoSource || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="来源提单行" width="110" align="right">
-            <template #default="{ row }">{{ row.materialNoSourceTicketId || '-' }}</template>
-          </el-table-column>
+          <el-table-column prop="qty" label="数量" width="82" align="right" />
           <el-table-column label="就绪" width="88" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.ready ? 'success' : 'danger'" size="small">{{ row.ready ? '已就绪' : '阻断' }}</el-tag>
+              <el-tag :type="row.ready ? 'success' : 'danger'" size="small">
+                {{ row.ready ? '已就绪' : '阻断' }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="blockedReason" label="阻断原因" min-width="190" show-overflow-tooltip>
             <template #default="{ row }">{{ row.blockedReason || '-' }}</template>
           </el-table-column>
+          <el-table-column prop="salesOrderDate" label="下单日期" width="116">
+            <template #default="{ row }">{{ formatDate(row.salesOrderDate) }}</template>
+          </el-table-column>
+          <el-table-column prop="customerOrderTitle" label="客户下单抬头" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="salesMaterialNo" label="料号" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="customerDeliveryDate" label="客户交期" width="116">
+            <template #default="{ row }">{{ formatDate(row.customerDeliveryDate) }}</template>
+          </el-table-column>
+          <el-table-column prop="internalDeliveryDate" label="内部交期(给生产的交期)" width="170">
+            <template #default="{ row }">{{ formatDate(row.internalDeliveryDate) }}</template>
+          </el-table-column>
+          <el-table-column prop="shippedQty" label="已出数量" width="90" align="right">
+            <template #default="{ row }">{{ numberOrZero(row.shippedQty) }}</template>
+          </el-table-column>
+          <el-table-column prop="unshippedQty" label="未出数量" width="90" align="right">
+            <template #default="{ row }">{{ numberOrZero(row.unshippedQty) }}</template>
+          </el-table-column>
+          <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="materialName" label="材料" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="surfaceTreatment" label="表面处理" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="taxIncludedUnitPrice" label="VAT单价-含税" width="120" align="right">
+            <template #default="{ row }">{{ formatMoney(row.taxIncludedUnitPrice) }}</template>
+          </el-table-column>
+          <el-table-column prop="untaxedUnitPrice" label="未税单价(CNY)" width="122" align="right">
+            <template #default="{ row }">{{ formatMoney(row.untaxedUnitPrice) }}</template>
+          </el-table-column>
+          <el-table-column prop="untaxedTotalPrice" label="（未税）金额" width="118" align="right">
+            <template #default="{ row }">{{ formatMoney(row.untaxedTotalPrice) }}</template>
+          </el-table-column>
+          <el-table-column prop="actualShipDate" label="实际出货日期" width="120">
+            <template #default="{ row }">{{ formatDate(row.actualShipDate) }}</template>
+          </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
         </el-table>
-      </div>
+      </main>
     </section>
 
-    <section class="erp-table-surface">
-      <div class="sales-order-u9-sync-section-header">
-        <div>
-          <h2>U9同步结果</h2>
-          <p>展示 U9 返回摘要、成功编码和失败明细，失败后可在修正后重试。</p>
-        </div>
-        <div v-if="syncResult" class="sales-order-u9-sync-result-tags">
-          <el-tag :type="syncResult.success ? 'success' : 'danger'">{{ syncResult.status || '-' }}</el-tag>
-          <el-tag type="success">成功 {{ numberOrZero(syncResult.successOrderCount) }}</el-tag>
-          <el-tag type="danger">失败 {{ numberOrZero(syncResult.failedOrderCount) }}</el-tag>
-          <el-tag type="info">合计 {{ numberOrZero(syncResult.totalOrderCount) }}</el-tag>
-        </div>
-      </div>
-      <el-alert
-        v-if="syncResult?.message"
-        class="sales-order-u9-sync-alert"
-        :title="syncResult.message"
-        :type="syncResult.success ? 'success' : 'warning'"
-        :closable="false"
-        show-icon
-      />
-      <div class="erp-table-body">
-        <el-table :data="syncRows" border stripe max-height="320" empty-text="暂无U9同步结果">
-          <el-table-column prop="salesOrderNo" label="销售订单号" min-width="150" fixed show-overflow-tooltip />
-          <el-table-column prop="status" label="结果状态" width="112" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.success ? 'success' : 'danger'" size="small">{{ row.status || (row.success ? '成功' : '失败') }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="u9OrderCode" label="U9编码" min-width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.u9OrderCode || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="u9OrderId" label="U9订单ID" min-width="130" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.u9OrderId || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="errorMessage" label="失败明细" min-width="260" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </section>
+    <OrderPickerDialog
+      v-model="orderPickerVisible"
+      title="选择销售订单"
+      customer-scope="u9-sync"
+      order-scope="u9-sync"
+      :allowed-statuses="U9_SYNC_ALLOWED_STATUSES"
+      @select="handleOrderSelected"
+    />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { DocumentChecked } from '@element-plus/icons-vue'
 import { usePendingAction } from '../composables/usePendingAction'
+import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
-  listSalesOrderU9SyncOrders,
   previewSalesOrderU9Sync,
   syncSalesOrderU9
 } from '../services/marketApi'
 
 const U9_SYNC_SUBMIT_PERMISSION = 'market:u9-sync:submit'
-const U9_SYNC_CUSTOMER_SELECT_PERMISSION = 'market:u9-sync:customer-select'
-const PAGE_SIZES = [20, 50, 100]
+const U9_SYNC_ORDER_SELECT_PERMISSION = 'market:u9-sync:order-select'
+const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']
 
 const u9SyncActionKeys = {
   sync: 'market:u9-sync:submit'
@@ -317,36 +277,37 @@ const u9SyncActionKeys = {
 
 const { isPending, runAction } = usePendingAction()
 
-const orders = ref([])
+const selectedOrder = ref(null)
 const selectedOrderId = ref(null)
 const previewData = ref(null)
 const syncResult = ref(null)
-const orderLoading = ref(false)
+const orderPickerVisible = ref(false)
 const previewLoading = ref(false)
 
-const filters = reactive({
-  customerName: '',
-  keyword: '',
-  status: '',
-  u9SyncStatus: '',
-  materialReadyStatus: ''
-})
-
-const orderPagination = reactive({
-  page: 1,
-  pageSize: 20,
-  total: 0
-})
-
-const selectedOrder = computed(() => orders.value.find(row => row.salesOrderId === selectedOrderId.value) || null)
-
-const selectedOrderTitle = computed(() => {
-  if (!selectedOrder.value) return '未选择'
-  return selectedOrder.value.salesOrderNo || '未编号销售订单'
-})
-
+const selectedOrderRows = computed(() => selectedOrder.value ? [selectedOrder.value] : [])
 const previewLines = computed(() => previewData.value?.lines || [])
 const syncRows = computed(() => syncResult.value?.rows || [])
+const currentU9Status = computed(() => previewData.value?.u9SyncStatus || selectedOrder.value?.u9SyncStatus || '未同步')
+const currentU9OrderCode = computed(() => {
+  const returnedCode = syncRows.value.find(row => row?.u9OrderCode)?.u9OrderCode
+  return returnedCode || previewData.value?.u9OrderCode || selectedOrder.value?.u9OrderCode || '-'
+})
+
+const customerDisplay = computed(() => {
+  const source = previewData.value || selectedOrder.value || {}
+  const customerName = source.customerName || ''
+  const extras = [source.customerShortName, source.customerCode]
+    .filter(Boolean)
+    .filter((value, index, array) => array.indexOf(value) === index && value !== customerName)
+  if (customerName && extras.length > 0) return `${customerName}（${extras.join(' / ')}）`
+  return customerName || extras.join(' / ') || '-'
+})
+
+const itemPanelTitle = computed(() => {
+  if (!selectedOrder.value) return '请点击右上角选择销售订单。'
+  if (previewLoading.value) return '正在加载销售订单零件。'
+  return `${selectedOrder.value.salesOrderNo || '未编号销售订单'} / ${selectedOrder.value.customerName || '未指定客户'}`
+})
 
 const readySummary = computed(() => {
   const source = previewData.value || selectedOrder.value || {}
@@ -361,8 +322,8 @@ const readySummary = computed(() => {
 const syncDisabledReason = computed(() => {
   if (isPending(u9SyncActionKeys.sync)) return 'U9同步正在提交，请稍候'
   if (!selectedOrder.value) return '请先选择销售订单'
-  if (!previewData.value || previewData.value.salesOrderId !== selectedOrder.value.salesOrderId) {
-    return '请先预览U9同步'
+  if (!previewData.value || previewData.value.salesOrderId !== selectedOrderId.value) {
+    return '请先选择销售订单并加载零件预览'
   }
   if (previewData.value.u9SyncStatus === '已同步') return '该销售订单已同步 U9'
   if (previewData.value.syncReady !== true) {
@@ -375,87 +336,53 @@ const canSyncSelected = computed(() => !syncDisabledReason.value)
 
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
 
-const buildOrderParams = () => ({
-  customerName: filters.customerName || undefined,
-  keyword: filters.keyword || undefined,
-  status: filters.status || undefined,
-  u9SyncStatus: filters.u9SyncStatus || undefined,
-  materialReadyStatus: filters.materialReadyStatus || undefined,
-  page: orderPagination.page,
-  pageSize: orderPagination.pageSize
-})
+const openOrderPicker = () => {
+  orderPickerVisible.value = true
+}
 
-const loadOrders = async () => {
-  orderLoading.value = true
-  try {
-    const response = await listSalesOrderU9SyncOrders(buildOrderParams())
-    orders.value = response?.records || []
-    orderPagination.total = Number(response?.total || 0)
-    orderPagination.page = Number(response?.page || orderPagination.page)
-    orderPagination.pageSize = Number(response?.pageSize || orderPagination.pageSize)
-    if (!orders.value.some(row => row.salesOrderId === selectedOrderId.value)) {
-      selectedOrderId.value = orders.value[0]?.salesOrderId || null
-      clearPreviewState()
-    }
-  } catch (error) {
-    orders.value = []
-    orderPagination.total = 0
-    selectedOrderId.value = null
-    clearPreviewState()
-    ElMessage.error(requestErrorMessage(error, '销售订单U9同步列表加载失败。'))
-  } finally {
-    orderLoading.value = false
+const normalizeSalesOrder = (order = {}) => {
+  const salesOrderId = Number(order.salesOrderId ?? order.sourceOrderId ?? order.id)
+  return {
+    ...order,
+    salesOrderId,
+    salesOrderNo: order.salesOrderNo || order.sourceOrderNo || order.orderNo || '-'
   }
 }
 
-const searchOrders = async () => {
-  orderPagination.page = 1
-  clearPreviewState()
-  await loadOrders()
-}
-
-const resetFilters = async () => {
-  filters.customerName = ''
-  filters.keyword = ''
-  filters.status = ''
-  filters.u9SyncStatus = ''
-  filters.materialReadyStatus = ''
-  await searchOrders()
+const handleOrderSelected = async (order) => {
+  const normalized = normalizeSalesOrder(order)
+  if (!normalized.salesOrderId) {
+    ElMessage.warning('请选择有效的销售订单。')
+    return
+  }
+  selectedOrder.value = normalized
+  selectedOrderId.value = normalized.salesOrderId
+  syncResult.value = null
+  await previewSelectedOrder({ silent: true })
 }
 
 const refreshCurrentState = async () => {
-  await loadOrders()
-  if (selectedOrder.value && previewData.value?.salesOrderId === selectedOrder.value.salesOrderId) {
-    await previewSelectedOrder({ silent: true, preserveResult: true })
+  if (!selectedOrder.value) {
+    ElMessage.warning('请先选择销售订单。')
+    return
   }
-}
-
-const handleOrderPageSizeChange = async () => {
-  orderPagination.page = 1
-  clearPreviewState()
-  await loadOrders()
-}
-
-const handleOrderPageChange = async () => {
-  clearPreviewState()
-  await loadOrders()
-}
-
-const selectOrder = (row) => {
-  if (!row?.salesOrderId || selectedOrderId.value === row.salesOrderId) return
-  selectedOrderId.value = row.salesOrderId
-  clearPreviewState()
+  await previewSelectedOrder({ silent: true, preserveResult: true })
 }
 
 const previewSelectedOrder = async ({ silent = false, preserveResult = false } = {}) => {
-  if (!selectedOrder.value) {
+  if (!selectedOrderId.value) {
     if (!silent) ElMessage.warning('请先选择销售订单。')
     return
   }
   previewLoading.value = true
   try {
-    const response = await previewSalesOrderU9Sync(selectedOrder.value.salesOrderId)
+    const response = await previewSalesOrderU9Sync(selectedOrderId.value)
     previewData.value = response || {}
+    selectedOrder.value = {
+      ...selectedOrder.value,
+      ...(response || {}),
+      salesOrderId: selectedOrderId.value
+    }
     if (!preserveResult) {
       syncResult.value = null
     }
@@ -497,14 +424,13 @@ const syncSelectedOrder = async () => {
       return
     }
     try {
-      const response = await syncSalesOrderU9(selectedOrder.value.salesOrderId)
+      const response = await syncSalesOrderU9(selectedOrderId.value)
       syncResult.value = response || {}
       if (response?.success) {
         ElMessage.success(response?.message || 'U9同步成功。')
       } else {
         ElMessage.warning(response?.message || 'U9同步返回失败，请查看失败明细。')
       }
-      await loadOrders()
       await previewSelectedOrder({ silent: true, preserveResult: true })
     } catch (error) {
       ElMessage.error(requestErrorMessage(error, 'U9同步提交失败。'))
@@ -512,12 +438,8 @@ const syncSelectedOrder = async () => {
   })
 }
 
-const clearPreviewState = () => {
-  previewData.value = null
-  syncResult.value = null
-}
-
-const orderRowKey = (row) => row.salesOrderId
+const orderValue = (field) => previewData.value?.[field] || selectedOrder.value?.[field] || ''
+const orderField = (field) => orderValue(field) || '-'
 
 function numberOrZero(value) {
   const number = Number(value)
@@ -527,8 +449,6 @@ function numberOrZero(value) {
 const orderStatusTagType = (status) => {
   if (status === '已生成提单') return 'success'
   if (status === '部分已提单') return 'warning'
-  if (status === '已报价') return 'primary'
-  if (status === '已废弃') return 'info'
   return 'info'
 }
 
@@ -546,11 +466,6 @@ const materialStatusTagType = (status) => {
   return 'info'
 }
 
-const formatDateTime = (value) => {
-  if (!value) return '-'
-  return String(value).replace('T', ' ').slice(0, 19)
-}
-
 const formatDate = (value) => {
   if (!value) return '-'
   return String(value).slice(0, 10)
@@ -562,10 +477,6 @@ const formatMoney = (value) => {
   if (Number.isNaN(amount)) return String(value)
   return amount.toFixed(2)
 }
-
-onMounted(() => {
-  loadOrders()
-})
 </script>
 
 <style scoped>
@@ -589,157 +500,180 @@ onMounted(() => {
   display: inline-flex;
 }
 
-.sales-order-u9-sync-toolbar {
+.sales-order-u9-sync-workspace {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(260px, 1fr) 140px 140px 140px auto;
-  gap: 12px;
-  align-items: end;
-  width: 100%;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
-.sales-order-u9-sync-filter {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  color: var(--erp-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
+.sales-order-u9-sync-side-panel,
+.sales-order-u9-sync-main-panel {
+  padding: 14px;
 }
 
-.sales-order-u9-sync-filter :deep(.el-select),
-.sales-order-u9-sync-filter :deep(.el-input) {
-  width: 100%;
-}
-
-.sales-order-u9-sync-keyword-filter {
-  min-width: 0;
-}
-
-.sales-order-u9-sync-toolbar-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.sales-order-u9-sync-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  gap: 10px;
-}
-
-.sales-order-u9-sync-summary-card {
-  display: grid;
-  gap: 4px;
-  min-height: 64px;
-  padding: 12px;
-  border: 1px solid var(--erp-border-soft);
-  border-radius: 8px;
-  background: var(--erp-surface-soft);
-}
-
-.sales-order-u9-sync-summary-card strong {
-  overflow: hidden;
+.panel-title {
+  margin-bottom: 12px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
   color: var(--erp-text);
-  font-size: 22px;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-.sales-order-u9-sync-summary-card span {
+.panel-title.compact {
+  margin-bottom: 10px;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-title-row .panel-title {
+  margin-bottom: 4px;
+}
+
+.panel-subtitle {
+  margin: 0;
   color: var(--erp-text-secondary);
   font-size: 12px;
 }
 
-.sales-order-u9-sync-summary-card.success strong {
-  color: var(--erp-success);
+.selected-order-mini-table {
+  width: 100%;
+  border-radius: 6px;
 }
 
-.sales-order-u9-sync-summary-card.warning strong {
-  color: var(--erp-warning);
+.selected-order-mini-table :deep(.el-table__cell) {
+  padding: 5px 0;
+}
+
+.sync-condition-panel,
+.selected-order-meta,
+.sync-result-panel {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--erp-border-soft);
+}
+
+.condition-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.condition-row strong {
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.warning-text {
+  color: var(--erp-warning) !important;
 }
 
 .sales-order-u9-sync-alert {
-  margin: 12px 14px 0;
+  margin-top: 10px;
 }
 
-.sales-order-u9-sync-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 14px 0;
+.sales-order-u9-sync-alert.inline {
+  margin: 0 0 12px;
 }
 
-.sales-order-u9-sync-section-header h2 {
+.selected-order-meta dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.selected-order-meta dl > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.selected-order-meta dt {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.selected-order-meta dd {
+  min-width: 0;
   margin: 0;
   color: var(--erp-text);
-  font-size: 16px;
-  line-height: 1.3;
+  font-size: 13px;
+  word-break: break-all;
 }
 
-.sales-order-u9-sync-section-header p {
-  margin: 4px 0 0;
-  color: var(--erp-text-secondary);
-  font-size: 12px;
-}
-
-.erp-table-body {
-  padding: 12px 14px;
-}
-
-.sales-order-u9-sync-radio-label {
-  display: none;
-}
-
-.sales-order-u9-sync-preview-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 12px 14px 0;
-  color: var(--erp-text-secondary);
-  font-size: 12px;
-}
-
+.sync-result-code-row,
+.sync-result-summary,
 .sales-order-u9-sync-result-tags {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 8px;
 }
 
-@media (max-width: 1200px) {
-  .sales-order-u9-sync-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.sales-order-u9-sync-result-tags {
+  justify-content: flex-end;
+}
 
-  .sales-order-u9-sync-summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.sync-result-code-row {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.sync-result-code-row strong {
+  min-width: 0;
+  color: var(--erp-text);
+  word-break: break-all;
+}
+
+.sync-result-summary {
+  justify-content: flex-start;
+  margin-bottom: 10px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.sales-order-u9-sync-result-alert {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 1180px) {
+  .sales-order-u9-sync-workspace {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
   .sales-order-u9-sync-header,
-  .sales-order-u9-sync-section-header {
+  .panel-title-row {
     flex-direction: column;
     align-items: stretch;
   }
 
   .sales-order-u9-sync-header-actions,
-  .sales-order-u9-sync-toolbar-actions,
   .sales-order-u9-sync-result-tags {
     justify-content: stretch;
   }
 
-  .sales-order-u9-sync-header-actions :deep(.el-button),
-  .sales-order-u9-sync-toolbar-actions :deep(.el-button) {
+  .sales-order-u9-sync-header-actions :deep(.el-button) {
     flex: 1;
     margin-left: 0;
-  }
-
-  .sales-order-u9-sync-toolbar,
-  .sales-order-u9-sync-summary-grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>

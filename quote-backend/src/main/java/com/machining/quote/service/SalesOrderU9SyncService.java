@@ -94,11 +94,15 @@ public class SalesOrderU9SyncService {
         resp.setSalesOrderNo(header.getSalesOrderNo());
         resp.setDocumentNo(header.getDocumentNo());
         resp.setCustomerName(header.getCustomerName());
+        resp.setCustomerShortName(header.getCustomerShortName());
         resp.setCustomerCode(header.getCustomerCode());
         resp.setOrderBy(header.getCustomerCode());
+        resp.setSalesOrderDate(header.getSalesOrderDate());
         resp.setCustomerOrderNo(header.getCustomerOrderNo());
         resp.setInternalProjectNo(header.getInternalProjectNo());
         resp.setCustomerProjectNo(header.getCustomerProjectNo());
+        resp.setCustomerOrderTitle(header.getCustomerOrderTitle());
+        resp.setOrderType(header.getOrderType());
         resp.setDocumentTypeCode(header.getDocumentTypeCode());
         resp.setStatus(header.getStatus());
         resp.setU9SyncStatus(header.getU9SyncStatus());
@@ -110,7 +114,7 @@ public class SalesOrderU9SyncService {
         String blockedReason = syncBlockedReason(header, items, stats);
         resp.setBlockedReason(blockedReason);
         resp.setSyncReady(isBlank(blockedReason));
-        resp.setLines(items.stream().map(this::toPreviewLine).toList());
+        resp.setLines(items.stream().map(item -> toPreviewLine(header, item)).toList());
         return resp;
     }
 
@@ -301,10 +305,14 @@ public class SalesOrderU9SyncService {
         row.setSalesOrderId(header.getId());
         row.setSalesOrderNo(header.getSalesOrderNo());
         row.setCustomerName(header.getCustomerName());
+        row.setCustomerShortName(header.getCustomerShortName());
         row.setCustomerCode(header.getCustomerCode());
+        row.setSalesOrderDate(header.getSalesOrderDate());
         row.setCustomerOrderNo(header.getCustomerOrderNo());
         row.setInternalProjectNo(header.getInternalProjectNo());
         row.setCustomerProjectNo(header.getCustomerProjectNo());
+        row.setCustomerOrderTitle(header.getCustomerOrderTitle());
+        row.setOrderType(header.getOrderType());
         row.setDocumentTypeCode(header.getDocumentTypeCode());
         row.setStatus(header.getStatus());
         row.setU9SyncStatus(header.getU9SyncStatus());
@@ -320,24 +328,34 @@ public class SalesOrderU9SyncService {
         return row;
     }
 
-    private SalesOrderU9SyncPreviewLine toPreviewLine(SalesOrderItem item) {
+    private SalesOrderU9SyncPreviewLine toPreviewLine(SalesOrderHeader header, SalesOrderItem item) {
         SalesOrderU9SyncPreviewLine line = new SalesOrderU9SyncPreviewLine();
         line.setSalesOrderItemId(item.getId());
-        line.setMaterialNoSourceTicketId(item.getMaterialNoSourceTicketId());
         line.setLineNo(item.getLineNo());
         line.setPartNo(item.getPartNo());
         line.setVersion(item.getVersion());
+        line.setSalesOrderDate(header.getSalesOrderDate());
+        line.setCustomerOrderTitle(header.getCustomerOrderTitle());
         line.setSalesMaterialNo(item.getSalesMaterialNo());
+        line.setCustomerDeliveryDate(item.getCustomerDeliveryDate());
+        line.setInternalDeliveryDate(item.getInternalDeliveryDate());
         line.setDescription(item.getDescription());
+        line.setMaterialName(item.getMaterialName());
+        line.setSurfaceTreatment(item.getSurfaceTreatment());
         line.setMaterialNo(item.getMaterialNo());
         line.setMaterialNoStatus(item.getMaterialNoStatus());
-        line.setMaterialNoSource(item.getMaterialNoSource());
         line.setQty(item.getQty());
+        line.setShippedQty(item.getShippedQty());
+        line.setUnshippedQty(item.getUnshippedQty());
+        line.setTaxIncludedUnitPrice(item.getTaxIncludedUnitPrice());
+        line.setUntaxedUnitPrice(item.getUntaxedUnitPrice());
+        line.setUntaxedTotalPrice(item.getUntaxedTotalPrice());
         line.setFinalUnitPrice(preferredPrice(item));
         line.setDeliveryDate(preferredDeliveryDate(item));
+        line.setActualShipDate(item.getActualShipDate());
+        line.setRemark(item.getRemark());
         boolean ready = isConfirmedMaterialNo(item);
         line.setReady(ready);
-        line.setItemCode(ready ? item.getMaterialNo() : null);
         line.setBlockedReason(ready ? "" : materialBlockedReason(item));
         return line;
     }

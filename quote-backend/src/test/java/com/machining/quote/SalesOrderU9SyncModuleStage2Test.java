@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,6 +74,14 @@ class SalesOrderU9SyncModuleStage2Test {
                     assertThat(row.getSalesOrderId()).isEqualTo(released.getId());
                     assertThat(row.getSalesOrderNo()).isEqualTo("SOQPO-001");
                     assertThat(row.getCustomerCode()).isEqualTo("CUST-A");
+                    assertThat(row.getCustomerShortName()).isEqualTo("客户简称A");
+                    assertThat(row.getCustomerName()).isEqualTo("客户A");
+                    assertThat(row.getCustomerOrderNo()).isEqualTo("PO-" + released.getId());
+                    assertThat(row.getCustomerProjectNo()).isEqualTo("CP-" + released.getId());
+                    assertThat(row.getCustomerOrderTitle()).isEqualTo("客户下单抬头-" + released.getId());
+                    assertThat(row.getOrderType()).isEqualTo("正式订单");
+                    assertThat(row.getInternalProjectNo()).isEqualTo("IP-" + released.getId());
+                    assertThat(row.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 7, 31));
                     assertThat(row.getDocumentTypeCode()).isEqualTo("SO01");
                     assertThat(row.getItemCount()).isEqualTo(2);
                     assertThat(row.getMaterialConfirmedItemCount()).isEqualTo(1);
@@ -104,6 +113,15 @@ class SalesOrderU9SyncModuleStage2Test {
         assertThat(resp.getSalesOrderId()).isEqualTo(header.getId());
         assertThat(resp.getSalesOrderNo()).isEqualTo("SOQPO-001");
         assertThat(resp.getOrderBy()).isEqualTo("CUST-A");
+        assertThat(resp.getCustomerCode()).isEqualTo("CUST-A");
+        assertThat(resp.getCustomerShortName()).isEqualTo("客户简称A");
+        assertThat(resp.getCustomerName()).isEqualTo("客户A");
+        assertThat(resp.getCustomerOrderNo()).isEqualTo(header.getCustomerOrderNo());
+        assertThat(resp.getCustomerProjectNo()).isEqualTo(header.getCustomerProjectNo());
+        assertThat(resp.getCustomerOrderTitle()).isEqualTo(header.getCustomerOrderTitle());
+        assertThat(resp.getOrderType()).isEqualTo(header.getOrderType());
+        assertThat(resp.getInternalProjectNo()).isEqualTo(header.getInternalProjectNo());
+        assertThat(resp.getSalesOrderDate()).isEqualTo(header.getSalesOrderDate());
         assertThat(resp.getDocumentTypeCode()).isEqualTo("SO01");
         assertThat(resp.getItemCount()).isEqualTo(2);
         assertThat(resp.getMaterialConfirmedItemCount()).isEqualTo(1);
@@ -114,18 +132,40 @@ class SalesOrderU9SyncModuleStage2Test {
         assertThat(resp.getLines().get(0))
                 .satisfies(line -> {
                     assertThat(line.getSalesOrderItemId()).isEqualTo(ready.getId());
-                    assertThat(line.getItemCode()).isEqualTo("MAT-READY-001");
+                    assertThat(line.getSalesOrderDate()).isEqualTo(header.getSalesOrderDate());
+                    assertThat(line.getCustomerOrderTitle()).isEqualTo(header.getCustomerOrderTitle());
+                    assertThat(line.getSalesMaterialNo()).isEqualTo(ready.getSalesMaterialNo());
+                    assertThat(line.getCustomerDeliveryDate()).isEqualTo(ready.getCustomerDeliveryDate());
+                    assertThat(line.getInternalDeliveryDate()).isEqualTo(ready.getInternalDeliveryDate());
+                    assertThat(line.getShippedQty()).isEqualTo(ready.getShippedQty());
+                    assertThat(line.getUnshippedQty()).isEqualTo(ready.getUnshippedQty());
+                    assertThat(line.getDescription()).isEqualTo(ready.getDescription());
+                    assertThat(line.getMaterialName()).isEqualTo(ready.getMaterialName());
+                    assertThat(line.getSurfaceTreatment()).isEqualTo(ready.getSurfaceTreatment());
+                    assertThat(line.getTaxIncludedUnitPrice()).isEqualByComparingTo(ready.getTaxIncludedUnitPrice());
+                    assertThat(line.getUntaxedUnitPrice()).isEqualByComparingTo(ready.getUntaxedUnitPrice());
+                    assertThat(line.getUntaxedTotalPrice()).isEqualByComparingTo(ready.getUntaxedTotalPrice());
+                    assertThat(line.getActualShipDate()).isEqualTo(ready.getActualShipDate());
+                    assertThat(line.getRemark()).isEqualTo(ready.getRemark());
                     assertThat(line.getMaterialNo()).isEqualTo("MAT-READY-001");
                     assertThat(line.getMaterialNoStatus()).isEqualTo("已确认");
-                    assertThat(line.getMaterialNoSourceTicketId()).isEqualTo(3001L);
                     assertThat(line.getReady()).isTrue();
                     assertThat(line.getBlockedReason()).isBlank();
                 });
         assertThat(resp.getLines().get(1))
-                .extracting(SalesOrderU9SyncPreviewLine::getItemCode,
-                        SalesOrderU9SyncPreviewLine::getReady,
+                .extracting(SalesOrderU9SyncPreviewLine::getReady,
                         SalesOrderU9SyncPreviewLine::getBlockedReason)
-                .containsExactly(null, false, "物料号未确认");
+                .containsExactly(false, "物料号未确认");
+        assertThat(Arrays.stream(SalesOrderU9SyncPreviewLine.class.getDeclaredFields())
+                .map(java.lang.reflect.Field::getName))
+                .doesNotContain(
+                        "itemCode",
+                        "materialNoSource",
+                        "materialNoSourceTicketId",
+                        "customerOrderNo",
+                        "customerProjectNo",
+                        "orderType",
+                        "internalProjectNo");
         verify(fixture.dataScopeService).assertCanAccessSalesOrder(header);
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());
@@ -185,10 +225,13 @@ class SalesOrderU9SyncModuleStage2Test {
         header.setDocumentNo("DOC-" + id);
         header.setDocumentTypeCode("SO01");
         header.setCustomerCode("CUST-A");
+        header.setCustomerShortName("客户简称A");
         header.setCustomerName("客户A");
         header.setCustomerOrderNo("PO-" + id);
         header.setInternalProjectNo("IP-" + id);
         header.setCustomerProjectNo("CP-" + id);
+        header.setCustomerOrderTitle("客户下单抬头-" + id);
+        header.setOrderType("正式订单");
         header.setSalesOrderDate(LocalDate.of(2026, 7, 31));
         header.setStatus(status);
         header.setU9SyncStatus(u9SyncStatus);
@@ -206,16 +249,28 @@ class SalesOrderU9SyncModuleStage2Test {
         item.setDescription("零件 " + partNo);
         item.setSalesMaterialNo("SALES-" + partNo);
         item.setQty(5);
+        item.setOrderType("正式订单");
+        item.setCustomerOrderNo("PO-" + salesOrderId);
+        item.setCustomerProjectNo("CP-" + salesOrderId);
+        item.setInternalProjectNo("IP-" + salesOrderId);
         item.setReleasedQty(5);
         item.setRemainingQty(0);
         item.setCustomerDeliveryDate(LocalDate.of(2026, 8, 20));
         item.setInternalDeliveryDate(LocalDate.of(2026, 8, 18));
+        item.setShippedQty(2);
+        item.setUnshippedQty(3);
+        item.setMaterialName("AL6061");
+        item.setSurfaceTreatment("阳极氧化");
         item.setMaterialNo(materialNo);
         item.setMaterialNoStatus(materialNoStatus);
         item.setMaterialNoSource("MES_TICKET");
         item.setMaterialNoSyncedAt(LocalDateTime.of(2026, 7, 31, 10, 0));
         item.setFinalUnitPrice(new BigDecimal("12.34"));
         item.setTaxIncludedUnitPrice(new BigDecimal("12.34"));
+        item.setUntaxedUnitPrice(new BigDecimal("10.92"));
+        item.setUntaxedTotalPrice(new BigDecimal("54.60"));
+        item.setActualShipDate(LocalDate.of(2026, 8, 25));
+        item.setRemark("销售订单备注");
         item.setStatus(QuoteStatusWorkflow.RELEASED);
         return item;
     }

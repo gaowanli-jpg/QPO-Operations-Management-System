@@ -18,7 +18,6 @@ describe('sales order U9 sync module', () => {
     const app = readSource('App.vue')
 
     expect(app).toContain("paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents'")
-    expect(app).toContain("'/u9-sync': { title: 'U9同步', permission: 'market:u9-sync:view'")
 
     const marketGroupIndex = app.indexOf("{ key: 'market'")
     const releaseIndex = app.indexOf("'/release'", marketGroupIndex)
@@ -30,38 +29,51 @@ describe('sales order U9 sync module', () => {
     expect(deliveryDocumentIndex).toBeGreaterThan(u9SyncIndex)
   })
 
-  test('renders the full sales-order-only U9 sync workspace', () => {
+  test('renders a release-style single-order U9 sync workspace', () => {
     const componentPath = resolve(currentDir, 'components', 'SalesOrderU9Sync.vue')
     expect(existsSync(componentPath)).toBe(true)
 
     const component = readSource('components', 'SalesOrderU9Sync.vue')
     expect(component).toContain('class="erp-page sales-order-u9-sync-page"')
     expect(component).toContain('class="erp-page-header sales-order-u9-sync-header"')
-    expect(component).toContain('<h1 class="erp-page-title">U9同步</h1>')
-    expect(component).toContain('class="erp-toolbar"')
-    expect(component).toContain('销售订单列表')
-    expect(component).toContain('U9同步预览')
-    expect(component).toContain('U9同步结果')
-    expect(component).toContain('同步就绪摘要')
-    expect(component).toContain('阻断原因')
-    expect(component).toContain('失败明细')
-    expect(component).toContain('销售订单')
+    expect(component).toContain("import OrderPickerDialog from './OrderPickerDialog.vue'")
+    expect(component).toContain('<OrderPickerDialog')
+    expect(component).toContain('customer-scope="u9-sync"')
+    expect(component).toContain('order-scope="u9-sync"')
+    expect(component).toContain(':allowed-statuses="U9_SYNC_ALLOWED_STATUSES"')
+    expect(component).toContain('@select="handleOrderSelected"')
+    expect(component).toContain("const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']")
+    expect(component).toContain('class="erp-surface sales-order-u9-sync-workspace"')
+    expect(component).toContain('class="erp-surface sales-order-u9-sync-side-panel"')
+    expect(component).toContain('class="erp-table-surface sales-order-u9-sync-main-panel"')
+    expect(component).toContain('class="selected-order-mini-table"')
+    expect(component).toContain('class="sync-condition-panel"')
+    expect(component).toContain('class="sync-result-panel"')
+    expect(component).toContain('orderPickerVisible')
+    expect(component).toContain('openOrderPicker')
+    expect(component).toContain('handleOrderSelected')
+    expect(component).not.toContain('class="erp-toolbar"')
+    expect(component).not.toContain('order-picker-toolbar')
+    expect(component).not.toContain('sales-order-u9-sync-summary-grid')
+    expect(component).not.toContain('<el-option label="已报价"')
     expect(component).not.toContain('RFQ')
     expect(component).not.toContain('sales-order-u9-sync-placeholder')
   })
 
-  test('uses U9 sync API helpers and backend paging instead of client-side full loading', () => {
+  test('uses U9 sync API helpers through the shared backend-paged order picker', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
+    const picker = readSource('components', 'OrderPickerDialog.vue')
 
-    expect(component).toContain('listSalesOrderU9SyncOrders')
     expect(component).toContain('previewSalesOrderU9Sync')
     expect(component).toContain('syncSalesOrderU9')
-    expect(component).toContain('page: orderPagination.page')
-    expect(component).toContain('pageSize: orderPagination.pageSize')
-    expect(component).toContain('v-model:current-page="orderPagination.page"')
-    expect(component).toContain('v-model:page-size="orderPagination.pageSize"')
-    expect(component).toContain('@current-change="handleOrderPageChange"')
-    expect(component).toContain('@size-change="handleOrderPageSizeChange"')
+    expect(component).not.toContain('v-model:current-page="orderPagination.page"')
+    expect(component).not.toContain('@row-dblclick="confirmPickedOrder"')
+    expect(picker).toContain("'u9-sync': 'market:u9-sync:customer-select'")
+    expect(picker).toContain("'u9-sync': ['部分已提单', '已生成提单']")
+    expect(picker).toContain("'u9-sync': '销售订单'")
+    expect(picker).toContain('orderNoText')
+    expect(picker).toContain('salesOrderNo')
+    expect(picker).toContain('salesOrderId')
   })
 
   test('gates submit action and disables sync when the selected order is blocked', () => {
@@ -72,22 +84,97 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain(':disabled="!canSyncSelected"')
     expect(component).toContain('syncDisabledReason')
     expect(component).toContain('blockedReason')
-    expect(component).toContain('materialReadyStatus')
+    expect(component).toContain('missingMaterialItemCount')
   })
 
   test('shows sales order U9 fields, material readiness, return result and failure details', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
 
-    expect(component).toContain('prop="salesOrderNo" label="销售订单号"')
-    expect(component).toContain('prop="customerName" label="客户"')
-    expect(component).toContain('prop="customerOrderNo" label="客户订单号"')
-    expect(component).toContain('prop="internalProjectNo" label="内部项目号"')
-    expect(component).toContain('label="零件数"')
-    expect(component).toContain('label="已确认物料号"')
-    expect(component).toContain('prop="u9SyncStatus" label="U9状态"')
-    expect(component).toContain('prop="u9OrderCode" label="U9编码"')
-    expect(component).toContain('prop="itemCode" label="ItemCode"')
-    expect(component).toContain('prop="materialNoStatus" label="物料号状态"')
-    expect(component).toContain('prop="errorMessage" label="失败明细"')
+    expect(component).toContain('prop="salesOrderNo"')
+    expect(component).toContain('<dt>客户</dt>')
+    expect(component).toContain('customerDisplay')
+    expect(component).toContain('客户订单号')
+    expect(component).toContain('内部项目号')
+    expect(component).toContain('U9状态')
+    expect(component).toContain('prop="u9OrderCode"')
+    expect(component).toContain('prop="materialNo" label="物料号"')
+    expect(component).toContain('prop="materialNoStatus"')
+    expect(component).toContain('prop="errorMessage"')
+  })
+
+  test('keeps order-level sales order fields in order info instead of repeated item columns', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+    const orderInfoIndex = component.indexOf('<div class="selected-order-meta">')
+    const syncResultIndex = component.indexOf('<div class="sync-result-panel">')
+    const orderInfo = component.slice(orderInfoIndex, syncResultIndex)
+
+    const expectedOrderFields = [
+      '<dt>客户</dt>',
+      '<dt>单据类型编码</dt>',
+      '<dt>客户订单号</dt>',
+      '<dt>客户项目号</dt>',
+      '<dt>订单类型</dt>',
+      '<dt>内部项目号</dt>'
+    ]
+
+    let previousIndex = -1
+    expectedOrderFields.forEach(field => {
+      const currentIndex = orderInfo.indexOf(field)
+      expect(currentIndex).toBeGreaterThan(previousIndex)
+      previousIndex = currentIndex
+    })
+
+    expect(orderInfo).toContain('customerDisplay')
+    expect(orderInfo).not.toContain('<dt>下单日期</dt>')
+    expect(orderInfo).not.toContain('<dt>客户下单抬头</dt>')
+    expect(orderInfo).not.toContain('<dt>OrderBy</dt>')
+    expect(orderInfo).not.toContain('<dt>U9编码</dt>')
+    expect(component).toContain('<div class="sync-result-code-row">')
+    expect(component).toContain('当前U9编码')
+  })
+
+  test('orders preview item columns as fixed material fields followed by remaining line-level import-template fields', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+    const expectedColumns = [
+      'label="图号"',
+      'label="行号"',
+      'label="版本"',
+      'label="物料号"',
+      'label="物料号状态"',
+      'label="数量"',
+      'label="就绪"',
+      'label="阻断原因"',
+      'label="下单日期"',
+      'label="客户下单抬头"',
+      'label="料号"',
+      'label="客户交期"',
+      'label="内部交期(给生产的交期)"',
+      'label="已出数量"',
+      'label="未出数量"',
+      'label="描述"',
+      'label="材料"',
+      'label="表面处理"',
+      'label="VAT单价-含税"',
+      'label="未税单价(CNY)"',
+      'label="（未税）金额"',
+      'label="实际出货日期"',
+      'label="备注"'
+    ]
+
+    let previousIndex = -1
+    expectedColumns.forEach(column => {
+      const currentIndex = component.indexOf(column)
+      expect(currentIndex).toBeGreaterThan(previousIndex)
+      previousIndex = currentIndex
+    })
+
+    expect(component).not.toContain('label="ItemCode"')
+    expect(component).not.toContain('label="物料号来源"')
+    expect(component).not.toContain('label="来源提单行"')
+    expect(component).not.toContain('label="客户订单号"')
+    expect(component).not.toContain('label="客户项目号"')
+    expect(component).not.toContain('label="订单类型"')
+    expect(component).not.toContain('label="内部项目号"')
+    expect(component).not.toContain('ItemCode 来自销售订单零件物料号')
   })
 })

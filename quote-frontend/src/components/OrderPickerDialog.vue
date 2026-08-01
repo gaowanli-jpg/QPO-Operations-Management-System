@@ -39,13 +39,13 @@
     </div>
 
     <div class="picker-step">
-      <div class="step-title">3. 选择 RFQ 订单</div>
+      <div class="step-title">3. 选择{{ orderTypeLabel }}</div>
       <el-empty v-if="!selectedStatus" description="请先选择订单状态" :image-size="72" />
       <template v-else>
         <el-input
           v-model="keyword"
           clearable
-          placeholder="搜索 RFQ 号"
+          :placeholder="keywordPlaceholder"
           class="keyword-input"
         />
         <el-table
@@ -59,7 +59,9 @@
           :row-class-name="resolveRowClassName"
           @row-click="selectOrder"
         >
-          <el-table-column prop="rfqNo" label="RFQ号" min-width="170" fixed show-overflow-tooltip />
+          <el-table-column :label="orderNoColumnLabel" min-width="170" fixed show-overflow-tooltip>
+            <template #default="{ row }">{{ orderNoText(row) }}</template>
+          </el-table-column>
           <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="120" align="center">
             <template #default="{ row }">
@@ -126,6 +128,7 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
   'quote-process': 'market:quote-process:customer-select',
   release: 'market:release:customer-select',
   'delivery-document': 'market:delivery-document:customer-select',
+  'u9-sync': 'market:u9-sync:customer-select',
   'engineer-setup': 'engineer:setup:customer-select',
   'market-order': 'market:order:customer-select',
   'history-order': 'market:history-order:customer-select'
@@ -135,7 +138,12 @@ const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分�
 
 const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
+  'u9-sync': ['部分已提单', '已生成提单'],
   'engineer-setup': ['未核价']
+}
+
+const ORDER_TYPE_LABEL_BY_SCOPE = {
+  'u9-sync': '销售订单'
 }
 
 const props = defineProps({
@@ -201,7 +209,16 @@ let keywordTimer = null
 const multiple = computed(() => props.multiple)
 const lockedCustomerName = computed(() => props.lockedCustomerName || '')
 const pendingSelectedOrderCount = computed(() => Object.keys(pendingSelectedOrders).length)
-const orderSourceKey = (order) => `${order?.sourceType || 'RFQ'}:${order?.sourceOrderId ?? order?.id ?? ''}`
+const orderTypeLabel = computed(() => ORDER_TYPE_LABEL_BY_SCOPE[props.orderScope] || 'RFQ 订单')
+const orderNoColumnLabel = computed(() => props.orderScope === 'u9-sync' ? '销售订单号' : 'RFQ号')
+const keywordPlaceholder = computed(() => props.orderScope === 'u9-sync' ? '搜索销售订单号' : '搜索 RFQ 号')
+
+const resolveOrderSourceType = (order) => (
+  props.orderScope === 'u9-sync' ? 'SALES_ORDER' : (order?.sourceType || 'RFQ')
+)
+const resolveOrderId = (order) => order?.sourceOrderId ?? order?.salesOrderId ?? order?.id ?? ''
+const orderSourceKey = (order) => `${resolveOrderSourceType(order)}:${resolveOrderId(order)}`
+const orderNoText = (row) => row?.salesOrderNo || row?.sourceOrderNo || row?.rfqNo || row?.orderNo || row?.id || '-'
 
 const statusOptions = computed(() => {
   const allowed = props.allowedStatuses.filter(Boolean)

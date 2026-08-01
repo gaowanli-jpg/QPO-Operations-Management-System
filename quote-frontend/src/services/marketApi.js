@@ -26,7 +26,8 @@ export const downloadSalesOrderImportTemplate = () => downloadFile('/api/market/
 const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',
   release: '/api/market/release/orders',
-  'delivery-document': '/api/market/delivery-documents/orders'
+  'delivery-document': '/api/market/delivery-documents/orders',
+  'u9-sync': '/api/market/u9-sync/orders'
 }
 
 export const listMarketOrders = (params = {}, scope) => {

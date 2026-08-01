@@ -92,10 +92,12 @@ describe('marketApi', () => {
     await marketApi.listMarketOrders(params, 'quote-process')
     await marketApi.listMarketOrders(params, 'release')
     await marketApi.listMarketOrders(params, 'delivery-document')
+    await marketApi.listMarketOrders(params, 'u9-sync')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/orders', { params })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/orders', { params })
     expect(request).toHaveBeenNthCalledWith(3, '/api/market/delivery-documents/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/u9-sync/orders', { params })
   })
 
   test('delivery document helpers use the independent backend namespace', async () => {

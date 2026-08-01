@@ -57,7 +57,10 @@ describe('market release sales order source stage 5', () => {
     const marketApi = readSource('services', 'marketApi.js')
 
     expect(marketApi).toContain("release: '/api/market/release/orders'")
-    expect(source).toContain('const orderSourceKey = (order) => `${order?.sourceType || \'RFQ\'}:${order?.sourceOrderId ?? order?.id ?? \'\'}')
+    expect(source).toContain('const resolveOrderSourceType = (order) => (')
+    expect(source).toContain("order?.sourceType || 'RFQ'")
+    expect(source).toContain('const resolveOrderId = (order) => order?.sourceOrderId ?? order?.salesOrderId ?? order?.id ?? \'\'')
+    expect(source).toContain('const orderSourceKey = (order) => `${resolveOrderSourceType(order)}:${resolveOrderId(order)}`')
     expect(source).toContain('pendingSelectedOrders[orderSourceKey(order)] = order')
     expect(source).toContain('isOrderAlreadySelected(row)')
     expect(source).toContain('isOrderSelected(row)')
