@@ -165,6 +165,41 @@ class MesMaterialCallbackStage3Test {
     }
 
     @Test
+    void staleMesRequestCallbackDoesNotOverwriteNewerTicketRequest() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketMesRequestMapper requestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = salesOrderTicket("CALLBACK_PENDING", null);
+        ticket.setMesRequestId("MES-REQ-LATEST");
+        when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(requestLedger("CALLBACK_PENDING", 123));
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        wire(service, ticketMapper, requestMapper, salesOrderItemMapper, auditService);
+
+        assertThatThrownBy(() -> service.handleMaterialCallback(callback("MAT-OLD")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("旧 MES 回调");
+
+        verify(ticketMapper, never()).updateById(any());
+        verify(salesOrderItemMapper, never()).updateById(any());
+        ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
+        verify(requestMapper).update(requestCaptor.capture(), any(Wrapper.class));
+        assertThat(requestCaptor.getValue().getRequestStatus()).isEqualTo("STALE");
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(Map.class),
+                eq("DELIVERY"),
+                eq("FAILED"),
+                contains("mesRequestId=MES-REQ-123"),
+                contains("旧 MES 回调")
+        );
+    }
+
+    @Test
     void callbackControllerRejectsMissingOrWrongTokenBeforeCallingService() {
         MesMaterialSyncService service = mock(MesMaterialSyncService.class);
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();

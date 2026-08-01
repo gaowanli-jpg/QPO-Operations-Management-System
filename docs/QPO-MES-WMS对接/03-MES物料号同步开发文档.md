@@ -2,6 +2,8 @@
 
 > 更新说明：本文档记录的是 MES 物料号同步的第一版“同步响应”口径。后续已确认需要同时支持“即时返回物料号”和“受理后回调物料号”两种 MES 结果，详细设计以 `docs/QPO报价状态流转/18-MES物料号异步回调开发文档.md` 为准。实施阶段应保留本文档中已提零件、权限、日志和基础 MES 客户端能力，并按第 18 号文档扩展 `mes_request_id`、`CALLBACK_PENDING` 和回调接口。
 
+> 阶段 5 收口说明：正式联调口径同时支持 **即时返回物料号** 和 **受理后回调物料号**。QPO 每次请求生成 `mesRequestId`，MES 响应和后续回调必须原样带回；回调接口为 `POST /api/integrations/mes/material-callback`。待回调响应下 `system_task` 按成功完成，提单行进入 `CALLBACK_PENDING`。本次不新增用户权限，继续使用 `market:delivered-item:mes-sync` 触发获取 / 重试；MES 回调接口使用机器 token，不挂用户权限。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已经具备：
@@ -53,10 +55,16 @@
   -> 创建 system_task: MES_MATERIAL_SYNC
   -> ticket.mes_sync_status = PROCESSING
   -> 异步调用 MES
-  -> MES 返回 materialNo
-  -> ticket.material_no = materialNo
-  -> ticket.mes_sync_status = SUCCESS
-  -> ticket.mes_synced_at = now
+  -> MES 情况 A：即时返回 materialNo
+      -> ticket.material_no = materialNo
+      -> ticket.mes_sync_status = SUCCESS
+      -> ticket.mes_synced_at = now
+      -> system_task.status = SUCCESS
+  -> MES 情况 B：返回 callbackRequired=true / CALLBACK_PENDING
+      -> ticket.mes_sync_status = CALLBACK_PENDING
+      -> 保存 mesRequestId / MES 任务号
+      -> system_task.status = SUCCESS
+      -> MES 后续回调 QPO 写回 materialNo
   -> 页面轮询任务状态或刷新列表
 ```
 
@@ -123,6 +131,8 @@ ERP_MES_BASE_URL=http://mes.example.local
 ERP_MES_AUTH_TOKEN=
 ERP_MES_MATERIAL_PATH=/api/mes/materials/resolve
 ERP_MES_TIMEOUT_MS=10000
+ERP_MES_CALLBACK_TOKEN=
+ERP_MES_CALLBACK_TOKEN_ENABLED=true
 ```
 
 说明：
@@ -140,6 +150,8 @@ ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
 ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
 ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
 ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
+ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
+ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
 ```
 
 Spring 配置读取建议：
@@ -187,6 +199,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 
 ```json
 {
+  "mesRequestId": "MES-123-8f8c2",
   "ticketId": 123,
   "rfqId": 88,
   "rfqNo": "RFQ-20260721-001",
@@ -202,6 +215,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 
 | 字段 | 必填 | 来源 |
 | --- | --- | --- |
+| `mesRequestId` | 是 | QPO 每次请求生成的唯一 ID，MES 响应和回调必须原样返回。 |
 | `ticketId` | 是 | `order_delivery_ticket.id` |
 | `rfqId` | 是 | `order_delivery_ticket.rfq_id` |
 | `rfqNo` | 是 | `order_rfq.rfq_no` |
@@ -218,9 +232,25 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 ```json
 {
   "success": true,
+  "status": "SUCCESS",
   "materialNo": "MAT-000123",
   "message": "created",
-  "externalTraceId": "MES-TRACE-001"
+  "externalTraceId": "MES-TRACE-001",
+  "mesRequestId": "MES-123-8f8c2",
+  "callbackRequired": false
+}
+```
+
+已受理待回调：
+
+```json
+{
+  "success": true,
+  "status": "CALLBACK_PENDING",
+  "callbackRequired": true,
+  "message": "MES已受理，物料号生成后回调QPO",
+  "externalTraceId": "MES-TASK-001",
+  "mesRequestId": "MES-123-8f8c2"
 }
 ```
 
@@ -237,21 +267,52 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 QPO 处理规则：
 
 - `success=true` 且 `materialNo` 非空，判定成功。
+- `success=true` 且 `callbackRequired=true`，或 `status=CALLBACK_PENDING / ACCEPTED / PENDING`，判定为待回调，写入 `CALLBACK_PENDING`，请求流水状态也写入 `CALLBACK_PENDING`。
 - `success=false`，判定失败。
-- HTTP 2xx 但 `materialNo` 为空，判定失败。
+- HTTP 2xx、`materialNo` 为空且没有明确待回调标识时，判定失败。
 - HTTP 非 2xx，判定失败。
 - 超时，判定失败。
 - `materialNo` 去除首尾空格后保存，长度超过 100 拒绝保存并标记失败。
+- MES 返回待回调时，`system_task` 不长时间挂起，按成功完成；批量任务中该行计入 `callbackPendingCount`，不计入失败。
+
+### 7.3 MES 回调 QPO
+
+当 MES 先返回待回调后，后续通过以下接口写回物料号：
+
+```text
+POST /api/integrations/mes/material-callback
+Content-Type: application/json
+Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}
+```
+
+请求体：
+
+```json
+{
+  "mesRequestId": "MES-123-8f8c2",
+  "ticketId": 123,
+  "status": "SUCCESS",
+  "materialNo": "MAT-000123",
+  "externalTraceId": "MES-TASK-001",
+  "message": "MES completed"
+}
+```
+
+QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。
 
 ## 8. 后端设计
 
 ### 8.1 权限
 
-新增权限：
+权限：
+
+阶段 5 不新增用户权限，继续使用既有权限：
 
 | 权限编码 | 类型 | 父级 | 中文 |
 | --- | --- | --- | --- |
 | `market:delivered-item:mes-sync` | `BUTTON` / `API` | `market:delivered-item:view` | 获取MES物料号 |
+
+MES 回调接口不使用用户登录态，不进入权限树；它通过 `ERP_MES_CALLBACK_TOKEN` 做机器认证。
 
 默认角色：
 
@@ -303,6 +364,7 @@ public SystemTask submitMesMaterialSyncTask(Integer ticketId)
 - 通过 `DataScopeService.assertCanAccessOrder(ticket.getRfqId(), orderRfqMapper)` 校验数据范围。
 - 已有 `material_no` 且 `mes_sync_status=SUCCESS` 时拒绝重复提交。
 - `mes_sync_status=PROCESSING` 时拒绝重复提交。
+- `mes_sync_status=CALLBACK_PENDING` 时拒绝重复提交，提示等待 MES 回调。
 - 创建 `system_task`。
 - 记录操作日志 `DELIVERY_MES_MATERIAL_SYNC_SUBMIT`。
 - 异步执行 `MesMaterialSyncService.syncMaterialNo(ticketId, taskId)`。
@@ -323,8 +385,10 @@ public SystemTask submitMesMaterialSyncTask(Integer ticketId)
 ```text
 PENDING / FAILED -> PROCESSING -> SUCCESS
 PENDING / FAILED -> PROCESSING -> FAILED
+PENDING / FAILED -> PROCESSING -> CALLBACK_PENDING -> SUCCESS
 SUCCESS -> 拒绝重复提交
 PROCESSING -> 拒绝重复提交
+CALLBACK_PENDING -> 拒绝重复提交
 ```
 
 成功写入：
@@ -342,6 +406,15 @@ mes_synced_at = now
 mes_sync_status = FAILED
 mes_sync_message = 失败摘要，最长建议 500 字符
 mes_synced_at 不更新
+```
+
+待回调写入：
+
+```text
+mes_sync_status = CALLBACK_PENDING
+mes_sync_message = MES message 或 "MES accepted, waiting for callback"
+mes_request_id = QPO 本次请求 ID
+mes_external_task_id = MES 返回的 externalTraceId
 ```
 
 请求前校验：
@@ -434,7 +507,11 @@ MES 物料号任务已提交，任务ID：{taskId}
 | --- | --- | --- | --- |
 | `DELIVERY_MES_MATERIAL_SYNC_SUBMIT` | `DELIVERY` | `order_delivery_ticket` | 用户提交任务。 |
 | `DELIVERY_MES_MATERIAL_SYNC_SUCCESS` | `DELIVERY` | `order_delivery_ticket` | MES 返回物料号成功。 |
+| `DELIVERY_MES_MATERIAL_SYNC_ACCEPTED` | `DELIVERY` | `order_delivery_ticket` | MES 已受理，等待回调。 |
 | `DELIVERY_MES_MATERIAL_SYNC_FAILED` | `DELIVERY` | `order_delivery_ticket` | MES 获取失败。 |
+| `DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS` | `DELIVERY` | `order_delivery_ticket` | MES 回调写回物料号成功。 |
+| `DELIVERY_MES_MATERIAL_CALLBACK_FAILED` | `DELIVERY` | `order_delivery_ticket` | MES 回调失败或业务拒绝。 |
+| `DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT` | `DELIVERY` | `order_delivery_ticket` | MES 回调物料号与已确认值冲突。 |
 
 操作日志摘要：
 
@@ -442,6 +519,7 @@ MES 物料号任务已提交，任务ID：{taskId}
 {
   "ticketId": 123,
   "taskId": 456,
+  "mesRequestId": "MES-123-8f8c2",
   "rfqId": 88,
   "partNo": "P-1001",
   "version": "A",
@@ -458,6 +536,11 @@ MES 物料号任务已提交，任务ID：{taskId}
 MES material sync submitted ticketId={} taskId={} rfqId={} partNo={}
 MES material sync started ticketId={} taskId={} rfqId={} partNo={}
 MES material sync completed ticketId={} taskId={} rfqId={} partNo={} materialNo={} durationMs={}
+MES material sync accepted ticketId={} taskId={} mesRequestId={} externalTraceId={} durationMs={}
+MES material callback received ticketId={} mesRequestId={} externalTraceId={}
+MES material callback completed ticketId={} mesRequestId={} materialNo={} durationMs={}
+MES material callback rejected ticketId={} mesRequestId={} reason={}
+MES material callback conflict ticketId={} mesRequestId={} existingMaterialNo={} incomingMaterialNo={}
 MES material sync rejected ticketId={} reason={}
 MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 ```
@@ -468,7 +551,7 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 - rejected 用 WARN。
 - failed 用 ERROR，并传异常对象。
 - 失败必须能在 `qpo-error.log` 查到 `taskId` 和堆栈。
-- 日志不记录 MES token、图纸文件内容、完整请求体。
+- 日志不记录 MES token、回调 token、Authorization header、图纸文件内容、完整请求 JSON、完整响应 JSON 或完整回调 JSON。
 
 ## 11. 测试计划
 
@@ -504,7 +587,14 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 
 - `DELIVERY_MES_MATERIAL_SYNC_SUBMIT` 中文化。
 - `DELIVERY_MES_MATERIAL_SYNC_SUCCESS` 中文化。
+- `DELIVERY_MES_MATERIAL_SYNC_ACCEPTED` 中文化。
 - `DELIVERY_MES_MATERIAL_SYNC_FAILED` 中文化。
+- `DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS` / `FAILED` / `CONFLICT` 中文化。
+- 回调成功写回 `order_delivery_ticket`。
+- 销售订单来源回调成功写回 `sales_order_item`。
+- 重复回调幂等、冲突回调拒绝覆盖、旧 `mesRequestId` 回调不覆盖新请求。
+- 回调 token 缺失 / 错误被拒绝。
+- 批量任务待回调计数正确。
 
 ### 11.2 前端测试
 
@@ -518,6 +608,8 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 - `PENDING` 且无物料号时显示“获取物料号”。
 - `FAILED` 时显示“重试”。
 - `PROCESSING` 时按钮禁用。
+- `CALLBACK_PENDING` 行显示“待回调”且按钮禁用。
+- 批量获取文案包含“待MES回调的行会自动跳过”。
 - `SUCCESS` 且已有物料号时不显示获取按钮。
 - 提交成功后显示任务 ID。
 
@@ -625,15 +717,17 @@ npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 
 文档：
 
-- 更新 `docs/QPO权限用户体系/02-权限点清单与现有角色映射.md`。
-- 更新 `docs/QPO权限用户体系/03-权限体系部署与管理员使用说明.md`。
+- 权限清单说明不新增用户权限，继续使用 `market:delivered-item:mes-sync`。
+- 更新 `docs/QPO-MES-WMS对接/03-MES物料号同步开发文档.md`。
+- 更新 `docs/QPO-MES-WMS对接/06-提供给MES的物料号接口对接说明.md`，旧同步响应口径已废弃。
 - 更新 `docs/QPO日志模块/03-日志运维说明.md`。
 - 更新 `docs/QPO日志模块/04-主流程文件日志规范化开发文档.md`。
 
 验收：
 
-- 管理员知道如何给角色授权 MES 物料号获取。
-- 运维知道如何按 taskId / requestId 查 MES 同步失败。
+- 管理员知道阶段 5 不新增权限，仍授权已提零件下的“获取MES物料号”。
+- 运维知道如何按 `taskId` / `requestId` / `mesRequestId` 查即时成功、待回调、回调成功、失败和冲突。
+- MES 实施人员知道响应必须返回 `mesRequestId`，待回调后通过 QPO 回调接口写回物料号。
 
 ### 阶段 6：全量回归与提交
 
@@ -648,43 +742,16 @@ npm test
 npm run build
 ```
 
-提交建议：
-
-```powershell
-git add docs/QPO-MES-WMS对接/03-MES物料号同步开发文档.md `
-  quote-backend/src/main/resources/db/migration/V46__delivery_ticket_mes_sync_permission.sql `
-  quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveReq.java `
-  quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java `
-  quote-backend/src/main/java/com/machining/quote/service/MesMaterialClient.java `
-  quote-backend/src/main/java/com/machining/quote/service/MesMaterialSyncService.java `
-  quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java `
-  quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java `
-  quote-backend/src/main/java/com/machining/quote/service/AuditService.java `
-  quote-backend/src/main/java/com/machining/quote/service/PermissionService.java `
-  docker-compose.yml `
-  erp.env `
-  quote-backend/src/test/java/com/machining/quote/MesMaterialSyncTest.java `
-  quote-backend/src/test/java/com/machining/quote/MesMaterialClientTest.java `
-  quote-backend/src/test/java/com/machining/quote/AuditActionCoverageTests.java `
-  quote-backend/src/test/java/com/machining/quote/PermissionModuleTreeTest.java `
-  quote-frontend/src/services/deliveredItemApi.js `
-  quote-frontend/src/components/DeliveredItemManage.vue `
-  quote-frontend/src/deliveredItemApi.test.js `
-  quote-frontend/src/deliveredItemMesSync.test.js `
-  docs/QPO权限用户体系/02-权限点清单与现有角色映射.md `
-  docs/QPO权限用户体系/03-权限体系部署与管理员使用说明.md `
-  docs/QPO日志模块/03-日志运维说明.md `
-  docs/QPO日志模块/04-主流程文件日志规范化开发文档.md
-
-git commit -m "feat: add mes material sync for delivered items"
-```
+阶段 5 提交只应包含文档、回归测试和必要的轻量前端测试补充，不提交本地 `erp.env`。
 
 ## 13. 完成定义
 
 - 已提零件页面可以触发 MES 物料号任务。
 - MES 返回成功时，物料号写回 `order_delivery_ticket.material_no`。
+- MES 返回待回调时，已提零件进入 `CALLBACK_PENDING`，后台任务成功完成。
+- MES 回调成功时，物料号写回 `order_delivery_ticket.material_no`；销售订单来源同步回写 `sales_order_item.material_no` 和确认状态。
 - MES 返回失败或异常时，状态和失败摘要可见。
-- 操作日志可查提交、成功、失败。
-- 文件日志可通过 requestId 和 taskId 排查。
+- 操作日志可查提交、已受理待回调、即时成功、回调成功、失败和冲突。
+- 文件日志可通过 requestId、taskId 和 mesRequestId 排查。
 - 权限树中可以独立授权“获取MES物料号”。
 - 不影响议价提单、订单管理、历史订单、报价处理主流程。
