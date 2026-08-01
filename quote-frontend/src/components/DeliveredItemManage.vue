@@ -203,6 +203,10 @@
           <el-descriptions-item label="物料号">{{ formatMaterialNo(selectedItem.materialNo) }}</el-descriptions-item>
           <el-descriptions-item label="零件类型">{{ selectedItem.itemType || '-' }}</el-descriptions-item>
           <el-descriptions-item label="MES状态">{{ statusText(selectedItem.mesSyncStatus) }}</el-descriptions-item>
+          <el-descriptions-item label="MES请求ID">{{ selectedItem.mesRequestId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="MES任务号">{{ selectedItem.mesExternalTaskId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="回调时间">{{ formatDateTime(selectedItem.mesCallbackReceivedAt) }}</el-descriptions-item>
+          <el-descriptions-item label="状态摘要">{{ callbackStatusSummary(selectedItem) }}</el-descriptions-item>
           <el-descriptions-item label="WMS状态">{{ statusText(selectedItem.wmsAllocateStatus) }}</el-descriptions-item>
           <el-descriptions-item label="提单数量">{{ selectedItem.qty ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ selectedItem.customerName || '-' }}</el-descriptions-item>
@@ -567,6 +571,17 @@ const statusTagType = (value) => ({
   CALLBACK_PENDING: 'warning',
   PENDING: 'info'
 }[value] || 'info')
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').replace(/\.\d+$/, '').replace(/Z$/, '')
+}
+
+const callbackStatusSummary = (selectedItem) => {
+  if (!selectedItem) return '-'
+  const message = selectedItem.mesCallbackMessage || selectedItem.mesSyncMessage
+  return message ? `${statusText(selectedItem.mesSyncStatus)}：${message}` : statusText(selectedItem.mesSyncStatus)
+}
 
 const formatProcessRoute = (route) => {
   if (!route) return '-'
