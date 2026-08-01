@@ -283,6 +283,7 @@ const filters = reactive({
 const syncStatusOptions = [
   { value: 'PENDING', label: '未处理' },
   { value: 'PROCESSING', label: '处理中' },
+  { value: 'CALLBACK_PENDING', label: '待MES回调' },
   { value: 'SUCCESS', label: '成功' },
   { value: 'FAILED', label: '失败' }
 ]
@@ -386,6 +387,9 @@ const mesSyncAction = (row) => {
   if (row.mesSyncStatus === 'PROCESSING') {
     return { label: '处理中', type: 'warning', disabled: true }
   }
+  if (row.mesSyncStatus === 'CALLBACK_PENDING') {
+    return { label: '待回调', type: 'warning', disabled: true }
+  }
   if (row.mesSyncStatus === 'FAILED') {
     return { label: '重试', type: 'warning', disabled: false }
   }
@@ -421,7 +425,7 @@ const handleBatchMesSync = async () => {
     return ElMessage.warning('请先选择需要获取物料号的已提零件。')
   }
   try {
-    await ElMessageBox.confirm(`确认批量向 MES 获取 ${selectedCountText()} 的物料号？已成功或处理中的行会自动跳过。`, '批量获取MES物料号', {
+    await ElMessageBox.confirm(`确认批量向 MES 获取 ${selectedCountText()} 的物料号？已成功、处理中、待MES回调的行会自动跳过。`, '批量获取MES物料号', {
       confirmButtonText: '确认提交',
       cancelButtonText: '取消',
       type: 'warning'
@@ -560,6 +564,7 @@ const statusTagType = (value) => ({
   SUCCESS: 'success',
   FAILED: 'danger',
   PROCESSING: 'warning',
+  CALLBACK_PENDING: 'warning',
   PENDING: 'info'
 }[value] || 'info')
 

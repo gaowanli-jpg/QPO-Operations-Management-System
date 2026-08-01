@@ -2,12 +2,14 @@
 
 本文档提供给 MES 系统开发/实施人员，用于说明 QPO 如何调用 MES 获取已提零件的物料号。
 
+> 更新说明：本文档原先只描述 MES 在 HTTP response 中同步返回物料号的第一版接口。根据最新联调要求，MES 可以即时返回物料号，也可以先返回“已受理，后续回调”，再通过 QPO 回调接口写回物料号。异步回调的完整契约以 `docs/QPO报价状态流转/18-MES物料号异步回调开发文档.md` 为准。
+
 ## 1. 对接结论
 
 - 调用方向：QPO -> MES。
 - 调用方式：HTTP `POST`，请求体为 `application/json`。
-- 返回方式：MES 在同一次 HTTP 请求的响应体中同步返回结果。
-- 回调要求：当前 QPO 不需要 MES 回调，也没有为本流程提供 MES 回调接口。
+- 返回方式：MES 可以在同一次 HTTP 请求的响应体中同步返回物料号，也可以返回已受理并后续回调。
+- 回调要求：新口径需要 MES 响应和回调都原样带回 QPO 生成的 `mesRequestId`，后续通过 QPO 回调接口写回物料号。
 - 文件访问：QPO 会传 `drawingUrl`，如果 MES 需要下载图纸，MES 服务器必须能在内网访问该 URL。
 
 简单理解：
@@ -16,8 +18,9 @@
 用户在 QPO 点击“获取物料号”
   -> QPO 创建内部异步任务
   -> 任务里 QPO POST 调 MES
-  -> MES 立即在 HTTP response 里返回 materialNo
-  -> QPO 保存 materialNo 和同步状态
+  -> MES 立即在 HTTP response 里返回 materialNo，或返回已受理待回调
+  -> 如果立即返回 materialNo，QPO 保存 materialNo 和同步状态
+  -> 如果待回调，QPO 标记为待MES回调，MES 后续按 mesRequestId 回调 QPO
 ```
 
 ## 2. MES 需要提供给 QPO 的信息
