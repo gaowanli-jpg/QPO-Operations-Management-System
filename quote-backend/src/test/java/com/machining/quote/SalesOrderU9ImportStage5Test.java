@@ -42,9 +42,9 @@ class SalesOrderU9ImportStage5Test {
                         "`market:u9-sync:*`",
                         "`sales_order_header` / `sales_order_item`",
                         "`material_no_status = 已确认`",
-                        "不得实时从 `order_delivery_ticket.material_no` 组装 U9 请求"
+                        "不得实时从 `order_delivery_ticket.material_no` 组装 U9 请求",
+                        "销售订单管理入口位于订单分组"
                 )
-                .doesNotContain("`market:sales-order:view`")
                 .doesNotContain("ItemCode` 使用 `order_delivery_ticket.material_no`");
         assertThat(adminGuide)
                 .contains(

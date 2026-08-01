@@ -117,7 +117,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
-  { key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] },
+  { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
 ]
 
@@ -132,7 +132,7 @@ const menuMetaByPath = {
   '/engineering': { title: '零件核价', permission: 'engineer:setup:view', icon: Setting },
   '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
   '/orders': { title: '询价订单', permission: 'market:order:view', icon: Document },
-  '/history-orders': { title: '历史订单', permission: 'market:history-order:view', icon: Files },
+  '/sales-orders': { title: '销售订单', permission: 'market:sales-order:view', icon: Files },
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
   '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
   '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
@@ -219,9 +219,9 @@ const shellMetaByPath = {
     title: '询价订单',
     description: '查看询价订单、图纸、提单和工艺表状态。'
   },
-  '/history-orders': {
-    title: '历史订单',
-    description: '查询历史报价、提单和工艺资料。'
+  '/sales-orders': {
+    title: '销售订单',
+    description: '查看销售订单、零件明细、提单行和工艺表状态。'
   },
   '/delivered-items': {
     title: '已提零件',

@@ -12,7 +12,7 @@ const GlobalSetup = () => import('../components/GlobalSetup.vue')
 const ItemPricing = () => import('../components/ItemPricing.vue')
 const MaterialProcessManage = () => import('../components/MaterialProcessManage.vue')
 const OrderManage = () => import('../components/OrderManage.vue')
-const HistoryOrderManage = () => import('../components/HistoryOrderManage.vue')
+const SalesOrderManage = () => import('../components/SalesOrderManage.vue')
 const DeliveredItemManage = () => import('../components/DeliveredItemManage.vue')
 const LockedItemManage = () => import('../components/LockedItemManage.vue')
 const UserManage = () => import('../components/UserManage.vue')
@@ -35,7 +35,8 @@ const routes = [
   { path: '/engineering', component: GlobalSetup, meta: { permission: 'engineer:setup:view' } },
   { path: '/material-process', component: MaterialProcessManage, meta: { permission: 'engineer:dict:view' } },
   { path: '/orders', component: OrderManage, meta: { permission: 'market:order:view' } },
-  { path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:history-order:view' } },
+  { path: '/sales-orders', component: SalesOrderManage, meta: { permission: 'market:sales-order:view' } },
+  { path: '/history-orders', redirect: '/sales-orders' },
   { path: '/delivered-items', component: DeliveredItemManage, meta: { permission: 'market:delivered-item:view' } },
   { path: '/locked-items', component: LockedItemManage, meta: { permission: 'market:locked-item:view' } },
   { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },

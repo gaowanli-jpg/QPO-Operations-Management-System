@@ -97,12 +97,12 @@ describe('QPO customer picker dialog', () => {
   test('customer selection buttons are gated by module-owned permissions', () => {
     const orderPicker = readComponent('OrderPickerDialog.vue')
     const orderManage = readComponent('OrderManage.vue')
-    const historyManage = readComponent('HistoryOrderManage.vue')
+    const salesOrderManage = readComponent('SalesOrderManage.vue')
 
     expect(orderPicker).toContain('customerSelectPermission')
     expect(orderPicker).toContain('v-permission="customerSelectPermission"')
     expect(orderManage).toContain('v-permission="\'market:order:customer-select\'"')
-    expect(historyManage).toContain('v-permission="\'market:history-order:customer-select\'"')
+    expect(salesOrderManage).toContain('v-permission="\'market:sales-order:customer-select\'"')
   })
 
   test('delivered and locked item modules use their own customer selection scopes', () => {

@@ -8,6 +8,7 @@ const CUSTOMER_ENDPOINTS = {
   'engineer-setup': '/api/engineer/setup/customers',
   'market-order': '/api/order-management/customers',
   'history-order': '/api/order-management/history-orders/customers',
+  'sales-order': '/api/market/sales-order-management/customers',
   'delivered-item': '/api/order-delivery/tickets/customers',
   'locked-item': '/api/order-delivery/allocations/customers'
 }

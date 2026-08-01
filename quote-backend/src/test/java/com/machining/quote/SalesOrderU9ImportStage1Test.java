@@ -41,7 +41,8 @@ class SalesOrderU9ImportStage1Test {
         assertThat(source)
                 .contains("permission(169L, \"BUTTON\", \"market:rfq:import-sales-order\", \"导入销售订单\", null, null, false, 117, 1L)")
                 .contains("Map.entry(\"market:rfq:import-sales-order\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))")
-                .doesNotContain("\"market:sales-order:view\"");
+                .contains("\"market:sales-order:view\"")
+                .contains("\"/sales-orders\"");
     }
 
     @Test
@@ -110,7 +111,8 @@ class SalesOrderU9ImportStage1Test {
                 .contains("`market:rfq:import-sales-order`")
                 .contains("导入销售订单")
                 .contains("挂在 `market:rfq:view` 下")
-                .doesNotContain("`market:sales-order:view`");
+                .contains("销售订单导入、模板下载仍沿用 `market:rfq:import-sales-order`")
+                .contains("销售订单管理入口位于订单分组");
         assertThat(adminDoc)
                 .contains("`market:rfq:import-sales-order`")
                 .contains("销售订单");

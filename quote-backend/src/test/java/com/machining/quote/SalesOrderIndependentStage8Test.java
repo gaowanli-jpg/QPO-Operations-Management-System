@@ -40,9 +40,9 @@ class SalesOrderIndependentStage8Test {
                         "\u540c\u6b65\u8bf7\u6c42\u4ece `sales_order_header` / `sales_order_item` \u7ec4\u88c5",
                         "`ItemCode` \u4f7f\u7528 `sales_order_item.material_no`",
                         "`material_no_status = \u5df2\u786e\u8ba4`",
-                        "\u4e0d\u65b0\u589e\u53ef\u5206\u914d `common:*` \u6743\u9650"
+                        "\u4e0d\u65b0\u589e\u53ef\u5206\u914d `common:*` \u6743\u9650",
+                        "\u9500\u552e\u8ba2\u5355\u7ba1\u7406\u5165\u53e3\u4f4d\u4e8e\u8ba2\u5355\u5206\u7ec4"
                 )
-                .doesNotContain("`market:sales-order:view` |")
                 .doesNotContain("ItemCode` \u4f7f\u7528 `order_delivery_ticket.material_no`");
         assertThat(logDoc)
                 .contains(

@@ -19,7 +19,7 @@ class PermissionSystemStage4Test {
                         "/market",
                         "/orders",
                         "/sales-match",
-                        "/history-orders",
+                        "/sales-orders",
                         "/delivered-items",
                         "/locked-items",
                         "/quote-process",
@@ -47,6 +47,9 @@ class PermissionSystemStage4Test {
         assertThat(info.getPermissions()).contains(
                 "market:rfq:import",
                 "market:rfq:upload-drawing",
+                "market:sales-order:view",
+                "market:sales-order:customer-select",
+                "market:sales-order:file-preview",
                 "market:sales-match:view",
                 "market:sales-match:customer-select",
                 "market:sales-match:order-select",

@@ -27,10 +27,12 @@ describe('QPO role permission tree guardrails', () => {
     expect(roleManage).not.toContain('<el-checkbox-group')
   })
 
-  test('freezes history orders as an independently authorized menu module', () => {
-    expect(routerSource).toContain("{ path: '/history-orders', component: HistoryOrderManage, meta: { permission: 'market:history-order:view' } }")
-    expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:history-order:view'")
-    expect(appVue).not.toContain("'/history-orders': { title: '历史订单', permission: 'market:order:view'")
+  test('uses sales orders as the independently authorized replacement for history orders', () => {
+    expect(routerSource).toContain("{ path: '/sales-orders', component: SalesOrderManage, meta: { permission: 'market:sales-order:view' } }")
+    expect(routerSource).toContain("{ path: '/history-orders', redirect: '/sales-orders' }")
+    expect(appVue).toContain("'/sales-orders': { title: '销售订单', permission: 'market:sales-order:view'")
+    expect(appVue).not.toContain("'/history-orders': { title: '历史订单'")
+    expect(appVue).not.toContain("'/sales-orders': { title: '销售订单', permission: 'market:history-order:view'")
   })
 
   test('does not expose legacy common permissions in the role authorization UI', () => {

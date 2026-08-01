@@ -51,9 +51,9 @@ describe('QPO Stage 7 final consistency pass', () => {
     }
   })
 
-  test('normalizes remaining admin and history pages', () => {
+  test('normalizes remaining admin and sales order pages', () => {
     const expectations = [
-      ['HistoryOrderManage.vue', 'history-page'],
+      ['SalesOrderManage.vue', 'sales-order-manage-page'],
       ['QuoteTemplateManage.vue', 'template-page'],
       ['UserManage.vue', 'user-manage-page']
     ]
@@ -80,38 +80,38 @@ describe('QPO Stage 7 final consistency pass', () => {
     }
   })
 
-  test('keeps dialogs and destructive table operations on shared affordances', () => {
+  test('keeps dialogs and sales order shell operations on shared affordances', () => {
     const userSource = readComponent('UserManage.vue')
-    const historySource = readComponent('HistoryOrderManage.vue')
+    const salesOrderSource = readComponent('SalesOrderManage.vue')
 
     expect(userSource).toContain('erp-dialog-form')
     expect(userSource).toContain('erp-dialog-footer')
     expect(userSource).toContain('erp-table-actions')
-    expect(historySource).toContain('erp-table-actions')
-    expect(historySource).toContain('erp-empty-state')
+    expect(salesOrderSource).toContain('erp-table-actions')
+    expect(salesOrderSource).toContain('erp-empty-state')
   })
 
-  test('aligns order and history order list chrome while keeping history functions distinct', () => {
+  test('aligns inquiry and sales order list chrome while keeping sales order actions separate', () => {
     const orderSource = readComponent('OrderManage.vue')
-    const historySource = readComponent('HistoryOrderManage.vue')
+    const salesOrderSource = readComponent('SalesOrderManage.vue')
     const disabledRefreshButton = ':loading="loading" :disabled="!selectedCustomer" @click="refreshOrders"'
 
-    expect(historySource).toContain('<header class="erp-page-header">')
-    expect(historySource).not.toContain('history-page-actions')
+    expect(salesOrderSource).toContain('<header class="erp-page-header">')
+    expect(salesOrderSource).not.toContain('history-page-actions')
 
-    const historyToolbarIndex = historySource.indexOf('class="erp-toolbar-group history-filter-group"')
-    const historyRefreshIndex = historySource.indexOf(disabledRefreshButton)
-    expect(historyToolbarIndex).toBeGreaterThan(-1)
-    expect(historyRefreshIndex).toBeGreaterThan(historyToolbarIndex)
+    const salesOrderToolbarIndex = salesOrderSource.indexOf('class="erp-toolbar-group sales-order-filter-group"')
+    const salesOrderRefreshIndex = salesOrderSource.indexOf(disabledRefreshButton)
+    expect(salesOrderToolbarIndex).toBeGreaterThan(-1)
+    expect(salesOrderRefreshIndex).toBeGreaterThan(salesOrderToolbarIndex)
     expect(orderSource).toContain(disabledRefreshButton)
 
-    expect(historySource).toContain('彻底删除')
-    expect(historySource).toContain('查看订单')
-    expect(historySource).not.toContain('重置提单/工艺')
+    expect(salesOrderSource).not.toContain('彻底删除')
+    expect(salesOrderSource).toContain('查看销售订单')
+    expect(salesOrderSource).not.toContain('重置提单/工艺')
 
     expect(orderSource).toContain('.order-table-surface .erp-table-body')
-    expect(historySource).toContain('.history-table-surface .erp-table-body')
+    expect(salesOrderSource).toContain('.sales-order-table-surface .erp-table-body')
     expect(orderSource).toContain('padding: var(--erp-space-3);')
-    expect(historySource).toContain('padding: var(--erp-space-3);')
+    expect(salesOrderSource).toContain('padding: var(--erp-space-3);')
   })
 })
