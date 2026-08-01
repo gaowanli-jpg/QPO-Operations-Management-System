@@ -657,10 +657,10 @@ class CoreWorkflowIntegrationTests {
                 .doesNotContain("DELIVERY_TICKET_DELETE")
                 .doesNotContain("PROCESS_SHEET_DELETE");
         assertThat(source("src/main/java/com/machining/quote/controller/OrderManagementController.java"))
-                .as("订单管理不再暴露重置提单/工艺接口")
+                .as("询价订单不再暴露重置提单/工艺接口")
                 .doesNotContain("reset-production");
         assertThat(source("src/main/java/com/machining/quote/service/OrderManagementService.java"))
-                .as("订单管理不再保留重置提单/工艺服务方法")
+                .as("询价订单不再保留重置提单/工艺服务方法")
                 .doesNotContain("resetProductionData")
                 .doesNotContain("Order production reset completed");
     }

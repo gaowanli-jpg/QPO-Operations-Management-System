@@ -2,8 +2,8 @@
   <div class="erp-page order-manage-page">
     <header class="erp-page-header">
       <div>
-        <h1 class="erp-page-title">订单管理</h1>
-        <p class="erp-page-description">先选择客户，再管理该客户下的订单、零件、图纸文件、提单和工艺表数据。</p>
+        <h1 class="erp-page-title">询价订单</h1>
+        <p class="erp-page-description">先选择客户，再管理该客户下的询价订单、零件、图纸文件、提单和工艺表数据。</p>
       </div>
     </header>
 
@@ -52,13 +52,13 @@
 
     <section class="erp-table-surface order-table-surface">
       <div v-if="!selectedCustomer" class="erp-empty-state">
-        <el-empty description="请先选择客户查看订单" />
+        <el-empty description="请先选择客户查看询价订单" />
       </div>
 
       <template v-else>
         <div class="erp-table-body">
           <el-table :data="orders" border stripe height="600" v-loading="loading">
-          <el-table-column prop="rfqNo" label="订单号" min-width="170" fixed show-overflow-tooltip />
+          <el-table-column prop="rfqNo" label="RFQ号" min-width="170" fixed show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="120" align="center">
             <template #default="scope">
               <el-tag type="success" size="small">
@@ -131,10 +131,10 @@
       </template>
     </section>
 
-    <el-drawer v-model="detailVisible" title="订单详情" size="72%">
+    <el-drawer v-model="detailVisible" title="询价订单详情" size="72%">
       <div v-if="orderDetail" v-loading="detailLoading" class="detail-wrap">
         <el-descriptions :column="2" border class="detail-descriptions">
-          <el-descriptions-item label="订单号">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="RFQ号">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ orderDetail.orderInfo?.status || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ orderDetail.orderInfo?.customerName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="图纸目录" :span="2">{{ orderDetail.fileRoot || '-' }}</el-descriptions-item>
@@ -405,12 +405,12 @@ const ORDER_STATUS_ACTIONS = [
     permission: 'market:order:rollback-quoted',
     handler: rollbackQuotedOrder,
     type: 'warning',
-    reason: '订单管理：已报价退回已核价',
-    successMessage: '订单已退回已核价。',
+    reason: '询价订单：已报价退回已核价',
+    successMessage: '询价订单已退回已核价。',
     errorMessage: '退回已核价失败。',
     confirmTitle: '退回已核价',
     confirmButtonText: '确认退回',
-    confirmMessage: (row) => `确认将订单「${row.rfqNo || row.id}」从“已报价”退回“已核价”吗？系统只调整订单和零件状态，不会清空报价交期、核价结果或图纸。`
+    confirmMessage: (row) => `确认将询价订单「${row.rfqNo || row.id}」从“已报价”退回“已核价”吗？系统只调整询价订单和零件状态，不会清空报价交期、核价结果或图纸。`
   },
   {
     status: '已核价',
@@ -418,12 +418,12 @@ const ORDER_STATUS_ACTIONS = [
     permission: 'market:order:rollback-priced',
     handler: rollbackPricedOrder,
     type: 'warning',
-    reason: '订单管理：已核价退回未核价',
-    successMessage: '订单已退回未核价。',
+    reason: '询价订单：已核价退回未核价',
+    successMessage: '询价订单已退回未核价。',
     errorMessage: '退回未核价失败。',
     confirmTitle: '退回未核价',
     confirmButtonText: '确认退回',
-    confirmMessage: (row) => `确认将订单「${row.rfqNo || row.id}」从“已核价”退回“未核价”吗？系统只调整状态，已有核价数据会保留为草稿。`
+    confirmMessage: (row) => `确认将询价订单「${row.rfqNo || row.id}」从“已核价”退回“未核价”吗？系统只调整状态，已有核价数据会保留为草稿。`
   },
   {
     status: '未核价',
@@ -431,12 +431,12 @@ const ORDER_STATUS_ACTIONS = [
     permission: 'market:order:discard',
     handler: discardOrder,
     type: 'danger',
-    reason: '订单管理：废弃未核价订单',
-    successMessage: '订单已废弃。',
-    errorMessage: '废弃订单失败。',
-    confirmTitle: '废弃订单',
+    reason: '询价订单：废弃未核价订单',
+    successMessage: '询价订单已废弃。',
+    errorMessage: '废弃询价订单失败。',
+    confirmTitle: '废弃询价订单',
     confirmButtonText: '确认废弃',
-    confirmMessage: (row) => `确认废弃订单「${row.rfqNo || row.id}」吗？废弃后订单不会进入核价、报价处理和议价提单候选，但数据仍保留。`
+    confirmMessage: (row) => `确认废弃询价订单「${row.rfqNo || row.id}」吗？废弃后询价订单不会进入核价、报价处理和议价提单候选，但数据仍保留。`
   },
   {
     status: '已核价',
@@ -444,12 +444,12 @@ const ORDER_STATUS_ACTIONS = [
     permission: 'market:order:discard',
     handler: discardOrder,
     type: 'danger',
-    reason: '订单管理：废弃已核价订单',
-    successMessage: '订单已废弃。',
-    errorMessage: '废弃订单失败。',
-    confirmTitle: '废弃订单',
+    reason: '询价订单：废弃已核价订单',
+    successMessage: '询价订单已废弃。',
+    errorMessage: '废弃询价订单失败。',
+    confirmTitle: '废弃询价订单',
     confirmButtonText: '确认废弃',
-    confirmMessage: (row) => `确认废弃订单「${row.rfqNo || row.id}」吗？系统只调整状态，不会清空核价结果、报价交期或图纸。`
+    confirmMessage: (row) => `确认废弃询价订单「${row.rfqNo || row.id}」吗？系统只调整状态，不会清空核价结果、报价交期或图纸。`
   },
   {
     status: '已报价',
@@ -457,12 +457,12 @@ const ORDER_STATUS_ACTIONS = [
     permission: 'market:order:discard',
     handler: discardOrder,
     type: 'danger',
-    reason: '订单管理：废弃已报价订单',
-    successMessage: '订单已废弃。',
-    errorMessage: '废弃订单失败。',
-    confirmTitle: '废弃订单',
+    reason: '询价订单：废弃已报价订单',
+    successMessage: '询价订单已废弃。',
+    errorMessage: '废弃询价订单失败。',
+    confirmTitle: '废弃询价订单',
     confirmButtonText: '确认废弃',
-    confirmMessage: (row) => `确认废弃订单「${row.rfqNo || row.id}」吗？系统只调整状态，不会清空报价单数据。`
+    confirmMessage: (row) => `确认废弃询价订单「${row.rfqNo || row.id}」吗？系统只调整状态，不会清空报价单数据。`
   },
   {
     status: '废弃',
@@ -470,15 +470,15 @@ const ORDER_STATUS_ACTIONS = [
     permission: 'market:order:restore',
     handler: restoreOrder,
     type: 'success',
-    reason: '订单管理：恢复废弃订单',
-    successMessage: '订单已恢复为已核价。',
-    errorMessage: '恢复订单失败。',
-    confirmTitle: '恢复订单',
+    reason: '询价订单：恢复废弃订单',
+    successMessage: '询价订单已恢复为已核价。',
+    errorMessage: '恢复询价订单失败。',
+    confirmTitle: '恢复询价订单',
     confirmButtonText: '确认恢复',
-    confirmMessage: (row) => `确认将废弃订单「${row.rfqNo || row.id}」恢复为“已核价”吗？恢复后仍需按后续业务校验保存报价单。`
+    confirmMessage: (row) => `确认将废弃询价订单「${row.rfqNo || row.id}」恢复为“已核价”吗？恢复后仍需按后续业务校验保存报价单。`
   }
 ]
-const RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON = '订单已生成提单，不能废弃或回退'
+const RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON = '询价订单已生成提单，不能废弃或回退'
 
 const ResultList = defineComponent({
   props: {
@@ -546,7 +546,7 @@ const loadOrders = async () => {
     total.value = response.total || 0
   } catch (error) {
     console.error(error)
-    ElMessage.error('订单列表加载失败。')
+    ElMessage.error('询价订单列表加载失败。')
   } finally {
     loading.value = false
   }
@@ -611,7 +611,7 @@ const openDetail = async (row) => {
     await fetchCurrentDetailTab()
   } catch (error) {
     console.error(error)
-    ElMessage.error('订单详情加载失败。')
+    ElMessage.error('询价订单详情加载失败。')
   } finally {
     detailLoading.value = false
   }
@@ -635,7 +635,7 @@ const fetchDetailItems = async () => {
     detailItemTotal.value = Number(response.total ?? 0)
   } catch (error) {
     console.error(error)
-    ElMessage.error('订单零件明细加载失败。')
+    ElMessage.error('询价订单零件明细加载失败。')
   } finally {
     detailItemsLoading.value = false
   }
@@ -654,7 +654,7 @@ const fetchDetailTickets = async () => {
     detailTicketTotal.value = Number(response.total ?? 0)
   } catch (error) {
     console.error(error)
-    ElMessage.error('订单提单行加载失败。')
+    ElMessage.error('询价订单提单行加载失败。')
   } finally {
     detailTicketsLoading.value = false
   }
@@ -673,7 +673,7 @@ const fetchDetailProcessSheets = async () => {
     detailProcessSheetTotal.value = Number(response.total ?? 0)
   } catch (error) {
     console.error(error)
-    ElMessage.error('订单工艺表行加载失败。')
+    ElMessage.error('询价订单工艺表行加载失败。')
   } finally {
     detailProcessSheetsLoading.value = false
   }
@@ -791,7 +791,7 @@ const performStatusAction = async (row, action) => {
 }
 
 const submitSupplementDrawings = async () => {
-  if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开订单详情。')
+  if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开询价订单详情。')
   if (supplementFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
 
   const rfqId = orderDetail.value.orderInfo.id

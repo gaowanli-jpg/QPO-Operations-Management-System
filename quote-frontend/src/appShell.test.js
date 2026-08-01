@@ -78,6 +78,8 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain('const backendVisiblePermissions')
     expect(appVue).not.toContain('backendVisiblePermissions.value.has(permission)')
     expect(appVue).toContain('return backendPaths.has(path)')
+    expect(appVue).toContain("'/orders': { title: '询价订单', permission: 'market:order:view'")
+    expect(appVue).not.toContain("'/orders': { title: '订单管理', permission: 'market:order:view'")
     expect(appVue).toContain("'/history-orders': { title: '历史订单', permission: 'market:history-order:view'")
     expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
     expect(appVue).toContain("'/locked-items': { title: '锁库零件', permission: 'market:locked-item:view'")
@@ -89,6 +91,7 @@ describe('QPO app shell polish', () => {
 
   test('places delivered and locked items in the order sidebar group with four-character titles', () => {
     expect(appVue).toContain("{ key: 'orders', title: '订单', paths: ['/orders', '/history-orders', '/delivered-items', '/locked-items'] }")
+    expect(appVue).toContain("'/orders': { title: '询价订单', permission: 'market:order:view'")
     expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
     expect(appVue).toContain("'/locked-items': { title: '锁库零件', permission: 'market:locked-item:view'")
   })

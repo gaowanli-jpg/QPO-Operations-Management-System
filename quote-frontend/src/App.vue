@@ -131,7 +131,7 @@ const menuMetaByPath = {
   '/quote-template': { title: '报价模板', permission: 'market:template:view', icon: Files },
   '/engineering': { title: '零件核价', permission: 'engineer:setup:view', icon: Setting },
   '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
-  '/orders': { title: '订单管理', permission: 'market:order:view', icon: Document },
+  '/orders': { title: '询价订单', permission: 'market:order:view', icon: Document },
   '/history-orders': { title: '历史订单', permission: 'market:history-order:view', icon: Files },
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
   '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
@@ -216,8 +216,8 @@ const shellMetaByPath = {
     description: '维护工程核价使用的材料、工艺和费用字典。'
   },
   '/orders': {
-    title: '订单管理',
-    description: '查看订单、图纸、提单和工艺表状态。'
+    title: '询价订单',
+    description: '查看询价订单、图纸、提单和工艺表状态。'
   },
   '/history-orders': {
     title: '历史订单',

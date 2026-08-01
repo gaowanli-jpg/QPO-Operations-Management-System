@@ -31,6 +31,8 @@ describe('QPO Stage 3 shared page layout migration', () => {
   test('migrates order management to shared toolbar and table surface classes', () => {
     const source = readComponent('OrderManage.vue')
 
+    expect(source).toContain('<h1 class="erp-page-title">询价订单</h1>')
+    expect(source).not.toContain('<h1 class="erp-page-title">订单管理</h1>')
     expectClasses(source, [
       'erp-page',
       'erp-page-header',

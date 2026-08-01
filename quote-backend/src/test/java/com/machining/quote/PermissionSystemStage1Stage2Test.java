@@ -82,7 +82,7 @@ class PermissionSystemStage1Stage2Test {
         when(permissionMapper.selectEnabledPermissionsByLegacyUserId(7)).thenReturn(List.of(
                 permission(1L, 0L, "MENU", "market:rfq:view", "新单导入", "/market", "MarketDashboard", true, 10),
                 permission(2L, 0L, "BUTTON", "market:rfq:import", "导入 RFQ", null, null, false, 20),
-                permission(3L, 1L, "MENU", "market:order:view", "订单管理", "/orders", "OrderManage", false, 30)
+                permission(3L, 1L, "MENU", "market:order:view", "询价订单", "/orders", "OrderManage", false, 30)
         ));
 
         PermissionInfoDTO info = permissionService.getPermissionInfo(7, "ADMIN");

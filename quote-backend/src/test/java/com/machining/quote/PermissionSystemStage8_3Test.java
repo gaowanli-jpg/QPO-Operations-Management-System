@@ -120,7 +120,7 @@ class PermissionSystemStage8_3Test {
         when(permissionMapper.selectByPermissionCodes(List.of("market:rfq:view", "market:order:view", "common:task:view")))
                 .thenReturn(List.of(
                         permission(1L, 0L, "MENU", "market:rfq:view", "新单导入", true, true, 110),
-                        permission(3L, 0L, "MENU", "market:order:view", "订单管理", true, true, 120),
+                        permission(3L, 0L, "MENU", "market:order:view", "询价订单", true, true, 120),
                         permission(904L, 0L, "API", "common:task:view", "查看异步任务", false, false, 913)
                 ));
 

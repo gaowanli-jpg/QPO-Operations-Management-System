@@ -32,6 +32,7 @@ class PermissionModuleTreeTest {
     private static final Path DELIVERY_COMMON_QUERY_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
     private static final Path RETIRE_RFQ_ORDER_TYPE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V53__retire_rfq_order_type_select_permission.sql");
     private static final Path DELIVERY_DOCUMENT_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
+    private static final Path INQUIRY_ORDER_RENAME_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V70__rename_order_management_to_inquiry_orders.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path DOCS_ROOT = Path.of("..", "docs");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
@@ -513,6 +514,14 @@ class PermissionModuleTreeTest {
     void orderStatusManagementPermissionsBelongToOrderModule() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
 
+        assertThat(source)
+                .as("The RFQ order module keeps compatibility codes while showing the inquiry-order label")
+                .contains(
+                        "permission(3L, \"MENU\", \"market:order:view\", \"询价订单\", \"/orders\", \"OrderManage\", true, 120)",
+                        "permission(132L, \"API\", \"market:order:customer-select\", \"询价订单选择客户\", null, null, false, 123, 3L)",
+                        "permission(133L, \"API\", \"market:order:file-preview\", \"询价订单预览文件\", null, null, false, 124, 3L)"
+                )
+                .doesNotContain("permission(3L, \"MENU\", \"market:order:view\", \"订单管理\"");
         assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
                 .as("Order status management actions need independent order-module permissions")
                 .contains(
@@ -537,6 +546,20 @@ class PermissionModuleTreeTest {
                         "Map.entry(\"market:order:discard\", Set.of(\"MARKET_MANAGER\"))",
                         "Map.entry(\"market:order:restore\", Set.of(\"MARKET_MANAGER\"))"
                 );
+    }
+
+    @Test
+    void inquiryOrderRenameMigrationKeepsDatabasePermissionCatalogAligned() throws IOException {
+        String migration = Files.readString(INQUIRY_ORDER_RENAME_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(migration)
+                .contains("market:order:view")
+                .contains("询价订单")
+                .contains("market:order:customer-select")
+                .contains("询价订单选择客户")
+                .contains("market:order:file-preview")
+                .contains("询价订单预览文件")
+                .doesNotContain("market:history-order:view");
     }
 
     @Test
