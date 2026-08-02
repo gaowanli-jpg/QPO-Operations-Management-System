@@ -1,13 +1,22 @@
 package com.machining.quote.service.mes;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.mes.MesProductionAssemblyRelationDTO;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
+import com.machining.quote.entity.ItemAssemblyRelation;
+import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.SalesOrderItemAssemblyRelation;
+import com.machining.quote.mapper.ItemAssemblyRelationMapper;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import org.slf4j.Logger;
@@ -15,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -42,6 +52,14 @@ public class MesProductionDispatchService {
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private MesProductionDispatchClient mesProductionDispatchClient;
+    @Autowired(required = false)
+    private ItemAssemblyRelationMapper itemAssemblyRelationMapper;
+    @Autowired(required = false)
+    private ItemQuoteVersionMapper itemQuoteVersionMapper;
+    @Autowired(required = false)
+    private SalesOrderItemAssemblyRelationMapper salesOrderItemAssemblyRelationMapper;
+    @Autowired(required = false)
+    private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired(required = false)
     private AuditService auditService;
     @Autowired(required = false)
@@ -105,7 +123,6 @@ public class MesProductionDispatchService {
         }
 
         String requestId = requestId(allocation.getId());
-        MesProductionDispatchReq request = buildRequest(allocation, requestId);
         long startedAt = System.currentTimeMillis();
         if (!markProcessing(allocation, requestId)) {
             String reason = "MES production status changed before dispatch";
@@ -116,6 +133,7 @@ public class MesProductionDispatchService {
                 allocation.getId(), requestId, allocation.getSourceType(), allocation.getSourceOrderId(),
                 allocation.getSourceItemId(), allocation.getQty(), allocation.getTicketQty());
         try {
+            MesProductionDispatchReq request = buildRequest(allocation, requestId);
             MesProductionDispatchResp response = mesProductionDispatchClient.dispatch(request);
             if (response == null || !Boolean.TRUE.equals(response.getSuccess())) {
                 throw new RuntimeException(response == null || isBlank(response.getMessage())
@@ -171,8 +189,90 @@ public class MesProductionDispatchService {
         req.setMaterialData(allocation.getMaterialData());
         req.setMaterialGrossWeight(allocation.getMaterialGrossWeight());
         req.setPartNetWeight(allocation.getPartNetWeight());
-        req.setAssemblyRelations(List.<MesProductionAssemblyRelationDTO>of());
+        req.setAssemblyRelations(buildAssemblyRelations(allocation));
         return req;
+    }
+
+    private List<MesProductionAssemblyRelationDTO> buildAssemblyRelations(OrderDeliveryTicketAllocation allocation) {
+        if (allocation == null || allocation.getSourceItemId() == null) {
+            return List.of();
+        }
+        if ("SALES_ORDER".equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))) {
+            return buildSalesOrderAssemblyRelations(allocation);
+        }
+        return buildRfqAssemblyRelations(allocation);
+    }
+
+    private List<MesProductionAssemblyRelationDTO> buildRfqAssemblyRelations(OrderDeliveryTicketAllocation allocation) {
+        Integer parentItemId = toInteger(allocation.getSourceItemId());
+        if (parentItemId == null || itemAssemblyRelationMapper == null || itemQuoteVersionMapper == null) {
+            return List.of();
+        }
+        QueryWrapper<ItemAssemblyRelation> query = new QueryWrapper<>();
+        query.eq("parent_item_id", parentItemId).orderByAsc("sort_no").orderByAsc("id");
+        List<ItemAssemblyRelation> relations = itemAssemblyRelationMapper.selectList(query);
+        if (relations == null || relations.isEmpty()) {
+            return List.of();
+        }
+        ItemQuoteVersion parent = itemQuoteVersionMapper.selectById(parentItemId);
+        List<MesProductionAssemblyRelationDTO> result = new ArrayList<>();
+        for (ItemAssemblyRelation relation : relations) {
+            if (relation == null) {
+                continue;
+            }
+            ItemQuoteVersion child = relation.getChildItemId() == null
+                    ? null
+                    : itemQuoteVersionMapper.selectById(relation.getChildItemId());
+            MesProductionAssemblyRelationDTO dto = new MesProductionAssemblyRelationDTO();
+            dto.setParentItemId(toLong(relation.getParentItemId(), parentItemId.longValue()));
+            dto.setChildItemId(toLong(relation.getChildItemId(), null));
+            dto.setParentPartNo(firstNonBlank(parent == null ? null : parent.getPartNo(), allocation.getPartNo()));
+            dto.setParentVersion(firstNonBlank(parent == null ? null : parent.getVersion(), allocation.getVersion()));
+            dto.setChildPartNo(child == null ? null : child.getPartNo());
+            dto.setChildVersion(child == null ? null : child.getVersion());
+            dto.setQtyPerParent(relation.getChildQtyPerParent() == null
+                    ? null
+                    : BigDecimal.valueOf(relation.getChildQtyPerParent()));
+            dto.setSortNo(relation.getSortNo());
+            result.add(dto);
+        }
+        return result;
+    }
+
+    private List<MesProductionAssemblyRelationDTO> buildSalesOrderAssemblyRelations(OrderDeliveryTicketAllocation allocation) {
+        Long parentItemId = allocation.getSourceItemId();
+        if (parentItemId == null || salesOrderItemAssemblyRelationMapper == null || salesOrderItemMapper == null) {
+            return List.of();
+        }
+        QueryWrapper<SalesOrderItemAssemblyRelation> query = new QueryWrapper<>();
+        query.eq("parent_item_id", parentItemId).orderByAsc("sort_no").orderByAsc("id");
+        List<SalesOrderItemAssemblyRelation> relations = salesOrderItemAssemblyRelationMapper.selectList(query);
+        if (relations == null || relations.isEmpty()) {
+            return List.of();
+        }
+        SalesOrderItem parent = salesOrderItemMapper.selectById(parentItemId);
+        List<MesProductionAssemblyRelationDTO> result = new ArrayList<>();
+        for (SalesOrderItemAssemblyRelation relation : relations) {
+            if (relation == null) {
+                continue;
+            }
+            SalesOrderItem child = relation.getChildItemId() == null
+                    ? null
+                    : salesOrderItemMapper.selectById(relation.getChildItemId());
+            MesProductionAssemblyRelationDTO dto = new MesProductionAssemblyRelationDTO();
+            dto.setParentItemId(relation.getParentItemId());
+            dto.setChildItemId(relation.getChildItemId());
+            dto.setParentPartNo(firstNonBlank(parent == null ? null : parent.getPartNo(), allocation.getPartNo()));
+            dto.setParentVersion(firstNonBlank(parent == null ? null : parent.getVersion(), allocation.getVersion()));
+            dto.setChildPartNo(child == null ? null : child.getPartNo());
+            dto.setChildVersion(child == null ? null : child.getVersion());
+            dto.setQtyPerParent(relation.getQtyPerParent());
+            dto.setSortNo(relation.getSortNo());
+            dto.setSourceParentItemId(relation.getSourceParentItemId());
+            dto.setSourceChildItemId(relation.getSourceChildItemId());
+            result.add(dto);
+        }
+        return result;
     }
 
     private boolean markProcessing(OrderDeliveryTicketAllocation allocation, String requestId) {
@@ -343,6 +443,21 @@ public class MesProductionDispatchService {
 
     private String blankToEmpty(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private Integer toInteger(Long value) {
+        if (value == null || value > Integer.MAX_VALUE || value < Integer.MIN_VALUE) {
+            return null;
+        }
+        return value.intValue();
+    }
+
+    private Long toLong(Integer value, Long fallback) {
+        return value == null ? fallback : value.longValue();
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return isBlank(primary) ? fallback : primary;
     }
 
     private String abbreviate(String value) {
