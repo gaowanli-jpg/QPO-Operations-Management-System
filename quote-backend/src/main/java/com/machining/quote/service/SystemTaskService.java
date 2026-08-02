@@ -7,6 +7,7 @@ import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.mes.MesMaterialSyncService;
+import com.machining.quote.service.mes.MesProductionDispatchService;
 import com.machining.quote.service.wms.WmsAllocationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,8 @@ public class SystemTaskService {
     private MesMaterialSyncService mesMaterialSyncService;
     @Autowired(required = false)
     private WmsAllocationService wmsAllocationService;
+    @Autowired(required = false)
+    private MesProductionDispatchService mesProductionDispatchService;
     @Autowired(required = false)
     private DeliveryIntegrationBatchService deliveryIntegrationBatchService;
     @Autowired(required = false)
@@ -211,6 +214,24 @@ public class SystemTaskService {
         recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
         log.info("WMS allocation batch submitted taskId={} ticketCount={}", task.getId(), normalizedTicketIds.size());
         taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.allocateWmsBatch(normalizedTicketIds, task.getId())));
+        return taskMapper.selectById(task.getId());
+    }
+
+    public SystemTask submitMesProductionBatchTask(List<Integer> allocationIds) {
+        if (mesProductionDispatchService == null) {
+            throw new RuntimeException("MES production dispatch service is unavailable");
+        }
+        List<Integer> normalizedAllocationIds = mesProductionDispatchService.normalizeAllocationIds(allocationIds);
+        mesProductionDispatchService.assertCanAccessAllocations(normalizedAllocationIds);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("allocationIds", normalizedAllocationIds);
+        request.put("allocationCount", normalizedAllocationIds.size());
+        SystemTask task = createTask("MES_PRODUCTION_DISPATCH", request);
+        recordTaskSubmitAudit("LOCKED_ITEM_MES_PRODUCTION_SUBMIT", "DELIVERY", task, request);
+        log.info("MES production dispatch submitted taskId={} allocationCount={}",
+                task.getId(), normalizedAllocationIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(),
+                () -> mesProductionDispatchService.dispatchBatch(normalizedAllocationIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 

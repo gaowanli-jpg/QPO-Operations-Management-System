@@ -331,6 +331,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("LOCKED_ITEM_MES_PRODUCTION_SUBMIT")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("LOCKED_ITEM_MES_PRODUCTION_SUCCESS")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("LOCKED_ITEM_MES_PRODUCTION_FAILED")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_TICKET_EXPORT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("DELIVERY");
 
@@ -351,6 +354,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUCCESS");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_FAILED");
+        assertThat(AuditService.labelForAction("LOCKED_ITEM_MES_PRODUCTION_SUBMIT")).isNotEqualTo("LOCKED_ITEM_MES_PRODUCTION_SUBMIT");
+        assertThat(AuditService.labelForAction("LOCKED_ITEM_MES_PRODUCTION_SUCCESS")).isNotEqualTo("LOCKED_ITEM_MES_PRODUCTION_SUCCESS");
+        assertThat(AuditService.labelForAction("LOCKED_ITEM_MES_PRODUCTION_FAILED")).isNotEqualTo("LOCKED_ITEM_MES_PRODUCTION_FAILED");
         assertThat(AuditService.labelForAction("DELIVERY_TICKET_EXPORT")).isNotEqualTo("DELIVERY_TICKET_EXPORT");
         assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isNotEqualTo("DELIVERY_PROCESS_SHEET_EXPORT");
     }

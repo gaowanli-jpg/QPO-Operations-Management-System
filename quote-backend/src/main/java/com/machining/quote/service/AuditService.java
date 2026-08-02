@@ -209,7 +209,9 @@ public class AuditService {
                 || startsWith(action, "SYSTEM_POST_")
                 || startsWith(action, "CUSTOMER_MASTER_")) return "SYSTEM";
         if (startsWith(action, "ORDER_")) return "ORDER";
-        if (startsWith(action, "DELIVERY_") || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
+        if (startsWith(action, "DELIVERY_")
+                || startsWith(action, "LOCKED_ITEM_")
+                || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
         if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_") || startsWith(action, "RELEASE_")) return "MARKET";
         if (startsWith(action, "ITEM_") || startsWith(action, "REPEAT_")) return "ENGINEER";
         if (startsWith(action, "AUTH_")) return "AUTH";
@@ -322,6 +324,9 @@ public class AuditService {
             case "DELIVERY_WMS_ALLOCATION_SUBMIT" -> "提交WMS锁库";
             case "DELIVERY_WMS_ALLOCATION_SUCCESS" -> "WMS锁库成功";
             case "DELIVERY_WMS_ALLOCATION_FAILED" -> "WMS锁库失败";
+            case "LOCKED_ITEM_MES_PRODUCTION_SUBMIT" -> "提交MES生产下发";
+            case "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
+            case "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
             case "ORDER_DELETE_COMPLETELY" -> "彻底删除订单";
             case "ORDER_SUPPLEMENT_DRAWINGS" -> "补传图纸";
             default -> action;

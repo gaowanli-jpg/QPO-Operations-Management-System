@@ -6,6 +6,7 @@ import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
 import com.machining.quote.dto.DeliveryTicketBatchReq;
 import com.machining.quote.dto.LockedItemDTO;
+import com.machining.quote.dto.LockedItemMesProductionBatchReq;
 import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.LockedItemQueryReq;
 import com.machining.quote.dto.PageResult;
@@ -97,5 +98,11 @@ public class OrderDeliveryController {
     @RequirePermission("market:locked-item:view")
     public List<LockedItemDTO> listTicketAllocations(@PathVariable Integer ticketId) {
         return lockedItemService.listTicketAllocations(ticketId);
+    }
+
+    @PostMapping("/allocations/mes-production")
+    @RequirePermission("market:locked-item:mes-production-submit")
+    public SystemTask submitMesProduction(@RequestBody LockedItemMesProductionBatchReq req) {
+        return systemTaskService.submitMesProductionBatchTask(req == null ? null : req.getAllocationIds());
     }
 }
