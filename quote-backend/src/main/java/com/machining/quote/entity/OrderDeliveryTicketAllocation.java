@@ -24,6 +24,7 @@ public class OrderDeliveryTicketAllocation {
     private Long sourceItemId;
     private String allocationType;
     private Integer qty;
+    private Integer ticketQty;
     private String materialNo;
     private String orderType;
     private String itemType;
@@ -49,6 +50,11 @@ public class OrderDeliveryTicketAllocation {
     private Double partNetWeight;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private Object sourcePayload;
+    private String mesProductionStatus;
+    private String mesProductionRequestId;
+    private String mesProductionExternalId;
+    private LocalDateTime mesProductionSyncedAt;
+    private String mesProductionMessage;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

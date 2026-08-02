@@ -215,6 +215,7 @@ public class WmsAllocationService {
         row.setSourceItemId(ticket.getSourceItemId());
         row.setAllocationType(type);
         row.setQty(qty);
+        row.setTicketQty(ticket.getQty());
         row.setMaterialNo(ticket.getMaterialNo());
         row.setOrderType(ticket.getOrderType());
         row.setItemType(ticket.getItemType());
@@ -237,6 +238,7 @@ public class WmsAllocationService {
         row.setPartNetWeight(ticket.getPartNetWeight());
         row.setWmsProductionOrderNo(productionOrderNo);
         row.setSourcePayload(rowPayload(type, qty, productionOrderNo, resp));
+        row.setMesProductionStatus("PENDING");
         row.setStatus(ALLOCATION_ACTIVE);
         LocalDateTime now = LocalDateTime.now();
         row.setCreatedAt(now);

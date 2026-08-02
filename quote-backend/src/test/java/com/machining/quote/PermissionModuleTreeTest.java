@@ -33,7 +33,9 @@ class PermissionModuleTreeTest {
     private static final Path RETIRE_RFQ_ORDER_TYPE_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V53__retire_rfq_order_type_select_permission.sql");
     private static final Path DELIVERY_DOCUMENT_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
     private static final Path INQUIRY_ORDER_RENAME_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V70__rename_order_management_to_inquiry_orders.sql");
+    private static final Path LOCKED_ITEM_MES_PRODUCTION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
+    private static final Path PERMISSION_LIST_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path DOCS_ROOT = Path.of("..", "docs");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
     private static final List<String> APS_TARGET_SYSTEM_PHRASES = List.of(
@@ -226,6 +228,39 @@ class PermissionModuleTreeTest {
         assertThat(source)
                 .as("WMS allocation permissions must not become assignable common permissions")
                 .doesNotContain("common:wms", "common:locked-item");
+    }
+
+    @Test
+    void lockedItemMesProductionSubmitPermissionBelongsToLockedItemModule() throws IOException {
+        String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
+        String migration = Files.readString(LOCKED_ITEM_MES_PRODUCTION_PERMISSION_MIGRATION, StandardCharsets.UTF_8);
+        String permissionDoc = Files.readString(PERMISSION_LIST_DOC, StandardCharsets.UTF_8);
+
+        assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
+                .as("MES production dispatch is a locked-item operation, not a common permission")
+                .contains("market:locked-item:mes-production-submit");
+        assertThat(source)
+                .contains(
+                        "permission(196L, \"BUTTON\", \"market:locked-item:mes-production-submit\", \"锁库零件下发MES生产\", null, null, false, 129, 162L)",
+                        "Map.entry(\"market:locked-item:mes-production-submit\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
+                )
+                .doesNotContain("Map.entry(\"market:locked-item:mes-production-submit\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+        assertThat(migration)
+                .contains(
+                        "market:locked-item:view",
+                        "market:locked-item:mes-production-submit",
+                        "锁库零件下发MES生产",
+                        "SUPER_ADMIN",
+                        "MARKET_USER",
+                        "MARKET_MANAGER"
+                )
+                .doesNotContain("WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER', 'READONLY')");
+        assertThat(permissionDoc)
+                .contains(
+                        "market:locked-item:mes-production-submit",
+                        "锁库零件下发MES生产"
+                )
+                .doesNotContain("common:mes-production");
     }
 
     @Test

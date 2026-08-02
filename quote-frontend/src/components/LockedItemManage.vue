@@ -20,7 +20,7 @@
           <span class="customer-picker-action">选择客户</span>
         </el-button>
         <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
-        <el-input v-model="filters.rfqNo" clearable placeholder="RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.rfqNo" clearable placeholder="来源订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.materialNo" clearable placeholder="物料号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
@@ -77,7 +77,7 @@
           </el-table-column>
           <el-table-column prop="qty" label="数量" width="96" align="right" />
           <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="rfqNo" label="来源订单号" min-width="150" show-overflow-tooltip />
           <el-table-column prop="internalProjectNo" label="内部项目号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.internalProjectNo) }}</template>
           </el-table-column>
@@ -156,7 +156,7 @@
           <el-descriptions-item label="MES状态">{{ statusText(selectedTicketDetail.mesSyncStatus) }}</el-descriptions-item>
           <el-descriptions-item label="WMS状态">{{ statusText(selectedTicketDetail.wmsAllocateStatus) }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ formatDash(selectedTicketDetail.customerName) }}</el-descriptions-item>
-          <el-descriptions-item label="RFQ号">{{ formatDash(selectedTicketDetail.rfqNo) }}</el-descriptions-item>
+          <el-descriptions-item label="来源订单号">{{ formatDash(selectedTicketDetail.rfqNo) }}</el-descriptions-item>
           <el-descriptions-item label="内部项目号">{{ formatDash(selectedTicketDetail.internalProjectNo) }}</el-descriptions-item>
           <el-descriptions-item label="客户订单号">{{ formatDash(selectedTicketDetail.customerOrderNo) }}</el-descriptions-item>
           <el-descriptions-item label="客户项目号">{{ formatDash(selectedTicketDetail.customerProjectNo) }}</el-descriptions-item>

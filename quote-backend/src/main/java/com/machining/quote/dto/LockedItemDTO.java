@@ -19,6 +19,7 @@ public class LockedItemDTO {
     private String itemType;
     private String allocationType;
     private Integer qty;
+    private Integer ticketQty;
     private String materialNo;
     private String orderType;
     private String partNo;
@@ -38,6 +39,11 @@ public class LockedItemDTO {
     private Double partNetWeight;
     private String wmsProductionOrderNo;
     private Object sourcePayload;
+    private String mesProductionStatus;
+    private String mesProductionRequestId;
+    private String mesProductionExternalId;
+    private LocalDateTime mesProductionSyncedAt;
+    private String mesProductionMessage;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

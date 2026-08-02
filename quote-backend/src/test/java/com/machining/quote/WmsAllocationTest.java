@@ -51,6 +51,8 @@ class WmsAllocationTest {
             "src", "main", "resources", "db", "migration", "V54__delivery_allocation_remark_snapshot.sql");
     private static final Path ALLOCATION_ITEM_TYPE_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V58__delivery_allocation_item_type_snapshot.sql");
+    private static final Path MES_PRODUCTION_DISPATCH_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
     private static final Path DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERY_ALLOCATION = Path.of(
@@ -177,6 +179,8 @@ class WmsAllocationTest {
                     assertSnapshot(row, "getMaterialData", Map.of("shape", "板材", "name", "7075"));
                     assertSnapshot(row, "getMaterialGrossWeight", 12.345);
                     assertSnapshot(row, "getPartNetWeight", 10.2);
+                    assertSnapshot(row, "getTicketQty", 10);
+                    assertSnapshot(row, "getMesProductionStatus", "PENDING");
                     assertThat(row.getStatus()).isEqualTo("ACTIVE");
                     assertThat(row.getSourcePayload()).isNotNull();
                 });
@@ -460,8 +464,37 @@ class WmsAllocationTest {
                         "row.setProcessRoute(ticket.getProcessRoute())",
                         "row.setMaterialData(ticket.getMaterialData())",
                         "row.setMaterialGrossWeight(ticket.getMaterialGrossWeight())",
-                        "row.setPartNetWeight(ticket.getPartNetWeight())"
+                        "row.setPartNetWeight(ticket.getPartNetWeight())",
+                        "row.setTicketQty(ticket.getQty())",
+                        "row.setMesProductionStatus(\"PENDING\")"
                 );
+    }
+
+    @Test
+    void mesProductionDispatchMigrationAddsTicketQuantityAndStatusSkeleton() throws IOException {
+        String migration = read(MES_PRODUCTION_DISPATCH_MIGRATION);
+
+        assertThat(migration)
+                .contains(
+                        "ALTER TABLE order_delivery_ticket_allocation",
+                        "ADD COLUMN IF NOT EXISTS ticket_qty INTEGER",
+                        "ADD COLUMN IF NOT EXISTS mes_production_status VARCHAR(30) DEFAULT 'PENDING'",
+                        "ADD COLUMN IF NOT EXISTS mes_production_request_id VARCHAR(80)",
+                        "ADD COLUMN IF NOT EXISTS mes_production_external_id VARCHAR(120)",
+                        "ADD COLUMN IF NOT EXISTS mes_production_synced_at TIMESTAMP",
+                        "ADD COLUMN IF NOT EXISTS mes_production_message TEXT",
+                        "SET ticket_qty = ticket.qty",
+                        "FROM order_delivery_ticket ticket",
+                        "alloc.ticket_id = ticket.id",
+                        "idx_delivery_allocation_mes_production_status",
+                        "uk_delivery_allocation_mes_production_request",
+                        "market:locked-item:mes-production-submit",
+                        "锁库零件下发MES生产",
+                        "market:locked-item:view",
+                        "MARKET_USER",
+                        "MARKET_MANAGER"
+                )
+                .doesNotContain("market:locked-item:mes-production-submit' AND r.role_code = 'READONLY'");
     }
 
     private String read(Path path) throws IOException {

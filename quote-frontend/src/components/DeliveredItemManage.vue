@@ -57,7 +57,7 @@
       </div>
 
       <div v-if="advancedFiltersVisible" class="erp-toolbar-group delivered-advanced-filters">
-        <el-input v-model="filters.rfqNo" clearable placeholder="来源单号/RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-input v-model="filters.rfqNo" clearable placeholder="来源订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerOrderNo" clearable placeholder="客户订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerProjectNo" clearable placeholder="客户项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
@@ -136,7 +136,7 @@
           </el-table-column>
           <el-table-column prop="qty" label="提单数量" width="100" align="right" />
           <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="rfqNo" label="RFQ号" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="rfqNo" label="来源订单号" min-width="150" show-overflow-tooltip />
           <el-table-column prop="internalProjectNo" label="内部项目号" min-width="140" show-overflow-tooltip />
           <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ row.customerOrderNo || '-' }}</template>
@@ -233,7 +233,7 @@
           <el-descriptions-item label="WMS状态">{{ statusText(selectedItem.wmsAllocateStatus) }}</el-descriptions-item>
           <el-descriptions-item label="提单数量">{{ selectedItem.qty ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ selectedItem.customerName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="RFQ号">{{ selectedItem.rfqNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="来源订单号">{{ selectedItem.rfqNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="内部项目号">{{ selectedItem.internalProjectNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户订单号">{{ selectedItem.customerOrderNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户项目号">{{ selectedItem.customerProjectNo || '-' }}</el-descriptions-item>

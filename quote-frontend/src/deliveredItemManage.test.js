@@ -9,7 +9,7 @@ const source = readFileSync(resolve(currentDir, 'components', 'DeliveredItemMana
 describe('DeliveredItemManage foundation page', () => {
   test('freezes delivered item page title, filters, and core columns', () => {
     expect(source).toContain('已提零件')
-    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '零件类型', '内部项目号', 'MES状态', 'WMS状态', '交货日期']) {
+    for (const label of ['客户', '来源订单号', '图号', '版本', '物料号', '零件类型', '内部项目号', 'MES状态', 'WMS状态', '交货日期']) {
       expect(source).toContain(label)
     }
     for (const label of ['提单ID', '图号', '物料号', '零件类型', '提单数量', 'MES状态', 'WMS状态', '客户订单号', '客户项目号', '材料类型', '毛重', '净重', '工艺路线', '材料描述', '表面处理']) {
@@ -45,7 +45,7 @@ describe('DeliveredItemManage foundation page', () => {
       'label="订单类型"',
       'label="提单数量"',
       'label="客户"',
-      'label="RFQ号"',
+      'label="来源订单号"',
       'label="内部项目号"',
       'label="客户订单号"',
       'label="客户项目号"',
@@ -148,7 +148,9 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('高级筛选')
     expect(source).toContain('收起筛选')
     expect(source).toContain('流程状态')
-    expect(source).toContain('来源单号')
+    expect(source).toContain('来源订单号')
+    expect(source).not.toContain('来源单号/RFQ号')
+    expect(source).not.toContain('label="RFQ号"')
 
     for (const token of [
       'filters.partNo',

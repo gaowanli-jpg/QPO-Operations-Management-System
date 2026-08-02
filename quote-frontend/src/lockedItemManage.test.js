@@ -60,9 +60,11 @@ describe('LockedItemManage guardrails', () => {
       expect(pageSource).toContain(token)
     }
 
-    for (const label of ['客户', 'RFQ号', '图号', '版本', '物料号', '零件类型', '内部项目号', '分配类型', '在产订单号', '数量']) {
+    for (const label of ['客户', '来源订单号', '图号', '版本', '物料号', '零件类型', '内部项目号', '分配类型', '在产订单号', '数量']) {
       expect(pageSource).toContain(label)
     }
+    expect(pageSource).not.toContain('placeholder="RFQ号"')
+    expect(pageSource).not.toContain('label="RFQ号"')
   })
 
   test('uses module customer picker and freezes common locked-item filters', () => {
@@ -110,7 +112,7 @@ describe('LockedItemManage guardrails', () => {
       '订单类型',
       '数量',
       '客户',
-      'RFQ号',
+      '来源订单号',
       '内部项目号',
       '客户订单号',
       '客户项目号',

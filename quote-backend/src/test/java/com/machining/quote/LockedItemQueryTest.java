@@ -28,6 +28,8 @@ class LockedItemQueryTest {
             "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
     private static final Path QUERY_INDEX_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
+    private static final Path MES_PRODUCTION_DISPATCH_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
 
     @Test
     void lockedItemQueryContractFreezesEndpointsAndPermission() throws IOException {
@@ -206,6 +208,51 @@ class LockedItemQueryTest {
                         "@GetMapping(\"/allocations/customers\")",
                         "@RequirePermission(\"market:locked-item:customer-select\")",
                         "return lockedItemService.listCustomerOptions(field, keyword)"
+                );
+    }
+
+    @Test
+    void lockedItemQueryReturnsMesProductionDispatchSkeletonFields() throws IOException {
+        String migration = read(MES_PRODUCTION_DISPATCH_MIGRATION);
+        String entity = read(ALLOCATION_ENTITY);
+        String dto = read(LOCKED_ITEM_DTO);
+        String mapper = read(ALLOCATION_MAPPER);
+
+        assertThat(migration)
+                .contains(
+                        "ticket_qty",
+                        "mes_production_status",
+                        "mes_production_request_id",
+                        "mes_production_external_id",
+                        "mes_production_synced_at",
+                        "mes_production_message"
+                );
+        assertThat(entity)
+                .contains(
+                        "private Integer ticketQty;",
+                        "private String mesProductionStatus;",
+                        "private String mesProductionRequestId;",
+                        "private String mesProductionExternalId;",
+                        "private LocalDateTime mesProductionSyncedAt;",
+                        "private String mesProductionMessage;"
+                );
+        assertThat(dto)
+                .contains(
+                        "private Integer ticketQty;",
+                        "private String mesProductionStatus;",
+                        "private String mesProductionRequestId;",
+                        "private String mesProductionExternalId;",
+                        "private LocalDateTime mesProductionSyncedAt;",
+                        "private String mesProductionMessage;"
+                );
+        assertThat(mapper)
+                .contains(
+                        "alloc.ticket_qty",
+                        "alloc.mes_production_status",
+                        "alloc.mes_production_request_id",
+                        "alloc.mes_production_external_id",
+                        "alloc.mes_production_synced_at",
+                        "alloc.mes_production_message"
                 );
     }
 
