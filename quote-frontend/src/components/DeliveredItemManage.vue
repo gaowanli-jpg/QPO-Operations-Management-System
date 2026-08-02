@@ -67,6 +67,20 @@
       </div>
     </section>
 
+    <section v-if="mesBatchResult" class="erp-table-surface mes-batch-result-surface">
+      <div class="erp-table-header mes-batch-result-header">
+        <div>
+          <h3>MES批量获取结果</h3>
+          <p>已按同图号版本去重，未重复发送 MES 的行会继续等待主请求回调。</p>
+        </div>
+        <div class="mes-batch-result-tags">
+          <el-tag type="warning">关联待回调：{{ formatMesBatchCount(mesBatchResult, 'dedupFollowerCount') }}</el-tag>
+          <el-tag type="success">复用已确认物料号：{{ formatMesBatchCount(mesBatchResult, 'reusedMaterialCount') }}</el-tag>
+          <el-tag type="primary">实际提交MES：{{ formatMesBatchCount(mesBatchResult, 'submittedToMesCount') }}</el-tag>
+        </div>
+      </div>
+    </section>
+
     <section class="erp-table-surface delivered-table-surface">
       <div class="erp-table-body">
         <el-table :data="items" border stripe height="600" v-loading="loading" @selection-change="handleSelectionChange">
@@ -83,7 +97,14 @@
             <template #default="{ row }">{{ row.itemType || '-' }}</template>
           </el-table-column>
           <el-table-column label="MES状态" width="110" align="center">
-            <template #default="{ row }"><el-tag :type="statusTagType(row.mesSyncStatus)" size="small">{{ statusText(row.mesSyncStatus) }}</el-tag></template>
+            <template #default="{ row }">
+              <div class="mes-status-cell">
+                <el-tag :type="statusTagType(row.mesSyncStatus)" size="small">{{ statusText(row.mesSyncStatus) }}</el-tag>
+                <el-tooltip v-if="dedupFollowerNote(row)" :content="dedupFollowerNote(row)" placement="top">
+                  <el-tag type="warning" effect="plain" size="small">关联待回调</el-tag>
+                </el-tooltip>
+              </div>
+            </template>
           </el-table-column>
           <el-table-column label="WMS状态" width="110" align="center">
             <template #default="{ row }"><el-tag :type="statusTagType(row.wmsAllocateStatus)" size="small">{{ statusText(row.wmsAllocateStatus) }}</el-tag></template>
@@ -207,6 +228,10 @@
           <el-descriptions-item label="MES任务号">{{ selectedItem.mesExternalTaskId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="回调时间">{{ formatDateTime(selectedItem.mesCallbackReceivedAt) }}</el-descriptions-item>
           <el-descriptions-item label="状态摘要">{{ callbackStatusSummary(selectedItem) }}</el-descriptions-item>
+          <el-descriptions-item label="MES请求角色">{{ mesRequestRoleText(selectedItem.mesRequestRole) }}</el-descriptions-item>
+          <el-descriptions-item label="主提单ID">{{ selectedItem.mesMasterTicketId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="主请求ID">{{ selectedItem.mesMasterRequestId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="去重键">{{ selectedItem.mesDedupKey || '-' }}</el-descriptions-item>
           <el-descriptions-item label="WMS状态">{{ statusText(selectedItem.wmsAllocateStatus) }}</el-descriptions-item>
           <el-descriptions-item label="提单数量">{{ selectedItem.qty ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ selectedItem.customerName || '-' }}</el-descriptions-item>
@@ -223,6 +248,15 @@
           <el-descriptions-item label="表面处理">{{ selectedItem.surfaceTreatment || '-' }}</el-descriptions-item>
           <el-descriptions-item label="备注">{{ selectedItem.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
+
+        <el-alert
+          v-if="dedupFollowerNote(selectedItem)"
+          class="mes-dedup-alert"
+          type="warning"
+          :closable="false"
+          show-icon
+          :title="dedupFollowerNote(selectedItem)"
+        />
 
         <section class="detail-section">
           <h3>工艺快照</h3>
@@ -254,6 +288,7 @@ import {
   syncMesMaterial,
   syncMesMaterialBatch
 } from '../services/deliveredItemApi'
+import { getTask } from '../services/taskApi'
 import { usePendingAction } from '../composables/usePendingAction'
 
 const router = useRouter()
@@ -301,6 +336,7 @@ const total = ref(0)
 const detailVisible = ref(false)
 const selectedItem = ref(null)
 const customerPickerVisible = ref(false)
+const mesBatchResult = ref(null)
 
 watch([page, pageSize], () => loadItems())
 
@@ -388,6 +424,9 @@ const isDeliveredRowActionPending = (row) => isMesSyncPending(row) || isWmsAlloc
 
 const mesSyncAction = (row) => {
   if (row.mesSyncStatus === 'SUCCESS') return null
+  if (row.mesRequestRole === 'FOLLOWER' && row.mesSyncStatus !== 'FAILED') {
+    return { label: '待回调', type: 'warning', disabled: true }
+  }
   if (row.mesSyncStatus === 'PROCESSING') {
     return { label: '处理中', type: 'warning', disabled: true }
   }
@@ -428,6 +467,7 @@ const handleBatchMesSync = async () => {
   if (selectedTicketIds.value.length === 0) {
     return ElMessage.warning('请先选择需要获取物料号的已提零件。')
   }
+  mesBatchResult.value = null
   try {
     await ElMessageBox.confirm(`确认批量向 MES 获取 ${selectedCountText()} 的物料号？已成功、处理中、待MES回调的行会自动跳过。`, '批量获取MES物料号', {
       confirmButtonText: '确认提交',
@@ -443,6 +483,7 @@ const handleBatchMesSync = async () => {
       const task = await syncMesMaterialBatch(selectedTicketIds.value)
       const taskId = taskIdOf(task)
       ElMessage.success(taskId ? `批量 MES 物料号任务已提交，任务ID：${taskId}` : '批量 MES 物料号任务已提交')
+      mesBatchResult.value = mesBatchResultOf(task) || await waitMesBatchTaskResult(taskId)
       selectedRows.value = []
       await loadItems()
     } catch (error) {
@@ -583,6 +624,59 @@ const callbackStatusSummary = (selectedItem) => {
   return message ? `${statusText(selectedItem.mesSyncStatus)}：${message}` : statusText(selectedItem.mesSyncStatus)
 }
 
+const mesRequestRoleText = (role) => ({
+  MASTER: '主请求',
+  FOLLOWER: '关联等待',
+  REUSED: '复用成功'
+}[role] || '-')
+
+const dedupFollowerNote = (item) => {
+  if (!item || item.mesRequestRole !== 'FOLLOWER') return ''
+  return '已关联同图号版本主请求，未重复发送MES'
+}
+
+const mesBatchResultOf = (task) => {
+  const result = task?.resultJson || task?.result || task?.task?.resultJson
+  if (!result) return null
+  if (typeof result === 'object') return result
+  if (typeof result === 'string') {
+    try {
+      const parsed = JSON.parse(result)
+      return parsed && typeof parsed === 'object' ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const waitFor = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
+
+const waitMesBatchTaskResult = async (taskId) => {
+  if (!taskId) return null
+  const delays = [300, 700, 1000, 1200, 1500]
+  for (const delayMs of delays) {
+    await waitFor(delayMs)
+    try {
+      const latestTask = await getTask(taskId)
+      const result = mesBatchResultOf(latestTask)
+      if (result) return result
+      if (['SUCCESS', 'FAILED'].includes(String(latestTask?.status || '').toUpperCase())) {
+        return null
+      }
+    } catch (error) {
+      console.warn('MES batch task result polling failed', error)
+      return null
+    }
+  }
+  return null
+}
+
+const formatMesBatchCount = (result, key) => {
+  const value = result?.[key]
+  return Number.isFinite(Number(value)) ? Number(value) : 0
+}
+
 const formatProcessRoute = (route) => {
   if (!route) return '-'
   let rows = Array.isArray(route) ? route : []
@@ -641,6 +735,41 @@ onMounted(() => loadItems())
   margin-left: 0;
 }
 
+.mes-batch-result-surface {
+  margin-bottom: 12px;
+}
+
+.mes-batch-result-header {
+  align-items: center;
+  gap: 12px;
+}
+
+.mes-batch-result-header h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--erp-text);
+}
+
+.mes-batch-result-header p {
+  margin: 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.mes-batch-result-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mes-status-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .detail-wrap {
   display: flex;
   flex-direction: column;
@@ -651,6 +780,10 @@ onMounted(() => loadItems())
   margin: 0 0 8px;
   color: var(--erp-text);
   font-size: 15px;
+}
+
+.mes-dedup-alert {
+  margin-top: -4px;
 }
 
 .route-preview {
@@ -664,6 +797,11 @@ onMounted(() => loadItems())
 
 @media (max-width: 1200px) {
   .delivered-filter-group {
+    justify-content: flex-start;
+  }
+
+  .mes-batch-result-header,
+  .mes-batch-result-tags {
     justify-content: flex-start;
   }
 }
