@@ -72,10 +72,10 @@
           @change="handleSearch"
           @clear="handleSearch"
         />
-        <el-select v-model="filters.mesSyncStatus" clearable placeholder="MES状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleSearch">
+        <el-select v-model="filters.mesSyncStatus" clearable placeholder="MES状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleTechnicalStatusChange">
           <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
-        <el-select v-model="filters.wmsAllocateStatus" clearable placeholder="WMS状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleSearch">
+        <el-select v-model="filters.wmsAllocateStatus" clearable placeholder="WMS状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleTechnicalStatusChange">
           <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
       </div>
@@ -322,6 +322,7 @@ const syncStatusOptions = [
   { value: 'FAILED', label: '失败' }
 ]
 const flowStageOptions = [
+  { value: '', label: '全部未完成' },
   { value: 'MES_PROCESSING', label: '物料号处理中' },
   { value: 'MES_CALLBACK_PENDING', label: '待MES回调' },
   { value: 'MES_FAILED', label: '物料号失败' },

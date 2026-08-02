@@ -197,6 +197,50 @@ describe('DeliveredItemManage foundation page', () => {
     expect(actionSource).toContain('批量获取库存数据')
   })
 
+  test('maps first-pass flow stage filters to existing MES and WMS query params', () => {
+    for (const label of ['全部未完成', '物料号处理中', '待MES回调', '物料号失败', '库存处理中', '库存失败']) {
+      expect(source).toContain(`label: '${label}'`)
+    }
+
+    for (const mapping of [
+      "MES_CALLBACK_PENDING: { mesSyncStatus: 'CALLBACK_PENDING' }",
+      "MES_FAILED: { mesSyncStatus: 'FAILED' }",
+      "WMS_FAILED: { wmsAllocateStatus: 'FAILED' }"
+    ]) {
+      expect(source).toContain(mapping)
+    }
+
+    expect(source).toContain(".filter(([key, value]) => !['dateRange', 'flowStage'].includes(key)")
+    expect(source).toContain('Object.assign(params, flowStageParams)')
+    expect(source).toContain('if (filters.mesSyncStatus || filters.wmsAllocateStatus)')
+    expect(source).toContain("filters.flowStage = ''")
+  })
+
+  test('reset clears all delivered item filters and returns to first page', () => {
+    const resetStart = source.indexOf('const handleResetFilters')
+    const resetSource = source.slice(resetStart, source.indexOf('const handleFlowStageChange', resetStart))
+
+    for (const resetToken of [
+      "customerName: ''",
+      "rfqNo: ''",
+      "partNo: ''",
+      "version: ''",
+      "flowStage: ''",
+      "internalProjectNo: ''",
+      "customerOrderNo: ''",
+      "customerProjectNo: ''",
+      "mesSyncStatus: ''",
+      "wmsAllocateStatus: ''",
+      'dateRange: []'
+    ]) {
+      expect(resetSource).toContain(resetToken)
+    }
+
+    expect(resetSource).toContain('await handleSearch()')
+    expect(source).toContain('page.value = 1')
+    expect(source).not.toContain('items.value = (response.records || []).filter')
+  })
+
   test('wires drawing preview to delivered item module permission', () => {
     expect(source).toContain('market:delivered-item:file-preview')
     expect(source).toContain('预览图纸')
