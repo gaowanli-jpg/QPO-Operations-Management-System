@@ -25,3 +25,8 @@ export const submitWmsAllocationBatch = (ticketIds = []) => request('/api/order-
 export const listLockedItems = (params = {}) => request('/api/order-delivery/allocations', { params })
 
 export const listTicketAllocations = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/allocations`)
+
+export const submitMesProductionDispatchBatch = (allocationIds = []) => request('/api/order-delivery/allocations/mes-production', {
+  method: 'POST',
+  data: { allocationIds }
+})

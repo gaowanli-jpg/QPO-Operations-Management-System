@@ -42,7 +42,9 @@
             v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
             type="primary"
             plain
-            disabled
+            :disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"
+            :loading="isMesProductionDispatchPending"
+            @click="handleMesProductionDispatch"
           >
             下发MES生产
           </el-button>
@@ -69,9 +71,42 @@
       </div>
     </section>
 
+    <section v-if="mesProductionResult" class="erp-table-surface mes-production-result-surface">
+      <div class="erp-table-header mes-production-result-header">
+        <div>
+          <h3>MES生产下发结果</h3>
+          <p>只下发待生产数量行，非待生产行由后端自动跳过。</p>
+        </div>
+        <div class="mes-production-result-tags">
+          <el-tag type="success">成功：{{ formatMesProductionCount(mesProductionResult, 'successCount') }}</el-tag>
+          <el-tag type="danger">失败：{{ formatMesProductionCount(mesProductionResult, 'failedCount') }}</el-tag>
+          <el-tag type="info">跳过：{{ formatMesProductionCount(mesProductionResult, 'skippedCount') }}</el-tag>
+        </div>
+      </div>
+      <div v-if="Array.isArray(mesProductionResult.rows) && mesProductionResult.rows.length" class="mes-production-result-rows">
+        <div
+          v-for="row in mesProductionResult.rows.slice(0, 5)"
+          :key="row.allocationId"
+          class="mes-production-result-row"
+        >
+          <span>分配ID：{{ row.allocationId || '-' }}</span>
+          <el-tag :type="mesProductionRowTagType(row.status)" size="small">{{ mesProductionRowStatusText(row.status) }}</el-tag>
+          <span class="mes-production-result-message">{{ row.message || '-' }}</span>
+        </div>
+      </div>
+    </section>
+
     <section class="erp-table-surface locked-table-surface">
       <div class="erp-table-body">
-        <el-table :data="items" border stripe height="600" v-loading="loading">
+        <el-table
+          :data="items"
+          border
+          stripe
+          height="600"
+          v-loading="loading"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
@@ -205,11 +240,18 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { getDeliveredItem, listLockedItems, listTicketAllocations } from '../services/deliveredItemApi'
+import {
+  getDeliveredItem,
+  listLockedItems,
+  listTicketAllocations,
+  submitMesProductionDispatchBatch
+} from '../services/deliveredItemApi'
+import { getTask } from '../services/taskApi'
+import { usePendingAction } from '../composables/usePendingAction'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
 const LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:locked-item:mes-production-submit'
@@ -217,6 +259,11 @@ const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 
 const route = useRoute()
 const router = useRouter()
+const { isPending, runAction } = usePendingAction()
+
+const lockedActionKeys = {
+  mesProductionDispatch: () => 'locked-item:mes-production:batch'
+}
 
 const filters = reactive({
   customerName: '',
@@ -245,6 +292,8 @@ const mesProductionStatusOptions = [
 ]
 
 const items = ref([])
+const selectedRows = ref([])
+const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
 const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
@@ -253,6 +302,7 @@ const customerPickerVisible = ref(false)
 const ticketDetailVisible = ref(false)
 const selectedTicketDetail = ref(null)
 const advancedFiltersVisible = ref(false)
+const mesProductionResult = ref(null)
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
@@ -324,6 +374,46 @@ const handleCustomerClear = async () => {
   await handleSearch()
 }
 
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows || []
+}
+
+const selectedAllocationCountText = () => `${selectedAllocationIds.value.length} 条锁库零件`
+
+const taskIdOf = (task) => task?.id || task?.taskId || task?.task?.id
+
+const isMesProductionDispatchPending = computed(() => isPending(lockedActionKeys.mesProductionDispatch()))
+
+const handleMesProductionDispatch = async () => {
+  if (selectedAllocationIds.value.length === 0) {
+    return ElMessage.warning('请先选择需要下发 MES 生产的锁库零件。')
+  }
+  mesProductionResult.value = null
+  try {
+    await ElMessageBox.confirm(`确认将选中的待生产锁库零件下发给 MES 生产流程？本次已选 ${selectedAllocationCountText()}，非待生产行会自动跳过。`, '下发MES生产', {
+      confirmButtonText: '确认提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  return runAction(lockedActionKeys.mesProductionDispatch(), async () => {
+    try {
+      const task = await submitMesProductionDispatchBatch(selectedAllocationIds.value)
+      const taskId = taskIdOf(task)
+      ElMessage.success(taskId ? `MES生产下发任务已提交，任务ID：${taskId}` : 'MES生产下发任务已提交')
+      mesProductionResult.value = mesProductionResultOf(task) || await waitMesProductionTaskResult(taskId)
+      selectedRows.value = []
+      await loadItems()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || 'MES生产下发任务提交失败。')
+    }
+  })
+}
+
 const showAllItems = () => {
   router.push({ path: '/locked-items' })
 }
@@ -356,6 +446,60 @@ const statusText = (value) => ({
   SUCCESS: '成功',
   FAILED: '失败'
 }[value] || formatDash(value))
+
+const mesProductionResultOf = (task) => {
+  const result = task?.resultJson || task?.result || task?.task?.resultJson
+  if (!result) return null
+  if (typeof result === 'object') return result
+  if (typeof result === 'string') {
+    try {
+      const parsed = JSON.parse(result)
+      return parsed && typeof parsed === 'object' ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const waitFor = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
+
+const waitMesProductionTaskResult = async (taskId) => {
+  if (!taskId) return null
+  const delays = [300, 700, 1000, 1200, 1500]
+  for (const delayMs of delays) {
+    await waitFor(delayMs)
+    try {
+      const latestTask = await getTask(taskId)
+      const result = mesProductionResultOf(latestTask)
+      if (result) return result
+      if (['SUCCESS', 'FAILED'].includes(String(latestTask?.status || '').toUpperCase())) {
+        return null
+      }
+    } catch (error) {
+      console.warn('MES production dispatch task result polling failed', error)
+      return null
+    }
+  }
+  return null
+}
+
+const formatMesProductionCount = (result, key) => {
+  const value = result?.[key]
+  return Number.isFinite(Number(value)) ? Number(value) : 0
+}
+
+const mesProductionRowStatusText = (value) => ({
+  SUCCESS: '成功',
+  FAILED: '失败',
+  SKIPPED: '跳过'
+}[value] || formatDash(value))
+
+const mesProductionRowTagType = (value) => ({
+  SUCCESS: 'success',
+  FAILED: 'danger',
+  SKIPPED: 'info'
+}[value] || 'info')
 
 const normalizeObject = (value) => {
   if (!value) return {}
@@ -492,6 +636,63 @@ onMounted(() => loadItems())
   padding: var(--erp-space-3);
 }
 
+.mes-production-result-surface {
+  margin-bottom: 12px;
+}
+
+.mes-production-result-header {
+  align-items: center;
+  gap: 12px;
+}
+
+.mes-production-result-header h3 {
+  margin: 0 0 4px;
+  color: var(--erp-text-primary);
+  font-size: var(--erp-font-size-base);
+  font-weight: 600;
+}
+
+.mes-production-result-header p {
+  margin: 0;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.mes-production-result-tags,
+.mes-production-result-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mes-production-result-tags {
+  justify-content: flex-end;
+}
+
+.mes-production-result-rows {
+  padding: 0 var(--erp-space-3) var(--erp-space-3);
+}
+
+.mes-production-result-row {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--erp-border-light);
+  border-radius: var(--erp-radius-sm);
+  background: var(--erp-bg-soft);
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.mes-production-result-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detail-wrap {
   display: grid;
   gap: var(--erp-space-4);
@@ -523,6 +724,11 @@ onMounted(() => loadItems())
 
   .locked-primary-filters,
   .locked-batch-actions {
+    justify-content: flex-start;
+  }
+
+  .mes-production-result-header,
+  .mes-production-result-tags {
     justify-content: flex-start;
   }
 

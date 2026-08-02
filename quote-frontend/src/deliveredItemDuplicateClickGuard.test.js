@@ -71,14 +71,18 @@ describe('delivery duplicate click guards', () => {
     }
   })
 
-  test('locked item list keeps query loading scoped to the table', () => {
+  test('locked item list keeps query loading scoped while production dispatch uses button-level pending', () => {
     const source = readSource('components', 'LockedItemManage.vue')
 
     expect(source).toContain('const loading = ref(false)')
     expect(source).toContain('v-loading="loading"')
     expect(source).toContain('loading.value = true')
     expect(source).toContain('loading.value = false')
-    expect(source).not.toContain('usePendingAction')
+    expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
+    expect(source).toContain('const { isPending, runAction } = usePendingAction()')
+    expect(source).toContain("mesProductionDispatch: () => 'locked-item:mes-production:batch'")
+    expect(source).toContain(':loading="isMesProductionDispatchPending"')
+    expect(source).toContain(':disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"')
   })
 
   test('WMS batch allocation key suppresses duplicate submitWmsAllocationBatch calls while pending', async () => {

@@ -81,6 +81,42 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).toContain('v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
   })
 
+  test('supports selecting locked allocation rows for MES production dispatch', () => {
+    expect(pageSource).toContain('@selection-change="handleSelectionChange"')
+    expect(pageSource).toContain('<el-table-column type="selection" width="46" fixed align="center" />')
+    expect(pageSource).toContain('const selectedRows = ref([])')
+    expect(pageSource).toContain('const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))')
+    expect(pageSource).toContain('const handleSelectionChange = (rows) =>')
+    expect(pageSource).toContain('selectedRows.value = rows || []')
+  })
+
+  test('wires MES production dispatch button with confirmation, pending guard, and API call', () => {
+    expect(apiSource).toContain('submitMesProductionDispatchBatch')
+    expect(apiSource).toContain('/api/order-delivery/allocations/mes-production')
+    expect(apiSource).toContain('data: { allocationIds }')
+    expect(pageSource).toContain('submitMesProductionDispatchBatch')
+    expect(pageSource).toContain('ElMessageBox.confirm')
+    expect(pageSource).toContain('确认将选中的待生产锁库零件下发给 MES 生产流程？')
+    expect(pageSource).toContain('非待生产行会自动跳过')
+    expect(pageSource).toContain(':disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"')
+    expect(pageSource).toContain(':loading="isMesProductionDispatchPending"')
+    expect(pageSource).toContain('@click="handleMesProductionDispatch"')
+    expect(pageSource).toContain('return runAction(lockedActionKeys.mesProductionDispatch(), async () =>')
+    expect(pageSource).toContain('await submitMesProductionDispatchBatch(selectedAllocationIds.value)')
+  })
+
+  test('shows MES production batch result summary and refreshes after submit', () => {
+    expect(pageSource).toContain('mesProductionResult')
+    expect(pageSource).toContain('mes-production-result-surface')
+    expect(pageSource).toContain('MES生产下发结果')
+    expect(pageSource).toContain('成功：{{ formatMesProductionCount(mesProductionResult, \'successCount\') }}')
+    expect(pageSource).toContain('失败：{{ formatMesProductionCount(mesProductionResult, \'failedCount\') }}')
+    expect(pageSource).toContain('跳过：{{ formatMesProductionCount(mesProductionResult, \'skippedCount\') }}')
+    expect(pageSource).toContain('waitMesProductionTaskResult(taskId)')
+    expect(pageSource).toContain('selectedRows.value = []')
+    expect(pageSource).toContain('await loadItems()')
+  })
+
   test('uses module customer picker and freezes primary versus advanced locked-item filters', () => {
     const primaryStart = pageSource.indexOf('locked-primary-filters')
     const primarySource = pageSource.slice(primaryStart, pageSource.indexOf('</div>', primaryStart))
