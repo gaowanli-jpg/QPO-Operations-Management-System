@@ -834,7 +834,17 @@ git add docs/QPO-MES-WMS对接/04-WMS锁库分配与锁库零件模块开发文�
 git commit -m "feat: add wms allocation for delivered items"
 ```
 
-## 14. 完成定义
+## 14. Stage 20 锁库结果池收口说明
+
+阶段 20 重构后，WMS 成功后结果进入锁库零件模块，锁库零件模块承担完成结果池展示职责。
+
+- `order_delivery_ticket_allocation` 是锁库结果池，保存 WMS 拆分后的库存锁定、在产锁定和待生产明细。
+- 原始 ticket 不删除，`order_delivery_ticket` 中的提单事实、MES/WMS 状态、物料号、来源订单和工艺快照继续保留。
+- 完成行从已提零件默认列表隐藏，但仍可从锁库 allocation 通过 `ticketId` 反查原始 `order_delivery_ticket`。
+- 锁库零件详情或操作入口应保留“查看提单行”或等价的 ticketId 跳转能力，确保 MES/WMS 状态、物料号、来源订单和工艺快照可追溯。
+- 查询仍由后端分页完成，锁库结果页不全量拉取已提零件再本地拼接。
+
+## 15. 完成定义
 
 - 已提零件可提交 WMS 锁库任务。
 - WMS 动态多个在产订单可拆成多条 `IN_PRODUCTION_LOCK`。
