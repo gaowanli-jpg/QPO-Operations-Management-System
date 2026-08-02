@@ -225,7 +225,7 @@ const shellMetaByPath = {
   },
   '/delivered-items': {
     title: '已提零件',
-    description: '查看已生成提单的零件需求池和外部系统处理状态。'
+    description: '仅展示尚未完成物料号获取和锁库流程的提单零件。'
   },
   '/locked-items': {
     title: '锁库零件',

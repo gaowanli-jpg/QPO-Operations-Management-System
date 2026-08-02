@@ -17,8 +17,22 @@ describe('DeliveredItemManage foundation page', () => {
     }
   })
 
+  test('explains delivered items as the unfinished MES WMS work pool without local history moves', () => {
+    expect(source).toContain('仅展示尚未完成物料号获取和锁库流程的提单零件')
+    expect(source).toContain('完成锁库后的结果请在锁库零件模块查看')
+    expect(source).toContain('暂无未完成流程的已提零件')
+    expect(source).toContain('empty-text="暂无未完成流程的已提零件')
+    expect(source).not.toContain("flowScope: 'ALL'")
+    expect(source).not.toContain('flowScope: "ALL"')
+    expect(source).not.toContain('items.value = (response.records || []).filter')
+
+    for (const forbiddenAction of ['删除已提零件', '转移到历史', '搬到历史表']) {
+      expect(source).not.toContain(forbiddenAction)
+    }
+  })
+
   test('keeps delivered item table columns in the MES WMS demand-pool order', () => {
-    const tableSource = source.slice(source.indexOf('<el-table :data="items"'))
+    const tableSource = source.slice(source.indexOf('<el-table'))
     const labels = [
       'label="提单ID"',
       'label="图号"',

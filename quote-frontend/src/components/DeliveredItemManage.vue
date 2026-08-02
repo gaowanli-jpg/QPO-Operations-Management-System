@@ -3,9 +3,18 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">已提零件</h1>
-        <p class="erp-page-description">查看已生成提单的零件需求池和 MES / WMS 基础状态。</p>
+        <p class="erp-page-description">仅展示尚未完成物料号获取和锁库流程的提单零件；完成锁库后的结果请在锁库零件模块查看。</p>
       </div>
     </header>
+
+    <el-alert
+      class="delivered-active-pool-tip"
+      type="info"
+      :closable="false"
+      show-icon
+      title="仅展示尚未完成物料号获取和锁库流程的提单零件"
+      description="完成锁库后的结果请在锁库零件模块查看。"
+    />
 
     <section class="erp-toolbar delivered-filter-toolbar">
       <div class="erp-toolbar-group delivered-filter-group">
@@ -83,7 +92,15 @@
 
     <section class="erp-table-surface delivered-table-surface">
       <div class="erp-table-body">
-        <el-table :data="items" border stripe height="600" v-loading="loading" @selection-change="handleSelectionChange">
+        <el-table
+          :data="items"
+          border
+          stripe
+          height="600"
+          v-loading="loading"
+          empty-text="暂无未完成流程的已提零件，完成锁库后的结果请在锁库零件模块查看。"
+          @selection-change="handleSelectionChange"
+        >
           <el-table-column type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
@@ -531,7 +548,7 @@ const handleWmsAllocation = async (row) => {
     try {
       const task = await submitWmsAllocation(row.id)
       const taskId = task?.id || task?.taskId || task?.task?.id
-      ElMessage.success(taskId ? `WMS 锁库任务已提交，任务ID：${taskId}` : 'WMS 锁库任务已提交')
+      ElMessage.success(taskId ? `锁库完成，结果已进入锁库零件模块，任务ID：${taskId}` : '锁库完成，结果已进入锁库零件模块')
       await loadItems()
     } catch (error) {
       console.error(error)
@@ -558,7 +575,7 @@ const handleBatchWmsAllocation = async () => {
     try {
       const task = await submitWmsAllocationBatch(selectedTicketIds.value)
       const taskId = taskIdOf(task)
-      ElMessage.success(taskId ? `批量 WMS 库存任务已提交，任务ID：${taskId}` : '批量 WMS 库存任务已提交')
+      ElMessage.success(taskId ? `锁库完成，结果已进入锁库零件模块，任务ID：${taskId}` : '锁库完成，结果已进入锁库零件模块')
       selectedRows.value = []
       await loadItems()
     } catch (error) {
@@ -725,6 +742,10 @@ onMounted(() => loadItems())
 
 .delivered-table-surface .erp-table-body {
   padding: var(--erp-space-3);
+}
+
+.delivered-active-pool-tip {
+  margin-bottom: 12px;
 }
 
 .delivered-row-actions {
