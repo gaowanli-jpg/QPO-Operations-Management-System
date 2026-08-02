@@ -21,6 +21,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,8 @@ public class MesMaterialSyncService {
     private BusinessFileService businessFileService;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private MesMaterialDedupService dedupService;
 
     public MesMaterialCallbackResp handleMaterialCallback(MesMaterialCallbackReq req) {
         long startedAt = System.currentTimeMillis();
@@ -116,11 +119,33 @@ public class MesMaterialSyncService {
         long startedAt = System.currentTimeMillis();
         OrderDeliveryTicket ticket = loadTicket(ticketId);
         assertCanStart(ticket);
+        MesMaterialDedupService.DedupResolveResult dedupResult = dedupService == null
+                ? null
+                : dedupService.resolveBeforeMes(ticket, taskId);
+        if (dedupResult != null && dedupResult.isReuseSuccess()) {
+            return completeDedupReuse(ticket, taskId, dedupResult, startedAt);
+        }
+        if (dedupResult != null && dedupResult.isFollowExistingActive()) {
+            return completeDedupFollow(ticket, taskId, dedupResult, startedAt);
+        }
         String mesRequestId = generateMesRequestId(ticket.getId());
         log.info("MES material sync started ticketId={} taskId={} rfqId={} partNo={}",
                 ticket.getId(), taskId, ticket.getRfqId(), ticket.getPartNo());
-        insertMesRequest(ticket, taskId, mesRequestId);
-        markProcessing(ticket, mesRequestId);
+        try {
+            insertMesRequest(ticket, taskId, mesRequestId, dedupResult);
+        } catch (RuntimeException error) {
+            if (isDedupUniqueConflict(error, dedupResult)) {
+                MesMaterialDedupService.DedupResolveResult followResult =
+                        dedupService.followActiveMaster(ticket, taskId, dedupResult.getDedupKey());
+                return completeDedupFollow(ticket, taskId, followResult, startedAt);
+            }
+            throw error;
+        }
+        if (dedupResult != null) {
+            log.info("MES material dedup master created ticketId={} mesRequestId={} dedupKey={}",
+                    ticket.getId(), mesRequestId, dedupResult.getDedupKey());
+        }
+        markProcessing(ticket, mesRequestId, dedupResult);
         try {
             MesMaterialResolveReq req = buildRequest(ticket, mesRequestId);
             MesMaterialResolveResp resp = mesMaterialClient.resolveMaterial(req);
@@ -199,6 +224,59 @@ public class MesMaterialSyncService {
         }
     }
 
+    private Map<String, Object> completeDedupReuse(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            MesMaterialDedupService.DedupResolveResult dedupResult,
+            long startedAt) {
+        OrderDeliveryTicket update = new OrderDeliveryTicket();
+        update.setId(ticket.getId());
+        update.setMaterialNo(dedupResult.getMaterialNo());
+        update.setMesSyncStatus(STATUS_SUCCESS);
+        update.setMesSyncMessage("Reuse confirmed MES material number for same part/version");
+        update.setMesSyncedAt(LocalDateTime.now());
+        update.setMesDedupKey(dedupResult.getDedupKey());
+        update.setMesRequestRole(MesMaterialDedupService.ROLE_REUSED);
+        update.setMesMasterTicketId(dedupResult.getMasterTicketId());
+        update.setMesMasterRequestId(dedupResult.getMasterMesRequestId());
+        ticketMapper.updateById(update);
+        syncSalesOrderItemMaterialNo(ticket, dedupResult.getMaterialNo(), update.getMesSyncMessage());
+        Map<String, Object> result = summary(
+                ticket,
+                taskId,
+                null,
+                dedupResult.getMaterialNo(),
+                STATUS_SUCCESS,
+                null
+        );
+        appendDedupSummary(result, dedupResult);
+        recordDedupAudit("DELIVERY_MES_MATERIAL_DEDUP_REUSE", ticket, taskId, result, STATUS_SUCCESS, null);
+        log.info("MES material dedup reuse ticketId={} materialNo={} dedupKey={} durationMs={}",
+                ticket.getId(), dedupResult.getMaterialNo(), dedupResult.getDedupKey(),
+                System.currentTimeMillis() - startedAt);
+        return result;
+    }
+
+    private Map<String, Object> completeDedupFollow(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            MesMaterialDedupService.DedupResolveResult dedupResult,
+            long startedAt) {
+        Map<String, Object> result = summary(
+                ticket,
+                taskId,
+                dedupResult.getMasterMesRequestId(),
+                null,
+                dedupResult.getStatus(),
+                null
+        );
+        appendDedupSummary(result, dedupResult);
+        log.info("MES material dedup follow ticketId={} masterTicketId={} masterMesRequestId={} dedupKey={} durationMs={}",
+                ticket.getId(), dedupResult.getMasterTicketId(), dedupResult.getMasterMesRequestId(),
+                dedupResult.getDedupKey(), System.currentTimeMillis() - startedAt);
+        return result;
+    }
+
     private MesMaterialResolveReq buildRequest(OrderDeliveryTicket ticket, String mesRequestId) {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
         req.setMesRequestId(mesRequestId);
@@ -261,12 +339,19 @@ public class MesMaterialSyncService {
         return STATUS_CALLBACK_PENDING.equals(normalized) || "PENDING".equals(normalized) || "ACCEPTED".equals(normalized);
     }
 
-    private void markProcessing(OrderDeliveryTicket ticket, String mesRequestId) {
+    private void markProcessing(
+            OrderDeliveryTicket ticket,
+            String mesRequestId,
+            MesMaterialDedupService.DedupResolveResult dedupResult) {
         OrderDeliveryTicket update = new OrderDeliveryTicket();
         update.setId(ticket.getId());
         update.setMesRequestId(mesRequestId);
         update.setMesSyncStatus(STATUS_PROCESSING);
         update.setMesSyncMessage("MES material sync processing");
+        if (dedupResult != null) {
+            update.setMesDedupKey(dedupResult.getDedupKey());
+            update.setMesRequestRole(MesMaterialDedupService.ROLE_MASTER);
+        }
         UpdateWrapper<OrderDeliveryTicket> wrapper = new UpdateWrapper<>();
         wrapper.eq("id", ticket.getId())
                 .and(status -> status
@@ -447,6 +532,32 @@ public class MesMaterialSyncService {
         );
     }
 
+    private void recordDedupAudit(
+            String action,
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            Map<String, Object> summary,
+            String result,
+            String errorMessage) {
+        if (auditService == null) {
+            return;
+        }
+        auditService.record(
+                action,
+                "order_delivery_ticket",
+                ticket.getId(),
+                null,
+                summary,
+                "DELIVERY",
+                result,
+                AuditService.labelForAction(action)
+                        + " ticketId=" + ticket.getId()
+                        + " taskId=" + taskId
+                        + " dedupKey=" + summary.get("dedupKey"),
+                errorMessage
+        );
+    }
+
     private void recordCallbackAudit(
             String action,
             OrderDeliveryTicket ticket,
@@ -525,7 +636,50 @@ public class MesMaterialSyncService {
         return summary;
     }
 
-    private void insertMesRequest(OrderDeliveryTicket ticket, Long taskId, String mesRequestId) {
+    private void appendDedupSummary(
+            Map<String, Object> summary,
+            MesMaterialDedupService.DedupResolveResult dedupResult) {
+        summary.put("dedupResult", dedupResult.getType());
+        summary.put("dedupKey", dedupResult.getDedupKey());
+        String role = MesMaterialDedupService.RESULT_MASTER_CREATED.equals(dedupResult.getType())
+                ? MesMaterialDedupService.ROLE_MASTER
+                : (dedupResult.isReuseSuccess()
+                        ? MesMaterialDedupService.ROLE_REUSED
+                        : MesMaterialDedupService.ROLE_FOLLOWER);
+        summary.put("mesRequestRole", role);
+        if (dedupResult.getMasterTicketId() != null) {
+            summary.put("masterTicketId", dedupResult.getMasterTicketId());
+        }
+        if (!isBlank(dedupResult.getMasterMesRequestId())) {
+            summary.put("masterMesRequestId", dedupResult.getMasterMesRequestId());
+        }
+    }
+
+    private boolean isDedupUniqueConflict(
+            RuntimeException error,
+            MesMaterialDedupService.DedupResolveResult dedupResult) {
+        if (dedupService == null || dedupResult == null || isBlank(dedupResult.getDedupKey())) {
+            return false;
+        }
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof DataIntegrityViolationException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.contains("uk_delivery_mes_request_active_dedup")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void insertMesRequest(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            String mesRequestId,
+            MesMaterialDedupService.DedupResolveResult dedupResult) {
         if (mesRequestMapper == null) {
             return;
         }
@@ -534,6 +688,11 @@ public class MesMaterialSyncService {
         request.setMesRequestId(mesRequestId);
         request.setSystemTaskId(taskId);
         request.setRequestStatus(STATUS_PROCESSING);
+        if (dedupResult != null) {
+            request.setDedupKey(dedupResult.getDedupKey());
+            request.setRequestRole(MesMaterialDedupService.ROLE_MASTER);
+            request.setFollowerCount(0);
+        }
         request.setRequestMessage("MES material sync submitted");
         request.setRequestedAt(LocalDateTime.now());
         mesRequestMapper.insert(request);

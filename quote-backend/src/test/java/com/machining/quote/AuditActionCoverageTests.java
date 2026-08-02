@@ -325,6 +325,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_CALLBACK_FAILED")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_DEDUP_REUSE")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_DEDUP_FOLLOW")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_DEDUP_FANOUT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("DELIVERY");
@@ -342,6 +345,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS")).isNotEqualTo("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_FAILED")).isNotEqualTo("DELIVERY_MES_MATERIAL_CALLBACK_FAILED");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT")).isNotEqualTo("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_DEDUP_REUSE")).isNotEqualTo("DELIVERY_MES_MATERIAL_DEDUP_REUSE");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_DEDUP_FOLLOW")).isNotEqualTo("DELIVERY_MES_MATERIAL_DEDUP_FOLLOW");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_DEDUP_FANOUT")).isNotEqualTo("DELIVERY_MES_MATERIAL_DEDUP_FANOUT");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUCCESS");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_FAILED");
@@ -358,6 +364,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS")).isEqualTo("MES物料号回调成功");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_FAILED")).isEqualTo("MES物料号回调失败");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT")).isEqualTo("MES物料号回调冲突");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_DEDUP_REUSE")).isEqualTo("复用同图号版本MES物料号");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_DEDUP_FOLLOW")).isEqualTo("关联同图号版本MES主请求");
+        assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_DEDUP_FANOUT")).isEqualTo("分发同图号版本MES物料号");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("提交WMS锁库");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("WMS锁库成功");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("WMS锁库失败");
