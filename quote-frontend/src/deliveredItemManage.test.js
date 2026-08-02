@@ -197,21 +197,15 @@ describe('DeliveredItemManage foundation page', () => {
     expect(actionSource).toContain('批量获取库存数据')
   })
 
-  test('maps first-pass flow stage filters to existing MES and WMS query params', () => {
-    for (const label of ['全部未完成', '物料号处理中', '待MES回调', '物料号失败', '库存处理中', '库存失败']) {
+  test('sends flow stage filters to backend for precise MES and WMS business stages', () => {
+    for (const label of ['全部未完成', '待获取物料号', '物料号处理中', '待MES回调', '物料号失败', '待获取库存', '库存处理中', '库存失败']) {
       expect(source).toContain(`label: '${label}'`)
     }
 
-    for (const mapping of [
-      "MES_CALLBACK_PENDING: { mesSyncStatus: 'CALLBACK_PENDING' }",
-      "MES_FAILED: { mesSyncStatus: 'FAILED' }",
-      "WMS_FAILED: { wmsAllocateStatus: 'FAILED' }"
-    ]) {
-      expect(source).toContain(mapping)
-    }
-
-    expect(source).toContain(".filter(([key, value]) => !['dateRange', 'flowStage'].includes(key)")
-    expect(source).toContain('Object.assign(params, flowStageParams)')
+    expect(source).toContain(".filter(([key, value]) => key !== 'dateRange'")
+    expect(source).toContain('params.flowStage = filters.flowStage')
+    expect(source).not.toContain('flowStageStatusMap')
+    expect(source).not.toContain('Object.assign(params, flowStageParams)')
     expect(source).toContain('if (filters.mesSyncStatus || filters.wmsAllocateStatus)')
     expect(source).toContain("filters.flowStage = ''")
   })

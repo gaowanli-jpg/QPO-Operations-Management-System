@@ -55,6 +55,7 @@ class DeliveredItemQueryBackendTest {
                         "private Integer page;",
                         "private Integer pageSize;",
                         "private String flowScope;",
+                        "private String flowStage;",
                         "private String customerName;",
                         "private String rfqNo;",
                         "private String partNo;",
@@ -98,6 +99,8 @@ class DeliveredItemQueryBackendTest {
                 .contains(
                         "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")",
                         "applyFlowScope(query, req.getFlowScope())",
+                        "applyFlowStage(query, req.getFlowStage())",
+                        "normalizeFlowStage",
                         "normalizeFlowScope",
                         "FLOW_SCOPE_ACTIVE",
                         "FLOW_SCOPE_COMPLETED",
@@ -116,6 +119,16 @@ class DeliveredItemQueryBackendTest {
                         "query.ge(\"ticket.delivery_date\", req.getDateFrom())",
                         "query.le(\"ticket.delivery_date\", req.getDateTo())",
                         "listCustomers"
+                );
+        assertThat(source)
+                .as("Flow stage is a backend business filter so the frontend does not combine MES/WMS statuses")
+                .contains(
+                        "FLOW_STAGE_NEED_MATERIAL",
+                        "FLOW_STAGE_NEED_WMS",
+                        "COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'",
+                        "NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL",
+                        "query.eq(\"ticket.mes_sync_status\", \"SUCCESS\")",
+                        "COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'"
                 );
         assertThat(source)
                 .as("Customer picker passes exact customer names, so the delivered-item query should not use fuzzy customer matching")

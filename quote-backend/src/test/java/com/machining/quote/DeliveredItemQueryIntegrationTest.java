@@ -151,6 +151,55 @@ class DeliveredItemQueryIntegrationTest {
     }
 
     @Test
+    void flowStageFiltersActivePoolByBusinessStageWithoutBypassingDataScope() {
+        int legacyUserId = uniqueLegacyId();
+        long roleId = insertRole("CUSTOMER");
+        long userId = insertUser(legacyUserId);
+        linkUserRole(userId, roleId);
+        jdbcTemplate.update(
+                "INSERT INTO system_role_data_scope_customer (role_id, customer_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                roleId, "StageCustomer");
+        AuthContext.set(new AuthContext.SessionUser(legacyUserId, "delivered-stage", "Delivered Stage", "MARKET"));
+
+        int completed = createTicket("QPO-DI-STAGE-DONE-" + UUID.randomUUID(), "StageCustomer", "STAGE-DONE", "A", "MAT-DONE", "/uploads/stage-done.pdf",
+                "SUCCESS", "SUCCESS");
+        createAllocation(completed, "MAT-DONE", "STAGE-DONE", "A", "StageCustomer");
+        createTicket("QPO-DI-STAGE-NOMAT-" + UUID.randomUUID(), "StageCustomer", "STAGE-NO-MAT", "A", null, "/uploads/stage-no-mat.pdf",
+                "PENDING", "PENDING");
+        createTicket("QPO-DI-STAGE-MESFAIL-" + UUID.randomUUID(), "StageCustomer", "STAGE-MES-FAIL", "A", "MAT-MES-FAIL", "/uploads/stage-mes-fail.pdf",
+                "FAILED", "PENDING");
+        createTicket("QPO-DI-STAGE-WMSPENDING-" + UUID.randomUUID(), "StageCustomer", "STAGE-WMS-PENDING", "A", "MAT-WMS-PENDING", "/uploads/stage-wms-pending.pdf",
+                "SUCCESS", "PENDING");
+        createTicket("QPO-DI-STAGE-WMSFAIL-" + UUID.randomUUID(), "StageCustomer", "STAGE-WMS-FAIL", "A", "MAT-WMS-FAIL", "/uploads/stage-wms-fail.pdf",
+                "SUCCESS", "FAILED");
+        createTicket("QPO-DI-STAGE-OTHER-" + UUID.randomUUID(), "OtherCustomer", "STAGE-OTHER-CUSTOMER", "A", null, "/uploads/stage-other.pdf",
+                "PENDING", "PENDING");
+
+        DeliveredItemQueryReq needMaterialReq = new DeliveredItemQueryReq();
+        needMaterialReq.setPage(1);
+        needMaterialReq.setPageSize(50);
+        needMaterialReq.setFlowStage("NEED_MATERIAL");
+        assertThat(partNos(deliveredItemService.listTickets(needMaterialReq)))
+                .contains("STAGE-NO-MAT", "STAGE-MES-FAIL")
+                .doesNotContain("STAGE-WMS-PENDING", "STAGE-WMS-FAIL", "STAGE-DONE", "STAGE-OTHER-CUSTOMER");
+
+        DeliveredItemQueryReq needWmsReq = new DeliveredItemQueryReq();
+        needWmsReq.setPage(1);
+        needWmsReq.setPageSize(50);
+        needWmsReq.setFlowStage("NEED_WMS");
+        assertThat(partNos(deliveredItemService.listTickets(needWmsReq)))
+                .contains("STAGE-WMS-PENDING", "STAGE-WMS-FAIL")
+                .doesNotContain("STAGE-NO-MAT", "STAGE-MES-FAIL", "STAGE-DONE", "STAGE-OTHER-CUSTOMER");
+
+        DeliveredItemQueryReq mesFailedReq = new DeliveredItemQueryReq();
+        mesFailedReq.setPage(1);
+        mesFailedReq.setPageSize(50);
+        mesFailedReq.setFlowStage("MES_FAILED");
+        assertThat(partNos(deliveredItemService.listTickets(mesFailedReq)))
+                .containsExactly("STAGE-MES-FAIL");
+    }
+
+    @Test
     void lockedAllocationCanTraceCompletedTicketDetailWithoutBypassingDataScope() {
         String customerName = "TraceCustomer";
         int legacyUserId = uniqueLegacyId();

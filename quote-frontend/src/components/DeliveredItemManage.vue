@@ -323,19 +323,14 @@ const syncStatusOptions = [
 ]
 const flowStageOptions = [
   { value: '', label: '全部未完成' },
+  { value: 'NEED_MATERIAL', label: '待获取物料号' },
   { value: 'MES_PROCESSING', label: '物料号处理中' },
   { value: 'MES_CALLBACK_PENDING', label: '待MES回调' },
   { value: 'MES_FAILED', label: '物料号失败' },
+  { value: 'NEED_WMS', label: '待获取库存' },
   { value: 'WMS_PROCESSING', label: '库存处理中' },
   { value: 'WMS_FAILED', label: '库存失败' }
 ]
-const flowStageStatusMap = {
-  MES_PROCESSING: { mesSyncStatus: 'PROCESSING' },
-  MES_CALLBACK_PENDING: { mesSyncStatus: 'CALLBACK_PENDING' },
-  MES_FAILED: { mesSyncStatus: 'FAILED' },
-  WMS_PROCESSING: { wmsAllocateStatus: 'PROCESSING' },
-  WMS_FAILED: { wmsAllocateStatus: 'FAILED' }
-}
 const items = ref([])
 const selectedRows = ref([])
 const selectedTicketIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
@@ -353,10 +348,9 @@ watch([page, pageSize], () => loadItems())
 
 const buildParams = () => {
   const params = Object.fromEntries(Object.entries(filters)
-    .filter(([key, value]) => !['dateRange', 'flowStage'].includes(key) && String(value || '').trim()))
-  const flowStageParams = flowStageStatusMap[filters.flowStage] || {}
-  if (filters.flowStage && !params.mesSyncStatus && !params.wmsAllocateStatus) {
-    Object.assign(params, flowStageParams)
+    .filter(([key, value]) => key !== 'dateRange' && String(value || '').trim()))
+  if (filters.flowStage) {
+    params.flowStage = filters.flowStage
   }
   const [dateFrom, dateTo] = filters.dateRange || []
   if (dateFrom) params.dateFrom = dateFrom

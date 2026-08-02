@@ -17,6 +17,13 @@ public class DeliveredItemService {
     private static final String FLOW_SCOPE_ACTIVE = "ACTIVE";
     private static final String FLOW_SCOPE_COMPLETED = "COMPLETED";
     private static final String FLOW_SCOPE_ALL = "ALL";
+    private static final String FLOW_STAGE_NEED_MATERIAL = "NEED_MATERIAL";
+    private static final String FLOW_STAGE_MES_PROCESSING = "MES_PROCESSING";
+    private static final String FLOW_STAGE_MES_CALLBACK_PENDING = "MES_CALLBACK_PENDING";
+    private static final String FLOW_STAGE_MES_FAILED = "MES_FAILED";
+    private static final String FLOW_STAGE_NEED_WMS = "NEED_WMS";
+    private static final String FLOW_STAGE_WMS_PROCESSING = "WMS_PROCESSING";
+    private static final String FLOW_STAGE_WMS_FAILED = "WMS_FAILED";
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -97,9 +104,32 @@ public class DeliveredItemService {
         if (req.getDateTo() != null) {
             query.le("ticket.delivery_date", req.getDateTo());
         }
+        applyFlowStage(query, req.getFlowStage());
         applyFlowScope(query, req.getFlowScope());
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    private void applyFlowStage(QueryWrapper<DeliveredItemDTO> query, String flowStage) {
+        String stage = normalizeFlowStage(flowStage);
+        switch (stage) {
+            case FLOW_STAGE_NEED_MATERIAL -> query.and(needMaterial -> needMaterial
+                    .apply("NULLIF(BTRIM(ticket.material_no), '') IS NULL")
+                    .or()
+                    .apply("COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'"));
+            case FLOW_STAGE_MES_PROCESSING -> query.eq("ticket.mes_sync_status", "PROCESSING");
+            case FLOW_STAGE_MES_CALLBACK_PENDING -> query.eq("ticket.mes_sync_status", "CALLBACK_PENDING");
+            case FLOW_STAGE_MES_FAILED -> query.eq("ticket.mes_sync_status", "FAILED");
+            case FLOW_STAGE_NEED_WMS -> {
+                query.apply("NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL");
+                query.eq("ticket.mes_sync_status", "SUCCESS");
+                query.apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'");
+            }
+            case FLOW_STAGE_WMS_PROCESSING -> query.eq("ticket.wms_allocate_status", "PROCESSING");
+            case FLOW_STAGE_WMS_FAILED -> query.eq("ticket.wms_allocate_status", "FAILED");
+            default -> {
+            }
+        }
     }
 
     private void applyFlowScope(QueryWrapper<DeliveredItemDTO> query, String flowScope) {
@@ -133,6 +163,23 @@ public class DeliveredItemService {
             return normalized;
         }
         return FLOW_SCOPE_ACTIVE;
+    }
+
+    private String normalizeFlowStage(String flowStage) {
+        if (!hasText(flowStage)) {
+            return "";
+        }
+        String normalized = flowStage.trim().toUpperCase();
+        if (FLOW_STAGE_NEED_MATERIAL.equals(normalized)
+                || FLOW_STAGE_MES_PROCESSING.equals(normalized)
+                || FLOW_STAGE_MES_CALLBACK_PENDING.equals(normalized)
+                || FLOW_STAGE_MES_FAILED.equals(normalized)
+                || FLOW_STAGE_NEED_WMS.equals(normalized)
+                || FLOW_STAGE_WMS_PROCESSING.equals(normalized)
+                || FLOW_STAGE_WMS_FAILED.equals(normalized)) {
+            return normalized;
+        }
+        return "";
     }
 
     private void applyLike(QueryWrapper<DeliveredItemDTO> query, String column, String value) {
