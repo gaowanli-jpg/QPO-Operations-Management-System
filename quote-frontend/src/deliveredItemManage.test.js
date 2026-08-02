@@ -126,8 +126,12 @@ describe('DeliveredItemManage foundation page', () => {
   })
 
   test('uses module customer picker and freezes common delivered-item filters', () => {
-    const toolbarStart = source.indexOf('delivered-filter-group')
+    const toolbarStart = source.indexOf('delivered-filter-toolbar')
     const toolbarSource = source.slice(toolbarStart, source.indexOf('</section>', toolbarStart))
+    const primaryStart = source.indexOf('delivered-primary-filters')
+    const primarySource = source.slice(primaryStart, source.indexOf('</div>', primaryStart))
+    const advancedStart = source.indexOf('delivered-advanced-filters')
+    const advancedSource = source.slice(advancedStart, source.indexOf('</div>', advancedStart))
 
     expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(source).toContain('<CustomerPickerDialog')
@@ -136,10 +140,26 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('@select="handleCustomerSelected"')
     expect(toolbarSource).not.toContain('v-model="filters.customerName"')
 
+    expect(source).toContain('delivered-toolbar-main')
+    expect(source).toContain('delivered-primary-filters')
+    expect(source).toContain('delivered-batch-actions')
+    expect(source).toContain('delivered-advanced-filters')
+    expect(source).toContain('v-if="advancedFiltersVisible"')
+    expect(source).toContain('高级筛选')
+    expect(source).toContain('收起筛选')
+    expect(source).toContain('流程状态')
+    expect(source).toContain('来源单号')
+
     for (const token of [
-      'filters.rfqNo',
       'filters.partNo',
       'filters.version',
+      'filters.flowStage'
+    ]) {
+      expect(primarySource).toContain(token)
+    }
+
+    for (const advancedToken of [
+      'filters.rfqNo',
       'filters.internalProjectNo',
       'filters.customerOrderNo',
       'filters.customerProjectNo',
@@ -147,7 +167,8 @@ describe('DeliveredItemManage foundation page', () => {
       'filters.wmsAllocateStatus',
       'filters.dateRange'
     ]) {
-      expect(toolbarSource).toContain(token)
+      expect(advancedSource).toContain(advancedToken)
+      expect(primarySource).not.toContain(advancedToken)
     }
 
     for (const removedCommonFilter of [
@@ -155,6 +176,25 @@ describe('DeliveredItemManage foundation page', () => {
     ]) {
       expect(toolbarSource).not.toContain(removedCommonFilter)
     }
+  })
+
+  test('keeps delivered item batch actions separated from query filters', () => {
+    const primaryStart = source.indexOf('delivered-primary-filters')
+    const primarySource = source.slice(primaryStart, source.indexOf('</div>', primaryStart))
+    const actionsStart = source.indexOf('delivered-batch-actions')
+    const actionSource = source.slice(actionsStart, source.indexOf('</div>', actionsStart))
+
+    expect(primarySource).toContain('@click="handleSearch"')
+    expect(primarySource).toContain('@click="handleResetFilters"')
+    expect(primarySource).not.toContain('handleBatchMesSync')
+    expect(primarySource).not.toContain('handleBatchWmsAllocation')
+
+    expect(actionSource).toContain('DELIVERED_ITEM_MES_SYNC_PERMISSION')
+    expect(actionSource).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
+    expect(actionSource).toContain('handleBatchMesSync')
+    expect(actionSource).toContain('handleBatchWmsAllocation')
+    expect(actionSource).toContain('批量获取物料号')
+    expect(actionSource).toContain('批量获取库存数据')
   })
 
   test('wires drawing preview to delivered item module permission', () => {

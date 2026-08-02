@@ -8,29 +8,59 @@
     </header>
 
     <section class="erp-toolbar delivered-filter-toolbar">
-      <div class="erp-toolbar-group delivered-filter-group">
-        <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-          <span
-            :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
-            :title="filters.customerName || '选择客户'"
+      <div class="delivered-toolbar-main">
+        <div class="erp-toolbar-group delivered-primary-filters">
+          <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
+            <span
+              :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
+              :title="filters.customerName || '选择客户'"
+            >
+              {{ filters.customerName || '选择客户' }}
+            </span>
+            <span class="customer-picker-action">选择客户</span>
+          </el-button>
+          <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
+          <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+          <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
+          <el-select v-model="filters.flowStage" clearable placeholder="流程状态" class="filter-select flow-stage-select" @change="handleFlowStageChange" @clear="handleFlowStageChange">
+            <el-option v-for="option in flowStageOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+          <el-button @click="handleSearch">搜索</el-button>
+          <el-button @click="handleResetFilters">重置</el-button>
+          <el-button plain @click="advancedFiltersVisible = !advancedFiltersVisible">
+            {{ advancedFiltersVisible ? '收起筛选' : '高级筛选' }}
+          </el-button>
+        </div>
+
+        <div class="erp-toolbar-group delivered-batch-actions">
+          <el-button
+            v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"
+            type="success"
+            plain
+            :disabled="selectedTicketIds.length === 0 || isBatchMesSyncPending"
+            :loading="isBatchMesSyncPending"
+            @click="handleBatchMesSync"
           >
-            {{ filters.customerName || '选择客户' }}
-          </span>
-          <span class="customer-picker-action">选择客户</span>
-        </el-button>
-        <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
-        <el-input v-model="filters.rfqNo" clearable placeholder="RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
+            批量获取物料号
+          </el-button>
+          <el-button
+            v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"
+            type="primary"
+            plain
+            :disabled="selectedTicketIds.length === 0 || isBatchWmsAllocationPending"
+            :loading="isBatchWmsAllocationPending"
+            @click="handleBatchWmsAllocation"
+          >
+            批量获取库存数据
+          </el-button>
+        </div>
+      </div>
+
+      <div v-if="advancedFiltersVisible" class="erp-toolbar-group delivered-advanced-filters">
+        <el-input v-model="filters.rfqNo" clearable placeholder="来源单号/RFQ号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerOrderNo" clearable placeholder="客户订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerProjectNo" clearable placeholder="客户项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-select v-model="filters.mesSyncStatus" clearable placeholder="MES状态" class="filter-select" @change="handleSearch" @clear="handleSearch">
-          <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
-        </el-select>
-        <el-select v-model="filters.wmsAllocateStatus" clearable placeholder="WMS状态" class="filter-select" @change="handleSearch" @clear="handleSearch">
-          <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
-        </el-select>
         <el-date-picker
           v-model="filters.dateRange"
           type="daterange"
@@ -42,28 +72,12 @@
           @change="handleSearch"
           @clear="handleSearch"
         />
-        <el-button @click="handleSearch">搜索</el-button>
-        <el-button type="primary" :loading="loading" @click="loadItems">刷新</el-button>
-        <el-button
-          v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"
-          type="success"
-          plain
-          :disabled="selectedTicketIds.length === 0 || isBatchMesSyncPending"
-          :loading="isBatchMesSyncPending"
-          @click="handleBatchMesSync"
-        >
-          批量获取物料号
-        </el-button>
-        <el-button
-          v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"
-          type="primary"
-          plain
-          :disabled="selectedTicketIds.length === 0 || isBatchWmsAllocationPending"
-          :loading="isBatchWmsAllocationPending"
-          @click="handleBatchWmsAllocation"
-        >
-          批量获取库存数据
-        </el-button>
+        <el-select v-model="filters.mesSyncStatus" clearable placeholder="MES状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleSearch">
+          <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
+        </el-select>
+        <el-select v-model="filters.wmsAllocateStatus" clearable placeholder="WMS状态" class="filter-select" @change="handleTechnicalStatusChange" @clear="handleSearch">
+          <el-option v-for="option in syncStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
+        </el-select>
       </div>
     </section>
 
@@ -292,6 +306,7 @@ const filters = reactive({
   rfqNo: '',
   partNo: '',
   version: '',
+  flowStage: '',
   internalProjectNo: '',
   customerOrderNo: '',
   customerProjectNo: '',
@@ -306,6 +321,20 @@ const syncStatusOptions = [
   { value: 'SUCCESS', label: '成功' },
   { value: 'FAILED', label: '失败' }
 ]
+const flowStageOptions = [
+  { value: 'MES_PROCESSING', label: '物料号处理中' },
+  { value: 'MES_CALLBACK_PENDING', label: '待MES回调' },
+  { value: 'MES_FAILED', label: '物料号失败' },
+  { value: 'WMS_PROCESSING', label: '库存处理中' },
+  { value: 'WMS_FAILED', label: '库存失败' }
+]
+const flowStageStatusMap = {
+  MES_PROCESSING: { mesSyncStatus: 'PROCESSING' },
+  MES_CALLBACK_PENDING: { mesSyncStatus: 'CALLBACK_PENDING' },
+  MES_FAILED: { mesSyncStatus: 'FAILED' },
+  WMS_PROCESSING: { wmsAllocateStatus: 'PROCESSING' },
+  WMS_FAILED: { wmsAllocateStatus: 'FAILED' }
+}
 const items = ref([])
 const selectedRows = ref([])
 const selectedTicketIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
@@ -317,12 +346,17 @@ const detailVisible = ref(false)
 const selectedItem = ref(null)
 const customerPickerVisible = ref(false)
 const mesBatchResult = ref(null)
+const advancedFiltersVisible = ref(false)
 
 watch([page, pageSize], () => loadItems())
 
 const buildParams = () => {
   const params = Object.fromEntries(Object.entries(filters)
-    .filter(([key, value]) => key !== 'dateRange' && String(value || '').trim()))
+    .filter(([key, value]) => !['dateRange', 'flowStage'].includes(key) && String(value || '').trim()))
+  const flowStageParams = flowStageStatusMap[filters.flowStage] || {}
+  if (filters.flowStage && !params.mesSyncStatus && !params.wmsAllocateStatus) {
+    Object.assign(params, flowStageParams)
+  }
   const [dateFrom, dateTo] = filters.dateRange || []
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
@@ -350,6 +384,38 @@ const loadItems = async () => {
 const handleSearch = async () => {
   page.value = 1
   await loadItems()
+}
+
+const handleResetFilters = async () => {
+  Object.assign(filters, {
+    customerName: '',
+    rfqNo: '',
+    partNo: '',
+    version: '',
+    flowStage: '',
+    internalProjectNo: '',
+    customerOrderNo: '',
+    customerProjectNo: '',
+    mesSyncStatus: '',
+    wmsAllocateStatus: '',
+    dateRange: []
+  })
+  await handleSearch()
+}
+
+const handleFlowStageChange = async () => {
+  if (filters.flowStage) {
+    filters.mesSyncStatus = ''
+    filters.wmsAllocateStatus = ''
+  }
+  await handleSearch()
+}
+
+const handleTechnicalStatusChange = async () => {
+  if (filters.mesSyncStatus || filters.wmsAllocateStatus) {
+    filters.flowStage = ''
+  }
+  await handleSearch()
 }
 
 const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
@@ -584,9 +650,38 @@ onMounted(() => loadItems())
 </script>
 
 <style scoped>
-.delivered-filter-group {
+.delivered-filter-toolbar {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.delivered-toolbar-main {
+  display: flex;
   width: 100%;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.delivered-primary-filters {
+  flex: 1 1 680px;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.delivered-batch-actions {
+  flex: 0 0 auto;
   justify-content: flex-end;
+}
+
+.delivered-advanced-filters {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-soft);
+  justify-content: flex-start;
 }
 
 .filter-input {
@@ -602,6 +697,11 @@ onMounted(() => loadItems())
 .filter-select {
   width: 130px;
   flex: 0 0 130px;
+}
+
+.flow-stage-select {
+  width: 150px;
+  flex-basis: 150px;
 }
 
 .filter-date-range {
@@ -682,7 +782,13 @@ onMounted(() => loadItems())
 }
 
 @media (max-width: 1200px) {
-  .delivered-filter-group {
+  .delivered-toolbar-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .delivered-primary-filters,
+  .delivered-batch-actions {
     justify-content: flex-start;
   }
 
