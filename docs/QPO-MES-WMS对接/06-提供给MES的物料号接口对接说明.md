@@ -2,7 +2,7 @@
 
 本文档提供给 MES 系统开发/实施人员，用于说明 QPO 如何调用 MES 获取已提零件的物料号。
 
-> 更新说明：本文档原先只描述 MES 在 HTTP response 中同步返回物料号的第一版接口。根据最新联调要求，MES 可以即时返回物料号，也可以先返回“已受理，后续回调”，再通过 QPO 回调接口写回物料号。异步回调的完整契约以 `docs/QPO报价状态流转/18-MES物料号异步回调开发文档.md` 为准。
+> 更新说明：本文档原先只描述 MES 在 HTTP response 中同步返回物料号的第一版接口。根据最新联调要求，MES 可以即时返回物料号，也可以先返回“已受理，后续回调”，再通过 QPO 回调接口写回物料号。MES 回调 QPO 的完整接口契约已经拆分为独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
 
 > 阶段 5 收口说明：旧同步响应口径已废弃。MES 可以即时返回物料号，也可以返回已受理并后续回调；两种路径都必须原样返回 QPO 生成的 `mesRequestId`。
 
@@ -230,59 +230,16 @@ QPO 前端支持批量选择多个已提零件后提交“获取物料号”任�
 
 ## 6. MES 回调 QPO
 
-MES 返回待回调后，后续通过以下接口把正式物料号写回 QPO。MES 仍只回调主 `mesRequestId`；关联等待行是 QPO 内部关系，MES 不需要分别回调每个相同图号版本零件。
+MES 返回待回调后，后续通过 QPO 回调接口把正式物料号写回 QPO。回调接口已经独立成文档，本文只保留入口和关键口径：
 
-```http
-POST /api/integrations/mes/material-callback
-Content-Type: application/json
-Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}
-```
+- 独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
+- 接口入口：`POST /api/integrations/mes/material-callback`。
+- 认证方式：`Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}`，是否启用由 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED` 控制。
+- 定位方式：MES 必须原样带回 QPO 请求中的主 `mesRequestId`，并带回 `ticketId` 做交叉校验。
+- 去重口径：同图号版本去重场景下，MES 仍只回调主 `mesRequestId`；关联等待行是 QPO 内部关系，MES 不需要分别回调每个相同图号版本零件。
+- 写回口径：QPO 收到主请求成功回调后写回 `order_delivery_ticket.material_no`，并 fan-out 写回所有关联等待行；销售订单来源提单行还会同步回写 `sales_order_item.material_no` 与物料号确认字段。
 
-回调请求体：
-
-```json
-{
-  "mesRequestId": "MES-123-8f8c2",
-  "ticketId": 123,
-  "status": "SUCCESS",
-  "materialNo": "MAT-000123",
-  "externalTraceId": "MES-TASK-001",
-  "message": "MES completed"
-}
-```
-
-字段说明：
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `mesRequestId` | string | 是 | QPO 请求 ID，主定位键。 |
-| `ticketId` | integer | 是 | QPO 已提零件 ID，用于交叉校验。 |
-| `status` | string | 是 | 成功返回 `SUCCESS`；失败可返回 `FAILED`。 |
-| `materialNo` | string | 成功时必填 | MES 最终确认的物料号。 |
-| `externalTraceId` | string | 否 | MES 任务号或流水号。 |
-| `message` | string | 否 | 回调摘要，不要放完整内部任务 JSON。 |
-
-回调响应示例：
-
-```json
-{
-  "success": true,
-  "message": "QPO已接收物料号回调",
-  "ticketId": 123,
-  "mesRequestId": "MES-123-8f8c2",
-  "materialNo": "MAT-000123"
-}
-```
-
-QPO 回调处理规则：
-
-- 按 `mesRequestId` 定位请求流水，按 `ticketId` 交叉校验；
-- 回调成功写入 `order_delivery_ticket.material_no`，状态变为 `SUCCESS`；
-- 如果该主请求存在同图号版本关联等待行，QPO fan-out 写回所有等待行，等待行状态同步变为 `SUCCESS`；
-- 销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段；
-- 重复相同回调幂等返回成功，不重复污染数据；
-- 同一 `mesRequestId` 返回不同 `materialNo` 时拒绝覆盖；
-- 缺少或错误的 `ERP_MES_CALLBACK_TOKEN` 会被拒绝。
+回调请求字段、响应字段、错误码、幂等规则、冲突规则和联调样例，以 `08-MES物料号回调接口对接说明.md` 为准。
 
 ## 7. 幂等与重复请求建议
 

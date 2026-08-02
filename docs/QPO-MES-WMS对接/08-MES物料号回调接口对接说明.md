@@ -1,0 +1,258 @@
+# QPO 提供给 MES 的物料号回调接口对接说明
+
+本文档是 `06-提供给MES的物料号接口对接说明.md` 中“MES 回调 QPO”部分的独立接口文档，用于 MES 在物料号无法即时返回时，后续把正式物料号回写给 QPO。
+
+## 1. 接口结论
+
+- 调用方向：MES -> QPO。
+- 调用时机：MES 在 QPO 获取物料号请求中返回 `callbackRequired=true`，或返回 `status=CALLBACK_PENDING / ACCEPTED / PENDING` 后，后续生成正式物料号时调用。
+- 接口路径：`POST /api/integrations/mes/material-callback`。
+- 请求格式：`application/json`。
+- 认证方式：`Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}`。
+- 主定位键：`mesRequestId`。
+- 交叉校验键：`ticketId`。
+- 去重口径：MES 只回调主 `mesRequestId`；同图号版本的 follower 等待行由 QPO 内部 fan-out 写回，MES 不需要逐行回调。
+
+## 2. 前置约定
+
+QPO 调 MES 获取物料号时，会在请求体中传入：
+
+```json
+{
+  "mesRequestId": "MES-123-8f8c2",
+  "ticketId": 123,
+  "partNo": "P-1001",
+  "version": "A",
+  "sourceType": "SALES_ORDER"
+}
+```
+
+MES 必须保存并原样带回 `mesRequestId` 和 `ticketId`：
+
+- `mesRequestId` 是 QPO 每次请求生成的唯一 ID，也是回调主定位键。
+- `ticketId` 是 QPO 已提零件行 ID，用于防止回调串单。
+- 如果 QPO 同图号版本去重后把其他零件作为 follower 关联到主请求，MES 不需要知道 follower 明细，也不需要分别回调 follower。
+
+## 3. HTTP 契约
+
+```http
+POST {QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback
+Content-Type: application/json
+Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}
+```
+
+说明：
+
+- `QPO_PUBLIC_BASE_URL` 是 QPO 提供给 MES 可访问的内网地址，例如 `http://192.168.70.21:8088`。
+- 当 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED=true` 时，必须携带 Bearer token。
+- token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 返回 HTTP `401`。
+- 不要在日志、截图、工单或联调群中明文发送真实 token。
+
+## 4. 成功回调
+
+### 4.1 请求示例
+
+```json
+{
+  "mesRequestId": "MES-123-8f8c2",
+  "ticketId": 123,
+  "status": "SUCCESS",
+  "materialNo": "MAT-000123",
+  "externalTraceId": "MES-TASK-001",
+  "message": "MES material resolved"
+}
+```
+
+### 4.2 请求字段
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `mesRequestId` | string | 是 | QPO 请求 ID，主定位键，必须等于 QPO 调 MES 时传入的 `mesRequestId`。 |
+| `ticketId` | integer | 是 | QPO 已提零件行 ID，用于和请求流水交叉校验。 |
+| `status` | string | 是 | 成功回调固定传 `SUCCESS`。 |
+| `materialNo` | string | 成功时必填 | MES 最终确认的物料号；QPO 会去除首尾空格，长度不能超过 100。 |
+| `externalTraceId` | string | 否 | MES 任务号、流水号或工单号，QPO 会保存用于排查。 |
+| `message` | string | 否 | 回调摘要，不要放完整 MES 内部任务 JSON。 |
+
+### 4.3 成功响应
+
+```json
+{
+  "success": true,
+  "message": "QPO已接收物料号回调",
+  "ticketId": 123,
+  "mesRequestId": "MES-123-8f8c2",
+  "materialNo": "MAT-000123"
+}
+```
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `success` | boolean | QPO 是否成功处理该回调。 |
+| `message` | string | QPO 处理摘要。 |
+| `ticketId` | integer | 本次回调对应的 QPO 已提零件行 ID。 |
+| `mesRequestId` | string | 本次回调对应的 QPO 请求 ID。 |
+| `materialNo` | string | QPO 接收并保存的物料号。 |
+
+## 5. 失败回调
+
+如果 MES 后续确认无法生成物料号，可以回调失败状态，让 QPO 从 `CALLBACK_PENDING` 结束为 `FAILED`，用户后续可重新发起获取物料号。
+
+### 5.1 请求示例
+
+```json
+{
+  "mesRequestId": "MES-123-8f8c2",
+  "ticketId": 123,
+  "status": "FAILED",
+  "externalTraceId": "MES-TASK-001",
+  "message": "图纸无法识别，缺少材料信息"
+}
+```
+
+### 5.2 QPO 处理结果
+
+- QPO 将对应 `order_delivery_ticket.mes_sync_status` 更新为 `FAILED`。
+- QPO 将失败摘要写入状态信息和请求流水。
+- 如果该主请求存在同图号版本 follower 等待行，QPO 会把等待行同步更新为失败。
+- HTTP 层返回 `200`，响应体中 `success=false`，表示 QPO 已接收失败结果但业务结果为失败。
+
+失败响应示例：
+
+```json
+{
+  "success": false,
+  "message": "MES 回调失败",
+  "ticketId": 123,
+  "mesRequestId": "MES-123-8f8c2",
+  "materialNo": null
+}
+```
+
+## 6. QPO 写回规则
+
+QPO 收到成功回调后按以下顺序处理：
+
+1. 校验回调 token。
+2. 校验 `mesRequestId` 不为空。
+3. 校验 `ticketId` 不为空。
+4. 按 `mesRequestId` 查询 `order_delivery_ticket_mes_request` 请求流水。
+5. 校验请求流水中的 `ticketId` 和回调 `ticketId` 一致。
+6. 校验当前 `order_delivery_ticket.mes_request_id` 仍等于回调 `mesRequestId`，旧请求回调不能覆盖新请求。
+7. 校验 `status=SUCCESS` 时 `materialNo` 非空且长度不超过 100。
+8. 写回 `order_delivery_ticket.material_no`、`mes_sync_status=SUCCESS`、`mes_synced_at`、`mes_external_task_id`、`mes_callback_received_at` 和回调摘要。
+9. 更新 `order_delivery_ticket_mes_request` 请求流水状态。
+10. 如果来源是销售订单，回写 `sales_order_item.material_no`、`material_no_status=已确认`、`material_no_source=MES_TICKET`、`material_no_source_ticket_id`、`material_no_synced_at`。
+11. 如果当前请求是同图号版本去重主请求，QPO fan-out 写回所有 follower 等待行。
+
+## 7. 同图号版本去重回调规则
+
+QPO 当前获取物料号模块已经支持按 **图号 + 版本** 去重：
+
+- 同一批量中相同 `图号 + 版本` 只会有一行成为 MASTER 并真实请求 MES。
+- 跨批次有相同 `图号 + 版本` 活跃主请求时，后续行成为 FOLLOWER，不再请求 MES。
+- 跨批次已有唯一成功物料号时，后续行直接复用，不请求 MES。
+- 跨批次存在多个不同成功物料号时，QPO 不自动复用，按正常请求重新调用 MES。
+
+因此 MES 回调时只需要处理 MASTER：
+
+```text
+MES 回调 MASTER mesRequestId
+  -> QPO 写回 MASTER 提单行
+  -> QPO 查找 order_delivery_ticket_mes_waiter
+  -> QPO 写回所有 FOLLOWER 提单行
+  -> 如果 FOLLOWER 来源是销售订单，同步回写 sales_order_item 物料号确认字段
+```
+
+MES 不需要：
+
+- 回调 follower 的 `ticketId`。
+- 感知 QPO 内部的 `mesDedupKey`。
+- 感知 QPO 内部的 `mesMasterTicketId` 或 `mesMasterRequestId`。
+
+## 8. 幂等和冲突规则
+
+| 场景 | QPO 处理 |
+| --- | --- |
+| 相同 `mesRequestId` + 相同 `ticketId` + 相同 `materialNo` 重复回调 | 幂等返回成功，不重复污染数据。 |
+| 相同 `mesRequestId` + 不同 `ticketId` | 返回 HTTP `409`，拒绝串单回调。 |
+| 相同 `mesRequestId` + 不同 `materialNo` | 返回 HTTP `409`，拒绝覆盖已确认物料号。 |
+| 旧 `mesRequestId` 回调到当前已有新请求的 ticket | 返回 HTTP `409`，旧回调不能覆盖新请求。 |
+| 销售订单零件已有不同且已确认物料号 | 返回 HTTP `409`，不覆盖销售订单主零件表。 |
+| 找不到 `mesRequestId` 请求流水 | 返回 HTTP `404`。 |
+| 缺少 `mesRequestId`、`ticketId` 或成功回调缺少 `materialNo` | 返回 HTTP `400`。 |
+| token 缺失或错误 | 返回 HTTP `401`。 |
+
+## 9. 错误响应示例
+
+### 9.1 token 错误
+
+HTTP `401`
+
+```json
+{
+  "success": false,
+  "message": "MES 回调 token 无效",
+  "ticketId": 123,
+  "mesRequestId": "MES-123-8f8c2",
+  "materialNo": null
+}
+```
+
+### 9.2 请求流水不存在
+
+HTTP `404`
+
+```json
+{
+  "success": false,
+  "message": "MES 请求流水不存在",
+  "ticketId": 123,
+  "mesRequestId": "MES-123-8f8c2",
+  "materialNo": null
+}
+```
+
+### 9.3 物料号冲突
+
+HTTP `409`
+
+```json
+{
+  "success": false,
+  "message": "MES 回调物料号冲突，不能覆盖已确认物料号",
+  "ticketId": 123,
+  "mesRequestId": "MES-123-8f8c2",
+  "materialNo": null
+}
+```
+
+## 10. 联调验收用例
+
+| 场景 | MES 操作 | QPO 预期 |
+| --- | --- | --- |
+| 待回调成功 | 回调 `status=SUCCESS` + `materialNo` | 已提零件状态变为 `SUCCESS`，保存物料号。 |
+| 待回调失败 | 回调 `status=FAILED` + `message` | 已提零件状态变为 `FAILED`，用户可重试。 |
+| 销售订单来源成功 | 回调销售订单来源提单行 | `sales_order_item.material_no` 和 `material_no_status=已确认` 被回写。 |
+| 同图号版本主请求成功 | 只回调 MASTER `mesRequestId` | MASTER 和所有 FOLLOWER 等待行都写回物料号。 |
+| 重复相同回调 | 重复发送相同 `materialNo` | QPO 幂等返回成功。 |
+| 冲突回调 | 同一 `mesRequestId` 发送不同 `materialNo` | QPO 返回 `409`，不覆盖数据。 |
+| 旧请求回调 | ticket 已经有新的 `mesRequestId` | QPO 返回 `409`，旧请求不覆盖新请求。 |
+| token 错误 | 不带或带错 Bearer token | QPO 返回 `401`。 |
+
+## 11. 日志和安全要求
+
+- QPO 文件日志会记录 `ticketId`、`mesRequestId`、`externalTraceId`、`materialNo`、`durationMs` 和失败摘要。
+- QPO 操作日志动作包括 `DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS`、`DELIVERY_MES_MATERIAL_CALLBACK_FAILED`、`DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT` 和去重 fan-out 相关动作。
+- 日志不得记录 token、Authorization header、完整 MES 请求 JSON、完整 MES 回调 JSON 或 MES 内部完整任务 JSON。
+- MES 回调的 `message` 建议只放简短摘要，不要放敏感信息、图纸内容、完整 BOM 或内部审批详情。
+
+## 12. 双方上线前确认
+
+- QPO 提供 MES 可访问的公网或内网 base URL。
+- QPO 和 MES 确认 `ERP_MES_CALLBACK_TOKEN` 的发放、轮换和保密方式。
+- MES 确认只回调主 `mesRequestId`，不需要逐个回调同图号版本 follower。
+- MES 确认失败场景会回调 `status=FAILED` 和明确 `message`，或由 QPO 用户重试触发下一次请求。
+- 双方保留 `ticketId`、`mesRequestId`、`externalTraceId` 作为联调排查三要素。
