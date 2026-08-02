@@ -844,7 +844,19 @@ git commit -m "feat: add wms allocation for delivered items"
 - 锁库零件详情或操作入口应保留“查看提单行”或等价的 ticketId 跳转能力，确保 MES/WMS 状态、物料号、来源订单和工艺快照可追溯。
 - 查询仍由后端分页完成，锁库结果页不全量拉取已提零件再本地拼接。
 
-## 15. 完成定义
+## 15. Stage 22 待生产下发与 `ticket_qty` 收口说明
+
+阶段 22 后，锁库零件模块同时承担“锁库结果池”和“待生产下发工作台”职责。WMS 成功后，QPO 仍不删除原始 ticket，也不把数据搬到新的历史表；`order_delivery_ticket_allocation` 保存拆分结果，并通过 `ticket_id` 回溯原始提单行。
+
+- `ticket_qty` 是原始提单数量快照，来源于 `order_delivery_ticket.qty`。
+- `qty` 表示 allocation 拆分后的当前数量；对 `PRODUCTION_REQUIRED` 行来说，`qty` 就是待生产数量。
+- `ticket_qty` 表示未锁库存前的原始提单数量，用于 MES 生产下发时让 MES 同时看到本次待生产数量和原始提单数量。
+- `ticket_qty` 写入所有 allocation 行，不只写待生产行，便于后续审计和数量核对。
+- 原始 ticket 不删除；锁库零件、MES 生产下发结果和原始已提零件通过 `ticket_id` 保持完整溯源。
+- 数量关系保持：已入库库存锁定数量 + 在产库存锁定数量 + 待生产数量 = `ticket_qty`。
+- 锁库零件下发 MES 生产只处理 `allocation_type = PRODUCTION_REQUIRED` 的行，接口契约见 `docs/QPO-MES-WMS对接/09-提供给MES的待生产下发接口对接说明.md`。
+
+## 16. 完成定义
 
 - 已提零件可提交 WMS 锁库任务。
 - WMS 动态多个在产订单可拆成多条 `IN_PRODUCTION_LOCK`。

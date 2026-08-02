@@ -6,6 +6,8 @@
 
 > 阶段 6 收口说明：第 19 号文档已把 MES 物料号同步扩展为 **同图号版本去重** 口径。QPO 对同一 `图号 + 版本` 同一时间只保留一个活跃 MES 主请求；同批量相同 `图号 + 版本` 只打 MES 一次；跨批次待回调时相同 `图号 + 版本` 不再打 MES；跨批次已成功且只有一个成功物料号时直接复用物料号；跨批次存在多个不同成功物料号时不自动复用，按正常请求调用 MES。MES 仍只回调主 `mesRequestId`，QPO 收到主请求即时成功或回调成功后负责 fan-out 写回所有关联等待行；销售订单 U9 同步前能看到等待行物料号已确认。
 
+> 阶段 22 收口说明：MES 对接现在包含两条独立业务 path：物料号获取继续使用 `ERP_MES_MATERIAL_PATH`，锁库零件待生产下发使用 `ERP_MES_PRODUCTION_PATH`。两者复用 `ERP_MES_BASE_URL`、`ERP_MES_AUTH_TOKEN` 和 `ERP_MES_TIMEOUT_MS`，但请求契约、权限点、操作日志和文件日志事件名彼此独立；待生产下发接口详见 `docs/QPO-MES-WMS对接/09-提供给MES的待生产下发接口对接说明.md`。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已经具备：
@@ -135,6 +137,7 @@ MES 调用异常 / 返回无物料号 / 请求字段不完整
 ERP_MES_BASE_URL=http://mes.example.local
 ERP_MES_AUTH_TOKEN=
 ERP_MES_MATERIAL_PATH=/api/mes/materials/resolve
+ERP_MES_PRODUCTION_PATH=/api/mes/production/submit
 ERP_MES_TIMEOUT_MS=10000
 ERP_MES_CALLBACK_TOKEN=
 ERP_MES_CALLBACK_TOKEN_ENABLED=true
@@ -145,6 +148,7 @@ ERP_MES_CALLBACK_TOKEN_ENABLED=true
 - 继续使用 `ERP_` 环境变量前缀，保持当前 QPO 部署兼容风格。
 - token 可以为空；为空时不发送 Authorization header。
 - 本地没有 MES 时，测试使用 mock，不依赖真实外部系统。
+- 物料号获取继续使用 `ERP_MES_MATERIAL_PATH`；待生产下发使用 `ERP_MES_PRODUCTION_PATH`。
 
 ### 6.2 `docker-compose.yml`
 
@@ -154,6 +158,7 @@ backend 环境变量映射：
 ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
 ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
 ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
+ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}
 ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
 ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
 ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
@@ -171,6 +176,9 @@ private String mesAuthToken;
 @Value("${erp.mes.material-path:/api/mes/materials/resolve}")
 private String materialPath;
 
+@Value("${erp.mes.production-path:/api/mes/production/submit}")
+private String productionPath;
+
 @Value("${erp.mes.timeout-ms:10000}")
 private Integer timeoutMs;
 ```
@@ -181,10 +189,12 @@ private Integer timeoutMs;
 ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
 ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
 ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
+ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}
 ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
 ```
 
 Spring Boot 会把 `ERP_MES_BASE_URL` 绑定到 `erp.mes.base-url`。
+同理，`ERP_MES_PRODUCTION_PATH` 会绑定到 `erp.mes.production-path`，供锁库零件待生产下发客户端使用。
 
 ## 7. MES 接口契约
 
