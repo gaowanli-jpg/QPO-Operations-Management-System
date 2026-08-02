@@ -8,28 +8,53 @@
     </header>
 
     <section class="erp-toolbar locked-filter-toolbar">
-      <div class="erp-toolbar-group locked-filter-group">
-        <el-tag v-if="route.query.ticketId" type="info" effect="plain">提单ID：{{ route.query.ticketId }}</el-tag>
-        <el-button v-permission="'market:locked-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-          <span
-            :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
-            :title="filters.customerName || '选择客户'"
+      <div class="locked-toolbar-main">
+        <div class="erp-toolbar-group locked-primary-filters">
+          <el-tag v-if="route.query.ticketId" type="info" effect="plain">提单ID：{{ route.query.ticketId }}</el-tag>
+          <el-button v-permission="'market:locked-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
+            <span
+              :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
+              :title="filters.customerName || '选择客户'"
+            >
+              {{ filters.customerName || '选择客户' }}
+            </span>
+            <span class="customer-picker-action">选择客户</span>
+          </el-button>
+          <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
+          <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
+          <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
+          <el-select v-model="filters.allocationType" clearable placeholder="分配类型" class="filter-select allocation-type-select" @change="handleSearch" @clear="handleSearch">
+            <el-option v-for="option in allocationTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+          <el-select v-model="filters.mesProductionStatus" clearable placeholder="生产下发状态" class="filter-select production-status-select" @change="handleSearch" @clear="handleSearch">
+            <el-option v-for="option in mesProductionStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+          <el-button @click="handleSearch">搜索</el-button>
+          <el-button @click="handleResetFilters">重置</el-button>
+          <el-button plain @click="advancedFiltersVisible = !advancedFiltersVisible">
+            {{ advancedFiltersVisible ? '收起筛选' : '高级筛选' }}
+          </el-button>
+          <el-button v-if="route.query.ticketId" @click="showAllItems">查看全部</el-button>
+        </div>
+
+        <div class="erp-toolbar-group locked-batch-actions">
+          <el-button
+            v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
+            type="primary"
+            plain
+            disabled
           >
-            {{ filters.customerName || '选择客户' }}
-          </span>
-          <span class="customer-picker-action">选择客户</span>
-        </el-button>
-        <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
+            下发MES生产
+          </el-button>
+        </div>
+      </div>
+
+      <div v-if="advancedFiltersVisible" class="erp-toolbar-group locked-advanced-filters">
         <el-input v-model="filters.rfqNo" clearable placeholder="来源订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="filters.version" clearable placeholder="版本" class="filter-input small" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.materialNo" clearable placeholder="物料号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.internalProjectNo" clearable placeholder="内部项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerOrderNo" clearable placeholder="客户订单号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="filters.customerProjectNo" clearable placeholder="客户项目号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-select v-model="filters.allocationType" clearable placeholder="分配类型" class="filter-select" @change="handleSearch" @clear="handleSearch">
-          <el-option v-for="option in allocationTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
-        </el-select>
         <el-date-picker
           v-model="filters.dateRange"
           type="daterange"
@@ -41,9 +66,6 @@
           @change="handleSearch"
           @clear="handleSearch"
         />
-        <el-button @click="handleSearch">搜索</el-button>
-        <el-button type="primary" :loading="loading" @click="loadItems">刷新</el-button>
-        <el-button v-if="route.query.ticketId" @click="showAllItems">查看全部</el-button>
       </div>
     </section>
 
@@ -190,6 +212,7 @@ import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { getDeliveredItem, listLockedItems, listTicketAllocations } from '../services/deliveredItemApi'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
+const LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:locked-item:mes-production-submit'
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 
 const route = useRoute()
@@ -205,6 +228,7 @@ const filters = reactive({
   customerOrderNo: '',
   customerProjectNo: '',
   allocationType: '',
+  mesProductionStatus: '',
   dateRange: []
 })
 
@@ -212,6 +236,12 @@ const allocationTypeOptions = [
   { value: 'IN_STOCK_LOCK', label: '已入库库存锁定', type: 'success' },
   { value: 'IN_PRODUCTION_LOCK', label: '在产库存锁定', type: 'warning' },
   { value: 'PRODUCTION_REQUIRED', label: '待生产数量', type: 'danger' }
+]
+const mesProductionStatusOptions = [
+  { value: 'PENDING', label: '未处理' },
+  { value: 'PROCESSING', label: '处理中' },
+  { value: 'SUCCESS', label: '成功' },
+  { value: 'FAILED', label: '失败' }
 ]
 
 const items = ref([])
@@ -222,6 +252,7 @@ const total = ref(0)
 const customerPickerVisible = ref(false)
 const ticketDetailVisible = ref(false)
 const selectedTicketDetail = ref(null)
+const advancedFiltersVisible = ref(false)
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
@@ -262,6 +293,23 @@ const loadItems = async () => {
 const handleSearch = async () => {
   page.value = 1
   await loadItems()
+}
+
+const handleResetFilters = async () => {
+  Object.assign(filters, {
+    customerName: '',
+    rfqNo: '',
+    partNo: '',
+    version: '',
+    materialNo: '',
+    internalProjectNo: '',
+    customerOrderNo: '',
+    customerProjectNo: '',
+    allocationType: '',
+    mesProductionStatus: '',
+    dateRange: []
+  })
+  await handleSearch()
 }
 
 const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
@@ -358,9 +406,56 @@ onMounted(() => loadItems())
 </script>
 
 <style scoped>
-.locked-filter-group {
+.locked-filter-toolbar {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.locked-toolbar-main {
+  display: flex;
   width: 100%;
+  gap: 12px;
+  row-gap: 8px;
+  column-gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.locked-primary-filters {
+  flex: 1 1 680px;
+  min-width: 0;
+  justify-content: flex-start;
+  row-gap: 8px;
+  column-gap: 10px;
+  box-sizing: border-box;
+}
+
+.locked-batch-actions {
+  flex: 0 0 auto;
+  align-self: stretch;
   justify-content: flex-end;
+  align-content: flex-start;
+  row-gap: 8px;
+  column-gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--erp-border-soft);
+  box-sizing: border-box;
+}
+
+.locked-advanced-filters {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-soft);
+  justify-content: flex-start;
+  row-gap: 8px;
+  column-gap: 10px;
+  box-sizing: border-box;
 }
 
 .filter-input {
@@ -374,8 +469,18 @@ onMounted(() => loadItems())
 }
 
 .filter-select {
+  width: 140px;
+  flex: 0 0 140px;
+}
+
+.allocation-type-select {
   width: 150px;
-  flex: 0 0 150px;
+  flex-basis: 150px;
+}
+
+.production-status-select {
+  width: 150px;
+  flex-basis: 150px;
 }
 
 .filter-date-range {
@@ -411,8 +516,36 @@ onMounted(() => loadItems())
 }
 
 @media (max-width: 1200px) {
-  .locked-filter-group {
+  .locked-toolbar-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .locked-primary-filters,
+  .locked-batch-actions {
     justify-content: flex-start;
+  }
+
+  .locked-batch-actions {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .locked-primary-filters .filter-input,
+  .locked-primary-filters .filter-select,
+  .locked-advanced-filters .filter-input,
+  .locked-advanced-filters .filter-select {
+    width: auto;
+    min-width: 120px;
+    flex: 1 1 140px;
+  }
+
+  .filter-date-range {
+    width: 100%;
+    flex: 1 1 100%;
   }
 }
 </style>

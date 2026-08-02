@@ -55,6 +55,7 @@ describe('LockedItemManage guardrails', () => {
       'customerOrderNo',
       'customerProjectNo',
       'allocationType',
+      'mesProductionStatus',
       'dateRange'
     ]) {
       expect(pageSource).toContain(token)
@@ -67,35 +68,58 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).not.toContain('label="RFQ号"')
   })
 
-  test('uses module customer picker and freezes common locked-item filters', () => {
-    const toolbarStart = pageSource.indexOf('locked-filter-group')
-    const toolbarSource = pageSource.slice(toolbarStart, pageSource.indexOf('</section>', toolbarStart))
+  test('uses workbench filter layout with primary filters, batch actions, and collapsed advanced filters', () => {
+    expect(pageSource).toContain('locked-toolbar-main')
+    expect(pageSource).toContain('locked-primary-filters')
+    expect(pageSource).toContain('locked-batch-actions')
+    expect(pageSource).toContain('locked-advanced-filters')
+    expect(pageSource).toContain('advancedFiltersVisible = ref(false)')
+    expect(pageSource).toContain('advancedFiltersVisible ? \'收起筛选\' : \'高级筛选\'')
+    expect(pageSource).toContain('handleResetFilters')
+    expect(pageSource).toContain('下发MES生产')
+    expect(pageSource).toContain('LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION')
+    expect(pageSource).toContain('v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
+  })
+
+  test('uses module customer picker and freezes primary versus advanced locked-item filters', () => {
+    const primaryStart = pageSource.indexOf('locked-primary-filters')
+    const primarySource = pageSource.slice(primaryStart, pageSource.indexOf('</div>', primaryStart))
+    const advancedStart = pageSource.indexOf('locked-advanced-filters')
+    const advancedSource = pageSource.slice(advancedStart, pageSource.indexOf('</div>', advancedStart))
 
     expect(pageSource).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(pageSource).toContain('<CustomerPickerDialog')
     expect(pageSource).toContain('customer-scope="locked-item"')
     expect(pageSource).toContain('v-permission="\'market:locked-item:customer-select\'"')
     expect(pageSource).toContain('@select="handleCustomerSelected"')
-    expect(toolbarSource).not.toContain('v-model="filters.customerName"')
+    expect(primarySource).not.toContain('v-model="filters.customerName"')
+
+    for (const token of [
+      'filters.partNo',
+      'filters.version',
+      'filters.allocationType',
+      'filters.mesProductionStatus'
+    ]) {
+      expect(primarySource).toContain(token)
+    }
 
     for (const token of [
       'filters.rfqNo',
-      'filters.partNo',
-      'filters.version',
       'filters.internalProjectNo',
       'filters.customerOrderNo',
       'filters.customerProjectNo',
       'filters.materialNo',
-      'filters.allocationType',
       'filters.dateRange'
     ]) {
-      expect(toolbarSource).toContain(token)
+      expect(advancedSource).toContain(token)
+      expect(primarySource).not.toContain(token)
     }
 
     for (const removedCommonFilter of [
       'filters.wmsProductionOrderNo'
     ]) {
-      expect(toolbarSource).not.toContain(removedCommonFilter)
+      expect(primarySource).not.toContain(removedCommonFilter)
+      expect(advancedSource).not.toContain(removedCommonFilter)
     }
   })
 
