@@ -22,6 +22,7 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('完成锁库后的结果请在锁库零件模块查看')
     expect(source).toContain('暂无未完成流程的已提零件')
     expect(source).toContain('empty-text="暂无未完成流程的已提零件')
+    expect(source).not.toContain('delivered-active-pool-tip')
     expect(source).not.toContain("flowScope: 'ALL'")
     expect(source).not.toContain('flowScope: "ALL"')
     expect(source).not.toContain('items.value = (response.records || []).filter')

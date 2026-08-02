@@ -15,6 +15,7 @@ describe('Delivered item active pool stage 4 closure', () => {
     expect(deliveredPageSource).toContain('仅展示尚未完成物料号获取和锁库流程的提单零件')
     expect(deliveredPageSource).toContain('完成锁库后的结果请在锁库零件模块查看')
     expect(deliveredPageSource).toContain('暂无未完成流程的已提零件')
+    expect(deliveredPageSource).not.toContain('delivered-active-pool-tip')
     expect(deliveredPageSource).not.toContain("flowScope: 'ALL'")
     expect(deliveredPageSource).not.toContain('items.value = (response.records || []).filter')
   })

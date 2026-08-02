@@ -7,15 +7,6 @@
       </div>
     </header>
 
-    <el-alert
-      class="delivered-active-pool-tip"
-      type="info"
-      :closable="false"
-      show-icon
-      title="仅展示尚未完成物料号获取和锁库流程的提单零件"
-      description="完成锁库后的结果请在锁库零件模块查看。"
-    />
-
     <section class="erp-toolbar delivered-filter-toolbar">
       <div class="erp-toolbar-group delivered-filter-group">
         <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
@@ -620,10 +611,6 @@ onMounted(() => loadItems())
 
 .delivered-table-surface .erp-table-body {
   padding: var(--erp-space-3);
-}
-
-.delivered-active-pool-tip {
-  margin-bottom: 12px;
 }
 
 .delivered-row-actions {
