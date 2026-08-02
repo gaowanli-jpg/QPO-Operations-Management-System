@@ -91,6 +91,9 @@ public class MesMaterialSyncService {
         if (!STATUS_SUCCESS.equalsIgnoreCase(trimToNull(req.getStatus()))) {
             markFailed(ticket, mesRequestId, isBlank(req.getMessage()) ? "MES 回调失败" : req.getMessage());
             updateMesRequestFromCallback(mesRequestId, STATUS_FAILED, null, externalTraceId, req.getMessage(), true);
+            if (dedupService != null) {
+                dedupService.completeMasterFailed(mesRequestId, req.getMessage());
+            }
             recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", ticket, request, req, STATUS_FAILED, req.getMessage());
             return callbackResponse(false, "MES 回调失败", ticketId, mesRequestId, null);
         }
@@ -99,6 +102,9 @@ public class MesMaterialSyncService {
         }
         if (STATUS_SUCCESS.equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
             if (materialNo.equals(ticket.getMaterialNo().trim())) {
+                if (dedupService != null) {
+                    dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
+                }
                 return callbackResponse(true, "MES 回调已处理", ticketId, mesRequestId, materialNo);
             }
             recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, request, req, STATUS_FAILED,
@@ -109,6 +115,9 @@ public class MesMaterialSyncService {
         markCallbackSuccess(ticket, mesRequestId, materialNo, req.getMessage(), externalTraceId);
         updateMesRequestFromCallback(mesRequestId, STATUS_SUCCESS, materialNo, externalTraceId, req.getMessage(), true);
         syncSalesOrderItemMaterialNo(ticket, materialNo, req.getMessage());
+        if (dedupService != null) {
+            dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
+        }
         recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS", ticket, request, req, STATUS_SUCCESS, null);
         log.info("MES material callback completed ticketId={} mesRequestId={} materialNo={} durationMs={}",
                 ticketId, mesRequestId, materialNo, System.currentTimeMillis() - startedAt);
@@ -154,6 +163,14 @@ public class MesMaterialSyncService {
             if (!isBlank(materialNo)) {
                 markSuccess(ticket, mesRequestId, materialNo, resp == null ? null : resp.getMessage(), resp == null ? null : resp.getExternalTraceId());
                 updateMesRequest(mesRequestId, STATUS_SUCCESS, materialNo, resp == null ? null : resp.getExternalTraceId(), resp == null ? null : resp.getMessage(), true);
+                if (dedupService != null) {
+                    dedupService.completeMasterSuccess(
+                            mesRequestId,
+                            materialNo,
+                            resp == null ? null : resp.getMessage(),
+                            resp == null ? null : resp.getExternalTraceId()
+                    );
+                }
                 Map<String, Object> summary = summary(ticket, taskId, mesRequestId, materialNo, STATUS_SUCCESS, resp == null ? null : resp.getExternalTraceId());
                 recordAudit(
                         "DELIVERY_MES_MATERIAL_SYNC_SUCCESS",
@@ -173,6 +190,9 @@ public class MesMaterialSyncService {
             if (isCallbackPendingResponse(resp)) {
                 markCallbackPending(ticket, mesRequestId, resp.getExternalTraceId(), resp.getMessage());
                 updateMesRequest(mesRequestId, STATUS_CALLBACK_PENDING, null, resp.getExternalTraceId(), resp.getMessage(), false);
+                if (dedupService != null) {
+                    dedupService.markMasterCallbackPending(mesRequestId, resp.getExternalTraceId(), resp.getMessage());
+                }
                 Map<String, Object> summary = summary(ticket, taskId, mesRequestId, null, STATUS_CALLBACK_PENDING, resp.getExternalTraceId());
                 recordAudit(
                         "DELIVERY_MES_MATERIAL_SYNC_ACCEPTED",
@@ -192,6 +212,9 @@ public class MesMaterialSyncService {
         } catch (RuntimeException error) {
             markFailed(ticket, mesRequestId, error.getMessage());
             updateMesRequest(mesRequestId, STATUS_FAILED, null, null, error.getMessage(), true);
+            if (dedupService != null) {
+                dedupService.completeMasterFailed(mesRequestId, error.getMessage());
+            }
             recordAudit("DELIVERY_MES_MATERIAL_SYNC_FAILED", ticket, taskId, mesRequestId, null, STATUS_FAILED, null, error.getMessage());
             log.error("MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}",
                     ticket.getId(), taskId, ticket.getRfqId(), ticket.getPartNo(),
