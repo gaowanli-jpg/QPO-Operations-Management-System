@@ -12,9 +12,11 @@ describe('DeliveredItemManage MES callback pending state', () => {
     expect(pageSource).toContain("label: '待MES回调'")
   })
 
-  test('disables repeated MES material requests while waiting for callback', () => {
-    expect(pageSource).toContain("row.mesSyncStatus === 'CALLBACK_PENDING'")
-    expect(pageSource).toContain("label: '待回调'")
+  test('keeps callback pending visible while batch submission skips waiting rows', () => {
+    expect(pageSource).toContain("CALLBACK_PENDING: 'warning'")
+    expect(pageSource).toContain('statusText(row.mesSyncStatus)')
+    expect(pageSource).not.toContain("label: '待回调'")
+    expect(pageSource).not.toContain('@click="handleMesSync(row)"')
     expect(pageSource).toContain('已成功、处理中、待MES回调的行会自动跳过')
   })
 })

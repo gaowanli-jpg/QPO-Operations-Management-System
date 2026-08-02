@@ -48,15 +48,11 @@ describe('DeliveredItemManage MES dedup stage 5 display', () => {
       pageSource.indexOf('label="MES状态"'),
       pageSource.indexOf('label="WMS状态"')
     )
-    const actionSource = pageSource.slice(
-      pageSource.indexOf('const mesSyncAction = (row) =>'),
-      pageSource.indexOf('const handleMesSync = async')
-    )
 
     expect(statusColumnSource).toContain('dedupFollowerNote(row)')
     expect(statusColumnSource).toContain('关联待回调')
-    expect(actionSource).toContain("row.mesRequestRole === 'FOLLOWER'")
-    expect(actionSource).toContain("return { label: '待回调', type: 'warning', disabled: true }")
-    expect(actionSource).toContain("row.mesSyncStatus === 'CALLBACK_PENDING'")
+    expect(pageSource).toContain("item.mesRequestRole !== 'FOLLOWER'")
+    expect(pageSource).not.toContain('const mesSyncAction = (row) =>')
+    expect(pageSource).not.toContain('@click="handleMesSync(row)"')
   })
 })

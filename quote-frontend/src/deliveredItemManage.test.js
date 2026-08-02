@@ -81,14 +81,29 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('submitWmsAllocationBatch')
   })
 
-  test('wires WMS allocation action and locked-result entry after the WMS allocation phase', () => {
+  test('keeps WMS allocation as a batch toolbar action and locked-result entry as row navigation', () => {
     expect(source).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
     expect(source).toContain('market:delivered-item:wms-allocate')
-    expect(source).toContain('submitWmsAllocation')
-    expect(source).toContain('wmsAllocationAction(row)')
-    expect(source).toContain('提交WMS锁库')
-    expect(source).toContain('重试WMS')
+    expect(source).toContain('submitWmsAllocationBatch')
+    expect(source).toContain('handleBatchWmsAllocation')
+    expect(source).not.toContain('wmsAllocationAction(row)')
+    expect(source).not.toContain('@click="handleWmsAllocation(row)"')
     expect(source).toContain('查看锁库')
+  })
+
+  test('removes row-level MES and WMS fetch actions from delivered item operation column', () => {
+    const operationColumnSource = source.slice(
+      source.indexOf('label="操作"'),
+      source.indexOf('</el-table>', source.indexOf('label="操作"'))
+    )
+
+    expect(operationColumnSource).toContain('@click="openDetail(row)"')
+    expect(operationColumnSource).toContain('@click="openLockedItems(row)"')
+    expect(operationColumnSource).toContain('@click="openDrawingPreview(row)"')
+    expect(operationColumnSource).not.toContain('mesSyncAction(row)')
+    expect(operationColumnSource).not.toContain('wmsAllocationAction(row)')
+    expect(operationColumnSource).not.toContain('@click="handleMesSync(row)"')
+    expect(operationColumnSource).not.toContain('@click="handleWmsAllocation(row)"')
   })
 
   test('renders missing material numbers and malformed process routes safely', () => {

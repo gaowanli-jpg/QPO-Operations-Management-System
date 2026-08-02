@@ -24,28 +24,30 @@ const deferred = () => {
 }
 
 describe('delivery duplicate click guards', () => {
-  test('delivered item MES and WMS actions use ticket-scoped pending keys', () => {
+  test('delivered item MES and WMS toolbar actions use batch-scoped pending keys', () => {
     const source = readSource('components', 'DeliveredItemManage.vue')
 
     expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
     expect(source).toContain('const { isPending, runAction } = usePendingAction()')
-    expect(source).toContain('mesSync: (ticketId) => `delivery:mes-sync:${ticketId}`')
-    expect(source).toContain('wmsAllocation: (ticketId) => `delivery:wms-allocation:${ticketId}`')
-    expect(source).toContain(':loading="isMesSyncPending(row)"')
-    expect(source).toContain(':loading="isWmsAllocationPending(row)"')
-    expect(source).toContain(':disabled="mesSyncAction(row).disabled || isDeliveredRowActionPending(row)"')
-    expect(source).toContain(':disabled="wmsAllocationAction(row).disabled || isDeliveredRowActionPending(row)"')
+    expect(source).toContain("batchMesSync: () => 'delivery:mes-sync:batch'")
+    expect(source).toContain("batchWmsAllocation: () => 'delivery:wms-allocation:batch'")
+    expect(source).toContain(':loading="isBatchMesSyncPending"')
+    expect(source).toContain(':loading="isBatchWmsAllocationPending"')
+    expect(source).toContain(':disabled="selectedTicketIds.length === 0 || isBatchMesSyncPending"')
+    expect(source).toContain(':disabled="selectedTicketIds.length === 0 || isBatchWmsAllocationPending"')
+    expect(source).not.toContain('mesSync: (ticketId) => `delivery:mes-sync:${ticketId}`')
+    expect(source).not.toContain('wmsAllocation: (ticketId) => `delivery:wms-allocation:${ticketId}`')
   })
 
-  test('delivered item MES and WMS handlers wrap submissions in runAction', () => {
+  test('delivered item MES and WMS batch handlers wrap submissions in runAction', () => {
     const source = readSource('components', 'DeliveredItemManage.vue')
-    const mesBlock = blockBetween(source, 'const handleMesSync = async (row) =>', 'const wmsAllocationAction = (row) =>')
-    const wmsBlock = blockBetween(source, 'const handleWmsAllocation = async (row) =>', 'const openLockedItems = (row) =>')
+    const mesBlock = blockBetween(source, 'const handleBatchMesSync = async () =>', 'const handleBatchWmsAllocation = async () =>')
+    const wmsBlock = blockBetween(source, 'const handleBatchWmsAllocation = async () =>', 'const openLockedItems = (row) =>')
 
-    expect(mesBlock).toContain('return runAction(deliveredActionKeys.mesSync(row.id), async () =>')
-    expect(mesBlock).toContain('await syncMesMaterial(row.id)')
-    expect(wmsBlock).toContain('return runAction(deliveredActionKeys.wmsAllocation(row.id), async () =>')
-    expect(wmsBlock).toContain('await submitWmsAllocation(row.id)')
+    expect(mesBlock).toContain('return runAction(deliveredActionKeys.batchMesSync(), async () =>')
+    expect(mesBlock).toContain('await syncMesMaterialBatch(selectedTicketIds.value)')
+    expect(wmsBlock).toContain('return runAction(deliveredActionKeys.batchWmsAllocation(), async () =>')
+    expect(wmsBlock).toContain('await submitWmsAllocationBatch(selectedTicketIds.value)')
   })
 
   test('delivery document exports use button-level pending loading', () => {
@@ -79,20 +81,20 @@ describe('delivery duplicate click guards', () => {
     expect(source).not.toContain('usePendingAction')
   })
 
-  test('WMS allocation key suppresses duplicate submitWmsAllocation calls while pending', async () => {
+  test('WMS batch allocation key suppresses duplicate submitWmsAllocationBatch calls while pending', async () => {
     const { runAction } = usePendingAction()
     const pendingRequest = deferred()
-    const submitWmsAllocation = vi.fn(() => pendingRequest.promise)
+    const submitWmsAllocationBatch = vi.fn(() => pendingRequest.promise)
 
-    const firstClick = runAction('delivery:wms-allocation:310', submitWmsAllocation)
-    const secondClick = runAction('delivery:wms-allocation:310', submitWmsAllocation)
+    const firstClick = runAction('delivery:wms-allocation:batch', submitWmsAllocationBatch)
+    const secondClick = runAction('delivery:wms-allocation:batch', submitWmsAllocationBatch)
 
     await expect(secondClick).resolves.toBeUndefined()
-    expect(submitWmsAllocation).toHaveBeenCalledTimes(1)
+    expect(submitWmsAllocationBatch).toHaveBeenCalledTimes(1)
 
     pendingRequest.resolve({ taskId: 7001 })
 
     await expect(firstClick).resolves.toEqual({ taskId: 7001 })
-    expect(submitWmsAllocation).toHaveBeenCalledTimes(1)
+    expect(submitWmsAllocationBatch).toHaveBeenCalledTimes(1)
   })
 })

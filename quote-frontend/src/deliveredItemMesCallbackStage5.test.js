@@ -7,20 +7,13 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const pageSource = readFileSync(resolve(currentDir, 'components', 'DeliveredItemManage.vue'), 'utf8')
 
 describe('DeliveredItemManage MES callback stage 5 regression', () => {
-  test('keeps original MES action logic while adding callback pending guardrails', () => {
-    const actionSource = pageSource.slice(
-      pageSource.indexOf('const mesSyncAction = (row) =>'),
-      pageSource.indexOf('const handleMesSync = async')
-    )
-
-    expect(actionSource).toContain("row.mesSyncStatus === 'SUCCESS') return null")
-    expect(actionSource).toContain("row.mesSyncStatus === 'PROCESSING'")
-    expect(actionSource).toContain("return { label: '处理中', type: 'warning', disabled: true }")
-    expect(actionSource).toContain("row.mesSyncStatus === 'FAILED'")
-    expect(actionSource).toContain("return { label: '重试', type: 'warning', disabled: false }")
-    expect(actionSource).toContain("row.mesSyncStatus === 'CALLBACK_PENDING'")
-    expect(actionSource).toContain("return { label: '待回调', type: 'warning', disabled: true }")
-    expect(actionSource).toContain("return { label: '获取物料号', type: 'success', disabled: false }")
+  test('keeps MES callback guardrails while removing row-level MES submit actions', () => {
+    expect(pageSource).toContain("CALLBACK_PENDING: 'warning'")
+    expect(pageSource).toContain('statusText(row.mesSyncStatus)')
+    expect(pageSource).toContain('handleBatchMesSync')
+    expect(pageSource).not.toContain('const mesSyncAction = (row) =>')
+    expect(pageSource).not.toContain('const handleMesSync = async')
+    expect(pageSource).not.toContain('@click="handleMesSync(row)"')
   })
 
   test('keeps callback pending visible in filter, table tag and batch confirmation copy', () => {

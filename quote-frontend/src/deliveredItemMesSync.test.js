@@ -17,22 +17,21 @@ describe('DeliveredItemManage MES material sync guardrails', () => {
     expect(pageSource).toContain('v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"')
   })
 
-  test('freezes MES button display rules by ticket status', () => {
-    expect(pageSource).toContain('mesSyncAction(row)')
-    expect(pageSource).toContain('获取物料号')
-    expect(pageSource).toContain('重试')
-    expect(pageSource).toContain('处理中')
-    expect(pageSource).toContain("row.mesSyncStatus === 'PROCESSING'")
-    expect(pageSource).toContain("row.mesSyncStatus === 'FAILED'")
-    expect(pageSource).toContain("row.mesSyncStatus === 'SUCCESS') return null")
-    expect(pageSource).not.toContain("row.mesSyncStatus === 'SUCCESS' && row.materialNo")
+  test('keeps MES sync as a batch toolbar action instead of row-level fetch buttons', () => {
+    expect(pageSource).toContain('handleBatchMesSync')
+    expect(pageSource).toContain('syncMesMaterialBatch')
+    expect(pageSource).toContain('batchMesSync')
+    expect(pageSource).toContain("CALLBACK_PENDING: 'warning'")
+    expect(pageSource).not.toContain('mesSyncAction(row)')
+    expect(pageSource).not.toContain('@click="handleMesSync(row)"')
+    expect(pageSource).not.toContain('syncMesMaterial(row.id)')
   })
 
-  test('confirms submission and reports task id after MES sync task is created', () => {
+  test('confirms batch submission and reports task id after MES sync task is created', () => {
     expect(pageSource).toContain('ElMessageBox.confirm')
-    expect(pageSource).toContain('确认向 MES 获取该零件的物料号？')
-    expect(pageSource).toContain('syncMesMaterial(row.id)')
-    expect(pageSource).toContain('MES 物料号任务已提交，任务ID')
+    expect(pageSource).toContain('确认批量向 MES 获取')
+    expect(pageSource).toContain('syncMesMaterialBatch(selectedTicketIds.value)')
+    expect(pageSource).toContain('批量 MES 物料号任务已提交，任务ID')
     expect(pageSource).toContain('await loadItems()')
     expect(pageSource).toContain('ElMessage.error')
   })

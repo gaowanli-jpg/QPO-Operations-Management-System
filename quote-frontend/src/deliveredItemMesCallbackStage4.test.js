@@ -7,11 +7,12 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const pageSource = readFileSync(resolve(currentDir, 'components', 'DeliveredItemManage.vue'), 'utf8')
 
 describe('DeliveredItemManage MES callback detail display', () => {
-  test('shows callback pending state in filters, table labels, and disabled row action', () => {
+  test('shows callback pending state in filters, table labels, and batch skip copy', () => {
     expect(pageSource).toContain("{ value: 'CALLBACK_PENDING', label: '待MES回调' }")
     expect(pageSource).toContain("CALLBACK_PENDING: 'warning'")
-    expect(pageSource).toContain("row.mesSyncStatus === 'CALLBACK_PENDING'")
-    expect(pageSource).toContain("return { label: '待回调', type: 'warning', disabled: true }")
+    expect(pageSource).toContain('statusText(row.mesSyncStatus)')
+    expect(pageSource).not.toContain("return { label: '待回调', type: 'warning', disabled: true }")
+    expect(pageSource).not.toContain('@click="handleMesSync(row)"')
     expect(pageSource).toContain('已成功、处理中、待MES回调的行会自动跳过')
   })
 

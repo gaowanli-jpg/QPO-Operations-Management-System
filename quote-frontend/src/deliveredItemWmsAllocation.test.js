@@ -8,39 +8,42 @@ const pageSource = readFileSync(resolve(currentDir, 'components', 'DeliveredItem
 const apiSource = readFileSync(resolve(currentDir, 'services', 'deliveredItemApi.js'), 'utf8')
 
 describe('DeliveredItemManage WMS allocation guardrails', () => {
-  test('wires module-owned WMS allocation permission and action labels in delivered item page', () => {
+  test('wires module-owned WMS allocation permission to the batch toolbar action', () => {
     expect(pageSource).toContain('DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION')
     expect(pageSource).toContain('market:delivered-item:wms-allocate')
     expect(pageSource).toContain('v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"')
-    expect(pageSource).toContain('submitWmsAllocation')
-    expect(pageSource).toContain('提交WMS锁库')
-    expect(pageSource).toContain('重试WMS')
-    expect(pageSource).toContain('处理中')
+    expect(pageSource).toContain('submitWmsAllocationBatch')
+    expect(pageSource).toContain('handleBatchWmsAllocation')
+    expect(pageSource).toContain('批量获取库存数据')
+    expect(pageSource).not.toContain('wmsAllocationAction')
+    expect(pageSource).not.toContain('@click="handleWmsAllocation(row)"')
     expect(pageSource).toContain('查看锁库')
   })
 
-  test('implements WMS button display rules by material number and allocation status', () => {
+  test('keeps WMS status display but removes row-level WMS mutation rules', () => {
     expect(pageSource).toContain('wmsAllocateStatus')
     expect(pageSource).toContain('statusText(row.wmsAllocateStatus)')
-    expect(pageSource).toContain('wmsAllocationAction')
-    expect(pageSource).toContain('!row.materialNo')
-    expect(pageSource).toContain("row.wmsAllocateStatus === 'PENDING'")
-    expect(pageSource).toContain("row.wmsAllocateStatus === 'FAILED'")
-    expect(pageSource).toContain("row.wmsAllocateStatus === 'PROCESSING'")
+    expect(pageSource).not.toContain('wmsAllocationAction')
+    expect(pageSource).not.toContain('!row.materialNo')
+    expect(pageSource).not.toContain("row.wmsAllocateStatus === 'PENDING'")
+    expect(pageSource).not.toContain("row.wmsAllocateStatus === 'FAILED'")
+    expect(pageSource).not.toContain("row.wmsAllocateStatus === 'PROCESSING'")
     expect(pageSource).toContain("row.wmsAllocateStatus === 'SUCCESS'")
   })
 
-  test('posts WMS allocation then refreshes list with Element Plus feedback', () => {
+  test('posts batch WMS allocation then refreshes list with Element Plus feedback', () => {
     expect(apiSource).toContain('submitWmsAllocation')
     expect(apiSource).toContain('/api/order-delivery/tickets/${ticketId}/wms-allocation')
     expect(pageSource).toContain('ElMessageBox.confirm')
-    expect(pageSource).toContain('确认向 WMS 提交该零件锁库分配')
+    expect(pageSource).toContain('确认批量向 WMS 获取')
+    expect(pageSource).toContain('submitWmsAllocationBatch(selectedTicketIds.value)')
+    expect(pageSource).not.toContain('submitWmsAllocation(row.id)')
     expect(pageSource).toContain('锁库完成，结果已进入锁库零件模块')
     expect(pageSource).not.toContain('WMS 锁库任务已提交')
     expect(pageSource).not.toContain('批量 WMS 库存任务已提交')
     expect(pageSource).toContain('任务ID')
     expect(pageSource).toContain('await loadItems()')
-    expect(pageSource).toContain('WMS 锁库任务提交失败。')
+    expect(pageSource).toContain('批量 WMS 库存任务提交失败。')
   })
 
   test('links successful WMS allocations to locked item results with permission guard', () => {
