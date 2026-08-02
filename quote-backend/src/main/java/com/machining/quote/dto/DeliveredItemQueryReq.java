@@ -8,6 +8,7 @@ import java.time.LocalDate;
 public class DeliveredItemQueryReq {
     private Integer page;
     private Integer pageSize;
+    private String flowScope;
     private String customerName;
     private String rfqNo;
     private String partNo;

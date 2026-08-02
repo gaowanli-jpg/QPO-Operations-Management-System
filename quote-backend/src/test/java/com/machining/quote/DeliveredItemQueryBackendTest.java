@@ -24,6 +24,8 @@ class DeliveredItemQueryBackendTest {
             "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
     private static final Path QUERY_OPTIMIZATION_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V52__delivery_part_version_and_exact_customer_filters.sql");
+    private static final Path ACTIVE_POOL_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V75__delivered_item_active_pool_indexes.sql");
 
     @Test
     void deliveredItemDtosExposeJoinedOrderItemAndExternalSystemFields() throws IOException {
@@ -52,6 +54,7 @@ class DeliveredItemQueryBackendTest {
                 .contains(
                         "private Integer page;",
                         "private Integer pageSize;",
+                        "private String flowScope;",
                         "private String customerName;",
                         "private String rfqNo;",
                         "private String partNo;",
@@ -94,6 +97,11 @@ class DeliveredItemQueryBackendTest {
         assertThat(source)
                 .contains(
                         "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")",
+                        "applyFlowScope(query, req.getFlowScope())",
+                        "normalizeFlowScope",
+                        "FLOW_SCOPE_ACTIVE",
+                        "FLOW_SCOPE_COMPLETED",
+                        "FLOW_SCOPE_ALL",
                         "countDeliveredItems",
                         "return PageResult.of(List.of(), 0, safePage, safePageSize)",
                         "selectDeliveredItems",
@@ -112,6 +120,39 @@ class DeliveredItemQueryBackendTest {
         assertThat(source)
                 .as("Customer picker passes exact customer names, so the delivered-item query should not use fuzzy customer matching")
                 .doesNotContain("applyLike(query, \"ticket.customer_name\", req.getCustomerName())");
+    }
+
+    @Test
+    void deliveredItemActivePoolKeepsCompletedRowsOutOfDefaultListWithoutHidingDetails() throws IOException {
+        String req = read(DELIVERED_ITEM_QUERY_REQ);
+        String service = read(DELIVERED_ITEM_SERVICE);
+        String mapper = read(ORDER_DELIVERY_TICKET_MAPPER);
+
+        assertThat(req)
+                .contains("private String flowScope;");
+        assertThat(service)
+                .contains(
+                        "applyFlowScope(query, req.getFlowScope())",
+                        "FLOW_SCOPE_ACTIVE",
+                        "FLOW_SCOPE_COMPLETED",
+                        "FLOW_SCOPE_ALL",
+                        "NULLIF(BTRIM(ticket.material_no), '') IS NULL",
+                        "COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'",
+                        "COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'",
+                        "NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)",
+                        "EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)"
+                );
+        assertThat(service)
+                .as("Detail lookups must remain usable from locked items and audit traces")
+                .contains("public DeliveredItemDTO getTicket(Integer ticketId)")
+                .doesNotContain("getTicket(Integer ticketId, String flowScope)");
+        assertThat(mapper)
+                .as("Delivered item filtering must stay in database pagination, not Java/frontend post filtering")
+                .contains(
+                        "ORDER BY ticket.id DESC",
+                        "LIMIT #{limit} OFFSET #{offset}",
+                        "SELECT COUNT(*)"
+                );
     }
 
     @Test
@@ -137,6 +178,7 @@ class DeliveredItemQueryBackendTest {
     void deliveredItemCommonQueryIndexesStayFocusedOnRecommendedFields() throws IOException {
         String migration = read(QUERY_INDEX_MIGRATION);
         String optimizationMigration = read(QUERY_OPTIMIZATION_MIGRATION);
+        String activePoolMigration = read(ACTIVE_POOL_MIGRATION);
 
         assertThat(migration)
                 .contains(
@@ -154,6 +196,24 @@ class DeliveredItemQueryBackendTest {
                 .contains(
                         "idx_order_delivery_ticket_part_version",
                         "ON order_delivery_ticket(part_no, version, id)"
+                );
+        assertThat(activePoolMigration)
+                .as("Default delivered-item page is an indexed active pool, not a table move")
+                .contains(
+                        "idx_order_delivery_ticket_active_flow_id",
+                        "ON order_delivery_ticket(id DESC)",
+                        "NULLIF(BTRIM(material_no), '') IS NULL",
+                        "COALESCE(mes_sync_status, 'PENDING') <> 'SUCCESS'",
+                        "COALESCE(wms_allocate_status, 'PENDING') <> 'SUCCESS'",
+                        "idx_order_delivery_ticket_completed_flow_id",
+                        "ON order_delivery_ticket(mes_sync_status, wms_allocate_status, id DESC)",
+                        "idx_delivery_allocation_ticket",
+                        "ON order_delivery_ticket_allocation(ticket_id, id)"
+                )
+                .doesNotContain(
+                        "CREATE TABLE IF NOT EXISTS delivered_item_history",
+                        "DELETE FROM order_delivery_ticket",
+                        "INSERT INTO delivered_item_history"
                 );
     }
 

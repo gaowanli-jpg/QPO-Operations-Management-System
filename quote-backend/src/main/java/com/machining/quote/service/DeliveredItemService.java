@@ -14,6 +14,10 @@ import java.util.List;
 
 @Service
 public class DeliveredItemService {
+    private static final String FLOW_SCOPE_ACTIVE = "ACTIVE";
+    private static final String FLOW_SCOPE_COMPLETED = "COMPLETED";
+    private static final String FLOW_SCOPE_ALL = "ALL";
+
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
@@ -93,8 +97,42 @@ public class DeliveredItemService {
         if (req.getDateTo() != null) {
             query.le("ticket.delivery_date", req.getDateTo());
         }
+        applyFlowScope(query, req.getFlowScope());
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    private void applyFlowScope(QueryWrapper<DeliveredItemDTO> query, String flowScope) {
+        String scope = normalizeFlowScope(flowScope);
+        if (FLOW_SCOPE_ALL.equals(scope)) {
+            return;
+        }
+        if (FLOW_SCOPE_COMPLETED.equals(scope)) {
+            query.apply("NULLIF(BTRIM(ticket.material_no), '') IS NOT NULL");
+            query.eq("ticket.mes_sync_status", "SUCCESS");
+            query.eq("ticket.wms_allocate_status", "SUCCESS");
+            query.apply("EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)");
+            return;
+        }
+        query.and(active -> active
+                .apply("NULLIF(BTRIM(ticket.material_no), '') IS NULL")
+                .or()
+                .apply("COALESCE(ticket.mes_sync_status, 'PENDING') <> 'SUCCESS'")
+                .or()
+                .apply("COALESCE(ticket.wms_allocate_status, 'PENDING') <> 'SUCCESS'")
+                .or()
+                .apply("NOT EXISTS (SELECT 1 FROM order_delivery_ticket_allocation alloc_done WHERE alloc_done.ticket_id = ticket.id)"));
+    }
+
+    private String normalizeFlowScope(String flowScope) {
+        if (!hasText(flowScope)) {
+            return FLOW_SCOPE_ACTIVE;
+        }
+        String normalized = flowScope.trim().toUpperCase();
+        if (FLOW_SCOPE_COMPLETED.equals(normalized) || FLOW_SCOPE_ALL.equals(normalized)) {
+            return normalized;
+        }
+        return FLOW_SCOPE_ACTIVE;
     }
 
     private void applyLike(QueryWrapper<DeliveredItemDTO> query, String column, String value) {

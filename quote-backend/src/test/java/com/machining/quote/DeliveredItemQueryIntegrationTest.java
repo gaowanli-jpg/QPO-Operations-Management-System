@@ -32,6 +32,7 @@ class DeliveredItemQueryIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     private final List<Integer> ticketIds = new ArrayList<>();
+    private final List<Integer> allocationIds = new ArrayList<>();
     private final List<Integer> itemIds = new ArrayList<>();
     private final List<Integer> rfqIds = new ArrayList<>();
     private final List<Long> userIds = new ArrayList<>();
@@ -40,6 +41,7 @@ class DeliveredItemQueryIntegrationTest {
     @AfterEach
     void tearDown() {
         AuthContext.clear();
+        deleteByIds("order_delivery_ticket_allocation", allocationIds);
         deleteByIds("order_delivery_ticket", ticketIds);
         deleteByIds("item_quote_version", itemIds);
         deleteByIds("order_rfq", rfqIds);
@@ -95,7 +97,68 @@ class DeliveredItemQueryIntegrationTest {
                 .hasMessageContaining("No data permission");
     }
 
+    @Test
+    void defaultListShowsOnlyActiveFlowWhileCompletedAndAllScopesRemainQueryable() {
+        int legacyUserId = uniqueLegacyId();
+        long roleId = insertRole("ALL");
+        long userId = insertUser(legacyUserId);
+        linkUserRole(userId, roleId);
+        AuthContext.set(new AuthContext.SessionUser(legacyUserId, "delivered-active", "Delivered Active", "MARKET"));
+
+        int completed = createTicket("QPO-DI-DONE-" + UUID.randomUUID(), "ACME", "DONE", "A", "MAT-DONE", "/uploads/done.pdf",
+                "SUCCESS", "SUCCESS");
+        createAllocation(completed, "MAT-DONE", "DONE", "A", "ACME");
+        createTicket("QPO-DI-NOMAT-" + UUID.randomUUID(), "ACME", "NO-MAT", "A", null, "/uploads/no-mat.pdf",
+                "PENDING", "PENDING");
+        createTicket("QPO-DI-CALLBACK-" + UUID.randomUUID(), "ACME", "WAIT-MES", "A", null, "/uploads/wait.pdf",
+                "CALLBACK_PENDING", "PENDING");
+        createTicket("QPO-DI-WMSFAIL-" + UUID.randomUUID(), "ACME", "WMS-FAIL", "A", "MAT-WMS", "/uploads/wms-fail.pdf",
+                "SUCCESS", "FAILED");
+        createTicket("QPO-DI-MISSING-ALLOC-" + UUID.randomUUID(), "ACME", "MISSING-ALLOC", "A", "MAT-MISS", "/uploads/miss.pdf",
+                "SUCCESS", "SUCCESS");
+
+        DeliveredItemQueryReq activeReq = new DeliveredItemQueryReq();
+        activeReq.setPage(1);
+        activeReq.setPageSize(50);
+        PageResult<DeliveredItemDTO> activePage = deliveredItemService.listTickets(activeReq);
+
+        assertThat(partNos(activePage))
+                .contains("NO-MAT", "WAIT-MES", "WMS-FAIL", "MISSING-ALLOC")
+                .doesNotContain("DONE");
+
+        DeliveredItemQueryReq completedReq = new DeliveredItemQueryReq();
+        completedReq.setPage(1);
+        completedReq.setPageSize(50);
+        completedReq.setFlowScope("COMPLETED");
+        assertThat(partNos(deliveredItemService.listTickets(completedReq)))
+                .contains("DONE")
+                .doesNotContain("NO-MAT", "WAIT-MES", "WMS-FAIL", "MISSING-ALLOC");
+
+        DeliveredItemQueryReq allReq = new DeliveredItemQueryReq();
+        allReq.setPage(1);
+        allReq.setPageSize(50);
+        allReq.setFlowScope("ALL");
+        assertThat(partNos(deliveredItemService.listTickets(allReq)))
+                .contains("DONE", "NO-MAT", "WAIT-MES", "WMS-FAIL", "MISSING-ALLOC");
+
+        assertThat(deliveredItemService.getTicket(completed).getPartNo())
+                .as("Detail lookup remains available for locked-item traceability")
+                .isEqualTo("DONE");
+    }
+
     private int createTicket(String rfqNo, String customerName, String partNo, String version, String materialNo, String drawingUrl) {
+        return createTicket(rfqNo, customerName, partNo, version, materialNo, drawingUrl, "PENDING", "PENDING");
+    }
+
+    private int createTicket(
+            String rfqNo,
+            String customerName,
+            String partNo,
+            String version,
+            String materialNo,
+            String drawingUrl,
+            String mesSyncStatus,
+            String wmsAllocateStatus) {
         Integer rfqId = jdbcTemplate.queryForObject("""
                 INSERT INTO order_rfq (rfq_no, customer_name, status)
                 VALUES (?, ?, '已报价')
@@ -113,11 +176,29 @@ class DeliveredItemQueryIntegrationTest {
                     rfq_id, item_id, part_no, version, qty, material_no, mes_sync_status, wms_allocate_status,
                     process_route, material_data, delivery_date
                 )
-                VALUES (?, ?, ?, ?, 4, ?, 'PENDING', 'PENDING', '[]'::jsonb, '{}'::jsonb, CURRENT_DATE)
+                VALUES (?, ?, ?, ?, 4, ?, ?, ?, '[]'::jsonb, '{}'::jsonb, CURRENT_DATE)
                 RETURNING id
-                """, Integer.class, rfqId, itemId, partNo, version, materialNo);
+                """, Integer.class, rfqId, itemId, partNo, version, materialNo, mesSyncStatus, wmsAllocateStatus);
         ticketIds.add(ticketId);
         return ticketId;
+    }
+
+    private int createAllocation(Integer ticketId, String materialNo, String partNo, String version, String customerName) {
+        Integer allocationId = jdbcTemplate.queryForObject("""
+                INSERT INTO order_delivery_ticket_allocation (
+                    ticket_id, allocation_type, qty, material_no, part_no, version, customer_name, status
+                )
+                VALUES (?, 'IN_STOCK_LOCK', 4, ?, ?, ?, ?, 'ACTIVE')
+                RETURNING id
+                """, Integer.class, ticketId, materialNo, partNo, version, customerName);
+        allocationIds.add(allocationId);
+        return allocationId;
+    }
+
+    private List<String> partNos(PageResult<DeliveredItemDTO> page) {
+        return page.getRecords().stream()
+                .map(DeliveredItemDTO::getPartNo)
+                .toList();
     }
 
     private long insertRole(String dataScope) {
