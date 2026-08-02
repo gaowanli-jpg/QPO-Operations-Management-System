@@ -6,12 +6,14 @@
 
 > 阶段 5 收口说明：旧同步响应口径已废弃。MES 可以即时返回物料号，也可以返回已受理并后续回调；两种路径都必须原样返回 QPO 生成的 `mesRequestId`。
 
+> 阶段 6 收口说明：QPO 已支持同图号版本去重。去重键固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。相同 `图号 + 版本` 已有活跃主请求时，后续行会成为 QPO 内部关联等待行，不再重复请求 MES；已有唯一成功物料号时，后续行直接复用。MES 仍只回调主 `mesRequestId`，QPO fan-out 写回所有关联等待行。
+
 ## 1. 对接结论
 
 - 调用方向：QPO -> MES。
 - 调用方式：HTTP `POST`，请求体为 `application/json`。
 - 返回方式：MES 可以在同一次 HTTP 请求的响应体中同步返回物料号，也可以返回已受理并后续回调。
-- 回调要求：新口径需要 MES 响应和回调都原样带回 QPO 生成的 `mesRequestId`，后续通过 QPO 回调接口写回物料号。
+- 回调要求：新口径需要 MES 响应和回调都原样带回 QPO 生成的 `mesRequestId`，后续通过 QPO 回调接口写回物料号；同图号版本去重场景下，MES 仍只回调主 `mesRequestId`。
 - 文件访问：QPO 会传 `drawingUrl`，如果 MES 需要下载图纸，MES 服务器必须能在内网访问该 URL。
 
 简单理解：
@@ -22,7 +24,8 @@
   -> 任务里 QPO POST 调 MES
   -> MES 立即在 HTTP response 里返回 materialNo，或返回已受理待回调
   -> 如果立即返回 materialNo，QPO 保存 materialNo 和同步状态
-  -> 如果待回调，QPO 标记为待MES回调，MES 后续按 mesRequestId 回调 QPO
+  -> 如果待回调，QPO 标记为待MES回调，MES 后续按主 mesRequestId 回调 QPO
+  -> 如果有相同图号版本等待行，QPO 自行 fan-out 写回等待行，MES 不需要逐行回调
 ```
 
 ## 2. MES 需要提供给 QPO 的信息
@@ -207,12 +210,14 @@ QPO 前端支持批量选择多个已提零件后提交“获取物料号”任�
 用户选择 N 个零件
   -> QPO 创建 1 个批量 system_task
   -> 任务内部按 ticketId 顺序循环
-  -> 每个零件单独 POST 调一次 MES
-  -> 每个零件等待 MES 同步响应后再处理下一个
-  -> 最后 QPO 汇总成功、失败、跳过数量
+  -> 每行先按 图号 + 版本 做 QPO 内部去重判断
+  -> 只有 MASTER 主请求行会 POST 调 MES
+  -> FOLLOWER 关联等待行不调用 MES，等待主请求回调或即时成功分发
+  -> REUSED 复用行直接使用同图号版本唯一已确认物料号
+  -> 最后 QPO 汇总成功、失败、跳过、关联待回调、复用和实际提交 MES 数量
 ```
 
-也就是说，MES 会收到多次单零件请求，而不是一次包含多个零件的请求。
+也就是说，MES 仍会收到单零件请求，而不是一次包含多个零件的大请求；但同图号版本去重后，MES 只会收到需要真实处理的主请求，不会收到 QPO 内部关联等待行的重复请求。
 
 并发说明：
 
@@ -221,10 +226,11 @@ QPO 前端支持批量选择多个已提零件后提交“获取物料号”任�
 - QPO 当前后台任务线程池默认：核心线程 `2`，最大线程 `4`，队列 `50`。
 - 建议 MES 至少支持 `4` 个来自 QPO 的并发请求；如果 MES 支持更低并发，请提前告知 QPO 侧调整任务线程池或增加限流。
 - 批量中如果某行进入 `CALLBACK_PENDING`，QPO 会继续处理后续行，最终汇总 `callbackPendingCount`。
+- 同图号版本去重汇总字段：`dedupFollowerCount` 表示关联等待未重复发 MES 的数量；`reusedMaterialCount` 表示复用已确认物料号的数量；`submittedToMesCount` 表示实际提交 MES 的主请求数量。
 
 ## 6. MES 回调 QPO
 
-MES 返回待回调后，后续通过以下接口把正式物料号写回 QPO：
+MES 返回待回调后，后续通过以下接口把正式物料号写回 QPO。MES 仍只回调主 `mesRequestId`；关联等待行是 QPO 内部关系，MES 不需要分别回调每个相同图号版本零件。
 
 ```http
 POST /api/integrations/mes/material-callback
@@ -272,6 +278,7 @@ QPO 回调处理规则：
 
 - 按 `mesRequestId` 定位请求流水，按 `ticketId` 交叉校验；
 - 回调成功写入 `order_delivery_ticket.material_no`，状态变为 `SUCCESS`；
+- 如果该主请求存在同图号版本关联等待行，QPO fan-out 写回所有等待行，等待行状态同步变为 `SUCCESS`；
 - 销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段；
 - 重复相同回调幂等返回成功，不重复污染数据；
 - 同一 `mesRequestId` 返回不同 `materialNo` 时拒绝覆盖；

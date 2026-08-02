@@ -4,6 +4,8 @@
 
 > 阶段 5 收口说明：正式联调口径同时支持 **即时返回物料号** 和 **受理后回调物料号**。QPO 每次请求生成 `mesRequestId`，MES 响应和后续回调必须原样带回；回调接口为 `POST /api/integrations/mes/material-callback`。待回调响应下 `system_task` 按成功完成，提单行进入 `CALLBACK_PENDING`。本次不新增用户权限，继续使用 `market:delivered-item:mes-sync` 触发获取 / 重试；MES 回调接口使用机器 token，不挂用户权限。
 
+> 阶段 6 收口说明：第 19 号文档已把 MES 物料号同步扩展为 **同图号版本去重** 口径。QPO 对同一 `图号 + 版本` 同一时间只保留一个活跃 MES 主请求；同批量相同 `图号 + 版本` 只打 MES 一次；跨批次待回调时相同 `图号 + 版本` 不再打 MES；跨批次已成功且只有一个成功物料号时直接复用物料号；跨批次存在多个不同成功物料号时不自动复用，按正常请求调用 MES。MES 仍只回调主 `mesRequestId`，QPO 收到主请求即时成功或回调成功后负责 fan-out 写回所有关联等待行；销售订单 U9 同步前能看到等待行物料号已确认。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已经具备：
@@ -54,7 +56,10 @@
   -> 后端校验权限和数据范围
   -> 创建 system_task: MES_MATERIAL_SYNC
   -> ticket.mes_sync_status = PROCESSING
-  -> 异步调用 MES
+  -> 先按 图号 + 版本 判断是否可复用或关联活跃主请求
+  -> 如果可复用已确认物料号：不调用 MES，直接写 SUCCESS
+  -> 如果已有活跃主请求：不调用 MES，当前行作为 FOLLOWER 等待主请求
+  -> 如果没有可复用结果和活跃主请求：当前行成为 MASTER，异步调用 MES
   -> MES 情况 A：即时返回 materialNo
       -> ticket.material_no = materialNo
       -> ticket.mes_sync_status = SUCCESS
@@ -274,6 +279,7 @@ QPO 处理规则：
 - 超时，判定失败。
 - `materialNo` 去除首尾空格后保存，长度超过 100 拒绝保存并标记失败。
 - MES 返回待回调时，`system_task` 不长时间挂起，按成功完成；批量任务中该行计入 `callbackPendingCount`，不计入失败。
+- 同图号版本去重后，批量任务同时返回 `dedupFollowerCount`、`reusedMaterialCount`、`submittedToMesCount`：分别表示关联等待未重复发 MES、复用已确认物料号、实际提交 MES 的数量。
 
 ### 7.3 MES 回调 QPO
 
@@ -306,7 +312,7 @@ QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验
 
 权限：
 
-阶段 5 不新增用户权限，继续使用既有权限：
+阶段 5/阶段 6 不新增用户权限，继续使用既有权限：
 
 | 权限编码 | 类型 | 父级 | 中文 |
 | --- | --- | --- | --- |
@@ -374,6 +380,7 @@ public SystemTask submitMesMaterialSyncTask(Integer ticketId)
 职责：
 
 - 锁定 `order_delivery_ticket`。
+- 调用 `MesMaterialDedupService`，先按 `图号 + 版本` 判断是否可复用、是否已有活跃主请求、是否需要创建主请求。
 - 组装 MES 请求数据。
 - 更新 ticket 状态。
 - 调用 `MesMaterialClient`。
@@ -389,6 +396,14 @@ PENDING / FAILED -> PROCESSING -> CALLBACK_PENDING -> SUCCESS
 SUCCESS -> 拒绝重复提交
 PROCESSING -> 拒绝重复提交
 CALLBACK_PENDING -> 拒绝重复提交
+```
+
+同图号版本去重状态：
+
+```text
+PENDING / FAILED -> REUSED -> SUCCESS
+PENDING / FAILED -> FOLLOWER -> PROCESSING / CALLBACK_PENDING -> SUCCESS
+PENDING / FAILED -> MASTER -> PROCESSING -> SUCCESS / CALLBACK_PENDING / FAILED
 ```
 
 成功写入：
@@ -416,6 +431,22 @@ mes_sync_message = MES message 或 "MES accepted, waiting for callback"
 mes_request_id = QPO 本次请求 ID
 mes_external_task_id = MES 返回的 externalTraceId
 ```
+
+去重字段写入：
+
+```text
+mes_dedup_key = 图号 + 版本
+mes_request_role = MASTER / FOLLOWER / REUSED
+mes_master_ticket_id = FOLLOWER 关联的主提单行 ID
+mes_master_request_id = FOLLOWER 关联的主 mesRequestId
+```
+
+主请求成功分发：
+
+- MASTER 即时成功或回调成功时，QPO fan-out 写回所有 `order_delivery_ticket_mes_waiter` 等待行。
+- 等待行写入同一个 `materialNo`，状态变为 `SUCCESS`。
+- 销售订单来源等待行同步回写 `sales_order_item.material_no` 和 `material_no_status = 已确认`，因此销售订单 U9 同步前能看到等待行物料号已确认。
+- MES 仍只回调主 `mesRequestId`，不需要知道 QPO 内部有哪些关联等待行。
 
 请求前校验：
 
@@ -731,6 +762,18 @@ npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 
 ### 阶段 6：全量回归与提交
 
+阶段 6 以第 19 号同图号版本去重文档为准，验收口径如下：
+
+- `mvnw.cmd test` 通过。
+- `npm test` 通过。
+- `npm run build` 通过。
+- 同批量相同 `图号 + 版本` 只打 MES 一次。
+- 跨批次待回调时相同 `图号 + 版本` 不再打 MES。
+- 跨批次已成功且只有一个成功物料号时，相同 `图号 + 版本` 直接复用物料号。
+- 跨批次存在多个不同成功物料号时，相同 `图号 + 版本` 不自动复用，按正常请求调用 MES。
+- MES 回调一次可写回所有等待行。
+- 销售订单 U9 同步前能看到等待行物料号已确认。
+
 验收命令：
 
 ```powershell
@@ -742,7 +785,7 @@ npm test
 npm run build
 ```
 
-阶段 5 提交只应包含文档、回归测试和必要的轻量前端测试补充，不提交本地 `erp.env`。
+阶段 6 提交只应包含文档、回归测试和必要的轻量前后端测试补充，不提交本地 `erp.env`。
 
 ## 13. 完成定义
 
@@ -750,6 +793,7 @@ npm run build
 - MES 返回成功时，物料号写回 `order_delivery_ticket.material_no`。
 - MES 返回待回调时，已提零件进入 `CALLBACK_PENDING`，后台任务成功完成。
 - MES 回调成功时，物料号写回 `order_delivery_ticket.material_no`；销售订单来源同步回写 `sales_order_item.material_no` 和确认状态。
+- 同图号版本去重后，关联等待行不重复调用 MES；MES 仍只回调主 `mesRequestId`，QPO 负责分发写回等待行。
 - MES 返回失败或异常时，状态和失败摘要可见。
 - 操作日志可查提交、已受理待回调、即时成功、回调成功、失败和冲突。
 - 文件日志可通过 requestId、taskId 和 mesRequestId 排查。
