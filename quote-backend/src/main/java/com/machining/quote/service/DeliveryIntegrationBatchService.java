@@ -15,6 +15,16 @@ import java.util.Map;
 
 @Service
 public class DeliveryIntegrationBatchService {
+    private static final String TASK_MES_MATERIAL_BATCH_SYNC = "MES_MATERIAL_BATCH_SYNC";
+    private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
+    private static final String STATUS_DEDUP_FOLLOWING = "DEDUP_FOLLOWING";
+    private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_REUSE_SUCCESS = "REUSE_SUCCESS";
+    private static final String STATUS_SKIPPED = "SKIPPED";
+    private static final String STATUS_SUCCESS = "SUCCESS";
+    private static final String DEDUP_FOLLOW_EXISTING_ACTIVE = "FOLLOW_EXISTING_ACTIVE";
+    private static final String DEDUP_REUSE_SUCCESS = "REUSE_SUCCESS";
+
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired(required = false)
@@ -60,26 +70,24 @@ public class DeliveryIntegrationBatchService {
         for (Integer ticketId : normalizeTicketIds(ticketIds)) {
             OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
             if (isMesCallbackPending(ticket)) {
-                rows.add(row(ticketId, "CALLBACK_PENDING", "MES 物料号等待回调", null));
+                rows.add(row(ticketId, STATUS_CALLBACK_PENDING, "MES 物料号等待回调", null));
                 continue;
             }
             String skipReason = mesSkipReason(ticket);
             if (skipReason != null) {
-                rows.add(row(ticketId, "SKIPPED", skipReason, null));
+                rows.add(row(ticketId, STATUS_SKIPPED, skipReason, null));
                 continue;
             }
             try {
                 Object result = mesMaterialSyncService.syncMaterialNo(ticketId, taskId);
-                if (isCallbackPendingResult(result)) {
-                    rows.add(row(ticketId, "CALLBACK_PENDING", "MES 已受理，等待回调", result));
-                } else {
-                    rows.add(row(ticketId, "SUCCESS", "MES 物料号同步成功", result));
-                }
+                rows.add(mesResultRow(ticketId, result));
             } catch (RuntimeException error) {
-                rows.add(row(ticketId, "FAILED", safeMessage(error), null));
+                Map<String, Object> failed = row(ticketId, STATUS_FAILED, safeMessage(error), null);
+                failed.put("submittedToMes", true);
+                rows.add(failed);
             }
         }
-        return summary("MES_MATERIAL_BATCH_SYNC", taskId, rows);
+        return summary(TASK_MES_MATERIAL_BATCH_SYNC, taskId, rows);
     }
 
     public Map<String, Object> allocateWmsBatch(List<Integer> ticketIds, Long taskId) {
@@ -91,14 +99,14 @@ public class DeliveryIntegrationBatchService {
             OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
             String skipReason = wmsSkipReason(ticket);
             if (skipReason != null) {
-                rows.add(row(ticketId, "SKIPPED", skipReason, null));
+                rows.add(row(ticketId, STATUS_SKIPPED, skipReason, null));
                 continue;
             }
             try {
                 Object result = wmsAllocationService.allocate(ticketId, taskId);
-                rows.add(row(ticketId, "SUCCESS", "WMS 库存数据获取成功", result));
+                rows.add(row(ticketId, STATUS_SUCCESS, "WMS 库存数据获取成功", result));
             } catch (RuntimeException error) {
-                rows.add(row(ticketId, "FAILED", safeMessage(error), null));
+                rows.add(row(ticketId, STATUS_FAILED, safeMessage(error), null));
             }
         }
         return summary("WMS_ALLOCATION_BATCH", taskId, rows);
@@ -143,7 +151,39 @@ public class DeliveryIntegrationBatchService {
         row.put("message", abbreviate(message));
         if (result != null) {
             row.put("result", result);
+            if (result instanceof Map<?, ?> raw) {
+                Object dedupResult = raw.get("dedupResult");
+                Object dedupKey = raw.get("dedupKey");
+                if (dedupResult != null) {
+                    row.put("dedupResult", dedupResult);
+                }
+                if (dedupKey != null) {
+                    row.put("dedupKey", dedupKey);
+                }
+            }
         }
+        return row;
+    }
+
+    private Map<String, Object> mesResultRow(Integer ticketId, Object result) {
+        String dedupResult = dedupResult(result);
+        if (DEDUP_FOLLOW_EXISTING_ACTIVE.equals(dedupResult)) {
+            Map<String, Object> row = row(ticketId, STATUS_DEDUP_FOLLOWING, "已关联同图号版本 MES 主请求，等待回调", result);
+            row.put("submittedToMes", false);
+            return row;
+        }
+        if (DEDUP_REUSE_SUCCESS.equals(dedupResult)) {
+            Map<String, Object> row = row(ticketId, STATUS_REUSE_SUCCESS, "复用同图号版本已确认物料号", result);
+            row.put("submittedToMes", false);
+            return row;
+        }
+        if (isCallbackPendingResult(result)) {
+            Map<String, Object> row = row(ticketId, STATUS_CALLBACK_PENDING, "MES 已受理，等待回调", result);
+            row.put("submittedToMes", true);
+            return row;
+        }
+        Map<String, Object> row = row(ticketId, STATUS_SUCCESS, "MES 物料号同步成功", result);
+        row.put("submittedToMes", true);
         return row;
     }
 
@@ -152,16 +192,52 @@ public class DeliveryIntegrationBatchService {
         summary.put("taskType", taskType);
         summary.put("taskId", taskId);
         summary.put("totalCount", rows.size());
-        summary.put("successCount", count(rows, "SUCCESS"));
-        summary.put("callbackPendingCount", count(rows, "CALLBACK_PENDING"));
-        summary.put("failedCount", count(rows, "FAILED"));
-        summary.put("skippedCount", count(rows, "SKIPPED"));
+        if (TASK_MES_MATERIAL_BATCH_SYNC.equals(taskType)) {
+            summary.put("successCount", countAny(rows, STATUS_SUCCESS, STATUS_REUSE_SUCCESS));
+            summary.put("callbackPendingCount", countAny(rows, STATUS_CALLBACK_PENDING, STATUS_DEDUP_FOLLOWING));
+            summary.put("failedCount", count(rows, STATUS_FAILED));
+            summary.put("skippedCount", count(rows, STATUS_SKIPPED));
+            summary.put("dedupFollowerCount", count(rows, STATUS_DEDUP_FOLLOWING));
+            summary.put("reusedMaterialCount", count(rows, STATUS_REUSE_SUCCESS));
+            summary.put("submittedToMesCount", countSubmittedToMes(rows));
+        } else {
+            summary.put("successCount", count(rows, STATUS_SUCCESS));
+            summary.put("callbackPendingCount", count(rows, STATUS_CALLBACK_PENDING));
+            summary.put("failedCount", count(rows, STATUS_FAILED));
+            summary.put("skippedCount", count(rows, STATUS_SKIPPED));
+        }
         summary.put("results", rows);
         return summary;
     }
 
     private int count(List<Map<String, Object>> rows, String status) {
         return Math.toIntExact(rows.stream().filter(row -> status.equals(row.get("status"))).count());
+    }
+
+    private int countAny(List<Map<String, Object>> rows, String... statuses) {
+        return Math.toIntExact(rows.stream().filter(row -> {
+            Object rowStatus = row.get("status");
+            for (String status : statuses) {
+                if (status.equals(rowStatus)) {
+                    return true;
+                }
+            }
+            return false;
+        }).count());
+    }
+
+    private int countSubmittedToMes(List<Map<String, Object>> rows) {
+        return Math.toIntExact(rows.stream()
+                .filter(row -> Boolean.TRUE.equals(row.get("submittedToMes")))
+                .count());
+    }
+
+    private String dedupResult(Object result) {
+        if (!(result instanceof Map<?, ?> raw)) {
+            return null;
+        }
+        Object dedupResult = raw.get("dedupResult");
+        return dedupResult == null ? null : String.valueOf(dedupResult);
     }
 
     private boolean isCallbackPendingResult(Object result) {
