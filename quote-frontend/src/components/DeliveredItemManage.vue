@@ -649,34 +649,52 @@ onMounted(() => loadItems())
   align-items: stretch;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 .delivered-toolbar-main {
   display: flex;
   width: 100%;
   gap: 12px;
+  row-gap: 8px;
+  column-gap: 10px;
   align-items: flex-start;
   justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .delivered-primary-filters {
   flex: 1 1 680px;
   min-width: 0;
   justify-content: flex-start;
+  row-gap: 8px;
+  column-gap: 10px;
+  box-sizing: border-box;
 }
 
 .delivered-batch-actions {
   flex: 0 0 auto;
+  align-self: stretch;
   justify-content: flex-end;
+  align-content: flex-start;
+  row-gap: 8px;
+  column-gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--erp-border-soft);
+  box-sizing: border-box;
 }
 
 .delivered-advanced-filters {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--erp-border-soft);
   border-radius: 6px;
   background: var(--erp-surface-soft);
   justify-content: flex-start;
+  row-gap: 8px;
+  column-gap: 10px;
+  box-sizing: border-box;
 }
 
 .filter-input {
@@ -787,9 +805,31 @@ onMounted(() => loadItems())
     justify-content: flex-start;
   }
 
+  .delivered-batch-actions {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
+
   .mes-batch-result-header,
   .mes-batch-result-tags {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .delivered-primary-filters .filter-input,
+  .delivered-primary-filters .filter-select,
+  .delivered-advanced-filters .filter-input,
+  .delivered-advanced-filters .filter-select {
+    width: auto;
+    min-width: 120px;
+    flex: 1 1 140px;
+  }
+
+  .filter-date-range {
+    width: 100%;
+    flex: 1 1 100%;
   }
 }
 </style>

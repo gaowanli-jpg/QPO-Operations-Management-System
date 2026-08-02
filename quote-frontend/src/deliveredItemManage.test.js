@@ -197,6 +197,29 @@ describe('DeliveredItemManage foundation page', () => {
     expect(actionSource).toContain('批量获取库存数据')
   })
 
+  test('styles delivered item filters as a layered workbench toolbar', () => {
+    const styleSource = source.slice(source.indexOf('<style scoped>'))
+    const toolbarStyle = styleSource.slice(
+      styleSource.indexOf('.delivered-filter-toolbar'),
+      styleSource.indexOf('.filter-input')
+    )
+    const responsiveStyle = styleSource.slice(styleSource.indexOf('@media (max-width: 1200px)'))
+
+    expect(toolbarStyle).toContain('padding: 12px')
+    expect(toolbarStyle).toContain('box-sizing: border-box')
+    expect(toolbarStyle).toContain('row-gap: 8px')
+    expect(toolbarStyle).toContain('column-gap: 10px')
+    expect(toolbarStyle).toContain('align-self: stretch')
+    expect(toolbarStyle).toContain('padding-left: 12px')
+    expect(toolbarStyle).toContain('border-left: 1px solid var(--erp-border-soft)')
+    expect(toolbarStyle).toContain('background: var(--erp-surface-soft)')
+    expect(toolbarStyle).not.toContain('background: #')
+
+    expect(responsiveStyle).toContain('border-left: 0')
+    expect(responsiveStyle).toContain('padding-left: 0')
+    expect(responsiveStyle).toContain('width: 100%')
+  })
+
   test('sends flow stage filters to backend for precise MES and WMS business stages', () => {
     for (const label of ['全部未完成', '待获取物料号', '物料号处理中', '待MES回调', '物料号失败', '待获取库存', '库存处理中', '库存失败']) {
       expect(source).toContain(`label: '${label}'`)
