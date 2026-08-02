@@ -17,6 +17,9 @@ public class OrderDeliveryTicketMesRequest {
     private String mesRequestId;
     private Long systemTaskId;
     private String requestStatus;
+    private String dedupKey;
+    private String requestRole;
+    private Integer followerCount;
     private String mesExternalTaskId;
     private String materialNo;
     private String requestMessage;

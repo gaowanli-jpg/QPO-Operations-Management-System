@@ -55,6 +55,10 @@ public class OrderDeliveryTicket {
     private String mesExternalTaskId;
     private LocalDateTime mesCallbackReceivedAt;
     private String mesCallbackMessage;
+    private String mesDedupKey;
+    private String mesRequestRole;
+    private Integer mesMasterTicketId;
+    private String mesMasterRequestId;
     private String wmsAllocateStatus;
     private String wmsAllocateMessage;
     private LocalDateTime wmsAllocatedAt;

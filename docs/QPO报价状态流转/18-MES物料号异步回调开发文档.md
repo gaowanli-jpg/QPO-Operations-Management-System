@@ -181,7 +181,23 @@ CREATE INDEX IF NOT EXISTS idx_delivery_mes_request_external_task
 | `STALE` | 本次请求已不是该 ticket 的最新请求，后续回调不得覆盖当前结果。 |
 | `IGNORED` | 重复回调或无效回调已安全忽略。 |
 
-### 5.3 销售订单物料号回写字段
+### 5.3 同图号版本去重引用
+
+第 19 号文档 `19-MES物料号同图号版本去重开发文档.md` 在本回调模型之上补充同图号版本去重能力。去重键 `dedupKey` 固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。
+
+阶段 1 新增 `order_delivery_ticket_mes_waiter` 用于记录 follower 等待关系。MES 只回调主请求，QPO fan-out 写回等待行：
+
+```text
+同图号版本 ticket
+  -> 一个 MASTER 真实调用 MES
+  -> 其他 FOLLOWER 记录到 order_delivery_ticket_mes_waiter
+  -> MES 只回调主请求 mesRequestId
+  -> QPO fan-out 写回等待行
+```
+
+原 `mes_request_id` 仍只表示当前 ticket 自己真实发起的 MES 请求；follower 行不得共用主请求的 `mes_request_id`，只能通过 `mes_master_request_id` 和等待表追溯主请求。
+
+### 5.4 销售订单物料号回写字段
 
 销售订单来源提单行已经通过 `source_type = 'SALES_ORDER'`、`source_order_id`、`source_item_id` 指回独立销售订单主表 / 零件表。
 
