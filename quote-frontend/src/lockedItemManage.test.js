@@ -24,8 +24,26 @@ describe('LockedItemManage guardrails', () => {
     expect(apiSource).toContain('/api/order-delivery/allocations')
     expect(apiSource).toContain('listTicketAllocations')
     expect(apiSource).toContain('/api/order-delivery/tickets/${ticketId}/allocations')
+    expect(apiSource).toContain('getDeliveredItem')
+    expect(apiSource).toContain('/api/order-delivery/tickets/${ticketId}')
     expect(pageSource).toContain('listLockedItems')
     expect(pageSource).toContain('listTicketAllocations')
+  })
+
+  test('can trace a locked allocation back to original delivered ticket detail', () => {
+    expect(pageSource).toContain('getDeliveredItem')
+    expect(pageSource).toContain('openTicketDetail')
+    expect(pageSource).toContain('查看提单行')
+    expect(pageSource).toContain('ticketDetailVisible')
+    expect(pageSource).toContain('原始提单行详情')
+    expect(pageSource).toContain('selectedTicketDetail')
+    expect(pageSource).toContain('selectedTicketDetail.mesSyncStatus')
+    expect(pageSource).toContain('selectedTicketDetail.wmsAllocateStatus')
+    expect(pageSource).toContain('selectedTicketDetail.materialNo')
+    expect(pageSource).toContain('selectedTicketDetail.sourceType')
+    expect(pageSource).toContain('selectedTicketDetail.sourceOrderId')
+    expect(pageSource).toContain('selectedTicketDetail.processRoute')
+    expect(pageSource).toContain('market:delivered-item:view')
   })
 
   test('renders locked item filters and table columns', () => {
@@ -104,7 +122,8 @@ describe('LockedItemManage guardrails', () => {
       '交货日期',
       '材料描述',
       '表面处理',
-      '备注'
+      '备注',
+      '操作'
     ]
 
     const labels = Array.from(pageSource.matchAll(/label="([^"]+)"/g)).map(match => match[1])

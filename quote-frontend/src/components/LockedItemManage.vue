@@ -114,6 +114,19 @@
           <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.remark) }}</template>
           </el-table-column>
+          <el-table-column label="操作" width="120" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                v-permission="DELIVERED_ITEM_VIEW_PERMISSION"
+                size="small"
+                type="primary"
+                plain
+                @click="openTicketDetail(row)"
+              >
+                查看提单行
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <div class="erp-pagination">
@@ -130,6 +143,36 @@
       </div>
     </section>
 
+    <el-drawer v-model="ticketDetailVisible" title="原始提单行详情" size="62%">
+      <div v-if="selectedTicketDetail" class="detail-wrap">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="提单ID">{{ selectedTicketDetail.id }}</el-descriptions-item>
+          <el-descriptions-item label="来源类型">{{ formatDash(selectedTicketDetail.sourceType) }}</el-descriptions-item>
+          <el-descriptions-item label="来源订单ID">{{ formatDash(selectedTicketDetail.sourceOrderId) }}</el-descriptions-item>
+          <el-descriptions-item label="来源零件ID">{{ formatDash(selectedTicketDetail.sourceItemId) }}</el-descriptions-item>
+          <el-descriptions-item label="图号">{{ formatDash(selectedTicketDetail.partNo) }}</el-descriptions-item>
+          <el-descriptions-item label="版本">{{ formatDash(selectedTicketDetail.version) }}</el-descriptions-item>
+          <el-descriptions-item label="物料号">{{ formatDash(selectedTicketDetail.materialNo) }}</el-descriptions-item>
+          <el-descriptions-item label="MES状态">{{ statusText(selectedTicketDetail.mesSyncStatus) }}</el-descriptions-item>
+          <el-descriptions-item label="WMS状态">{{ statusText(selectedTicketDetail.wmsAllocateStatus) }}</el-descriptions-item>
+          <el-descriptions-item label="客户">{{ formatDash(selectedTicketDetail.customerName) }}</el-descriptions-item>
+          <el-descriptions-item label="RFQ号">{{ formatDash(selectedTicketDetail.rfqNo) }}</el-descriptions-item>
+          <el-descriptions-item label="内部项目号">{{ formatDash(selectedTicketDetail.internalProjectNo) }}</el-descriptions-item>
+          <el-descriptions-item label="客户订单号">{{ formatDash(selectedTicketDetail.customerOrderNo) }}</el-descriptions-item>
+          <el-descriptions-item label="客户项目号">{{ formatDash(selectedTicketDetail.customerProjectNo) }}</el-descriptions-item>
+          <el-descriptions-item label="材料">{{ formatMaterialName(selectedTicketDetail) }}</el-descriptions-item>
+          <el-descriptions-item label="材料类型">{{ formatMaterialShape(selectedTicketDetail.materialData) }}</el-descriptions-item>
+          <el-descriptions-item label="毛重">{{ formatWeight(selectedTicketDetail.materialGrossWeight) }}</el-descriptions-item>
+          <el-descriptions-item label="净重">{{ formatWeight(selectedTicketDetail.partNetWeight) }}</el-descriptions-item>
+        </el-descriptions>
+
+        <section class="detail-section">
+          <h3>工艺快照</h3>
+          <div class="route-preview">{{ formatProcessRoute(selectedTicketDetail.processRoute) }}</div>
+        </section>
+      </div>
+    </el-drawer>
+
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="filters.customerName"
@@ -144,9 +187,10 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { listLockedItems, listTicketAllocations } from '../services/deliveredItemApi'
+import { getDeliveredItem, listLockedItems, listTicketAllocations } from '../services/deliveredItemApi'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
+const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 
 const route = useRoute()
 const router = useRouter()
@@ -176,6 +220,8 @@ const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const customerPickerVisible = ref(false)
+const ticketDetailVisible = ref(false)
+const selectedTicketDetail = ref(null)
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
@@ -234,12 +280,34 @@ const showAllItems = () => {
   router.push({ path: '/locked-items' })
 }
 
+const openTicketDetail = async (row) => {
+  if (!row?.ticketId) {
+    ElMessage.warning('当前锁库结果缺少提单ID，无法反查原始提单行。')
+    return
+  }
+  try {
+    selectedTicketDetail.value = await getDeliveredItem(row.ticketId)
+    ticketDetailVisible.value = true
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '原始提单行详情加载失败。')
+  }
+}
+
 const allocationTypeMeta = (value) => allocationTypeOptions.find(option => option.value === value) || {
   label: value || '-',
   type: 'info'
 }
 
 const formatDash = (value) => (value === null || value === undefined || value === '') ? '-' : value
+
+const statusText = (value) => ({
+  PENDING: '未处理',
+  PROCESSING: '处理中',
+  CALLBACK_PENDING: '待MES回调',
+  SUCCESS: '成功',
+  FAILED: '失败'
+}[value] || formatDash(value))
 
 const normalizeObject = (value) => {
   if (!value) return {}
@@ -317,6 +385,29 @@ onMounted(() => loadItems())
 
 .locked-table-surface .erp-table-body {
   padding: var(--erp-space-3);
+}
+
+.detail-wrap {
+  display: grid;
+  gap: var(--erp-space-4);
+}
+
+.detail-section h3 {
+  margin: 0 0 var(--erp-space-2);
+  color: var(--erp-text-primary);
+  font-size: var(--erp-font-size-base);
+  font-weight: 600;
+}
+
+.route-preview {
+  min-height: 48px;
+  padding: var(--erp-space-3);
+  border: 1px solid var(--erp-border-light);
+  border-radius: var(--erp-radius-sm);
+  background: var(--erp-bg-soft);
+  color: var(--erp-text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 1200px) {

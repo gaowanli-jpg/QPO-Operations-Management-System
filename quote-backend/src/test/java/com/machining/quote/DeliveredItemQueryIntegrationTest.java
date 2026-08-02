@@ -3,8 +3,10 @@ package com.machining.quote;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.service.DeliveredItemService;
+import com.machining.quote.service.LockedItemService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DeliveredItemQueryIntegrationTest {
     @Autowired
     private DeliveredItemService deliveredItemService;
+    @Autowired
+    private LockedItemService lockedItemService;
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
@@ -146,6 +150,62 @@ class DeliveredItemQueryIntegrationTest {
                 .isEqualTo("DONE");
     }
 
+    @Test
+    void lockedAllocationCanTraceCompletedTicketDetailWithoutBypassingDataScope() {
+        String customerName = "TraceCustomer";
+        int legacyUserId = uniqueLegacyId();
+        long roleId = insertRole("CUSTOMER");
+        long userId = insertUser(legacyUserId);
+        linkUserRole(userId, roleId);
+        jdbcTemplate.update(
+                "INSERT INTO system_role_data_scope_customer (role_id, customer_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                roleId, customerName);
+        AuthContext.set(new AuthContext.SessionUser(legacyUserId, "locked-trace", "Locked Trace", "MARKET"));
+
+        int completed = createTicket("QPO-DI-TRACE-" + UUID.randomUUID(), customerName, "TRACE-PART", "A", "MAT-TRACE", "/uploads/trace.pdf",
+                "SUCCESS", "SUCCESS");
+        createAllocation(completed, "MAT-TRACE", "TRACE-PART", "A", customerName);
+
+        DeliveredItemQueryReq defaultReq = new DeliveredItemQueryReq();
+        defaultReq.setPage(1);
+        defaultReq.setPageSize(50);
+        assertThat(partNos(deliveredItemService.listTickets(defaultReq)))
+                .as("Completed flow rows are hidden from the default active pool")
+                .doesNotContain("TRACE-PART");
+
+        List<LockedItemDTO> allocations = lockedItemService.listTicketAllocations(completed);
+        assertThat(allocations)
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getTicketId()).isEqualTo(completed);
+                    assertThat(row.getMaterialNo()).isEqualTo("MAT-TRACE");
+                    assertThat(row.getPartNo()).isEqualTo("TRACE-PART");
+                });
+
+        DeliveredItemDTO detail = deliveredItemService.getTicket(completed);
+        assertThat(detail.getPartNo()).isEqualTo("TRACE-PART");
+        assertThat(detail.getMaterialNo()).isEqualTo("MAT-TRACE");
+        assertThat(detail.getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(detail.getWmsAllocateStatus()).isEqualTo("SUCCESS");
+        assertThat(detail.getSourceType()).isEqualTo("RFQ");
+        assertThat(detail.getSourceOrderId()).isNotNull();
+        assertThat(detail.getSourceItemId()).isNotNull();
+        assertThat(detail.getProcessRoute()).isNotNull();
+        assertThat(detail.getMaterialData()).isNotNull();
+
+        AuthContext.clear();
+        int noScopeUserId = uniqueLegacyId();
+        long noScopeRoleId = insertRole("NONE");
+        long noScopeSystemUserId = insertUser(noScopeUserId);
+        linkUserRole(noScopeSystemUserId, noScopeRoleId);
+        AuthContext.set(new AuthContext.SessionUser(noScopeUserId, "locked-none", "Locked None", "MARKET"));
+
+        assertThat(lockedItemService.listTicketAllocations(completed)).isEmpty();
+        assertThatThrownBy(() -> deliveredItemService.getTicket(completed))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("No data permission");
+    }
+
     private int createTicket(String rfqNo, String customerName, String partNo, String version, String materialNo, String drawingUrl) {
         return createTicket(rfqNo, customerName, partNo, version, materialNo, drawingUrl, "PENDING", "PENDING");
     }
@@ -173,12 +233,13 @@ class DeliveredItemQueryIntegrationTest {
         itemIds.add(itemId);
         Integer ticketId = jdbcTemplate.queryForObject("""
                 INSERT INTO order_delivery_ticket (
-                    rfq_id, item_id, part_no, version, qty, material_no, mes_sync_status, wms_allocate_status,
-                    process_route, material_data, delivery_date
+                    rfq_id, rfq_no, customer_name, item_id, source_type, source_order_id, source_item_id,
+                    part_no, version, qty, material_no, mes_sync_status, wms_allocate_status,
+                    process_route, material_data, material_gross_weight, part_net_weight, delivery_date
                 )
-                VALUES (?, ?, ?, ?, 4, ?, ?, ?, '[]'::jsonb, '{}'::jsonb, CURRENT_DATE)
+                VALUES (?, ?, ?, ?, 'RFQ', ?, ?, ?, ?, 4, ?, ?, ?, '[]'::jsonb, '{}'::jsonb, 1.250, 1.100, CURRENT_DATE)
                 RETURNING id
-                """, Integer.class, rfqId, itemId, partNo, version, materialNo, mesSyncStatus, wmsAllocateStatus);
+                """, Integer.class, rfqId, rfqNo, customerName, itemId, rfqId, itemId, partNo, version, materialNo, mesSyncStatus, wmsAllocateStatus);
         ticketIds.add(ticketId);
         return ticketId;
     }
@@ -186,11 +247,15 @@ class DeliveredItemQueryIntegrationTest {
     private int createAllocation(Integer ticketId, String materialNo, String partNo, String version, String customerName) {
         Integer allocationId = jdbcTemplate.queryForObject("""
                 INSERT INTO order_delivery_ticket_allocation (
-                    ticket_id, allocation_type, qty, material_no, part_no, version, customer_name, status
+                    ticket_id, source_type, source_order_id, source_item_id, allocation_type,
+                    qty, material_no, part_no, version, customer_name, process_route, material_data, status
                 )
-                VALUES (?, 'IN_STOCK_LOCK', 4, ?, ?, ?, ?, 'ACTIVE')
+                SELECT id, source_type, source_order_id, source_item_id, 'IN_STOCK_LOCK',
+                       4, ?, ?, ?, ?, process_route, material_data, 'ACTIVE'
+                FROM order_delivery_ticket
+                WHERE id = ?
                 RETURNING id
-                """, Integer.class, ticketId, materialNo, partNo, version, customerName);
+                """, Integer.class, materialNo, partNo, version, customerName, ticketId);
         allocationIds.add(allocationId);
         return allocationId;
     }
