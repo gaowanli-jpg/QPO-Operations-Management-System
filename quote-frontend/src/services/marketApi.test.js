@@ -120,6 +120,8 @@ describe('marketApi', () => {
     await marketApi.listSalesMatchItems(101, params)
     await marketApi.previewSalesOrderMatch(payload)
     await marketApi.applySalesOrderMatch({ ...payload, applyAllMatchedInSelectedOrders: false })
+    await marketApi.previewSalesOrderMatchByOrder(101)
+    await marketApi.applySalesOrderMatchByOrder(101)
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-match/customers', { params: { keyword: 'ACME' } })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-match/orders', { params })
@@ -131,6 +133,11 @@ describe('marketApi', () => {
     expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-match/apply', {
       method: 'POST',
       data: { ...payload, applyAllMatchedInSelectedOrders: false }
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/sales-match/orders/101/preview')
+    expect(request).toHaveBeenNthCalledWith(7, '/api/market/sales-match/orders/101/apply', {
+      method: 'POST',
+      data: undefined
     })
   })
 

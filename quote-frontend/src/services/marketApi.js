@@ -73,6 +73,10 @@ export const previewSalesOrderMatch = (payload) => postJson('/api/market/sales-m
 
 export const applySalesOrderMatch = (payload) => postJson('/api/market/sales-match/apply', payload)
 
+export const previewSalesOrderMatchByOrder = (salesOrderId) => request(`/api/market/sales-match/orders/${salesOrderId}/preview`)
+
+export const applySalesOrderMatchByOrder = (salesOrderId) => postJson(`/api/market/sales-match/orders/${salesOrderId}/apply`)
+
 export const listSalesOrderU9SyncOrders = (params = {}) => request('/api/market/u9-sync/orders', { params })
 
 export const previewSalesOrderU9Sync = (salesOrderId) => request(`/api/market/u9-sync/orders/${salesOrderId}/preview`)
