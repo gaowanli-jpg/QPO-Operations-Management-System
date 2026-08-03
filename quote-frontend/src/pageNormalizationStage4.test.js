@@ -27,11 +27,13 @@ describe('QPO Stage 4 dialog, form, and table action normalization', () => {
 
   test('normalizes order management dialog, upload, and action affordances', () => {
     const source = readSource('components', 'OrderManage.vue')
+    const supplementDialog = readSource('components', 'order', 'SupplementDrawingDialog.vue')
 
-    expect(source).toContain('erp-dialog-section')
-    expect(source).toContain('erp-dialog-footer')
+    expect(source).toContain('<SupplementDrawingDialog')
+    expect(supplementDialog).toContain('erp-dialog-section')
+    expect(supplementDialog).toContain('erp-dialog-footer')
     expect(source).toContain('erp-table-actions')
-    expect(source).toContain('erp-upload-surface')
+    expect(supplementDialog).toContain('erp-upload-surface')
   })
 
   test('keeps sales order shell on shared page affordances without legacy delete actions', () => {

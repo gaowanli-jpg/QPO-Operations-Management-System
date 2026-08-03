@@ -9,6 +9,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 const readComponent = (fileName) => readSource('components', fileName)
 const importDrawingPanelPath = resolve(currentDir, 'components', 'import', 'ImportDrawingUploadPanel.vue')
+const supplementDrawingDialogPath = resolve(currentDir, 'components', 'order', 'SupplementDrawingDialog.vue')
 
 describe('drawing upload workflow parity', () => {
   test('market RFQ and sales order imports share the same drawing upload panel component', () => {
@@ -48,17 +49,19 @@ describe('drawing upload workflow parity', () => {
   })
 
   test('order supplement supports dropping folders, choosing folders, and choosing multiple PDFs', () => {
-    const source = readComponent('OrderManage.vue')
+    const orderSource = readComponent('OrderManage.vue')
+    const source = readFileSync(supplementDrawingDialogPath, 'utf8')
 
-    expect(source).toContain('@drop.prevent="handleSupplementDrop"')
-    expect(source).toContain('ref="supplementFileInput"')
-    expect(source).toContain('ref="supplementFolderInput"')
+    expect(orderSource).toContain('<SupplementDrawingDialog')
+    expect(source).toContain('@drop.prevent="handleDrop"')
+    expect(source).toContain('ref="fileInput"')
+    expect(source).toContain('ref="folderInput"')
     expect(source).toContain('accept=".pdf"')
     expect(source).toContain('webkitdirectory directory multiple')
-    expect(source).toContain('@change="handleSupplementFileSelect"')
-    expect(source).toContain('@change="handleSupplementFolderSelect"')
-    expect(source).toContain('@click="triggerSupplementFileSelect"')
-    expect(source).toContain('@click="triggerSupplementFolderSelect"')
+    expect(source).toContain('@change="handleFileSelect"')
+    expect(source).toContain('@change="handleFolderSelect"')
+    expect(source).toContain('@click="triggerFileSelect"')
+    expect(source).toContain('@click="triggerFolderSelect"')
     expect(source).toContain('选择多个 PDF')
     expect(source).toContain('选择文件夹')
     expect(source).toContain('collectPdfFilesFromDataTransfer')

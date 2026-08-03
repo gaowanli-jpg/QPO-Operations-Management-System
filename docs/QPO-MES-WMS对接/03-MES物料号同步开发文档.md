@@ -10,6 +10,8 @@
 
 > 系统配置阶段 6 收口说明：QPO 通过数据中心获取 MES 物料号，出站配置由 **系统配置 > 出站接口/数据中心配置** 或 `ERP_DATA_CENTER_*` fallback 提供；数据中心调用 QPO 的入站配置由 **系统配置 > 入站接口 > MES 物料号回调** 管理，调用方为数据中心，业务来源为 MES。回调 URL 和机器 token 在页面生成、轮换、启停，真实 token 单独交付数据中心。`ERP_MES_CALLBACK_TOKEN` 与 `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为页面配置不存在时的老环境 deprecated fallback，不作为给数据中心的主要交付变量。
 
+> 数据中心统一对接阶段 8 收口：MES 物料号获取底层调用使用 `MES_MATERIAL_RESOLVE` endpoint，链路为 `QPO -> 数据中心 -> MES`。同图号版本去重仍由 QPO 负责，数据中心只需要转发主 `mesRequestId` 的 MES 结果；QPO 收到主请求即时成功或回调成功后负责 fan-out 写回 follower。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已经具备：
