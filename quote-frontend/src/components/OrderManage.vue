@@ -241,92 +241,18 @@
       </div>
     </el-drawer>
 
-    <el-dialog
+    <SupplementDrawingDialog
       v-model="supplementVisible"
+      v-model:files="supplementFiles"
       title="补传图纸"
-      width="720px"
-      :close-on-click-modal="false"
-    >
-      <div v-if="orderDetail" class="supplement-dialog">
-        <el-descriptions :column="1" border size="small" class="erp-dialog-section supplement-descriptions">
-          <el-descriptions-item label="订单">{{ orderDetail.orderInfo?.rfqNo || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户">
-            {{ orderDetail.orderInfo?.customerName || '-' }}
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <div class="erp-dialog-section missing-list">
-          <div class="section-subtitle">待补图零件</div>
-          <el-table :data="missingDrawingItems" border stripe height="180">
-            <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="version" label="版本" width="80" align="center" />
-            <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="qty" label="数量" width="70" align="center" />
-          </el-table>
-        </div>
-
-        <div class="erp-upload-surface upload-area">
-          <div v-permission="'market:order:supplement-drawing'"
-            class="custom-dropzone supplement-dropzone"
-            @dragover.prevent
-            @drop.prevent="handleSupplementDrop"
-          >
-            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-            <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
-            <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
-            <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-            <div class="supplement-upload-actions">
-              <el-button v-permission="'market:order:supplement-drawing'" plain class="workflow-soft-button folder-select-button" @click="triggerSupplementFileSelect">选择多个 PDF</el-button>
-              <el-button v-permission="'market:order:supplement-drawing'" plain class="workflow-soft-button folder-select-button" @click="triggerSupplementFolderSelect">选择文件夹</el-button>
-            </div>
-            <input type="file" ref="supplementFileInput" accept=".pdf" multiple class="hidden-input" @change="handleSupplementFileSelect" />
-            <input type="file" ref="supplementFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleSupplementFolderSelect" />
-          </div>
-        </div>
-
-        <div v-if="supplementFiles.length > 0" class="supplement-file-stats">
-          <h4>已选择待补传图纸（{{ supplementFiles.length }} 份）</h4>
-          <ul class="supplement-pdf-list">
-            <li v-for="(file, index) in supplementFiles" :key="`${file.name}-${file.size}-${index}`">
-              <span>{{ file.name }}</span>
-              <el-button v-permission="'market:order:supplement-drawing'" link type="danger" size="small" @click="removeSupplementFile(index)">移除</el-button>
-            </li>
-          </ul>
-        </div>
-
-        <div v-if="supplementResult" class="supplement-result">
-          <el-alert
-            :title="supplementResult.message"
-            type="success"
-            :closable="false"
-            show-icon
-          />
-          <el-tabs>
-            <el-tab-pane :label="`已绑定 ${supplementResult.boundCount || 0}`">
-              <result-list :items="supplementResult.boundItems" />
-            </el-tab-pane>
-            <el-tab-pane :label="`已跳过 ${supplementResult.alreadyBoundCount || 0}`">
-              <result-list :items="supplementResult.alreadyBoundItems" />
-            </el-tab-pane>
-            <el-tab-pane :label="`未匹配 ${supplementResult.unmatchedCount || 0}`">
-              <result-list :items="supplementResult.unmatchedDrawings" />
-            </el-tab-pane>
-            <el-tab-pane :label="`非PDF ${supplementResult.skippedCount || 0}`">
-              <result-list :items="supplementResult.skippedFiles" />
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="erp-dialog-footer">
-          <el-button @click="supplementVisible = false">关闭</el-button>
-          <el-button v-permission="'market:order:supplement-drawing'" type="primary" :loading="supplementUploadPending" :disabled="supplementFiles.length === 0 || supplementUploadPending" @click="submitSupplementDrawings">
-            上传并匹配
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+      :order-label="orderDetail?.orderInfo?.rfqNo || '-'"
+      :customer-name="orderDetail?.orderInfo?.customerName || '-'"
+      :missing-items="missingDrawingItems"
+      :result="supplementResult"
+      :pending="supplementUploadPending"
+      :permission="'market:order:supplement-drawing'"
+      @submit="submitSupplementDrawings"
+    />
 
     <CustomerPickerDialog
       v-model="customerPickerVisible"
@@ -338,11 +264,10 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
-import { collectPdfFilesFromDataTransfer, mergePdfFiles } from '../utils/drawingUpload'
+import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   discardOrder,
@@ -388,8 +313,6 @@ const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
 const supplementResult = ref(null)
-const supplementFileInput = ref(null)
-const supplementFolderInput = ref(null)
 const customerPickerVisible = ref(false)
 
 const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
@@ -479,25 +402,6 @@ const ORDER_STATUS_ACTIONS = [
   }
 ]
 const RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON = '询价订单已生成提单，不能废弃或回退'
-
-const ResultList = defineComponent({
-  props: {
-    items: {
-      type: Array,
-      default: () => []
-    }
-  },
-  setup(props) {
-    return () => props.items.length
-      ? h('ul', { class: 'result-list' }, props.items.map((item, index) => h('li', { key: index }, [
-          h('span', { class: 'result-main' }, item.partNo ? `${item.partNo} / ${item.version || '-'}` : (item.fileName || '-')),
-          item.description ? h('span', { class: 'result-sub' }, ` ｜ ${item.description}`) : null,
-          item.fileName && item.partNo ? h('span', { class: 'result-sub' }, ` ｜ ${item.fileName}`) : null,
-          item.reason ? h('span', { class: 'result-reason' }, ` ｜ ${item.reason}`) : null
-        ])))
-      : h('el-empty', { description: '无记录', imageSize: 60 })
-  }
-})
 
 const missingDrawingItems = computed(() => detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(orderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
@@ -697,44 +601,6 @@ const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
   supplementVisible.value = true
-}
-
-const addSupplementFiles = (files, sourceLabel) => {
-  const beforeCount = supplementFiles.value.length
-  supplementFiles.value = mergePdfFiles(supplementFiles.value, files)
-  const addedCount = supplementFiles.value.length - beforeCount
-  if (addedCount > 0) {
-    ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
-  } else {
-    ElMessage.warning('未找到新的 PDF 图纸。')
-  }
-}
-
-const handleSupplementDrop = async (e) => {
-  const pdfs = await collectPdfFilesFromDataTransfer(e.dataTransfer)
-  addSupplementFiles(pdfs, '提取')
-}
-
-const triggerSupplementFileSelect = () => {
-  supplementFileInput.value?.click()
-}
-
-const triggerSupplementFolderSelect = () => {
-  supplementFolderInput.value?.click()
-}
-
-const handleSupplementFileSelect = (e) => {
-  addSupplementFiles(e.target.files, '选择')
-  e.target.value = ''
-}
-
-const handleSupplementFolderSelect = (e) => {
-  addSupplementFiles(e.target.files, '从选中的文件夹中提取')
-  e.target.value = ''
-}
-
-const removeSupplementFile = (index) => {
-  supplementFiles.value.splice(index, 1)
 }
 
 const refreshCurrentDetail = async () => {

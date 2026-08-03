@@ -14,6 +14,7 @@ import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.util.DrawingPartNoResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -142,6 +143,10 @@ public class SalesOrderManageService {
         summary.put("itemCount", numberValue(row.get("item_count")).longValue());
         summary.put("boundDrawingCount", numberValue(row.get("bound_drawing_count")).longValue());
         summary.put("missingDrawingCount", numberValue(row.get("missing_drawing_count")).longValue());
+        summary.put("missingItems", listSalesOrderItems(salesOrderId).stream()
+                .filter(item -> isBlank(item.getDrawingUrl()))
+                .map(this::buildMissingSalesItem)
+                .toList());
         return summary;
     }
 
@@ -172,9 +177,9 @@ public class SalesOrderManageService {
     }
 
     @Transactional
-    public Map<String, Object> supplementItemDrawings(Long itemId, List<MultipartFile> drawings) {
-        if (itemId == null) {
-            throw new RuntimeException("销售订单零件 ID 不能为空");
+    public Map<String, Object> supplementOrderDrawings(Long salesOrderId, List<MultipartFile> drawings) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
         }
         if (drawings == null || drawings.isEmpty()) {
             throw new RuntimeException("请至少上传一份 PDF 图纸");
@@ -183,11 +188,19 @@ public class SalesOrderManageService {
             throw new RuntimeException("图纸文件服务不可用");
         }
 
-        SalesOrderItem item = salesOrderItemMapper.selectByIdForUpdate(itemId);
-        if (item == null) {
-            throw new RuntimeException("销售订单零件不存在");
+        SalesOrderHeader order = salesOrderHeaderMapper.selectByIdForUpdate(salesOrderId);
+        if (order == null) {
+            throw new RuntimeException("销售订单不存在");
         }
-        SalesOrderHeader order = requireSalesOrder(item.getSalesOrderId());
+        assertSalesOrderDataScope(order);
+        List<SalesOrderItem> items = listSalesOrderItems(salesOrderId);
+        Map<String, List<SalesOrderItem>> itemMap = new HashMap<>();
+        for (SalesOrderItem item : items) {
+            String normalizedPartNo = DrawingPartNoResolver.normalizePartNo(item.getPartNo());
+            if (!normalizedPartNo.isEmpty()) {
+                itemMap.computeIfAbsent(normalizedPartNo, key -> new ArrayList<>()).add(item);
+            }
+        }
 
         List<Map<String, Object>> boundItems = new ArrayList<>();
         List<Map<String, Object>> alreadyBoundItems = new ArrayList<>();
@@ -197,11 +210,20 @@ public class SalesOrderManageService {
         for (MultipartFile drawing : drawings) {
             String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
             if (isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
-                skippedFiles.add(buildFileResult(cleanFileName, item.getPartNo(), "非 PDF 文件"));
+                skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
                 continue;
             }
-            if (!isBlank(item.getDrawingUrl())) {
-                alreadyBoundItems.add(buildSalesItemResult(item, cleanFileName, "该销售订单零件已有图纸，未覆盖"));
+
+            String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMap.keySet());
+            List<SalesOrderItem> matchedItems = itemMap.get(partNoFromFileName);
+            if (matchedItems == null || matchedItems.isEmpty()) {
+                unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该销售订单对应零件"));
+                continue;
+            }
+            if (matchedItems.stream().allMatch(item -> !isBlank(item.getDrawingUrl()))) {
+                for (SalesOrderItem item : matchedItems) {
+                    alreadyBoundItems.add(buildSalesItemResult(item, cleanFileName, "该销售订单零件已有图纸，未覆盖"));
+                }
                 continue;
             }
 
@@ -211,12 +233,18 @@ public class SalesOrderManageService {
                     orderNo,
                     drawing,
                     ACTION_DRAWING_SUPPLEMENT,
-                    String.valueOf(itemId)
+                    String.valueOf(salesOrderId)
             );
-            item.setDrawingUrl(storedFile.publicPath());
-            item.setHasDrawing(true);
-            salesOrderItemMapper.updateById(item);
-            boundItems.add(buildSalesItemResult(item, cleanFileName, "已绑定"));
+            for (SalesOrderItem item : matchedItems) {
+                if (!isBlank(item.getDrawingUrl())) {
+                    alreadyBoundItems.add(buildSalesItemResult(item, cleanFileName, "该销售订单零件已有图纸，未覆盖"));
+                    continue;
+                }
+                item.setDrawingUrl(storedFile.publicPath());
+                item.setHasDrawing(true);
+                salesOrderItemMapper.updateById(item);
+                boundItems.add(buildSalesItemResult(item, cleanFileName, "已绑定"));
+            }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -234,8 +262,8 @@ public class SalesOrderManageService {
         if (auditService != null && !boundItems.isEmpty()) {
             auditService.record(
                     ACTION_DRAWING_SUPPLEMENT,
-                    "sales_order_item",
-                    itemId,
+                    "sales_order_header",
+                    salesOrderId,
                     null,
                     result,
                     "MARKET",
@@ -244,8 +272,12 @@ public class SalesOrderManageService {
                     null
             );
         }
-        log.info("Sales order drawing supplement completed salesOrderId={} itemId={} uploadCount={} boundCount={} alreadyBoundCount={} skippedCount={}",
-                order.getId(), itemId, drawings.size(), boundItems.size(), alreadyBoundItems.size(), skippedFiles.size());
+        log.info("Sales order drawing supplement completed salesOrderId={} uploadCount={} boundCount={} alreadyBoundCount={} unmatchedCount={} skippedCount={}",
+                order.getId(), drawings.size(), boundItems.size(), alreadyBoundItems.size(), unmatchedDrawings.size(), skippedFiles.size());
+        if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty()) {
+            log.warn("Sales order drawing supplement completed with warnings salesOrderId={} unmatchedCount={} skippedCount={}",
+                    order.getId(), unmatchedDrawings.size(), skippedFiles.size());
+        }
         return result;
     }
 
@@ -635,6 +667,17 @@ public class SalesOrderManageService {
             }
         }
         return "";
+    }
+
+    private Map<String, Object> buildMissingSalesItem(SalesOrderItem item) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("itemId", item.getId());
+        result.put("partNo", item.getPartNo());
+        result.put("version", item.getVersion());
+        result.put("description", item.getDescription());
+        result.put("qty", item.getQty());
+        result.put("lineNo", item.getLineNo());
+        return result;
     }
 
     private Map<String, Object> buildSalesItemResult(SalesOrderItem item, String fileName, String reason) {

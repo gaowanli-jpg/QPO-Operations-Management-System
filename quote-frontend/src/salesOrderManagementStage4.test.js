@@ -20,13 +20,14 @@ describe('sales order management stage 4 governance and drawings', () => {
       'getSalesOrderDrawingSummary',
       'discardSalesOrder',
       'restoreSalesOrder',
-      'supplementSalesOrderItemDrawings'
+      'supplementSalesOrderDrawings'
     ]) {
       expect(orderApi).toContain(`export const ${apiName}`)
       expect(salesOrderManage).toContain(apiName)
     }
     expect(orderApi).toContain('/api/market/sales-order-management/orders')
-    expect(orderApi).toContain('/api/market/sales-order-management/items/${itemId}/drawings')
+    expect(orderApi).toContain('/api/market/sales-order-management/orders/${salesOrderId}/supplement-drawings')
+    expect(orderApi).not.toContain('/api/market/sales-order-management/items/${itemId}/drawings')
   })
 
   test('shows only sales order governance buttons and never exposes delete behavior', () => {
@@ -41,13 +42,17 @@ describe('sales order management stage 4 governance and drawings', () => {
     expect(salesOrderManage).not.toContain('删除')
   })
 
-  test('supports row-level sales order drawing supplement bound to sales order item', () => {
+  test('supports order-level sales order drawing supplement with shared dialog', () => {
     expect(salesOrderManage).toContain("v-permission=\"'market:sales-order:supplement-drawing'\"")
-    expect(salesOrderManage).toContain('openSupplementDialog(scope.row)')
-    expect(salesOrderManage).toContain('supplementTargetItem')
-    expect(salesOrderManage).toContain('supplementSalesOrderItemDrawings(supplementTargetItem.value.id, formData)')
-    expect(salesOrderManage).toContain('collectPdfFilesFromDataTransfer')
-    expect(salesOrderManage).toContain('mergePdfFiles')
+    expect(salesOrderManage).toContain('<SupplementDrawingDialog')
+    expect(salesOrderManage).toContain(':missing-items="missingDrawingItems"')
+    expect(salesOrderManage).toContain(':permission="\'market:sales-order:supplement-drawing\'"')
+    expect(salesOrderManage).toContain('@click="openSupplementDialog"')
+    expect(salesOrderManage).toContain('supplementSalesOrderDrawings(salesOrderId, formData)')
+    expect(salesOrderManage).toContain('drawingSummary.value?.missingItems')
+    expect(salesOrderManage).not.toContain('openSupplementDialog(scope.row)')
+    expect(salesOrderManage).not.toContain('supplementTargetItem')
+    expect(salesOrderManage).not.toContain('supplementSalesOrderItemDrawings')
     expect(salesOrderManage).toContain('await fetchDetailItems()')
     expect(salesOrderManage).toContain('await loadOrders()')
   })

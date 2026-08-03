@@ -177,9 +177,9 @@ class SalesOrderManagementStage6RegressionTest {
         SalesOrderHeader order = salesOrder(801L, QuoteStatusWorkflow.QUOTED);
         SalesOrderItem item = item(8801L, 801L, QuoteStatusWorkflow.QUOTED, 0);
         item.setPartNo("SO-DRAW-1");
-        when(itemMapper.selectByIdForUpdate(8801L)).thenReturn(item);
-        when(headerMapper.selectById(801L)).thenReturn(order);
-        when(businessFileService.saveSalesOrderImportDrawing(eq("ACME"), eq("SO-801"), any(), eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("8801")))
+        when(headerMapper.selectByIdForUpdate(801L)).thenReturn(order);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(item));
+        when(businessFileService.saveSalesOrderImportDrawing(eq("ACME"), eq("SO-801"), any(), eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("801")))
                 .thenReturn(new BusinessFileService.StoredBusinessFile(
                         "/uploads/sales-orders/SO-801/SO-DRAW-1.pdf",
                         StorageType.LOCAL,
@@ -190,15 +190,39 @@ class SalesOrderManagementStage6RegressionTest {
                         12L,
                         null));
 
-        Map<String, Object> result = service.supplementItemDrawings(
-                8801L,
+        Map<String, Object> result = service.supplementOrderDrawings(
+                801L,
                 List.of(new MockMultipartFile("drawings", "SO-DRAW-1.pdf", "application/pdf", "pdf".getBytes(StandardCharsets.UTF_8))));
 
         assertThat(result).containsEntry("boundCount", 1);
         verify(itemMapper).updateById(org.mockito.Mockito.argThat(updated ->
                 Boolean.TRUE.equals(updated.getHasDrawing())
                         && "/uploads/sales-orders/SO-801/SO-DRAW-1.pdf".equals(updated.getDrawingUrl())));
-        verify(auditService).record(eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("sales_order_item"), eq(8801L), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+        verify(auditService).record(eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("sales_order_header"), eq(801L), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+    }
+
+    @Test
+    void drawingSummaryIncludesMissingItemsForPagedDetailDialog() {
+        SalesOrderHeader order = salesOrder(910L, QuoteStatusWorkflow.QUOTED);
+        SalesOrderItem missing = item(9901L, 910L, QuoteStatusWorkflow.QUOTED, 0);
+        missing.setPartNo("SUM-MISSING");
+        missing.setDescription("Needs drawing");
+        SalesOrderItem bound = item(9902L, 910L, QuoteStatusWorkflow.QUOTED, 0);
+        bound.setPartNo("SUM-BOUND");
+        bound.setDrawingUrl("/existing/SUM-BOUND.pdf");
+        when(headerMapper.selectById(910L)).thenReturn(order);
+        when(itemMapper.selectMaps(any(QueryWrapper.class))).thenReturn(List.of(Map.of(
+                "item_count", 2L,
+                "bound_drawing_count", 1L,
+                "missing_drawing_count", 1L
+        )));
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(missing, bound));
+
+        Map<String, Object> summary = service.getDrawingSummary(910L);
+
+        assertThat(summary).containsEntry("missingDrawingCount", 1L);
+        assertThat((List<?>) summary.get("missingItems")).hasSize(1);
+        assertThat(String.valueOf(summary.get("missingItems"))).contains("SUM-MISSING").doesNotContain("SUM-BOUND");
     }
 
     @Test

@@ -50,9 +50,10 @@ class SalesOrderManagementStage4Test {
                         "@RequirePermission(\"market:sales-order:discard\")",
                         "@PostMapping(\"/orders/{salesOrderId}/restore\")",
                         "@RequirePermission(\"market:sales-order:restore\")",
-                        "@PostMapping(value = \"/items/{itemId}/drawings\", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)",
+                        "@PostMapping(value = \"/orders/{salesOrderId}/supplement-drawings\", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)",
                         "@RequirePermission(\"market:sales-order:supplement-drawing\")"
                 )
+                .doesNotContain("/items/{itemId}/drawings")
                 .doesNotContain("@DeleteMapping")
                 .doesNotContain("market:order:delete")
                 .doesNotContain("market:history-order:");
@@ -72,8 +73,8 @@ class SalesOrderManagementStage4Test {
                         "Sales order status change completed",
                         "Sales order drawing supplement completed",
                         "saveSalesOrderImportDrawing",
-                        "sales_order_header",
-                        "sales_order_item"
+                        "DrawingPartNoResolver",
+                        "sales_order_header"
                 )
                 .doesNotContain(
                         "ItemQuoteVersionMapper",
@@ -140,13 +141,19 @@ class SalesOrderManagementStage4Test {
     }
 
     @Test
-    void supplementDrawingBindsToSalesOrderItem() throws Exception {
+    void supplementDrawingBindsMissingItemsAcrossSalesOrderByPartNo() throws Exception {
         SalesOrderHeader header = header(400L, QuoteStatusWorkflow.QUOTED);
-        SalesOrderItem item = item(700L, 400L, QuoteStatusWorkflow.QUOTED);
-        Fixture fixture = fixture(header, List.of(item), 0L);
-        when(fixture.itemMapper.selectByIdForUpdate(700L)).thenReturn(item);
-        when(fixture.headerMapper.selectById(400L)).thenReturn(header);
-        when(fixture.businessFileService.saveSalesOrderImportDrawing(eq("客户A"), eq("SO-400"), any(), eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("700")))
+        SalesOrderItem itemA = item(700L, 400L, QuoteStatusWorkflow.QUOTED);
+        itemA.setPartNo("P-700");
+        SalesOrderItem itemB = item(701L, 400L, QuoteStatusWorkflow.QUOTED);
+        itemB.setPartNo("P-700");
+        SalesOrderItem itemC = item(702L, 400L, QuoteStatusWorkflow.QUOTED);
+        itemC.setPartNo("P-702");
+        itemC.setDrawingUrl("/existing/P-702.pdf");
+        itemC.setHasDrawing(true);
+        Fixture fixture = fixture(header, List.of(itemA, itemB, itemC), 0L);
+        when(fixture.headerMapper.selectByIdForUpdate(400L)).thenReturn(header);
+        when(fixture.businessFileService.saveSalesOrderImportDrawing(eq("客户A"), eq("SO-400"), any(), eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("400")))
                 .thenReturn(new BusinessFileService.StoredBusinessFile(
                         "/uploads/客户A/SO-400/P-700.pdf",
                         StorageType.LOCAL,
@@ -157,16 +164,30 @@ class SalesOrderManagementStage4Test {
                         5L,
                         null
                 ));
-        MockMultipartFile drawing = new MockMultipartFile("drawings", "P-700.pdf", "application/pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile matchingDrawing = new MockMultipartFile("drawings", "P-700.pdf", "application/pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile alreadyBoundDrawing = new MockMultipartFile("drawings", "P-702.pdf", "application/pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile unmatchedDrawing = new MockMultipartFile("drawings", "NO-MATCH.pdf", "application/pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile skippedFile = new MockMultipartFile("drawings", "note.txt", "text/plain", "dummy".getBytes(StandardCharsets.UTF_8));
 
-        Object result = invokeSupplement(fixture.service, 700L, List.of(drawing));
+        Object result = invokeSupplement(fixture.service, 400L, List.of(matchingDrawing, alreadyBoundDrawing, unmatchedDrawing, skippedFile));
 
-        assertThat(String.valueOf(result)).contains("成功绑定 1 份");
+        assertThat(String.valueOf(result)).contains("成功绑定 2 份");
+        assertThat((Map<String, Object>) result)
+                .containsEntry("boundCount", 2)
+                .containsEntry("alreadyBoundCount", 1)
+                .containsEntry("unmatchedCount", 1)
+                .containsEntry("skippedCount", 1);
         ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
-        verify(fixture.itemMapper).updateById(itemCaptor.capture());
-        assertThat(itemCaptor.getValue().getDrawingUrl()).isEqualTo("/uploads/客户A/SO-400/P-700.pdf");
-        assertThat(itemCaptor.getValue().getHasDrawing()).isTrue();
-        verify(fixture.auditService).record(eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("sales_order_item"), eq(700L), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
+        verify(fixture.itemMapper, times(2)).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getAllValues())
+                .extracting(SalesOrderItem::getId)
+                .containsExactlyInAnyOrder(700L, 701L);
+        assertThat(itemCaptor.getAllValues())
+                .allSatisfy(updated -> {
+                    assertThat(updated.getDrawingUrl()).isEqualTo("/uploads/客户A/SO-400/P-700.pdf");
+                    assertThat(updated.getHasDrawing()).isTrue();
+                });
+        verify(fixture.auditService).record(eq("SALES_ORDER_DRAWING_SUPPLEMENT"), eq("sales_order_header"), eq(400L), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
     }
 
     private Object invokeStatusAction(SalesOrderManageService service, String action, Long salesOrderId, String reason) throws Exception {
@@ -183,10 +204,10 @@ class SalesOrderManagementStage4Test {
         }
     }
 
-    private Object invokeSupplement(SalesOrderManageService service, Long itemId, List<MultipartFile> drawings) throws Exception {
-        Method method = SalesOrderManageService.class.getMethod("supplementItemDrawings", Long.class, List.class);
+    private Object invokeSupplement(SalesOrderManageService service, Long salesOrderId, List<MultipartFile> drawings) throws Exception {
+        Method method = SalesOrderManageService.class.getMethod("supplementOrderDrawings", Long.class, List.class);
         try {
-            return method.invoke(service, itemId, drawings);
+            return method.invoke(service, salesOrderId, drawings);
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;

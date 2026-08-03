@@ -104,11 +104,11 @@ public class SalesOrderManageController {
         return salesOrderManageService.restore(salesOrderId, req == null ? new OrderStatusChangeReq() : req);
     }
 
-    @PostMapping(value = "/items/{itemId}/drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/orders/{salesOrderId}/supplement-drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:sales-order:supplement-drawing")
-    public Map<String, Object> supplementItemDrawings(
-            @PathVariable Long itemId,
+    public Map<String, Object> supplementOrderDrawings(
+            @PathVariable Long salesOrderId,
             @RequestParam("drawings") List<MultipartFile> drawings) {
-        return salesOrderManageService.supplementItemDrawings(itemId, drawings);
+        return salesOrderManageService.supplementOrderDrawings(salesOrderId, drawings);
     }
 }

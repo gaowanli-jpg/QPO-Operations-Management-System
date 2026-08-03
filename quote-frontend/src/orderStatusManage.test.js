@@ -99,8 +99,8 @@ describe('order status management stage 0 guardrails', () => {
     expect(orderManage).toContain("supplementDrawings: (orderId) => `order:supplement-drawings:${orderId || 'none'}`")
     expect(orderManage).toContain(':loading="isOrderStatusPending(scope.row)"')
     expect(orderManage).toContain(':disabled="isOrderStatusPending(scope.row)"')
-    expect(orderManage).toContain(':loading="supplementUploadPending"')
-    expect(orderManage).toContain(':disabled="supplementFiles.length === 0 || supplementUploadPending"')
+    expect(orderManage).toContain(':pending="supplementUploadPending"')
+    expect(orderManage).toContain('v-model:files="supplementFiles"')
   })
 
   test('wraps order status changes and supplement uploads with runAction guards', () => {

@@ -78,7 +78,7 @@ export const restoreSalesOrder = (salesOrderId, payload = {}) => request(`/api/m
   data: payload
 })
 
-export const supplementSalesOrderItemDrawings = (itemId, formData) => request(`/api/market/sales-order-management/items/${itemId}/drawings`, {
+export const supplementSalesOrderDrawings = (salesOrderId, formData) => request(`/api/market/sales-order-management/orders/${salesOrderId}/supplement-drawings`, {
   method: 'POST',
   data: formData,
   headers: { 'Content-Type': 'multipart/form-data' }
