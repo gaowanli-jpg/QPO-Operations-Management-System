@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+﻿import { describe, expect, test } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,19 +40,22 @@ describe('QPO system integration config frontend', () => {
     expect(systemConfigManage).not.toContain('name="integration"')
   })
 
-  test('renders U9 MES WMS outbound table dialog and data center reserved card', () => {
+  test('renders U9 MES WMS fallback table and data center endpoint copy', () => {
     expect(integrationPanel).toContain('system-integration-config-panel')
     expect(integrationPanel).toContain('出站接口')
-    expect(integrationPanel).toContain('当前激活配置概览')
-    expect(integrationPanel).toContain('出站接口配置列表')
+    expect(integrationPanel).toContain('当前出站配置概览')
+    expect(integrationPanel).toContain('直连 fallback 配置列表')
     expect(integrationPanel).toContain('新增出站接口配置')
     expect(integrationPanel).toContain('编辑出站接口配置')
     expect(integrationPanel).toContain('U9')
     expect(integrationPanel).toContain('MES')
     expect(integrationPanel).toContain('WMS')
-    expect(integrationPanel).toContain('数据中心')
-    expect(integrationPanel).toContain('预留')
-    expect(integrationPanel).toContain('当前版本未接入')
+    expect(integrationPanel).toContain('数据中心连接配置')
+    expect(integrationPanel).toContain('功能接口配置')
+    expect(integrationPanel).toContain('MES_MATERIAL_RESOLVE')
+    expect(integrationPanel).toContain('WMS_INVENTORY_ALLOCATE')
+    expect(integrationPanel).toContain('U9_SALES_ORDER_SYNC')
+    expect(integrationPanel).toContain('MES_PRODUCTION_DISPATCH')
     expect(integrationPanel).toContain('authLoginPath')
     expect(integrationPanel).toContain('salesOrderCreatePath')
     expect(integrationPanel).toContain('materialPath')
@@ -61,6 +64,7 @@ describe('QPO system integration config frontend', () => {
     expect(integrationPanel).toContain('authToken')
     expect(integrationPanel).toContain('show-password')
     expect(integrationPanel).toContain('******')
+    expect(integrationPanel).not.toContain('当前版本未接入')
     expect(integrationPanel).not.toContain('MES 回调 token')
   })
 

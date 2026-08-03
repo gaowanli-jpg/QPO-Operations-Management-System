@@ -3,20 +3,20 @@
     <section class="erp-surface system-config-panel-toolbar">
       <div>
         <h2 class="erp-section-title">出站接口</h2>
-        <p class="erp-page-description">管理 QPO 调用 U9、MES、WMS 所需的地址、认证、超时和测试状态。</p>
+        <p class="erp-page-description">管理 QPO 出站接口/数据中心配置；数据中心负责转发到 MES、WMS、U9，旧直连配置仅作为 deprecated fallback。</p>
       </div>
       <div class="erp-page-actions system-integration-create-actions">
-        <el-button v-permission="'system:config:integration:update'" type="primary" @click="openCreate('U9')">新增 U9 配置</el-button>
-        <el-button v-permission="'system:config:integration:update'" @click="openCreate('MES')">新增 MES 配置</el-button>
-        <el-button v-permission="'system:config:integration:update'" @click="openCreate('WMS')">新增 WMS 配置</el-button>
+        <el-button v-permission="'system:config:integration:update'" type="primary" @click="openCreate('U9')">新增直连 U9 fallback</el-button>
+        <el-button v-permission="'system:config:integration:update'" @click="openCreate('MES')">新增直连 MES fallback</el-button>
+        <el-button v-permission="'system:config:integration:update'" @click="openCreate('WMS')">新增直连 WMS fallback</el-button>
         <el-button :loading="loading" @click="loadAll">刷新</el-button>
       </div>
     </section>
 
     <section class="erp-surface system-integration-active-card">
       <div class="erp-section-header">
-        <h2 class="erp-section-title">当前激活配置概览</h2>
-        <span class="system-config-table-note">业务调用优先使用激活配置；未配置时保留环境变量 fallback。</span>
+        <h2 class="erp-section-title">当前出站配置概览</h2>
+        <span class="system-config-table-note">数据中心连接配置为新口径；旧 U9 / MES / WMS 激活配置仅用于兼容 fallback。</span>
       </div>
       <div class="system-integration-summary-grid">
         <article v-for="system in systemCards" :key="system.code" class="system-integration-summary-card">
@@ -35,16 +35,35 @@
 
     <section class="erp-surface system-integration-data-center-card">
       <div class="erp-section-header">
-        <h2 class="erp-section-title">数据中心</h2>
-        <el-tag type="info" effect="plain">预留</el-tag>
+        <h2 class="erp-section-title">数据中心连接配置</h2>
+        <el-tag type="success" effect="plain">新口径</el-tag>
       </div>
-      <p class="system-config-table-note">后续用于统一主数据或跨系统数据同步，当前版本未接入；不提供保存、测试、激活或停用入口。</p>
+      <p class="system-config-table-note">用于维护 QPO 调用数据中心的 Base URL、Token URL、Client ID、Client Secret、grant_type 和超时；页面配置缺失时回退到 ERP_DATA_CENTER_* 环境变量。</p>
+      <div class="system-data-center-endpoint-grid">
+        <article class="system-data-center-endpoint-card">
+          <strong>MES_MATERIAL_RESOLVE</strong>
+          <span>获取物料号 / MES / POST</span>
+        </article>
+        <article class="system-data-center-endpoint-card">
+          <strong>WMS_INVENTORY_ALLOCATE</strong>
+          <span>获取库存信息 / WMS / POST</span>
+        </article>
+        <article class="system-data-center-endpoint-card">
+          <strong>U9_SALES_ORDER_SYNC</strong>
+          <span>U9同步 / U9 / POST</span>
+        </article>
+        <article class="system-data-center-endpoint-card">
+          <strong>MES_PRODUCTION_DISPATCH</strong>
+          <span>下发 MES 生产 / MES / POST</span>
+        </article>
+      </div>
+      <p class="system-config-table-note">功能接口配置按 endpointCode 唯一维护 path、method、timeout、requestAdapter、responseAdapter 和说明性 schema；写操作继续由 system:config:integration:update 控制。</p>
     </section>
 
     <section class="erp-table-surface system-config-table-surface">
       <div class="erp-table-header">
-        <h2 class="erp-table-title">出站接口配置列表</h2>
-        <span class="system-config-table-note">密钥字段仅展示 ******；留空或传 ****** 时后端沿用原密钥。</span>
+        <h2 class="erp-table-title">直连 fallback 配置列表</h2>
+        <span class="system-config-table-note">仅用于数据中心配置缺失或应急回退；密钥字段仅展示 ******，留空或传 ****** 时后端沿用原密钥。</span>
       </div>
       <div class="erp-table-body">
         <el-table :data="configs" border v-loading="loading" empty-text="暂无出站接口配置">
@@ -344,9 +363,9 @@ const systemCards = computed(() => [
     label: '数据中心',
     active: false,
     reserved: true,
-    name: '预留',
-    baseUrl: '当前版本未接入',
-    lastTest: '暂不支持测试'
+    name: '数据中心连接配置',
+    baseUrl: 'ERP_DATA_CENTER_* / 页面配置 fallback',
+    lastTest: '功能接口配置按 endpointCode 唯一维护'
   }
 ])
 
@@ -417,7 +436,7 @@ const validateForm = () => {
       return false
     }
     if (!form.id && !form.clientSecret) {
-      ElMessage.warning('新增 U9 配置必须填写 clientSecret')
+      ElMessage.warning('新增直连 U9 fallback 必须填写 clientSecret')
       return false
     }
   }
@@ -595,6 +614,33 @@ onMounted(loadAll)
 
 .system-integration-data-center-card .system-config-table-note {
   padding: 0 var(--erp-space-4);
+}
+
+.system-data-center-endpoint-grid {
+  display: grid;
+  gap: var(--erp-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  padding: var(--erp-space-4);
+}
+
+.system-data-center-endpoint-card {
+  background: var(--erp-surface-muted);
+  border: 1px solid var(--erp-border-color);
+  border-radius: var(--erp-radius-md);
+  display: grid;
+  gap: var(--erp-space-1);
+  padding: var(--erp-space-3);
+}
+
+.system-data-center-endpoint-card strong {
+  color: var(--erp-text-primary);
+  font-family: var(--erp-font-family-mono, monospace);
+  font-size: var(--erp-font-size-sm);
+}
+
+.system-data-center-endpoint-card span {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
 }
 
 .system-config-table-surface .erp-table-body {

@@ -32,8 +32,8 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
             "..", "docs", "QPO-MES-WMS对接", "08-MES物料号回调接口对接说明.md");
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
-    private static final Path PERMISSION_RENAME_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V79__rename_integration_permissions_to_outbound.sql");
+    private static final Path DATA_CENTER_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V81__data_center_integration_config.sql");
 
     @Test
     void systemConfigDocsDescribeOutboundInboundSplitAndKeepInboundDetailsInStage4Doc() throws IOException {
@@ -58,7 +58,7 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
     void permissionAndAuditDocsUseOutboundAndInboundGovernanceTerms() throws IOException {
         assertThat(read(PERMISSION_CATALOG_DOC))
                 .contains(
-                        "出站接口配置",
+                        "出站接口/数据中心配置",
                         "`system:config:integration:update`",
                         "`system:config:inbound:update`",
                         "`system:config:inbound:token-rotate`")
@@ -120,17 +120,17 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
     void defaultPermissionNamesAndAuditLabelsUseOutboundTermWithoutChangingCodes() {
         assertThat(readUnchecked(PERMISSION_SERVICE))
                 .contains(
-                        "\"system:config:integration:update\", \"维护出站接口配置\"",
-                        "\"system:config:integration:test\", \"测试出站接口配置\"",
-                        "\"system:config:integration:activate\", \"激活出站接口配置\"");
-        assertThat(readUnchecked(PERMISSION_RENAME_MIGRATION))
+                        "\"system:config:integration:update\", \"维护出站接口/数据中心配置\"",
+                        "\"system:config:integration:test\", \"测试出站接口/数据中心配置\"",
+                        "\"system:config:integration:activate\", \"激活出站接口/数据中心配置\"");
+        assertThat(readUnchecked(DATA_CENTER_MIGRATION))
                 .contains(
                         "system:config:integration:update",
-                        "维护出站接口配置",
+                        "维护出站接口/数据中心配置",
                         "system:config:integration:test",
-                        "测试出站接口配置",
+                        "测试出站接口/数据中心配置",
                         "system:config:integration:activate",
-                        "激活出站接口配置");
+                        "激活出站接口/数据中心配置");
 
         PermissionService permissionService = new PermissionService();
         assertThat(String.valueOf(permissionService.getPermissionInfo(null, "ADMIN")))
