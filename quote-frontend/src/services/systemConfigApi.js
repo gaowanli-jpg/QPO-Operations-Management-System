@@ -48,6 +48,39 @@ export const disableIntegrationConfig = (id) => request(`/api/system/integration
   method: 'PUT'
 })
 
+export const listDataCenterConfigs = () => request('/api/system/data-center-configs')
+
+export const saveDataCenterConfig = (payload) => {
+  const id = payload?.id
+  return request(id ? `/api/system/data-center-configs/${id}` : '/api/system/data-center-configs', {
+    method: id ? 'PUT' : 'POST',
+    data: payload
+  })
+}
+
+export const testDataCenterToken = (id) => request(`/api/system/data-center-configs/${id}/test-token`, {
+  method: 'POST'
+})
+
+export const activateDataCenterConfig = (id) => request(`/api/system/data-center-configs/${id}/activate`, {
+  method: 'PUT'
+})
+
+export const disableDataCenterConfig = (id) => request(`/api/system/data-center-configs/${id}/disable`, {
+  method: 'PUT'
+})
+
+export const listDataCenterEndpoints = () => request('/api/system/data-center-endpoints')
+
+export const saveDataCenterEndpoint = (endpointCode, payload) => request(`/api/system/data-center-endpoints/${endpointCode}`, {
+  method: 'PUT',
+  data: payload
+})
+
+export const testDataCenterEndpoint = (endpointCode) => request(`/api/system/data-center-endpoints/${endpointCode}/test`, {
+  method: 'POST'
+})
+
 export const listInboundCallbackConfigs = () => request('/api/system/inbound-callback-configs')
 
 export const getMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback')
