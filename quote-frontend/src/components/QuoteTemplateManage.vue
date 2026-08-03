@@ -38,7 +38,30 @@
                 <el-descriptions-item label="大小">
                   {{ formatSize(templateStatus.size) }}
                 </el-descriptions-item>
+                <el-descriptions-item label="表头校验行">
+                  第 {{ templateStatus.headerRowNumber }} 行
+                </el-descriptions-item>
               </el-descriptions>
+              <el-form class="template-config-form" label-position="top">
+                <el-form-item label="表头校验行">
+                  <div class="template-config-row">
+                    <el-input-number v-model="templateConfig.headerRowNumber" :min="2" :step="1" controls-position="right" />
+                    <el-button
+                      v-permission="'market:template:upload'"
+                      type="primary"
+                      plain
+                      :loading="isPending(quoteTemplateActionKeys.saveConfig)"
+                      :disabled="isPending(quoteTemplateActionKeys.saveConfig)"
+                      @click="saveTemplateConfig"
+                    >
+                      保存配置
+                    </el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+              <p class="template-config-note">
+                默认两行表头结构：第 {{ templateStatus.groupHeaderRowNumber }} 行为分组表头，第 {{ templateStatus.headerRowNumber }} 行用于字段校验，第 {{ templateStatus.detailStartRowNumber }} 行开始写入零件明细。
+              </p>
             </div>
           </el-col>
 
@@ -46,7 +69,7 @@
             <div class="erp-surface template-panel">
               <div class="erp-section-title template-section-title">上传并替换模板</div>
               <el-alert
-                title="模板第 8 行必须包含：序号、图号、物料描述、图纸状态、材料名称、表面处理、版本、数量、单位、含税单价、含税总价、交货周期、备注。"
+                :title="`模板第 ${templateStatus.headerRowNumber} 行必须包含：序号、图号、物料描述、图纸状态、材料名称、表面处理、版本、数量、单位、含税单价、含税总价、交货周期、备注。`"
                 type="info"
                 show-icon
                 :closable="false"
@@ -86,7 +109,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, UploadFilled } from '@element-plus/icons-vue'
-import { getQuoteTemplate, saveQuoteTemplate } from '../services/adminApi'
+import { getQuoteTemplate, saveQuoteTemplate, updateQuoteTemplateConfig } from '../services/adminApi'
 import { usePendingAction } from '../composables/usePendingAction'
 
 const loading = ref(false)
@@ -95,13 +118,20 @@ const selectedFile = ref(null)
 const { isPending, runAction } = usePendingAction()
 
 const quoteTemplateActionKeys = {
+  saveConfig: 'market:template:config-save',
   upload: 'market:template:upload'
 }
 const templateStatus = reactive({
   exists: false,
   fileName: '',
   updatedAt: '',
-  size: 0
+  size: 0,
+  headerRowNumber: 8,
+  groupHeaderRowNumber: 7,
+  detailStartRowNumber: 9
+})
+const templateConfig = reactive({
+  headerRowNumber: 8
 })
 
 const loadStatus = async () => {
@@ -112,8 +142,12 @@ const loadStatus = async () => {
       exists: !!response?.exists,
       fileName: response?.fileName || '',
       updatedAt: response?.updatedAt || '',
-      size: response?.size || 0
+      size: response?.size || 0,
+      headerRowNumber: Number(response?.headerRowNumber || 8),
+      groupHeaderRowNumber: Number(response?.groupHeaderRowNumber || 7),
+      detailStartRowNumber: Number(response?.detailStartRowNumber || 9)
     })
+    templateConfig.headerRowNumber = templateStatus.headerRowNumber
   } catch (error) {
     ElMessage.error(error.response?.data?.message || '报价单模板状态加载失败。')
   } finally {
@@ -142,6 +176,23 @@ const handleExceed = (files) => {
   if (file) {
     uploadRef.value?.handleStart(file)
   }
+}
+
+const saveTemplateConfig = async () => {
+  const headerRowNumber = Number(templateConfig.headerRowNumber)
+  if (!Number.isInteger(headerRowNumber) || headerRowNumber < 2) {
+    ElMessage.warning('表头校验行必须大于等于 2。')
+    return
+  }
+  return runAction(quoteTemplateActionKeys.saveConfig, async () => {
+    try {
+      const response = await updateQuoteTemplateConfig({ headerRowNumber })
+      ElMessage.success(response.message || '报价单模板配置已保存。')
+      await loadStatus()
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || '报价单模板配置保存失败。')
+    }
+  })
 }
 
 const uploadTemplate = async () => {
@@ -199,6 +250,23 @@ onMounted(loadStatus)
 
 .template-section-title {
   margin-bottom: var(--erp-space-3);
+}
+
+.template-config-form {
+  margin-top: var(--erp-space-4);
+}
+
+.template-config-row {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-3);
+}
+
+.template-config-note {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+  line-height: 1.6;
+  margin: 0;
 }
 
 .template-alert {

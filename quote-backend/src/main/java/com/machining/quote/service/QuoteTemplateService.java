@@ -1,5 +1,6 @@
 package com.machining.quote.service;
 
+import com.machining.quote.dto.QuoteTemplateConfigReq;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -34,7 +35,8 @@ public class QuoteTemplateService {
     private static final Logger log = LoggerFactory.getLogger(QuoteTemplateService.class);
     private static final String TEMPLATE_FILENAME = "quote-template.xlsx";
     private static final String META_FILENAME = "quote-template.properties";
-    private static final int HEADER_ROW_INDEX = 7;
+    private static final String HEADER_ROW_NUMBER_KEY = "headerRowNumber";
+    private static final int DEFAULT_HEADER_ROW_NUMBER = 8;
     private static final List<String> REQUIRED_HEADERS = List.of(
             "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
@@ -55,6 +57,10 @@ public class QuoteTemplateService {
     public Map<String, Object> status() {
         Path templatePath = templatePath();
         Map<String, Object> result = new LinkedHashMap<>();
+        TemplateLayout layout = templateLayout();
+        result.put("headerRowNumber", layout.headerRowNumber());
+        result.put("groupHeaderRowNumber", layout.headerRowNumber() - 1);
+        result.put("detailStartRowNumber", layout.headerRowNumber() + 1);
         result.put("exists", Files.exists(templatePath));
         if (!Files.exists(templatePath)) {
             return result;
@@ -69,6 +75,25 @@ public class QuoteTemplateService {
             result.put("updatedAt", properties.getProperty("updatedAt", ""));
         }
         return result;
+    }
+
+    public Map<String, Object> updateConfig(QuoteTemplateConfigReq req) {
+        int headerRowNumber = normalizeHeaderRowNumber(req == null ? null : req.getHeaderRowNumber());
+        try {
+            Files.createDirectories(templateDir());
+            Properties properties = loadMeta();
+            properties.setProperty(HEADER_ROW_NUMBER_KEY, String.valueOf(headerRowNumber));
+            properties.setProperty("configUpdatedAt", LocalDateTime.now().toString());
+            saveProperties(properties);
+            Map<String, Object> templateStatus = status();
+            recordTemplateConfigAudit(headerRowNumber, templateStatus);
+            log.info("Quote template config updated headerRowNumber={} detailStartRowNumber={}",
+                    headerRowNumber, templateStatus.get("detailStartRowNumber"));
+            return templateStatus;
+        } catch (IOException e) {
+            log.error("Quote template config update failed headerRowNumber={}", headerRowNumber, e);
+            throw new RuntimeException("报价单模板配置保存失败：" + e.getMessage(), e);
+        }
     }
 
     public Map<String, Object> uploadTemplate(MultipartFile file) {
@@ -126,15 +151,20 @@ public class QuoteTemplateService {
         return WorkbookFactory.create(templatePath().toFile());
     }
 
+    public TemplateLayout templateLayout() {
+        return layoutFor(headerRowNumber());
+    }
+
     private void validateTemplate(InputStream inputStream) {
         try (Workbook workbook = WorkbookFactory.create(inputStream)) {
             if (workbook.getNumberOfSheets() == 0) {
                 throw new RuntimeException("报价单模板必须至少包含一个工作表");
             }
             Sheet sheet = workbook.getSheetAt(0);
-            Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
+            TemplateLayout layout = templateLayout();
+            Row headerRow = sheet.getRow(layout.headerRowIndex());
             if (headerRow == null) {
-                throw new RuntimeException("报价单模板第 8 行必须包含表头");
+                throw new RuntimeException("报价单模板第 " + layout.headerRowNumber() + " 行必须包含表头");
             }
 
             DataFormatter formatter = new DataFormatter();
@@ -168,9 +198,14 @@ public class QuoteTemplateService {
     }
 
     private void saveMeta(String originalFilename) throws IOException {
-        Properties properties = new Properties();
+        Properties properties = loadMeta();
         properties.setProperty("fileName", originalFilename);
         properties.setProperty("updatedAt", LocalDateTime.now().toString());
+        properties.putIfAbsent(HEADER_ROW_NUMBER_KEY, String.valueOf(DEFAULT_HEADER_ROW_NUMBER));
+        saveProperties(properties);
+    }
+
+    private void saveProperties(Properties properties) throws IOException {
         try (OutputStream outputStream = Files.newOutputStream(metaPath())) {
             properties.store(outputStream, "quote template metadata");
         }
@@ -195,6 +230,25 @@ public class QuoteTemplateService {
         );
     }
 
+    private void recordTemplateConfigAudit(int headerRowNumber, Map<String, Object> templateStatus) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>(templateStatus);
+        summary.put("headerRowNumber", headerRowNumber);
+        auditService.record(
+                "QUOTE_TEMPLATE_CONFIG_UPDATE",
+                "quote_template",
+                "headerRowNumber",
+                null,
+                summary,
+                "SYSTEM",
+                "SUCCESS",
+                "QUOTE_TEMPLATE_CONFIG_UPDATE headerRowNumber=" + headerRowNumber,
+                null
+        );
+    }
+
     private void moveTemplateFile(Path tmpPath, Path targetPath) throws IOException {
         try {
             Files.move(tmpPath, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -215,6 +269,31 @@ public class QuoteTemplateService {
             return new Properties();
         }
         return properties;
+    }
+
+    private int headerRowNumber() {
+        return normalizeHeaderRowNumber(loadMeta().getProperty(HEADER_ROW_NUMBER_KEY));
+    }
+
+    private int normalizeHeaderRowNumber(Object rawValue) {
+        int value;
+        if (rawValue == null) {
+            value = DEFAULT_HEADER_ROW_NUMBER;
+        } else {
+            try {
+                value = Integer.parseInt(rawValue.toString().trim());
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("表头校验行必须是数字");
+            }
+        }
+        if (value < 2) {
+            throw new RuntimeException("表头校验行必须大于等于 2");
+        }
+        return value;
+    }
+
+    private TemplateLayout layoutFor(int headerRowNumber) {
+        return new TemplateLayout(headerRowNumber, headerRowNumber - 2, headerRowNumber - 1, headerRowNumber);
     }
 
     private Path templateDir() {
@@ -251,5 +330,8 @@ public class QuoteTemplateService {
     private boolean hasPromotedProcessHeaders(Set<String> headers) {
         return PROMOTED_PROCESS_HEADERS.stream()
                 .allMatch(header -> headers.contains(normalizeHeader(header)));
+    }
+
+    public record TemplateLayout(int headerRowNumber, int groupRowIndex, int headerRowIndex, int detailStartRowIndex) {
     }
 }

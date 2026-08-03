@@ -163,4 +163,13 @@ describe('adminApi', () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   })
+
+  test('updateQuoteTemplateConfig saves configurable header row number', async () => {
+    await adminApi.updateQuoteTemplateConfig({ headerRowNumber: 10 })
+
+    expect(request).toHaveBeenCalledWith('/api/admin/quote-template/config', {
+      method: 'PUT',
+      data: { headerRowNumber: 10 }
+    })
+  })
 })

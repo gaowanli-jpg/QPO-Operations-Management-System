@@ -110,6 +110,7 @@ class AuditServiceTests {
         assertThat(AuditService.inferModule("ORDER_QUOTE_COMPLETE")).isEqualTo("ENGINEER");
         assertThat(AuditService.inferModule("PRICING_SHEET_EXPORT")).isEqualTo("ENGINEER");
         assertThat(AuditService.inferModule("QUOTE_TEMPLATE_UPLOAD")).isEqualTo("SYSTEM");
+        assertThat(AuditService.inferModule("QUOTE_TEMPLATE_CONFIG_UPDATE")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("ORDER_DELETE_COMPLETELY")).isEqualTo("ORDER");
         assertThat(AuditService.inferModule("SYSTEM_DEPT_CREATE")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("SYSTEM_POST_DELETE")).isEqualTo("SYSTEM");
@@ -130,6 +131,7 @@ class AuditServiceTests {
         assertThat(AuditService.labelForAction("ORDER_STATUS_ROLLBACK_PRICED")).contains("已核价");
         assertThat(AuditService.labelForAction("ORDER_DISCARD")).contains("废弃");
         assertThat(AuditService.labelForAction("ORDER_RESTORE")).contains("恢复");
+        assertThat(AuditService.labelForAction("QUOTE_TEMPLATE_CONFIG_UPDATE")).contains("模板配置");
     }
 
     @Test

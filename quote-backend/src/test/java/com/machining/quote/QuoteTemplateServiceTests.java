@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.machining.quote.service.QuoteTemplateService;
+import com.machining.quote.dto.QuoteTemplateConfigReq;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -55,6 +56,63 @@ class QuoteTemplateServiceTests {
         assertThatThrownBy(() -> service.uploadTemplate(file))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("缺少必要表头");
+    }
+
+    @Test
+    void templateConfigPersistsHeaderRowNumberAndDerivedLayout() {
+        QuoteTemplateService service = service();
+        QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
+        req.setHeaderRowNumber(10);
+
+        var status = service.updateConfig(req);
+
+        assertThat(status).containsEntry("headerRowNumber", 10);
+        assertThat(status).containsEntry("groupHeaderRowNumber", 9);
+        assertThat(status).containsEntry("detailStartRowNumber", 11);
+        assertThat(service.templateLayout().headerRowIndex()).isEqualTo(9);
+        assertThat(service.templateLayout().groupRowIndex()).isEqualTo(8);
+        assertThat(service.templateLayout().detailStartRowIndex()).isEqualTo(10);
+    }
+
+    @Test
+    void uploadTemplateValidatesConfiguredHeaderRowNumber() throws Exception {
+        QuoteTemplateService service = service();
+        QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
+        req.setHeaderRowNumber(10);
+        service.updateConfig(req);
+
+        MockMultipartFile invalidAtConfiguredRow = new MockMultipartFile(
+                "templateFile",
+                "bad.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                workbookBytes(VALID_TEMPLATE_HEADERS, 8)
+        );
+        assertThatThrownBy(() -> service.uploadTemplate(invalidAtConfiguredRow))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("第 10 行必须包含表头");
+
+        MockMultipartFile validAtConfiguredRow = new MockMultipartFile(
+                "templateFile",
+                "客户模板.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                workbookBytes(VALID_TEMPLATE_HEADERS, 10)
+        );
+
+        var status = service.uploadTemplate(validAtConfiguredRow);
+
+        assertThat(status).containsEntry("exists", true);
+        assertThat(status).containsEntry("headerRowNumber", 10);
+    }
+
+    @Test
+    void templateConfigRejectsInvalidHeaderRowNumber() {
+        QuoteTemplateService service = service();
+        QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
+        req.setHeaderRowNumber(1);
+
+        assertThatThrownBy(() -> service.updateConfig(req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("表头校验行必须大于等于 2");
     }
 
     @Test
@@ -129,9 +187,13 @@ class QuoteTemplateServiceTests {
     }
 
     private byte[] workbookBytes(List<String> headers) throws Exception {
+        return workbookBytes(headers, 8);
+    }
+
+    private byte[] workbookBytes(List<String> headers, int headerRowNumber) throws Exception {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            Row row = workbook.createSheet("第2份").createRow(7);
+            Row row = workbook.createSheet("第2份").createRow(headerRowNumber - 1);
             for (int i = 0; i < headers.size(); i++) {
                 row.createCell(i).setCellValue(headers.get(i));
             }

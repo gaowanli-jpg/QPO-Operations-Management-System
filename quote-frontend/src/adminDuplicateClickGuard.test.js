@@ -74,6 +74,7 @@ describe('admin duplicate click guards', () => {
     expect(sources.dict).toContain("deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`")
 
     expect(sources.template).toContain("upload: 'market:template:upload'")
+    expect(sources.template).toContain("saveConfig: 'market:template:config-save'")
     expect(sources.audit).toContain("exportLogs: 'system:audit:export'")
     expect(sources.audit).toContain("saveRetention: 'system:audit:retention-save'")
     expect(sources.audit).toContain("cleanupRetention: 'system:audit:retention-cleanup'")
@@ -162,10 +163,16 @@ describe('admin duplicate click guards', () => {
   })
 
   test('template upload and audit writes use button level pending guards', () => {
+    const templateConfigBlock = blockBetween(sources.template, 'const saveTemplateConfig = async () =>', 'const uploadTemplate = async () =>')
     const templateBlock = blockBetween(sources.template, 'const uploadTemplate = async () =>', 'const formatDateTime = (value) =>')
     const exportBlock = blockBetween(sources.audit, 'const exportLogs = async () =>', 'const saveRetentionSetting = async () =>')
     const saveRetentionBlock = blockBetween(sources.audit, 'const saveRetentionSetting = async () =>', 'const runRetentionCleanup = async () =>')
     const cleanupBlock = blockBetween(sources.audit, 'const runRetentionCleanup = async () =>', 'const searchLogs = () =>')
+
+    expect(sources.template).toContain(':loading="isPending(quoteTemplateActionKeys.saveConfig)"')
+    expect(sources.template).toContain(':disabled="isPending(quoteTemplateActionKeys.saveConfig)"')
+    expect(templateConfigBlock).toContain('return runAction(quoteTemplateActionKeys.saveConfig, async () =>')
+    expect(templateConfigBlock).toContain('await updateQuoteTemplateConfig')
 
     expect(sources.template).toContain(':disabled="!selectedFile || isPending(quoteTemplateActionKeys.upload)"')
     expect(sources.template).toContain(':loading="isPending(quoteTemplateActionKeys.upload)"')

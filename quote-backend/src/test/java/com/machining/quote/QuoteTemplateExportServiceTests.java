@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.machining.quote.dto.QuoteTemplateConfigReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -54,6 +55,7 @@ class QuoteTemplateExportServiceTests {
     @BeforeEach
     void writeTemplate() throws Exception {
         Files.createDirectories(quoteTemplateService.templatePath().getParent());
+        Files.deleteIfExists(quoteTemplateService.templatePath().getParent().resolve("quote-template.properties"));
         try (Workbook workbook = templateWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             workbook.write(outputStream);
@@ -62,7 +64,7 @@ class QuoteTemplateExportServiceTests {
     }
 
     @Test
-    void detailTemplateExportWritesTopInfoRowsAndDynamicColumns() throws Exception {
+    void detailTemplateExportPreservesTopInfoRowsAndWritesDynamicColumns() throws Exception {
         OrderRfq order = createOrder();
         createQuotedItems(order.getId(), 11);
 
@@ -71,7 +73,8 @@ class QuoteTemplateExportServiceTests {
 
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
-            assertThat(rowContains(sheet, 2, order.getRfqNo())).isTrue();
+            assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
+            assertThat(text(sheet, 2, 8)).isEqualTo("RFQ No.");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
             assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
@@ -92,7 +95,8 @@ class QuoteTemplateExportServiceTests {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
-            assertThat(rowContains(sheet, 2, order.getRfqNo())).isTrue();
+            assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
+            assertThat(text(sheet, 2, 8)).isEqualTo("RFQ No.");
             assertThat(hasMergedRegion(sheet, 0, 0, 0, 12)).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
             assertThat(hasMergedRegion(sheet, DETAIL_START_ROW_INDEX + 11, DETAIL_START_ROW_INDEX + 11, 0, 12)).isTrue();
@@ -162,6 +166,35 @@ class QuoteTemplateExportServiceTests {
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 1)).isEqualTo("4");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 2)).isEqualTo("77.5");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 3)).isEqualTo("310");
+        }
+    }
+
+    @Test
+    void detailTemplateExportUsesConfiguredHeaderRowNumber() throws Exception {
+        QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
+        req.setHeaderRowNumber(10);
+        quoteTemplateService.updateConfig(req);
+        int configuredGroupRowIndex = 8;
+        int configuredHeaderRowIndex = 9;
+        int configuredDetailStartRowIndex = 10;
+        try (Workbook workbook = templateWorkbook(configuredHeaderRowIndex, configuredDetailStartRowIndex);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workbook.write(outputStream);
+            Files.write(quoteTemplateService.templatePath(), outputStream.toByteArray());
+        }
+        OrderRfq order = createOrder();
+        createQuotedItems(order.getId(), 2);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        quoteTemplateExportService.exportTemplateQuoteDetail(order.getId(), response);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(text(sheet, configuredHeaderRowIndex, 0)).isEqualTo("序号");
+            assertThat(rowContains(sheet, configuredGroupRowIndex, "装配")).isTrue();
+            assertThat(text(sheet, configuredDetailStartRowIndex, 1)).isEqualTo("'=P-001");
+            assertThat(text(sheet, configuredDetailStartRowIndex + 2, 0)).isEqualTo("QUOTATION VALIDITY");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 0)).isEmpty();
         }
     }
 
@@ -263,6 +296,10 @@ class QuoteTemplateExportServiceTests {
     }
 
     private Workbook templateWorkbook() {
+        return templateWorkbook(HEADER_ROW_INDEX, DETAIL_START_ROW_INDEX);
+    }
+
+    private Workbook templateWorkbook(int headerRowIndex, int detailStartRowIndex) {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("第2份");
         sheet.createRow(0).createCell(0).setCellValue("客户报价单模板");
@@ -271,8 +308,8 @@ class QuoteTemplateExportServiceTests {
         infoRow.createCell(0).setCellValue("询价日：");
         infoRow.createCell(8).setCellValue("RFQ No.");
 
-        Row groupRow = sheet.createRow(6);
-        Row headerRow = sheet.createRow(HEADER_ROW_INDEX);
+        Row groupRow = sheet.createRow(headerRowIndex - 1);
+        Row headerRow = sheet.createRow(headerRowIndex);
         List<String> headers = new ArrayList<>(List.of(
                 "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
                 "重量(KG)", "材料费"
@@ -299,12 +336,13 @@ class QuoteTemplateExportServiceTests {
         groupRow.getCell(26).setCellValue("百分比费用");
         groupRow.getCell(34).setCellValue("合计");
 
-        for (int rowIndex = DETAIL_START_ROW_INDEX; rowIndex < 18; rowIndex++) {
+        for (int rowIndex = detailStartRowIndex; rowIndex < detailStartRowIndex + 10; rowIndex++) {
             Row row = sheet.createRow(rowIndex);
-            row.createCell(0).setCellValue(rowIndex - DETAIL_START_ROW_INDEX + 1);
+            row.createCell(0).setCellValue(rowIndex - detailStartRowIndex + 1);
         }
-        sheet.createRow(18).createCell(0).setCellValue("QUOTATION VALIDITY");
-        sheet.addMergedRegion(new CellRangeAddress(18, 18, 0, 39));
+        int footerRowIndex = detailStartRowIndex + 10;
+        sheet.createRow(footerRowIndex).createCell(0).setCellValue("QUOTATION VALIDITY");
+        sheet.addMergedRegion(new CellRangeAddress(footerRowIndex, footerRowIndex, 0, 39));
         return workbook;
     }
 

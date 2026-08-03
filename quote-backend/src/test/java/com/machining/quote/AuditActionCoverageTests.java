@@ -3,6 +3,7 @@ package com.machining.quote;
 import com.alibaba.excel.EasyExcel;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.controller.MarketController;
+import com.machining.quote.dto.QuoteTemplateConfigReq;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ErpUser;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -179,6 +180,30 @@ class AuditActionCoverageTests {
                 eq("SYSTEM"),
                 eq("SUCCESS"),
                 contains("customer-template.xlsx"),
+                isNull()
+        );
+    }
+
+    @Test
+    void quoteTemplateConfigUpdateWritesAuditSummary() {
+        AuditService auditService = mock(AuditService.class);
+        QuoteTemplateService service = new QuoteTemplateService();
+        ReflectionTestUtils.setField(service, "uploadDir", tempDir.toString());
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
+        req.setHeaderRowNumber(10);
+
+        service.updateConfig(req);
+
+        verify(auditService).record(
+                eq("QUOTE_TEMPLATE_CONFIG_UPDATE"),
+                eq("quote_template"),
+                eq("headerRowNumber"),
+                isNull(),
+                any(Map.class),
+                eq("SYSTEM"),
+                eq("SUCCESS"),
+                contains("headerRowNumber=10"),
                 isNull()
         );
     }

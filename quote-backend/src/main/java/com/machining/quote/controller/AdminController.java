@@ -2,6 +2,7 @@ package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PasswordChangeReq;
+import com.machining.quote.dto.QuoteTemplateConfigReq;
 import com.machining.quote.dto.UserSaveReq;
 import com.machining.quote.service.QuoteTemplateService;
 import com.machining.quote.service.UserAdminService;
@@ -69,5 +70,11 @@ public class AdminController {
     @RequirePermission("market:template:upload")
     public Map<String, Object> uploadQuoteTemplate(@RequestParam("templateFile") MultipartFile templateFile) {
         return Map.of("success", true, "message", "报价单模板已更新", "data", quoteTemplateService.uploadTemplate(templateFile));
+    }
+
+    @PutMapping("/quote-template/config")
+    @RequirePermission("market:template:upload")
+    public Map<String, Object> updateQuoteTemplateConfig(@RequestBody QuoteTemplateConfigReq req) {
+        return Map.of("success", true, "message", "报价单模板配置已保存", "data", quoteTemplateService.updateConfig(req));
     }
 }

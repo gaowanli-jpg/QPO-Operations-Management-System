@@ -107,3 +107,8 @@ export const saveQuoteTemplate = (formData) => request('/api/admin/quote-templat
   data: formData,
   headers: { 'Content-Type': 'multipart/form-data' }
 })
+
+export const updateQuoteTemplateConfig = (payload) => request('/api/admin/quote-template/config', {
+  method: 'PUT',
+  data: payload
+})
