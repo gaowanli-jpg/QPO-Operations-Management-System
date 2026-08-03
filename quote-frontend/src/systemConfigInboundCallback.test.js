@@ -10,7 +10,7 @@ const systemConfigApi = readSource('services', 'systemConfigApi.js')
 const inboundPanel = readSource('components', 'system-config', 'SystemInboundCallbackConfigPanel.vue')
 const outboundPanel = readSource('components', 'system-config', 'SystemIntegrationConfigPanel.vue')
 
-describe('system inbound callback config frontend stage 5', () => {
+describe('system inbound callback config frontend stage 6', () => {
   test('defines inbound callback config API methods', () => {
     expect(systemConfigApi).toContain("export const listInboundCallbackConfigs = () => request('/api/system/inbound-callback-configs')")
     expect(systemConfigApi).toContain("export const getMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback')")
@@ -39,10 +39,15 @@ describe('system inbound callback config frontend stage 5', () => {
     expect(outboundPanel).not.toContain('MES 回调 token')
   })
 
-  test('keeps MES callback URL and token delivery in the inbound panel', () => {
-    expect(inboundPanel).toContain('回调 URL 和 token 由 QPO 管理员在入站接口页提供')
-    expect(inboundPanel).toContain('真实 token 需单独通过受控渠道交付')
+  test('shows data center as caller and MES as business source', () => {
+    expect(inboundPanel).toContain('调用方：数据中心')
+    expect(inboundPanel).toContain('业务来源：MES')
+    expect(inboundPanel).toContain('数据中心后续异步调用 QPO 写回 MES 物料号')
+    expect(inboundPanel).toContain('回调 URL 和 token 由 QPO 管理员在入站接口页提供给数据中心')
+    expect(inboundPanel).toContain('真实 token 需单独通过受控渠道交付数据中心')
     expect(inboundPanel).toContain('token 只展示一次')
+    expect(inboundPanel).not.toContain('提供给 MES')
+    expect(inboundPanel).not.toContain('交付 MES')
     expect(outboundPanel).not.toContain('QPO_INBOUND_CALLBACK_TOKEN')
     expect(outboundPanel).not.toContain('MES 回调 token')
   })

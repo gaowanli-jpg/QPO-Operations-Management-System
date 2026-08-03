@@ -124,7 +124,7 @@ class MesMaterialCallbackConfigStage4Test {
             assertThat(service.hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, null)).isTrue();
 
             assertThat(output.getOut())
-                    .contains("MES material callback token verification disabled")
+                    .contains("Data center inbound material callback token verification disabled")
                     .doesNotContain("db-token", "env-token", sha256Hex("db-token"));
         } finally {
             logger.setLevel(original);

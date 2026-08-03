@@ -1,21 +1,23 @@
-# QPO 提供给 MES 的物料号回调接口对接说明
+# QPO 提供给数据中心的 MES 物料号回调接口对接说明
 
-本文档是 `06-提供给MES的物料号接口对接说明.md` 中“MES 回调 QPO”部分的独立接口文档，用于 MES 在物料号无法即时返回时，后续把正式物料号回写给 QPO。
+本文档是 QPO 提供给数据中心联调方的入站接口文档。业务来源仍是 MES：当 MES 在物料号无法即时返回、后续生成正式物料号后，由数据中心携带 QPO 入站 token 调用 QPO，把物料号结果写回 QPO。
 
 ## 1. 接口结论
 
-- 调用方向：MES -> QPO。
-- 调用时机：MES 在 QPO 获取物料号请求中返回 `callbackRequired=true`，或返回 `status=CALLBACK_PENDING / ACCEPTED / PENDING` 后，后续生成正式物料号时调用。
+- 交付对象：数据中心。
+- 调用方向：数据中心 -> QPO。
+- 业务来源：MES。
+- 调用时机：MES 在 QPO 获取物料号请求中返回 `callbackRequired=true`，或返回 `status=CALLBACK_PENDING / ACCEPTED / PENDING` 后，后续生成正式物料号时由数据中心转发调用。
 - 接口路径：`POST /api/integrations/mes/material-callback`。
 - 请求格式：`application/json`。
 - 认证方式：`Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
 - 主定位键：`mesRequestId`。
 - 交叉校验键：`ticketId`。
-- 去重口径：MES 只回调主 `mesRequestId`；同图号版本的 follower 等待行由 QPO 内部 fan-out 写回，MES 不需要逐行回调。
+- 去重口径：数据中心只需要转发主 `mesRequestId` 的 MES 结果；同图号版本的 follower 等待行由 QPO 内部 fan-out 写回，数据中心和 MES 都不需要逐行回调。
 
 ## 2. 前置约定
 
-QPO 调 MES 获取物料号时，会在请求体中传入：
+QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入：
 
 ```json
 {
@@ -27,11 +29,11 @@ QPO 调 MES 获取物料号时，会在请求体中传入：
 }
 ```
 
-MES 必须保存并原样带回 `mesRequestId` 和 `ticketId`：
+数据中心转发 MES 回调时，必须原样带回 `mesRequestId` 和 `ticketId`：
 
 - `mesRequestId` 是 QPO 每次请求生成的唯一 ID，也是回调主定位键。
 - `ticketId` 是 QPO 已提零件行 ID，用于防止回调串单。
-- 如果 QPO 同图号版本去重后把其他零件作为 follower 关联到主请求，MES 不需要知道 follower 明细，也不需要分别回调 follower。
+- 如果 QPO 同图号版本去重后把其他零件作为 follower 关联到主请求，数据中心和 MES 都不需要知道 follower 明细，也不需要分别回调 follower。
 
 ## 3. HTTP 契约
 
@@ -43,23 +45,23 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 
 说明：
 
-- `QPO_PUBLIC_BASE_URL` 是 QPO 提供给 MES 可访问的内网地址，例如 `http://192.168.70.21:8088`；正式 URL 需要等部署网络、端口、域名或反向代理确定后再给 MES。
-- `QPO_INBOUND_CALLBACK_TOKEN` 是 QPO 侧生成的 MES 回调机器 token，占位符不是实际 token。真实 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次，并通过受控渠道单独交付给 MES。
-- 当 QPO 入站接口配置开启 token 校验时，MES 必须携带 `Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
-- `ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 fallback；页面入站接口配置存在时，以页面配置为准。MES 联调方不需要也不应依赖该环境变量名。
+- `QPO_PUBLIC_BASE_URL` 是 QPO 提供给数据中心可访问的内网地址，例如 `http://192.168.70.21:8088`；正式 URL 需要等部署网络、端口、域名或反向代理确定后再给数据中心。
+- `QPO_INBOUND_CALLBACK_TOKEN` 是 QPO 侧生成的入站回调机器 token，占位符不是实际 token。真实 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次，并通过受控渠道单独交付数据中心。
+- 当 QPO 入站接口配置开启 token 校验时，数据中心必须携带 `Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
+- `ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback；页面入站接口配置存在时，以页面配置为准。数据中心联调方不需要也不应依赖该环境变量名。
 - token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 返回 HTTP `401`。
 - 不要在日志、截图、工单或联调群中明文发送真实 token。
 
 ### 3.1 联调交付信息
 
-把本接口交给 MES 前，QPO 侧需要补齐下面两项运行时信息：
+把本接口交给数据中心前，QPO 侧需要补齐下面两项运行时信息：
 
-| 项目 | 当前口径 | 交付给 MES 的形式 |
+| 项目 | 当前口径 | 交付给数据中心的形式 |
 | --- | --- | --- |
 | 回调 URL | 部署后确定，格式为 `{QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback` | 例如 `http://qpo-host:8088/api/integrations/mes/material-callback` |
-| 回调 token | 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次 | 只提供 token 值本身，MES 调用时放入 `Authorization: Bearer {token}` |
+| 回调 token | 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次 | 只提供 token 值本身，数据中心调用 QPO 时放入 `Authorization: Bearer {token}` |
 
-MES 拿到 **回调 URL + 回调 token + 本文档请求/响应字段说明** 后，即可调用本接口。联调时建议先用一条 QPO 已进入 `CALLBACK_PENDING` 的 `mesRequestId` 和 `ticketId` 做成功回调验证，再验证 token 错误、重复回调、冲突回调等异常场景。
+数据中心拿到 **回调 URL + 回调 token + 本文档请求/响应字段说明** 后，即可调用本接口。联调时建议先用一条 QPO 已进入 `CALLBACK_PENDING` 的 `mesRequestId` 和 `ticketId` 做成功回调验证，再验证 token 错误、重复回调、冲突回调等异常场景。
 
 ## 4. 成功回调
 
@@ -207,7 +209,7 @@ HTTP `401`
 ```json
 {
   "success": false,
-  "message": "MES 回调 token 无效",
+  "message": "QPO 入站回调 token 无效",
   "ticketId": 123,
   "mesRequestId": "MES-123-8f8c2",
   "materialNo": null
@@ -244,7 +246,7 @@ HTTP `409`
 
 ## 10. 联调验收用例
 
-| 场景 | MES 操作 | QPO 预期 |
+| 场景 | 数据中心转发的 MES 结果 | QPO 预期 |
 | --- | --- | --- |
 | 待回调成功 | 回调 `status=SUCCESS` + `materialNo` | 已提零件状态变为 `SUCCESS`，保存物料号。 |
 | 待回调失败 | 回调 `status=FAILED` + `message` | 已提零件状态变为 `FAILED`，用户可重试。 |
@@ -259,13 +261,13 @@ HTTP `409`
 
 - QPO 文件日志会记录 `ticketId`、`mesRequestId`、`externalTraceId`、`materialNo`、`durationMs` 和失败摘要。
 - QPO 操作日志动作包括 `DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS`、`DELIVERY_MES_MATERIAL_CALLBACK_FAILED`、`DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT` 和去重 fan-out 相关动作。
-- 日志不得记录 token、Authorization header、完整 MES 请求 JSON、完整 MES 回调 JSON 或 MES 内部完整任务 JSON。
-- MES 回调的 `message` 建议只放简短摘要，不要放敏感信息、图纸内容、完整 BOM 或内部审批详情。
+- 日志不得记录 token、Authorization header、完整 MES 请求 JSON、完整入站回调 JSON 或 MES 内部完整任务 JSON。
+- 回调 `message` 建议只放简短摘要，不要放敏感信息、图纸内容、完整 BOM 或内部审批详情。
 
 ## 12. 双方上线前确认
 
-- QPO 提供 MES 可访问的公网或内网 base URL。
-- QPO 和 MES 确认 `QPO_INBOUND_CALLBACK_TOKEN` 的发放、轮换和保密方式；真实 token 单独交付，不写入文档、日志、截图或工单。
-- MES 确认只回调主 `mesRequestId`，不需要逐个回调同图号版本 follower。
-- MES 确认失败场景会回调 `status=FAILED` 和明确 `message`，或由 QPO 用户重试触发下一次请求。
+- QPO 提供数据中心可访问的公网或内网 base URL。
+- QPO 和数据中心确认 `QPO_INBOUND_CALLBACK_TOKEN` 的发放、轮换和保密方式；真实 token 单独交付数据中心，不写入文档、日志、截图或工单。
+- 数据中心确认只转发主 `mesRequestId` 的 MES 结果，不需要逐个回调同图号版本 follower。
+- 数据中心确认失败场景会转发 `status=FAILED` 和明确 `message`，或由 QPO 用户重试触发下一次请求。
 - 双方保留 `ticketId`、`mesRequestId`、`externalTraceId` 作为联调排查三要素。

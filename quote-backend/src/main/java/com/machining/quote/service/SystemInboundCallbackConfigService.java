@@ -115,7 +115,7 @@ public class SystemInboundCallbackConfigService {
         resp.setCallbackCode(entity.getCallbackCode());
         resp.setToken(token);
         resp.setTokenMask(entity.getTokenMask());
-        resp.setMessage("token 已生成，请立即复制并通过受控渠道交付 MES；关闭后无法再次查看明文。");
+        resp.setMessage("token 已生成，请立即复制并通过受控渠道交付数据中心；关闭后无法再次查看明文。");
         return resp;
     }
 
@@ -154,7 +154,7 @@ public class SystemInboundCallbackConfigService {
                 ? fallbackCallbackTokenEnabled
                 : (entity.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : Boolean.TRUE.equals(entity.getTokenEnabled()));
         if (!tokenEnabled) {
-            log.warn("MES material callback token verification disabled callbackCode={} configSource={}",
+            log.warn("Data center inbound material callback token verification disabled callbackCode={} configSource={}",
                     callbackCode.name(), entity == null ? "ENV" : "DB");
             return true;
         }

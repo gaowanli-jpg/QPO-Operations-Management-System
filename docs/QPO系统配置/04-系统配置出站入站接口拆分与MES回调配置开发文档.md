@@ -1,5 +1,7 @@
 # QPO 系统配置模块：出站 / 入站接口拆分与 MES 回调配置开发文档
 
+> 数据中心统一对接阶段 6 更新：入站接口运行时调用方从 MES 调整为 **数据中心**，业务来源仍为 MES。QPO 入站 token 仍由系统配置页生成或轮换，真实 token 单独交付数据中心；`ERP_MES_CALLBACK_TOKEN` 仅作为老环境 deprecated fallback。
+
 ## 1. 背景
 
 当前 QPO 的“系统配置”页面已经承载两类能力：
@@ -491,7 +493,7 @@ POST /api/system/inbound-callback-configs/mes-material-callback/validate
   "callbackCode": "MES_MATERIAL_CALLBACK",
   "token": "真实token只返回一次",
   "tokenMask": "***pLc",
-  "message": "token 已生成，请立即复制并通过受控渠道交付 MES"
+  "message": "token 已生成，请立即复制并通过受控渠道交付数据中心"
 }
 ```
 
@@ -664,13 +666,13 @@ export const validateMesMaterialCallbackConfig = () =>
 轮换 token 确认文案：
 
 ```text
-轮换后旧 token 将立即失效。MES 未同步新 token 前，回调会被拒绝。确认继续？
+轮换后旧 token 将立即失效。数据中心未同步新 token 前，回调会被拒绝。确认继续？
 ```
 
 生成成功弹窗：
 
 ```text
-token 只展示一次，请立即复制并通过受控渠道交付 MES。
+token 只展示一次，请立即复制并通过受控渠道交付数据中心。
 关闭后无法再次查看，只能重新轮换。
 ```
 
@@ -986,7 +988,7 @@ npm run build
 - 文档不包含真实 token。
 - 操作日志不包含真实 token。
 - 文件日志不包含真实 token。
-- MES 回调接口文档可直接给 MES 联调方使用，回调 URL 和 token 由 QPO 管理员从系统配置页面提供。
+- MES 物料号回调接口文档可直接给数据中心联调方使用，回调 URL 和 token 由 QPO 管理员从系统配置页面提供给数据中心。
 - 系统配置页面的信息架构为 `文件存储 / 出站接口 / 入站接口`，不再显得多个系统混在一起。
 
 ## 15. 完成定义

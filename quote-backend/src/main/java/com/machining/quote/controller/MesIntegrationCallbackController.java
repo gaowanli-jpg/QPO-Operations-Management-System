@@ -28,7 +28,7 @@ public class MesIntegrationCallbackController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestBody(required = false) MesMaterialCallbackReq req) {
         if (!inboundCallbackConfigService.hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(failure("MES 回调 token 无效", req));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(failure("QPO 入站回调 token 无效", req));
         }
         try {
             return ResponseEntity.ok(mesMaterialSyncService.handleMaterialCallback(req));

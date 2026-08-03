@@ -3,7 +3,7 @@
     <section class="erp-surface system-inbound-callback-toolbar">
       <div>
         <h2 class="erp-section-title">入站接口</h2>
-        <p class="erp-page-description">管理外部系统调用 QPO 的回调入口、机器令牌和启用状态。</p>
+        <p class="erp-page-description">管理数据中心调用 QPO 的入站回调入口、机器令牌和启用状态。</p>
       </div>
       <div class="erp-page-actions system-inbound-callback-actions">
         <el-button :loading="loading" @click="loadConfig">刷新</el-button>
@@ -14,7 +14,7 @@
       <div class="erp-section-header system-inbound-card-header">
         <div>
           <h2 class="erp-section-title">MES 物料号回调</h2>
-          <p class="system-inbound-callback-note">MES 后续异步回调 QPO 写回物料号，和 QPO 主动调用 MES 的出站连接分开管理。回调 URL 和 token 由 QPO 管理员在入站接口页提供。</p>
+          <p class="system-inbound-callback-note">数据中心后续异步调用 QPO 写回 MES 物料号，调用方：数据中心，业务来源：MES。回调 URL 和 token 由 QPO 管理员在入站接口页提供给数据中心。</p>
         </div>
         <div class="system-inbound-status-tags">
           <el-tag :type="config.enabled ? 'success' : 'info'" effect="plain">
@@ -31,7 +31,7 @@
         <el-alert
           v-if="config.tokenEnabled === false"
           class="system-inbound-warning"
-          title="当前已关闭 token 校验，MES 回调会跳过机器令牌校验，请仅在联调或受控网络内短期开启。"
+          title="当前已关闭 token 校验，数据中心调用 QPO 会跳过机器令牌校验，请仅在联调或受控网络内短期开启。"
           type="warning"
           show-icon
           :closable="false"
@@ -41,7 +41,17 @@
           <article class="system-inbound-summary-card system-inbound-summary-card-wide">
             <span>回调地址</span>
             <strong>{{ emptyText(config.callbackUrl) }}</strong>
-            <small>提供给 MES 的完整 URL，真实 token 需单独通过受控渠道交付。</small>
+            <small>提供给数据中心的完整 URL，真实 token 需单独通过受控渠道交付数据中心。</small>
+          </article>
+          <article class="system-inbound-summary-card">
+            <span>调用方</span>
+            <strong>数据中心</strong>
+            <small>调用方：数据中心，负责转发 MES 回调。</small>
+          </article>
+          <article class="system-inbound-summary-card">
+            <span>业务来源</span>
+            <strong>MES</strong>
+            <small>业务来源：MES，写回物料号结果。</small>
           </article>
           <article class="system-inbound-summary-card">
             <span>配置来源</span>
@@ -74,7 +84,7 @@
         <el-form :model="form" label-width="132px" class="system-inbound-form">
           <el-form-item label="QPO 访问基础地址">
             <el-input v-model.trim="form.publicBaseUrl" placeholder="例如 http://192.168.70.21:8088" />
-            <span class="system-inbound-form-tip">用于拼接给 MES 的回调地址；留空时后端会按环境变量 fallback。</span>
+            <span class="system-inbound-form-tip">用于拼接给数据中心调用的回调地址；留空时后端会按环境变量 fallback。</span>
           </el-form-item>
           <el-form-item label="接口启用">
             <el-switch v-model="form.enabled" active-text="接受回调" inactive-text="停用回调" />
@@ -127,12 +137,12 @@
 
     <el-dialog
       v-model="tokenDialogVisible"
-      title="MES 回调 token 已生成"
+      title="QPO 入站回调 token 已生成"
       width="620px"
       @closed="clearPlainToken"
     >
       <el-alert
-        title="token 只展示一次，关闭后无法再次查看，请立即复制并通过受控渠道交付 MES。"
+        title="token 只展示一次，关闭后无法再次查看，请立即复制并通过受控渠道交付数据中心。"
         type="warning"
         show-icon
         :closable="false"
@@ -188,7 +198,7 @@ const tokenStatusText = computed(() => {
   if (!config.tokenEnabled) return 'token 校验关闭'
   return config.tokenConfigured ? 'token 已配置' : 'token 未配置'
 })
-const tokenMaskText = computed(() => config.tokenConfigured ? `脱敏标识：${config.tokenMask || '已配置'}` : '请生成 token 后交付 MES')
+const tokenMaskText = computed(() => config.tokenConfigured ? `脱敏标识：${config.tokenMask || '已配置'}` : '请生成 token 后交付数据中心')
 const validateStatusText = computed(() => {
   if (config.lastValidateStatus === 'SUCCESS') return '校验成功'
   if (config.lastValidateStatus === 'FAILED') return '校验失败'
@@ -301,7 +311,7 @@ const rotateToken = async () => {
     if (config.tokenConfigured) {
       try {
         await ElMessageBox.confirm(
-          '轮换后旧 token 将立即失效。MES 未同步新 token 前，回调会被拒绝。确认继续？',
+          '轮换后旧 token 将立即失效。数据中心未同步新 token 前，回调会被拒绝。确认继续？',
           '轮换入站回调 token',
           { type: 'warning', confirmButtonText: '确认轮换', cancelButtonText: '取消' }
         )

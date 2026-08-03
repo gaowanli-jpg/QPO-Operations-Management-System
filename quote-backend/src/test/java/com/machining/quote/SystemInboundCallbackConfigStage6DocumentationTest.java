@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SystemInboundCallbackConfigStage6DocumentationTest {
+    private static final Path DATA_CENTER_DOC = Path.of(
+            "..", "docs", "QPO系统配置", "05-数据中心统一对接开发文档.md");
     private static final Path SYSTEM_OUTBOUND_DOC = Path.of(
             "..", "docs", "QPO系统配置", "03-系统对接配置开发文档.md");
     private static final Path SYSTEM_SPLIT_DOC = Path.of(
@@ -68,7 +70,7 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
                 .contains(
                         "系统 > 系统配置 > 出站接口",
                         "系统 > 系统配置 > 入站接口",
-                        "MES 回调接口的真实 token 由入站接口配置生成后通过受控渠道交付给 MES")
+                        "MES 物料号回调接口的真实 token 由入站接口配置生成后通过受控渠道交付给数据中心")
                 .doesNotContain("系统 > 系统配置 > 系统对接");
 
         assertThat(read(LOG_OPS_DOC))
@@ -92,28 +94,48 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
     void mesIntegrationDocsPointCallbackTokenToInboundConfigPage() throws IOException {
         assertThat(read(MES_SYNC_DOC))
                 .contains(
-                        "QPO 调 MES 的出站配置",
-                        "MES 回调 QPO 的入站配置",
+                        "QPO 通过数据中心获取 MES 物料号",
+                        "数据中心调用 QPO 的入站配置",
                         "系统配置 > 入站接口 > MES 物料号回调",
                         "ERP_MES_CALLBACK_TOKEN",
-                        "fallback")
+                        "deprecated fallback")
                 .contains("不新增用户权限，继续使用 `market:delivered-item:mes-sync`");
 
         assertThat(read(MES_OUTBOUND_DOC))
                 .contains(
                         "回调接口详情见 `08-MES物料号回调接口对接说明.md`",
-                        "回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供",
+                        "回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供给数据中心",
                         "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}")
+                .doesNotContain("交付给 MES")
                 .doesNotContain("未带或带错 `ERP_MES_CALLBACK_TOKEN`");
 
         assertThat(read(MES_CALLBACK_DOC))
                 .contains(
+                        "交付对象：数据中心",
+                        "调用方向：数据中心 -> QPO",
+                        "业务来源：MES",
                         "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
                         "系统配置 > 入站接口 > MES 物料号回调",
-                        "真实 token 单独交付",
+                        "真实 token 单独交付数据中心",
                         "明文只展示一次",
-                        "ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 fallback")
-                .doesNotContain("Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}");
+                        "ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback")
+                .doesNotContain("Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}")
+                .doesNotContain("交付给 MES");
+    }
+
+    @Test
+    void dataCenterDocDefinesInboundCallbackAsDataCenterCallingQpo() throws IOException {
+        assertThat(read(DATA_CENTER_DOC))
+                .contains(
+                        "数据中心调用 QPO",
+                        "调用方为数据中心，业务来源为 MES",
+                        "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
+                        "真实 token 单独交付数据中心",
+                        "ERP_MES_CALLBACK_TOKEN",
+                        "deprecated fallback")
+                .doesNotContain("QPO_INBOUND_CALLBACK_TOKEN=")
+                .doesNotContain("Bearer eyJ")
+                .doesNotContain("交付给 MES");
     }
 
     @Test
