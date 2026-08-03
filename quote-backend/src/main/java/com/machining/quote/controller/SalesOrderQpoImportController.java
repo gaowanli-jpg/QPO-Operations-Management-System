@@ -24,7 +24,8 @@ public class SalesOrderQpoImportController {
             @RequestParam("customerId") Long customerId,
             @RequestParam(value = "documentTypeCode", required = false) String documentTypeCode,
             @RequestParam("excelFile") MultipartFile excelFile,
-            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
-        return salesOrderQpoImportService.importQpo(excelFile, customerId, documentTypeCode, drawings);
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        return salesOrderQpoImportService.importQpo(excelFile, customerId, documentTypeCode, drawings, versionDrawings);
     }
 }

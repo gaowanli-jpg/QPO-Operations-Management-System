@@ -68,7 +68,7 @@ public class SalesOrderQpoImportService {
 
     @Transactional
     public SalesOrderQpoImportResp importQpo(MultipartFile excelFile, Long customerId, String documentTypeCode) {
-        return importQpo(excelFile, customerId, documentTypeCode, null);
+        return importQpo(excelFile, customerId, documentTypeCode, null, null);
     }
 
     @Transactional
@@ -77,6 +77,16 @@ public class SalesOrderQpoImportService {
             Long customerId,
             String documentTypeCode,
             List<MultipartFile> drawings) {
+        return importQpo(excelFile, customerId, documentTypeCode, drawings, null);
+    }
+
+    @Transactional
+    public SalesOrderQpoImportResp importQpo(
+            MultipartFile excelFile,
+            Long customerId,
+            String documentTypeCode,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
         validateFile(excelFile);
         CustomerMaster customer = requireCustomer(customerId);
         if (dataScopeService != null) {
@@ -92,7 +102,7 @@ public class SalesOrderQpoImportService {
             throw new IllegalArgumentException("销售订单表格没有可导入的订单");
         }
         validateDuplicateImports(customer, parseResult.getOrders());
-        DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings);
+        DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings);
 
         SalesOrderImportBatch batch = createBatch(batchNo, sourceFileName, parseResult);
         batchMapper.insert(batch);
@@ -154,10 +164,14 @@ public class SalesOrderQpoImportService {
             CustomerMaster customer,
             String batchNo,
             SalesOrderQpoExcelParseResult parseResult,
-            List<MultipartFile> drawings) {
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
         Set<String> knownPartNos = collectKnownPartNos(parseResult);
+        Set<DrawingPartNoResolver.DrawingIdentity> knownPartNoVersions = collectKnownPartNoVersions(parseResult);
         Map<String, DrawingFileInfo> drawingByPartNo = new LinkedHashMap<>();
+        Map<String, DrawingFileInfo> drawingByPartNoVersion = new LinkedHashMap<>();
         List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
+        int versionUploadedDrawingCount = 0;
 
         if (drawings != null && !drawings.isEmpty()) {
             if (businessFileService == null) {
@@ -175,15 +189,52 @@ public class SalesOrderQpoImportService {
                         drawing,
                         "SALES_ORDER_IMPORT_DRAWING",
                         batchNo);
-                DrawingFileInfo drawingInfo = new DrawingFileInfo(partNo, cleanFileName, storedFile.publicPath());
+                DrawingFileInfo drawingInfo = new DrawingFileInfo(partNo, "", cleanFileName, storedFile.publicPath(), false);
                 uploadedDrawings.add(drawingInfo);
                 if (!isBlank(partNo)) {
                     drawingByPartNo.put(partNo, drawingInfo);
                 }
             }
         }
+        if (versionDrawings != null && !versionDrawings.isEmpty()) {
+            if (businessFileService == null) {
+                throw new IllegalStateException("销售订单图纸保存服务不可用");
+            }
+            for (MultipartFile drawing : versionDrawings) {
+                if (!isPdfDrawing(drawing)) {
+                    continue;
+                }
+                String cleanFileName = cleanDrawingFileName(drawing.getOriginalFilename());
+                DrawingPartNoResolver.DrawingIdentity identity =
+                        DrawingPartNoResolver.extractPartNoVersion(cleanFileName, knownPartNoVersions);
+                StoredBusinessFile storedFile = businessFileService.saveSalesOrderImportDrawing(
+                        customer.getCustomerName(),
+                        batchNo,
+                        drawing,
+                        "SALES_ORDER_IMPORT_DRAWING",
+                        batchNo);
+                String partNo = identity == null
+                        ? DrawingPartNoResolver.extractPartNo(cleanFileName, knownPartNos)
+                        : identity.partNo();
+                String version = identity == null ? "" : identity.version();
+                DrawingFileInfo drawingInfo = new DrawingFileInfo(
+                        partNo, version, cleanFileName, storedFile.publicPath(), true);
+                uploadedDrawings.add(drawingInfo);
+                versionUploadedDrawingCount++;
+                if (identity != null) {
+                    drawingByPartNoVersion.put(itemKey(identity.partNo(), identity.version()), drawingInfo);
+                }
+            }
+        }
 
-        return new DrawingBindingResult(parseResult, knownPartNos, drawingByPartNo, uploadedDrawings);
+        return new DrawingBindingResult(
+                parseResult,
+                knownPartNos,
+                knownPartNoVersions,
+                drawingByPartNo,
+                drawingByPartNoVersion,
+                uploadedDrawings,
+                versionUploadedDrawingCount);
     }
 
     private Set<String> collectKnownPartNos(SalesOrderQpoExcelParseResult parseResult) {
@@ -205,11 +256,31 @@ public class SalesOrderQpoImportService {
         return partNos;
     }
 
+    private Set<DrawingPartNoResolver.DrawingIdentity> collectKnownPartNoVersions(SalesOrderQpoExcelParseResult parseResult) {
+        Set<DrawingPartNoResolver.DrawingIdentity> identities = new HashSet<>();
+        if (parseResult == null || parseResult.getOrders() == null) {
+            return identities;
+        }
+        for (SalesOrderQpoOrderGroupDTO group : parseResult.getOrders()) {
+            if (group == null || group.getLines() == null) {
+                continue;
+            }
+            for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
+                String normalizedPartNo = normalizePartNo(line == null ? null : line.getPartNo());
+                String normalizedVersion = normalizeVersion(line == null ? null : line.getVersion());
+                if (!normalizedPartNo.isEmpty() && !normalizedVersion.isEmpty()) {
+                    identities.add(new DrawingPartNoResolver.DrawingIdentity(normalizedPartNo, normalizedVersion));
+                }
+            }
+        }
+        return identities;
+    }
+
     private void applyDrawingBinding(
             SalesOrderItem item,
             SalesOrderQpoExcelLineDTO line,
             DrawingBindingResult drawingBinding) {
-        DrawingFileInfo drawing = drawingBinding == null ? null : drawingBinding.find(line.getPartNo());
+        DrawingFileInfo drawing = drawingBinding == null ? null : drawingBinding.find(line.getPartNo(), line.getVersion());
         if (drawing != null) {
             item.setDrawingUrl(drawing.url());
             item.setHasDrawing(true);
@@ -510,6 +581,14 @@ public class SalesOrderQpoImportService {
         return DrawingPartNoResolver.normalizePartNo(partNo);
     }
 
+    private String normalizeVersion(String version) {
+        return DrawingPartNoResolver.normalizeVersion(version);
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
     private boolean isPdfDrawing(MultipartFile drawing) {
         String originalFilename = drawing == null ? null : drawing.getOriginalFilename();
         return drawing != null
@@ -539,29 +618,42 @@ public class SalesOrderQpoImportService {
     private Map<String, String> drawingFileResult(DrawingFileInfo drawing) {
         Map<String, String> result = new LinkedHashMap<>();
         result.put("partNo", drawing.partNo());
+        if (!isBlank(drawing.version())) {
+            result.put("version", drawing.version());
+        }
         result.put("fileName", drawing.originalFilename());
         return result;
     }
 
     private class DrawingBindingResult {
         private final Set<String> knownPartNos;
+        private final Set<DrawingPartNoResolver.DrawingIdentity> knownPartNoVersions;
         private final Map<String, DrawingFileInfo> drawingByPartNo;
+        private final Map<String, DrawingFileInfo> drawingByPartNoVersion;
         private final List<DrawingFileInfo> uploadedDrawings;
+        private final int versionUploadedDrawingCount;
         private final Map<String, Object> report;
 
         private DrawingBindingResult(
                 SalesOrderQpoExcelParseResult parseResult,
                 Set<String> knownPartNos,
+                Set<DrawingPartNoResolver.DrawingIdentity> knownPartNoVersions,
                 Map<String, DrawingFileInfo> drawingByPartNo,
-                List<DrawingFileInfo> uploadedDrawings) {
+                Map<String, DrawingFileInfo> drawingByPartNoVersion,
+                List<DrawingFileInfo> uploadedDrawings,
+                int versionUploadedDrawingCount) {
             this.knownPartNos = knownPartNos;
+            this.knownPartNoVersions = knownPartNoVersions;
             this.drawingByPartNo = drawingByPartNo;
+            this.drawingByPartNoVersion = drawingByPartNoVersion;
             this.uploadedDrawings = uploadedDrawings;
+            this.versionUploadedDrawingCount = versionUploadedDrawingCount;
             this.report = buildReport(parseResult);
         }
 
-        private DrawingFileInfo find(String partNo) {
-            return drawingByPartNo.get(normalizePartNo(partNo));
+        private DrawingFileInfo find(String partNo, String version) {
+            DrawingFileInfo versionDrawing = drawingByPartNoVersion.get(itemKey(partNo, version));
+            return versionDrawing == null ? drawingByPartNo.get(normalizePartNo(partNo)) : versionDrawing;
         }
 
         private Map<String, Object> report() {
@@ -586,15 +678,20 @@ public class SalesOrderQpoImportService {
 
         private DrawingSummary groupSummary(SalesOrderQpoOrderGroupDTO group) {
             Set<String> groupPartNos = new HashSet<>();
+            Set<DrawingPartNoResolver.DrawingIdentity> groupPartNoVersions = new HashSet<>();
             int matchedItems = 0;
             int missingItems = 0;
             if (group != null && group.getLines() != null) {
                 for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
                     String normalizedPartNo = normalizePartNo(line == null ? null : line.getPartNo());
+                    String normalizedVersion = normalizeVersion(line == null ? null : line.getVersion());
                     if (!normalizedPartNo.isEmpty()) {
                         groupPartNos.add(normalizedPartNo);
                     }
-                    if (!normalizedPartNo.isEmpty() && drawingByPartNo.containsKey(normalizedPartNo)) {
+                    if (!normalizedPartNo.isEmpty() && !normalizedVersion.isEmpty()) {
+                        groupPartNoVersions.add(new DrawingPartNoResolver.DrawingIdentity(normalizedPartNo, normalizedVersion));
+                    }
+                    if (find(normalizedPartNo, normalizedVersion) != null) {
                         matchedItems++;
                     } else {
                         missingItems++;
@@ -604,9 +701,11 @@ public class SalesOrderQpoImportService {
             int uploadedForGroup = 0;
             int unmatchedForGroup = 0;
             for (DrawingFileInfo drawing : uploadedDrawings) {
-                if (groupPartNos.contains(drawing.partNo())) {
+                if (drawing.versionSpecific()
+                        ? groupPartNoVersions.contains(new DrawingPartNoResolver.DrawingIdentity(drawing.partNo(), drawing.version()))
+                        : groupPartNos.contains(drawing.partNo())) {
                     uploadedForGroup++;
-                } else if (!knownPartNos.contains(drawing.partNo())) {
+                } else if (isUnmatchedDrawing(drawing)) {
                     unmatchedForGroup++;
                 }
             }
@@ -616,6 +715,7 @@ public class SalesOrderQpoImportService {
         private Map<String, Object> buildReport(SalesOrderQpoExcelParseResult parseResult) {
             List<Map<String, Object>> missingItems = new ArrayList<>();
             Set<String> matchedDrawingPartNos = new HashSet<>();
+            Set<String> matchedVersionDrawingKeys = new HashSet<>();
             int matchedItemCount = 0;
             if (parseResult != null && parseResult.getOrders() != null) {
                 for (SalesOrderQpoOrderGroupDTO group : parseResult.getOrders()) {
@@ -624,9 +724,14 @@ public class SalesOrderQpoImportService {
                     }
                     for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
                         String normalizedPartNo = normalizePartNo(line == null ? null : line.getPartNo());
-                        if (!normalizedPartNo.isEmpty() && drawingByPartNo.containsKey(normalizedPartNo)) {
+                        String normalizedVersion = normalizeVersion(line == null ? null : line.getVersion());
+                        DrawingFileInfo drawing = find(normalizedPartNo, normalizedVersion);
+                        if (drawing != null) {
                             matchedItemCount++;
                             matchedDrawingPartNos.add(normalizedPartNo);
+                            if (drawing.versionSpecific()) {
+                                matchedVersionDrawingKeys.add(itemKey(normalizedPartNo, normalizedVersion));
+                            }
                         } else {
                             missingItems.add(buildMissingDrawingItem(line, normalizedPartNo));
                         }
@@ -636,7 +741,7 @@ public class SalesOrderQpoImportService {
 
             List<Map<String, String>> unmatchedDrawings = new ArrayList<>();
             for (DrawingFileInfo drawing : uploadedDrawings) {
-                if (!knownPartNos.contains(drawing.partNo())) {
+                if (isUnmatchedDrawing(drawing)) {
                     unmatchedDrawings.add(drawingFileResult(drawing));
                 }
             }
@@ -646,6 +751,8 @@ public class SalesOrderQpoImportService {
             drawingReport.put("uploadedDrawingCount", uploadedDrawings.size());
             drawingReport.put("matchedItemCount", matchedItemCount);
             drawingReport.put("matchedDrawingCount", matchedDrawingPartNos.size());
+            drawingReport.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+            drawingReport.put("versionMatchedDrawingCount", matchedVersionDrawingKeys.size());
             drawingReport.put("missingDrawingCount", missingItems.size());
             drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
             drawingReport.put("missingItems", missingItems);
@@ -657,9 +764,20 @@ public class SalesOrderQpoImportService {
             Object value = report.get(key);
             return value instanceof Number number ? number.intValue() : 0;
         }
+
+        private boolean isUnmatchedDrawing(DrawingFileInfo drawing) {
+            return drawing.versionSpecific()
+                    ? !knownPartNoVersions.contains(new DrawingPartNoResolver.DrawingIdentity(drawing.partNo(), drawing.version()))
+                    : !knownPartNos.contains(drawing.partNo());
+        }
     }
 
-    private record DrawingFileInfo(String partNo, String originalFilename, String url) {
+    private record DrawingFileInfo(
+            String partNo,
+            String version,
+            String originalFilename,
+            String url,
+            boolean versionSpecific) {
     }
 
     private record DrawingSummary(

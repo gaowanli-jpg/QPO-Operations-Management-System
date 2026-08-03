@@ -375,13 +375,21 @@ public class MarketController {
         }
     }
 
+    public Map<String, Object> importRfq(
+            @RequestParam("customerName") String customerName,
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
+        return importRfq(customerName, excelFile, drawings, null);
+    }
+
     @PostMapping("/import-rfq")
     @RequirePermission("market:rfq:import")
     @Transactional
     public Map<String, Object> importRfq(
             @RequestParam("customerName") String customerName,
             @RequestParam("excelFile") MultipartFile excelFile,
-            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
         Map<String, Object> result = new HashMap<>();
         long startedAt = System.currentTimeMillis();
         String autoRfqNo = null;
@@ -400,16 +408,23 @@ public class MarketController {
                     .sheet()
                     .doReadSync();
             Set<String> excelPartNos = new HashSet<>();
+            Set<DrawingPartNoResolver.DrawingIdentity> excelPartNoVersions = new HashSet<>();
             for (RfqExcelDTO item : excelDataList) {
                 String safePartNo = normalizePartNo(item.getPartNo());
                 if (!safePartNo.isEmpty()) {
                     excelPartNos.add(safePartNo);
+                    String safeVersion = normalizeVersion(item.getVersion());
+                    if (!safeVersion.isEmpty()) {
+                        excelPartNoVersions.add(new DrawingPartNoResolver.DrawingIdentity(safePartNo, safeVersion));
+                    }
                 }
             }
             log.info("RFQ import parsed excel rfqNo={} itemCount={}", autoRfqNo, excelDataList.size());
 
             Map<String, DrawingFileInfo> drawingMap = new LinkedHashMap<>();
+            Map<String, DrawingFileInfo> versionDrawingMap = new LinkedHashMap<>();
             List<DrawingFileInfo> uploadedDrawings = new ArrayList<>();
+            int versionUploadedDrawingCount = 0;
             if (drawings != null && !drawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
                 pathOrder.setCustomerName(customerName);
@@ -429,9 +444,37 @@ public class MarketController {
                         StoredBusinessFile storedFile = businessFileService.saveDrawing(
                                 pathOrder, drawing, "RFQ_IMPORT_DRAWING", autoRfqNo);
                         String fileUrl = storedFile.publicPath();
-                        DrawingFileInfo drawingFileInfo = new DrawingFileInfo(partNoFromFileName, cleanFileName, fileUrl);
+                        DrawingFileInfo drawingFileInfo = new DrawingFileInfo(partNoFromFileName, "", cleanFileName, fileUrl, false);
                         uploadedDrawings.add(drawingFileInfo);
                         drawingMap.put(partNoFromFileName, drawingFileInfo);
+                    }
+                }
+            }
+            if (versionDrawings != null && !versionDrawings.isEmpty()) {
+                OrderRfq pathOrder = new OrderRfq();
+                pathOrder.setCustomerName(customerName);
+                pathOrder.setRfqNo(autoRfqNo);
+
+                for (MultipartFile drawing : versionDrawings) {
+                    String originalFilename = drawing.getOriginalFilename();
+                    if (originalFilename != null && originalFilename.toLowerCase().endsWith(".pdf")) {
+                        String cleanFileName = originalFilename.replaceAll(".*[\\\\/]", "");
+                        DrawingPartNoResolver.DrawingIdentity identity =
+                                DrawingPartNoResolver.extractPartNoVersion(cleanFileName, excelPartNoVersions);
+                        StoredBusinessFile storedFile = businessFileService.saveDrawing(
+                                pathOrder, drawing, "RFQ_IMPORT_DRAWING", autoRfqNo);
+                        String fileUrl = storedFile.publicPath();
+                        String partNo = identity == null
+                                ? DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos)
+                                : identity.partNo();
+                        String version = identity == null ? "" : identity.version();
+                        DrawingFileInfo drawingFileInfo = new DrawingFileInfo(
+                                partNo, version, cleanFileName, fileUrl, true);
+                        uploadedDrawings.add(drawingFileInfo);
+                        versionUploadedDrawingCount++;
+                        if (identity != null) {
+                            versionDrawingMap.put(itemKey(identity.partNo(), identity.version()), drawingFileInfo);
+                        }
                     }
                 }
             }
@@ -452,17 +495,23 @@ public class MarketController {
                     generatedRfqId, autoRfqNo, customerName);
 
             Set<String> matchedDrawingPartNos = new HashSet<>();
+            Set<String> matchedVersionDrawingKeys = new HashSet<>();
             List<Map<String, Object>> missingDrawingItems = new ArrayList<>();
             int matchedItemCount = 0;
 
             for (RfqExcelDTO item : excelDataList) {
                 String originalPartNo = item.getPartNo();
                 String safePartNo = normalizePartNo(originalPartNo);
+                String safeVersion = normalizeVersion(item.getVersion());
                 if (!safePartNo.isEmpty()) {
                     excelPartNos.add(safePartNo);
                 }
 
-                DrawingFileInfo matchedDrawing = drawingMap.get(safePartNo);
+                String partVersionKey = itemKey(safePartNo, safeVersion);
+                DrawingFileInfo matchedDrawing = versionDrawingMap.get(partVersionKey);
+                if (matchedDrawing == null) {
+                    matchedDrawing = drawingMap.get(safePartNo);
+                }
                 String matchedDrawingUrl = matchedDrawing == null ? null : matchedDrawing.url();
 
                 ItemQuoteVersion dbItem = new ItemQuoteVersion();
@@ -482,6 +531,9 @@ public class MarketController {
                     dbItem.setDrawingUrl(matchedDrawingUrl);
                     matchedItemCount++;
                     matchedDrawingPartNos.add(safePartNo);
+                    if (matchedDrawing.versionSpecific()) {
+                        matchedVersionDrawingKeys.add(partVersionKey);
+                    }
                     log.debug("RFQ import item drawing matched rfqId={} partNo={} drawingUrl={}",
                             generatedRfqId, safePartNo, matchedDrawingUrl);
                 } else {
@@ -495,9 +547,15 @@ public class MarketController {
 
             List<Map<String, String>> unmatchedDrawings = new ArrayList<>();
             for (DrawingFileInfo drawing : uploadedDrawings) {
-                if (!excelPartNos.contains(drawing.partNo())) {
+                boolean unmatched = drawing.versionSpecific()
+                        ? !excelPartNoVersions.contains(new DrawingPartNoResolver.DrawingIdentity(drawing.partNo(), drawing.version()))
+                        : !excelPartNos.contains(drawing.partNo());
+                if (unmatched) {
                     Map<String, String> unmatchedDrawing = new LinkedHashMap<>();
                     unmatchedDrawing.put("partNo", drawing.partNo());
+                    if (!drawing.version().isBlank()) {
+                        unmatchedDrawing.put("version", drawing.version());
+                    }
                     unmatchedDrawing.put("fileName", drawing.originalFilename());
                     unmatchedDrawings.add(unmatchedDrawing);
                 }
@@ -508,6 +566,8 @@ public class MarketController {
             drawingReport.put("uploadedDrawingCount", uploadedDrawings.size());
             drawingReport.put("matchedItemCount", matchedItemCount);
             drawingReport.put("matchedDrawingCount", matchedDrawingPartNos.size());
+            drawingReport.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+            drawingReport.put("versionMatchedDrawingCount", matchedVersionDrawingKeys.size());
             drawingReport.put("missingDrawingCount", missingDrawingItems.size());
             drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
             drawingReport.put("missingItems", missingDrawingItems);
@@ -603,12 +663,21 @@ public class MarketController {
         return missingItem;
     }
 
-    private record DrawingFileInfo(String partNo, String originalFilename, String url) {
+    private record DrawingFileInfo(
+            String partNo,
+            String version,
+            String originalFilename,
+            String url,
+            boolean versionSpecific) {
     }
 
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
         return normalized;
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
     }
 
     private String normalizeRfqNo(String rfqNo) {

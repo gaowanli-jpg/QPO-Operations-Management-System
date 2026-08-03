@@ -334,6 +334,90 @@ class SalesOrderQpoImportStage3Test {
     }
 
     @Test
+    void serviceAcceptsVersionDrawingsAndBindsOnlyMatchingPartVersion() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                mock(AuditService.class)
+        );
+        Method importWithVersionDrawings = SalesOrderQpoImportService.class.getMethod(
+                "importQpo",
+                MultipartFile.class,
+                Long.class,
+                String.class,
+                List.class,
+                List.class);
+        ReflectionTestUtils.setField(service, "businessFileService", salesOrderImportDrawingStorage());
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithSamePartDifferentVersions());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(301L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(401L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId("A".equals(item.getVersion()) ? 501L : 502L);
+            return 1;
+        }).when(itemMapper).insert(any(SalesOrderItem.class));
+
+        SalesOrderQpoImportResp resp = (SalesOrderQpoImportResp) importWithVersionDrawings.invoke(
+                service,
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01",
+                List.of(),
+                List.of(new MockMultipartFile("versionDrawings", "P-100_A.pdf", "application/pdf", "p1".getBytes(StandardCharsets.UTF_8)))
+        );
+
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(itemMapper, org.mockito.Mockito.times(2)).insert(itemCaptor.capture());
+        SalesOrderItem versionA = itemCaptor.getAllValues().get(0);
+        SalesOrderItem versionB = itemCaptor.getAllValues().get(1);
+        assertThat(versionA.getPartNo()).isEqualTo("P-100");
+        assertThat(versionA.getVersion()).isEqualTo("A");
+        assertThat(versionA.getDrawingUrl()).isEqualTo("/uploads/ACME/SOQPO/P-100_A.pdf");
+        assertThat(versionA.getHasDrawing()).isTrue();
+        assertThat(versionB.getPartNo()).isEqualTo("P-100");
+        assertThat(versionB.getVersion()).isEqualTo("B");
+        assertThat(versionB.getDrawingUrl()).isNull();
+        assertThat(versionB.getHasDrawing()).isFalse();
+        assertThat(resp.getDrawingReport())
+                .containsEntry("uploadedDrawingCount", 1)
+                .containsEntry("matchedItemCount", 1)
+                .containsEntry("missingDrawingCount", 1)
+                .containsEntry("versionUploadedDrawingCount", 1)
+                .containsEntry("versionMatchedDrawingCount", 1);
+    }
+
+    @Test
     void serviceRejectsDuplicateCustomerOrderAndInternalProjectBeforeWriting() throws Exception {
         SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
         CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
@@ -515,6 +599,46 @@ class SalesOrderQpoImportStage3Test {
         result.setLineCount(3);
         result.setSourceRowCount(3);
         return result;
+    }
+
+    private SalesOrderQpoExcelParseResult parseResultWithSamePartDifferentVersions() {
+        SalesOrderQpoExcelParseResult result = new SalesOrderQpoExcelParseResult();
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey("PO-001|IP-001");
+        group.setCustomerOrderNo("PO-001");
+        group.setInternalProjectNo("IP-001");
+        group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        group.setCustomerProjectNo("CP-001");
+        group.setCustomerOrderTitle("GSQ1");
+        group.setOrderType("样品订单");
+        group.setLines(List.of(line(1, "P-100", "A", "MAT-001", 10), line(2, "P-100", "B", "MAT-002", 4)));
+
+        result.setOrders(List.of(group));
+        result.setOrderCount(1);
+        result.setLineCount(2);
+        result.setSourceRowCount(2);
+        return result;
+    }
+
+    private BusinessFileService salesOrderImportDrawingStorage() {
+        return mock(BusinessFileService.class, invocation -> {
+            if ("saveSalesOrderImportDrawing".equals(invocation.getMethod().getName())) {
+                MultipartFile drawing = invocation.getArgument(2);
+                String fileName = drawing.getOriginalFilename() == null
+                        ? "drawing.pdf"
+                        : drawing.getOriginalFilename().replaceAll(".*[\\\\/]", "");
+                return new BusinessFileService.StoredBusinessFile(
+                        "/uploads/ACME/SOQPO/" + fileName,
+                        StorageType.LOCAL,
+                        1L,
+                        "ACME/SOQPO/" + fileName,
+                        fileName,
+                        "application/pdf",
+                        drawing.getSize(),
+                        null);
+            }
+            return Answers.RETURNS_DEFAULTS.answer(invocation);
+        });
     }
 
     private SalesOrderQpoExcelLineDTO line(int lineNo, String partNo, String version, String salesMaterialNo, int qty) {
