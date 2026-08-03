@@ -80,28 +80,6 @@
                   指定
                 </el-button>
               </div>
-              <el-upload
-                ref="selectionUploadRef"
-                action="#"
-                :auto-upload="false"
-                :show-file-list="false"
-                accept=".xlsx, .xls"
-                :on-change="handleQuoteProcessSelectionExcelChange"
-                class="quote-import-action"
-              >
-                <template #trigger>
-                  <el-button
-                    v-permission="'market:quote-process:update-lead-time'"
-                    :icon="Upload"
-                    plain
-                    class="workflow-soft-button"
-                    :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet"
-                    :loading="importSelecting"
-                  >
-                    导入表格锁定
-                  </el-button>
-                </template>
-              </el-upload>
               <div class="selection-count">已选 {{ selectedQuoteProcessItemIds.size }} 项</div>
             </div>
 
@@ -169,8 +147,33 @@
         <el-col :span="18">
           <div class="erp-table-surface workflow-main-panel quote-process-table-panel">
             <div class="erp-table-header workflow-table-header panel-title-row">
-              <div class="panel-title">零件交期</div>
-              <el-tag v-if="quoteProcessItemTotal" type="info">{{ quoteProcessItemTotal }} 项</el-tag>
+              <div class="quote-process-title-group">
+                <div class="panel-title">零件交期</div>
+                <el-tag v-if="quoteProcessItemTotal" type="info">{{ quoteProcessItemTotal }} 项</el-tag>
+              </div>
+              <div class="quote-process-table-actions import-action-row">
+                <el-upload
+                  ref="selectionUploadRef"
+                  action="#"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept=".xlsx, .xls"
+                  :on-change="handleQuoteProcessSelectionExcelChange"
+                >
+                  <template #trigger>
+                    <el-button
+                      v-permission="'market:quote-process:update-lead-time'"
+                      size="small"
+                      plain
+                      class="workflow-soft-button"
+                      :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet"
+                      :loading="importSelecting"
+                    >
+                      导入表格选定
+                    </el-button>
+                  </template>
+                </el-upload>
+              </div>
             </div>
             <el-empty v-if="!selectedRfqId" description="请选择已核价或已报价订单" />
             <el-table
@@ -281,7 +284,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Check, DocumentChecked, Download, Minus, Plus, Upload } from '@element-plus/icons-vue'
+import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   downloadQuote,
@@ -454,7 +457,7 @@ const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
   selectionUploadRef.value?.clearFiles()
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能导入锁定。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能导入表格选定。')
   if (!file) return
 
   const fileName = String(file.name || '').toLowerCase()
@@ -483,12 +486,12 @@ const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
       } else if (selectedCount === 0) {
         ElMessage.warning(`已读取 ${importedCount} 个图号+版本，但没有匹配到当前订单的报价零件。`)
       } else {
-        const skippedText = skippedCount > 0 ? `，${skippedCount} 项未锁定` : ''
-        ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已锁定 ${selectedCount} 项${skippedText}。`)
+        const skippedText = skippedCount > 0 ? `，${skippedCount} 项未选定` : ''
+        ElMessage.success(`已读取 ${importedCount} 个图号+版本，匹配 ${matchedCount} 项，已选定 ${selectedCount} 项${skippedText}。`)
       }
     } catch (error) {
       console.error(error)
-      ElMessage.error(error.response?.data?.message || '导入表格锁定失败。')
+      ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
     }
   })
 }
@@ -691,6 +694,36 @@ const exportTemplateSimpleQuote = async () => {
   margin-bottom: 0;
 }
 
+.quote-process-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.import-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+.quote-process-table-actions {
+  justify-content: flex-end;
+  width: auto;
+  margin-top: 0;
+}
+
+.quote-process-table-actions :deep(.el-upload) {
+  display: flex;
+}
+
+.quote-process-table-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
 .selected-order-text {
   min-height: 34px;
   display: flex;
@@ -766,15 +799,6 @@ const exportTemplateSimpleQuote = async () => {
   margin-left: 0;
 }
 
-.quote-import-action {
-  margin-top: 10px;
-}
-
-.quote-import-action :deep(.el-button) {
-  width: 100%;
-  margin-left: 0;
-}
-
 .selection-count {
   margin-top: 10px;
   color: var(--erp-text-secondary);
@@ -826,6 +850,16 @@ const exportTemplateSimpleQuote = async () => {
 
   .header-actions {
     justify-content: flex-start;
+  }
+
+  .quote-process-table-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .quote-process-table-actions :deep(.el-button),
+  .quote-process-table-actions :deep(.el-upload) {
+    width: 100%;
   }
 }
 </style>

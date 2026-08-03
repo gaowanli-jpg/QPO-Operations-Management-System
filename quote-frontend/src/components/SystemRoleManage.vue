@@ -2,8 +2,8 @@
   <div class="erp-page role-manage-page">
     <header class="erp-page-header">
       <div>
-        <h1 class="erp-page-title">角色管理</h1>
-        <p class="erp-page-description">配置角色启停、权限授权和数据范围入口。</p>
+        <h1 class="erp-page-title">角色权限</h1>
+        <p class="erp-page-description">配置角色启停、功能授权和数据范围入口。</p>
       </div>
       <div class="erp-page-actions">
         <el-button v-permission="'system:role:create'" type="primary" @click="openCreate">新增角色</el-button>

@@ -34,6 +34,7 @@ class PermissionModuleTreeTest {
     private static final Path DELIVERY_DOCUMENT_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
     private static final Path INQUIRY_ORDER_RENAME_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V70__rename_order_management_to_inquiry_orders.sql");
     private static final Path LOCKED_ITEM_MES_PRODUCTION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
+    private static final Path SYSTEM_USER_ROLE_MODULE_RENAME_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V80__rename_user_role_permission_modules.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path PERMISSION_LIST_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path DOCS_ROOT = Path.of("..", "docs");
@@ -58,7 +59,7 @@ class PermissionModuleTreeTest {
             "APS 同步不能被破坏"
     );
     private static final Pattern FALLBACK_PERMISSION = Pattern.compile(
-            "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"[^\"]+\"\\s*,\\s*(null|\"[^\"]+\")",
+            "permission\\([^,]+,\\s*\"(MENU|BUTTON|API)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*\"([^\"]+)\"\\s*,\\s*(null|\"[^\"]+\")",
             Pattern.MULTILINE
     );
     private static final Pattern ROUTE_PERMISSION = Pattern.compile(
@@ -598,6 +599,26 @@ class PermissionModuleTreeTest {
     }
 
     @Test
+    void systemUserAndRolePermissionModulesUseCurrentBusinessNames() throws IOException {
+        Map<String, String> namesByCode = new LinkedHashMap<>();
+        for (PermissionRow row : fallbackPermissions()) {
+            namesByCode.put(row.code, row.name);
+        }
+        String migration = Files.readString(SYSTEM_USER_ROLE_MODULE_RENAME_MIGRATION, StandardCharsets.UTF_8);
+
+        assertThat(namesByCode)
+                .containsEntry("system:user:view", "用户管理")
+                .containsEntry("system:role:view", "角色权限");
+        assertThat(namesByCode.values())
+                .doesNotContain("用户权限", "角色管理");
+        assertThat(migration)
+                .contains("system:user:view")
+                .contains("用户管理")
+                .contains("system:role:view")
+                .contains("角色权限");
+    }
+
+    @Test
     void organizationPermissionsFormAssignableModuleTree() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
 
@@ -637,9 +658,9 @@ class PermissionModuleTreeTest {
         Matcher matcher = FALLBACK_PERMISSION.matcher(source);
         List<PermissionRow> rows = new ArrayList<>();
         while (matcher.find()) {
-            String pathToken = matcher.group(3);
+            String pathToken = matcher.group(4);
             String path = "null".equals(pathToken) ? null : pathToken.substring(1, pathToken.length() - 1);
-            rows.add(new PermissionRow(matcher.group(1), matcher.group(2), path));
+            rows.add(new PermissionRow(matcher.group(1), matcher.group(2), matcher.group(3), path));
         }
         return rows;
     }
@@ -662,6 +683,6 @@ class PermissionModuleTreeTest {
                 || normalized.contains("/QPO日志模块");
     }
 
-    private record PermissionRow(String type, String code, String path) {
+    private record PermissionRow(String type, String code, String name, String path) {
     }
 }

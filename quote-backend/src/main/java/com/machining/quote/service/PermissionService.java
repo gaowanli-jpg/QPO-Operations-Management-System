@@ -267,7 +267,7 @@ public class PermissionService {
             permission(119L, "BUTTON", "system:user:disable", "启停用户", null, null, false, 813, 9L),
             permission(120L, "BUTTON", "system:user:reset-password", "重置密码", null, null, false, 814, 9L),
             permission(121L, "BUTTON", "system:user:delete", "删除用户", null, null, false, 815, 9L),
-            permission(122L, "MENU", "system:role:view", "角色管理", "/roles", "SystemRoleManage", true, 820),
+            permission(122L, "MENU", "system:role:view", "角色权限", "/roles", "SystemRoleManage", true, 820),
             permission(123L, "BUTTON", "system:role:create", "新增角色", null, null, false, 821, 122L),
             permission(124L, "BUTTON", "system:role:update", "编辑角色", null, null, false, 822, 122L),
             permission(125L, "BUTTON", "system:role:delete", "删除角色", null, null, false, 823, 122L),

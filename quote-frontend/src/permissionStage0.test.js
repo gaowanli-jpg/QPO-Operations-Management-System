@@ -79,6 +79,18 @@ describe('QPO permission stage 0 guardrails', () => {
     expect(menuPermissionEntries()).toEqual(visibleMenuPermissions)
   })
 
+  test('uses current system module display names in sidebar and page headers', () => {
+    const userManage = readSource('components', 'UserManage.vue')
+    const roleManage = readSource('components', 'SystemRoleManage.vue')
+
+    expect(appVue).toContain("'/users': { title: '用户管理', permission: 'system:user:view'")
+    expect(appVue).toContain("'/roles': { title: '角色权限', permission: 'system:role:view'")
+    expect(appVue).not.toContain("title: '用户权限'")
+    expect(appVue).not.toContain("title: '角色管理'")
+    expect(userManage).toContain('<h1 class="erp-page-title">用户管理</h1>')
+    expect(roleManage).toContain('<h1 class="erp-page-title">角色权限</h1>')
+  })
+
   test('maps every protected frontend route to a target permission code', () => {
     const doc = mappingDoc()
 

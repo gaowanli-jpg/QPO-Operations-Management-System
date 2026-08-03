@@ -135,8 +135,8 @@ const menuMetaByPath = {
   '/sales-orders': { title: '销售订单', permission: 'market:sales-order:view', icon: Files },
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
   '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
-  '/users': { title: '用户权限', permission: 'system:user:view', icon: User },
-  '/roles': { title: '角色管理', permission: 'system:role:view', icon: User },
+  '/users': { title: '用户管理', permission: 'system:user:view', icon: User },
+  '/roles': { title: '角色权限', permission: 'system:role:view', icon: User },
   '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
   '/customers': { title: '客户资料', permission: 'system:customer:view', icon: User },
   '/audit-logs': { title: '操作日志', permission: 'system:audit:view', icon: Document },
@@ -232,12 +232,12 @@ const shellMetaByPath = {
     description: '查看 WMS 返回后的库存锁定、在产锁定和待生产拆分明细。'
   },
   '/users': {
-    title: '用户权限',
+    title: '用户管理',
     description: '维护账号状态、角色和密码安全。'
   },
   '/roles': {
-    title: '角色管理',
-    description: '配置角色启停、权限授权和数据范围。'
+    title: '角色权限',
+    description: '配置角色启停、功能授权和数据范围。'
   },
   '/organization': {
     title: '组织档案',

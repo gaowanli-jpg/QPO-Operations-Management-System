@@ -117,6 +117,18 @@ describe('large order item paging contracts', () => {
     expect(source).toContain('await syncQuoteProcessPageSelection()')
   })
 
+  test('quote process import selection action lives in the right table header', () => {
+    const source = readSource('components', 'QuoteProcess.vue')
+    const headerStart = source.indexOf('class="erp-table-header workflow-table-header panel-title-row"')
+    const tableStart = source.indexOf('<el-table', headerStart)
+    const tableHeader = source.slice(headerStart, tableStart)
+
+    expect(source).not.toContain('导入表格锁定')
+    expect(tableHeader).toContain('导入表格选定')
+    expect(tableHeader).toContain(':on-change="handleQuoteProcessSelectionExcelChange"')
+    expect(tableHeader).toContain('quote-process-table-actions')
+  })
+
   test('market release page uses backend paging and cross-page selection state', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const apiSource = readSource('services', 'marketApi.js')

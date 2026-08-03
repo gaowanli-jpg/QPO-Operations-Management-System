@@ -155,7 +155,7 @@ describe('authStore', () => {
     }, {
       roles: ['SUPER_ADMIN'],
       permissions: ['system:user:view'],
-      menus: [{ path: '/users', title: '用户权限' }]
+      menus: [{ path: '/users', title: '用户管理' }]
     })
 
     await authStore.updateMyProfile({
