@@ -32,7 +32,9 @@ public class AuditService {
             "confirmpassword",
             "passwordhash",
             "token",
+            "tokenhash",
             "authtoken",
+            "callbacktoken",
             "jwttoken",
             "clientsecret",
             "accesssecret",
@@ -190,6 +192,7 @@ public class AuditService {
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_STORAGE_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INTEGRATION_CONFIG_")) return "SYSTEM";
+        if (startsWith(action, "SYSTEM_INBOUND_CALLBACK_")) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_U9".equalsIgnoreCase(action)) return "MARKET";
@@ -267,6 +270,9 @@ public class AuditService {
             case "SYSTEM_INTEGRATION_CONFIG_TEST_FAILED" -> "测试系统对接配置失败";
             case "SYSTEM_INTEGRATION_CONFIG_ACTIVATE" -> "激活系统对接配置";
             case "SYSTEM_INTEGRATION_CONFIG_DISABLE" -> "停用系统对接配置";
+            case "SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE" -> "保存入站接口配置";
+            case "SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE" -> "轮换入站回调Token";
+            case "SYSTEM_INBOUND_CALLBACK_CONFIG_VALIDATE" -> "校验入站接口配置";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_U9" -> "导入销售订单并同步U9";
