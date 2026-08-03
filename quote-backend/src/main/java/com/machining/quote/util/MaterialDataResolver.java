@@ -3,6 +3,7 @@ package com.machining.quote.util;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.SalesOrderItem;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,6 +32,21 @@ public final class MaterialDataResolver {
             return "";
         }
         return stringValue(normalizeMap(item.getMaterialData()).get("name"));
+    }
+
+    public static String effectiveSalesOrderMaterialName(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        String engineeringMaterialName = stringValue(item.getEngineeringMaterialName());
+        if (!engineeringMaterialName.isEmpty()) {
+            return engineeringMaterialName;
+        }
+        String materialDataName = stringValue(normalizeMap(item.getMaterialData()).get("name"));
+        if (!materialDataName.isEmpty()) {
+            return materialDataName;
+        }
+        return stringValue(item.getMaterialName());
     }
 
     public static String materialShape(Object materialData) {

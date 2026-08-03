@@ -119,6 +119,8 @@ class SalesOrderDeliveryTicketStage6Test {
         SalesOrderHeader header = salesOrderHeader();
         SalesOrderItem first = salesOrderItem(1001L, 4, 0, "SO-P-1");
         SalesOrderItem second = salesOrderItem(1002L, 3, 0, "SO-P-2");
+        second.setEngineeringMaterialName(null);
+        second.setMaterialData(Map.of("shape", "plate"));
 
         when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
         when(headerMapper.selectById(9001L)).thenReturn(header);
@@ -147,6 +149,9 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(partialTicket.getCustomerName()).isEqualTo("ACME");
         assertThat(partialTicket.getRfqNo()).isEqualTo("SO-QPO-001");
         assertThat(partialTicket.getMaterialNo()).isEqualTo("MAT-1001");
+        assertThat(partialTicket.getMaterialName()).isEqualTo("6061");
+        assertThat(partialTicket.getEngineeringMaterialName()).isEqualTo("7075");
+        assertThat(partialTicket.getMaterialData()).isEqualTo(Map.of("name", "7075"));
         assertThat(partialTicket.getDrawingUrl()).isEqualTo("/drawings/SO-P-1.pdf");
         assertThat(first.getReleasedQty()).isEqualTo(2);
         assertThat(first.getRemainingQty()).isEqualTo(2);
@@ -161,6 +166,13 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(second.getReleasedQty()).isEqualTo(3);
         assertThat(second.getRemainingQty()).isZero();
         assertThat(second.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+        OrderDeliveryTicket fallbackTicket = insertedTickets.stream()
+                .filter(ticket -> Long.valueOf(1002L).equals(ticket.getSourceItemId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(fallbackTicket.getMaterialName()).isEqualTo("6061");
+        assertThat(fallbackTicket.getEngineeringMaterialName()).isEqualTo("6061");
+        assertThat(fallbackTicket.getMaterialData()).isEqualTo(Map.of("shape", "plate"));
         assertThat(header.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
         verify(dataScopeService, atLeastOnce()).assertCanAccessSalesOrder(header);
         verify(auditService, atLeastOnce()).record(eq("DELIVERY_TICKET_GENERATE"), eq("sales_order_header"), eq(9001L), isNull(), any());

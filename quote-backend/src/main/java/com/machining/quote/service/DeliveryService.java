@@ -585,11 +585,7 @@ public class DeliveryService {
     }
 
     private String resolveSalesOrderEngineeringMaterialName(SalesOrderItem item) {
-        if (!isBlank(item.getEngineeringMaterialName())) {
-            return item.getEngineeringMaterialName().trim();
-        }
-        Object name = MaterialDataResolver.normalizeMap(item.getMaterialData()).get("name");
-        return name == null ? "" : String.valueOf(name).trim();
+        return MaterialDataResolver.effectiveSalesOrderMaterialName(item);
     }
 
     private String resolveSalesOrderMaterialShape(SalesOrderItem item) {
