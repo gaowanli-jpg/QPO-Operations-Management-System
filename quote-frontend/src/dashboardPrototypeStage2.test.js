@@ -85,7 +85,7 @@ describe('Dashboard prototype stage 2 page wiring', () => {
     const dashboardSource = readFileSync(resolve(dashboardDir, 'DashboardHome.vue'), 'utf8')
 
     expect(dashboardSource).toContain("import { dashboardMockData } from './dashboardMockData'")
-    expect(dashboardSource).toContain("import { formatDashboardNumber")
+    expect(dashboardSource).toContain("import { goDashboardTarget } from './dashboardNavigation'")
     expect(dashboardSource).toContain('summaryCards')
     expect(dashboardSource).toContain('rfqStatusDistribution')
     expect(dashboardSource).toContain('salesQuotedCustomerDistribution')

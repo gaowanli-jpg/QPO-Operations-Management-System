@@ -21,21 +21,13 @@
     </header>
 
     <div class="dashboard-summary-grid">
-      <button
+      <DashboardSummaryCard
         v-for="card in visibleSummaryCards"
         :key="card.key"
-        type="button"
-        class="erp-surface dashboard-surface dashboard-summary-card"
-        :class="`dashboard-tone-${card.tone}`"
-        @click="goToItem(card)"
-      >
-        <span class="dashboard-card-label">{{ card.title }}</span>
-        <strong class="dashboard-card-value">
-          {{ formatDashboardNumber(card.value) }}<small>{{ card.unit }}</small>
-        </strong>
-        <span class="dashboard-card-helper dashboard-muted">{{ card.helper }}</span>
-        <span class="dashboard-card-trend">{{ card.trendText }}</span>
-      </button>
+        :item="card"
+        :auth-store="authStore"
+        @select="goToItem"
+      />
     </div>
 
     <div class="dashboard-placeholder-grid dashboard-chart-grid">
@@ -58,90 +50,24 @@
     </div>
 
     <div class="dashboard-workbench-grid">
-      <section class="erp-surface dashboard-surface dashboard-matrix-card">
-        <div class="dashboard-section-header">
-          <div>
-            <h2>客户状态交叉表</h2>
-            <p class="dashboard-muted">按客户合并展示询价三状态和销售已报价数量，不展示提单后状态。</p>
-          </div>
-          <el-tag size="small" type="info" effect="plain">客户视角</el-tag>
-        </div>
-        <div class="dashboard-matrix-table">
-          <div class="dashboard-matrix-row dashboard-matrix-head">
-            <span>客户</span>
-            <span>未核价</span>
-            <span>已核价</span>
-            <span>已报价</span>
-            <span>销售已报价</span>
-            <span>关注合计</span>
-          </div>
-          <div
-            v-for="row in customerMatrix"
-            :key="row.customerId"
-            class="dashboard-matrix-row"
-          >
-            <span class="dashboard-customer-cell">
-              <strong>{{ row.customerName }}</strong>
-              <small class="dashboard-muted">{{ row.customerCode }}</small>
-            </span>
-            <button type="button" @click="goToOrders(row, '未核价')">{{ formatDashboardNumber(row.rfqUnpriced) }}</button>
-            <button type="button" @click="goToOrders(row, '已核价')">{{ formatDashboardNumber(row.rfqPriced) }}</button>
-            <button type="button" @click="goToOrders(row, '已报价')">{{ formatDashboardNumber(row.rfqQuoted) }}</button>
-            <button type="button" @click="goToSalesOrders(row)">{{ formatDashboardNumber(row.salesQuoted) }}</button>
-            <strong>{{ formatDashboardNumber(row.totalFocus) }}</strong>
-          </div>
-        </div>
-      </section>
+      <DashboardCustomerMatrix
+        :rows="customerMatrix"
+        :auth-store="authStore"
+        @rfq-select="goToOrders"
+        @sales-select="goToSalesOrders"
+      />
 
       <aside class="dashboard-side-stack">
-        <section class="erp-surface dashboard-surface dashboard-todo-card">
-          <div class="dashboard-section-header">
-            <div>
-              <h2>待办快捷入口</h2>
-              <p class="dashboard-muted">点击进入对应业务模块继续处理。</p>
-            </div>
-          </div>
-          <div class="dashboard-action-list">
-            <button
-              v-for="todo in visibleTodoCards"
-              :key="todo.key"
-              type="button"
-              class="dashboard-action-item"
-              @click="goToItem(todo)"
-            >
-              <span>
-                <strong>{{ todo.title }}</strong>
-                <small class="dashboard-muted">{{ todo.description }}</small>
-              </span>
-              <em>{{ formatDashboardNumber(todo.value) }}{{ todo.unit }}</em>
-            </button>
-          </div>
-        </section>
-
-        <section class="erp-surface dashboard-surface dashboard-attention-card">
-          <div class="dashboard-section-header">
-            <div>
-              <h2>最近异常 / 关注项</h2>
-              <p class="dashboard-muted">只做入口提示，实际处理仍回到业务模块。</p>
-            </div>
-          </div>
-          <div class="dashboard-action-list">
-            <button
-              v-for="item in visibleAttentionItems"
-              :key="item.key"
-              type="button"
-              class="dashboard-attention-item"
-              :class="`dashboard-severity-${item.severity}`"
-              @click="goToItem(item)"
-            >
-              <span>
-                <strong>{{ item.title }}</strong>
-                <small>{{ item.description }}</small>
-              </span>
-              <em>{{ formatDashboardNumber(item.value) }}{{ item.unit }}</em>
-            </button>
-          </div>
-        </section>
+        <DashboardTodoCard
+          :items="visibleTodoCards"
+          :auth-store="authStore"
+          @select="goToItem"
+        />
+        <DashboardAttentionList
+          :items="visibleAttentionItems"
+          :auth-store="authStore"
+          @select="goToItem"
+        />
       </aside>
     </div>
   </section>
@@ -152,9 +78,13 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
 import { useAuthStore } from '../../stores/authStore'
+import DashboardAttentionList from './DashboardAttentionList.vue'
 import DashboardChartCard from './DashboardChartCard.vue'
+import DashboardCustomerMatrix from './DashboardCustomerMatrix.vue'
+import DashboardSummaryCard from './DashboardSummaryCard.vue'
+import DashboardTodoCard from './DashboardTodoCard.vue'
 import { dashboardMockData } from './dashboardMockData'
-import { formatDashboardNumber, canShowDashboardAction, goDashboardTarget } from './dashboardNavigation'
+import { goDashboardTarget } from './dashboardNavigation'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -181,9 +111,9 @@ const customerMatrix = dashboardMockData.customerMatrix
 const todoCards = dashboardMockData.todoCards
 const attentionItems = dashboardMockData.attentionItems
 
-const visibleSummaryCards = computed(() => summaryCards.filter((item) => canShowDashboardAction(item, authStore)))
-const visibleTodoCards = computed(() => todoCards.filter((item) => canShowDashboardAction(item, authStore)))
-const visibleAttentionItems = computed(() => attentionItems.filter((item) => canShowDashboardAction(item, authStore)))
+const visibleSummaryCards = summaryCards
+const visibleTodoCards = todoCards
+const visibleAttentionItems = attentionItems
 
 const refreshUpdatedAt = () => {
   updatedAtValue.value = new Date()
@@ -293,211 +223,12 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   min-width: 0;
 }
 
-.dashboard-summary-card,
-.dashboard-action-item,
-.dashboard-attention-item,
-.dashboard-matrix-row button {
-  cursor: pointer;
-}
-
-.dashboard-summary-card {
-  display: flex;
-  min-height: 158px;
-  padding: var(--erp-space-4);
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--erp-space-2);
-  text-align: left;
-  transition:
-    border-color var(--erp-duration-fast) var(--erp-ease-standard),
-    box-shadow var(--erp-duration-fast) var(--erp-ease-standard),
-    background-color var(--erp-duration-fast) var(--erp-ease-standard);
-}
-
-.dashboard-summary-card:hover,
-.dashboard-action-item:hover,
-.dashboard-attention-item:hover,
-.dashboard-matrix-row button:hover {
+:deep(.dashboard-summary-card:hover),
+:deep(.dashboard-action-item:hover),
+:deep(.dashboard-attention-item:hover),
+:deep(.dashboard-matrix-button:hover) {
   border-color: var(--erp-primary);
   box-shadow: var(--erp-shadow-sm);
-}
-
-.dashboard-card-label,
-.dashboard-card-helper,
-.dashboard-card-trend {
-  font-size: var(--erp-font-size-sm);
-}
-
-.dashboard-card-label {
-  color: var(--erp-text-secondary);
-}
-
-.dashboard-card-value {
-  color: var(--erp-text);
-  font-size: 30px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.dashboard-card-value small {
-  margin-left: var(--erp-space-1);
-  color: var(--erp-text-muted);
-  font-size: var(--erp-font-size-sm);
-  font-weight: var(--erp-font-weight-medium);
-}
-
-.dashboard-card-trend {
-  margin-top: auto;
-  padding-top: var(--erp-space-2);
-  color: var(--erp-text);
-}
-
-.dashboard-tone-primary {
-  border-top: 3px solid var(--erp-primary);
-}
-
-.dashboard-tone-success {
-  border-top: 3px solid var(--erp-success);
-}
-
-.dashboard-tone-warning {
-  border-top: 3px solid var(--erp-warning);
-}
-
-.dashboard-tone-info {
-  border-top: 3px solid var(--erp-info);
-}
-
-.dashboard-matrix-card,
-.dashboard-todo-card,
-.dashboard-attention-card {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.dashboard-section-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--erp-space-3);
-  padding: var(--erp-space-4);
-  border-bottom: 1px solid var(--erp-border);
-  background: var(--erp-surface-soft);
-}
-
-.dashboard-section-header h2 {
-  margin: 0 0 var(--erp-space-1);
-  color: var(--erp-text);
-  font-size: var(--erp-font-size-lg);
-}
-
-.dashboard-section-header p {
-  margin: 0;
-  font-size: var(--erp-font-size-sm);
-  line-height: var(--erp-line-height-base);
-}
-
-.dashboard-action-list {
-  display: grid;
-  gap: var(--erp-space-2);
-  padding: var(--erp-space-4);
-}
-
-.dashboard-action-item,
-.dashboard-attention-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--erp-space-3);
-  min-height: 48px;
-  padding: var(--erp-space-3);
-  color: var(--erp-text);
-  background: var(--erp-surface);
-  border: 1px solid var(--erp-border-soft);
-  border-radius: var(--erp-radius-lg);
-  text-align: left;
-}
-
-.dashboard-action-item span,
-.dashboard-attention-item span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dashboard-action-item small,
-.dashboard-attention-item small {
-  line-height: var(--erp-line-height-tight);
-}
-
-.dashboard-action-item em,
-.dashboard-attention-item em {
-  color: var(--erp-text);
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--erp-font-weight-bold);
-}
-
-.dashboard-severity-warning {
-  background: var(--erp-warning-soft);
-}
-
-.dashboard-severity-danger {
-  background: var(--erp-danger-soft);
-}
-
-.dashboard-matrix-table {
-  padding: var(--erp-space-4);
-  overflow-x: auto;
-}
-
-.dashboard-matrix-row {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.35fr) repeat(5, minmax(92px, 0.55fr));
-  align-items: center;
-  gap: var(--erp-space-2);
-  min-width: 780px;
-  padding: var(--erp-space-2) 0;
-  border-bottom: 1px solid var(--erp-border-soft);
-}
-
-.dashboard-matrix-row:last-child {
-  border-bottom: 0;
-}
-
-.dashboard-matrix-head {
-  color: var(--erp-text-secondary);
-  font-size: var(--erp-font-size-sm);
-  font-weight: var(--erp-font-weight-bold);
-}
-
-.dashboard-customer-cell {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.dashboard-customer-cell strong,
-.dashboard-customer-cell small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dashboard-matrix-row button {
-  min-height: 34px;
-  color: var(--erp-primary);
-  background: var(--erp-primary-soft);
-  border: 1px solid transparent;
-  border-radius: var(--erp-radius-md);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--erp-font-weight-bold);
-}
-
-.dashboard-matrix-row > strong {
-  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 1280px) {
