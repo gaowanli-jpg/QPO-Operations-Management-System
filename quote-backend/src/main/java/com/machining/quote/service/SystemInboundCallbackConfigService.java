@@ -154,6 +154,8 @@ public class SystemInboundCallbackConfigService {
                 ? fallbackCallbackTokenEnabled
                 : (entity.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : Boolean.TRUE.equals(entity.getTokenEnabled()));
         if (!tokenEnabled) {
+            log.warn("MES material callback token verification disabled callbackCode={} configSource={}",
+                    callbackCode.name(), entity == null ? "ENV" : "DB");
             return true;
         }
         String expectedHash = entity == null ? null : trimToNull(entity.getTokenHash());

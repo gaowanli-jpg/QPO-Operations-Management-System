@@ -11,6 +11,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SystemInboundCallbackConfigService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -202,10 +203,10 @@ class MesMaterialCallbackStage3Test {
     @Test
     void callbackControllerRejectsMissingOrWrongTokenBeforeCallingService() {
         MesMaterialSyncService service = mock(MesMaterialSyncService.class);
-        MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
-        ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
-        ReflectionTestUtils.setField(controller, "callbackToken", "callback-token");
-        ReflectionTestUtils.setField(controller, "callbackTokenEnabled", true);
+        SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
+        MesIntegrationCallbackController controller = controller(service, configService);
+        when(configService.hasValidBearerToken(any(), isNull())).thenReturn(false);
+        when(configService.hasValidBearerToken(any(), eq("Bearer wrong"))).thenReturn(false);
 
         ResponseEntity<MesMaterialCallbackResp> missing = controller.materialCallback(null, callback("MAT-NEW"));
         ResponseEntity<MesMaterialCallbackResp> wrong = controller.materialCallback("Bearer wrong", callback("MAT-NEW"));
@@ -226,9 +227,10 @@ class MesMaterialCallbackStage3Test {
         expected.setTicketId(123);
         expected.setMesRequestId("MES-REQ-123");
         when(service.handleMaterialCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
+        SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
+        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
-        ReflectionTestUtils.setField(controller, "callbackToken", "callback-token");
-        ReflectionTestUtils.setField(controller, "callbackTokenEnabled", true);
+        ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", callback("MAT-NEW"));
 
@@ -240,12 +242,11 @@ class MesMaterialCallbackStage3Test {
     @Test
     void callbackControllerReturnsBadRequestWhenRequiredIdentityIsMissing() {
         MesMaterialSyncService service = syncService();
-        MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
+        SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
+        MesIntegrationCallbackController controller = controller(service, configService);
         MesMaterialCallbackReq req = callback("MAT-NEW");
         req.setMesRequestId(" ");
-        ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
-        ReflectionTestUtils.setField(controller, "callbackToken", "callback-token");
-        ReflectionTestUtils.setField(controller, "callbackTokenEnabled", true);
+        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", req);
 
@@ -257,6 +258,15 @@ class MesMaterialCallbackStage3Test {
 
     private MesMaterialSyncService syncService() {
         return new MesMaterialSyncService();
+    }
+
+    private MesIntegrationCallbackController controller(
+            MesMaterialSyncService syncService,
+            SystemInboundCallbackConfigService configService) {
+        MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
+        ReflectionTestUtils.setField(controller, "mesMaterialSyncService", syncService);
+        ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
+        return controller;
     }
 
     private void wire(
