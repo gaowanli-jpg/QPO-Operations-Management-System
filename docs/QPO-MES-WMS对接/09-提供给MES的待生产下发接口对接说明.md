@@ -56,6 +56,7 @@ ERP_MES_TIMEOUT_MS=10000
   "customerProjectNo": "CP-001",
   "materialName": "铝板",
   "engineeringMaterialName": "AL6061",
+  "materialShape": "板材",
   "surfaceTreatment": "阳极氧化",
   "description": "生产备注",
   "remark": "QPO锁库待生产下发",
@@ -105,6 +106,7 @@ ERP_MES_TIMEOUT_MS=10000
 | `customerProjectNo` | 否 | 客户项目号。 |
 | `materialName` | 否 | 业务材料名称。 |
 | `engineeringMaterialName` | 否 | 工程材料名称。 |
+| `materialShape` | 否 | 材料形态，来自显式快照字段；通常为 `板材 / 棒材 / 管材`，来源于核价材料快照里的 `materialData.shape`。 |
 | `surfaceTreatment` | 否 | 表面处理。 |
 | `description` | 否 | 说明。 |
 | `remark` | 否 | 备注。 |

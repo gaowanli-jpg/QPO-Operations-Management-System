@@ -38,6 +38,7 @@ public class ItemQuoteVersion {
     // 👇 市场部 Excel 导入新增的 5 个业务字段 👇
     private String materialName;      // 材料名称
     private String engineeringMaterialName; // 工程核价选择的材料
+    private String materialShape;
     private String surfaceTreatment;  // 表面处理
     private String unit;              // 单位
     private String leadTime;          // 交货周期(L/T)

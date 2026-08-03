@@ -53,6 +53,8 @@ class WmsAllocationTest {
             "src", "main", "resources", "db", "migration", "V58__delivery_allocation_item_type_snapshot.sql");
     private static final Path MES_PRODUCTION_DISPATCH_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
+    private static final Path MATERIAL_SHAPE_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V77__material_shape_snapshots.sql");
     private static final Path DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERY_ALLOCATION = Path.of(
@@ -171,6 +173,7 @@ class WmsAllocationTest {
                     assertSnapshot(row, "getCustomerProjectNo", "CP-9");
                     assertSnapshot(row, "getMaterialName", "6061");
                     assertSnapshot(row, "getEngineeringMaterialName", "7075");
+                    assertSnapshot(row, "getMaterialShape", "板材");
                     assertSnapshot(row, "getSurfaceTreatment", "Anodized");
                     assertSnapshot(row, "getRemark", "Rush note");
                     assertSnapshot(row, "getDescription", "Bracket");
@@ -431,6 +434,7 @@ class WmsAllocationTest {
                         "private String customerProjectNo;",
                         "private String materialName;",
                         "private String engineeringMaterialName;",
+                        "private String materialShape;",
                         "private String surfaceTreatment;",
                         "private String remark;",
                         "private String description;",
@@ -457,6 +461,7 @@ class WmsAllocationTest {
                         "row.setCustomerProjectNo(ticket.getCustomerProjectNo())",
                         "row.setMaterialName(ticket.getMaterialName())",
                         "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName())",
+                        "row.setMaterialShape(ticket.getMaterialShape())",
                         "row.setSurfaceTreatment(ticket.getSurfaceTreatment())",
                         "row.setRemark(ticket.getRemark())",
                         "row.setDescription(ticket.getDescription())",
@@ -467,6 +472,24 @@ class WmsAllocationTest {
                         "row.setPartNetWeight(ticket.getPartNetWeight())",
                         "row.setTicketQty(ticket.getQty())",
                         "row.setMesProductionStatus(\"PENDING\")"
+                );
+    }
+
+    @Test
+    void materialShapeMigrationAddsExplicitSnapshotsAndBackfillsFromMaterialData() throws IOException {
+        String migration = read(MATERIAL_SHAPE_MIGRATION);
+
+        assertThat(migration)
+                .contains(
+                        "ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
+                        "ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
+                        "ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
+                        "ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
+                        "material_data ->> 'shape'",
+                        "COMMENT ON COLUMN item_quote_version.material_shape",
+                        "COMMENT ON COLUMN sales_order_item.material_shape",
+                        "COMMENT ON COLUMN order_delivery_ticket.material_shape",
+                        "COMMENT ON COLUMN order_delivery_ticket_allocation.material_shape"
                 );
     }
 
@@ -536,6 +559,7 @@ class WmsAllocationTest {
         ticket.setCustomerProjectNo("CP-9");
         ticket.setMaterialName("6061");
         ticket.setEngineeringMaterialName("7075");
+        setSnapshot(ticket, "setMaterialShape", "板材");
         ticket.setSurfaceTreatment("Anodized");
         ticket.setRemark("Rush note");
         ticket.setDescription("Bracket");
@@ -585,6 +609,14 @@ class WmsAllocationTest {
             assertThat(actual).isEqualTo(expectedValue);
         } catch (ReflectiveOperationException error) {
             throw new AssertionError("Allocation snapshot getter missing or inaccessible: " + getterName, error);
+        }
+    }
+
+    private void setSnapshot(Object row, String setterName, Object value) {
+        try {
+            row.getClass().getMethod(setterName, value.getClass()).invoke(row, value);
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Snapshot setter missing or inaccessible: " + setterName, error);
         }
     }
 }

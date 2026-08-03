@@ -514,6 +514,7 @@ public class DeliveryService {
         ticket.setQty(qty);
         ticket.setMaterialName(item.getMaterialName());
         ticket.setEngineeringMaterialName(resolveSalesOrderEngineeringMaterialName(item));
+        ticket.setMaterialShape(resolveSalesOrderMaterialShape(item));
         ticket.setSurfaceTreatment(item.getSurfaceTreatment());
         ticket.setVersion(item.getVersion());
         ticket.setStartDate(startDate);
@@ -591,6 +592,16 @@ public class DeliveryService {
         return name == null ? "" : String.valueOf(name).trim();
     }
 
+    private String resolveSalesOrderMaterialShape(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        if (!isBlank(item.getMaterialShape())) {
+            return item.getMaterialShape().trim();
+        }
+        return MaterialDataResolver.materialShape(item.getMaterialData());
+    }
+
     private String salesOrderItemLabel(SalesOrderItem item) {
         return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
     }
@@ -617,6 +628,7 @@ public class DeliveryService {
         ticket.setQty(qty);
         ticket.setMaterialName(item.getMaterialName());
         ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
+        ticket.setMaterialShape(resolveMaterialShape(item));
         ticket.setSurfaceTreatment(item.getSurfaceTreatment());
         ticket.setVersion(item.getVersion());
         ticket.setStartDate(startDate);
@@ -630,6 +642,10 @@ public class DeliveryService {
         ticket.setPartNetWeight(item.getPartNetWeight());
         ticketMapper.insert(ticket);
         return ticket;
+    }
+
+    private String resolveMaterialShape(ItemQuoteVersion item) {
+        return MaterialDataResolver.materialShape(item);
     }
 
     private void addDeliveryDemand(ItemQuoteVersion item, int qty, Map<Integer, DemandLine> demandByItemId) {

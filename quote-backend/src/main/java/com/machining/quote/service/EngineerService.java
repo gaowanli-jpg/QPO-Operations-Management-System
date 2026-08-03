@@ -219,6 +219,7 @@ public class EngineerService {
 
         item.setMaterialData(materialData);
         item.setEngineeringMaterialName(engineeringMaterialName);
+        item.setMaterialShape(materialShape(materialData));
         item.setProcessRoute(processRoute);
         item.setFeeData(feeBreakdown);
         item.setMaterialGrossWeight(materialGrossWeight);
@@ -316,6 +317,7 @@ public class EngineerService {
         parent.setAssemblyFee(safeAssemblyFee);
         parent.setMaterialData(materialData);
         parent.setEngineeringMaterialName("");
+        parent.setMaterialShape("");
         parent.setProcessRoute(processRoute);
         parent.setFeeData(assemblyFeeBreakdown);
         parent.setMaterialGrossWeight(0.0);
@@ -1465,6 +1467,10 @@ public class EngineerService {
         }
         String text = value.toString().trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private String materialShape(Map<String, Object> materialData) {
+        return stringValue(materialData == null ? null : materialData.get("shape"));
     }
 
     private Double doubleValue(Object value) {

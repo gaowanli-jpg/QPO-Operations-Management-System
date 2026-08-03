@@ -181,6 +181,7 @@ public class MesProductionDispatchService {
         req.setCustomerProjectNo(allocation.getCustomerProjectNo());
         req.setMaterialName(allocation.getMaterialName());
         req.setEngineeringMaterialName(allocation.getEngineeringMaterialName());
+        req.setMaterialShape(allocation.getMaterialShape());
         req.setSurfaceTreatment(allocation.getSurfaceTreatment());
         req.setDescription(allocation.getDescription());
         req.setRemark(allocation.getRemark());

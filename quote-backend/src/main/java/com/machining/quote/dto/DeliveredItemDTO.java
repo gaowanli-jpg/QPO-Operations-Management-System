@@ -28,6 +28,7 @@ public class DeliveredItemDTO {
     private String itemType;
     private String materialName;
     private String engineeringMaterialName;
+    private String materialShape;
     private String surfaceTreatment;
     private String drawingUrl;
     private Object processRoute;

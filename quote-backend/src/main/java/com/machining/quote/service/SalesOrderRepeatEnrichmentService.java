@@ -6,6 +6,7 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -101,6 +102,7 @@ public class SalesOrderRepeatEnrichmentService {
         boolean hasUploadedDrawing = !isBlank(uploadedDrawingUrl);
         current.setMaterialName(source.getMaterialName());
         current.setEngineeringMaterialName(source.getEngineeringMaterialName());
+        current.setMaterialShape(resolveMaterialShape(source));
         current.setSurfaceTreatment(source.getSurfaceTreatment());
         current.setMaterialGrossWeight(source.getMaterialGrossWeight());
         current.setPartNetWeight(source.getPartNetWeight());
@@ -157,5 +159,9 @@ public class SalesOrderRepeatEnrichmentService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String resolveMaterialShape(ItemQuoteVersion source) {
+        return MaterialDataResolver.materialShape(source);
     }
 }

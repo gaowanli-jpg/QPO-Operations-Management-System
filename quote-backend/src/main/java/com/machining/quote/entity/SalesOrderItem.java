@@ -38,6 +38,7 @@ public class SalesOrderItem {
     private LocalDate internalDeliveryDate;
     private String materialName;
     private String engineeringMaterialName;
+    private String materialShape;
     private String surfaceTreatment;
     private BigDecimal taxIncludedUnitPrice;
     private BigDecimal untaxedUnitPrice;

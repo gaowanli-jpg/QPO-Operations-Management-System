@@ -28,6 +28,7 @@ public class MesProductionDispatchReq {
     private String customerProjectNo;
     private String materialName;
     private String engineeringMaterialName;
+    private String materialShape;
     private String surfaceTreatment;
     private String description;
     private String remark;

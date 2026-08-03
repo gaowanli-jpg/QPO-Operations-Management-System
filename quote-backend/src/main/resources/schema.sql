@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     customer_delivery_date DATE,
     internal_delivery_date DATE,
     material_name VARCHAR(255),
+    material_shape VARCHAR(30),
     surface_treatment VARCHAR(255),
     unit VARCHAR(50),
     lead_time VARCHAR(100),
@@ -239,6 +240,7 @@ CREATE TABLE IF NOT EXISTS sales_order_item (
     internal_delivery_date DATE,
     material_name VARCHAR(255),
     engineering_material_name VARCHAR(255),
+    material_shape VARCHAR(30),
     surface_treatment VARCHAR(255),
     tax_included_unit_price NUMERIC(14, 4),
     untaxed_unit_price NUMERIC(14, 4),
@@ -413,6 +415,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     qty INTEGER,
     material_name VARCHAR(100),
     engineering_material_name VARCHAR(255),
+    material_shape VARCHAR(30),
     surface_treatment VARCHAR(100),
     version VARCHAR(20),
     start_date DATE,
@@ -482,6 +485,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     customer_project_no VARCHAR(100),
     material_name VARCHAR(100),
     engineering_material_name VARCHAR(255),
+    material_shape VARCHAR(30),
     surface_treatment VARCHAR(100),
     remark TEXT,
     description TEXT,
@@ -511,6 +515,7 @@ ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_o
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_name VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS engineering_material_name VARCHAR(255);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS surface_treatment VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS remark TEXT;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS description TEXT;

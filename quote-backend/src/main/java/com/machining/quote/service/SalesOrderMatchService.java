@@ -23,6 +23,7 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -336,6 +337,9 @@ public class SalesOrderMatchService {
         if (overwriteSnapshot || isBlank(item.getEngineeringMaterialName())) {
             item.setEngineeringMaterialName(source.getEngineeringMaterialName());
         }
+        if (overwriteSnapshot || isBlank(item.getMaterialShape())) {
+            item.setMaterialShape(resolveMaterialShape(source));
+        }
         if (overwriteSnapshot || item.getMaterialGrossWeight() == null) {
             item.setMaterialGrossWeight(source.getMaterialGrossWeight());
         }
@@ -523,6 +527,7 @@ public class SalesOrderMatchService {
         putIfCurrentBlank(fields, "materialName", current.getMaterialName(), source.getMaterialName());
         putIfCurrentBlank(fields, "surfaceTreatment", current.getSurfaceTreatment(), source.getSurfaceTreatment());
         putSnapshot(fields, "engineeringMaterialName", current.getEngineeringMaterialName(), source.getEngineeringMaterialName());
+        putSnapshot(fields, "materialShape", current.getMaterialShape(), resolveMaterialShape(source));
         putSnapshot(fields, "materialGrossWeight", current.getMaterialGrossWeight(), source.getMaterialGrossWeight());
         putSnapshot(fields, "partNetWeight", current.getPartNetWeight(), source.getPartNetWeight());
         putSnapshot(fields, "quoteMode", current.getQuoteMode(), source.getQuoteMode());
@@ -824,5 +829,9 @@ public class SalesOrderMatchService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String resolveMaterialShape(ItemQuoteVersion source) {
+        return MaterialDataResolver.materialShape(source);
     }
 }

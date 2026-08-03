@@ -315,6 +315,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
   "customerProjectNo": "222",
   "materialName": "6061",
   "engineeringMaterialName": "铝合金6061",
+  "materialShape": "板材",
   "surfaceTreatment": "阳极氧化",
   "description": "材料描述",
   "remark": "备注",
@@ -367,6 +368,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 | `customerProjectNo` | `order_delivery_ticket_allocation.customer_project_no`。 |
 | `materialName` | `order_delivery_ticket_allocation.material_name`。 |
 | `engineeringMaterialName` | `order_delivery_ticket_allocation.engineering_material_name`。 |
+| `materialShape` | `order_delivery_ticket_allocation.material_shape`，材料形态显式快照，通常为 `板材 / 棒材 / 管材`，来源于核价材料快照 `materialData.shape`。 |
 | `surfaceTreatment` | `order_delivery_ticket_allocation.surface_treatment`。 |
 | `description` | `order_delivery_ticket_allocation.description`。 |
 | `remark` | `order_delivery_ticket_allocation.remark`。 |

@@ -34,6 +34,7 @@ public class OrderDeliveryTicket {
     private Integer qty;
     private String materialName;
     private String engineeringMaterialName;
+    private String materialShape;
     private String surfaceTreatment;
     private String version;
     private LocalDate startDate;

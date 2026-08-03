@@ -156,6 +156,7 @@ class LockedItemMesProductionDispatchTest {
         assertThat(request.getCustomerProjectNo()).isEqualTo("CP-9");
         assertThat(request.getMaterialName()).isEqualTo("6061");
         assertThat(request.getEngineeringMaterialName()).isEqualTo("7075");
+        assertThat(request.getMaterialShape()).isEqualTo("板材");
         assertThat(request.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(request.getDescription()).isEqualTo("Bracket");
         assertThat(request.getRemark()).isEqualTo("Rush");
@@ -484,6 +485,7 @@ class LockedItemMesProductionDispatchTest {
         row.setCustomerProjectNo("CP-9");
         row.setMaterialName("6061");
         row.setEngineeringMaterialName("7075");
+        row.setMaterialShape("板材");
         row.setSurfaceTreatment("Anodized");
         row.setRemark("Rush");
         row.setDescription("Bracket");

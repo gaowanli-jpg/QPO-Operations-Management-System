@@ -33,6 +33,18 @@ public final class MaterialDataResolver {
         return stringValue(normalizeMap(item.getMaterialData()).get("name"));
     }
 
+    public static String materialShape(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("shape"));
+    }
+
+    public static String materialShape(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        String savedMaterialShape = stringValue(item.getMaterialShape());
+        return savedMaterialShape.isEmpty() ? materialShape(item.getMaterialData()) : savedMaterialShape;
+    }
+
     public static Map<String, Object> normalizeMap(Object value) {
         if (value instanceof Map<?, ?> rawMap) {
             Map<String, Object> result = new LinkedHashMap<>();
