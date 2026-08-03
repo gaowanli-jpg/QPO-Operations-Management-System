@@ -6,6 +6,8 @@ import com.machining.quote.integration.ExternalAuthType;
 import com.machining.quote.integration.ExternalIntegrationConfig;
 import com.machining.quote.integration.ExternalIntegrationConfigService;
 import com.machining.quote.integration.ExternalSystemCode;
+import com.machining.quote.service.DataCenterEndpointRegistry;
+import com.machining.quote.service.DataCenterIntegrationClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,11 +35,27 @@ public class MesMaterialClient {
     private String mesMaterialPath;
     @Value("${erp.mes.timeout-ms:10000}")
     private Integer mesTimeoutMs;
+    @Value("${erp.data-center.enabled:true}")
+    private Boolean dataCenterEnabled = true;
+
+    @Autowired(required = false)
+    private DataCenterIntegrationClient dataCenterIntegrationClient;
 
     @Autowired(required = false)
     private ExternalIntegrationConfigService externalIntegrationConfigService;
 
     public MesMaterialResolveResp resolveMaterial(MesMaterialResolveReq req) {
+        if (useDataCenter()) {
+            log.debug("MES material resolve data center request ticketId={} rfqId={} partNo={}",
+                    req == null ? null : req.getTicketId(),
+                    req == null ? null : req.getRfqId(),
+                    req == null ? null : req.getPartNo());
+            return dataCenterIntegrationClient.call(
+                    DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
+                    req,
+                    MesMaterialResolveResp.class
+            );
+        }
         ExternalIntegrationConfig config = runtimeConfig();
         if (isBlank(config.baseUrl())) {
             throw new RuntimeException("MES base URL is not configured");
@@ -73,6 +91,10 @@ public class MesMaterialClient {
         } catch (ResourceAccessException error) {
             throw new RuntimeException("MES material resolve failed message=" + abbreviate(error.getMessage()), error);
         }
+    }
+
+    private boolean useDataCenter() {
+        return Boolean.TRUE.equals(dataCenterEnabled) && dataCenterIntegrationClient != null;
     }
 
     private ExternalIntegrationConfig runtimeConfig() {

@@ -6,6 +6,8 @@ import com.machining.quote.integration.ExternalAuthType;
 import com.machining.quote.integration.ExternalIntegrationConfig;
 import com.machining.quote.integration.ExternalIntegrationConfigService;
 import com.machining.quote.integration.ExternalSystemCode;
+import com.machining.quote.service.DataCenterEndpointRegistry;
+import com.machining.quote.service.DataCenterIntegrationClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,11 +35,28 @@ public class WmsAllocationClient {
     private String wmsAllocationPath;
     @Value("${erp.wms.timeout-ms:10000}")
     private Integer wmsTimeoutMs;
+    @Value("${erp.data-center.enabled:true}")
+    private Boolean dataCenterEnabled = true;
+
+    @Autowired(required = false)
+    private DataCenterIntegrationClient dataCenterIntegrationClient;
 
     @Autowired(required = false)
     private ExternalIntegrationConfigService externalIntegrationConfigService;
 
     public WmsAllocationResp allocate(WmsAllocationReq req) {
+        if (useDataCenter()) {
+            log.debug("WMS allocation data center request ticketId={} rfqId={} materialNo={} demandQty={}",
+                    req == null ? null : req.getTicketId(),
+                    req == null ? null : req.getRfqId(),
+                    req == null ? null : req.getMaterialNo(),
+                    req == null ? null : req.getDemandQty());
+            return dataCenterIntegrationClient.call(
+                    DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE,
+                    req,
+                    WmsAllocationResp.class
+            );
+        }
         ExternalIntegrationConfig config = runtimeConfig();
         if (isBlank(config.baseUrl())) {
             throw new RuntimeException("WMS base URL is not configured");
@@ -74,6 +93,10 @@ public class WmsAllocationClient {
         } catch (ResourceAccessException error) {
             throw new RuntimeException("WMS allocation failed message=" + abbreviate(error.getMessage()), error);
         }
+    }
+
+    private boolean useDataCenter() {
+        return Boolean.TRUE.equals(dataCenterEnabled) && dataCenterIntegrationClient != null;
     }
 
     private ExternalIntegrationConfig runtimeConfig() {

@@ -9,6 +9,8 @@ import com.machining.quote.integration.ExternalAuthType;
 import com.machining.quote.integration.ExternalIntegrationConfig;
 import com.machining.quote.integration.ExternalIntegrationConfigService;
 import com.machining.quote.integration.ExternalSystemCode;
+import com.machining.quote.service.DataCenterEndpointRegistry;
+import com.machining.quote.service.DataCenterIntegrationClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -36,20 +38,37 @@ public class U9SalesOrderClient {
     private Integer connectTimeoutMs;
     @Value("${erp.u9.read-timeout-ms:30000}")
     private Integer readTimeoutMs;
+    @Value("${erp.data-center.enabled:true}")
+    private Boolean dataCenterEnabled = true;
 
     @Autowired
     private U9TokenService tokenService;
 
     @Autowired(required = false)
+    private DataCenterIntegrationClient dataCenterIntegrationClient;
+
+    @Autowired(required = false)
     private ExternalIntegrationConfigService externalIntegrationConfigService;
 
     public U9ApiResult<U9ResultDTO> create(List<U9SalesOrderHeadDTO> orders) {
+        if (orders == null || orders.isEmpty()) {
+            throw new IllegalArgumentException("U9 sales order request cannot be empty");
+        }
+        if (useDataCenter()) {
+            String response = dataCenterIntegrationClient.call(
+                    DataCenterEndpointRegistry.U9_SALES_ORDER_SYNC,
+                    orders,
+                    String.class
+            );
+            try {
+                return objectMapper.readValue(response, new TypeReference<>() {});
+            } catch (Exception error) {
+                throw new RuntimeException("U9 sales order create response parse failed message=" + abbreviate(error.getMessage()), error);
+            }
+        }
         ExternalIntegrationConfig config = runtimeConfig();
         if (isBlank(config.baseUrl())) {
             throw new IllegalStateException("ERP_U9_BASE_URL is required for U9 sales order sync");
-        }
-        if (orders == null || orders.isEmpty()) {
-            throw new IllegalArgumentException("U9 sales order request cannot be empty");
         }
         String token = tokenService.fetchToken();
         HttpHeaders headers = new HttpHeaders();
@@ -69,6 +88,10 @@ public class U9SalesOrderClient {
         } catch (Exception error) {
             throw new RuntimeException("U9 sales order create response parse failed message=" + abbreviate(error.getMessage()), error);
         }
+    }
+
+    private boolean useDataCenter() {
+        return Boolean.TRUE.equals(dataCenterEnabled) && dataCenterIntegrationClient != null;
     }
 
     private ExternalIntegrationConfig runtimeConfig() {
