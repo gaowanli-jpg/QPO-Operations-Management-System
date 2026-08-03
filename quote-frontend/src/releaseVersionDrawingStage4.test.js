@@ -29,11 +29,15 @@ describe('release drawing replacement stage 4', () => {
     expect(source).toContain('clientSkippedReplacementFiles')
     expect(source).toContain('仅支持 PDF 图纸')
 
+    expect(submitBlock).toContain("if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择订单。')")
+    expect(submitBlock).not.toContain('if (selectedRfqIds.value.length === 0)')
+    expect(submitBlock).toContain("formData.append('sources', JSON.stringify(selectedOrderSources.value))")
     expect(submitBlock).toContain("formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))")
     expect(submitBlock).toContain("formData.append('drawings', file)")
     expect(submitBlock).toContain('const response = await replaceReleaseDrawings(formData)')
     expect(submitBlock).toContain('await fetchReleaseItemsBatch()')
     expect(submitBlock).not.toContain('clearSelectedRows()')
+    expect(submitBlock).not.toContain('selectedRows.value.map')
   })
 
   test('market release displays drawing replacement result and refreshed drawing status', () => {
@@ -74,5 +78,6 @@ describe('release drawing replacement stage 4', () => {
     expect(source).toContain('class="custom-dropzone drawing-replace-dropzone supplement-dropzone"')
     expect(source).toContain('class="drawing-replace-upload-actions import-action-row"')
     expect(source).toContain('将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处')
+    expect(source).toContain('无需勾选零件')
   })
 })

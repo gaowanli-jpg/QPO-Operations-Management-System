@@ -2,12 +2,18 @@ package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.ReleaseOrderSource;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
@@ -53,7 +59,7 @@ class ReleaseVersionDrawingStage1Test {
                 .contains("@RequirePermission(\"market:release:create\")")
                 .contains("@PostMapping(value = \"/release/drawings/replace\"")
                 .contains("internalTargetLeadTimeService.updateReleaseItemVersion(itemId, req)")
-                .contains("internalTargetLeadTimeService.replaceReleaseDrawings(parseRfqIds(rfqIdsJson), drawings)");
+                .contains("parseReleaseSources(sourcesJson, rfqIdsJson)");
 
         String releaseService = source("service", "InternalTargetLeadTimeService.java");
         assertThat(releaseService)
@@ -148,7 +154,9 @@ class ReleaseVersionDrawingStage1Test {
                             null);
                 });
 
-        Map<String, Object> result = service.replaceReleaseDrawings(List.of(101, 102), List.of(drawing));
+        Map<String, Object> result = service.replaceReleaseDrawings(
+                List.of(ReleaseOrderSource.rfq(101), ReleaseOrderSource.rfq(102)),
+                List.of(drawing));
         List<Map<String, Object>> replacedItems = (List<Map<String, Object>>) result.get("replacedItems");
 
         assertThat(result)
@@ -167,7 +175,69 @@ class ReleaseVersionDrawingStage1Test {
         verify(businessFileService).saveDrawing(eq(secondOrder), eq(drawing), eq("RELEASE_DRAWING_REPLACE"), eq("102"));
         verify(itemMapper).updateById(firstItem);
         verify(itemMapper).updateById(secondItem);
-        verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("item_quote_version"), eq("101,102"),
+        verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("release_drawing_replace"), eq("RFQ:101,RFQ:102"),
+                isNull(), any(Map.class), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=2"), isNull());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void replaceReleaseDrawingsReplacesSamePartAcrossRfqAndSalesOrderSources() throws Exception {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, auditService, null);
+        SalesOrderHeaderMapper salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
+
+        OrderRfq rfqOrder = releaseOrder(101, "RFQ-MIX-001");
+        ItemQuoteVersion rfqItem = releaseItem(201, 101, "P-MIX-001", "A");
+        rfqItem.setDrawingUrl("/uploads/old-rfq.pdf");
+        SalesOrderHeader salesOrder = salesOrder(2001L, "SO-MIX-001");
+        SalesOrderItem salesItem = salesOrderItem(3001L, 2001L, "P-MIX-001", "B");
+        salesItem.setDrawingUrl("/uploads/old-sales.pdf");
+        salesItem.setHasDrawing(true);
+
+        when(orderMapper.selectByIdForUpdate(101)).thenReturn(rfqOrder);
+        when(salesOrderHeaderMapper.selectByIdForUpdate(2001L)).thenReturn(salesOrder);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(rfqItem));
+        when(salesOrderItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(salesItem));
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        MockMultipartFile drawing = pdf("P-MIX-001.pdf");
+        when(businessFileService.saveDrawing(eq(rfqOrder), eq(drawing), eq("RELEASE_DRAWING_REPLACE"), eq("101")))
+                .thenReturn(stored("/uploads/ACME/RFQ-MIX-001/P-MIX-001-new.pdf", drawing));
+        when(businessFileService.saveSalesOrderImportDrawing(eq("ACME"), eq("SO-MIX-001"), eq(drawing),
+                eq("RELEASE_DRAWING_REPLACE"), eq("2001")))
+                .thenReturn(stored("/uploads/ACME/SO-MIX-001/P-MIX-001-new.pdf", drawing));
+
+        Map<String, Object> result = service.replaceReleaseDrawings(
+                List.of(ReleaseOrderSource.rfq(101), ReleaseOrderSource.salesOrder(2001L)),
+                List.of(drawing));
+        List<Map<String, Object>> replacedItems = (List<Map<String, Object>>) result.get("replacedItems");
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("matchedCount", 2)
+                .containsEntry("replacedCount", 2)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 0);
+        assertThat(rfqItem.getDrawingUrl()).isEqualTo("/uploads/ACME/RFQ-MIX-001/P-MIX-001-new.pdf");
+        assertThat(salesItem.getDrawingUrl()).isEqualTo("/uploads/ACME/SO-MIX-001/P-MIX-001-new.pdf");
+        assertThat(salesItem.getHasDrawing()).isTrue();
+        assertThat(replacedItems)
+                .extracting(row -> row.get("sourceType"))
+                .containsExactlyInAnyOrder(ReleaseSourceType.RFQ.name(), ReleaseSourceType.SALES_ORDER.name());
+        assertThat(replacedItems)
+                .extracting(row -> row.get("sourceItemId"))
+                .containsExactlyInAnyOrder(201L, 3001L);
+        verify(itemMapper).updateById(rfqItem);
+        verify(salesOrderItemMapper).updateById(salesItem);
+        verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("release_drawing_replace"), any(),
                 isNull(), any(Map.class), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=2"), isNull());
     }
 
@@ -191,7 +261,7 @@ class ReleaseVersionDrawingStage1Test {
         assertThatThrownBy(() -> service.updateReleaseItemVersion(201, req))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("No data permission for order 101");
-        assertThatThrownBy(() -> service.replaceReleaseDrawings(List.of(101), List.of(pdf("DRW-001.pdf"))))
+        assertThatThrownBy(() -> service.replaceReleaseDrawings(List.of(ReleaseOrderSource.rfq(101)), List.of(pdf("DRW-001.pdf"))))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("No data permission for order 101");
     }
@@ -234,6 +304,42 @@ class ReleaseVersionDrawingStage1Test {
         item.setFinalUnitPrice(10.0);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
+    }
+
+    private SalesOrderHeader salesOrder(Long id, String salesOrderNo) {
+        SalesOrderHeader order = new SalesOrderHeader();
+        order.setId(id);
+        order.setSalesOrderNo(salesOrderNo);
+        order.setCustomerName("ACME");
+        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        return order;
+    }
+
+    private SalesOrderItem salesOrderItem(Long id, Long salesOrderId, String partNo, String version) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(id);
+        item.setSalesOrderId(salesOrderId);
+        item.setPartNo(partNo);
+        item.setVersion(version);
+        item.setDescription("sales order item");
+        item.setQty(2);
+        item.setReleasedQty(0);
+        item.setRemainingQty(2);
+        item.setFinalUnitPrice(java.math.BigDecimal.TEN);
+        item.setStatus(QuoteStatusWorkflow.QUOTED);
+        return item;
+    }
+
+    private BusinessFileService.StoredBusinessFile stored(String publicPath, MockMultipartFile drawing) {
+        return new BusinessFileService.StoredBusinessFile(
+                publicPath,
+                StorageType.LOCAL,
+                1L,
+                publicPath.substring("/uploads/".length()),
+                drawing.getOriginalFilename(),
+                drawing.getContentType(),
+                drawing.getSize(),
+                null);
     }
 
     private MockMultipartFile pdf(String fileName) {

@@ -244,9 +244,10 @@ public class MarketController {
     @PostMapping(value = "/release/drawings/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:release:create")
     public Map<String, Object> replaceReleaseDrawings(
-            @RequestParam("rfqIds") String rfqIdsJson,
+            @RequestParam(value = "sources", required = false) String sourcesJson,
+            @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
-        return internalTargetLeadTimeService.replaceReleaseDrawings(parseRfqIds(rfqIdsJson), drawings);
+        return internalTargetLeadTimeService.replaceReleaseDrawings(parseReleaseSources(sourcesJson, rfqIdsJson), drawings);
     }
 
     @GetMapping("/release/tickets/{rfqId}")

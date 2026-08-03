@@ -211,21 +211,44 @@ public class InternalTargetLeadTimeService {
     }
 
     @Transactional
-    public Map<String, Object> replaceReleaseDrawings(List<Integer> rfqIds, List<MultipartFile> drawings) {
-        List<OrderRfq> orders = requireOrdersForUpdate(rfqIds);
+    public Map<String, Object> replaceReleaseDrawings(List<ReleaseOrderSource> sources, List<MultipartFile> drawings) {
+        List<ReleaseOrderSource> normalizedSources = normalizeReleaseSourcesFromInput(new ArrayList<>(sources == null ? List.of() : sources));
+        if (normalizedSources.isEmpty()) {
+            throw new RuntimeException("Please select at least one order.");
+        }
         if (drawings == null || drawings.isEmpty()) {
             throw new RuntimeException("Please upload at least one PDF drawing.");
         }
 
-        Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
-        orders.forEach(order -> orderById.put(order.getId(), order));
-        List<ItemQuoteVersion> items = listItemsBatch(orderById.keySet().stream().toList());
-        List<OrderDeliveryTicket> tickets = listTicketsForItems(items);
-        Map<String, List<ItemQuoteVersion>> itemsByPartNo = new LinkedHashMap<>();
-        for (ItemQuoteVersion item : items) {
-            String partNo = normalizePartNo(item.getPartNo());
+        Map<Integer, OrderRfq> rfqOrderById = requireRfqOrdersForUpdate(sourceRfqIds(normalizedSources));
+        Map<Long, SalesOrderHeader> salesOrderById = requireSalesOrdersForUpdate(sourceSalesOrderIds(normalizedSources));
+        List<ItemQuoteVersion> rfqItems = listItemsBatch(rfqOrderById.keySet().stream().toList());
+        List<OrderDeliveryTicket> rfqTickets = listTicketsForItems(rfqItems);
+        List<SalesOrderItem> salesOrderItems = listSalesOrderItemsBatch(salesOrderById.keySet().stream().toList());
+        Map<String, List<ReleaseDrawingTarget>> targetsByPartNo = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : rfqItems) {
+            int ticketedQty = ticketedQty(item, rfqTickets);
+            int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty);
+            ReleaseDrawingTarget target = ReleaseDrawingTarget.rfq(
+                    item,
+                    rfqOrderById.get(item.getRfqId()),
+                    isReleaseItemMutable(item, ticketedQty),
+                    releaseMutationBlockedReason(item, remainingQty));
+            String partNo = normalizePartNo(target.partNo());
             if (!partNo.isEmpty()) {
-                itemsByPartNo.computeIfAbsent(partNo, ignored -> new ArrayList<>()).add(item);
+                targetsByPartNo.computeIfAbsent(partNo, ignored -> new ArrayList<>()).add(target);
+            }
+        }
+        for (SalesOrderItem item : salesOrderItems) {
+            SalesOrderHeader order = salesOrderById.get(item.getSalesOrderId());
+            ReleaseDrawingTarget target = ReleaseDrawingTarget.salesOrder(
+                    item,
+                    order,
+                    isSalesOrderReleaseItemMutable(item),
+                    salesOrderReleaseMutationBlockedReason(item));
+            String partNo = normalizePartNo(target.partNo());
+            if (!partNo.isEmpty()) {
+                targetsByPartNo.computeIfAbsent(partNo, ignored -> new ArrayList<>()).add(target);
             }
         }
 
@@ -243,40 +266,43 @@ public class InternalTargetLeadTimeService {
                     continue;
                 }
 
-                String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemsByPartNo.keySet());
-                List<ItemQuoteVersion> matchedItems = itemsByPartNo.get(partNoFromFileName);
-                if (matchedItems == null || matchedItems.isEmpty()) {
+                String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, targetsByPartNo.keySet());
+                List<ReleaseDrawingTarget> matchedTargets = targetsByPartNo.get(partNoFromFileName);
+                if (matchedTargets == null || matchedTargets.isEmpty()) {
                     unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "No matching item in selected orders"));
                     continue;
                 }
 
-                matchedCount += matchedItems.size();
-                Map<Integer, String> newUrlByRfqId = new LinkedHashMap<>();
-                for (ItemQuoteVersion item : matchedItems) {
-                    int itemTicketedQty = ticketedQty(item, tickets);
-                    if (!isReleaseItemMutable(item, itemTicketedQty)) {
-                        skippedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName,
-                                releaseMutationBlockedReason(item, Math.max(0, safeInt(item.getQty()) - itemTicketedQty))));
+                matchedCount += matchedTargets.size();
+                Map<String, String> newUrlBySource = new LinkedHashMap<>();
+                for (ReleaseDrawingTarget target : matchedTargets) {
+                    if (!target.mutable()) {
+                        skippedItems.add(buildDrawingItemResult(target, cleanFileName, target.blockedReason()));
                         continue;
                     }
-                    String fileUrl = newUrlByRfqId.computeIfAbsent(item.getRfqId(),
-                            ignored -> saveReleaseDrawing(drawing, cleanFileName, orderById.get(item.getRfqId())));
-                    item.setDrawingUrl(fileUrl);
-                    itemMapper.updateById(item);
-                    replacedItems.add(buildDrawingItemResult(item, orderById.get(item.getRfqId()), cleanFileName, "Replaced"));
+                    String sourceKey = target.sourceType().name() + ":" + target.sourceOrderId();
+                    String fileUrl = newUrlBySource.computeIfAbsent(sourceKey,
+                            ignored -> saveReleaseDrawing(drawing, cleanFileName, target));
+                    applyReleaseDrawing(target, fileUrl);
+                    replacedItems.add(buildDrawingItemResult(target, cleanFileName, "Replaced"));
                 }
             }
         } catch (ReleaseDrawingSaveException e) {
-            log.error("Release drawings replace failed rfqIds={} uploadCount={}", orderById.keySet(), drawings.size(), e);
+            log.error("Release drawings replace failed sources={} uploadCount={}", sourceLogValue(normalizedSources), drawings.size(), e);
             throw new RuntimeException(e.getMessage(), e);
         } catch (RuntimeException e) {
-            log.error("Release drawings replace failed rfqIds={} uploadCount={}", orderById.keySet(), drawings.size(), e);
+            log.error("Release drawings replace failed sources={} uploadCount={}", sourceLogValue(normalizedSources), drawings.size(), e);
             throw e;
         }
 
+        List<Integer> rfqIds = new ArrayList<>(rfqOrderById.keySet());
+        List<Long> salesOrderIds = new ArrayList<>(salesOrderById.keySet());
         Map<String, Object> auditSummary = new LinkedHashMap<>();
-        auditSummary.put("rfqIds", orderById.keySet());
-        auditSummary.put("rfqNos", orders.stream().map(OrderRfq::getRfqNo).toList());
+        auditSummary.put("sources", normalizedSources.stream().map(this::sourceAuditRow).toList());
+        auditSummary.put("rfqIds", rfqIds);
+        auditSummary.put("salesOrderIds", salesOrderIds);
+        auditSummary.put("rfqNos", rfqOrderById.values().stream().map(OrderRfq::getRfqNo).toList());
+        auditSummary.put("salesOrderNos", salesOrderById.values().stream().map(SalesOrderHeader::getSalesOrderNo).toList());
         auditSummary.put("uploadCount", drawings.size());
         auditSummary.put("matchedCount", matchedCount);
         auditSummary.put("replacedCount", replacedItems.size());
@@ -286,18 +312,18 @@ public class InternalTargetLeadTimeService {
         auditSummary.put("unmatchedDrawings", unmatchedDrawings);
         auditSummary.put("skippedFiles", skippedFiles);
         auditSummary.put("skippedItems", skippedItems);
-        String auditTargetId = orderById.keySet().stream()
-                .map(String::valueOf)
+        String auditTargetId = normalizedSources.stream()
+                .map(source -> source.getSourceType().name() + ":" + source.getSourceOrderId())
                 .collect(java.util.stream.Collectors.joining(","));
         auditService.record(
                 "RELEASE_DRAWING_REPLACE",
-                "item_quote_version",
+                "release_drawing_replace",
                 auditTargetId,
                 null,
                 auditSummary,
                 "MARKET",
                 "SUCCESS",
-                "RELEASE_DRAWING_REPLACE rfqIds=" + orderById.keySet() + " replacedCount=" + replacedItems.size(),
+                "RELEASE_DRAWING_REPLACE sources=" + sourceLogValue(normalizedSources) + " replacedCount=" + replacedItems.size(),
                 null
         );
 
@@ -313,12 +339,12 @@ public class InternalTargetLeadTimeService {
         result.put("unmatchedDrawings", unmatchedDrawings);
         result.put("skippedFiles", skippedFiles);
         result.put("skippedItems", skippedItems);
-        log.info("Release drawings replace completed rfqIds={} uploadCount={} matchedCount={} replacedCount={} unmatchedCount={} skippedCount={}",
-                orderById.keySet(), drawings.size(), matchedCount, replacedItems.size(), unmatchedDrawings.size(),
+        log.info("Release drawings replace completed sources={} uploadCount={} matchedCount={} replacedCount={} unmatchedCount={} skippedCount={}",
+                sourceLogValue(normalizedSources), drawings.size(), matchedCount, replacedItems.size(), unmatchedDrawings.size(),
                 skippedFiles.size() + skippedItems.size());
         if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty() || !skippedItems.isEmpty()) {
-            log.warn("Release drawings replace completed with warnings rfqIds={} unmatchedCount={} skippedCount={}",
-                    orderById.keySet(), unmatchedDrawings.size(), skippedFiles.size() + skippedItems.size());
+            log.warn("Release drawings replace completed with warnings sources={} unmatchedCount={} skippedCount={}",
+                    sourceLogValue(normalizedSources), unmatchedDrawings.size(), skippedFiles.size() + skippedItems.size());
         }
         return result;
     }
@@ -929,6 +955,38 @@ public class InternalTargetLeadTimeService {
                 .orderByAsc("id");
         return salesOrderItemMapper.selectList(query);
     }
+
+    private Map<Integer, OrderRfq> requireRfqOrdersForUpdate(Set<Integer> rfqIds) {
+        if (rfqIds == null || rfqIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, OrderRfq> result = new LinkedHashMap<>();
+        for (OrderRfq order : requireOrdersForUpdate(new ArrayList<>(rfqIds))) {
+            result.put(order.getId(), order);
+        }
+        return result;
+    }
+
+    private Map<Long, SalesOrderHeader> requireSalesOrdersForUpdate(Set<Long> salesOrderIds) {
+        if (salesOrderIds == null || salesOrderIds.isEmpty()) {
+            return Map.of();
+        }
+        if (salesOrderHeaderMapper == null) {
+            throw new RuntimeException("Sales order release service is unavailable");
+        }
+        Map<Long, SalesOrderHeader> result = new LinkedHashMap<>();
+        for (Long salesOrderId : salesOrderIds) {
+            SalesOrderHeader order = salesOrderHeaderMapper.selectByIdForUpdate(salesOrderId);
+            if (order == null) {
+                throw new RuntimeException("Sales order does not exist");
+            }
+            assertSalesOrderDataScope(order);
+            assertCanReadSalesOrderReleaseWorkspace(order);
+            result.put(order.getId(), order);
+        }
+        return result;
+    }
+
     private OrderRfq requireOrder(Integer rfqId) {
         if (rfqId == null) {
             throw new RuntimeException("RFQ ID is required");
@@ -995,6 +1053,12 @@ public class InternalTargetLeadTimeService {
     private void assertOrderDataScope(OrderRfq order) {
         if (dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(order);
+        }
+    }
+
+    private void assertSalesOrderDataScope(SalesOrderHeader order) {
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessOrder(toOrderScopeProxy(order));
         }
     }
 
@@ -1374,6 +1438,64 @@ public class InternalTargetLeadTimeService {
 
     private record FilteredReleaseSql(String sql, List<Object> params) {
     }
+
+    private record ReleaseDrawingTarget(
+            ReleaseSourceType sourceType,
+            Long sourceOrderId,
+            Long sourceItemId,
+            String sourceOrderNo,
+            String customerName,
+            String partNo,
+            String version,
+            boolean mutable,
+            String blockedReason,
+            ItemQuoteVersion rfqItem,
+            SalesOrderItem salesOrderItem,
+            OrderRfq rfqOrder,
+            SalesOrderHeader salesOrder) {
+        private static ReleaseDrawingTarget rfq(
+                ItemQuoteVersion item,
+                OrderRfq order,
+                boolean mutable,
+                String blockedReason) {
+            return new ReleaseDrawingTarget(
+                    ReleaseSourceType.RFQ,
+                    item == null || item.getRfqId() == null ? null : item.getRfqId().longValue(),
+                    item == null || item.getId() == null ? null : item.getId().longValue(),
+                    order == null ? "" : order.getRfqNo(),
+                    order == null ? "" : order.getCustomerName(),
+                    item == null ? "" : item.getPartNo(),
+                    item == null ? "" : item.getVersion(),
+                    mutable,
+                    blockedReason,
+                    item,
+                    null,
+                    order,
+                    null);
+        }
+
+        private static ReleaseDrawingTarget salesOrder(
+                SalesOrderItem item,
+                SalesOrderHeader order,
+                boolean mutable,
+                String blockedReason) {
+            return new ReleaseDrawingTarget(
+                    ReleaseSourceType.SALES_ORDER,
+                    item == null ? null : item.getSalesOrderId(),
+                    item == null ? null : item.getId(),
+                    order == null ? "" : order.getSalesOrderNo(),
+                    order == null ? "" : order.getCustomerName(),
+                    item == null ? "" : item.getPartNo(),
+                    item == null ? "" : item.getVersion(),
+                    mutable,
+                    blockedReason,
+                    null,
+                    item,
+                    null,
+                    order);
+        }
+    }
+
     private String normalizePartNo(String partNo) {
         return partNo == null ? "" : partNo.trim().toUpperCase();
     }
@@ -1440,6 +1562,38 @@ public class InternalTargetLeadTimeService {
         return "Item cannot be updated";
     }
 
+    private boolean isSalesOrderReleaseItemMutable(SalesOrderItem item) {
+        if (item == null) {
+            return false;
+        }
+        return salesOrderReleaseRemainingQty(item) > 0
+                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+    }
+
+    private int salesOrderReleaseRemainingQty(SalesOrderItem item) {
+        if (item == null) {
+            return 0;
+        }
+        if (item.getRemainingQty() != null && item.getRemainingQty() > 0) {
+            return item.getRemainingQty();
+        }
+        return Math.max(0, safeInt(item.getQty()) - safeInt(item.getReleasedQty()));
+    }
+
+    private String salesOrderReleaseMutationBlockedReason(SalesOrderItem item) {
+        if (salesOrderReleaseRemainingQty(item) <= 0) {
+            return "Item is fully released";
+        }
+        if (item != null && (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
+                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus()))) {
+            return "Item is released";
+        }
+        return "Item cannot be updated";
+    }
+
     private String saveReleaseDrawing(MultipartFile drawing, String cleanFileName, OrderRfq order) {
         if (order == null) {
             throw new RuntimeException("Order does not exist");
@@ -1451,6 +1605,43 @@ public class InternalTargetLeadTimeService {
         } catch (RuntimeException e) {
             throw new ReleaseDrawingSaveException("Drawing save failed: " + cleanFileName, e);
         }
+    }
+
+    private String saveReleaseDrawing(MultipartFile drawing, String cleanFileName, ReleaseDrawingTarget target) {
+        if (target.sourceType() == ReleaseSourceType.RFQ) {
+            return saveReleaseDrawing(drawing, cleanFileName, target.rfqOrder());
+        }
+        if (target.salesOrder() == null) {
+            throw new RuntimeException("Sales order does not exist");
+        }
+        try {
+            String batchNo = isBlank(target.sourceOrderNo())
+                    ? String.valueOf(target.sourceOrderId())
+                    : target.sourceOrderNo();
+            return businessFileService
+                    .saveSalesOrderImportDrawing(
+                            target.customerName(),
+                            batchNo,
+                            drawing,
+                            "RELEASE_DRAWING_REPLACE",
+                            String.valueOf(target.sourceOrderId()))
+                    .publicPath();
+        } catch (RuntimeException e) {
+            throw new ReleaseDrawingSaveException("Drawing save failed: " + cleanFileName, e);
+        }
+    }
+
+    private void applyReleaseDrawing(ReleaseDrawingTarget target, String fileUrl) {
+        if (target.sourceType() == ReleaseSourceType.RFQ) {
+            ItemQuoteVersion item = target.rfqItem();
+            item.setDrawingUrl(fileUrl);
+            itemMapper.updateById(item);
+            return;
+        }
+        SalesOrderItem item = target.salesOrderItem();
+        item.setDrawingUrl(fileUrl);
+        item.setHasDrawing(true);
+        salesOrderItemMapper.updateById(item);
     }
 
     private String cleanFilename(String originalFilename) {
@@ -1476,6 +1667,27 @@ public class InternalTargetLeadTimeService {
         return result;
     }
 
+    private Map<String, Object> buildDrawingItemResult(
+            ReleaseDrawingTarget target,
+            String fileName,
+            String reason) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sourceType", target.sourceType().name());
+        result.put("sourceOrderId", target.sourceOrderId());
+        result.put("sourceOrderNo", target.sourceOrderNo());
+        result.put("sourceItemId", target.sourceItemId());
+        result.put("partNo", target.partNo());
+        result.put("version", target.version());
+        result.put("fileName", fileName);
+        result.put("reason", reason);
+        if (target.sourceType() == ReleaseSourceType.RFQ) {
+            result.put("rfqId", target.sourceOrderId() == null ? null : target.sourceOrderId().intValue());
+            result.put("rfqNo", target.sourceOrderNo());
+            result.put("itemId", target.sourceItemId() == null ? null : target.sourceItemId().intValue());
+        }
+        return result;
+    }
+
     private Map<String, Object> buildFileResult(String fileName, String partNo, String reason) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("fileName", fileName);
@@ -1491,6 +1703,19 @@ public class InternalTargetLeadTimeService {
         row.put("version", version);
         row.put("reason", reason);
         return row;
+    }
+
+    private Map<String, Object> sourceAuditRow(ReleaseOrderSource source) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("sourceType", source.getSourceType().name());
+        row.put("sourceOrderId", source.getSourceOrderId());
+        return row;
+    }
+
+    private String sourceLogValue(List<ReleaseOrderSource> sources) {
+        return sources == null ? "[]" : sources.stream()
+                .map(source -> source.getSourceType().name() + ":" + source.getSourceOrderId())
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
     }
 
     private static class ReleaseDrawingSaveException extends RuntimeException {

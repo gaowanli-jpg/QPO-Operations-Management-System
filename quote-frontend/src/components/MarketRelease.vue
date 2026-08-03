@@ -340,6 +340,7 @@
       <div class="drawing-replace-dialog">
         <el-alert
           :title="`将按图号匹配当前已选 ${selectedOrders.length} 个订单，匹配成功会覆盖旧图纸。`"
+          description="系统会在当前选中的订单范围内按图号匹配全部零件，命中后替换图纸；无需勾选零件。"
           type="warning"
           :closable="false"
           show-icon
@@ -992,7 +993,7 @@ const removeReplacementDrawingFile = (index) => {
 }
 
 const submitReplacementDrawings = async () => {
-  if (selectedRfqIds.value.length === 0) return ElMessage.warning('请先选择询价单。')
+  if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择订单。')
   if (replacementDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
 
   const formData = new FormData()
