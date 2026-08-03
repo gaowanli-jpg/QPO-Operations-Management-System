@@ -289,6 +289,8 @@ public class PermissionService {
             permission(178L, "BUTTON", "system:config:integration:update", "维护系统对接配置", null, null, false, 8494, 174L),
             permission(179L, "BUTTON", "system:config:integration:test", "测试系统对接配置", null, null, false, 8495, 174L),
             permission(180L, "BUTTON", "system:config:integration:activate", "激活系统对接配置", null, null, false, 8496, 174L),
+            permission(197L, "BUTTON", "system:config:inbound:update", "维护入站接口配置", null, null, false, 8497, 174L),
+            permission(198L, "BUTTON", "system:config:inbound:token-rotate", "轮换入站回调Token", null, null, false, 8498, 174L),
             permission(10L, "MENU", "system:audit:view", "操作日志", "/audit-logs", "AuditLogManage", true, 850),
             permission(128L, "BUTTON", "system:audit:export", "导出操作日志", null, null, false, 851, 10L),
             permission(129L, "BUTTON", "system:audit:retention", "配置日志保留策略", null, null, false, 852, 10L)
@@ -402,6 +404,8 @@ public class PermissionService {
             Map.entry("system:config:integration:update", Set.of()),
             Map.entry("system:config:integration:test", Set.of()),
             Map.entry("system:config:integration:activate", Set.of()),
+            Map.entry("system:config:inbound:update", Set.of()),
+            Map.entry("system:config:inbound:token-rotate", Set.of()),
             Map.entry("system:audit:view", Set.of("AUDITOR")),
             Map.entry("system:audit:export", Set.of("AUDITOR")),
             Map.entry("system:audit:retention", Set.of()),
