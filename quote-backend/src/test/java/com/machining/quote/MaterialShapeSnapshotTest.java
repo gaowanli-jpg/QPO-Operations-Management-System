@@ -40,7 +40,10 @@ class MaterialShapeSnapshotTest {
                         "ticket.setMaterialShape(resolveSalesOrderMaterialShape(item))"
                 );
         assertThat(read(SALES_MATCH_SERVICE))
-                .contains("item.setMaterialShape(resolveMaterialShape(source))");
+                .contains(
+                        "String materialShape = resolveMaterialShape(source)",
+                        "item.setMaterialShape(materialShape)"
+                );
         assertThat(read(SALES_REPEAT_SERVICE))
                 .contains("current.setMaterialShape(resolveMaterialShape(source))");
     }
