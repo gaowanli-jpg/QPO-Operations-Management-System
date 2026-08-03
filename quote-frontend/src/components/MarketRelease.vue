@@ -862,7 +862,7 @@ const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) 
 
 const requireSingleSelectedRowsRfqId = (actionText) => {
   if (!selectedOrders.value.length) {
-    ElMessage.warning('请先选择询价单。')
+    ElMessage.warning('请先选择订单。')
     return null
   }
   const rfqIds = selectedRowsRfqIds()
@@ -876,7 +876,7 @@ const requireSingleSelectedRowsRfqId = (actionText) => {
 const handleSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
   selectionUploadRef.value?.clearFiles()
-  if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择询价单。')
+  if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择订单。')
   if (!file) return
 
   const fileName = String(file.name || '').toLowerCase()
@@ -920,7 +920,7 @@ const handleSelectionExcelChange = async (uploadFile) => {
 
 const openDrawingReplaceDialog = () => {
   if (selectedOrders.value.length === 0) {
-    ElMessage.warning('请先选择询价单。')
+    ElMessage.warning('请先选择订单。')
     return
   }
   replacementDrawingFiles.value = []
@@ -1119,7 +1119,7 @@ const saveInternalTargetLeadTime = async (row) => {
 
 const submitTicket = async () => {
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
-  if (!selectedOrders.value.length) return ElMessage.warning('请先选择询价单。')
+  if (!selectedOrders.value.length) return ElMessage.warning('请先选择订单。')
   if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')
   const internalProjectNo = releaseForm.internalProjectNo.trim()
   if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')

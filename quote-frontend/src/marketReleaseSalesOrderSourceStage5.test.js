@@ -35,6 +35,13 @@ describe('market release sales order source stage 5', () => {
     expect(source).toContain('acceptedQtyMap[rowKey(row)]')
   })
 
+  test('release action empty-selection warnings use generic order copy', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+
+    expect(source).toContain("ElMessage.warning('请先选择订单。')")
+    expect(source).not.toContain("ElMessage.warning('请先选择询价单。')")
+  })
+
   test('release page shows source order number and defaults release parameters from sales order headers', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
