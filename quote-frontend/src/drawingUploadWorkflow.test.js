@@ -12,14 +12,18 @@ const importDrawingPanelPath = resolve(currentDir, 'components', 'import', 'Impo
 const supplementDrawingDialogPath = resolve(currentDir, 'components', 'order', 'SupplementDrawingDialog.vue')
 
 describe('drawing upload workflow parity', () => {
-  test('market RFQ and sales order imports share the same drawing upload panel component', () => {
+  test('market RFQ and sales order imports render paired part and part-version drawing panels', () => {
     const source = readComponent('MarketDashboard.vue')
 
     expect(existsSync(importDrawingPanelPath)).toBe(true)
     expect(source).toContain("import ImportDrawingUploadPanel from './import/ImportDrawingUploadPanel.vue'")
-    expect(source.match(/<ImportDrawingUploadPanel/g) || []).toHaveLength(2)
+    expect(source.match(/<ImportDrawingUploadPanel/g) || []).toHaveLength(4)
+    expect(source.match(/class="drawing-upload-dual-grid"/g) || []).toHaveLength(2)
     expect(source).toContain('v-model="drawingFiles"')
+    expect(source).toContain('v-model="versionDrawingFiles"')
     expect(source).toContain('v-model="salesOrderDrawingFiles"')
+    expect(source).toContain('v-model="salesOrderVersionDrawingFiles"')
+    expect(source).toContain('按图号+版本绑定图纸')
   })
 
   test('shared drawing upload panel exposes drop, file, folder, and remove controls', () => {
@@ -35,6 +39,8 @@ describe('drawing upload workflow parity', () => {
     expect(source).toContain('@change="handleFolderSelect"')
     expect(source).toContain('@click="triggerFileSelect"')
     expect(source).toContain('@click="triggerFolderSelect"')
+    expect(source).toContain('class="import-upload-button-stack"')
+    expect(source).toContain('flex-direction: column')
     expect(source).toContain('collectPdfFilesFromDataTransfer')
     expect(source).toContain('mergePdfFiles')
     expect(source).toContain('emit(\'update:modelValue\'')
@@ -45,23 +51,37 @@ describe('drawing upload workflow parity', () => {
 
     expect(source).toContain('<ImportDrawingUploadPanel')
     expect(source).toContain('v-model="drawingFiles"')
+    expect(source).toContain('v-model="versionDrawingFiles"')
     expect(source).toContain('permission="market:rfq:upload-drawing"')
   })
 
-  test('order supplement supports dropping folders, choosing folders, and choosing multiple PDFs', () => {
+  test('order supplement supports paired part and part-version drawing entrances', () => {
     const orderSource = readComponent('OrderManage.vue')
     const source = readFileSync(supplementDrawingDialogPath, 'utf8')
 
     expect(orderSource).toContain('<SupplementDrawingDialog')
+    expect(orderSource).toContain('v-model:files="supplementFiles"')
+    expect(orderSource).toContain('v-model:version-files="supplementVersionFiles"')
+    expect(source).toContain('versionFiles')
+    expect(source).toContain('update:versionFiles')
+    expect(source).toContain('按图号补传')
+    expect(source).toContain('按图号+版本补传')
+    expect(source).toContain('class="supplement-upload-dual-grid"')
     expect(source).toContain('@drop.prevent="handleDrop"')
     expect(source).toContain('ref="fileInput"')
     expect(source).toContain('ref="folderInput"')
+    expect(source).toContain('ref="versionFileInput"')
+    expect(source).toContain('ref="versionFolderInput"')
     expect(source).toContain('accept=".pdf"')
     expect(source).toContain('webkitdirectory directory multiple')
     expect(source).toContain('@change="handleFileSelect"')
     expect(source).toContain('@change="handleFolderSelect"')
+    expect(source).toContain('@change="handleVersionFileSelect"')
+    expect(source).toContain('@change="handleVersionFolderSelect"')
     expect(source).toContain('@click="triggerFileSelect"')
     expect(source).toContain('@click="triggerFolderSelect"')
+    expect(source).toContain('@click="triggerVersionFileSelect"')
+    expect(source).toContain('@click="triggerVersionFolderSelect"')
     expect(source).toContain('选择多个 PDF')
     expect(source).toContain('选择文件夹')
     expect(source).toContain('collectPdfFilesFromDataTransfer')

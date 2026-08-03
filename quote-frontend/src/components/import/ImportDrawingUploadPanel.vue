@@ -20,7 +20,7 @@
       </div>
 
       <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-      <div class="import-action-row">
+      <div class="import-upload-button-stack">
         <el-button
           v-permission="permission"
           plain
@@ -186,11 +186,11 @@ const fileKey = (file, index) => `${file?.name || 'pdf'}|${file?.size ?? ''}|${f
   text-align: center;
 }
 
-.import-action-row {
+.import-upload-button-stack {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
   margin-top: 12px;

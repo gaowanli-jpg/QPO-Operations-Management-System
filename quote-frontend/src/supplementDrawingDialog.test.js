@@ -27,6 +27,25 @@ describe('shared supplement drawing dialog', () => {
     expect(dialog).toContain('@drop.prevent="handleDrop"')
   })
 
+  test('exposes independent part-version files and disables submit only when both entrances are empty', () => {
+    expect(dialog).toContain('versionFiles: { type: Array, default: () => [] }')
+    expect(dialog).toContain("'update:versionFiles'")
+    expect(dialog).toContain('props.versionFiles')
+    expect(dialog).toContain("emit('update:versionFiles'")
+    expect(dialog).toContain('files.length === 0 && versionFiles.length === 0')
+  })
+
+  test('parents submit part-version supplement drawings without changing old drawings field', () => {
+    for (const source of [orderManage, salesOrderManage]) {
+      expect(source).toContain('v-model:files="supplementFiles"')
+      expect(source).toContain('v-model:version-files="supplementVersionFiles"')
+      expect(source).toContain('const supplementVersionFiles = ref([])')
+      expect(source).toContain('supplementVersionFiles.value.forEach')
+      expect(source).toContain("formData.append('drawings', file)")
+      expect(source).toContain("formData.append('versionDrawings', file)")
+    }
+  })
+
   test('shows missing items and the four supplement result buckets', () => {
     expect(dialog).toContain(':data="missingItems"')
     expect(dialog).toContain('result.boundItems')

@@ -244,6 +244,7 @@
     <SupplementDrawingDialog
       v-model="supplementVisible"
       v-model:files="supplementFiles"
+      v-model:version-files="supplementVersionFiles"
       title="补传图纸"
       :order-label="orderDetail?.orderInfo?.rfqNo || '-'"
       :customer-name="orderDetail?.orderInfo?.customerName || '-'"
@@ -312,6 +313,7 @@ const detailTicketTotal = ref(0)
 const detailProcessSheetTotal = ref(0)
 const supplementVisible = ref(false)
 const supplementFiles = ref([])
+const supplementVersionFiles = ref([])
 const supplementResult = ref(null)
 const customerPickerVisible = ref(false)
 
@@ -600,6 +602,7 @@ const handleDetailTabChange = async () => {
 const openSupplementDialog = () => {
   supplementResult.value = null
   supplementFiles.value = []
+  supplementVersionFiles.value = []
   supplementVisible.value = true
 }
 
@@ -658,16 +661,18 @@ const performStatusAction = async (row, action) => {
 
 const submitSupplementDrawings = async () => {
   if (!orderDetail.value?.orderInfo?.id) return ElMessage.warning('请先打开询价订单详情。')
-  if (supplementFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
+  if (supplementFiles.value.length === 0 && supplementVersionFiles.value.length === 0) return ElMessage.warning('请先选择需要补传的 PDF 图纸。')
 
   const rfqId = orderDetail.value.orderInfo.id
   return runAction(orderActionKeys.supplementDrawings(rfqId), async () => {
     const formData = new FormData()
     supplementFiles.value.forEach(file => formData.append('drawings', file))
+    supplementVersionFiles.value.forEach(file => formData.append('versionDrawings', file))
     const response = await supplementDrawings(rfqId, formData)
     supplementResult.value = response
     ElMessage.success(response.message || '补传图纸处理完成。')
     supplementFiles.value = []
+    supplementVersionFiles.value = []
     await refreshCurrentDetail()
     await loadOrders()
   }).catch((error) => {

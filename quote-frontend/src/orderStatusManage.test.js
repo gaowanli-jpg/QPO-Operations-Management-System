@@ -101,6 +101,7 @@ describe('order status management stage 0 guardrails', () => {
     expect(orderManage).toContain(':disabled="isOrderStatusPending(scope.row)"')
     expect(orderManage).toContain(':pending="supplementUploadPending"')
     expect(orderManage).toContain('v-model:files="supplementFiles"')
+    expect(orderManage).toContain('v-model:version-files="supplementVersionFiles"')
   })
 
   test('wraps order status changes and supplement uploads with runAction guards', () => {
@@ -110,6 +111,8 @@ describe('order status management stage 0 guardrails', () => {
     expect(statusBlock).toContain('return runAction(orderActionKeys.statusChange(row.id), async () =>')
     expect(statusBlock).toContain('await action.handler(row.id, { reason: action.reason })')
     expect(supplementBlock).toContain('return runAction(orderActionKeys.supplementDrawings(rfqId), async () =>')
+    expect(supplementBlock).toContain("formData.append('drawings', file)")
+    expect(supplementBlock).toContain("formData.append('versionDrawings', file)")
     expect(supplementBlock).toContain('await supplementDrawings(rfqId, formData)')
   })
 

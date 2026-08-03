@@ -90,10 +90,20 @@
                 <span class="step-index">03</span>
                 <span>步骤 3：上传关联图纸（PDF）</span>
               </div>
-              <ImportDrawingUploadPanel
-                v-model="drawingFiles"
-                permission="market:rfq:upload-drawing"
-              />
+              <div class="drawing-upload-dual-grid">
+                <ImportDrawingUploadPanel
+                  v-model="drawingFiles"
+                  permission="market:rfq:upload-drawing"
+                  alert-title="按图号绑定图纸：支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
+                  selected-title="按图号待绑定图纸"
+                />
+                <ImportDrawingUploadPanel
+                  v-model="versionDrawingFiles"
+                  permission="market:rfq:upload-drawing"
+                  alert-title="按图号+版本绑定图纸：支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf。"
+                  selected-title="按图号+版本待绑定图纸"
+                />
+              </div>
             </div>
 
             <div class="erp-toolbar submit-footer">
@@ -233,12 +243,22 @@
                 <span class="step-index">04</span>
                 <span>步骤 4：上传关联图纸（PDF）</span>
               </div>
-              <ImportDrawingUploadPanel
-                v-model="salesOrderDrawingFiles"
-                permission="market:rfq:import-sales-order"
-                :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                selected-title="已成功提取销售订单待绑定图纸"
-              />
+              <div class="drawing-upload-dual-grid">
+                <ImportDrawingUploadPanel
+                  v-model="salesOrderDrawingFiles"
+                  permission="market:rfq:import-sales-order"
+                  :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                  alert-title="按图号绑定图纸：支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
+                  selected-title="销售订单按图号待绑定图纸"
+                />
+                <ImportDrawingUploadPanel
+                  v-model="salesOrderVersionDrawingFiles"
+                  permission="market:rfq:import-sales-order"
+                  :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                  alert-title="按图号+版本绑定图纸：支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf。"
+                  selected-title="销售订单按图号+版本待绑定图纸"
+                />
+              </div>
             </div>
 
             <div class="erp-toolbar submit-footer sales-order-submit-row">
@@ -349,6 +369,7 @@ import { readActionError } from '../utils/actionError'
 const rfqForm = reactive({ customerName: '' })
 const excelFile = ref(null)
 const drawingFiles = ref([])
+const versionDrawingFiles = ref([])
 const excelUploadRef = ref(null)
 const customerPickerVisible = ref(false)
 const activeImportMode = ref('rfq')
@@ -361,6 +382,7 @@ const salesOrderForm = reactive({
 })
 const salesOrderFile = ref(null)
 const salesOrderDrawingFiles = ref([])
+const salesOrderVersionDrawingFiles = ref([])
 const salesOrderUploadRef = ref(null)
 const salesOrderCustomerPickerVisible = ref(false)
 const salesOrderImportResult = ref(null)
@@ -510,6 +532,9 @@ const submitSalesOrderImport = async () => {
     salesOrderDrawingFiles.value.forEach(file => {
       formData.append('drawings', file)
     })
+    salesOrderVersionDrawingFiles.value.forEach(file => {
+      formData.append('versionDrawings', file)
+    })
 
     try {
       const response = await importSalesOrderToQpo(formData)
@@ -536,6 +561,7 @@ const submitSalesOrderImport = async () => {
           salesOrderForm.documentTypeCode = 'SO01'
           salesOrderFile.value = null
           salesOrderDrawingFiles.value = []
+          salesOrderVersionDrawingFiles.value = []
           salesOrderUploadRef.value?.clearFiles?.()
         })
       } else {
@@ -561,6 +587,9 @@ const submitRfqPackage = async () => {
     drawingFiles.value.forEach(file => {
       formData.append('drawings', file)
     })
+    versionDrawingFiles.value.forEach(file => {
+      formData.append('versionDrawings', file)
+    })
 
     try {
       const response = await importRfq(formData)
@@ -582,6 +611,7 @@ const submitRfqPackage = async () => {
           rfqForm.customerName = ''
           excelFile.value = null
           drawingFiles.value = [] // 清空拖拽出来的 PDF
+          versionDrawingFiles.value = []
           if (excelUploadRef.value) {
             excelUploadRef.value.clearFiles() // 清空原生的 Excel 选择框
           }
@@ -739,6 +769,17 @@ const submitRfqPackage = async () => {
   background: var(--erp-surface-soft);
 }
 
+.drawing-upload-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.drawing-upload-dual-grid :deep(.import-drawing-upload-panel) {
+  min-width: 0;
+}
+
 .submit-footer {
   justify-content: center;
   margin-top: 0;
@@ -799,6 +840,10 @@ const submitRfqPackage = async () => {
 
   .sales-order-result-summary {
     justify-content: flex-start;
+  }
+
+  .drawing-upload-dual-grid {
+    grid-template-columns: 1fr;
   }
 
   .submit-btn {

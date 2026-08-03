@@ -23,33 +23,69 @@
       </div>
 
       <div class="erp-upload-surface upload-area">
-        <div
-          v-permission="permission"
-          class="custom-dropzone supplement-dropzone"
-          @dragover.prevent
-          @drop.prevent="handleDrop"
-        >
-          <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-          <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
-          <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
-          <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-          <div class="supplement-upload-actions">
-            <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" @click="triggerFileSelect">选择多个 PDF</el-button>
-            <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" @click="triggerFolderSelect">选择文件夹</el-button>
-          </div>
-          <input ref="fileInput" type="file" accept=".pdf" multiple class="hidden-input" @change="handleFileSelect" />
-          <input ref="folderInput" type="file" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
-        </div>
-      </div>
+        <div class="supplement-upload-dual-grid">
+          <section class="supplement-upload-entry">
+            <div class="supplement-upload-title">按图号补传</div>
+            <div
+              v-permission="permission"
+              class="custom-dropzone supplement-dropzone"
+              @dragover.prevent
+              @drop.prevent="handleDrop"
+            >
+              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+              <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
+              <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
+              <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+              <div class="supplement-upload-actions import-upload-button-stack">
+                <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerFileSelect">选择多个 PDF</el-button>
+                <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerFolderSelect">选择文件夹</el-button>
+              </div>
+              <input ref="fileInput" type="file" accept=".pdf" multiple class="hidden-input" @change="handleFileSelect" />
+              <input ref="folderInput" type="file" webkitdirectory directory multiple class="hidden-input" @change="handleFolderSelect" />
+            </div>
 
-      <div v-if="files.length > 0" class="supplement-file-stats">
-        <h4>已选择待补传图纸（{{ files.length }} 份）</h4>
-        <ul class="supplement-pdf-list">
-          <li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${index}`">
-            <span>{{ file.name }}</span>
-            <el-button v-permission="permission" link type="danger" size="small" @click="removeFile(index)">移除</el-button>
-          </li>
-        </ul>
+            <div v-if="files.length > 0" class="supplement-file-stats">
+              <h4>按图号待补传图纸（{{ files.length }} 份）</h4>
+              <ul class="supplement-pdf-list">
+                <li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${index}`">
+                  <span>{{ file.name }}</span>
+                  <el-button v-permission="permission" link type="danger" size="small" :disabled="pending" @click="removeFile(index)">移除</el-button>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="supplement-upload-entry">
+            <div class="supplement-upload-title">按图号+版本补传</div>
+            <div
+              v-permission="permission"
+              class="custom-dropzone supplement-dropzone"
+              @dragover.prevent
+              @drop.prevent="handleVersionDrop"
+            >
+              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+              <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
+              <div class="el-upload__tip">支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf，例如 L20100000733_A.pdf。</div>
+              <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+              <div class="supplement-upload-actions import-upload-button-stack">
+                <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerVersionFileSelect">选择多个 PDF</el-button>
+                <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerVersionFolderSelect">选择文件夹</el-button>
+              </div>
+              <input ref="versionFileInput" type="file" accept=".pdf" multiple class="hidden-input" @change="handleVersionFileSelect" />
+              <input ref="versionFolderInput" type="file" webkitdirectory directory multiple class="hidden-input" @change="handleVersionFolderSelect" />
+            </div>
+
+            <div v-if="versionFiles.length > 0" class="supplement-file-stats">
+              <h4>按图号+版本待补传图纸（{{ versionFiles.length }} 份）</h4>
+              <ul class="supplement-pdf-list">
+                <li v-for="(file, index) in versionFiles" :key="`${file.name}-${file.size}-${index}`">
+                  <span>{{ file.name }}</span>
+                  <el-button v-permission="permission" link type="danger" size="small" :disabled="pending" @click="removeVersionFile(index)">移除</el-button>
+                </li>
+              </ul>
+            </div>
+          </section>
+        </div>
       </div>
 
       <div v-if="result" class="supplement-result">
@@ -78,7 +114,7 @@
           v-permission="permission"
           type="primary"
           :loading="pending"
-          :disabled="files.length === 0 || pending"
+          :disabled="(files.length === 0 && versionFiles.length === 0) || pending"
           @click="emit('submit')"
         >
           {{ submitText }}
@@ -101,15 +137,18 @@ const props = defineProps({
   customerName: { type: String, default: '-' },
   missingItems: { type: Array, default: () => [] },
   files: { type: Array, default: () => [] },
+  versionFiles: { type: Array, default: () => [] },
   result: { type: Object, default: null },
   pending: { type: Boolean, default: false },
   permission: { type: String, required: true },
   submitText: { type: String, default: '上传并匹配' }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:files', 'submit'])
+const emit = defineEmits(['update:modelValue', 'update:files', 'update:versionFiles', 'submit'])
 const fileInput = ref(null)
 const folderInput = ref(null)
+const versionFileInput = ref(null)
+const versionFolderInput = ref(null)
 
 const ResultList = defineComponent({
   props: {
@@ -130,10 +169,11 @@ const ResultList = defineComponent({
   }
 })
 
-const addFiles = (incomingFiles, sourceLabel) => {
-  const mergedFiles = mergePdfFiles(props.files, incomingFiles)
-  const addedCount = mergedFiles.length - props.files.length
-  emit('update:files', mergedFiles)
+const addFiles = (incomingFiles, sourceLabel, mode = 'part') => {
+  const currentFiles = mode === 'version' ? props.versionFiles : props.files
+  const mergedFiles = mergePdfFiles(currentFiles, incomingFiles)
+  const addedCount = mergedFiles.length - currentFiles.length
+  emit(mode === 'version' ? 'update:versionFiles' : 'update:files', mergedFiles)
   if (addedCount > 0) {
     ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
   } else {
@@ -142,16 +182,31 @@ const addFiles = (incomingFiles, sourceLabel) => {
 }
 
 const handleDrop = async (event) => {
+  if (props.pending) return
   const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
   addFiles(pdfs, '提取')
 }
 
+const handleVersionDrop = async (event) => {
+  if (props.pending) return
+  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
+  addFiles(pdfs, '提取', 'version')
+}
+
 const triggerFileSelect = () => {
-  fileInput.value?.click()
+  if (!props.pending) fileInput.value?.click()
 }
 
 const triggerFolderSelect = () => {
-  folderInput.value?.click()
+  if (!props.pending) folderInput.value?.click()
+}
+
+const triggerVersionFileSelect = () => {
+  if (!props.pending) versionFileInput.value?.click()
+}
+
+const triggerVersionFolderSelect = () => {
+  if (!props.pending) versionFolderInput.value?.click()
 }
 
 const handleFileSelect = (event) => {
@@ -164,8 +219,22 @@ const handleFolderSelect = (event) => {
   event.target.value = ''
 }
 
+const handleVersionFileSelect = (event) => {
+  addFiles(event.target.files, '选择', 'version')
+  event.target.value = ''
+}
+
+const handleVersionFolderSelect = (event) => {
+  addFiles(event.target.files, '从选中的文件夹中提取', 'version')
+  event.target.value = ''
+}
+
 const removeFile = (index) => {
   emit('update:files', props.files.filter((_, currentIndex) => currentIndex !== index))
+}
+
+const removeVersionFile = (index) => {
+  emit('update:versionFiles', props.versionFiles.filter((_, currentIndex) => currentIndex !== index))
 }
 </script>
 
@@ -209,12 +278,40 @@ const removeFile = (index) => {
   font-size: var(--erp-font-size-sm);
 }
 
+.supplement-upload-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.supplement-upload-entry {
+  min-width: 0;
+}
+
+.supplement-upload-title {
+  margin-bottom: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .supplement-upload-actions {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: center;
-  flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
+}
+
+.supplement-upload-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.import-upload-button-stack {
+  flex-direction: column;
 }
 
 .folder-select-button {
@@ -299,5 +396,11 @@ const removeFile = (index) => {
 
 .result-reason {
   color: var(--erp-warning);
+}
+
+@media (max-width: 760px) {
+  .supplement-upload-dual-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

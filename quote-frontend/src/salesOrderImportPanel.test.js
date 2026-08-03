@@ -80,11 +80,28 @@ describe('sales order import panel', () => {
     )
 
     expect(marketDashboard).toContain('salesOrderDrawingFiles')
+    expect(marketDashboard).toContain('salesOrderVersionDrawingFiles')
     expect(submitBlock).toContain('salesOrderDrawingFiles.value.forEach')
     expect(submitBlock).toContain("formData.append('drawings', file)")
+    expect(submitBlock).toContain('salesOrderVersionDrawingFiles.value.forEach')
+    expect(submitBlock).toContain("formData.append('versionDrawings', file)")
     expect(submitBlock).toContain('buildDrawingReportHtml(response.drawingReport)')
     expect(submitBlock).toContain('ElMessageBox.alert')
     expect(submitBlock).toContain('销售订单导入成功')
+  })
+
+  test('RFQ import submits old and part-version drawing entrances independently', () => {
+    const submitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitRfqPackage'),
+      marketDashboard.indexOf('</script>')
+    )
+
+    expect(marketDashboard).toContain('const drawingFiles = ref([])')
+    expect(marketDashboard).toContain('const versionDrawingFiles = ref([])')
+    expect(submitBlock).toContain('drawingFiles.value.forEach')
+    expect(submitBlock).toContain("formData.append('drawings', file)")
+    expect(submitBlock).toContain('versionDrawingFiles.value.forEach')
+    expect(submitBlock).toContain("formData.append('versionDrawings', file)")
   })
 
   test('adds template download actions to both import modes', () => {

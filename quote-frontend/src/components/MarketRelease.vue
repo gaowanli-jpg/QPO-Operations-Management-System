@@ -346,35 +346,73 @@
         />
 
         <div class="erp-upload-surface drawing-replace-upload">
-          <div
-            v-permission="'market:release:create'"
-            class="custom-dropzone drawing-replace-dropzone supplement-dropzone"
-            @dragover.prevent
-            @drop.prevent="handleReplacementDrop"
-          >
-            <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
-            <div class="el-upload__text dropzone-text">
-              将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
-            </div>
-            <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
-            <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
-            <div class="drawing-replace-upload-actions import-action-row">
-              <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" @click="triggerReplacementFileSelect">选择多个 PDF</el-button>
-              <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" @click="triggerReplacementFolderSelect">选择文件夹</el-button>
-            </div>
-            <input type="file" ref="replacementFileInput" accept=".pdf" multiple class="hidden-input" @change="handleReplacementFileSelect" />
-            <input type="file" ref="replacementFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleReplacementFolderSelect" />
-          </div>
-        </div>
+          <div class="drawing-replace-dual-grid">
+            <section class="drawing-replace-entry">
+              <div class="drawing-replace-entry-title">按图号替换</div>
+              <div
+                v-permission="'market:release:create'"
+                class="custom-dropzone drawing-replace-dropzone supplement-dropzone"
+                @dragover.prevent
+                @drop.prevent="handleReplacementDrop"
+              >
+                <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
+                <div class="el-upload__text dropzone-text">
+                  将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
+                </div>
+                <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
+                <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+                <div class="drawing-replace-upload-actions import-upload-button-stack">
+                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementFileSelect">选择多个 PDF</el-button>
+                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementFolderSelect">选择文件夹</el-button>
+                </div>
+                <input type="file" ref="replacementFileInput" accept=".pdf" multiple class="hidden-input" @change="handleReplacementFileSelect" />
+                <input type="file" ref="replacementFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleReplacementFolderSelect" />
+              </div>
 
-        <div v-if="replacementDrawingFiles.length > 0" class="replacement-file-stats">
-          <h4>已选择待替换图纸（{{ replacementDrawingFiles.length }} 份）</h4>
-          <ul class="replacement-pdf-list">
-            <li v-for="(file, index) in replacementDrawingFiles" :key="`${file.name}-${file.size}-${index}`">
-              <span>{{ file.name }}</span>
-              <el-button v-permission="'market:release:create'" link type="danger" size="small" @click="removeReplacementDrawingFile(index)">移除</el-button>
-            </li>
-          </ul>
+              <div v-if="replacementDrawingFiles.length > 0" class="replacement-file-stats">
+                <h4>按图号待替换图纸（{{ replacementDrawingFiles.length }} 份）</h4>
+                <ul class="replacement-pdf-list">
+                  <li v-for="(file, index) in replacementDrawingFiles" :key="`${file.name}-${file.size}-${index}`">
+                    <span>{{ file.name }}</span>
+                    <el-button v-permission="'market:release:create'" link type="danger" size="small" :disabled="replacingDrawings || submitting" @click="removeReplacementDrawingFile(index)">移除</el-button>
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="drawing-replace-entry">
+              <div class="drawing-replace-entry-title">按图号+版本替换</div>
+              <div
+                v-permission="'market:release:create'"
+                class="custom-dropzone drawing-replace-dropzone supplement-dropzone"
+                @dragover.prevent
+                @drop.prevent="handleReplacementVersionDrop"
+              >
+                <el-icon class="el-icon--upload dropzone-icon"><upload-filled /></el-icon>
+                <div class="el-upload__text dropzone-text">
+                  将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处
+                </div>
+                <div class="el-upload__tip">支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf，例如 L20100000733_A.pdf。</div>
+                <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
+                <div class="drawing-replace-upload-actions import-upload-button-stack">
+                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementVersionFileSelect">选择多个 PDF</el-button>
+                  <el-button v-permission="'market:release:create'" plain class="workflow-soft-button folder-select-button" :disabled="replacingDrawings || submitting" @click="triggerReplacementVersionFolderSelect">选择文件夹</el-button>
+                </div>
+                <input type="file" ref="replacementVersionFileInput" accept=".pdf" multiple class="hidden-input" @change="handleReplacementVersionFileSelect" />
+                <input type="file" ref="replacementVersionFolderInput" webkitdirectory directory multiple class="hidden-input" @change="handleReplacementVersionFolderSelect" />
+              </div>
+
+              <div v-if="replacementVersionDrawingFiles.length > 0" class="replacement-file-stats">
+                <h4>按图号+版本待替换图纸（{{ replacementVersionDrawingFiles.length }} 份）</h4>
+                <ul class="replacement-pdf-list">
+                  <li v-for="(file, index) in replacementVersionDrawingFiles" :key="`${file.name}-${file.size}-${index}`">
+                    <span>{{ file.name }}</span>
+                    <el-button v-permission="'market:release:create'" link type="danger" size="small" :disabled="replacingDrawings || submitting" @click="removeReplacementVersionDrawingFile(index)">移除</el-button>
+                  </li>
+                </ul>
+              </div>
+            </section>
+          </div>
         </div>
 
         <div v-if="clientSkippedReplacementFiles.length > 0 && !replacementDrawingResult" class="replacement-result">
@@ -440,7 +478,7 @@
             v-permission="'market:release:create'"
             type="primary"
             :loading="replacingDrawings"
-            :disabled="replacementDrawingFiles.length === 0 || replacingDrawings || submitting"
+            :disabled="(replacementDrawingFiles.length === 0 && replacementVersionDrawingFiles.length === 0) || replacingDrawings || submitting"
             @click="submitReplacementDrawings"
           >
             上传并替换
@@ -496,12 +534,15 @@ const itemTableRef = ref(null)
 const selectionUploadRef = ref(null)
 const replacementFileInput = ref(null)
 const replacementFolderInput = ref(null)
+const replacementVersionFileInput = ref(null)
+const replacementVersionFolderInput = ref(null)
 const releaseItemPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
 const drawingReplaceVisible = ref(false)
 const replacementDrawingFiles = ref([])
+const replacementVersionDrawingFiles = ref([])
 const replacementDrawingResult = ref(null)
 const clientSkippedReplacementFiles = ref([])
 
@@ -923,6 +964,7 @@ const openDrawingReplaceDialog = () => {
     return
   }
   replacementDrawingFiles.value = []
+  replacementVersionDrawingFiles.value = []
   replacementDrawingResult.value = null
   clientSkippedReplacementFiles.value = []
   drawingReplaceVisible.value = true
@@ -949,12 +991,12 @@ const addClientSkippedReplacementFiles = (files = []) => {
   ElMessage.warning(`已跳过 ${skipped.length} 个非 PDF 文件。`)
 }
 
-const addReplacementDrawingFiles = (files, sourceLabel) => {
+const addReplacementDrawingFiles = (files, sourceLabel, targetFiles = replacementDrawingFiles) => {
   const incomingFiles = Array.from(files || [])
   addClientSkippedReplacementFiles(incomingFiles)
-  const beforeCount = replacementDrawingFiles.value.length
-  replacementDrawingFiles.value = mergePdfFiles(replacementDrawingFiles.value, incomingFiles)
-  const addedCount = replacementDrawingFiles.value.length - beforeCount
+  const beforeCount = targetFiles.value.length
+  targetFiles.value = mergePdfFiles(targetFiles.value, incomingFiles)
+  const addedCount = targetFiles.value.length - beforeCount
   replacementDrawingResult.value = null
   if (addedCount > 0) {
     ElMessage.success(`成功${sourceLabel} ${addedCount} 份 PDF。`)
@@ -964,17 +1006,33 @@ const addReplacementDrawingFiles = (files, sourceLabel) => {
 }
 
 const handleReplacementDrop = async (event) => {
+  if (replacingDrawings.value || submitting.value) return
   addClientSkippedReplacementFiles(event.dataTransfer?.files)
   const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
   addReplacementDrawingFiles(pdfs, '提取')
 }
 
+const handleReplacementVersionDrop = async (event) => {
+  if (replacingDrawings.value || submitting.value) return
+  addClientSkippedReplacementFiles(event.dataTransfer?.files)
+  const pdfs = await collectPdfFilesFromDataTransfer(event.dataTransfer)
+  addReplacementDrawingFiles(pdfs, '提取', replacementVersionDrawingFiles)
+}
+
 const triggerReplacementFileSelect = () => {
-  replacementFileInput.value?.click()
+  if (!replacingDrawings.value && !submitting.value) replacementFileInput.value?.click()
 }
 
 const triggerReplacementFolderSelect = () => {
-  replacementFolderInput.value?.click()
+  if (!replacingDrawings.value && !submitting.value) replacementFolderInput.value?.click()
+}
+
+const triggerReplacementVersionFileSelect = () => {
+  if (!replacingDrawings.value && !submitting.value) replacementVersionFileInput.value?.click()
+}
+
+const triggerReplacementVersionFolderSelect = () => {
+  if (!replacingDrawings.value && !submitting.value) replacementVersionFolderInput.value?.click()
 }
 
 const handleReplacementFileSelect = (event) => {
@@ -987,18 +1045,33 @@ const handleReplacementFolderSelect = (event) => {
   event.target.value = ''
 }
 
+const handleReplacementVersionFileSelect = (event) => {
+  addReplacementDrawingFiles(event.target.files, '选择', replacementVersionDrawingFiles)
+  event.target.value = ''
+}
+
+const handleReplacementVersionFolderSelect = (event) => {
+  addReplacementDrawingFiles(event.target.files, '从选中的文件夹中提取', replacementVersionDrawingFiles)
+  event.target.value = ''
+}
+
 const removeReplacementDrawingFile = (index) => {
   replacementDrawingFiles.value.splice(index, 1)
 }
 
+const removeReplacementVersionDrawingFile = (index) => {
+  replacementVersionDrawingFiles.value.splice(index, 1)
+}
+
 const submitReplacementDrawings = async () => {
   if (selectedOrderSources.value.length === 0) return ElMessage.warning('请先选择订单。')
-  if (replacementDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
+  if (replacementDrawingFiles.value.length === 0 && replacementVersionDrawingFiles.value.length === 0) return ElMessage.warning('请先选择需要替换的 PDF 图纸。')
 
   const formData = new FormData()
   formData.append('rfqIds', JSON.stringify(selectedRfqIds.value))
   formData.append('sources', JSON.stringify(selectedOrderSources.value))
   replacementDrawingFiles.value.forEach(file => formData.append('drawings', file))
+  replacementVersionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
 
   return runAction(releaseActionKeys.replaceDrawings, async () => {
     try {
@@ -1013,6 +1086,7 @@ const submitReplacementDrawings = async () => {
         skippedCount: skippedFiles.length
       }
       replacementDrawingFiles.value = []
+      replacementVersionDrawingFiles.value = []
       clientSkippedReplacementFiles.value = []
       await fetchReleaseItemsBatch()
 
@@ -1455,6 +1529,25 @@ const statusTagType = (status) => {
   background: transparent;
 }
 
+.drawing-replace-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.drawing-replace-entry {
+  min-width: 0;
+}
+
+.drawing-replace-entry-title {
+  margin-bottom: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--erp-primary);
+  color: var(--erp-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .custom-dropzone {
   width: 100%;
   padding: 28px 16px;
@@ -1493,7 +1586,18 @@ const statusTagType = (status) => {
 }
 
 .drawing-replace-upload-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   margin-top: 12px;
+}
+
+.drawing-replace-upload-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.import-upload-button-stack {
+  flex-direction: column;
 }
 
 .folder-select-button {
@@ -1618,6 +1722,10 @@ const statusTagType = (status) => {
   }
 
   .replacement-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .drawing-replace-dual-grid {
     grid-template-columns: 1fr;
   }
 }
