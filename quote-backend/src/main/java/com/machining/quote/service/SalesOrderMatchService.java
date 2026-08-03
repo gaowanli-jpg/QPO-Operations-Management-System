@@ -326,51 +326,42 @@ public class SalesOrderMatchService {
     }
 
     private void applyProductionSnapshot(SalesOrderItem item, ItemQuoteVersion source, SalesOrderMatchApplyReq req) {
-        boolean overwriteSnapshot = req != null && req.isOverwriteExistingProductionSnapshot();
-        boolean overwriteTemplate = req != null && req.isOverwriteTemplateMaterial();
-        if ((overwriteTemplate || isBlank(item.getMaterialName())) && !isBlank(source.getMaterialName())) {
-            item.setMaterialName(source.getMaterialName());
+        String engineeringMaterialName = resolveEngineeringMaterialName(source);
+        String materialShape = resolveMaterialShape(source);
+        if (isBlank(item.getEngineeringMaterialName()) && !isBlank(engineeringMaterialName)) {
+            item.setEngineeringMaterialName(engineeringMaterialName);
         }
-        if ((overwriteTemplate || isBlank(item.getSurfaceTreatment())) && !isBlank(source.getSurfaceTreatment())) {
-            item.setSurfaceTreatment(source.getSurfaceTreatment());
+        if (isBlank(item.getMaterialShape()) && !isBlank(materialShape)) {
+            item.setMaterialShape(materialShape);
         }
-        if (overwriteSnapshot || isBlank(item.getEngineeringMaterialName())) {
-            item.setEngineeringMaterialName(source.getEngineeringMaterialName());
-        }
-        if (overwriteSnapshot || isBlank(item.getMaterialShape())) {
-            item.setMaterialShape(resolveMaterialShape(source));
-        }
-        if (overwriteSnapshot || item.getMaterialGrossWeight() == null) {
+        if (item.getMaterialGrossWeight() == null) {
             item.setMaterialGrossWeight(source.getMaterialGrossWeight());
         }
-        if (overwriteSnapshot || item.getPartNetWeight() == null) {
+        if (item.getPartNetWeight() == null) {
             item.setPartNetWeight(source.getPartNetWeight());
         }
-        if (overwriteSnapshot || isBlank(item.getQuoteMode())) {
+        if (isBlank(item.getQuoteMode())) {
             item.setQuoteMode(source.getQuoteMode());
         }
-        if (overwriteSnapshot || item.getAssemblyFee() == null) {
+        if (item.getAssemblyFee() == null) {
             item.setAssemblyFee(toBigDecimal(source.getAssemblyFee()));
         }
-        if (overwriteSnapshot || item.getBaseCost() == null) {
+        if (item.getBaseCost() == null) {
             item.setBaseCost(toBigDecimal(source.getBaseCost()));
         }
-        if (overwriteSnapshot || isBlank(item.getItemType())) {
+        if (isBlank(item.getItemType())) {
             item.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
         }
-        if (overwriteSnapshot || item.getMaterialData() == null) {
+        if (item.getMaterialData() == null) {
             item.setMaterialData(source.getMaterialData());
         }
-        if (overwriteSnapshot || item.getProcessRoute() == null) {
+        if (item.getProcessRoute() == null) {
             item.setProcessRoute(source.getProcessRoute());
         }
-        if (overwriteSnapshot || item.getFeeData() == null) {
+        if (item.getFeeData() == null) {
             item.setFeeData(source.getFeeData());
         }
-        if (isBlank(item.getDrawingUrl()) && !isBlank(source.getDrawingUrl())) {
-            item.setDrawingUrl(source.getDrawingUrl());
-            item.setHasDrawing(true);
-        } else if (!isBlank(item.getDrawingUrl())) {
+        if (!isBlank(item.getDrawingUrl())) {
             item.setHasDrawing(true);
         }
         item.setMatchedRfqId(source.getRfqId());
@@ -512,7 +503,7 @@ public class SalesOrderMatchService {
         row.setSourcePartNo(source.getPartNo());
         row.setSourceVersion(source.getVersion());
         row.setMaterialName(source.getMaterialName());
-        row.setEngineeringMaterialName(source.getEngineeringMaterialName());
+        row.setEngineeringMaterialName(resolveEngineeringMaterialName(source));
         row.setSurfaceTreatment(source.getSurfaceTreatment());
         row.setQuoteMode(source.getQuoteMode());
         row.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
@@ -524,9 +515,7 @@ public class SalesOrderMatchService {
 
     private Map<String, Object> changedFields(SalesOrderItem current, ItemQuoteVersion source) {
         Map<String, Object> fields = new LinkedHashMap<>();
-        putIfCurrentBlank(fields, "materialName", current.getMaterialName(), source.getMaterialName());
-        putIfCurrentBlank(fields, "surfaceTreatment", current.getSurfaceTreatment(), source.getSurfaceTreatment());
-        putSnapshot(fields, "engineeringMaterialName", current.getEngineeringMaterialName(), source.getEngineeringMaterialName());
+        putSnapshot(fields, "engineeringMaterialName", current.getEngineeringMaterialName(), resolveEngineeringMaterialName(source));
         putSnapshot(fields, "materialShape", current.getMaterialShape(), resolveMaterialShape(source));
         putSnapshot(fields, "materialGrossWeight", current.getMaterialGrossWeight(), source.getMaterialGrossWeight());
         putSnapshot(fields, "partNetWeight", current.getPartNetWeight(), source.getPartNetWeight());
@@ -534,23 +523,18 @@ public class SalesOrderMatchService {
         putSnapshot(fields, "itemType", current.getItemType(), QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
         putSnapshot(fields, "assemblyFee", current.getAssemblyFee(), toBigDecimal(source.getAssemblyFee()));
         putSnapshot(fields, "baseCost", current.getBaseCost(), toBigDecimal(source.getBaseCost()));
-        if (isBlank(current.getDrawingUrl()) && !isBlank(source.getDrawingUrl())) {
-            fields.put("drawingUrl", Map.of("current", "", "source", source.getDrawingUrl()));
-        }
-        fields.put("materialSnapshotAvailable", source.getMaterialData() != null);
-        fields.put("processSnapshotAvailable", source.getProcessRoute() != null);
-        fields.put("feeSnapshotAvailable", source.getFeeData() != null);
+        fields.put("materialSnapshotAvailable", current.getMaterialData() == null && source.getMaterialData() != null);
+        fields.put("processSnapshotAvailable", current.getProcessRoute() == null && source.getProcessRoute() != null);
+        fields.put("feeSnapshotAvailable", current.getFeeData() == null && source.getFeeData() != null);
         return fields;
     }
 
     private Map<String, Object> protectedFields(SalesOrderItem current, ItemQuoteVersion source) {
         Map<String, Object> fields = new LinkedHashMap<>();
-        if (!isBlank(current.getMaterialName())) {
-            fields.put("materialName", Map.of("current", current.getMaterialName(), "source", defaultText(source.getMaterialName(), "")));
-        }
-        if (!isBlank(current.getSurfaceTreatment())) {
-            fields.put("surfaceTreatment", Map.of("current", current.getSurfaceTreatment(), "source", defaultText(source.getSurfaceTreatment(), "")));
-        }
+        fields.put("materialName", protectedText(current.getMaterialName(), source.getMaterialName()));
+        fields.put("surfaceTreatment", protectedText(current.getSurfaceTreatment(), source.getSurfaceTreatment()));
+        fields.put("drawingUrl", protectedText(current.getDrawingUrl(), source.getDrawingUrl()));
+        fields.put("description", protectedText(current.getDescription(), source.getDescription()));
         fields.put("qty", current.getQty());
         fields.put("materialNo", defaultText(current.getMaterialNo(), ""));
         fields.put("taxIncludedUnitPrice", current.getTaxIncludedUnitPrice());
@@ -800,16 +784,26 @@ public class SalesOrderMatchService {
         return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
-    private void putIfCurrentBlank(Map<String, Object> target, String field, String current, String source) {
-        if (isBlank(current) && !isBlank(source)) {
-            target.put(field, Map.of("current", "", "source", source));
+    private void putSnapshot(Map<String, Object> target, String field, Object current, Object source) {
+        if (source == null || isPresent(current) || isBlankSource(source)) {
+            return;
         }
+        target.put(field, Map.of("current", "", "source", source));
     }
 
-    private void putSnapshot(Map<String, Object> target, String field, Object current, Object source) {
-        if (source != null && !Objects.equals(current, source)) {
-            target.put(field, Map.of("current", current == null ? "" : current, "source", source));
+    private boolean isPresent(Object value) {
+        if (value instanceof String text) {
+            return !isBlank(text);
         }
+        return value != null;
+    }
+
+    private boolean isBlankSource(Object value) {
+        return value instanceof String text && isBlank(text);
+    }
+
+    private Map<String, Object> protectedText(String current, String source) {
+        return Map.of("current", defaultText(current, ""), "source", defaultText(source, ""));
     }
 
     private BigDecimal toBigDecimal(Double value) {
@@ -829,6 +823,17 @@ public class SalesOrderMatchService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String resolveEngineeringMaterialName(ItemQuoteVersion source) {
+        if (source == null) {
+            return "";
+        }
+        if (!isBlank(source.getEngineeringMaterialName())) {
+            return source.getEngineeringMaterialName();
+        }
+        Object materialName = MaterialDataResolver.normalizeMap(source.getMaterialData()).get("name");
+        return materialName == null ? "" : materialName.toString().trim();
     }
 
     private String resolveMaterialShape(ItemQuoteVersion source) {

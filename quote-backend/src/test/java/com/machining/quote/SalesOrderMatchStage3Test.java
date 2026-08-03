@@ -116,6 +116,64 @@ class SalesOrderMatchStage3Test {
     }
 
     @Test
+    void applyDoesNotWriteProtectedSalesOrderFactsEvenWhenBlankAndOverwriteRequested() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        fixture.withLockedItems(header, List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "HISTORY-MATERIAL", "NORMAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyReq req = applyReq(List.of(item.getId()));
+        req.setOverwriteTemplateMaterial(true);
+        req.setOverwriteExistingProductionSnapshot(true);
+        fixture.service.apply(req);
+
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getMaterialName()).isNull();
+        assertThat(updated.getSurfaceTreatment()).isNull();
+        assertThat(updated.getDrawingUrl()).isNull();
+        assertThat(updated.getHasDrawing()).isNull();
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-HISTORY-MATERIAL");
+    }
+
+    @Test
+    void applyFillsOnlyEmptyProductionSnapshotsAndIgnoresOverwriteSnapshotFlag() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setEngineeringMaterialName(null);
+        item.setMaterialShape(null);
+        item.setMaterialData(Map.of("name", "EXISTING-REAL", "cost", 10));
+        item.setProcessRoute(List.of(Map.of("process", "OLD")));
+        item.setFeeData(List.of(Map.of("fee", "OLD")));
+        item.setQuoteMode("EXISTING-MODE");
+        item.setItemType("EXISTING-TYPE");
+        item.setAssemblyFee(new BigDecimal("3.00"));
+        item.setBaseCost(new BigDecimal("4.00"));
+        fixture.withLockedItems(header, List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "HISTORY-MATERIAL", "NORMAL");
+        source.setEngineeringMaterialName(null);
+        source.setMaterialData(Map.of("name", "SOURCE-REAL", "shape", "SOURCE-SHAPE", "cost", 50));
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyReq req = applyReq(List.of(item.getId()));
+        req.setOverwriteExistingProductionSnapshot(true);
+        fixture.service.apply(req);
+
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("SOURCE-REAL");
+        assertThat(updated.getMaterialShape()).isEqualTo("SOURCE-SHAPE");
+        assertThat(updated.getMaterialData()).isEqualTo(Map.of("name", "EXISTING-REAL", "cost", 10));
+        assertThat(updated.getProcessRoute()).isEqualTo(List.of(Map.of("process", "OLD")));
+        assertThat(updated.getFeeData()).isEqualTo(List.of(Map.of("fee", "OLD")));
+        assertThat(updated.getQuoteMode()).isEqualTo("EXISTING-MODE");
+        assertThat(updated.getItemType()).isEqualTo("EXISTING-TYPE");
+        assertThat(updated.getAssemblyFee()).isEqualByComparingTo("3.00");
+        assertThat(updated.getBaseCost()).isEqualByComparingTo("4.00");
+    }
+
+    @Test
     void applyMarksUnmatchedRowsWithoutBlockingMatchedRows() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(101L, "SOQPO-20260731-001");

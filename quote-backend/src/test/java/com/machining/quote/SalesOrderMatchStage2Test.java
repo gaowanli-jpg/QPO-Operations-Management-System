@@ -165,6 +165,27 @@ class SalesOrderMatchStage2Test {
     }
 
     @Test
+    void previewTreatsImportFactsAsProtectedEvenWhenBlank() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001", "CUSTOMER-A");
+        SalesOrderItem item = salesOrderItem(501L, 101L, "P-001", "A");
+        when(fixture.headerMapper.selectById(101L)).thenReturn(header);
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "HISTORY-MATERIAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchPreviewReq req = new SalesOrderMatchPreviewReq();
+        req.setSalesOrderIds(List.of(101L));
+        SalesOrderMatchPreviewResp resp = fixture.service.preview(req);
+
+        assertThat(resp.getRows()).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getChangedFields()).doesNotContainKeys("materialName", "surfaceTreatment", "drawingUrl");
+                    assertThat(row.getProtectedFields()).containsKeys("materialName", "surfaceTreatment", "drawingUrl");
+                });
+    }
+
+    @Test
     void customerOptionsDelegateToDataScopedCustomerSelection() {
         Fixture fixture = fixture();
         CustomerOptionDTO option = new CustomerOptionDTO();
