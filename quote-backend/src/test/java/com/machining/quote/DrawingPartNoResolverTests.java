@@ -8,6 +8,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DrawingPartNoResolverTests {
+    private static DrawingPartNoResolver.DrawingIdentity identity(String partNo, String version) {
+        return new DrawingPartNoResolver.DrawingIdentity(partNo, version);
+    }
+
     @Test
     void matchesDirectPartNoFilename() {
         String result = DrawingPartNoResolver.extractPartNo(
@@ -56,5 +60,66 @@ class DrawingPartNoResolverTests {
         );
 
         assertThat(result).isEqualTo("ABC1A");
+    }
+
+    @Test
+    void matchesPartNoAndVersionFilename() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P-100_A.pdf",
+                Set.of(identity("P-100", "A"))
+        );
+
+        assertThat(result).isEqualTo(identity("P-100", "A"));
+    }
+
+    @Test
+    void matchesPartNoAndVersionBeforeSpaceSeparatedDescription() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P-100_A 定位块.pdf",
+                Set.of(identity("P-100", "A"))
+        );
+
+        assertThat(result).isEqualTo(identity("P-100", "A"));
+    }
+
+    @Test
+    void matchesPartNoAndVersionBeforeDashSeparatedDescription() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P-100_A-定位块.pdf",
+                Set.of(identity("P-100", "A"))
+        );
+
+        assertThat(result).isEqualTo(identity("P-100", "A"));
+    }
+
+    @Test
+    void doesNotMatchLongerAsciiVersionSuffix() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P-100_A1.pdf",
+                Set.of(identity("P-100", "A"))
+        );
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void matchesKnownIdentityWithoutSplittingPartNoOrVersionBlindly() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P_100_A-1-定位块.pdf",
+                Set.of(identity("P_100", "A-1"))
+        );
+
+        assertThat(result).isEqualTo(identity("P_100", "A-1"));
+    }
+
+    @Test
+    void normalizesVersionForIdentityMatching() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "p-100_a.pdf",
+                Set.of(identity(" p-100 ", " a "))
+        );
+
+        assertThat(DrawingPartNoResolver.normalizeVersion(" a ")).isEqualTo("A");
+        assertThat(result).isEqualTo(identity("P-100", "A"));
     }
 }
