@@ -53,21 +53,22 @@ describe('release drawing replacement stage 4', () => {
     expect(source).toContain("{{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}")
   })
 
-  test('market release keeps order picking in the header and summarizes selected orders as a compact table', () => {
+  test('market release summarizes selected orders as a compact table without the inquiry order heading', () => {
     const source = readSource('components', 'MarketRelease.vue')
-    const inquiryPanel = source.slice(
-      source.indexOf('<div class="panel-title">询价单</div>'),
+    const orderSummaryPanel = source.slice(
+      source.indexOf('<el-table\n              class="selected-orders-mini-table"'),
       source.indexOf('<el-form label-width="80px" class="ticket-form">')
     )
 
-    expect(inquiryPanel).toContain('selected-orders-mini-table')
-    expect(inquiryPanel).toContain('prop="customerName"')
-    expect(inquiryPanel).toContain('prop="sourceOrderNo"')
-    expect(inquiryPanel).toContain('prop="status"')
-    expect(inquiryPanel).toContain('height="132"')
-    expect(inquiryPanel).not.toContain('order-picker-row')
-    expect(inquiryPanel).not.toContain('selected-order-tags')
-    expect(inquiryPanel).not.toContain('@click="openOrderPicker"')
+    expect(source).not.toContain('<div class="panel-title">询价单</div>')
+    expect(orderSummaryPanel).toContain('selected-orders-mini-table')
+    expect(orderSummaryPanel).toContain('prop="customerName"')
+    expect(orderSummaryPanel).toContain('prop="sourceOrderNo"')
+    expect(orderSummaryPanel).toContain('prop="status"')
+    expect(orderSummaryPanel).toContain('height="132"')
+    expect(orderSummaryPanel).not.toContain('order-picker-row')
+    expect(orderSummaryPanel).not.toContain('selected-order-tags')
+    expect(orderSummaryPanel).not.toContain('@click="openOrderPicker"')
   })
 
   test('market release uses horizontal import actions and shared drawing upload wording', () => {

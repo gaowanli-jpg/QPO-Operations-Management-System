@@ -89,6 +89,9 @@ describe('QPO system integration config frontend', () => {
 
   test('renders inbound callback panel for MES material callback', () => {
     expect(inboundPanel).toContain('system-inbound-callback-config-panel')
+    expect(inboundPanel).toContain('system-inbound-callback-table-surface')
+    expect(inboundPanel).toContain(':data="inboundConfigs"')
+    expect(inboundPanel).toContain('编辑入站接口')
     expect(inboundPanel).toContain('入站接口')
     expect(inboundPanel).toContain('MES 物料号回调')
     expect(inboundPanel).toContain('/api/integrations/mes/material-callback')

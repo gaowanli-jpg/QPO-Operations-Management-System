@@ -21,8 +21,19 @@ describe('system inbound callback config frontend stage 6', () => {
     expect(systemConfigApi).toContain("export const validateMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback/validate', {")
   })
 
-  test('renders MES callback card without outbound U9 or WMS forms', () => {
+  test('renders inbound callback table without outbound U9 or WMS forms', () => {
     expect(inboundPanel).toContain('system-inbound-callback-config-panel')
+    expect(inboundPanel).toContain('system-inbound-callback-table-surface')
+    expect(inboundPanel).toContain('<el-table')
+    expect(inboundPanel).toContain(':data="inboundConfigs"')
+    expect(inboundPanel).toContain('接口名称')
+    expect(inboundPanel).toContain('调用方')
+    expect(inboundPanel).toContain('业务来源')
+    expect(inboundPanel).toContain('回调地址')
+    expect(inboundPanel).toContain('接口状态')
+    expect(inboundPanel).toContain('token 校验')
+    expect(inboundPanel).toContain('配置来源')
+    expect(inboundPanel).toContain('最后校验')
     expect(inboundPanel).toContain('MES 物料号回调')
     expect(inboundPanel).toContain('callbackUrl')
     expect(inboundPanel).toContain('configSource')
@@ -37,6 +48,20 @@ describe('system inbound callback config frontend stage 6', () => {
     expect(inboundPanel).not.toContain('clientSecret')
     expect(inboundPanel).not.toContain('allocationPath')
     expect(outboundPanel).not.toContain('MES 回调 token')
+  })
+
+  test('uses edit drawer for inbound callback maintenance', () => {
+    expect(inboundPanel).toContain('el-drawer')
+    expect(inboundPanel).toContain('editDrawerVisible')
+    expect(inboundPanel).toContain('编辑入站接口')
+    expect(inboundPanel).toContain('openEditDrawer(row)')
+    expect(inboundPanel).toContain('selectedConfig')
+    expect(inboundPanel).toContain('QPO 访问基础地址')
+    expect(inboundPanel).toContain('接口启用')
+    expect(inboundPanel).toContain('token 校验')
+    expect(inboundPanel).toContain('备注')
+    expect(inboundPanel).not.toContain('system-inbound-summary-grid')
+    expect(inboundPanel).not.toContain('system-inbound-detail')
   })
 
   test('shows data center as caller and MES as business source', () => {
@@ -60,7 +85,7 @@ describe('system inbound callback config frontend stage 6', () => {
     expect(inboundPanel).toContain('生成 token')
     expect(inboundPanel).toContain('轮换 token')
     expect(inboundPanel).toContain('复制回调地址')
-    expect(inboundPanel).toContain('getMesMaterialCallbackConfig')
+    expect(inboundPanel).toContain('listInboundCallbackConfigs')
     expect(inboundPanel).toContain('saveMesMaterialCallbackConfig')
     expect(inboundPanel).toContain('rotateMesMaterialCallbackToken')
     expect(inboundPanel).toContain('validateMesMaterialCallbackConfig')

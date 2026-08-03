@@ -13,7 +13,6 @@
       <el-row :gutter="16">
         <el-col :span="6">
           <div class="erp-surface workflow-side-panel release-panel">
-            <div class="panel-title">询价单</div>
             <el-table
               class="selected-orders-mini-table"
               :data="selectedOrders"
