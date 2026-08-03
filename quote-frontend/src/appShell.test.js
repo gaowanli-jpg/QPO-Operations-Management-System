@@ -47,6 +47,14 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain('width="240px"')
   })
 
+  test('keeps the shell usable on narrow dashboard review viewports', () => {
+    expect(appVue).toContain('@media (max-width: 760px)')
+    expect(appVue).toContain('width: 72px !important;')
+    expect(appVue).toContain('.sidebar .el-menu-item span')
+    expect(appVue).toContain('display: none;')
+    expect(appVue).toContain('padding: var(--erp-space-2)')
+  })
+
   test('uses short grouped sidebar labels for the Stage 2 shell', () => {
     expect(appVue).toContain('menu-section')
     expect(appVue).toContain('市场')

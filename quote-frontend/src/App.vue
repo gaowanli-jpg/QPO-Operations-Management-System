@@ -633,4 +633,51 @@ html, body, #app {
     padding: var(--erp-space-4);
   }
 }
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 72px !important;
+  }
+
+  .logo-box {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .logo-text,
+  .menu-section,
+  .sidebar .el-menu-item span {
+    display: none;
+  }
+
+  .el-menu-vertical {
+    width: 100% !important;
+    padding: var(--erp-space-3) var(--erp-space-2) var(--erp-space-4);
+  }
+
+  .sidebar .el-menu-item,
+  .sidebar .el-menu-tooltip__trigger {
+    justify-content: center;
+    padding: 0 !important;
+  }
+
+  .sidebar .el-menu-item .el-icon {
+    margin-right: 0;
+  }
+
+  .sidebar .el-menu-item.is-active::before {
+    position: absolute;
+    left: 0;
+    margin-right: 0;
+  }
+
+  .header {
+    padding: var(--erp-space-2);
+  }
+
+  .app-main {
+    padding: var(--erp-space-2);
+  }
+}
 </style>
