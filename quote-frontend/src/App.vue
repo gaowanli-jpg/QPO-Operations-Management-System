@@ -115,6 +115,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
 const menuGroups = [
+  { key: 'dashboard', title: '首页看板', paths: ['/dashboard'] },
   { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/locked-items'] },
@@ -122,6 +123,7 @@ const menuGroups = [
 ]
 
 const menuMetaByPath = {
+  '/dashboard': { title: '首页看板', icon: DataBoard },
   '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
   '/sales-match': { title: '销售匹配', permission: 'market:sales-match:view', icon: Files },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
@@ -161,6 +163,7 @@ const visibleMenuGroups = computed(() => {
       ...group,
        items: group.paths
          .filter((path) => {
+          if (path === '/dashboard') return true
           if (hasBackendMenus) {
             return backendPaths.has(path)
           }
@@ -179,6 +182,10 @@ const visibleMenuGroups = computed(() => {
 })
 
 const shellMetaByPath = {
+  '/dashboard': {
+    title: '首页看板',
+    description: '查看询价订单、销售订单、待办和异常关注项。'
+  },
   '/market': {
     title: '新单导入',
     description: '导入客户询价表和图纸，推送工程评估。'

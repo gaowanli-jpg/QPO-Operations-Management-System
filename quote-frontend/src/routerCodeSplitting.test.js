@@ -7,6 +7,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const routerSource = readFileSync(resolve(currentDir, 'router', 'index.js'), 'utf8')
 
 const businessRouteComponents = [
+  ['DashboardHome', '../components/dashboard/DashboardHome.vue'],
   'MarketDashboard',
   'MarketRelease',
   'DeliveryDocumentManage',
@@ -26,9 +27,12 @@ const businessRouteComponents = [
 
 describe('QPO router code splitting', () => {
   test('lazy-loads business route components instead of pulling them into the main bundle', () => {
-    for (const componentName of businessRouteComponents) {
-      expect(routerSource).toContain(`const ${componentName} = () => import('../components/${componentName}.vue')`)
-      expect(routerSource).not.toContain(`import ${componentName} from '../components/${componentName}.vue'`)
+    for (const componentEntry of businessRouteComponents) {
+      const [componentName, importPath] = Array.isArray(componentEntry)
+        ? componentEntry
+        : [componentEntry, `../components/${componentEntry}.vue`]
+      expect(routerSource).toContain(`const ${componentName} = () => import('${importPath}')`)
+      expect(routerSource).not.toContain(`import ${componentName} from '${importPath}'`)
     }
   })
 
