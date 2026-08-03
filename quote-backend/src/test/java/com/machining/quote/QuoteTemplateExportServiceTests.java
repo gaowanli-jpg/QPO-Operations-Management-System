@@ -194,7 +194,7 @@ class QuoteTemplateExportServiceTests {
             assertThat(rowContains(sheet, configuredGroupRowIndex, "装配")).isTrue();
             assertThat(text(sheet, configuredDetailStartRowIndex, 1)).isEqualTo("'=P-001");
             assertThat(text(sheet, configuredDetailStartRowIndex + 2, 0)).isEqualTo("QUOTATION VALIDITY");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 0)).isEmpty();
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEmpty();
         }
     }
 
