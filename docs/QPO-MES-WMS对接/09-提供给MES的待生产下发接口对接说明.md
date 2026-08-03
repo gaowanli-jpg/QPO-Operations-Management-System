@@ -106,15 +106,15 @@ ERP_MES_TIMEOUT_MS=10000
 | `internalProjectNo` | 否 | 内部项目号。 |
 | `customerOrderNo` | 否 | 客户订单号。 |
 | `customerProjectNo` | 否 | 客户项目号。 |
-| `materialName` | 否 | 业务材料名称。 |
-| `engineeringMaterialName` | 否 | 工程材料名称。 |
+| `materialName` | 否 | 生产侧有效材料名称。QPO 按 `engineeringMaterialName -> materialData.name -> 导入材料 material_name` 降级得到，用于 MES 生产侧识别材料。 |
+| `engineeringMaterialName` | 否 | 真实材料 / 核价材料名称，来源于 RFQ 核价或销售匹配补全的 `engineering_material_name`；为空时可结合 `materialData.name` 理解。 |
 | `materialShape` | 否 | 材料形态，来自显式快照字段；通常为 `板材 / 棒材 / 管材`，来源于核价材料快照里的 `materialData.shape`。 |
 | `surfaceTreatment` | 否 | 表面处理。 |
 | `description` | 否 | 说明。 |
 | `remark` | 否 | 备注。 |
 | `deliveryDate` | 否 | 交货日期。 |
 | `processRoute` | 否 | 工艺路线快照。 |
-| `materialData` | 否 | 材料数据快照。 |
+| `materialData` | 否 | 材料核价快照，包含真实材料、材料形态、重量、成本、密度、单价等生产核价数据；不等同于销售订单模板导入材料。 |
 | `materialGrossWeight` | 否 | 材料毛重。 |
 | `partNetWeight` | 否 | 零件净重。 |
 | `assemblyRelations` | 是 | 组合件父子关系数组；普通件或无父子关系时传空数组。 |
