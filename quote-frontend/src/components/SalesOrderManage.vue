@@ -10,13 +10,15 @@
     <section class="erp-toolbar">
       <div class="erp-toolbar-group sales-order-filter-group">
         <el-button v-permission="'market:sales-order:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-          <span
-            :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
-            :title="selectedCustomer || '先选择客户'"
-          >
-            {{ selectedCustomer || '先选择客户' }}
+          <span class="customer-picker-content">
+            <span
+              :class="selectedCustomer ? 'customer-picker-text' : 'customer-picker-placeholder'"
+              :title="selectedCustomer || '先选择客户'"
+            >
+              {{ selectedCustomer || '先选择客户' }}
+            </span>
+            <span class="customer-picker-action">选择客户</span>
           </span>
-          <span class="customer-picker-action">选择客户</span>
         </el-button>
         <el-button v-if="selectedCustomer" plain @click="handleCustomerClear">清除客户</el-button>
         <el-select
@@ -692,6 +694,21 @@ const formatRoute = (route) => {
   width: 220px;
   flex: 0 0 220px;
   min-height: 32px;
+  padding: 0 12px;
+  text-align: left;
+}
+
+.customer-picker-trigger :deep(> span) {
+  display: block;
+  width: 100%;
+}
+
+.customer-picker-content {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
 }
 
 .customer-picker-text,
@@ -709,10 +726,15 @@ const formatRoute = (route) => {
 }
 
 .customer-picker-action {
+  align-items: center;
+  border-left: 1px solid var(--erp-border-soft);
+  display: inline-flex;
   flex: none;
   color: var(--erp-primary);
   font-size: 12px;
   font-weight: 700;
+  min-height: 24px;
+  padding-left: 12px;
 }
 
 .status-filter {

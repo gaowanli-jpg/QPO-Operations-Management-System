@@ -122,6 +122,25 @@ describe('QPO customer picker dialog', () => {
     expect(lockedManage).toContain('filters.customerName = resolveCustomerName(customer)')
   })
 
+  test('customer picker triggers keep the action label fixed while truncating long customer names', () => {
+    const pages = [
+      readComponent('OrderManage.vue'),
+      readComponent('SalesOrderManage.vue'),
+      readComponent('DeliveredItemManage.vue'),
+      readComponent('LockedItemManage.vue')
+    ]
+
+    for (const source of pages) {
+      expect(source).toContain('class="customer-picker-content"')
+      expect(source).toContain('class="customer-picker-action">选择客户</span>')
+      expect(source).toContain('.customer-picker-trigger :deep(> span)')
+      expect(source).toContain('.customer-picker-content')
+      expect(source).toContain('min-width: 0')
+      expect(source).toContain('text-overflow: ellipsis')
+      expect(source).toContain('border-left: 1px solid var(--erp-border-soft)')
+    }
+  })
+
   test('order workspaces use module-scoped summary APIs instead of common market summary', () => {
     const globalSetup = readComponent('GlobalSetup.vue')
     const itemPricing = readComponent('ItemPricing.vue')

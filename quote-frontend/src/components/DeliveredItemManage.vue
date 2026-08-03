@@ -11,13 +11,15 @@
       <div class="delivered-toolbar-main">
         <div class="erp-toolbar-group delivered-primary-filters">
           <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
-            <span
-              :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
-              :title="filters.customerName || '选择客户'"
-            >
-              {{ filters.customerName || '选择客户' }}
+            <span class="customer-picker-content">
+              <span
+                :class="filters.customerName ? 'customer-picker-text' : 'customer-picker-placeholder'"
+                :title="filters.customerName || '先选择客户'"
+              >
+                {{ filters.customerName || '先选择客户' }}
+              </span>
+              <span class="customer-picker-action">选择客户</span>
             </span>
-            <span class="customer-picker-action">选择客户</span>
           </el-button>
           <el-button v-if="filters.customerName" plain @click="handleCustomerClear">清除客户</el-button>
           <el-input v-model="filters.partNo" clearable placeholder="图号" class="filter-input" @keyup.enter="handleSearch" @clear="handleSearch" />
@@ -697,6 +699,53 @@ onMounted(() => loadItems())
   box-sizing: border-box;
 }
 
+.customer-picker-trigger {
+  flex: 0 0 220px;
+  min-height: 32px;
+  padding: 0 12px;
+  text-align: left;
+  width: 220px;
+}
+
+.customer-picker-trigger :deep(> span) {
+  display: block;
+  width: 100%;
+}
+
+.customer-picker-content {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.customer-picker-text,
+.customer-picker-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-picker-placeholder {
+  color: var(--erp-text-secondary);
+}
+
+.customer-picker-action {
+  align-items: center;
+  border-left: 1px solid var(--erp-border-soft);
+  color: var(--erp-primary);
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 24px;
+  padding-left: 12px;
+}
+
 .filter-input {
   width: 150px;
   flex: 0 0 150px;
@@ -818,6 +867,7 @@ onMounted(() => loadItems())
 }
 
 @media (max-width: 720px) {
+  .delivered-primary-filters .customer-picker-trigger,
   .delivered-primary-filters .filter-input,
   .delivered-primary-filters .filter-select,
   .delivered-advanced-filters .filter-input,
