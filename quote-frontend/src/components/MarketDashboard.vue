@@ -2,7 +2,7 @@
   <div class="erp-page market-page">
     <header class="erp-page-header">
       <div>
-        <h1 class="erp-page-title">市场部：新单导入中心</h1>
+        <h1 class="erp-page-title">新单导入</h1>
         <p class="erp-page-description">上传客户询价表和关联图纸，或导入销售订单到独立主表。</p>
       </div>
     </header>

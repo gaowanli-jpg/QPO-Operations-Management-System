@@ -61,4 +61,21 @@ describe('QPO Stage 3 shared page layout migration', () => {
     ])
     expect(source).not.toContain('manage-card')
   })
+
+  test('keeps major module page titles aligned with sidebar labels', () => {
+    const marketDashboard = readComponent('MarketDashboard.vue')
+    const quoteProcess = readComponent('QuoteProcess.vue')
+    const marketRelease = readComponent('MarketRelease.vue')
+    const materialProcess = readComponent('MaterialProcessManage.vue')
+
+    expect(marketDashboard).toContain('<h1 class="erp-page-title">新单导入</h1>')
+    expect(quoteProcess).toContain('<h2>报价处理</h2>')
+    expect(marketRelease).toContain('<h2>议价提单</h2>')
+    expect(materialProcess).toContain('<h1 class="erp-page-title">材料工艺</h1>')
+
+    expect(marketDashboard).not.toContain('新单导入中心')
+    expect(quoteProcess).not.toContain('报价单处理生成')
+    expect(marketRelease).not.toContain('议价确认与提单生成')
+    expect(materialProcess).not.toContain('材料与工艺管理')
+  })
 })

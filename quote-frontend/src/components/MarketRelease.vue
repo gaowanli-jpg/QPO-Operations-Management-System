@@ -2,7 +2,7 @@
   <div class="erp-page release-page workflow-page">
     <header class="erp-page-header release-page-header">
           <div>
-            <h2>市场部：议价确认与提单生成</h2>
+            <h2>议价提单</h2>
             <p>选择客户最终通过的零件，生成正式提单和对应工艺表。</p>
           </div>
           <div class="erp-page-actions release-page-actions"><el-button v-permission="'market:release:order-select'" :icon="DocumentChecked" type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
@@ -523,6 +523,7 @@ import {
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
 import { usePendingAction } from '../composables/usePendingAction'
+import { getSalesOrder } from '../services/orderApi'
 
 const selectedRfqId = ref(null)
 const selectedOrders = ref([])
@@ -562,6 +563,9 @@ const selectedOrderSources = computed(() => selectedOrders.value.map(toReleaseOr
 const selectedOrderKeys = computed(() => selectedOrderSources.value.map(sourceKey))
 const selectedRfqIds = computed(() => selectedOrderSources.value
   .filter(source => source.sourceType === 'RFQ')
+  .map(source => source.sourceOrderId))
+const selectedSalesOrderIds = computed(() => selectedOrderSources.value
+  .filter(source => source.sourceType === 'SALES_ORDER')
   .map(source => source.sourceOrderId))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
 const { isPending, runAction } = usePendingAction()
@@ -883,17 +887,30 @@ const formatGenerationFailures = (failedResults) => {
 
 const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) => {
   successItemIds.forEach(id => delete selectedItemIdMap[id])
-  const refreshedOrders = await Promise.all(selectedRfqIds.value.map(async (rfqId) => {
+  const refreshedRfqOrders = await Promise.all(selectedRfqIds.value.map(async (rfqId) => {
     try {
       const response = await getReleaseSummary(rfqId)
-      return { rfqId, orderInfo: response.orderInfo || {} }
+      return { sourceType: 'RFQ', sourceOrderId: rfqId, orderInfo: response.orderInfo || {} }
     } catch (error) {
       console.error(error)
-      return { rfqId, orderInfo: null }
+      return { sourceType: 'RFQ', sourceOrderId: rfqId, orderInfo: null }
     }
   }))
+  const refreshedSalesOrders = await Promise.all(selectedSalesOrderIds.value.map(async (salesOrderId) => {
+    try {
+      const response = await getSalesOrder(salesOrderId)
+      return { sourceType: 'SALES_ORDER', sourceOrderId: salesOrderId, orderInfo: response.orderInfo || {} }
+    } catch (error) {
+      console.error(error)
+      return { sourceType: 'SALES_ORDER', sourceOrderId: salesOrderId, orderInfo: null }
+    }
+  }))
+  const refreshedOrders = [...refreshedRfqOrders, ...refreshedSalesOrders]
   selectedOrders.value = selectedOrders.value.map(order => {
-    const refreshed = refreshedOrders.find(item => item.rfqId === order.id)
+    const source = toReleaseOrderSource(order)
+    const refreshed = refreshedOrders.find(item =>
+      item.sourceType === source.sourceType && Number(item.sourceOrderId) === Number(source.sourceOrderId)
+    )
     return refreshed?.orderInfo ? { ...order, ...refreshed.orderInfo } : order
   })
   selectedRfqId.value = firstSelectedRfqId()

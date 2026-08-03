@@ -83,6 +83,11 @@ describe('market release multi-order stage 2', () => {
 
     expect(source).toContain('const groupSelectedRowsBySource = (rows) =>')
     expect(source).toContain('const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) =>')
+    expect(source).toContain('const selectedSalesOrderIds = computed(() => selectedOrderSources.value')
+    expect(source).toContain('getSalesOrder')
+    expect(source).toContain('selectedSalesOrderIds.value.map(async (salesOrderId) =>')
+    expect(source).toContain("sourceType: 'SALES_ORDER'")
+    expect(source).toContain('response.orderInfo || {}')
     expect(submitBlock).toContain('const releaseGroups = groupSelectedRowsBySource(orderedSelectedRows)')
     expect(submitBlock).toContain('for (const { source, rows } of releaseGroups.values())')
     expect(submitBlock).toContain('const response = await generateTicket(payload)')

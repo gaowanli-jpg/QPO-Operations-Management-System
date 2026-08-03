@@ -43,7 +43,7 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain(':allowed-statuses="U9_SYNC_ALLOWED_STATUSES"')
     expect(component).toContain('@select="handleOrderSelected"')
     expect(component).toContain("const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']")
-    expect(component).toContain('class="erp-surface sales-order-u9-sync-workspace"')
+    expect(component).toContain('class="erp-surface workflow-workspace sales-order-u9-sync-workspace"')
     expect(component).toContain('class="erp-surface sales-order-u9-sync-side-panel"')
     expect(component).toContain('class="erp-table-surface sales-order-u9-sync-main-panel"')
     expect(component).toContain('class="selected-order-mini-table"')
@@ -58,6 +58,8 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('<el-option label="已报价"')
     expect(component).not.toContain('RFQ')
     expect(component).not.toContain('sales-order-u9-sync-placeholder')
+    expect(component).not.toContain('background: transparent;')
+    expect(component).not.toContain('box-shadow: none;')
   })
 
   test('uses U9 sync API helpers through the shared backend-paged order picker', () => {

@@ -2,7 +2,7 @@
   <div class="erp-page quote-process-page workflow-page">
     <header class="erp-page-header quote-process-page-header">
           <div>
-            <h2>市场部：报价单处理生成</h2>
+            <h2>报价处理</h2>
             <p>维护已核价订单的报价交期，生成并导出客户报价单。</p>
           </div>
           <div class="erp-page-actions header-actions">

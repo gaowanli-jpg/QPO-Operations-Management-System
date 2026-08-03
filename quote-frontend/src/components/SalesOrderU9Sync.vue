@@ -31,7 +31,7 @@
       </div>
     </header>
 
-    <section class="erp-surface sales-order-u9-sync-workspace">
+    <section class="erp-surface workflow-workspace sales-order-u9-sync-workspace">
       <aside class="erp-surface sales-order-u9-sync-side-panel">
         <div class="panel-title">已选销售订单</div>
         <el-table
@@ -503,11 +503,7 @@ const formatMoney = (value) => {
 .sales-order-u9-sync-workspace {
   display: grid;
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-  gap: 14px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  gap: var(--erp-space-4);
 }
 
 .sales-order-u9-sync-side-panel,

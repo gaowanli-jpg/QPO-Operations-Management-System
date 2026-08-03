@@ -2,7 +2,7 @@
   <div class="erp-page material-process-page">
     <header class="erp-page-header">
       <div>
-        <h1 class="erp-page-title">材料与工艺管理</h1>
+        <h1 class="erp-page-title">材料工艺</h1>
         <p class="erp-page-description">维护材料价格字典和工艺阶梯费率，工程核价会直接读取这里的数据。</p>
       </div>
     </header>
