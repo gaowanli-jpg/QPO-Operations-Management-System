@@ -39,87 +39,22 @@
     </div>
 
     <div class="dashboard-placeholder-grid dashboard-chart-grid">
-      <section class="erp-surface dashboard-surface dashboard-chart-card">
-        <div class="dashboard-section-header">
-          <div>
-            <h2>询价订单状态分布</h2>
-            <p class="dashboard-muted">只展示未核价、已核价、已报价三种主链路状态。</p>
-          </div>
-          <el-tag size="small" effect="plain">询价订单</el-tag>
-        </div>
-        <div class="dashboard-chart-shell">
-          <button
-            type="button"
-            class="dashboard-donut-button"
-            :style="rfqChartStyle"
-            aria-label="询价订单状态分布"
-            @click="goToItem(rfqStatusDistribution[0])"
-          >
-            <span class="dashboard-donut-ring">
-              <span class="dashboard-donut-center">
-                <small>合计</small>
-                <strong>{{ formatDashboardNumber(rfqTotal) }}</strong>
-                <small>询价订单</small>
-              </span>
-            </span>
-          </button>
-          <div class="dashboard-chart-legend">
-            <button
-              v-for="item in rfqChartRows"
-              :key="item.name"
-              type="button"
-              class="dashboard-legend-row"
-              @click="goToItem(item)"
-            >
-              <span class="dashboard-legend-color" :style="{ backgroundColor: item.color }" />
-              <span>{{ item.name }}</span>
-              <strong>{{ formatDashboardNumber(item.value) }} 单</strong>
-              <small>{{ getShareText(item.value, rfqTotal) }}</small>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section class="erp-surface dashboard-surface dashboard-chart-card">
-        <div class="dashboard-section-header">
-          <div>
-            <h2>销售订单已报价客户分布</h2>
-            <p class="dashboard-muted">销售订单饼图只统计已报价订单，分类维度为客户。</p>
-          </div>
-          <el-tag size="small" type="success" effect="plain">销售订单</el-tag>
-        </div>
-        <div class="dashboard-chart-shell">
-          <button
-            type="button"
-            class="dashboard-donut-button"
-            :style="salesChartStyle"
-            aria-label="销售订单已报价客户分布"
-            @click="goToItem(salesQuotedCustomerDistribution[0])"
-          >
-            <span class="dashboard-donut-ring">
-              <span class="dashboard-donut-center">
-                <small>合计</small>
-                <strong>{{ formatDashboardNumber(salesQuotedTotal) }}</strong>
-                <small>已报价</small>
-              </span>
-            </span>
-          </button>
-          <div class="dashboard-chart-legend">
-            <button
-              v-for="item in salesChartRows"
-              :key="item.customerId || item.name"
-              type="button"
-              class="dashboard-legend-row"
-              @click="goToItem(item)"
-            >
-              <span class="dashboard-legend-color" :style="{ backgroundColor: item.color }" />
-              <span>{{ item.name }}</span>
-              <strong>{{ formatDashboardNumber(item.value) }} 单</strong>
-              <small>{{ getShareText(item.value, salesQuotedTotal) }}</small>
-            </button>
-          </div>
-        </div>
-      </section>
+      <DashboardChartCard
+        title="询价订单状态分布"
+        description="只展示未核价、已核价、已报价三种主链路状态。"
+        :data="rfqStatusDistribution"
+        :palette="rfqPalette"
+        empty-text="当前权限范围内暂无询价订单状态数据"
+        @select="goToItem"
+      />
+      <DashboardChartCard
+        title="销售订单已报价客户分布"
+        description="销售订单饼图只统计已报价订单，分类维度为客户。"
+        :data="salesQuotedCustomerDistribution"
+        :palette="salesPalette"
+        empty-text="当前权限范围内暂无已报价销售订单"
+        @select="goToItem"
+      />
     </div>
 
     <div class="dashboard-workbench-grid">
@@ -217,6 +152,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
 import { useAuthStore } from '../../stores/authStore'
+import DashboardChartCard from './DashboardChartCard.vue'
 import { dashboardMockData } from './dashboardMockData'
 import { formatDashboardNumber, canShowDashboardAction, goDashboardTarget } from './dashboardNavigation'
 
@@ -237,33 +173,6 @@ const formatDateTime = (value) => value.toLocaleString('zh-CN', {
   hour12: false
 }).replace(/\//g, '-')
 
-const enrichChartRows = (items, palette) => items.map((item, index) => ({
-  ...item,
-  color: palette[index % palette.length]
-}))
-
-const getTotal = (items) => items.reduce((sum, item) => sum + Number(item.value || 0), 0)
-
-const buildDonutStyle = (items) => {
-  const total = getTotal(items)
-  if (!total) return { '--dashboard-donut': 'var(--erp-surface-soft)' }
-
-  let cursor = 0
-  const segments = items.map((item) => {
-    const next = cursor + (Number(item.value || 0) / total) * 100
-    const segment = `${item.color} ${cursor}% ${next}%`
-    cursor = next
-    return segment
-  })
-
-  return { '--dashboard-donut': `conic-gradient(${segments.join(', ')})` }
-}
-
-const getShareText = (value, total) => {
-  if (!total) return '0%'
-  return `${Math.round((Number(value || 0) / total) * 100)}%`
-}
-
 const updatedAt = computed(() => formatDateTime(updatedAtValue.value))
 const summaryCards = dashboardMockData.summaryCards
 const rfqStatusDistribution = dashboardMockData.rfqStatusDistribution
@@ -272,12 +181,6 @@ const customerMatrix = dashboardMockData.customerMatrix
 const todoCards = dashboardMockData.todoCards
 const attentionItems = dashboardMockData.attentionItems
 
-const rfqChartRows = computed(() => enrichChartRows(rfqStatusDistribution, rfqPalette))
-const salesChartRows = computed(() => enrichChartRows(salesQuotedCustomerDistribution, salesPalette))
-const rfqTotal = computed(() => getTotal(rfqStatusDistribution))
-const salesQuotedTotal = computed(() => getTotal(salesQuotedCustomerDistribution))
-const rfqChartStyle = computed(() => buildDonutStyle(rfqChartRows.value))
-const salesChartStyle = computed(() => buildDonutStyle(salesChartRows.value))
 const visibleSummaryCards = computed(() => summaryCards.filter((item) => canShowDashboardAction(item, authStore)))
 const visibleTodoCards = computed(() => todoCards.filter((item) => canShowDashboardAction(item, authStore)))
 const visibleAttentionItems = computed(() => attentionItems.filter((item) => canShowDashboardAction(item, authStore)))
@@ -391,8 +294,6 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
 }
 
 .dashboard-summary-card,
-.dashboard-donut-button,
-.dashboard-legend-row,
 .dashboard-action-item,
 .dashboard-attention-item,
 .dashboard-matrix-row button {
@@ -416,8 +317,6 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
 .dashboard-summary-card:hover,
 .dashboard-action-item:hover,
 .dashboard-attention-item:hover,
-.dashboard-legend-row:hover,
-.dashboard-donut-button:hover,
 .dashboard-matrix-row button:hover {
   border-color: var(--erp-primary);
   box-shadow: var(--erp-shadow-sm);
@@ -469,7 +368,6 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   border-top: 3px solid var(--erp-info);
 }
 
-.dashboard-chart-card,
 .dashboard-matrix-card,
 .dashboard-todo-card,
 .dashboard-attention-card {
@@ -499,67 +397,16 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   line-height: var(--erp-line-height-base);
 }
 
-.dashboard-chart-shell {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--erp-space-5);
-  padding: var(--erp-space-5);
-}
-
-.dashboard-donut-button {
-  display: grid;
-  place-items: center;
-  width: 190px;
-  height: 190px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--erp-radius-full);
-}
-
-.dashboard-donut-ring {
-  display: grid;
-  place-items: center;
-  width: 168px;
-  height: 168px;
-  padding: 20px;
-  background: var(--dashboard-donut, var(--erp-surface-soft));
-  border-radius: var(--erp-radius-full);
-}
-
-.dashboard-donut-center {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  color: var(--erp-text);
-  background: var(--erp-surface);
-  border: 1px solid var(--erp-border-soft);
-  border-radius: var(--erp-radius-full);
-}
-
-.dashboard-donut-center strong {
-  font-size: 30px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.dashboard-donut-center small {
-  color: var(--erp-text-secondary);
-  font-size: var(--erp-font-size-xs);
-}
-
-.dashboard-chart-legend,
 .dashboard-action-list {
   display: grid;
   gap: var(--erp-space-2);
+  padding: var(--erp-space-4);
 }
 
-.dashboard-legend-row,
 .dashboard-action-item,
 .dashboard-attention-item {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--erp-space-3);
   min-height: 48px;
@@ -571,23 +418,19 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   text-align: left;
 }
 
-.dashboard-legend-row {
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+.dashboard-action-item span,
+.dashboard-attention-item span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.dashboard-legend-color {
-  width: 10px;
-  height: 10px;
-  border-radius: var(--erp-radius-full);
+.dashboard-action-item small,
+.dashboard-attention-item small {
+  line-height: var(--erp-line-height-tight);
 }
 
-.dashboard-legend-row span:nth-child(2) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dashboard-legend-row strong,
 .dashboard-action-item em,
 .dashboard-attention-item em {
   color: var(--erp-text);
@@ -596,9 +439,12 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   font-weight: var(--erp-font-weight-bold);
 }
 
-.dashboard-legend-row small {
-  color: var(--erp-text-muted);
-  font-variant-numeric: tabular-nums;
+.dashboard-severity-warning {
+  background: var(--erp-warning-soft);
+}
+
+.dashboard-severity-danger {
+  background: var(--erp-danger-soft);
 }
 
 .dashboard-matrix-table {
@@ -654,36 +500,6 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   font-variant-numeric: tabular-nums;
 }
 
-.dashboard-action-list {
-  padding: var(--erp-space-4);
-}
-
-.dashboard-action-item,
-.dashboard-attention-item {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.dashboard-action-item span,
-.dashboard-attention-item span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dashboard-action-item small,
-.dashboard-attention-item small {
-  line-height: var(--erp-line-height-tight);
-}
-
-.dashboard-severity-warning {
-  background: var(--erp-warning-soft);
-}
-
-.dashboard-severity-danger {
-  background: var(--erp-danger-soft);
-}
-
 @media (max-width: 1280px) {
   .dashboard-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -691,17 +507,6 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
 
   .dashboard-workbench-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 1060px) {
-  .dashboard-chart-shell {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-
-  .dashboard-chart-legend {
-    width: 100%;
   }
 }
 
@@ -724,24 +529,6 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
     width: 100%;
     box-sizing: border-box;
     white-space: normal;
-  }
-
-  .dashboard-donut-button {
-    width: 158px;
-    height: 158px;
-  }
-
-  .dashboard-donut-ring {
-    width: 146px;
-    height: 146px;
-  }
-
-  .dashboard-legend-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
-  .dashboard-legend-row small {
-    grid-column: 2 / -1;
   }
 }
 </style>

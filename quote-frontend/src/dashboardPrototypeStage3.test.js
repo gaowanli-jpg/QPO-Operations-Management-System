@@ -17,28 +17,25 @@ describe('Dashboard prototype stage 3 visual workbench', () => {
     expect(source).toContain('dashboard-workbench-grid')
     expect(source).toContain('dashboard-surface')
     expect(source).toContain('dashboard-muted')
-    expect(source).toContain('客户状态交叉表')
-    expect(source).toContain('待办快捷入口')
-    expect(source).toContain('最近异常 / 关注项')
+    expect(source).toContain('customerMatrix')
+    expect(source).toContain('visibleTodoCards')
+    expect(source).toContain('visibleAttentionItems')
   })
 
-  test('renders two modern pie-like chart cards without introducing the stage 4 ECharts wrapper yet', () => {
+  test('keeps the chart area structured as two reusable dashboard chart cards', () => {
     const source = dashboardSource()
 
-    expect(source).toContain('dashboard-chart-shell')
-    expect(source).toContain('dashboard-donut-ring')
-    expect(source).toContain('dashboard-donut-center')
-    expect(source).toContain('dashboard-chart-legend')
-    expect(source).toContain('rfqChartStyle')
-    expect(source).toContain('salesChartStyle')
-    expect(source).not.toContain('DashboardChartCard')
-    expect(source).not.toContain('echarts.init')
+    expect(source).toContain('DashboardChartCard')
+    expect(source).toContain(':data="rfqStatusDistribution"')
+    expect(source).toContain(':data="salesQuotedCustomerDistribution"')
+    expect(source).toContain('@select="goToItem"')
   })
 
   test('keeps the page professional and not like a temporary prototype note or marketing hero', () => {
     const source = dashboardSource()
 
-    expect(source).not.toContain('阶段 2 mock 数据和导航辅助')
+    expect(source).not.toContain('阶段 2')
+    expect(source).not.toContain('阶段 3')
     expect(source).not.toContain('dashboard-stage-note')
     expect(source).not.toContain('linear-gradient')
     expect(source).not.toContain('hero-image')
