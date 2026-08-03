@@ -25,7 +25,8 @@ const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',
   release: '/api/market/release/orders',
   'delivery-document': '/api/market/delivery-documents/orders',
-  'u9-sync': '/api/market/u9-sync/orders'
+  'u9-sync': '/api/market/u9-sync/orders',
+  'sales-match': '/api/market/sales-match/orders'
 }
 
 export const listMarketOrders = (params = {}, scope) => {

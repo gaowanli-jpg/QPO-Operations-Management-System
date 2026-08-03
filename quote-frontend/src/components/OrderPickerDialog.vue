@@ -129,6 +129,7 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
   release: 'market:release:customer-select',
   'delivery-document': 'market:delivery-document:customer-select',
   'u9-sync': 'market:u9-sync:customer-select',
+  'sales-match': 'market:sales-match:customer-select',
   'engineer-setup': 'engineer:setup:customer-select',
   'market-order': 'market:order:customer-select'
 }
@@ -138,12 +139,16 @@ const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分�
 const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
   'u9-sync': ['部分已提单', '已生成提单'],
+  'sales-match': ['已报价'],
   'engineer-setup': ['未核价']
 }
 
 const ORDER_TYPE_LABEL_BY_SCOPE = {
-  'u9-sync': '销售订单'
+  'u9-sync': '销售订单',
+  'sales-match': '销售订单'
 }
+
+const SALES_ORDER_SCOPES = ['sales-match', 'u9-sync']
 
 const props = defineProps({
   modelValue: {
@@ -209,11 +214,11 @@ const multiple = computed(() => props.multiple)
 const lockedCustomerName = computed(() => props.lockedCustomerName || '')
 const pendingSelectedOrderCount = computed(() => Object.keys(pendingSelectedOrders).length)
 const orderTypeLabel = computed(() => ORDER_TYPE_LABEL_BY_SCOPE[props.orderScope] || 'RFQ 订单')
-const orderNoColumnLabel = computed(() => props.orderScope === 'u9-sync' ? '销售订单号' : 'RFQ号')
-const keywordPlaceholder = computed(() => props.orderScope === 'u9-sync' ? '搜索销售订单号' : '搜索 RFQ 号')
+const orderNoColumnLabel = computed(() => SALES_ORDER_SCOPES.includes(props.orderScope) ? '销售订单号' : 'RFQ号')
+const keywordPlaceholder = computed(() => SALES_ORDER_SCOPES.includes(props.orderScope) ? '搜索销售订单号' : '搜索 RFQ 号')
 
 const resolveOrderSourceType = (order) => (
-  props.orderScope === 'u9-sync' ? 'SALES_ORDER' : (order?.sourceType || 'RFQ')
+  SALES_ORDER_SCOPES.includes(props.orderScope) ? 'SALES_ORDER' : (order?.sourceType || 'RFQ')
 )
 const resolveOrderId = (order) => order?.sourceOrderId ?? order?.salesOrderId ?? order?.id ?? ''
 const orderSourceKey = (order) => `${resolveOrderSourceType(order)}:${resolveOrderId(order)}`
