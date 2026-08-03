@@ -108,7 +108,8 @@ public class SalesOrderManageController {
     @RequirePermission("market:sales-order:supplement-drawing")
     public Map<String, Object> supplementOrderDrawings(
             @PathVariable Long salesOrderId,
-            @RequestParam("drawings") List<MultipartFile> drawings) {
-        return salesOrderManageService.supplementOrderDrawings(salesOrderId, drawings);
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        return salesOrderManageService.supplementOrderDrawings(salesOrderId, drawings, versionDrawings);
     }
 }

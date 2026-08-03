@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -110,6 +111,56 @@ class OperationalWorkflowIntegrationTests {
 
         orderManagementService.deleteOrderCompletely(order.getId(), true);
         assertThat(orderMapper.selectById(order.getId())).isNull();
+    }
+
+    @Test
+    void supplementVersionDrawingsBindOnlyMatchingRfqPartVersion() {
+        OrderRfq order = new OrderRfq();
+        order.setRfqNo("SUP-VERSION-" + System.nanoTime());
+        order.setCustomerName("版本补图客户");
+        order.setProjectName("版本补图项目");
+        order.setStatus("待工程部评估");
+        orderMapper.insert(order);
+
+        ItemQuoteVersion itemVersionA = new ItemQuoteVersion();
+        itemVersionA.setRfqId(order.getId());
+        itemVersionA.setPartNo("P-200");
+        itemVersionA.setVersion("A");
+        itemVersionA.setDescription("版本A零件");
+        itemVersionA.setQty(1);
+        itemVersionA.setStatus("待核价");
+        itemMapper.insert(itemVersionA);
+
+        ItemQuoteVersion itemVersionB = new ItemQuoteVersion();
+        itemVersionB.setRfqId(order.getId());
+        itemVersionB.setPartNo("P-200");
+        itemVersionB.setVersion("B");
+        itemVersionB.setDescription("版本B零件");
+        itemVersionB.setQty(1);
+        itemVersionB.setStatus("待核价");
+        itemMapper.insert(itemVersionB);
+
+        MockMultipartFile versionDrawing = new MockMultipartFile(
+                "versionDrawings",
+                "P-200_B.pdf",
+                "application/pdf",
+                "%PDF-1.4 version".getBytes(StandardCharsets.UTF_8)
+        );
+
+        Map<String, Object> result = orderManagementService.supplementDrawings(
+                order.getId(),
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(versionDrawing)
+        );
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("boundCount", 1)
+                .containsEntry("alreadyBoundCount", 0)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 0);
+        assertThat(itemMapper.selectById(itemVersionA.getId()).getDrawingUrl()).isNull();
+        assertThat(itemMapper.selectById(itemVersionB.getId()).getDrawingUrl()).contains("/uploads/");
     }
 
     @Test

@@ -23,9 +23,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -273,17 +275,34 @@ public class OrderManagementService {
 
     @Transactional
     public Map<String, Object> supplementDrawings(Integer rfqId, List<MultipartFile> drawings) {
+        return supplementDrawings(rfqId, drawings, null);
+    }
+
+    @Transactional
+    public Map<String, Object> supplementDrawings(
+            Integer rfqId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
         OrderRfq order = requireOrderForUpdate(rfqId);
-        if (drawings == null || drawings.isEmpty()) {
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings)) {
             throw new RuntimeException("请至少上传一份 PDF 图纸");
         }
 
         List<ItemQuoteVersion> items = listItems(rfqId);
-        Map<String, List<ItemQuoteVersion>> itemMap = new HashMap<>();
+        Map<String, List<ItemQuoteVersion>> itemMapByPartNo = new HashMap<>();
+        Map<String, List<ItemQuoteVersion>> itemMapByPartNoVersion = new HashMap<>();
+        Set<DrawingPartNoResolver.DrawingIdentity> itemIdentities = new HashSet<>();
         for (ItemQuoteVersion item : items) {
             String normalizedPartNo = normalizePartNo(item.getPartNo());
             if (!normalizedPartNo.isEmpty()) {
-                itemMap.computeIfAbsent(normalizedPartNo, key -> new ArrayList<>()).add(item);
+                itemMapByPartNo.computeIfAbsent(normalizedPartNo, key -> new ArrayList<>()).add(item);
+            }
+            String normalizedVersion = DrawingPartNoResolver.normalizeVersion(item.getVersion());
+            if (!normalizedPartNo.isEmpty() && !normalizedVersion.isEmpty()) {
+                itemMapByPartNoVersion
+                        .computeIfAbsent(itemKey(normalizedPartNo, normalizedVersion), key -> new ArrayList<>())
+                        .add(item);
+                itemIdentities.add(new DrawingPartNoResolver.DrawingIdentity(normalizedPartNo, normalizedVersion));
             }
         }
 
@@ -292,39 +311,85 @@ public class OrderManagementService {
         List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
         List<Map<String, Object>> skippedFiles = new ArrayList<>();
 
-        for (MultipartFile drawing : drawings) {
-            String originalFilename = drawing.getOriginalFilename();
-            String cleanFileName = cleanFilename(originalFilename);
-            if (isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
-                skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
-                continue;
-            }
-
-            String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMap.keySet());
-            List<ItemQuoteVersion> matchedItems = itemMap.get(partNoFromFileName);
-            if (matchedItems == null || matchedItems.isEmpty()) {
-                unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
-                continue;
-            }
-            if (matchedItems.stream().allMatch(item -> !isBlank(item.getDrawingUrl()))) {
-                for (ItemQuoteVersion item : matchedItems) {
-                    alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
-                }
-                continue;
-            }
-
-            String fileUrl = businessFileService
-                    .saveDrawing(order, drawing, "ORDER_SUPPLEMENT_DRAWING", String.valueOf(rfqId))
-                    .publicPath();
-            for (ItemQuoteVersion item : matchedItems) {
-                if (!isBlank(item.getDrawingUrl())) {
-                    alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+        if (versionDrawings != null) {
+            for (MultipartFile drawing : versionDrawings) {
+                String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+                if (isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+                    skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
                     continue;
                 }
-                item.setDrawingUrl(fileUrl);
-                item.setStatus(QuoteStatusWorkflow.UNPRICED);
-                itemMapper.updateById(item);
-                boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
+
+                DrawingPartNoResolver.DrawingIdentity identity =
+                        DrawingPartNoResolver.extractPartNoVersion(cleanFileName, itemIdentities);
+                String partNoFromFileName = identity == null
+                        ? DrawingPartNoResolver.extractPartNo(cleanFileName, itemMapByPartNo.keySet())
+                        : identity.partNo();
+                if (identity == null) {
+                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
+                    continue;
+                }
+                List<ItemQuoteVersion> matchedItems = itemMapByPartNoVersion.get(itemKey(identity.partNo(), identity.version()));
+                if (matchedItems == null || matchedItems.isEmpty()) {
+                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
+                    continue;
+                }
+                if (matchedItems.stream().allMatch(item -> !isBlank(item.getDrawingUrl()))) {
+                    for (ItemQuoteVersion item : matchedItems) {
+                        alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+                    }
+                    continue;
+                }
+
+                String fileUrl = businessFileService
+                        .saveDrawing(order, drawing, "ORDER_SUPPLEMENT_DRAWING", String.valueOf(rfqId))
+                        .publicPath();
+                for (ItemQuoteVersion item : matchedItems) {
+                    if (!isBlank(item.getDrawingUrl())) {
+                        alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+                        continue;
+                    }
+                    item.setDrawingUrl(fileUrl);
+                    item.setStatus(QuoteStatusWorkflow.UNPRICED);
+                    itemMapper.updateById(item);
+                    boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
+                }
+            }
+        }
+
+        if (drawings != null) {
+            for (MultipartFile drawing : drawings) {
+                String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+                if (isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+                    skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+                    continue;
+                }
+
+                String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMapByPartNo.keySet());
+                List<ItemQuoteVersion> matchedItems = itemMapByPartNo.get(partNoFromFileName);
+                if (matchedItems == null || matchedItems.isEmpty()) {
+                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
+                    continue;
+                }
+                if (matchedItems.stream().allMatch(item -> !isBlank(item.getDrawingUrl()))) {
+                    for (ItemQuoteVersion item : matchedItems) {
+                        alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+                    }
+                    continue;
+                }
+
+                String fileUrl = businessFileService
+                        .saveDrawing(order, drawing, "ORDER_SUPPLEMENT_DRAWING", String.valueOf(rfqId))
+                        .publicPath();
+                for (ItemQuoteVersion item : matchedItems) {
+                    if (!isBlank(item.getDrawingUrl())) {
+                        alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
+                        continue;
+                    }
+                    item.setDrawingUrl(fileUrl);
+                    item.setStatus(QuoteStatusWorkflow.UNPRICED);
+                    itemMapper.updateById(item);
+                    boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
+                }
             }
         }
 
@@ -344,7 +409,7 @@ public class OrderManagementService {
         result.put("unmatchedDrawings", unmatchedDrawings);
         result.put("skippedFiles", skippedFiles);
         log.info("Order supplement drawings completed rfqId={} uploadCount={} boundCount={} alreadyBoundCount={} unmatchedCount={} skippedCount={}",
-                rfqId, drawings.size(), boundItems.size(), alreadyBoundItems.size(), unmatchedDrawings.size(), skippedFiles.size());
+                rfqId, fileCount(drawings) + fileCount(versionDrawings), boundItems.size(), alreadyBoundItems.size(), unmatchedDrawings.size(), skippedFiles.size());
         if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty()) {
             log.warn("Order supplement drawings completed with warnings rfqId={} unmatchedCount={} skippedCount={}",
                     rfqId, unmatchedDrawings.size(), skippedFiles.size());
@@ -698,6 +763,18 @@ public class OrderManagementService {
 
     private String normalizePartNo(String partNo) {
         return DrawingPartNoResolver.normalizePartNo(partNo);
+    }
+
+    private String itemKey(String partNo, String version) {
+        return normalizePartNo(partNo) + "||" + DrawingPartNoResolver.normalizeVersion(version);
+    }
+
+    private boolean isEmptyFiles(List<MultipartFile> files) {
+        return files == null || files.isEmpty();
+    }
+
+    private int fileCount(List<MultipartFile> files) {
+        return files == null ? 0 : files.size();
     }
 
     private Map<String, Object> buildItemResult(ItemQuoteVersion item, String fileName, String reason) {
