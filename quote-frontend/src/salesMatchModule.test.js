@@ -104,6 +104,25 @@ describe('sales match module', () => {
     expect(component).toContain('unmatchedItemCount')
     expect(component).toContain('补全结果')
     expect(component).toContain('整单零件预览')
+    expect(component).toContain('命中 {{ previewSummary.matchedItemCount }}')
+    expect(component).toContain('未匹配 {{ previewSummary.unmatchedItemCount }}')
+  })
+
+  test('sales match order-level flow auto previews, refreshes, and applies without item scope', () => {
+    const component = readSource('components', 'SalesMatch.vue')
+    const api = readSource('services', 'marketApi.js')
+    const apiTest = readSource('services', 'marketApi.test.js')
+
+    expect(component).toContain('await previewSelectedOrder({ silent: true })')
+    expect(component).toContain('await previewSelectedOrder({ silent: false, preserveResult: true })')
+    expect(component).toContain('await previewSelectedOrder({ silent: true, preserveResult: true })')
+    expect(component).toContain('确认对销售订单')
+    expect(component).toContain('整单补全空缺生产快照')
+    expect(component).not.toContain('覆盖字段')
+    expect(api).toContain('previewSalesOrderMatchByOrder')
+    expect(api).toContain('applySalesOrderMatchByOrder')
+    expect(apiTest).toContain("'/api/market/sales-match/orders/101/preview'")
+    expect(apiTest).toContain("'/api/market/sales-match/orders/101/apply'")
   })
 
   test('sales match page frames matching as filling production snapshots without overwrite options', () => {

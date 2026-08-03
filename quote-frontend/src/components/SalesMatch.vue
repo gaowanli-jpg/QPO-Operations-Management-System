@@ -161,6 +161,8 @@
           </div>
           <div class="sales-match-preview-tags">
             <el-tag :type="previewData ? 'success' : 'info'">{{ previewData ? '整单预览' : '待选择订单' }}</el-tag>
+            <el-tag type="success" effect="plain">命中 {{ previewSummary.matchedItemCount }}</el-tag>
+            <el-tag type="warning" effect="plain">未匹配 {{ previewSummary.unmatchedItemCount }}</el-tag>
             <el-tag type="success" effect="plain">只补空缺生产快照</el-tag>
             <el-tag type="info" effect="plain">导入字段受保护</el-tag>
           </div>
