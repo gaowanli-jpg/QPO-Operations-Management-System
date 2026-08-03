@@ -233,8 +233,8 @@ QPO 前端支持批量选择多个已提零件后提交“获取物料号”任�
 MES 返回待回调后，后续通过 QPO 回调接口把正式物料号写回 QPO。回调接口已经独立成文档，本文只保留入口和关键口径：
 
 - 独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
-- 接口入口：`POST /api/integrations/mes/material-callback`。
-- 认证方式：`Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}`，是否启用由 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED` 控制。
+- 接口入口：`POST {QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback`；`QPO_PUBLIC_BASE_URL` 由部署后的可访问地址确定。
+- 认证方式：`Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}`，是否启用由 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED` 控制；正式 token 由 QPO 侧生成并配置后，通过受控渠道单独交付给 MES。
 - 定位方式：MES 必须原样带回 QPO 请求中的主 `mesRequestId`，并带回 `ticketId` 做交叉校验。
 - 去重口径：同图号版本去重场景下，MES 仍只回调主 `mesRequestId`；关联等待行是 QPO 内部关系，MES 不需要分别回调每个相同图号版本零件。
 - 写回口径：QPO 收到主请求成功回调后写回 `order_delivery_ticket.material_no`，并 fan-out 写回所有关联等待行；销售订单来源提单行还会同步回写 `sales_order_item.material_no` 与物料号确认字段。

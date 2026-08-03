@@ -13,6 +13,7 @@ const readOptionalSource = (...segments) => {
 const systemConfigApi = readSource('services', 'systemConfigApi.js')
 const systemConfigManage = readSource('components', 'SystemConfigManage.vue')
 const integrationPanel = readOptionalSource('components', 'system-config', 'SystemIntegrationConfigPanel.vue')
+const inboundPanel = readOptionalSource('components', 'system-config', 'SystemInboundCallbackConfigPanel.vue')
 
 describe('QPO system integration config frontend', () => {
   test('defines system integration config API service contract', () => {
@@ -25,20 +26,27 @@ describe('QPO system integration config frontend', () => {
     expect(systemConfigApi).toContain('export const disableIntegrationConfig = (id) => request(`/api/system/integration-configs/${id}/disable`, {')
   })
 
-  test('splits system config page into storage and integration tabs', () => {
+  test('splits system config page into storage outbound and inbound tabs', () => {
     expect(systemConfigManage).toContain('el-tabs')
     expect(systemConfigManage).toContain('name="storage"')
-    expect(systemConfigManage).toContain('name="integration"')
+    expect(systemConfigManage).toContain('name="outbound"')
+    expect(systemConfigManage).toContain('name="inbound"')
     expect(systemConfigManage).toContain('<SystemStorageConfigPanel />')
     expect(systemConfigManage).toContain('<SystemIntegrationConfigPanel />')
+    expect(systemConfigManage).toContain('<SystemInboundCallbackConfigPanel />')
+    expect(systemConfigManage).toContain('文件存储')
+    expect(systemConfigManage).toContain('出站接口')
+    expect(systemConfigManage).toContain('入站接口')
+    expect(systemConfigManage).not.toContain('name="integration"')
   })
 
-  test('renders U9 MES WMS integration table dialog and data center reserved card', () => {
+  test('renders U9 MES WMS outbound table dialog and data center reserved card', () => {
     expect(integrationPanel).toContain('system-integration-config-panel')
+    expect(integrationPanel).toContain('出站接口')
     expect(integrationPanel).toContain('当前激活配置概览')
-    expect(integrationPanel).toContain('系统对接配置列表')
-    expect(integrationPanel).toContain('新增对接配置')
-    expect(integrationPanel).toContain('编辑对接配置')
+    expect(integrationPanel).toContain('出站接口配置列表')
+    expect(integrationPanel).toContain('新增出站接口配置')
+    expect(integrationPanel).toContain('编辑出站接口配置')
     expect(integrationPanel).toContain('U9')
     expect(integrationPanel).toContain('MES')
     expect(integrationPanel).toContain('WMS')
@@ -53,6 +61,15 @@ describe('QPO system integration config frontend', () => {
     expect(integrationPanel).toContain('authToken')
     expect(integrationPanel).toContain('show-password')
     expect(integrationPanel).toContain('******')
+    expect(integrationPanel).not.toContain('MES 回调 token')
+  })
+
+  test('renders inbound callback placeholder for MES material callback', () => {
+    expect(inboundPanel).toContain('system-inbound-callback-config-panel')
+    expect(inboundPanel).toContain('入站接口')
+    expect(inboundPanel).toContain('MES 物料号回调')
+    expect(inboundPanel).toContain('/api/integrations/mes/material-callback')
+    expect(inboundPanel).toContain('后续阶段接入')
   })
 
   test('protects integration writes with permissions and duplicate-click guards', () => {

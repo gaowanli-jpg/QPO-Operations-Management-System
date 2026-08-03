@@ -43,10 +43,22 @@ Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}
 
 说明：
 
-- `QPO_PUBLIC_BASE_URL` 是 QPO 提供给 MES 可访问的内网地址，例如 `http://192.168.70.21:8088`。
-- 当 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED=true` 时，必须携带 Bearer token。
+- `QPO_PUBLIC_BASE_URL` 是 QPO 提供给 MES 可访问的内网地址，例如 `http://192.168.70.21:8088`；正式 URL 需要等部署网络、端口、域名或反向代理确定后再给 MES。
+- `ERP_MES_CALLBACK_TOKEN` 是 QPO 侧生成并配置的机器 token，不写入代码仓库、不写入接口文档正文、不通过日志或截图传递；正式 token 确定后由双方通过受控渠道单独交付。
+- 当 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED=true` 时，MES 必须携带 `Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}`。
 - token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 返回 HTTP `401`。
 - 不要在日志、截图、工单或联调群中明文发送真实 token。
+
+### 3.1 联调交付信息
+
+把本接口交给 MES 前，QPO 侧需要补齐下面两项运行时信息：
+
+| 项目 | 当前口径 | 交付给 MES 的形式 |
+| --- | --- | --- |
+| 回调 URL | 部署后确定，格式为 `{QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback` | 例如 `http://qpo-host:8088/api/integrations/mes/material-callback` |
+| 回调 token | 由 QPO 侧生成，配置到 `ERP_MES_CALLBACK_TOKEN`，默认启用校验 | 只提供 token 值本身，MES 调用时放入 `Authorization: Bearer {token}` |
+
+MES 拿到 **回调 URL + 回调 token + 本文档请求/响应字段说明** 后，即可调用本接口。联调时建议先用一条 QPO 已进入 `CALLBACK_PENDING` 的 `mesRequestId` 和 `ticketId` 做成功回调验证，再验证 token 错误、重复回调、冲突回调等异常场景。
 
 ## 4. 成功回调
 

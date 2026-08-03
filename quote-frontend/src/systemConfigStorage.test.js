@@ -44,9 +44,11 @@ describe('QPO system config storage frontend', () => {
     expect(systemConfigManage).toContain('<h1 class="erp-page-title">系统配置</h1>')
     expect(systemConfigManage).toContain('SystemStorageConfigPanel')
     expect(systemConfigManage).toContain('SystemIntegrationConfigPanel')
+    expect(systemConfigManage).toContain('SystemInboundCallbackConfigPanel')
     expect(systemConfigManage).toContain('v-model="activeTab"')
     expect(systemConfigManage).toContain('文件存储')
-    expect(systemConfigManage).toContain('系统对接')
+    expect(systemConfigManage).toContain('出站接口')
+    expect(systemConfigManage).toContain('入站接口')
 
     expect(systemStoragePanel).toContain('system-storage-config-panel')
     expect(systemStoragePanel).toContain('当前激活策略')

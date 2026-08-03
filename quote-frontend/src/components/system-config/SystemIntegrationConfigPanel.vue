@@ -2,7 +2,7 @@
   <div class="system-integration-config-panel">
     <section class="erp-surface system-config-panel-toolbar">
       <div>
-        <h2 class="erp-section-title">系统对接</h2>
+        <h2 class="erp-section-title">出站接口</h2>
         <p class="erp-page-description">管理 QPO 调用 U9、MES、WMS 所需的地址、认证、超时和测试状态。</p>
       </div>
       <div class="erp-page-actions system-integration-create-actions">
@@ -43,11 +43,11 @@
 
     <section class="erp-table-surface system-config-table-surface">
       <div class="erp-table-header">
-        <h2 class="erp-table-title">系统对接配置列表</h2>
+        <h2 class="erp-table-title">出站接口配置列表</h2>
         <span class="system-config-table-note">密钥字段仅展示 ******；留空或传 ****** 时后端沿用原密钥。</span>
       </div>
       <div class="erp-table-body">
-        <el-table :data="configs" border v-loading="loading" empty-text="暂无系统对接配置">
+        <el-table :data="configs" border v-loading="loading" empty-text="暂无出站接口配置">
           <el-table-column label="系统" width="90">
             <template #default="{ row }">
               <el-tag effect="plain">{{ row.systemCode }}</el-tag>
@@ -111,7 +111,7 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑对接配置' : '新增对接配置'" width="760px">
+    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑出站接口配置' : '新增出站接口配置'" width="760px">
       <el-form ref="formRef" :model="form" label-width="160px" class="erp-dialog-form system-integration-form">
         <el-form-item label="系统类型" required>
           <el-segmented v-model="form.systemCode" :options="systemOptions" :disabled="!!form.id" @change="syncAuthType" />
@@ -320,7 +320,7 @@ const loadAll = async () => {
   } catch (error) {
     configs.value = []
     activeConfigs.value = []
-    ElMessage.error(requestErrorMessage(error, '系统对接配置加载失败'))
+    ElMessage.error(requestErrorMessage(error, '出站接口配置加载失败'))
   } finally {
     loading.value = false
   }
@@ -454,11 +454,11 @@ const saveIntegrationConfigForm = async () => {
   return runAction(integrationActionKeys.saveDialog, async () => {
     try {
       const response = await saveIntegrationConfig(buildPayload())
-      ElMessage.success(response?.message || '系统对接配置已保存')
+      ElMessage.success(response?.message || '出站接口配置已保存')
       dialogVisible.value = false
       await loadAll()
     } catch (error) {
-      ElMessage.error(requestErrorMessage(error, '系统对接配置保存失败'))
+      ElMessage.error(requestErrorMessage(error, '出站接口配置保存失败'))
     }
   })
 }
@@ -478,7 +478,7 @@ const testIntegrationConfigRow = async (row) => {
 const activateIntegrationConfigRow = async (row) => {
   return runAction(integrationActionKeys.activate(row.id), async () => {
     try {
-      await ElMessageBox.confirm(`确认激活 ${row.systemCode} 配置 ${row.name || row.id}？同一系统只允许一个激活配置。`, '激活对接配置', {
+      await ElMessageBox.confirm(`确认激活 ${row.systemCode} 配置 ${row.name || row.id}？同一系统只允许一个激活配置。`, '激活出站接口配置', {
         type: 'warning',
         confirmButtonText: '激活',
         cancelButtonText: '取消'
@@ -488,7 +488,7 @@ const activateIntegrationConfigRow = async (row) => {
     }
     try {
       const response = await activateIntegrationConfig(row.id)
-      ElMessage.success(response?.message || '系统对接配置已激活')
+      ElMessage.success(response?.message || '出站接口配置已激活')
       await loadAll()
     } catch (error) {
       ElMessage.error(requestErrorMessage(error, '激活配置失败'))
@@ -499,13 +499,13 @@ const activateIntegrationConfigRow = async (row) => {
 const disableIntegrationConfigRow = async (row) => {
   return runAction(integrationActionKeys.disable(row.id), async () => {
     try {
-      await ElMessageBox.confirm(`确认停用 ${row.systemCode} 配置 ${row.name || row.id}？已激活配置不能停用。`, '停用对接配置', { type: 'warning' })
+      await ElMessageBox.confirm(`确认停用 ${row.systemCode} 配置 ${row.name || row.id}？已激活配置不能停用。`, '停用出站接口配置', { type: 'warning' })
     } catch {
       return
     }
     try {
       const response = await disableIntegrationConfig(row.id)
-      ElMessage.success(response?.message || '系统对接配置已停用')
+      ElMessage.success(response?.message || '出站接口配置已停用')
       await loadAll()
     } catch (error) {
       ElMessage.error(requestErrorMessage(error, '停用配置失败'))
