@@ -31,16 +31,8 @@ describe('marketApi', () => {
     })
   })
 
-  test('importSalesOrder uploads sales order form data', async () => {
-    const formData = new FormData()
-
-    await marketApi.importSalesOrder(formData)
-
-    expect(request).toHaveBeenCalledWith('/api/market/sales-orders/import', {
-      method: 'POST',
-      data: formData,
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+  test('does not expose legacy sales order U9 import helper', () => {
+    expect('importSalesOrder' in marketApi).toBe(false)
   })
 
   test('importSalesOrderToQpo uploads sales order form data to QPO flow endpoint', async () => {

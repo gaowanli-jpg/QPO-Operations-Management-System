@@ -216,7 +216,7 @@
 - `SalesOrderRepeatEnrichmentService`：复用重复件来源查询，补齐销售订单生产快照。
 - `SalesOrderQpoImportResp` / `SalesOrderQpoImportRow`：返回导入结果、RFQ 号、匹配数量、警告。
 
-现有 `SalesOrderImportService` / `SalesOrderExcelParser` 若保留给 U9 同步，前端本阶段不再调用；若确认未上线使用，也可在实施时改造为 QPO 导入语义，但必须同步改名和日志动作，避免“导入销售订单”实际含义混乱。
+旧 Excel 直连 U9 导入链路已下线并清理；前端统一调用 `/api/market/sales-orders/import-qpo`。销售订单同步 U9 由独立的销售订单 U9 同步模块承担，避免“导入销售订单”与“同步 U9”语义混淆。
 
 ### 8.2 接口设计
 

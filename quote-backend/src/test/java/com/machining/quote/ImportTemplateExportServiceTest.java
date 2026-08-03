@@ -24,7 +24,7 @@ class ImportTemplateExportServiceTest {
     private static final Path MARKET_CONTROLLER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "controller", "MarketController.java");
     private static final Path SALES_ORDER_CONTROLLER = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "controller", "SalesOrderImportController.java");
+            "src", "main", "java", "com", "machining", "quote", "controller", "SalesOrderImportTemplateController.java");
 
     private final ImportTemplateExportService service = new ImportTemplateExportService();
 

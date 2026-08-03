@@ -197,7 +197,6 @@ public class AuditService {
         if (startsWith(action, "SYSTEM_INBOUND_CALLBACK_")) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
-        if ("SALES_ORDER_IMPORT_U9".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_QPO".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_MATCH_APPLY".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_U9_SYNC".equalsIgnoreCase(action)) return "MARKET";
@@ -287,7 +286,6 @@ public class AuditService {
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "QUOTE_TEMPLATE_CONFIG_UPDATE" -> "保存报价模板配置";
             case "RFQ_IMPORT" -> "导入 RFQ";
-            case "SALES_ORDER_IMPORT_U9" -> "导入销售订单并同步U9";
             case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单到独立主表";
             case "SALES_ORDER_MATCH_APPLY" -> "销售匹配确认补全";
             case "SALES_ORDER_U9_SYNC" -> "销售订单同步U9";
