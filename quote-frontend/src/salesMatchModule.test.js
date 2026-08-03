@@ -90,4 +90,22 @@ describe('sales match module', () => {
     expect(component).toContain('unmatchedItemCount')
     expect(component).toContain('补全结果')
   })
+
+  test('sales match page frames matching as filling production snapshots without overwrite options', () => {
+    const component = readSource('components', 'SalesMatch.vue')
+
+    expect(component).not.toContain('overwriteExistingProductionSnapshot')
+    expect(component).not.toContain('overwriteTemplateMaterial')
+    expect(component).not.toContain('覆盖已有生产快照')
+    expect(component).not.toContain('覆盖模板材料/表面处理')
+    expect(component).not.toContain('覆盖导入材料')
+    expect(component).toContain('导入材料')
+    expect(component).toContain('真实材料')
+    expect(component).toContain('材料形态')
+    expect(component).toContain('空缺生产快照')
+    expect(component).toContain('保护字段摘要')
+    expect(component).toContain('补全空缺生产快照')
+    expect(component).toContain('applySalesOrderMatch({')
+    expect(component).toContain('applyAllMatchedInSelectedOrders: matchOptions.onlyUnmatched')
+  })
 })

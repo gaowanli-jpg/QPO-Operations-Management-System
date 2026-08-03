@@ -3,7 +3,7 @@
     <header class="erp-page-header sales-match-header">
       <div>
         <h1 class="erp-page-title">销售匹配</h1>
-        <p class="erp-page-description">选择销售订单，预览历史已提单零件快照，并确认补全生产信息。</p>
+        <p class="erp-page-description">选择销售订单，预览历史已提单零件的真实材料、材料形态和生产快照，并补全空缺生产信息。</p>
       </div>
       <div class="erp-page-actions sales-match-header-actions">
         <el-button :loading="orderLoading || itemLoading" @click="refreshCurrentState">刷新</el-button>
@@ -17,7 +17,7 @@
           :disabled="!canApply"
           @click="applyMatch"
         >
-          确认补全
+          补全空缺生产快照
         </el-button>
       </div>
     </header>
@@ -206,7 +206,7 @@
             <el-table-column prop="version" label="版本" width="90" align="center" show-overflow-tooltip />
             <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
             <el-table-column prop="qty" label="数量" width="80" align="right" />
-            <el-table-column prop="materialName" label="材料" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="materialName" label="导入材料" min-width="120" show-overflow-tooltip />
             <el-table-column prop="surfaceTreatment" label="表面处理" min-width="120" show-overflow-tooltip />
             <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip>
               <template #default="{ row }">{{ row.materialNo || '待回写' }}</template>
@@ -245,11 +245,11 @@
       <div class="sales-match-section-header">
         <div>
           <h2>匹配预览结果</h2>
-          <p>预览不落库，只展示历史已提单生产快照摘要和保护字段。</p>
+          <p>预览不落库，只展示可补全的空缺生产快照和受保护的销售订单导入字段。</p>
         </div>
         <div class="sales-match-options">
-          <el-checkbox v-model="applyOptions.overwriteExistingProductionSnapshot">覆盖已有生产快照</el-checkbox>
-          <el-checkbox v-model="applyOptions.overwriteTemplateMaterial">覆盖模板材料/表面处理</el-checkbox>
+          <el-tag type="success" effect="plain">只补空缺生产快照</el-tag>
+          <el-tag type="info" effect="plain">导入字段受保护</el-tag>
         </div>
       </div>
       <div class="erp-table-body">
@@ -271,16 +271,22 @@
               <el-tag :type="row.matched ? 'success' : 'warning'" size="small">{{ row.matched ? '已命中' : '未匹配' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="materialName" label="历史材料" min-width="120" show-overflow-tooltip>
+          <el-table-column prop="materialName" label="导入材料" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">{{ row.materialName || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="surfaceTreatment" label="历史表面处理" min-width="130" show-overflow-tooltip>
+          <el-table-column prop="engineeringMaterialName" label="真实材料" min-width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.engineeringMaterialName || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="材料形态" min-width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatSnapshotSource(row.changedFields?.materialShape) }}</template>
+          </el-table-column>
+          <el-table-column prop="surfaceTreatment" label="表面处理" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">{{ row.surfaceTreatment || '-' }}</template>
           </el-table-column>
-          <el-table-column label="可补全摘要" min-width="180" show-overflow-tooltip>
+          <el-table-column label="空缺生产快照" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatFieldSummary(row.changedFields) }}</template>
           </el-table-column>
-          <el-table-column label="保护字段" min-width="160" show-overflow-tooltip>
+          <el-table-column label="保护字段摘要" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">{{ formatFieldSummary(row.protectedFields) }}</template>
           </el-table-column>
           <el-table-column prop="assemblyRelationStatus" label="父子关系" min-width="140" show-overflow-tooltip />
@@ -355,9 +361,10 @@ const SALES_MATCH_ORDER_SELECT_PERMISSION = 'market:sales-match:order-select'
 const PAGE_SIZES = [20, 50, 100]
 
 const FIELD_LABELS = {
-  materialName: '材料',
+  materialName: '导入材料',
   surfaceTreatment: '表面处理',
-  engineeringMaterialName: '工程材料',
+  engineeringMaterialName: '真实材料',
+  materialShape: '材料形态',
   materialGrossWeight: '毛重',
   partNetWeight: '净重',
   quoteMode: '核价模式',
@@ -365,7 +372,7 @@ const FIELD_LABELS = {
   assemblyFee: '组装费',
   baseCost: '基础成本',
   drawingUrl: '图纸',
-  materialSnapshotAvailable: '材料快照',
+  materialSnapshotAvailable: '材料核价快照',
   processSnapshotAvailable: '工艺路线',
   feeSnapshotAvailable: '费用快照',
   qty: '数量',
@@ -407,11 +414,6 @@ const itemFilters = reactive({
 
 const matchOptions = reactive({
   onlyUnmatched: true
-})
-
-const applyOptions = reactive({
-  overwriteExistingProductionSnapshot: false,
-  overwriteTemplateMaterial: false
 })
 
 const orderPagination = reactive({
@@ -655,8 +657,8 @@ const applyMatch = async () => {
   }
   return runAction(salesMatchActionKeys.apply, async () => {
     await ElMessageBox.confirm(
-      '确认将预览命中的历史生产快照补全到销售订单零件？价格、数量、交期、客户字段和物料号不会被覆盖。',
-      '确认销售匹配补全',
+      '确认按预览结果补全销售订单零件的空缺生产快照？导入材料、表面处理、图纸、价格、数量、交期、客户字段和物料号不会被改写。',
+      '确认补全空缺生产快照',
       {
         type: 'warning',
         confirmButtonText: '确认补全',
@@ -666,9 +668,7 @@ const applyMatch = async () => {
     try {
       const response = await applySalesOrderMatch({
         ...buildMatchPayload(),
-        applyAllMatchedInSelectedOrders: matchOptions.onlyUnmatched,
-        overwriteExistingProductionSnapshot: applyOptions.overwriteExistingProductionSnapshot,
-        overwriteTemplateMaterial: applyOptions.overwriteTemplateMaterial
+        applyAllMatchedInSelectedOrders: matchOptions.onlyUnmatched
       })
       applyResult.value = response || {}
       ElMessage.success(response?.message || '销售匹配补全完成。')
@@ -742,6 +742,14 @@ const formatMoney = (value) => {
   const amount = Number(value)
   if (Number.isNaN(amount)) return String(value)
   return `¥ ${amount.toFixed(2)}`
+}
+
+const formatSnapshotSource = (fieldValue) => {
+  if (!fieldValue) return '-'
+  if (typeof fieldValue === 'object' && !Array.isArray(fieldValue)) {
+    return fieldValue.source ?? fieldValue.value ?? '-'
+  }
+  return fieldValue
 }
 
 const formatFieldSummary = (fields) => {
@@ -896,10 +904,6 @@ onMounted(async () => {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.sales-match-options :deep(.el-checkbox) {
-  margin-right: 0;
 }
 
 @media (max-width: 1200px) {
