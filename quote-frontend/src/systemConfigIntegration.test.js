@@ -64,12 +64,18 @@ describe('QPO system integration config frontend', () => {
     expect(integrationPanel).not.toContain('MES 回调 token')
   })
 
-  test('renders inbound callback placeholder for MES material callback', () => {
+  test('renders inbound callback panel for MES material callback', () => {
     expect(inboundPanel).toContain('system-inbound-callback-config-panel')
     expect(inboundPanel).toContain('入站接口')
     expect(inboundPanel).toContain('MES 物料号回调')
     expect(inboundPanel).toContain('/api/integrations/mes/material-callback')
-    expect(inboundPanel).toContain('后续阶段接入')
+    expect(inboundPanel).toContain('callbackUrl')
+    expect(inboundPanel).toContain('configSource')
+    expect(inboundPanel).toContain('tokenConfigured')
+    expect(inboundPanel).toContain('保存配置')
+    expect(inboundPanel).toContain('生成 token')
+    expect(inboundPanel).toContain('复制回调地址')
+    expect(inboundPanel).not.toContain('后续阶段接入')
   })
 
   test('protects integration writes with permissions and duplicate-click guards', () => {

@@ -241,6 +241,7 @@ public class SystemInboundCallbackConfigService {
         dto.setTokenEnabled(entity.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : entity.getTokenEnabled());
         dto.setTokenConfigured(tokenHashConfigured || !isBlank(fallbackCallbackToken));
         dto.setTokenMask(tokenHashConfigured ? entity.getTokenMask() : (isBlank(fallbackCallbackToken) ? null : "已配置"));
+        dto.setTokenUpdatedAt(entity.getTokenUpdatedAt());
         dto.setPublicBaseUrl(publicBaseUrl == null ? trimToNull(fallbackPublicBaseUrl) : publicBaseUrl);
         dto.setCallbackPath(defaultText(entity.getCallbackPath(), MES_CALLBACK_PATH));
         dto.setCallbackUrl(callbackUrl(dto.getPublicBaseUrl(), dto.getCallbackPath()));

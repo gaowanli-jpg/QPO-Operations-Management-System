@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -66,6 +67,7 @@ class SystemInboundCallbackConfigStage3Test {
         assertThat(detail.getCallbackCode()).isEqualTo("MES_MATERIAL_CALLBACK");
         assertThat(detail.getTokenConfigured()).isTrue();
         assertThat(detail.getTokenMask()).isEqualTo("***oken");
+        assertThat(detail.getTokenUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 8, 3, 10, 30));
         assertThat(String.valueOf(configs)).doesNotContain(OLD_TOKEN, OLD_HASH);
         assertThat(String.valueOf(detail)).doesNotContain(OLD_TOKEN, OLD_HASH);
         assertThat(SystemInboundCallbackConfigDTO.class.getDeclaredFields())
@@ -196,6 +198,7 @@ class SystemInboundCallbackConfigStage3Test {
         entity.setCallbackPath("/api/integrations/mes/material-callback");
         entity.setTokenHash(OLD_HASH);
         entity.setTokenMask("***oken");
+        entity.setTokenUpdatedAt(LocalDateTime.of(2026, 8, 3, 10, 30));
         entity.setRemark("callback config");
         return entity;
     }

@@ -47,3 +47,20 @@ export const activateIntegrationConfig = (id) => request(`/api/system/integratio
 export const disableIntegrationConfig = (id) => request(`/api/system/integration-configs/${id}/disable`, {
   method: 'PUT'
 })
+
+export const listInboundCallbackConfigs = () => request('/api/system/inbound-callback-configs')
+
+export const getMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback')
+
+export const saveMesMaterialCallbackConfig = (payload) => request('/api/system/inbound-callback-configs/mes-material-callback', {
+  method: 'PUT',
+  data: payload
+})
+
+export const rotateMesMaterialCallbackToken = () => request('/api/system/inbound-callback-configs/mes-material-callback/token', {
+  method: 'POST'
+})
+
+export const validateMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback/validate', {
+  method: 'POST'
+})

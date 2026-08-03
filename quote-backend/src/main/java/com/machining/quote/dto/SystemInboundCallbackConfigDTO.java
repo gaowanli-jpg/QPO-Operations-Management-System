@@ -14,6 +14,7 @@ public class SystemInboundCallbackConfigDTO {
     private Boolean tokenEnabled;
     private Boolean tokenConfigured;
     private String tokenMask;
+    private LocalDateTime tokenUpdatedAt;
     private String publicBaseUrl;
     private String callbackPath;
     private String callbackUrl;
