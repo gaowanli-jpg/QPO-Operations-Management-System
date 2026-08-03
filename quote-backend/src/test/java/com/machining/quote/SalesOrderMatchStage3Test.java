@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -47,6 +48,7 @@ class SalesOrderMatchStage3Test {
 
         assertThat(controller)
                 .contains("@PostMapping(\"/apply\")")
+                .contains("@PostMapping(\"/orders/{salesOrderId}/apply\")")
                 .contains("@RequirePermission(\"market:sales-match:apply\")")
                 .contains("SalesOrderMatchApplyReq")
                 .contains("salesOrderMatchService.apply");
@@ -113,6 +115,48 @@ class SalesOrderMatchStage3Test {
         assertThat(summary.getUnmatchedItemCount()).isZero();
         assertThat(summary.getWarningMessage()).isEmpty();
         verify(fixture.auditService).record(eq("SALES_ORDER_MATCH_APPLY"), eq("sales_order_header"), eq(header.getId()), isNull(), any());
+    }
+
+    @Test
+    void applyOrderWrapsSingleQuotedSalesOrder() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        fixture.withLockedItems(header, List.of(item));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyResp resp = fixture.service.applyOrder(header.getId());
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getTotalItemCount()).isEqualTo(1);
+        assertThat(resp.getMatchedItemCount()).isEqualTo(1);
+        assertThat(fixture.lastItemUpdate().getMatchStatus()).isEqualTo("已匹配");
+    }
+
+    @Test
+    void applyOrderRejectsNonQuotedSalesOrdersAndLegacyPayloadCannotBypassStatusGuard() {
+        Fixture fixture = fixture();
+        SalesOrderHeader partial = header(101L, "SOQPO-20260731-001");
+        partial.setStatus(QuoteStatusWorkflow.PARTIALLY_RELEASED);
+        SalesOrderItem item = salesOrderItem(501L, partial.getId(), "P-001", "A");
+        fixture.withLockedItems(partial, List.of(item));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(item));
+
+        assertThatThrownBy(() -> fixture.service.applyOrder(partial.getId()))
+                .hasMessageContaining(QuoteStatusWorkflow.QUOTED);
+
+        SalesOrderMatchApplyReq orderReq = new SalesOrderMatchApplyReq();
+        orderReq.setSalesOrderIds(List.of(partial.getId()));
+        assertThatThrownBy(() -> fixture.service.apply(orderReq))
+                .hasMessageContaining(QuoteStatusWorkflow.QUOTED);
+
+        assertThatThrownBy(() -> fixture.service.apply(applyReq(List.of(item.getId()))))
+                .hasMessageContaining(QuoteStatusWorkflow.QUOTED);
+        verify(fixture.sourceMapper, never()).selectLatestReleasedRepeatSources(isNull(), any());
+        verify(fixture.salesOrderItemMapper, never()).updateById(any());
+        verify(fixture.headerMapper, never()).updateById(any());
     }
 
     @Test

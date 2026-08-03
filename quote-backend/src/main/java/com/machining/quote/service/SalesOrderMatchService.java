@@ -89,9 +89,13 @@ public class SalesOrderMatchService {
             Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
+        String effectiveStatus = normalizeMatchableOrderListStatus(status);
+        if (effectiveStatus == null) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
         QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
         applySalesOrderScope(query);
-        applyOrderFilters(query, customerName, keyword, status, matchStatus);
+        applyOrderFilters(query, customerName, keyword, effectiveStatus, matchStatus);
         Long total = headerMapper.selectCount(query);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -121,8 +125,18 @@ public class SalesOrderMatchService {
                 .toList(), total, safePage, safePageSize);
     }
 
+    public SalesOrderMatchPreviewResp previewOrder(Long salesOrderId) {
+        SalesOrderHeader header = requireMatchableSalesOrder(salesOrderId);
+        SalesOrderMatchPreviewReq req = new SalesOrderMatchPreviewReq();
+        req.setSalesOrderIds(List.of(header.getId()));
+        req.setSalesOrderItemIds(List.of());
+        req.setOnlyUnmatched(false);
+        return preview(req);
+    }
+
     public SalesOrderMatchPreviewResp preview(SalesOrderMatchPreviewReq req) {
         SalesOrderMatchPreviewResp resp = new SalesOrderMatchPreviewResp();
+        validateMatchableOrderIds(req == null ? null : req.getSalesOrderIds());
         List<SalesOrderItem> items = loadPreviewItems(req);
         if (items.isEmpty()) {
             return resp;
@@ -152,6 +166,7 @@ public class SalesOrderMatchService {
     @Transactional
     public SalesOrderMatchApplyResp apply(SalesOrderMatchApplyReq req) {
         long startedAt = System.currentTimeMillis();
+        validateMatchableOrderIds(req == null ? null : req.getSalesOrderIds());
         List<SalesOrderItem> items = loadApplyItems(req);
         SalesOrderMatchApplyResp resp = new SalesOrderMatchApplyResp();
         resp.setTotalItemCount(items.size());
@@ -206,6 +221,16 @@ public class SalesOrderMatchService {
         return resp;
     }
 
+    @Transactional
+    public SalesOrderMatchApplyResp applyOrder(Long salesOrderId) {
+        SalesOrderHeader header = requireMatchableSalesOrder(salesOrderId);
+        SalesOrderMatchApplyReq req = new SalesOrderMatchApplyReq();
+        req.setSalesOrderIds(List.of(header.getId()));
+        req.setSalesOrderItemIds(List.of());
+        req.setApplyAllMatchedInSelectedOrders(false);
+        return apply(req);
+    }
+
     private SalesOrderHeader requireSalesOrder(Long salesOrderId) {
         if (salesOrderId == null) {
             throw new RuntimeException("销售订单 ID 不能为空");
@@ -215,6 +240,12 @@ public class SalesOrderMatchService {
             throw new RuntimeException("销售订单不存在");
         }
         assertSalesOrderScope(header);
+        return header;
+    }
+
+    public SalesOrderHeader requireMatchableSalesOrder(Long salesOrderId) {
+        SalesOrderHeader header = requireSalesOrder(salesOrderId);
+        assertMatchableSalesOrder(header);
         return header;
     }
 
@@ -262,6 +293,7 @@ public class SalesOrderMatchService {
                 throw new RuntimeException("销售订单不存在：" + headerId);
             }
             assertSalesOrderScope(header);
+            assertMatchableSalesOrder(header);
             result.put(headerId, header);
         }
         return result;
@@ -299,7 +331,7 @@ public class SalesOrderMatchService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, SalesOrderHeader> result = new LinkedHashMap<>();
         for (Long headerId : headerIds) {
-            SalesOrderHeader header = requireSalesOrder(headerId);
+            SalesOrderHeader header = requireMatchableSalesOrder(headerId);
             result.put(headerId, header);
         }
         return result;
@@ -489,10 +521,12 @@ public class SalesOrderMatchService {
         row.setInternalProjectNo(firstNonBlank(item.getInternalProjectNo(), header == null ? null : header.getInternalProjectNo()));
         row.setPartNo(item.getPartNo());
         row.setVersion(item.getVersion());
+        row.setLineNo(item.getLineNo());
         row.setQty(item.getQty());
         row.setCurrentMatchStatus(defaultText(item.getMatchStatus(), MATCH_STATUS_PENDING));
         row.setAssemblyRelationStatus(defaultText(item.getAssemblyRelationStatus(), "不适用"));
         if (source == null) {
+            row.setMaterialShape(item.getMaterialShape());
             row.setMatched(false);
             row.setWarningMessage("未命中历史已提单生产快照");
             return row;
@@ -504,6 +538,7 @@ public class SalesOrderMatchService {
         row.setSourceVersion(source.getVersion());
         row.setMaterialName(source.getMaterialName());
         row.setEngineeringMaterialName(resolveEngineeringMaterialName(source));
+        row.setMaterialShape(resolveMaterialShape(source));
         row.setSurfaceTreatment(source.getSurfaceTreatment());
         row.setQuoteMode(source.getQuoteMode());
         row.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
@@ -725,6 +760,26 @@ public class SalesOrderMatchService {
                     .like("customer_project_no", text));
         }
         applyHeaderMatchFilter(query, matchStatus);
+    }
+
+    private String normalizeMatchableOrderListStatus(String status) {
+        if (isBlank(status)) {
+            return QuoteStatusWorkflow.QUOTED;
+        }
+        String normalized = status.trim();
+        return QuoteStatusWorkflow.QUOTED.equals(normalized) ? normalized : null;
+    }
+
+    private void validateMatchableOrderIds(List<Long> salesOrderIds) {
+        for (Long salesOrderId : normalizeIds(salesOrderIds)) {
+            requireMatchableSalesOrder(salesOrderId);
+        }
+    }
+
+    private void assertMatchableSalesOrder(SalesOrderHeader header) {
+        if (header == null || !QuoteStatusWorkflow.QUOTED.equals(header.getStatus())) {
+            throw new RuntimeException("销售匹配只能处理" + QuoteStatusWorkflow.QUOTED + "销售订单，请确认订单状态后重试");
+        }
     }
 
     private void applyHeaderMatchFilter(QueryWrapper<SalesOrderHeader> query, String matchStatus) {

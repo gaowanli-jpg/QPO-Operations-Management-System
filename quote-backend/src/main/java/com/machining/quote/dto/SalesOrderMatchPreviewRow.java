@@ -14,6 +14,7 @@ public class SalesOrderMatchPreviewRow {
     private String internalProjectNo;
     private String partNo;
     private String version;
+    private Integer lineNo;
     private Integer qty;
     private String currentMatchStatus;
     private Boolean matched;
@@ -23,6 +24,7 @@ public class SalesOrderMatchPreviewRow {
     private String sourceVersion;
     private String materialName;
     private String engineeringMaterialName;
+    private String materialShape;
     private String surfaceTreatment;
     private String quoteMode;
     private String itemType;

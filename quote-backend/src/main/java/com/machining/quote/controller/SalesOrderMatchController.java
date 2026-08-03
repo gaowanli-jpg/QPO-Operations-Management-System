@@ -57,6 +57,18 @@ public class SalesOrderMatchController {
         return salesOrderMatchService.listItems(salesOrderId, matchStatus, page, pageSize);
     }
 
+    @GetMapping("/orders/{salesOrderId}/preview")
+    @RequirePermission("market:sales-match:view")
+    public SalesOrderMatchPreviewResp previewOrder(@PathVariable Long salesOrderId) {
+        return salesOrderMatchService.previewOrder(salesOrderId);
+    }
+
+    @PostMapping("/orders/{salesOrderId}/apply")
+    @RequirePermission("market:sales-match:apply")
+    public SalesOrderMatchApplyResp applyOrder(@PathVariable Long salesOrderId) {
+        return salesOrderMatchService.applyOrder(salesOrderId);
+    }
+
     @PostMapping("/preview")
     @RequirePermission("market:sales-match:view")
     public SalesOrderMatchPreviewResp preview(@RequestBody(required = false) SalesOrderMatchPreviewReq req) {
