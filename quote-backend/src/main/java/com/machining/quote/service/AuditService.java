@@ -192,6 +192,7 @@ public class AuditService {
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_STORAGE_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INTEGRATION_CONFIG_")) return "SYSTEM";
+        if (startsWith(action, "SYSTEM_DATA_CENTER_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INBOUND_CALLBACK_")) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
@@ -270,6 +271,12 @@ public class AuditService {
             case "SYSTEM_INTEGRATION_CONFIG_TEST_FAILED" -> "测试出站接口配置失败";
             case "SYSTEM_INTEGRATION_CONFIG_ACTIVATE" -> "激活出站接口配置";
             case "SYSTEM_INTEGRATION_CONFIG_DISABLE" -> "停用出站接口配置";
+            case "SYSTEM_DATA_CENTER_CONFIG_CREATE" -> "新增数据中心连接配置";
+            case "SYSTEM_DATA_CENTER_CONFIG_UPDATE" -> "编辑数据中心连接配置";
+            case "SYSTEM_DATA_CENTER_CONFIG_TEST" -> "测试数据中心Token获取";
+            case "SYSTEM_DATA_CENTER_CONFIG_TEST_FAILED" -> "测试数据中心Token获取失败";
+            case "SYSTEM_DATA_CENTER_CONFIG_ACTIVATE" -> "激活数据中心连接配置";
+            case "SYSTEM_DATA_CENTER_CONFIG_DISABLE" -> "停用数据中心连接配置";
             case "SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE" -> "保存入站接口配置";
             case "SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE" -> "轮换入站回调Token";
             case "SYSTEM_INBOUND_CALLBACK_CONFIG_VALIDATE" -> "校验入站接口配置";
