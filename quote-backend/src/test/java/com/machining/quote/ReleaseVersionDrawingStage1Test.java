@@ -23,6 +23,7 @@ import com.machining.quote.service.OrderItemPageService;
 import com.machining.quote.storage.StorageType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -311,8 +312,24 @@ class ReleaseVersionDrawingStage1Test {
         assertThat(skippedItems).extracting(row -> row.get("reason")).containsExactly("Item is released");
         verify(itemMapper).updateById(rfqVersionA);
         verify(salesOrderItemMapper).updateById(salesVersionA);
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("release_drawing_replace"), any(),
-                isNull(), any(Map.class), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=2"), isNull());
+                isNull(), afterDataCaptor.capture(), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=2"), isNull());
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
+                .containsEntry("uploadCount", 1)
+                .containsEntry("versionUploadedDrawingCount", 1)
+                .containsEntry("matchedCount", 3)
+                .containsEntry("replacedCount", 2)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 1);
+        assertThat((Map<String, Object>) afterData.get("drawingMatchModes"))
+                .containsEntry("partNo", 0)
+                .containsEntry("partNoVersion", 1);
+        assertThat(String.valueOf(afterData))
+                .doesNotContain("%PDF")
+                .doesNotContain("MockMultipartFile")
+                .doesNotContain("multipart");
     }
 
     @Test

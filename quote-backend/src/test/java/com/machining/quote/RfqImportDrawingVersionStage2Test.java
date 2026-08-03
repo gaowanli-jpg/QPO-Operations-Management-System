@@ -25,6 +25,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -61,6 +63,32 @@ class RfqImportDrawingVersionStage2Test {
                 .containsEntry("missingDrawingCount", 1)
                 .containsEntry("versionUploadedDrawingCount", 1)
                 .containsEntry("versionMatchedDrawingCount", 1);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService(controller)).record(
+                eq("RFQ_IMPORT"),
+                eq("order_rfq"),
+                eq(88),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
+                .containsEntry("uploadedDrawingCount", 1)
+                .containsEntry("versionUploadedDrawingCount", 1)
+                .containsEntry("versionMatchedDrawingCount", 1);
+        assertThat((Map<String, Object>) afterData.get("drawingMatchModes"))
+                .containsEntry("partNo", 0)
+                .containsEntry("partNoVersion", 1);
+        assertThat(String.valueOf(afterData))
+                .doesNotContain("P-100_A.pdf")
+                .doesNotContain("MockMultipartFile")
+                .doesNotContain("multipart")
+                .doesNotContain("p1");
     }
 
     @Test
@@ -122,6 +150,10 @@ class RfqImportDrawingVersionStage2Test {
 
     private ItemQuoteVersionMapper itemMapper(MarketController controller) {
         return (ItemQuoteVersionMapper) ReflectionTestUtils.getField(controller, "itemQuoteVersionMapper");
+    }
+
+    private AuditService auditService(MarketController controller) {
+        return (AuditService) ReflectionTestUtils.getField(controller, "auditService");
     }
 
     private MockMultipartFile rfqFileWithSamePartDifferentVersions() {

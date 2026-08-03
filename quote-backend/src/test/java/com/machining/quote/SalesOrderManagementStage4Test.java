@@ -191,6 +191,7 @@ class SalesOrderManagementStage4Test {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void supplementVersionDrawingBindsOnlyMatchingSalesOrderPartVersion() throws Exception {
         SalesOrderHeader header = header(410L, QuoteStatusWorkflow.QUOTED);
         SalesOrderItem itemVersionA = item(710L, 410L, QuoteStatusWorkflow.QUOTED);
@@ -232,6 +233,35 @@ class SalesOrderManagementStage4Test {
         assertThat(itemCaptor.getValue().getHasDrawing()).isTrue();
         assertThat(itemVersionA.getDrawingUrl()).isNull();
         assertThat(itemVersionA.getHasDrawing()).isNull();
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_DRAWING_SUPPLEMENT"),
+                eq("sales_order_header"),
+                eq(410L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
+                .containsEntry("uploadCount", 1)
+                .containsEntry("uploadedDrawingCount", 0)
+                .containsEntry("versionUploadedDrawingCount", 1)
+                .containsEntry("boundCount", 1)
+                .containsEntry("alreadyBoundCount", 0)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 0);
+        assertThat((Map<String, Object>) afterData.get("drawingMatchModes"))
+                .containsEntry("partNo", 0)
+                .containsEntry("partNoVersion", 1);
+        assertThat(String.valueOf(afterData))
+                .doesNotContain("dummy")
+                .doesNotContain("MockMultipartFile")
+                .doesNotContain("multipart");
     }
 
     private Object invokeStatusAction(SalesOrderManageService service, String action, Long salesOrderId, String reason) throws Exception {

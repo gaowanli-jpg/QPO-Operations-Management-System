@@ -336,7 +336,14 @@ public class SalesOrderManageService {
                     "sales_order_header",
                     salesOrderId,
                     null,
-                    result,
+                    buildSupplementDrawingAuditSummary(
+                            order,
+                            drawings,
+                            versionDrawings,
+                            boundItems,
+                            alreadyBoundItems,
+                            unmatchedDrawings,
+                            skippedFiles),
                     "MARKET",
                     "SUCCESS",
                     AuditService.labelForAction(ACTION_DRAWING_SUPPLEMENT),
@@ -738,6 +745,33 @@ public class SalesOrderManageService {
 
     private int fileCount(List<MultipartFile> files) {
         return files == null ? 0 : files.size();
+    }
+
+    private Map<String, Object> buildSupplementDrawingAuditSummary(
+            SalesOrderHeader order,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<Map<String, Object>> boundItems,
+            List<Map<String, Object>> alreadyBoundItems,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        int uploadedDrawingCount = fileCount(drawings);
+        int versionUploadedDrawingCount = fileCount(versionDrawings);
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", order == null ? null : order.getId());
+        summary.put("salesOrderNo", order == null ? "" : firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo()));
+        summary.put("uploadCount", uploadedDrawingCount + versionUploadedDrawingCount);
+        summary.put("uploadedDrawingCount", uploadedDrawingCount);
+        summary.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+        summary.put("boundCount", boundItems.size());
+        summary.put("alreadyBoundCount", alreadyBoundItems.size());
+        summary.put("unmatchedCount", unmatchedDrawings.size());
+        summary.put("skippedCount", skippedFiles.size());
+        summary.put("drawingMatchModes", Map.of(
+                "partNo", uploadedDrawingCount,
+                "partNoVersion", versionUploadedDrawingCount
+        ));
+        return summary;
     }
 
     private String firstNonBlank(String... values) {

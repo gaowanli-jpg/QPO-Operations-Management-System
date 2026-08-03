@@ -341,6 +341,7 @@ class SalesOrderQpoImportStage3Test {
         SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
         SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        AuditService auditService = mock(AuditService.class);
         SalesOrderQpoImportService service = service(
                 parser,
                 customerMapper,
@@ -349,7 +350,7 @@ class SalesOrderQpoImportStage3Test {
                 headerMapper,
                 itemMapper,
                 mock(DataScopeService.class),
-                mock(AuditService.class)
+                auditService
         );
         Method importWithVersionDrawings = SalesOrderQpoImportService.class.getMethod(
                 "importQpo",
@@ -415,6 +416,32 @@ class SalesOrderQpoImportStage3Test {
                 .containsEntry("missingDrawingCount", 1)
                 .containsEntry("versionUploadedDrawingCount", 1)
                 .containsEntry("versionMatchedDrawingCount", 1);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("SALES_ORDER_IMPORT_QPO"),
+                eq("sales_order_import_batch"),
+                eq(201L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
+                .containsEntry("uploadedDrawingCount", 1)
+                .containsEntry("versionUploadedDrawingCount", 1)
+                .containsEntry("versionMatchedDrawingCount", 1);
+        assertThat((Map<String, Object>) afterData.get("drawingMatchModes"))
+                .containsEntry("partNo", 0)
+                .containsEntry("partNoVersion", 1);
+        assertThat(String.valueOf(afterData))
+                .doesNotContain("P-100_A.pdf")
+                .doesNotContain("MockMultipartFile")
+                .doesNotContain("multipart")
+                .doesNotContain("p1");
     }
 
     @Test

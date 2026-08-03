@@ -270,7 +270,9 @@ public class InternalTargetLeadTimeService {
         List<Map<String, Object>> skippedItems = new ArrayList<>();
         int matchedCount = 0;
         Set<String> versionReplacedTargetKeys = new HashSet<>();
-        int uploadCount = fileCount(drawings) + fileCount(versionDrawings);
+        int uploadedDrawingCount = fileCount(drawings);
+        int versionUploadedDrawingCount = fileCount(versionDrawings);
+        int uploadCount = uploadedDrawingCount + versionUploadedDrawingCount;
 
         try {
             if (versionDrawings != null) {
@@ -322,6 +324,12 @@ public class InternalTargetLeadTimeService {
         auditSummary.put("rfqNos", rfqOrderById.values().stream().map(OrderRfq::getRfqNo).toList());
         auditSummary.put("salesOrderNos", salesOrderById.values().stream().map(SalesOrderHeader::getSalesOrderNo).toList());
         auditSummary.put("uploadCount", uploadCount);
+        auditSummary.put("uploadedDrawingCount", uploadedDrawingCount);
+        auditSummary.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+        auditSummary.put("drawingMatchModes", Map.of(
+                "partNo", uploadedDrawingCount,
+                "partNoVersion", versionUploadedDrawingCount
+        ));
         auditSummary.put("matchedCount", matchedCount);
         auditSummary.put("replacedCount", replacedItems.size());
         auditSummary.put("unmatchedCount", unmatchedDrawings.size());
@@ -349,6 +357,12 @@ public class InternalTargetLeadTimeService {
         result.put("success", true);
         result.put("message", "Drawing replacement completed, replaced " + replacedItems.size() + " items.");
         result.put("uploadCount", uploadCount);
+        result.put("uploadedDrawingCount", uploadedDrawingCount);
+        result.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+        result.put("drawingMatchModes", Map.of(
+                "partNo", uploadedDrawingCount,
+                "partNoVersion", versionUploadedDrawingCount
+        ));
         result.put("matchedCount", matchedCount);
         result.put("replacedCount", replacedItems.size());
         result.put("unmatchedCount", unmatchedDrawings.size());

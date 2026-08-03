@@ -516,7 +516,14 @@ public class SalesOrderQpoImportService {
         Map<String, Object> drawingReport = resp.getDrawingReport();
         if (drawingReport != null) {
             summary.put("uploadedDrawingCount", drawingReport.get("uploadedDrawingCount"));
+            summary.put("versionUploadedDrawingCount", drawingReport.get("versionUploadedDrawingCount"));
             summary.put("matchedDrawingItemCount", drawingReport.get("matchedItemCount"));
+            summary.put("versionMatchedDrawingCount", drawingReport.get("versionMatchedDrawingCount"));
+            summary.put("drawingMatchModes", drawingReport.getOrDefault(
+                    "drawingMatchModes",
+                    drawingMatchModes(
+                            intValue(drawingReport.get("uploadedDrawingCount")),
+                            intValue(drawingReport.get("versionUploadedDrawingCount")))));
             summary.put("missingDrawingCount", drawingReport.get("missingDrawingCount"));
             summary.put("unmatchedDrawingCount", drawingReport.get("unmatchedDrawingCount"));
         }
@@ -587,6 +594,17 @@ public class SalesOrderQpoImportService {
 
     private String itemKey(String partNo, String version) {
         return normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
+    private Map<String, Integer> drawingMatchModes(int uploadedDrawingCount, int versionUploadedDrawingCount) {
+        return Map.of(
+                "partNo", Math.max(0, uploadedDrawingCount - versionUploadedDrawingCount),
+                "partNoVersion", Math.max(0, versionUploadedDrawingCount)
+        );
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
     }
 
     private boolean isPdfDrawing(MultipartFile drawing) {
@@ -753,6 +771,7 @@ public class SalesOrderQpoImportService {
             drawingReport.put("matchedDrawingCount", matchedDrawingPartNos.size());
             drawingReport.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
             drawingReport.put("versionMatchedDrawingCount", matchedVersionDrawingKeys.size());
+            drawingReport.put("drawingMatchModes", drawingMatchModes(uploadedDrawings.size(), versionUploadedDrawingCount));
             drawingReport.put("missingDrawingCount", missingItems.size());
             drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
             drawingReport.put("missingItems", missingItems);

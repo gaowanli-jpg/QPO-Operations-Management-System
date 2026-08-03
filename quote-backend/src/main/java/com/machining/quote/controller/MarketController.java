@@ -572,6 +572,7 @@ public class MarketController {
             drawingReport.put("matchedDrawingCount", matchedDrawingPartNos.size());
             drawingReport.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
             drawingReport.put("versionMatchedDrawingCount", matchedVersionDrawingKeys.size());
+            drawingReport.put("drawingMatchModes", drawingMatchModes(uploadedDrawings.size(), versionUploadedDrawingCount));
             drawingReport.put("missingDrawingCount", missingDrawingItems.size());
             drawingReport.put("unmatchedDrawingCount", unmatchedDrawings.size());
             drawingReport.put("missingItems", missingDrawingItems);
@@ -628,7 +629,14 @@ public class MarketController {
         summary.put("rfqId", rfqId);
         summary.put("itemCount", itemCount);
         summary.put("uploadedDrawingCount", drawingReport.get("uploadedDrawingCount"));
+        summary.put("versionUploadedDrawingCount", drawingReport.get("versionUploadedDrawingCount"));
         summary.put("matchedItemCount", drawingReport.get("matchedItemCount"));
+        summary.put("versionMatchedDrawingCount", drawingReport.get("versionMatchedDrawingCount"));
+        summary.put("drawingMatchModes", drawingReport.getOrDefault(
+                "drawingMatchModes",
+                drawingMatchModes(
+                        intValue(drawingReport.get("uploadedDrawingCount")),
+                        intValue(drawingReport.get("versionUploadedDrawingCount")))));
         summary.put("missingDrawingCount", drawingReport.get("missingDrawingCount"));
         summary.put("unmatchedDrawingCount", drawingReport.get("unmatchedDrawingCount"));
         auditService.record(
@@ -646,6 +654,17 @@ public class MarketController {
 
     private String normalizeHeader(String value) {
         return value == null ? "" : value.replaceAll("\\s+", "").trim();
+    }
+
+    private Map<String, Integer> drawingMatchModes(int uploadedDrawingCount, int versionUploadedDrawingCount) {
+        return Map.of(
+                "partNo", Math.max(0, uploadedDrawingCount - versionUploadedDrawingCount),
+                "partNoVersion", Math.max(0, versionUploadedDrawingCount)
+        );
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
     }
 
     private boolean isRfqNoHeader(String header) {
