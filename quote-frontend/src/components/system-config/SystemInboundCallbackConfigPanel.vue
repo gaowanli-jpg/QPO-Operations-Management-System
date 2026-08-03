@@ -14,7 +14,7 @@
       <div class="erp-section-header system-inbound-card-header">
         <div>
           <h2 class="erp-section-title">MES 物料号回调</h2>
-          <p class="system-inbound-callback-note">MES 后续异步回调 QPO 写回物料号，和 QPO 主动调用 MES 的出站连接分开管理。</p>
+          <p class="system-inbound-callback-note">MES 后续异步回调 QPO 写回物料号，和 QPO 主动调用 MES 的出站连接分开管理。回调 URL 和 token 由 QPO 管理员在入站接口页提供。</p>
         </div>
         <div class="system-inbound-status-tags">
           <el-tag :type="config.enabled ? 'success' : 'info'" effect="plain">

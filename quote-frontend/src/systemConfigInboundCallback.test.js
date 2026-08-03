@@ -39,6 +39,14 @@ describe('system inbound callback config frontend stage 5', () => {
     expect(outboundPanel).not.toContain('MES 回调 token')
   })
 
+  test('keeps MES callback URL and token delivery in the inbound panel', () => {
+    expect(inboundPanel).toContain('回调 URL 和 token 由 QPO 管理员在入站接口页提供')
+    expect(inboundPanel).toContain('真实 token 需单独通过受控渠道交付')
+    expect(inboundPanel).toContain('token 只展示一次')
+    expect(outboundPanel).not.toContain('QPO_INBOUND_CALLBACK_TOKEN')
+    expect(outboundPanel).not.toContain('MES 回调 token')
+  })
+
   test('wires edit validate token rotate and copy actions with permissions', () => {
     expect(inboundPanel).toContain("v-permission=\"'system:config:inbound:update'\"")
     expect(inboundPanel).toContain("v-permission=\"'system:config:inbound:token-rotate'\"")

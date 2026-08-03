@@ -115,7 +115,7 @@ class SystemIntegrationConfigStage1Test {
                         "`system:config:integration:update`",
                         "`system:config:integration:test`",
                         "`system:config:integration:activate`",
-                        "系统对接配置",
+                        "出站接口配置",
                         "U9",
                         "MES",
                         "WMS"
@@ -123,7 +123,7 @@ class SystemIntegrationConfigStage1Test {
                 .doesNotContain("`common:integration");
         assertThat(adminDoc)
                 .contains(
-                        "系统对接配置",
+                        "出站接口配置",
                         "`system:config:integration:update`",
                         "`system:config:integration:test`",
                         "`system:config:integration:activate`"

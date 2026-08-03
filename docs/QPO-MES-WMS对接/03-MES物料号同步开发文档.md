@@ -8,6 +8,8 @@
 
 > 阶段 22 收口说明：MES 对接现在包含两条独立业务 path：物料号获取继续使用 `ERP_MES_MATERIAL_PATH`，锁库零件待生产下发使用 `ERP_MES_PRODUCTION_PATH`。两者复用 `ERP_MES_BASE_URL`、`ERP_MES_AUTH_TOKEN` 和 `ERP_MES_TIMEOUT_MS`，但请求契约、权限点、操作日志和文件日志事件名彼此独立；待生产下发接口详见 `docs/QPO-MES-WMS对接/09-提供给MES的待生产下发接口对接说明.md`。
 
+> 系统配置阶段 6 收口说明：MES 配置现在按接口方向拆分。QPO 调 MES 的出站配置由 **系统配置 > 出站接口** 或 `ERP_MES_BASE_URL`、`ERP_MES_AUTH_TOKEN`、`ERP_MES_MATERIAL_PATH` fallback 提供；MES 回调 QPO 的入站配置由 **系统配置 > 入站接口 > MES 物料号回调** 管理，回调 URL 和机器 token 在页面生成、轮换、启停。`ERP_MES_CALLBACK_TOKEN` 与 `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为页面配置不存在时的老环境 fallback，不作为给 MES 的主要交付变量。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已经具备：
@@ -149,6 +151,8 @@ ERP_MES_CALLBACK_TOKEN_ENABLED=true
 - token 可以为空；为空时不发送 Authorization header。
 - 本地没有 MES 时，测试使用 mock，不依赖真实外部系统。
 - 物料号获取继续使用 `ERP_MES_MATERIAL_PATH`；待生产下发使用 `ERP_MES_PRODUCTION_PATH`。
+- QPO 调 MES 的出站配置优先读取系统配置页激活的 MES 配置；上述 `ERP_MES_*` 出站变量仅作为没有 active DB 配置时的 fallback。
+- MES 回调 QPO 的入站配置优先读取系统配置页 **入站接口 > MES 物料号回调**；`ERP_MES_CALLBACK_TOKEN` / `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为页面配置不存在时的 fallback。
 
 ### 6.2 `docker-compose.yml`
 
@@ -298,7 +302,7 @@ QPO 处理规则：
 ```text
 POST /api/integrations/mes/material-callback
 Content-Type: application/json
-Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}
+Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 ```
 
 请求体：
@@ -314,7 +318,7 @@ Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}
 }
 ```
 
-QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。
+QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。回调 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次并通过受控渠道交付 MES。
 
 ## 8. 后端设计
 
@@ -328,7 +332,7 @@ QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验
 | --- | --- | --- | --- |
 | `market:delivered-item:mes-sync` | `BUTTON` / `API` | `market:delivered-item:view` | 获取MES物料号 |
 
-MES 回调接口不使用用户登录态，不进入权限树；它通过 `ERP_MES_CALLBACK_TOKEN` 做机器认证。
+MES 回调接口不使用用户登录态，不进入权限树；它通过入站接口配置中的机器 token 做认证。页面配置不存在时才兼容 `ERP_MES_CALLBACK_TOKEN` fallback。
 
 默认角色：
 

@@ -39,7 +39,7 @@ class MesMaterialCallbackStage5DocumentationTest {
                         "callbackRequired",
                         "CALLBACK_PENDING",
                         "POST /api/integrations/mes/material-callback",
-                        "Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}",
+                        "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
                         "旧同步响应口径已废弃")
                 .doesNotContain("不需要 MES 回调");
     }
@@ -65,7 +65,7 @@ class MesMaterialCallbackStage5DocumentationTest {
                         "MES material callback conflict",
                         "ticketId",
                         "mesRequestId",
-                        "不得记录 MES token、回调 token、Authorization header、完整请求 JSON、完整响应 JSON 或完整回调 JSON");
+                        "不得记录 MES token、回调 token、token hash、Authorization header、完整请求 JSON、完整响应 JSON 或完整回调 JSON");
     }
 
     private static String read(Path path) throws IOException {

@@ -8,6 +8,8 @@
 
 > 阶段 6 收口说明：QPO 已支持同图号版本去重。去重键固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。相同 `图号 + 版本` 已有活跃主请求时，后续行会成为 QPO 内部关联等待行，不再重复请求 MES；已有唯一成功物料号时，后续行直接复用。MES 仍只回调主 `mesRequestId`，QPO fan-out 写回所有关联等待行。
 
+> 系统配置阶段 6 收口说明：本文档只描述 QPO 主动调用 MES 的出站物料号接口。MES 回调 QPO 的接口详情见 `08-MES物料号回调接口对接说明.md`；回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供，真实 token 单独交付，不写入本文档。
+
 ## 1. 对接结论
 
 - 调用方向：QPO -> MES。
@@ -50,8 +52,6 @@ ERP_MES_BASE_URL=http://mes-server:9000
 ERP_MES_AUTH_TOKEN=
 ERP_MES_MATERIAL_PATH=/api/mes/materials/resolve
 ERP_MES_TIMEOUT_MS=10000
-ERP_MES_CALLBACK_TOKEN=
-ERP_MES_CALLBACK_TOKEN_ENABLED=true
 ERP_PUBLIC_BASE_URL=http://192.168.70.21:8088
 ```
 
@@ -234,7 +234,7 @@ MES 返回待回调后，后续通过 QPO 回调接口把正式物料号写回 Q
 
 - 独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
 - 接口入口：`POST {QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback`；`QPO_PUBLIC_BASE_URL` 由部署后的可访问地址确定。
-- 认证方式：`Authorization: Bearer {ERP_MES_CALLBACK_TOKEN}`，是否启用由 QPO 配置 `ERP_MES_CALLBACK_TOKEN_ENABLED` 控制；正式 token 由 QPO 侧生成并配置后，通过受控渠道单独交付给 MES。
+- 认证方式：`Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`；回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供，真实 token 单独通过受控渠道交付。回调接口详情见 `08-MES物料号回调接口对接说明.md`。
 - 定位方式：MES 必须原样带回 QPO 请求中的主 `mesRequestId`，并带回 `ticketId` 做交叉校验。
 - 去重口径：同图号版本去重场景下，MES 仍只回调主 `mesRequestId`；关联等待行是 QPO 内部关系，MES 不需要分别回调每个相同图号版本零件。
 - 写回口径：QPO 收到主请求成功回调后写回 `order_delivery_ticket.material_no`，并 fan-out 写回所有关联等待行；销售订单来源提单行还会同步回写 `sales_order_item.material_no` 与物料号确认字段。
@@ -271,13 +271,13 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 | MES 内部异常 | HTTP 500 或 `success=false` | QPO 状态 `FAILED`。 |
 | 响应超时 | 无响应超过超时时间 | QPO 状态 `FAILED`，用户可重试。 |
 | `materialNo` 为空且无待回调标识 | `success=true` 但无物料号、无 `callbackRequired` | QPO 状态 `FAILED`。 |
-| 回调 token 错误 | 未带或带错 `ERP_MES_CALLBACK_TOKEN` | QPO 拒绝。 |
+| 回调 token 错误 | 未带或带错 `QPO_INBOUND_CALLBACK_TOKEN` | QPO 拒绝。 |
 
 ## 9. 双方上线前确认
 
 - QPO 后端服务器能访问 MES 的测试/生产地址。
 - MES 如需下载图纸，MES 服务器能访问 QPO 发出的 `drawingUrl`。
-- 双方确认 QPO 调 MES 的认证方式、MES 回调 QPO 的 `ERP_MES_CALLBACK_TOKEN`、IP 白名单、防火墙策略。
+- 双方确认 QPO 调 MES 的认证方式、MES 回调 QPO 的回调 URL、`QPO_INBOUND_CALLBACK_TOKEN`、IP 白名单、防火墙策略。
 - 双方确认超时时间、并发上限、是否需要限流。
 - MES 返回 JSON 字段名与本文档一致，尤其是 `success`、`status`、`callbackRequired`、`materialNo`、`message`、`mesRequestId`。
 - 双方约定联调样例数据，并保留 `ticketId` / `mesRequestId` / `externalTraceId` 方便查日志。

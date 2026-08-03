@@ -223,12 +223,12 @@ class SystemIntegrationConfigManageServiceTest {
     @Test
     void auditActionsExposeSystemModuleAndReadableLabels() {
         assertThat(AuditService.inferModule("SYSTEM_INTEGRATION_CONFIG_CREATE")).isEqualTo("SYSTEM");
-        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_CREATE")).contains("系统对接");
-        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_UPDATE")).contains("系统对接");
-        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_TEST")).contains("系统对接");
-        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_TEST_FAILED")).contains("系统对接");
-        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_ACTIVATE")).contains("系统对接");
-        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_DISABLE")).contains("系统对接");
+        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_CREATE")).contains("出站接口");
+        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_UPDATE")).contains("出站接口");
+        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_TEST")).contains("出站接口");
+        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_TEST_FAILED")).contains("出站接口");
+        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_ACTIVATE")).contains("出站接口");
+        assertThat(AuditService.labelForAction("SYSTEM_INTEGRATION_CONFIG_DISABLE")).contains("出站接口");
     }
 
     private SystemIntegrationConfigManageService service(
