@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -242,6 +243,79 @@ class ReleaseVersionDrawingStage1Test {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void replaceReleaseVersionDrawingsReplacesOnlyMatchingPartVersionAcrossMixedSources() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, auditService, null);
+        SalesOrderHeaderMapper salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        BusinessFileService businessFileService = mock(BusinessFileService.class);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
+
+        OrderRfq rfqOrder = releaseOrder(301, "RFQ-VERSION-001");
+        ItemQuoteVersion rfqVersionA = releaseItem(401, 301, "P-300", "A");
+        rfqVersionA.setDrawingUrl("/uploads/old-rfq-a.pdf");
+        ItemQuoteVersion rfqVersionB = releaseItem(402, 301, "P-300", "B");
+        rfqVersionB.setDrawingUrl("/uploads/old-rfq-b.pdf");
+        ItemQuoteVersion releasedRfqVersionA = releaseItem(403, 301, "P-300", "A");
+        releasedRfqVersionA.setDrawingUrl("/uploads/old-rfq-a-released.pdf");
+        releasedRfqVersionA.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
+        SalesOrderHeader salesOrder = salesOrder(3001L, "SO-VERSION-001");
+        SalesOrderItem salesVersionA = salesOrderItem(5001L, 3001L, "P-300", "A");
+        salesVersionA.setDrawingUrl("/uploads/old-sales-a.pdf");
+        salesVersionA.setHasDrawing(true);
+        SalesOrderItem salesVersionB = salesOrderItem(5002L, 3001L, "P-300", "B");
+        salesVersionB.setDrawingUrl("/uploads/old-sales-b.pdf");
+        salesVersionB.setHasDrawing(true);
+
+        when(orderMapper.selectByIdForUpdate(301)).thenReturn(rfqOrder);
+        when(salesOrderHeaderMapper.selectByIdForUpdate(3001L)).thenReturn(salesOrder);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(rfqVersionA, rfqVersionB, releasedRfqVersionA));
+        when(salesOrderItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(salesVersionA, salesVersionB));
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        MockMultipartFile versionDrawing = pdf("versionDrawings", "P-300_A.pdf");
+        when(businessFileService.saveDrawing(eq(rfqOrder), eq(versionDrawing), eq("RELEASE_DRAWING_REPLACE"), eq("301")))
+                .thenReturn(stored("/uploads/ACME/RFQ-VERSION-001/P-300_A-new.pdf", versionDrawing));
+        when(businessFileService.saveSalesOrderImportDrawing(eq("ACME"), eq("SO-VERSION-001"), eq(versionDrawing),
+                eq("RELEASE_DRAWING_REPLACE"), eq("3001")))
+                .thenReturn(stored("/uploads/ACME/SO-VERSION-001/P-300_A-new.pdf", versionDrawing));
+
+        Map<String, Object> result = service.replaceReleaseDrawings(
+                List.of(ReleaseOrderSource.rfq(301), ReleaseOrderSource.salesOrder(3001L)),
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(versionDrawing));
+        List<Map<String, Object>> replacedItems = (List<Map<String, Object>>) result.get("replacedItems");
+        List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("uploadCount", 1)
+                .containsEntry("matchedCount", 3)
+                .containsEntry("replacedCount", 2)
+                .containsEntry("unmatchedCount", 0)
+                .containsEntry("skippedCount", 1);
+        assertThat(rfqVersionA.getDrawingUrl()).isEqualTo("/uploads/ACME/RFQ-VERSION-001/P-300_A-new.pdf");
+        assertThat(salesVersionA.getDrawingUrl()).isEqualTo("/uploads/ACME/SO-VERSION-001/P-300_A-new.pdf");
+        assertThat(salesVersionA.getHasDrawing()).isTrue();
+        assertThat(rfqVersionB.getDrawingUrl()).isEqualTo("/uploads/old-rfq-b.pdf");
+        assertThat(salesVersionB.getDrawingUrl()).isEqualTo("/uploads/old-sales-b.pdf");
+        assertThat(releasedRfqVersionA.getDrawingUrl()).isEqualTo("/uploads/old-rfq-a-released.pdf");
+        assertThat(replacedItems).extracting(row -> row.get("sourceItemId")).containsExactlyInAnyOrder(401L, 5001L);
+        assertThat(skippedItems).extracting(row -> row.get("sourceItemId")).containsExactly(403L);
+        assertThat(skippedItems).extracting(row -> row.get("reason")).containsExactly("Item is released");
+        verify(itemMapper).updateById(rfqVersionA);
+        verify(salesOrderItemMapper).updateById(salesVersionA);
+        verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("release_drawing_replace"), any(),
+                isNull(), any(Map.class), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=2"), isNull());
+    }
+
+    @Test
     void updateAndReplaceRejectOrdersOutsideDataScope() {
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
@@ -343,8 +417,12 @@ class ReleaseVersionDrawingStage1Test {
     }
 
     private MockMultipartFile pdf(String fileName) {
+        return pdf("drawings", fileName);
+    }
+
+    private MockMultipartFile pdf(String fieldName, String fileName) {
         return new MockMultipartFile(
-                "drawings",
+                fieldName,
                 fileName,
                 "application/pdf",
                 "%PDF-1.4".getBytes(StandardCharsets.UTF_8)

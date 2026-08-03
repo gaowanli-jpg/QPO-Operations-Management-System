@@ -246,8 +246,12 @@ public class MarketController {
     public Map<String, Object> replaceReleaseDrawings(
             @RequestParam(value = "sources", required = false) String sourcesJson,
             @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
-            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
-        return internalTargetLeadTimeService.replaceReleaseDrawings(parseReleaseSources(sourcesJson, rfqIdsJson), drawings);
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        return internalTargetLeadTimeService.replaceReleaseDrawings(
+                parseReleaseSources(sourcesJson, rfqIdsJson),
+                drawings,
+                versionDrawings);
     }
 
     @GetMapping("/release/tickets/{rfqId}")

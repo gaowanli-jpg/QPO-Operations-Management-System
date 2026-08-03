@@ -212,11 +212,19 @@ public class InternalTargetLeadTimeService {
 
     @Transactional
     public Map<String, Object> replaceReleaseDrawings(List<ReleaseOrderSource> sources, List<MultipartFile> drawings) {
+        return replaceReleaseDrawings(sources, drawings, null);
+    }
+
+    @Transactional
+    public Map<String, Object> replaceReleaseDrawings(
+            List<ReleaseOrderSource> sources,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
         List<ReleaseOrderSource> normalizedSources = normalizeReleaseSourcesFromInput(new ArrayList<>(sources == null ? List.of() : sources));
         if (normalizedSources.isEmpty()) {
             throw new RuntimeException("Please select at least one order.");
         }
-        if (drawings == null || drawings.isEmpty()) {
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings)) {
             throw new RuntimeException("Please upload at least one PDF drawing.");
         }
 
@@ -226,6 +234,8 @@ public class InternalTargetLeadTimeService {
         List<OrderDeliveryTicket> rfqTickets = listTicketsForItems(rfqItems);
         List<SalesOrderItem> salesOrderItems = listSalesOrderItemsBatch(salesOrderById.keySet().stream().toList());
         Map<String, List<ReleaseDrawingTarget>> targetsByPartNo = new LinkedHashMap<>();
+        Map<String, List<ReleaseDrawingTarget>> targetsByPartNoVersion = new LinkedHashMap<>();
+        Set<DrawingPartNoResolver.DrawingIdentity> targetIdentities = new HashSet<>();
         for (ItemQuoteVersion item : rfqItems) {
             int ticketedQty = ticketedQty(item, rfqTickets);
             int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty);
@@ -238,6 +248,7 @@ public class InternalTargetLeadTimeService {
             if (!partNo.isEmpty()) {
                 targetsByPartNo.computeIfAbsent(partNo, ignored -> new ArrayList<>()).add(target);
             }
+            addVersionDrawingTarget(target, targetsByPartNoVersion, targetIdentities);
         }
         for (SalesOrderItem item : salesOrderItems) {
             SalesOrderHeader order = salesOrderById.get(item.getSalesOrderId());
@@ -250,6 +261,7 @@ public class InternalTargetLeadTimeService {
             if (!partNo.isEmpty()) {
                 targetsByPartNo.computeIfAbsent(partNo, ignored -> new ArrayList<>()).add(target);
             }
+            addVersionDrawingTarget(target, targetsByPartNoVersion, targetIdentities);
         }
 
         List<Map<String, Object>> replacedItems = new ArrayList<>();
@@ -257,41 +269,47 @@ public class InternalTargetLeadTimeService {
         List<Map<String, Object>> skippedFiles = new ArrayList<>();
         List<Map<String, Object>> skippedItems = new ArrayList<>();
         int matchedCount = 0;
+        Set<String> versionReplacedTargetKeys = new HashSet<>();
+        int uploadCount = fileCount(drawings) + fileCount(versionDrawings);
 
         try {
-            for (MultipartFile drawing : drawings) {
-                String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
-                if (drawing == null || cleanFileName.isEmpty() || !cleanFileName.toLowerCase().endsWith(".pdf")) {
-                    skippedFiles.add(buildFileResult(cleanFileName, "", "Not a PDF file"));
-                    continue;
+            if (versionDrawings != null) {
+                for (MultipartFile drawing : versionDrawings) {
+                    matchedCount += replaceReleaseDrawing(
+                            drawing,
+                            true,
+                            targetsByPartNo,
+                            targetsByPartNoVersion,
+                            targetIdentities,
+                            Set.of(),
+                            versionReplacedTargetKeys,
+                            replacedItems,
+                            unmatchedDrawings,
+                            skippedFiles,
+                            skippedItems);
                 }
-
-                String partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, targetsByPartNo.keySet());
-                List<ReleaseDrawingTarget> matchedTargets = targetsByPartNo.get(partNoFromFileName);
-                if (matchedTargets == null || matchedTargets.isEmpty()) {
-                    unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "No matching item in selected orders"));
-                    continue;
-                }
-
-                matchedCount += matchedTargets.size();
-                Map<String, String> newUrlBySource = new LinkedHashMap<>();
-                for (ReleaseDrawingTarget target : matchedTargets) {
-                    if (!target.mutable()) {
-                        skippedItems.add(buildDrawingItemResult(target, cleanFileName, target.blockedReason()));
-                        continue;
-                    }
-                    String sourceKey = target.sourceType().name() + ":" + target.sourceOrderId();
-                    String fileUrl = newUrlBySource.computeIfAbsent(sourceKey,
-                            ignored -> saveReleaseDrawing(drawing, cleanFileName, target));
-                    applyReleaseDrawing(target, fileUrl);
-                    replacedItems.add(buildDrawingItemResult(target, cleanFileName, "Replaced"));
+            }
+            if (drawings != null) {
+                for (MultipartFile drawing : drawings) {
+                    matchedCount += replaceReleaseDrawing(
+                            drawing,
+                            false,
+                            targetsByPartNo,
+                            targetsByPartNoVersion,
+                            targetIdentities,
+                            versionReplacedTargetKeys,
+                            null,
+                            replacedItems,
+                            unmatchedDrawings,
+                            skippedFiles,
+                            skippedItems);
                 }
             }
         } catch (ReleaseDrawingSaveException e) {
-            log.error("Release drawings replace failed sources={} uploadCount={}", sourceLogValue(normalizedSources), drawings.size(), e);
+            log.error("Release drawings replace failed sources={} uploadCount={}", sourceLogValue(normalizedSources), uploadCount, e);
             throw new RuntimeException(e.getMessage(), e);
         } catch (RuntimeException e) {
-            log.error("Release drawings replace failed sources={} uploadCount={}", sourceLogValue(normalizedSources), drawings.size(), e);
+            log.error("Release drawings replace failed sources={} uploadCount={}", sourceLogValue(normalizedSources), uploadCount, e);
             throw e;
         }
 
@@ -303,7 +321,7 @@ public class InternalTargetLeadTimeService {
         auditSummary.put("salesOrderIds", salesOrderIds);
         auditSummary.put("rfqNos", rfqOrderById.values().stream().map(OrderRfq::getRfqNo).toList());
         auditSummary.put("salesOrderNos", salesOrderById.values().stream().map(SalesOrderHeader::getSalesOrderNo).toList());
-        auditSummary.put("uploadCount", drawings.size());
+        auditSummary.put("uploadCount", uploadCount);
         auditSummary.put("matchedCount", matchedCount);
         auditSummary.put("replacedCount", replacedItems.size());
         auditSummary.put("unmatchedCount", unmatchedDrawings.size());
@@ -330,7 +348,7 @@ public class InternalTargetLeadTimeService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
         result.put("message", "Drawing replacement completed, replaced " + replacedItems.size() + " items.");
-        result.put("uploadCount", drawings.size());
+        result.put("uploadCount", uploadCount);
         result.put("matchedCount", matchedCount);
         result.put("replacedCount", replacedItems.size());
         result.put("unmatchedCount", unmatchedDrawings.size());
@@ -340,7 +358,7 @@ public class InternalTargetLeadTimeService {
         result.put("skippedFiles", skippedFiles);
         result.put("skippedItems", skippedItems);
         log.info("Release drawings replace completed sources={} uploadCount={} matchedCount={} replacedCount={} unmatchedCount={} skippedCount={}",
-                sourceLogValue(normalizedSources), drawings.size(), matchedCount, replacedItems.size(), unmatchedDrawings.size(),
+                sourceLogValue(normalizedSources), uploadCount, matchedCount, replacedItems.size(), unmatchedDrawings.size(),
                 skippedFiles.size() + skippedItems.size());
         if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty() || !skippedItems.isEmpty()) {
             log.warn("Release drawings replace completed with warnings sources={} unmatchedCount={} skippedCount={}",
@@ -1529,6 +1547,90 @@ public class InternalTargetLeadTimeService {
 
     private String itemKey(String partNo, String version) {
         return normalizePartNo(partNo) + "||" + normalizeVersion(version);
+    }
+
+    private void addVersionDrawingTarget(
+            ReleaseDrawingTarget target,
+            Map<String, List<ReleaseDrawingTarget>> targetsByPartNoVersion,
+            Set<DrawingPartNoResolver.DrawingIdentity> targetIdentities) {
+        String partNo = normalizePartNo(target.partNo());
+        String version = normalizeVersion(target.version());
+        if (partNo.isEmpty() || version.isEmpty()) {
+            return;
+        }
+        targetsByPartNoVersion.computeIfAbsent(itemKey(partNo, version), ignored -> new ArrayList<>()).add(target);
+        targetIdentities.add(new DrawingPartNoResolver.DrawingIdentity(partNo, version));
+    }
+
+    private int replaceReleaseDrawing(
+            MultipartFile drawing,
+            boolean matchByPartNoVersion,
+            Map<String, List<ReleaseDrawingTarget>> targetsByPartNo,
+            Map<String, List<ReleaseDrawingTarget>> targetsByPartNoVersion,
+            Set<DrawingPartNoResolver.DrawingIdentity> targetIdentities,
+            Set<String> protectedTargetKeys,
+            Set<String> replacedTargetKeys,
+            List<Map<String, Object>> replacedItems,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles,
+            List<Map<String, Object>> skippedItems) {
+        String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+        if (drawing == null || cleanFileName.isEmpty() || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+            skippedFiles.add(buildFileResult(cleanFileName, "", "Not a PDF file"));
+            return 0;
+        }
+
+        String partNoFromFileName;
+        List<ReleaseDrawingTarget> matchedTargets;
+        if (matchByPartNoVersion) {
+            DrawingPartNoResolver.DrawingIdentity identity =
+                    DrawingPartNoResolver.extractPartNoVersion(cleanFileName, targetIdentities);
+            partNoFromFileName = identity == null
+                    ? DrawingPartNoResolver.extractPartNo(cleanFileName, targetsByPartNo.keySet())
+                    : identity.partNo();
+            matchedTargets = identity == null ? null : targetsByPartNoVersion.get(itemKey(identity.partNo(), identity.version()));
+        } else {
+            partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, targetsByPartNo.keySet());
+            matchedTargets = targetsByPartNo.get(partNoFromFileName);
+        }
+
+        if (matchedTargets == null || matchedTargets.isEmpty()) {
+            unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "No matching item in selected orders"));
+            return 0;
+        }
+
+        Map<String, String> newUrlBySource = new LinkedHashMap<>();
+        for (ReleaseDrawingTarget target : matchedTargets) {
+            if (protectedTargetKeys != null && protectedTargetKeys.contains(targetKey(target))) {
+                skippedItems.add(buildDrawingItemResult(target, cleanFileName, "Already replaced by version drawing"));
+                continue;
+            }
+            if (!target.mutable()) {
+                skippedItems.add(buildDrawingItemResult(target, cleanFileName, target.blockedReason()));
+                continue;
+            }
+            String sourceKey = target.sourceType().name() + ":" + target.sourceOrderId();
+            String fileUrl = newUrlBySource.computeIfAbsent(sourceKey,
+                    ignored -> saveReleaseDrawing(drawing, cleanFileName, target));
+            applyReleaseDrawing(target, fileUrl);
+            if (replacedTargetKeys != null) {
+                replacedTargetKeys.add(targetKey(target));
+            }
+            replacedItems.add(buildDrawingItemResult(target, cleanFileName, "Replaced"));
+        }
+        return matchedTargets.size();
+    }
+
+    private String targetKey(ReleaseDrawingTarget target) {
+        return target.sourceType().name() + ":" + target.sourceItemId();
+    }
+
+    private boolean isEmptyFiles(List<MultipartFile> files) {
+        return files == null || files.isEmpty();
+    }
+
+    private int fileCount(List<MultipartFile> files) {
+        return files == null ? 0 : files.size();
     }
 
     private void assertReleaseItemMutable(ItemQuoteVersion item, List<OrderDeliveryTicket> tickets) {
