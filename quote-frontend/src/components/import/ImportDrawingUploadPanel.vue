@@ -149,11 +149,28 @@ const fileKey = (file, index) => `${file?.name || 'pdf'}|${file?.size ?? ''}|${f
 </script>
 
 <style scoped>
+.import-drawing-upload-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .upload-alert {
+  display: flex;
+  align-items: flex-start;
+  min-height: 56px;
   margin-bottom: 16px;
 }
 
 .custom-dropzone {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 260px;
+  box-sizing: border-box;
   border: 1px dashed #aab6c8;
   border-radius: 8px;
   background: var(--erp-surface-soft);
@@ -180,6 +197,10 @@ const fileKey = (file, index) => `${file?.name || 'pdf'}|${file?.size ?? ''}|${f
 }
 
 .folder-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
   margin-top: 14px;
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-sm);
@@ -193,10 +214,13 @@ const fileKey = (file, index) => `${file?.name || 'pdf'}|${file?.size ?? ''}|${f
   justify-content: center;
   gap: 10px;
   width: 100%;
-  margin-top: 12px;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .import-axis-button {
+  width: 100%;
+  max-width: 240px;
   justify-content: center;
   min-width: 240px;
 }

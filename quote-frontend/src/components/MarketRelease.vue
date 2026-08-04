@@ -1549,14 +1549,20 @@ const statusTagType = (status) => {
 .drawing-replace-dual-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: 14px;
 }
 
 .drawing-replace-entry {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
 .drawing-replace-entry-title {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
   margin-bottom: 8px;
   padding-left: 10px;
   border-left: 3px solid var(--erp-primary);
@@ -1591,12 +1597,26 @@ const statusTagType = (status) => {
   font-size: 15px;
 }
 
+.drawing-replace-dropzone {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 280px;
+  box-sizing: border-box;
+}
+
 .drawing-replace-dropzone :deep(.el-upload__tip) {
+  min-height: 48px;
   margin-top: 8px;
   color: var(--erp-text-secondary);
 }
 
 .folder-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
   margin-top: 12px;
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-sm);
@@ -1606,7 +1626,10 @@ const statusTagType = (status) => {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  margin-top: 12px;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .drawing-replace-upload-actions :deep(.el-button) {
@@ -1618,6 +1641,7 @@ const statusTagType = (status) => {
 }
 
 .folder-select-button {
+  width: 100%;
   min-height: 32px;
   min-width: 150px;
   padding-inline: 14px;

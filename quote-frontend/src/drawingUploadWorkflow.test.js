@@ -46,6 +46,22 @@ describe('drawing upload workflow parity', () => {
     expect(source).toContain('emit(\'update:modelValue\'')
   })
 
+  test('shared drawing upload panel keeps paired entrances equal height and action buttons aligned', () => {
+    const panel = readFileSync(importDrawingPanelPath, 'utf8')
+    const marketDashboard = readComponent('MarketDashboard.vue')
+
+    expect(panel).toContain('.import-drawing-upload-panel {\n  display: flex')
+    expect(panel).toContain('.upload-alert {\n  display: flex')
+    expect(panel).toContain('min-height: 56px')
+    expect(panel).toContain('.custom-dropzone {\n  display: flex')
+    expect(panel).toContain('min-height: 260px')
+    expect(panel).toContain('.import-upload-button-stack {\n  display: flex')
+    expect(panel).toContain('margin-top: auto')
+    expect(panel).toContain('.import-axis-button {\n  width: 100%')
+    expect(marketDashboard).toContain('align-items: stretch')
+    expect(marketDashboard).toContain('height: 100%')
+  })
+
   test('market import supports dropping folders, choosing folders, and choosing multiple PDFs', () => {
     const source = readComponent('MarketDashboard.vue')
 

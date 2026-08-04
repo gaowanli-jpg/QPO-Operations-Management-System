@@ -772,11 +772,13 @@ const submitRfqPackage = async () => {
 .drawing-upload-dual-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: 16px;
   padding: 18px 20px;
 }
 
 .drawing-upload-dual-grid :deep(.import-drawing-upload-panel) {
+  height: 100%;
   min-width: 0;
 }
 

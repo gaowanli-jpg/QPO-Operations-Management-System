@@ -87,4 +87,19 @@ describe('release drawing replacement stage 4', () => {
     expect(source).toContain('将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处')
     expect(source).toContain('无需勾选零件')
   })
+
+  test('market release keeps paired drawing replacement entrances equal height with aligned buttons', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+
+    expect(source).toContain('.drawing-replace-dual-grid {\n  display: grid')
+    expect(source).toContain('align-items: stretch')
+    expect(source).toContain('.drawing-replace-entry {\n  display: flex')
+    expect(source).toContain('.drawing-replace-entry-title {\n  min-height: 24px')
+    expect(source).toContain('.drawing-replace-dropzone {\n  display: flex')
+    expect(source).toContain('min-height: 280px')
+    expect(source).toContain('.drawing-replace-dropzone :deep(.el-upload__tip) {\n  min-height: 48px')
+    expect(source).toContain('.drawing-replace-upload-actions {\n  display: flex')
+    expect(source).toContain('margin-top: auto')
+    expect(source).toContain('.folder-select-button {\n  width: 100%')
+  })
 })

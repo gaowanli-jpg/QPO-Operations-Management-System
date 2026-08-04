@@ -53,4 +53,17 @@ describe('shared supplement drawing dialog', () => {
     expect(dialog).toContain('result.unmatchedDrawings')
     expect(dialog).toContain('result.skippedFiles')
   })
+
+  test('keeps paired supplement drawing entrances equal height with aligned buttons', () => {
+    expect(dialog).toContain('.supplement-upload-dual-grid {\n  display: grid')
+    expect(dialog).toContain('align-items: stretch')
+    expect(dialog).toContain('.supplement-upload-entry {\n  display: flex')
+    expect(dialog).toContain('.supplement-upload-title {\n  min-height: 24px')
+    expect(dialog).toContain('.supplement-dropzone {\n  display: flex')
+    expect(dialog).toContain('min-height: 280px')
+    expect(dialog).toContain('.supplement-dropzone :deep(.el-upload__tip) {\n  min-height: 48px')
+    expect(dialog).toContain('.supplement-upload-actions {\n  display: flex')
+    expect(dialog).toContain('margin-top: auto')
+    expect(dialog).toContain('.folder-select-button {\n  width: 100%')
+  })
 })

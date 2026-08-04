@@ -272,7 +272,26 @@ const removeVersionFile = (index) => {
   font-size: 42px;
 }
 
+.supplement-dropzone {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 280px;
+  box-sizing: border-box;
+}
+
+.supplement-dropzone :deep(.el-upload__tip) {
+  min-height: 48px;
+  margin-top: 8px;
+  color: var(--erp-text-secondary);
+}
+
 .folder-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
   margin-top: 12px;
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-sm);
@@ -281,14 +300,20 @@ const removeVersionFile = (index) => {
 .supplement-upload-dual-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: 14px;
 }
 
 .supplement-upload-entry {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
 .supplement-upload-title {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
   margin-bottom: 8px;
   padding-left: 10px;
   border-left: 3px solid var(--erp-primary);
@@ -303,7 +328,9 @@ const removeVersionFile = (index) => {
   align-items: stretch;
   justify-content: center;
   gap: 10px;
-  margin-top: 12px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .supplement-upload-actions :deep(.el-button) {
@@ -315,6 +342,7 @@ const removeVersionFile = (index) => {
 }
 
 .folder-select-button {
+  width: 100%;
   min-height: 32px;
   min-width: 150px;
   padding-inline: 14px;
