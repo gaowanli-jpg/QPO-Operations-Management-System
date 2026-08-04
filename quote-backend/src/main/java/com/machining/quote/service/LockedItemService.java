@@ -83,6 +83,7 @@ public class LockedItemService {
         applyLike(query, "alloc.customer_project_no", req.getCustomerProjectNo());
         applyEquals(query, "alloc.item_type", req.getItemType());
         applyEquals(query, "alloc.allocation_type", normalizeUpper(req.getAllocationType()));
+        applyEquals(query, "alloc.mes_production_status", normalizeUpper(req.getMesProductionStatus()));
         applyLike(query, "alloc.wms_production_order_no", req.getWmsProductionOrderNo());
         if (req.getDateFrom() != null) {
             query.ge("alloc.delivery_date", req.getDateFrom());

@@ -30,6 +30,10 @@ class LockedItemQueryTest {
             "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
     private static final Path MES_PRODUCTION_DISPATCH_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
+    private static final Path MES_PRODUCTION_STATUS_INDEX_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V82__locked_item_mes_production_status_paging_index.sql");
+    private static final Path SCHEMA_SQL = Path.of(
+            "src", "main", "resources", "schema.sql");
 
     @Test
     void lockedItemQueryContractFreezesEndpointsAndPermission() throws IOException {
@@ -216,6 +220,8 @@ class LockedItemQueryTest {
         String migration = read(MES_PRODUCTION_DISPATCH_MIGRATION);
         String entity = read(ALLOCATION_ENTITY);
         String dto = read(LOCKED_ITEM_DTO);
+        String queryReq = read(LOCKED_ITEM_QUERY_REQ);
+        String service = read(LOCKED_ITEM_SERVICE);
         String mapper = read(ALLOCATION_MAPPER);
 
         assertThat(migration)
@@ -245,6 +251,12 @@ class LockedItemQueryTest {
                         "private LocalDateTime mesProductionSyncedAt;",
                         "private String mesProductionMessage;"
                 );
+        assertThat(queryReq)
+                .as("Locked-item list filtering must wire the frontend MES production status filter into the backend query")
+                .contains("private String mesProductionStatus;");
+        assertThat(service)
+                .as("The MES production status filter should hit the dedicated allocation status index")
+                .contains("applyEquals(query, \"alloc.mes_production_status\", normalizeUpper(req.getMesProductionStatus()))");
         assertThat(mapper)
                 .contains(
                         "alloc.ticket_qty",
@@ -253,6 +265,28 @@ class LockedItemQueryTest {
                         "alloc.mes_production_external_id",
                         "alloc.mes_production_synced_at",
                         "alloc.mes_production_message"
+                );
+    }
+
+    @Test
+    void lockedItemMesProductionStatusHasDedicatedPagingIndex() throws IOException {
+        String migration = read(MES_PRODUCTION_STATUS_INDEX_MIGRATION);
+        String schema = read(SCHEMA_SQL);
+
+        assertThat(migration)
+                .as("Direct production-status filtering should not depend on the status+type composite index for paging")
+                .contains(
+                        "idx_delivery_allocation_mes_production_status_id",
+                        "ON order_delivery_ticket_allocation(mes_production_status, id DESC)"
+                );
+        assertThat(schema)
+                .as("Fresh schema should include the MES production status snapshot fields and the same paging index")
+                .contains(
+                        "ticket_qty INTEGER",
+                        "mes_production_status VARCHAR(30) DEFAULT 'PENDING'",
+                        "mes_production_request_id VARCHAR(80)",
+                        "idx_delivery_allocation_mes_production_status_id",
+                        "ON order_delivery_ticket_allocation(mes_production_status, id DESC)"
                 );
     }
 

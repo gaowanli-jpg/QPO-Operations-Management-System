@@ -496,6 +496,12 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     part_net_weight NUMERIC(14, 4),
     wms_production_order_no VARCHAR(100),
     source_payload JSONB DEFAULT '{}'::jsonb,
+    ticket_qty INTEGER,
+    mes_production_status VARCHAR(30) DEFAULT 'PENDING',
+    mes_production_request_id VARCHAR(80),
+    mes_production_external_id VARCHAR(120),
+    mes_production_synced_at TIMESTAMP,
+    mes_production_message TEXT,
     status VARCHAR(30) DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -524,6 +530,12 @@ ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS process_ro
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_data JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS ticket_qty INTEGER;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS mes_production_status VARCHAR(30) DEFAULT 'PENDING';
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS mes_production_request_id VARCHAR(80);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS mes_production_external_id VARCHAR(120);
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS mes_production_synced_at TIMESTAMP;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS mes_production_message TEXT;
 ALTER TABLE order_delivery_ticket_allocation
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB;
@@ -548,6 +560,16 @@ CREATE INDEX IF NOT EXISTS idx_delivery_allocation_item_type
 
 CREATE INDEX IF NOT EXISTS idx_delivery_allocation_source
     ON order_delivery_ticket_allocation(source_type, source_order_id, source_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_mes_production_status
+    ON order_delivery_ticket_allocation(mes_production_status, allocation_type, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_mes_production_status_id
+    ON order_delivery_ticket_allocation(mes_production_status, id DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_delivery_allocation_mes_production_request
+    ON order_delivery_ticket_allocation(mes_production_request_id)
+    WHERE mes_production_request_id IS NOT NULL AND TRIM(mes_production_request_id) <> '';
 
 INSERT INTO dict_material (
     material_name, material_type, remarks, density, plate_density, plate_price,
