@@ -56,6 +56,7 @@ describe('Dashboard prototype stage 5 interactive workbench components', () => {
     expect(source).toContain('salesQuoted')
     expect(source).toContain('totalFocus')
     expect(source).toContain('dashboard-number-muted')
+    expect(source).toContain('dashboard-matrix-empty')
     expect(source).toContain('isZeroValue')
     expect(source).toContain("emit('rfq-select'")
     expect(source).toContain("emit('sales-select'")

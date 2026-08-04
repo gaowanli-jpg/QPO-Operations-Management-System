@@ -1,5 +1,5 @@
 <template>
-  <section class="erp-page dashboard-home">
+  <section class="erp-page dashboard-home" v-loading="loading">
     <header class="erp-page-header dashboard-hero">
       <div class="dashboard-hero-copy">
         <p class="dashboard-eyebrow">QPO 工作台</p>
@@ -16,9 +16,14 @@
       <div class="dashboard-refresh-panel dashboard-surface">
         <span class="dashboard-refresh-label">数据更新时间</span>
         <strong>{{ updatedAt }}</strong>
-        <el-button type="primary" plain :icon="Refresh" @click="refreshUpdatedAt">刷新</el-button>
+        <el-button type="primary" plain :icon="Refresh" :loading="loading" @click="refreshDashboard">刷新</el-button>
       </div>
     </header>
+
+    <section v-if="errorMessage" class="erp-surface dashboard-error-state">
+      <span>{{ errorMessage }}</span>
+      <el-button type="primary" plain size="small" :loading="loading" @click="loadDashboardOverview">重试</el-button>
+    </section>
 
     <div class="dashboard-summary-grid">
       <DashboardSummaryCard
@@ -74,68 +79,103 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
+import { getDashboardOverview } from '../../services/dashboardApi'
 import { useAuthStore } from '../../stores/authStore'
 import DashboardAttentionList from './DashboardAttentionList.vue'
 import DashboardChartCard from './DashboardChartCard.vue'
 import DashboardCustomerMatrix from './DashboardCustomerMatrix.vue'
 import DashboardSummaryCard from './DashboardSummaryCard.vue'
 import DashboardTodoCard from './DashboardTodoCard.vue'
-import { dashboardMockData } from './dashboardMockData'
 import { goDashboardTarget } from './dashboardNavigation'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const updatedAtValue = ref(new Date(dashboardMockData.updatedAt))
+const dashboardData = ref(emptyDashboardData())
+const loading = ref(false)
+const errorMessage = ref('')
 
 const rfqPalette = ['#526170', '#9a5b13', '#1769aa']
 const salesPalette = ['#1769aa', '#20724f', '#9a5b13', '#526170']
 
-const formatDateTime = (value) => value.toLocaleString('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false
-}).replace(/\//g, '-')
+const updatedAt = computed(() => dashboardData.value.updatedAt || (loading.value ? '加载中' : '--'))
+const summaryCards = computed(() => dashboardData.value.summaryCards)
+const rfqStatusDistribution = computed(() => dashboardData.value.rfqStatusDistribution)
+const salesQuotedCustomerDistribution = computed(() => dashboardData.value.salesQuotedCustomerDistribution)
+const customerMatrix = computed(() => dashboardData.value.customerMatrix)
+const todoCards = computed(() => dashboardData.value.todoCards)
+const attentionItems = computed(() => dashboardData.value.attentionItems)
 
-const updatedAt = computed(() => formatDateTime(updatedAtValue.value))
-const summaryCards = dashboardMockData.summaryCards
-const rfqStatusDistribution = dashboardMockData.rfqStatusDistribution
-const salesQuotedCustomerDistribution = dashboardMockData.salesQuotedCustomerDistribution
-const customerMatrix = dashboardMockData.customerMatrix
-const todoCards = dashboardMockData.todoCards
-const attentionItems = dashboardMockData.attentionItems
+const visibleSummaryCards = computed(() => summaryCards.value)
+const visibleTodoCards = computed(() => todoCards.value)
+const visibleAttentionItems = computed(() => attentionItems.value)
 
-const visibleSummaryCards = summaryCards
-const visibleTodoCards = todoCards
-const visibleAttentionItems = attentionItems
+const emptyDashboardData = () => ({
+  updatedAt: '',
+  summaryCards: [],
+  rfqStatusDistribution: [],
+  salesQuotedCustomerDistribution: [],
+  customerMatrix: [],
+  todoCards: [],
+  attentionItems: []
+})
 
-const refreshUpdatedAt = () => {
-  updatedAtValue.value = new Date()
+const arrayOrEmpty = (value) => Array.isArray(value) ? value : []
+
+const normalizeDashboardData = (payload = {}) => ({
+  updatedAt: payload?.updatedAt || '',
+  summaryCards: arrayOrEmpty(payload?.summaryCards),
+  rfqStatusDistribution: arrayOrEmpty(payload?.rfqStatusDistribution),
+  salesQuotedCustomerDistribution: arrayOrEmpty(payload?.salesQuotedCustomerDistribution),
+  customerMatrix: arrayOrEmpty(payload?.customerMatrix),
+  todoCards: arrayOrEmpty(payload?.todoCards),
+  attentionItems: arrayOrEmpty(payload?.attentionItems)
+})
+
+const requestErrorMessage = (error) => error?.payload?.message || error?.response?.data?.message || error?.message || '首页看板数据加载失败，请稍后重试。'
+
+const loadDashboardOverview = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await getDashboardOverview()
+    dashboardData.value = normalizeDashboardData(response)
+  } catch (error) {
+    errorMessage.value = requestErrorMessage(error)
+  } finally {
+    loading.value = false
+  }
 }
+
+const refreshDashboard = () => loadDashboardOverview()
+
+const compactQuery = (query) => Object.fromEntries(
+  Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '')
+)
 
 const goToItem = (item) => goDashboardTarget(router, item)
 
 const goToOrders = (row, status) => goDashboardTarget(router, {
   path: '/orders',
-  query: {
+  query: compactQuery({
     status,
-    customerId: row.customerId
-  }
+    customerId: row.customerId,
+    customerName: row.customerName
+  })
 })
 
 const goToSalesOrders = (row) => goDashboardTarget(router, {
   path: '/sales-orders',
-  query: {
+  query: compactQuery({
     status: '已报价',
-    customerId: row.customerId
-  }
+    customerId: row.customerId,
+    customerName: row.customerName
+  })
 })
+
+onMounted(loadDashboardOverview)
 </script>
 
 <style scoped>
@@ -143,6 +183,7 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
   display: flex;
   flex-direction: column;
   gap: var(--erp-space-5);
+  min-height: 520px;
 }
 
 .dashboard-hero {
@@ -193,6 +234,17 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
 .dashboard-refresh-label {
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-sm);
+}
+
+.dashboard-error-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-3) var(--erp-space-4);
+  color: var(--erp-danger);
+  border-color: var(--erp-danger-soft);
+  background: var(--erp-danger-soft);
 }
 
 .dashboard-summary-grid,
@@ -251,12 +303,14 @@ const goToSalesOrders = (row) => goDashboardTarget(router, {
 
 @media (max-width: 760px) {
   .dashboard-hero,
-  .dashboard-refresh-panel {
+  .dashboard-refresh-panel,
+  .dashboard-error-state {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .dashboard-refresh-panel {
+  .dashboard-refresh-panel,
+  .dashboard-error-state {
     width: 100%;
     box-sizing: border-box;
     white-space: normal;

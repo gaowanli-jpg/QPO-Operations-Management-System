@@ -16,6 +16,7 @@
         <span>销售已报价</span>
         <span>关注合计</span>
       </div>
+      <div v-if="rows.length === 0" class="dashboard-matrix-empty">当前权限范围内暂无客户状态统计</div>
       <div
         v-for="row in rows"
         :key="row.customerId"
@@ -150,6 +151,17 @@ const isZeroValue = (value) => Number(value) === 0
 
 .dashboard-matrix-row:last-child {
   border-bottom: 0;
+}
+
+.dashboard-matrix-empty {
+  min-width: 820px;
+  margin-top: var(--erp-space-3);
+  padding: var(--erp-space-5);
+  color: var(--erp-text-secondary);
+  background: var(--erp-surface-muted);
+  border: 1px dashed var(--erp-border-strong);
+  border-radius: var(--erp-radius-lg);
+  text-align: center;
 }
 
 .dashboard-matrix-head {

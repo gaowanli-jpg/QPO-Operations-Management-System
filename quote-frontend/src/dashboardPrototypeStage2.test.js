@@ -81,10 +81,9 @@ describe('Dashboard prototype stage 2 navigation helpers', () => {
 })
 
 describe('Dashboard prototype stage 2 page wiring', () => {
-  test('renders every dashboard area from mock data without calling list APIs', () => {
+  test('keeps mock data as fixture while production dashboard avoids business list APIs', () => {
     const dashboardSource = readFileSync(resolve(dashboardDir, 'DashboardHome.vue'), 'utf8')
 
-    expect(dashboardSource).toContain("import { dashboardMockData } from './dashboardMockData'")
     expect(dashboardSource).toContain("import { goDashboardTarget } from './dashboardNavigation'")
     expect(dashboardSource).toContain('summaryCards')
     expect(dashboardSource).toContain('rfqStatusDistribution')
@@ -92,8 +91,9 @@ describe('Dashboard prototype stage 2 page wiring', () => {
     expect(dashboardSource).toContain('customerMatrix')
     expect(dashboardSource).toContain('todoCards')
     expect(dashboardSource).toContain('attentionItems')
+    expect(dashboardSource).not.toContain("import { dashboardMockData } from './dashboardMockData'")
     expect(dashboardSource).not.toContain('marketApi')
     expect(dashboardSource).not.toContain('deliveredItemApi')
-    expect(dashboardSource).not.toContain('/api/')
+    expect(dashboardSource).not.toContain('orderApi')
   })
 })
