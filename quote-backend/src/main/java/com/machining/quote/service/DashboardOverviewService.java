@@ -1,7 +1,9 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.PermissionInfoDTO;
 import com.machining.quote.dto.dashboard.DashboardAttentionItemDTO;
 import com.machining.quote.dto.dashboard.DashboardChartItemDTO;
 import com.machining.quote.dto.dashboard.DashboardCustomerCountRow;
@@ -16,9 +18,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -31,11 +35,29 @@ public class DashboardOverviewService {
     );
     private static final int SALES_CUSTOMER_CHART_LIMIT = 8;
     private static final int CUSTOMER_MATRIX_LIMIT = 20;
+    private static final List<String> RFQ_DOMAIN_PERMISSIONS = List.of(
+            "market:order:view",
+            "engineer:setup:view",
+            "engineer:pricing:view",
+            "market:quote-process:view",
+            "market:release:view"
+    );
+    private static final List<String> SALES_DOMAIN_PERMISSIONS = List.of(
+            "market:sales-order:view",
+            "market:sales-match:view",
+            "market:release:view",
+            "market:u9-sync:view"
+    );
+    private static final List<String> DELIVERED_DOMAIN_PERMISSIONS = List.of("market:delivered-item:view");
+    private static final List<String> LOCKED_DOMAIN_PERMISSIONS = List.of("market:locked-item:view");
+    private static final List<String> U9_DOMAIN_PERMISSIONS = List.of("market:u9-sync:view");
 
     @Autowired(required = false)
     private DashboardAggregationMapper aggregationMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private PermissionService permissionService;
 
     public DashboardOverviewService() {
     }
@@ -45,43 +67,112 @@ public class DashboardOverviewService {
         this.dataScopeService = dataScopeService;
     }
 
+    public DashboardOverviewService(
+            DashboardAggregationMapper aggregationMapper,
+            DataScopeService dataScopeService,
+            PermissionService permissionService) {
+        this.aggregationMapper = aggregationMapper;
+        this.dataScopeService = dataScopeService;
+        this.permissionService = permissionService;
+    }
+
     public DashboardOverviewDTO overview() {
         DashboardOverviewDTO overview = DashboardOverviewDTO.empty();
         if (aggregationMapper == null) {
             return overview;
         }
 
-        List<DashboardStatusCountRow> rfqStatusRows = safeList(
-                aggregationMapper.countRfqByStatus(rfqStatusQuery()));
-        List<DashboardCustomerCountRow> salesQuotedRows = safeList(
-                aggregationMapper.countSalesQuotedByCustomer(salesQuotedQuery()));
-        List<DashboardCustomerCountRow> rfqCustomerRows = safeList(
-                aggregationMapper.countRfqByCustomerAndStatus(rfqCustomerQuery()));
+        PermissionGate permissionGate = currentPermissionGate();
+        boolean canSeeRfq = permissionGate.hasAny(RFQ_DOMAIN_PERMISSIONS);
+        boolean canSeeSales = permissionGate.hasAny(SALES_DOMAIN_PERMISSIONS);
+        boolean canSeeDelivered = permissionGate.hasAny(DELIVERED_DOMAIN_PERMISSIONS);
+        boolean canSeeLocked = permissionGate.hasAny(LOCKED_DOMAIN_PERMISSIONS);
+        boolean canSeeU9 = permissionGate.hasAny(U9_DOMAIN_PERMISSIONS);
+
+        List<DashboardStatusCountRow> rfqStatusRows = canSeeRfq
+                ? safeList(aggregationMapper.countRfqByStatus(rfqStatusQuery()))
+                : List.of();
+        List<DashboardCustomerCountRow> salesQuotedRows = canSeeSales
+                ? safeList(aggregationMapper.countSalesQuotedByCustomer(salesQuotedQuery()))
+                : List.of();
+        List<DashboardCustomerCountRow> rfqCustomerRows = canSeeRfq
+                ? safeList(aggregationMapper.countRfqByCustomerAndStatus(rfqCustomerQuery()))
+                : List.of();
 
         long rfqUnpriced = countForStatus(rfqStatusRows, QuoteStatusWorkflow.UNPRICED);
         long rfqPriced = countForStatus(rfqStatusRows, QuoteStatusWorkflow.PRICED);
         long rfqQuoted = countForStatus(rfqStatusRows, QuoteStatusWorkflow.QUOTED);
         long salesQuoted = salesQuotedRows.stream().mapToLong(this::rowCount).sum();
-        long deliveredActive = count(() -> aggregationMapper.countDeliveredActive(deliveredActiveQuery()));
-        long lockedProductionTodo = count(() -> aggregationMapper.countLockedProductionTodo(lockedProductionTodoQuery()));
-        long deliveredNeedMaterial = count(() -> aggregationMapper.countDeliveredNeedMaterial(deliveredNeedMaterialQuery()));
-        long deliveredNeedWms = count(() -> aggregationMapper.countDeliveredNeedWms(deliveredNeedWmsQuery()));
-        long mesCallbackPending = count(() -> aggregationMapper.countDeliveredMesCallbackPending(deliveredMesStatusQuery("CALLBACK_PENDING")));
-        long mesFailed = count(() -> aggregationMapper.countDeliveredMesFailed(deliveredMesStatusQuery("FAILED")));
-        long wmsFailed = count(() -> aggregationMapper.countDeliveredWmsFailed(deliveredWmsStatusQuery("FAILED")));
-        long lockedProductionFailed = count(() -> aggregationMapper.countLockedMesProductionFailed(lockedProductionFailedQuery()));
-        long salesMatchTodo = count(() -> aggregationMapper.countSalesMatchTodo(salesMatchTodoQuery()));
-        long u9Ready = count(() -> aggregationMapper.countU9Ready(u9ReadyQuery()));
-        long u9Failed = count(() -> aggregationMapper.countU9Failed(u9FailedQuery()));
+        long deliveredActive = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredActive(deliveredActiveQuery())) : 0L;
+        long lockedProductionTodo = canSeeLocked ? count(() -> aggregationMapper.countLockedProductionTodo(lockedProductionTodoQuery())) : 0L;
+        long deliveredNeedMaterial = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredNeedMaterial(deliveredNeedMaterialQuery())) : 0L;
+        long deliveredNeedWms = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredNeedWms(deliveredNeedWmsQuery())) : 0L;
+        long mesCallbackPending = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredMesCallbackPending(deliveredMesStatusQuery("CALLBACK_PENDING"))) : 0L;
+        long mesFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredMesFailed(deliveredMesStatusQuery("FAILED"))) : 0L;
+        long wmsFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredWmsFailed(deliveredWmsStatusQuery("FAILED"))) : 0L;
+        long lockedProductionFailed = canSeeLocked ? count(() -> aggregationMapper.countLockedMesProductionFailed(lockedProductionFailedQuery())) : 0L;
+        long salesMatchTodo = permissionGate.canAccess("market:sales-match:view")
+                ? count(() -> aggregationMapper.countSalesMatchTodo(salesMatchTodoQuery()))
+                : 0L;
+        long u9Ready = canSeeU9 ? count(() -> aggregationMapper.countU9Ready(u9ReadyQuery())) : 0L;
+        long u9Failed = canSeeU9 ? count(() -> aggregationMapper.countU9Failed(u9FailedQuery())) : 0L;
 
-        overview.setRfqStatusDistribution(rfqStatusDistribution(rfqStatusRows));
-        overview.setSalesQuotedCustomerDistribution(salesCustomerDistribution(salesQuotedRows));
+        overview.setRfqStatusDistribution(canSeeRfq ? rfqStatusDistribution(rfqStatusRows) : List.of());
+        overview.setSalesQuotedCustomerDistribution(canSeeSales ? salesCustomerDistribution(salesQuotedRows) : List.of());
         overview.setCustomerMatrix(customerMatrix(rfqCustomerRows, salesQuotedRows));
-        overview.setSummaryCards(summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, salesQuoted, deliveredActive, lockedProductionTodo));
-        overview.setTodoCards(todoCards(rfqUnpriced, rfqPriced, rfqQuoted, salesMatchTodo, deliveredNeedMaterial,
-                deliveredNeedWms, lockedProductionTodo, u9Ready));
-        overview.setAttentionItems(attentionItems(mesCallbackPending, mesFailed, wmsFailed, u9Failed, lockedProductionFailed));
+        overview.setSummaryCards(filterSummaryCards(
+                summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, salesQuoted, deliveredActive, lockedProductionTodo),
+                permissionGate));
+        overview.setTodoCards(filterTodoCards(
+                todoCards(rfqUnpriced, rfqPriced, rfqQuoted, salesMatchTodo, deliveredNeedMaterial,
+                        deliveredNeedWms, lockedProductionTodo, u9Ready),
+                permissionGate));
+        overview.setAttentionItems(filterAttentionItems(
+                attentionItems(mesCallbackPending, mesFailed, wmsFailed, u9Failed, lockedProductionFailed),
+                permissionGate));
         return overview;
+    }
+
+    private PermissionGate currentPermissionGate() {
+        if (permissionService == null) {
+            return PermissionGate.fullAccess();
+        }
+        AuthContext.SessionUser user = AuthContext.get();
+        if (user == null) {
+            return PermissionGate.fullAccess();
+        }
+        PermissionInfoDTO permissionInfo = permissionService.getPermissionInfo(user.id(), user.role());
+        if (permissionInfo == null) {
+            return PermissionGate.none();
+        }
+        if (permissionInfo.isSuperAdmin()) {
+            return PermissionGate.fullAccess();
+        }
+        return new PermissionGate(false, new LinkedHashSet<>(safeList(permissionInfo.getPermissions())));
+    }
+
+    private List<DashboardSummaryCardDTO> filterSummaryCards(
+            List<DashboardSummaryCardDTO> cards,
+            PermissionGate permissionGate) {
+        return safeList(cards).stream()
+                .filter(card -> permissionGate.canAccess(card.getPermission()))
+                .toList();
+    }
+
+    private List<DashboardTodoCardDTO> filterTodoCards(
+            List<DashboardTodoCardDTO> cards,
+            PermissionGate permissionGate) {
+        return safeList(cards).stream()
+                .filter(card -> permissionGate.canAccess(card.getPermission()))
+                .toList();
+    }
+
+    private List<DashboardAttentionItemDTO> filterAttentionItems(
+            List<DashboardAttentionItemDTO> items,
+            PermissionGate permissionGate) {
+        return safeList(items).stream()
+                .filter(item -> permissionGate.canAccess(item.getPermission()))
+                .toList();
     }
 
     private QueryWrapper<Object> rfqStatusQuery() {
@@ -512,5 +603,27 @@ public class DashboardOverviewService {
 
     private <T> List<T> safeList(List<T> values) {
         return values == null ? List.of() : values;
+    }
+
+    private record PermissionGate(boolean allowAll, Set<String> permissions) {
+        private static PermissionGate fullAccess() {
+            return new PermissionGate(true, Set.of());
+        }
+
+        private static PermissionGate none() {
+            return new PermissionGate(false, Set.of());
+        }
+
+        private boolean hasAny(List<String> permissionCodes) {
+            return allowAll || safePermissions(permissionCodes).stream().anyMatch(this::canAccess);
+        }
+
+        private boolean canAccess(String permissionCode) {
+            return allowAll || permissionCode == null || permissionCode.isBlank() || permissions.contains(permissionCode);
+        }
+
+        private static List<String> safePermissions(List<String> permissionCodes) {
+            return permissionCodes == null ? List.of() : permissionCodes;
+        }
     }
 }
