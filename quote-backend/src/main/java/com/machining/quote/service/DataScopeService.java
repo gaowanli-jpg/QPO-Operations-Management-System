@@ -48,8 +48,16 @@ public class DataScopeService {
         applyScopeSql(query, currentOrderScopeSql(""));
     }
 
+    public void applyOrderScope(QueryWrapper<?> query, String alias) {
+        applyScopeSql(query, currentOrderScopeSql(alias));
+    }
+
     public void applySalesOrderScope(QueryWrapper<SalesOrderHeader> query) {
         applyScopeSql(query, currentOrderScopeSql(""));
+    }
+
+    public void applySalesOrderScope(QueryWrapper<?> query, String alias) {
+        applyScopeSql(query, currentOrderScopeSql(alias));
     }
 
     public void applyRfqScope(QueryWrapper<?> query, String rfqColumn) {
