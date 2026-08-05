@@ -58,6 +58,8 @@ const revealMaskRef = ref()
 const chartInstance = ref()
 const isPieRevealing = ref(false)
 const pieRevealFrame = ref()
+const pieStartAngle = 90
+const cssRevealStartAngle = 90 - pieStartAngle
 const pieRevealStartDelay = 80
 const pieRevealDuration = 1200
 
@@ -83,7 +85,10 @@ const clearPieRevealFrame = () => {
 }
 
 const updatePieRevealMask = (angle) => {
-  revealMaskRef.value?.style.setProperty('--dashboard-sweep-angle', `${angle}deg`)
+  const revealMask = revealMaskRef.value
+  if (!revealMask) return
+  revealMask.style.setProperty('--dashboard-reveal-start-angle', `${cssRevealStartAngle}deg`)
+  revealMask.style.setProperty('--dashboard-sweep-angle', `${angle}deg`)
 }
 
 const easeOutCubic = (progress) => 1 - Math.pow(1 - progress, 3)
@@ -142,7 +147,7 @@ const buildChartOption = () => ({
       type: 'pie',
       radius: '76%',
       center: ['33%', '50%'],
-      startAngle: 90,
+      startAngle: pieStartAngle,
       animation: false,
       avoidLabelOverlap: true,
       label: {
@@ -282,6 +287,7 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-chart-reveal-mask {
+  --dashboard-reveal-start-angle: 0deg;
   --dashboard-sweep-angle: 1deg;
   position: absolute;
   top: 50%;
@@ -290,7 +296,7 @@ onBeforeUnmount(() => {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: conic-gradient(from -90deg, transparent 0deg var(--dashboard-sweep-angle), var(--erp-surface) var(--dashboard-sweep-angle) 360deg);
+  background: conic-gradient(from var(--dashboard-reveal-start-angle), transparent 0deg var(--dashboard-sweep-angle), var(--erp-surface) var(--dashboard-sweep-angle) 360deg);
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
