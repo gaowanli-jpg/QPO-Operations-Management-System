@@ -33,23 +33,10 @@
 
     <section class="erp-surface workflow-workspace sales-match-workspace">
       <aside class="erp-surface sales-match-side-panel">
-        <div class="panel-title">已选销售订单</div>
-        <el-table
-          class="selected-order-mini-table"
-          :data="selectedOrderRows"
-          height="132"
-          size="small"
-          border
-          stripe
-          empty-text="请先选择销售订单"
-        >
-          <el-table-column prop="salesOrderNo" label="销售订单号" min-width="128" show-overflow-tooltip />
-          <el-table-column prop="status" label="状态" width="96" align="center">
-            <template #default="{ row }">
-              <el-tag :type="orderStatusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="panel-title">销售订单</div>
+        <div class="selected-order-text" :title="selectedOrderLabel">
+          {{ selectedOrderLabel }}
+        </div>
 
         <div class="match-condition-panel">
           <div class="panel-title compact">匹配条件</div>
@@ -297,7 +284,9 @@ const applyResult = ref(null)
 const orderPickerVisible = ref(false)
 const previewLoading = ref(false)
 
-const selectedOrderRows = computed(() => selectedOrder.value ? [selectedOrder.value] : [])
+const selectedOrderLabel = computed(() => selectedOrder.value
+  ? `${selectedOrder.value.salesOrderNo || selectedOrder.value.salesOrderId || '-'} / ${selectedOrder.value.customerName || '-'}`
+  : '未选择订单')
 const previewRows = computed(() => previewData.value?.rows || [])
 const applyRows = computed(() => applyResult.value?.rows || [])
 const currentOrderStatus = computed(() => orderValue('status') || '未选择')
@@ -564,13 +553,18 @@ const formatFieldSummary = (fields) => {
   font-size: 12px;
 }
 
-.selected-order-mini-table {
-  width: 100%;
+.selected-order-text {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  color: var(--erp-text);
+  border: 1px solid var(--erp-border);
   border-radius: 6px;
-}
-
-.selected-order-mini-table :deep(.el-table__cell) {
-  padding: 5px 0;
+  padding: 0 10px;
+  background: var(--erp-surface-soft);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .match-condition-panel,

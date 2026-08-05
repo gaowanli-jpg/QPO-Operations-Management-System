@@ -196,6 +196,7 @@
               class="release-selection-table"
               :data="pagedReleaseItems"
               :row-key="rowKey"
+              :row-class-name="releaseItemRowClassName"
               border
               stripe
               height="640"
@@ -779,6 +780,23 @@ const setItemList = (rows) => {
 const remainingQtyFor = (row) => {
   const qty = Number(row?.remainingQty ?? row?.qty ?? 0)
   return Number.isFinite(qty) ? Math.max(0, qty) : 0
+}
+
+const RELEASED_ITEM_STATUSES = new Set(['已生成提单', '已提单', '已部分提单'])
+
+const isFullyReleasedReleaseItem = (row) => {
+  const status = String(row?.status || '').trim()
+  const sourceQty = Number(row?.qty ?? 0)
+  const ticketedQty = Number(row?.ticketedQty ?? 0)
+  const fullyTicketedByQty = Number.isFinite(sourceQty)
+    && sourceQty > 0
+    && Number.isFinite(ticketedQty)
+    && ticketedQty >= sourceQty
+  return RELEASED_ITEM_STATUSES.has(status) || remainingQtyFor(row) <= 0 || fullyTicketedByQty
+}
+
+const releaseItemRowClassName = ({ row }) => {
+  return isFullyReleasedReleaseItem(row) ? 'release-item-row--released' : ''
 }
 
 const canSelectItem = (row) => {
@@ -1415,6 +1433,26 @@ const statusTagType = (status) => {
 
 .release-table-actions :deep(.el-button) {
   margin-left: 0;
+}
+
+.release-selection-table :deep(.release-item-row--released > td.el-table__cell) {
+  background: #fff7ed !important;
+}
+
+.release-selection-table :deep(.release-item-row--released:hover > td.el-table__cell) {
+  background: #ffedd5 !important;
+}
+
+.release-selection-table :deep(.release-item-row--released > td[class*="el-table-fixed-column--"]) {
+  background: #fff7ed !important;
+}
+
+.release-selection-table :deep(.release-item-row--released:hover > td[class*="el-table-fixed-column--"]) {
+  background: #ffedd5 !important;
+}
+
+.release-selection-table :deep(.release-item-row--released > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #f59e0b;
 }
 
 .full-width {
