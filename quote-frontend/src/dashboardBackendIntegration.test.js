@@ -51,6 +51,12 @@ describe('Dashboard backend integration stage 4', () => {
     expect(source).toContain('customerMatrix: []')
   })
 
+  test('dashboard home declares initialization helpers before using them in refs', () => {
+    const source = readSource(dashboardHomePath)
+
+    expect(source.indexOf('const emptyDashboardData = () =>'))
+      .toBeLessThan(source.indexOf('const dashboardData = ref(emptyDashboardData())'))
+  })
   test('dashboard real data integration does not call business list or write APIs', () => {
     const source = readSource(dashboardHomePath)
 

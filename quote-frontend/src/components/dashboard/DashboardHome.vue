@@ -93,6 +93,16 @@ import { goDashboardTarget } from './dashboardNavigation'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const emptyDashboardData = () => ({
+  updatedAt: '',
+  summaryCards: [],
+  rfqStatusDistribution: [],
+  salesQuotedCustomerDistribution: [],
+  customerMatrix: [],
+  todoCards: [],
+  attentionItems: []
+})
+
 const dashboardData = ref(emptyDashboardData())
 const loading = ref(false)
 const errorMessage = ref('')
@@ -111,16 +121,6 @@ const attentionItems = computed(() => dashboardData.value.attentionItems)
 const visibleSummaryCards = computed(() => summaryCards.value)
 const visibleTodoCards = computed(() => todoCards.value)
 const visibleAttentionItems = computed(() => attentionItems.value)
-
-const emptyDashboardData = () => ({
-  updatedAt: '',
-  summaryCards: [],
-  rfqStatusDistribution: [],
-  salesQuotedCustomerDistribution: [],
-  customerMatrix: [],
-  todoCards: [],
-  attentionItems: []
-})
 
 const arrayOrEmpty = (value) => Array.isArray(value) ? value : []
 
