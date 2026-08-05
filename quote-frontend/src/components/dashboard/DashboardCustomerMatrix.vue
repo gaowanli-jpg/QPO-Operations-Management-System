@@ -29,7 +29,7 @@
         <button
           v-if="canOpenRfq"
           type="button"
-          class="dashboard-matrix-button"
+          class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.rfqUnpriced) }"
           @click="emit('rfq-select', row, '未核价')"
         >
@@ -39,7 +39,7 @@
         <button
           v-if="canOpenRfq"
           type="button"
-          class="dashboard-matrix-button"
+          class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.rfqPriced) }"
           @click="emit('rfq-select', row, '已核价')"
         >
@@ -49,7 +49,7 @@
         <button
           v-if="canOpenRfq"
           type="button"
-          class="dashboard-matrix-button"
+          class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.rfqQuoted) }"
           @click="emit('rfq-select', row, '已报价')"
         >
@@ -59,16 +59,19 @@
         <button
           v-if="canOpenSales"
           type="button"
-          class="dashboard-matrix-button"
+          class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.salesQuoted) }"
           @click="emit('sales-select', row)"
         >
           {{ formatDashboardNumber(row.salesQuoted) }}
         </button>
         <span v-else class="dashboard-matrix-locked">--</span>
-        <strong :class="{ 'dashboard-number-muted': isZeroValue(row.totalFocus) }">
+        <span
+          class="dashboard-matrix-value dashboard-matrix-total"
+          :class="{ 'dashboard-number-muted': isZeroValue(row.totalFocus) }"
+        >
           {{ formatDashboardNumber(row.totalFocus) }}
-        </strong>
+        </span>
       </div>
     </div>
   </section>
@@ -183,19 +186,33 @@ const isZeroValue = (value) => Number(value) === 0
   white-space: nowrap;
 }
 
-.dashboard-matrix-button {
+.dashboard-matrix-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
   min-height: 34px;
+  padding: 0 var(--erp-space-2);
   color: var(--erp-primary);
   background: var(--erp-primary-soft);
   border: 1px solid transparent;
   border-radius: var(--erp-radius-md);
-  cursor: pointer;
   font: inherit;
   font-variant-numeric: tabular-nums;
   font-weight: var(--erp-font-weight-bold);
+}
+
+.dashboard-matrix-button {
+  cursor: pointer;
+  appearance: none;
   transition:
     border-color var(--erp-duration-fast) var(--erp-ease-standard),
     box-shadow var(--erp-duration-fast) var(--erp-ease-standard);
+}
+
+.dashboard-matrix-total {
+  cursor: default;
 }
 
 .dashboard-matrix-button:hover,
@@ -204,7 +221,6 @@ const isZeroValue = (value) => Number(value) === 0
   box-shadow: var(--erp-shadow-sm);
 }
 
-.dashboard-matrix-row > strong,
 .dashboard-matrix-locked {
   font-variant-numeric: tabular-nums;
 }

@@ -8,7 +8,10 @@
     </div>
 
     <div v-if="hasData" class="dashboard-chart-card-body">
-      <div ref="chartRef" class="dashboard-chart-canvas" :aria-label="title" role="img" />
+      <div class="dashboard-chart-shell" :class="{ 'dashboard-chart-shell-revealing': isPieRevealing }">
+        <div ref="chartRef" class="dashboard-chart-canvas" :aria-label="title" role="img" />
+        <span v-if="isPieRevealing" ref="revealMaskRef" class="dashboard-chart-reveal-mask" aria-hidden="true" />
+      </div>
     </div>
     <div v-else class="dashboard-chart-empty">
       {{ emptyText }}
@@ -51,7 +54,12 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 const chartRef = ref()
+const revealMaskRef = ref()
 const chartInstance = ref()
+const isPieRevealing = ref(false)
+const pieRevealFrame = ref()
+const pieRevealStartDelay = 80
+const pieRevealDuration = 1200
 
 const chartData = computed(() => props.data
   .map((item, index) => ({
@@ -65,6 +73,47 @@ const chartData = computed(() => props.data
 
 const total = computed(() => chartData.value.reduce((sum, item) => sum + item.value, 0))
 const hasData = computed(() => chartData.value.length > 0 && total.value > 0)
+
+const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+
+const clearPieRevealFrame = () => {
+  if (pieRevealFrame.value === undefined) return
+  window.cancelAnimationFrame(pieRevealFrame.value)
+  pieRevealFrame.value = undefined
+}
+
+const updatePieRevealMask = (angle) => {
+  revealMaskRef.value?.style.setProperty('--dashboard-sweep-angle', `${angle}deg`)
+}
+
+const easeOutCubic = (progress) => 1 - Math.pow(1 - progress, 3)
+
+const animatePieReveal = (startTime) => {
+  const runFrame = (timestamp) => {
+    const elapsed = Math.max(0, timestamp - startTime)
+    const progress = Math.min(elapsed / pieRevealDuration, 1)
+    updatePieRevealMask(1 + 359 * easeOutCubic(progress))
+    if (progress < 1) {
+      pieRevealFrame.value = window.requestAnimationFrame(runFrame)
+      return
+    }
+    pieRevealFrame.value = undefined
+    isPieRevealing.value = false
+  }
+  pieRevealFrame.value = window.requestAnimationFrame(runFrame)
+}
+
+const revealPieChart = async () => {
+  clearPieRevealFrame()
+  isPieRevealing.value = false
+  if (prefersReducedMotion()) return
+  await nextTick()
+  if (!hasData.value || !chartInstance.value) return
+  isPieRevealing.value = true
+  await nextTick()
+  updatePieRevealMask(1)
+  animatePieReveal(window.performance.now() + pieRevealStartDelay)
+}
 
 const buildChartOption = () => ({
   color: props.palette,
@@ -94,9 +143,7 @@ const buildChartOption = () => ({
       radius: '76%',
       center: ['33%', '50%'],
       startAngle: 90,
-      animationType: 'expansion',
-      animationDuration: 900,
-      animationEasing: 'cubicOut',
+      animation: false,
       avoidLabelOverlap: true,
       label: {
         show: false
@@ -113,8 +160,7 @@ const buildChartOption = () => ({
         }
       },
       itemStyle: {
-        borderColor: '#ffffff',
-        borderWidth: 2
+        borderWidth: 0
       },
       data: chartData.value
     }
@@ -155,6 +201,8 @@ const ensureChart = () => {
 }
 
 const disposeChart = () => {
+  clearPieRevealFrame()
+  isPieRevealing.value = false
   chartInstance.value?.dispose()
   chartInstance.value = undefined
 }
@@ -172,6 +220,7 @@ const renderChart = async () => {
   ensureChart()
   chartInstance.value?.setOption(buildChartOption(), true)
   chartInstance.value?.resize()
+  revealPieChart()
 }
 
 onMounted(() => {
@@ -220,9 +269,30 @@ onBeforeUnmount(() => {
   padding: var(--erp-space-4);
 }
 
-.dashboard-chart-canvas {
+.dashboard-chart-shell {
+  position: relative;
   width: 100%;
   height: 286px;
+  overflow: hidden;
+}
+
+.dashboard-chart-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.dashboard-chart-reveal-mask {
+  --dashboard-sweep-angle: 1deg;
+  position: absolute;
+  top: 50%;
+  left: 33%;
+  z-index: 1;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: conic-gradient(from -90deg, transparent 0deg var(--dashboard-sweep-angle), var(--erp-surface) var(--dashboard-sweep-angle) 360deg);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .dashboard-chart-empty {
@@ -258,8 +328,16 @@ onBeforeUnmount(() => {
     padding: var(--erp-space-3);
   }
 
-  .dashboard-chart-canvas {
+  .dashboard-chart-shell {
     height: 250px;
   }
+
+  .dashboard-chart-reveal-mask {
+    top: 40%;
+    left: 50%;
+    width: 170px;
+    height: 170px;
+  }
 }
+
 </style>
