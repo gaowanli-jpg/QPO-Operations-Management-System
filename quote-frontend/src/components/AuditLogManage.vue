@@ -5,34 +5,47 @@
         <h1 class="erp-page-title">操作日志</h1>
         <p class="erp-page-description">查询系统关键操作、账号安全事件和数据变更记录，用于追溯问题和审计。</p>
       </div>
-      <div class="erp-page-actions">
-        <el-button v-permission="'system:audit:retention'" @click="openRetentionSetting">日志保留策略</el-button>
-        <el-button v-permission="'system:audit:export'" :loading="isPending(auditActionKeys.exportLogs)" :disabled="isPending(auditActionKeys.exportLogs)" @click="exportLogs">导出 CSV</el-button>
-        <el-button :loading="loading" @click="loadLogs">刷新</el-button>
-      </div>
     </header>
 
     <section class="erp-toolbar audit-toolbar">
-      <div class="erp-toolbar-group audit-filter-grid">
-        <el-date-picker
-          v-model="filters.timeRange"
-          type="datetimerange"
-          start-placeholder="开始时间"
-          end-placeholder="结束时间"
-          value-format="YYYY-MM-DD HH:mm:ss"
-          range-separator="至"
-          class="audit-time-range"
-        />
-        <el-input v-model.trim="filters.username" placeholder="操作人" clearable class="audit-filter-control" />
+      <div class="audit-toolbar-main">
+        <div class="erp-toolbar-group audit-primary-filters">
+          <el-date-picker
+            v-model="filters.timeRange"
+            type="datetimerange"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            range-separator="至"
+            class="audit-time-range"
+          />
+          <el-input v-model.trim="filters.username" placeholder="操作人" clearable class="audit-filter-control" @keyup.enter="searchLogs" />
+          <el-select v-model="filters.module" placeholder="模块" clearable class="audit-filter-control">
+            <el-option v-for="module in optionData.modules" :key="module" :label="moduleLabel(module)" :value="module" />
+          </el-select>
+          <el-select v-model="filters.result" placeholder="结果" clearable class="audit-filter-control">
+            <el-option label="成功" value="SUCCESS" />
+            <el-option label="失败" value="FAILED" />
+          </el-select>
+          <el-button type="primary" :loading="loading" @click="searchLogs">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+          <el-button plain @click="advancedFiltersVisible = !advancedFiltersVisible">
+            {{ advancedFiltersVisible ? '收起筛选' : '高级筛选' }}
+          </el-button>
+        </div>
+
+        <div class="audit-toolbar-divider" />
+
+        <div class="erp-toolbar-group audit-page-actions">
+          <el-button v-permission="'system:audit:retention'" @click="openRetentionSetting">日志保留策略</el-button>
+          <el-button v-permission="'system:audit:export'" :loading="isPending(auditActionKeys.exportLogs)" :disabled="isPending(auditActionKeys.exportLogs)" @click="exportLogs">导出 CSV</el-button>
+          <el-button :loading="loading" @click="loadLogs">刷新</el-button>
+        </div>
+      </div>
+
+      <div v-if="advancedFiltersVisible" class="erp-toolbar-group audit-advanced-filters">
         <el-select v-model="filters.role" placeholder="角色" clearable class="audit-filter-control">
           <el-option v-for="role in optionData.roles" :key="role" :label="roleLabel(role)" :value="role" />
-        </el-select>
-        <el-select v-model="filters.module" placeholder="模块" clearable class="audit-filter-control">
-          <el-option v-for="module in optionData.modules" :key="module" :label="moduleLabel(module)" :value="module" />
-        </el-select>
-        <el-select v-model="filters.result" placeholder="结果" clearable class="audit-filter-control">
-          <el-option label="成功" value="SUCCESS" />
-          <el-option label="失败" value="FAILED" />
         </el-select>
         <el-select v-model="filters.action" placeholder="动作" clearable filterable class="audit-filter-control">
           <el-option
@@ -45,13 +58,9 @@
         <el-select v-model="filters.targetType" placeholder="对象类型" clearable filterable class="audit-filter-control">
           <el-option v-for="targetType in optionData.targetTypes" :key="targetType" :label="targetType" :value="targetType" />
         </el-select>
-        <el-input v-model.trim="filters.targetId" placeholder="对象 ID" clearable class="audit-filter-control" />
+        <el-input v-model.trim="filters.targetId" placeholder="对象 ID" clearable class="audit-filter-control" @keyup.enter="searchLogs" />
         <el-input v-model.trim="filters.requestId" placeholder="Request ID" clearable class="audit-request-id-control" @keyup.enter="searchLogs" />
         <el-input v-model.trim="filters.keyword" placeholder="关键词" clearable class="audit-keyword-control" @keyup.enter="searchLogs" />
-      </div>
-      <div class="erp-toolbar-group audit-actions">
-        <el-button type="primary" :loading="loading" @click="searchLogs">查询</el-button>
-        <el-button @click="resetFilters">重置</el-button>
       </div>
     </section>
 
@@ -273,6 +282,7 @@ const loading = ref(false)
 const retentionVisible = ref(false)
 const retentionLoading = ref(false)
 const detailVisible = ref(false)
+const advancedFiltersVisible = ref(false)
 const currentLog = ref(null)
 const logs = ref([])
 const { isPending, runAction } = usePendingAction()
@@ -558,32 +568,80 @@ onMounted(async () => {
 
 <style scoped>
 .audit-toolbar {
-  align-items: flex-start;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
-.audit-filter-grid {
-  flex: 1;
+.audit-toolbar-main {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  row-gap: 8px;
+  column-gap: 10px;
   align-items: flex-start;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.audit-primary-filters {
+  flex: 1 1 760px;
+  min-width: 0;
+  justify-content: flex-start;
+  row-gap: 8px;
+  column-gap: 10px;
+  box-sizing: border-box;
+}
+
+.audit-page-actions {
+  flex: 0 0 auto;
+  align-self: stretch;
+  justify-content: flex-end;
+  align-content: flex-start;
+  row-gap: 8px;
+  column-gap: 8px;
+  box-sizing: border-box;
+}
+
+.audit-toolbar-divider {
+  align-self: stretch;
+  flex: 0 0 1px;
+  width: 1px;
+  background: var(--erp-border-soft);
+}
+
+.audit-advanced-filters {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-soft);
+  justify-content: flex-start;
+  row-gap: 8px;
+  column-gap: 10px;
+  box-sizing: border-box;
 }
 
 .audit-time-range {
   width: 360px;
+  flex: 0 0 360px;
 }
 
 .audit-filter-control {
   width: 140px;
+  flex: 0 0 140px;
 }
 
 .audit-keyword-control {
   width: 180px;
+  flex: 0 0 180px;
 }
 
 .audit-request-id-control {
   width: 220px;
-}
-
-.audit-actions {
-  flex: 0 0 auto;
+  flex: 0 0 220px;
 }
 
 .audit-table-surface .erp-table-body {
@@ -670,23 +728,35 @@ onMounted(async () => {
   border-radius: var(--erp-radius-lg);
 }
 
-@media (max-width: 1180px) {
-  .audit-time-range,
-  .audit-filter-control,
-  .audit-request-id-control,
-  .audit-keyword-control {
-    width: 100%;
+@media (max-width: 1280px) {
+  .audit-toolbar-main {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .audit-filter-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .audit-page-actions,
+  .audit-primary-filters {
+    justify-content: flex-start;
+  }
+
+  .audit-toolbar-divider {
+    display: none;
   }
 }
 
 @media (max-width: 760px) {
-  .audit-filter-grid {
-    grid-template-columns: 1fr;
+  .audit-primary-filters .audit-filter-control,
+  .audit-advanced-filters .audit-filter-control,
+  .audit-advanced-filters .audit-request-id-control,
+  .audit-advanced-filters .audit-keyword-control {
+    width: auto;
+    min-width: 120px;
+    flex: 1 1 140px;
+  }
+
+  .audit-time-range {
+    width: 100%;
+    flex: 1 1 100%;
   }
 }
 </style>
