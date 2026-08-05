@@ -36,7 +36,7 @@ describe('Locked item MES production dispatch stage 6 closure', () => {
     expect(interfaceDoc).toContain('`assemblyRelations`')
     expect(interfaceDoc).toContain('普通件或无父子关系时传空数组')
     expect(interfaceDoc).toContain('只下发 `PRODUCTION_REQUIRED`')
-    expect(permissionDoc).toContain('market:locked-item:mes-production-submit')
+    expect(permissionDoc).toContain('market:production-item:mes-production-submit')
     expect(permissionDoc).not.toContain('common:mes-production')
     expect(logDoc).toContain('LOCKED_ITEM_MES_PRODUCTION_SUBMIT')
   })

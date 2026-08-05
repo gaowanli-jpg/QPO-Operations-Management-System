@@ -34,6 +34,7 @@ class PermissionModuleTreeTest {
     private static final Path DELIVERY_DOCUMENT_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
     private static final Path INQUIRY_ORDER_RENAME_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V70__rename_order_management_to_inquiry_orders.sql");
     private static final Path LOCKED_ITEM_MES_PRODUCTION_PERMISSION_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
+    private static final Path PRODUCTION_ITEM_MODULE_SPLIT_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V84__production_item_module_split.sql");
     private static final Path SYSTEM_USER_ROLE_MODULE_RENAME_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V80__rename_user_role_permission_modules.sql");
     private static final Path WMS_ALLOCATION_PLAN = Path.of("..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path PERMISSION_LIST_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
@@ -232,38 +233,58 @@ class PermissionModuleTreeTest {
     }
 
     @Test
-    void lockedItemMesProductionSubmitPermissionBelongsToLockedItemModule() throws IOException {
+    void productionItemPermissionsReplaceLockedItemMesProductionSubmitPermission() throws IOException {
         String source = Files.readString(PERMISSION_SERVICE, StandardCharsets.UTF_8);
-        String migration = Files.readString(LOCKED_ITEM_MES_PRODUCTION_PERMISSION_MIGRATION, StandardCharsets.UTF_8);
+        String migration = Files.readString(PRODUCTION_ITEM_MODULE_SPLIT_MIGRATION, StandardCharsets.UTF_8);
         String permissionDoc = Files.readString(PERMISSION_LIST_DOC, StandardCharsets.UTF_8);
 
         assertThat(fallbackPermissions().stream().map(row -> row.code).toList())
-                .as("MES production dispatch is a locked-item operation, not a common permission")
-                .contains("market:locked-item:mes-production-submit");
+                .as("MES production dispatch is now a production-item operation, not a locked-item or common permission")
+                .contains(
+                        "market:production-item:view",
+                        "market:production-item:customer-select",
+                        "market:production-item:mes-production-submit"
+                )
+                .doesNotContain("market:locked-item:mes-production-submit");
         assertThat(source)
                 .contains(
-                        "permission(196L, \"BUTTON\", \"market:locked-item:mes-production-submit\", \"锁库零件下发MES生产\", null, null, false, 129, 162L)",
-                        "Map.entry(\"market:locked-item:mes-production-submit\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
+                        "permission(199L, \"MENU\", \"market:production-item:view\"",
+                        "\"/production-items\"",
+                        "\"ProductionItemManage\"",
+                        "permission(200L, \"API\", \"market:production-item:customer-select\"",
+                        "permission(201L, \"BUTTON\", \"market:production-item:mes-production-submit\"",
+                        "Map.entry(\"market:production-item:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:production-item:customer-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:production-item:mes-production-submit\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
                 )
-                .doesNotContain("Map.entry(\"market:locked-item:mes-production-submit\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
+                .doesNotContain(
+                        "permission(196L, \"BUTTON\", \"market:locked-item:mes-production-submit\"",
+                        "Map.entry(\"market:locked-item:mes-production-submit\""
+                );
         assertThat(migration)
                 .contains(
-                        "market:locked-item:view",
+                        "market:production-item:view",
+                        "market:production-item:customer-select",
+                        "market:production-item:mes-production-submit",
+                        "/production-items",
+                        "ProductionItemManage",
                         "market:locked-item:mes-production-submit",
-                        "锁库零件下发MES生产",
+                        "assignable = FALSE",
+                        "visible = FALSE",
+                        "DELETE FROM system_role_permission",
                         "SUPER_ADMIN",
                         "MARKET_USER",
                         "MARKET_MANAGER"
                 )
-                .doesNotContain("WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER', 'READONLY')");
+                .doesNotContain("p.permission_code = 'market:production-item:mes-production-submit'" + System.lineSeparator() + "WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER', 'READONLY')");
         assertThat(permissionDoc)
                 .contains(
-                        "market:locked-item:mes-production-submit",
-                        "锁库零件下发MES生产"
+                        "market:production-item:view",
+                        "market:production-item:customer-select",
+                        "market:production-item:mes-production-submit"
                 )
-                .doesNotContain("common:mes-production");
+                .doesNotContain("common:mes-production", "market:locked-item:mes-production-submit | BUTTON");
     }
-
     @Test
     void wmsAllocationPermissionMigrationKeepsDatabaseCatalogAligned() throws IOException {
         String migration = Files.readString(WMS_ALLOCATION_PERMISSION_MIGRATION, StandardCharsets.UTF_8);

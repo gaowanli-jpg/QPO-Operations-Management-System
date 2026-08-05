@@ -118,7 +118,7 @@ const menuGroups = [
   { key: 'dashboard', title: '首页', paths: ['/dashboard'] },
   { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
-  { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/locked-items'] },
+  { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/production-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
 ]
 
@@ -136,6 +136,7 @@ const menuMetaByPath = {
   '/orders': { title: '询价订单', permission: 'market:order:view', icon: Document },
   '/sales-orders': { title: '销售订单', permission: 'market:sales-order:view', icon: Files },
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
+  '/production-items': { title: '待产零件', permission: 'market:production-item:view', icon: Files },
   '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
   '/users': { title: '用户管理', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色权限', permission: 'system:role:view', icon: User },
@@ -234,9 +235,13 @@ const shellMetaByPath = {
     title: '已提零件',
     description: '仅展示尚未完成物料号获取和锁库流程的提单零件。'
   },
+  '/production-items': {
+    title: '待产零件',
+    description: '处理 WMS 拆分后仍需下发 MES 生产的待产行。'
+  },
   '/locked-items': {
     title: '锁库零件',
-    description: '查看 WMS 返回后的库存锁定、在产锁定和待生产拆分明细。'
+    description: '查看 WMS 返回后的库存锁定和在产锁定结果。'
   },
   '/users': {
     title: '用户管理',

@@ -57,15 +57,15 @@ class LockedItemMesProductionStage6DocumentationTest {
     void permissionAndLogDocsDescribeProductionDispatchGovernanceWithoutCommonPermissions() throws IOException {
         assertThat(read(PERMISSION_DOC))
                 .contains(
-                        "market:locked-item:mes-production-submit",
-                        "锁库零件下发MES生产",
+                        "market:production-item:mes-production-submit",
+                        "待产零件下发MES生产",
                         "不新增可分配 `common:*` 权限")
                 .doesNotContain("common:mes-production");
 
         assertThat(read(ADMIN_DOC))
                 .contains(
-                        "锁库零件下发MES生产",
-                        "market:locked-item:mes-production-submit",
+                        "待产零件下发MES生产",
+                        "market:production-item:mes-production-submit",
                         "只控制生产下发，不反向授予 MES 物料号获取或 WMS 锁库能力");
 
         assertThat(read(LOG_OPS_DOC))
