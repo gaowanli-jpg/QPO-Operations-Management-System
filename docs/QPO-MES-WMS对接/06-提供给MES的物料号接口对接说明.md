@@ -1,6 +1,6 @@
-# QPO 对接 MES 物料号接口说明
+# QPO 经数据中心对接 MES 物料号接口说明
 
-本文档提供给 MES 系统开发/实施人员，用于说明 QPO 如何调用 MES 获取已提零件的物料号。
+本文档提供给数据中心和 MES 系统开发/实施人员，用于说明 QPO 已提零件模块获取物料号时发起的业务请求、MES 响应口径以及 QPO 内部去重/回调处理方式。
 
 > 更新说明：本文档原先只描述 MES 在 HTTP response 中同步返回物料号的第一版接口。根据最新联调要求，MES 可以即时返回物料号，也可以先返回“已受理，后续回调”，再通过 QPO 回调接口写回物料号。MES 回调 QPO 的完整接口契约已经拆分为独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
 
@@ -10,10 +10,14 @@
 
 > 系统配置阶段 6 收口说明：本文档只描述 QPO 通过数据中心获取 MES 物料号的业务接口口径。MES 回调 QPO 的接口详情见 `08-MES物料号回调接口对接说明.md`；回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供给数据中心，真实 token 单独交付数据中心，不写入本文档。
 
+> 当前实现收口说明：QPO 后端默认启用数据中心链路，`MesMaterialClient` 会优先调用数据中心 `MES_MATERIAL_RESOLVE` endpoint；只有关闭数据中心或本地运行未接入数据中心 client 时，才使用 MES 激活出站配置，且无 active DB 配置时继续回落到 `ERP_MES_*` 环境变量。
+
 ## 1. 对接结论
 
-- 调用方向：QPO -> MES。
+- 默认调用方向：QPO -> 数据中心 -> MES。
+- 直连兜底：关闭 `ERP_DATA_CENTER_ENABLED` 或本地未接入数据中心 client 时，QPO 可直接 POST MES；直连配置优先读取系统配置页 active MES 出站配置，无 active DB 配置时回落 `ERP_MES_*`。
 - 调用方式：HTTP `POST`，请求体为 `application/json`。
+- 数据中心 endpoint：`MES_MATERIAL_RESOLVE`，默认方法 `POST`，请求适配器 `MES_MATERIAL_V1`，响应适配器 `MES_MATERIAL_RESPONSE_V1`。
 - 返回方式：MES 可以在同一次 HTTP 请求的响应体中同步返回物料号，也可以返回已受理并后续回调。
 - 回调要求：新口径需要 MES 响应和回调都原样带回 QPO 生成的 `mesRequestId`，后续通过 QPO 回调接口写回物料号；同图号版本去重场景下，MES 仍只回调主 `mesRequestId`。
 - 文件访问：QPO 会传 `drawingUrl`，如果 MES 需要下载图纸，MES 服务器必须能在内网访问该 URL。
@@ -23,21 +27,24 @@
 ```text
 用户在 QPO 点击“获取物料号”
   -> QPO 创建内部异步任务
-  -> 任务里 QPO POST 调 MES
+  -> 任务先按 图号 + 版本 做 QPO 内部去重
+  -> 主请求经数据中心 MES_MATERIAL_RESOLVE endpoint 转发 MES
   -> MES 立即在 HTTP response 里返回 materialNo，或返回已受理待回调
   -> 如果立即返回 materialNo，QPO 保存 materialNo 和同步状态
   -> 如果待回调，QPO 标记为待MES回调，MES 后续按主 mesRequestId 回调 QPO
   -> 如果有相同图号版本等待行，QPO 自行 fan-out 写回等待行，MES 不需要逐行回调
 ```
 
-## 2. MES 需要提供给 QPO 的信息
+## 2. 数据中心 / MES 需要提供给 QPO 的信息
 
-请 MES 提供以下信息，用于 QPO 配置和联调：
+请数据中心和 MES 提供以下信息，用于 QPO 配置和联调：
 
 | 信息 | 示例 | 说明 |
 | --- | --- | --- |
-| MES 内网访问地址 | `http://mes-server:9000` | QPO 后端所在机器必须能访问。 |
-| 物料号接口路径 | `/api/mes/materials/resolve` | QPO 默认路径，可按 MES 实际路径配置。 |
+| MES 内网访问地址 | `http://mes-server:9000` | 数据中心必须能访问；直连兜底时 QPO 后端所在机器也必须能访问。 |
+| 数据中心访问地址 | `http://data-center:8080` | QPO 默认出站目标，数据中心负责转发到 MES。 |
+| 数据中心物料号 endpoint path | `/api/integrations/mes/materials/resolve` | 对应 QPO `MES_MATERIAL_RESOLVE` endpoint path，可在系统配置页维护。 |
+| MES 物料号接口路径 | `/api/mes/materials/resolve` | 数据中心转发 MES 时使用；直连兜底时 QPO 也可按该路径调用。 |
 | 认证方式 | `Bearer Token` / 无认证 | 当前 QPO 支持可选 `Authorization: Bearer {token}`。 |
 | 测试环境地址 | `http://mes-test:9000` | 用于联调。 |
 | 生产环境地址 | `http://mes-prod:9000` | 上线前配置。 |
@@ -45,7 +52,13 @@
 | 并发能力 | 例如 `4` 个并发请求 | QPO 默认后台任务线程池最大 4 个任务并行。 |
 | 错误码/错误信息规则 | JSON 示例 | 方便 QPO 页面展示失败原因。 |
 
-QPO 侧配置项：
+QPO 侧推荐配置为系统配置页 **出站接口 / 数据中心配置**：
+
+- 数据中心连接：维护数据中心 base URL、token URL、clientId/clientSecret、连接/读取超时。
+- 数据中心 endpoint：维护 `MES_MATERIAL_RESOLVE` 的 path、启停和超时。
+- MES 直连兜底：关闭数据中心或本地开发不接入数据中心时，使用 active MES 出站配置；如果没有 active DB 配置，再使用下面 `ERP_MES_*` 环境变量。
+
+本地/应急直连 fallback 环境变量：
 
 ```env
 ERP_MES_BASE_URL=http://mes-server:9000
@@ -57,20 +70,23 @@ ERP_PUBLIC_BASE_URL=http://192.168.70.21:8088
 
 `ERP_PUBLIC_BASE_URL` 用于生成图纸的绝对访问地址。如果 MES 要下载 `drawingUrl`，这个地址必须是 MES 能访问到的内网地址。
 
+> 注意：数据中心链路启用时，物料号获取出站调用不读取 `ERP_MES_BASE_URL` / `ERP_MES_AUTH_TOKEN`；这些变量只保留给直连兜底和本地开发。
+
 ## 3. HTTP 契约
 
 ### 3.1 请求
 
 ```http
-POST {ERP_MES_BASE_URL}{ERP_MES_MATERIAL_PATH}
+POST {ERP_DATA_CENTER_BASE_URL}{MES_MATERIAL_RESOLVE.path}
 Content-Type: application/json
-Authorization: Bearer {ERP_MES_AUTH_TOKEN}
+Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 ```
 
 说明：
 
-- `Authorization` 只有在 QPO 配置了 `ERP_MES_AUTH_TOKEN` 时才会发送。
-- 如果 MES 不需要认证，可以不配置 token。
+- 默认数据中心链路由 QPO 先获取数据中心 access token，再调用数据中心 endpoint；数据中心再转发到 MES。
+- 直连兜底时请求地址为 `POST {MES_BASE_URL}{MES_MATERIAL_PATH}`，`Authorization` 只有在 QPO active MES 配置或 `ERP_MES_AUTH_TOKEN` 配置了 token 时才会发送。
+- 如果 MES 直连不需要认证，可以不配置 token。
 - 请 MES 尽量返回 `Content-Type: application/json`。
 
 ### 3.2 请求 JSON 示例
@@ -80,6 +96,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
   "mesRequestId": "MES-123-8f8c2",
   "ticketId": 123,
   "rfqId": 88,
+  "orderNo": "RFQ-20260721-001",
   "rfqNo": "RFQ-20260721-001",
   "customerName": "客户A",
   "partNo": "P-1001",
@@ -99,6 +116,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 | `mesRequestId` | string | 否 | QPO 本次请求唯一标识。MES response 和后续 callback 必须原样返回。 |
 | `ticketId` | integer | 否 | QPO 已提零件行 ID，可作为幂等键之一。 |
 | `rfqId` | integer | 通常否 | QPO 订单/RFQ ID。 |
+| `orderNo` | string | 可能为空 | 当前实现由 QPO 的订单/RFQ 编号字段生成，用于展示和双方排查；回调定位仍以 `mesRequestId` + `ticketId` 为准。 |
 | `rfqNo` | string | 可能为空 | RFQ 编号。 |
 | `customerName` | string | 可能为空 | 客户名称。 |
 | `partNo` | string | 否 | 图号，QPO 调用前会校验非空。 |
@@ -146,6 +164,8 @@ QPO 成功判定：
 - `materialNo` 非空；
 - `mesRequestId` 等于 QPO 请求中的 `mesRequestId`；
 - `materialNo` 去掉首尾空格后长度不超过 100。
+
+QPO 写回结果：已提零件写入 `order_delivery_ticket.material_no`、`mes_sync_status=SUCCESS`、同步时间、MES 外部流水号和状态信息；如果来源是销售订单，还会同步写回 `sales_order_item.material_no`、`material_no_status=已确认`、`material_no_source=MES_TICKET`、`material_no_source_ticket_id`、`material_no_synced_at` 和摘要信息。
 
 ### 4.2 已受理待回调响应
 
@@ -227,6 +247,20 @@ QPO 前端支持批量选择多个已提零件后提交“获取物料号”任�
 - 建议 MES 至少支持 `4` 个来自 QPO 的并发请求；如果 MES 支持更低并发，请提前告知 QPO 侧调整任务线程池或增加限流。
 - 批量中如果某行进入 `CALLBACK_PENDING`，QPO 会继续处理后续行，最终汇总 `callbackPendingCount`。
 - 同图号版本去重汇总字段：`dedupFollowerCount` 表示关联等待未重复发 MES 的数量；`reusedMaterialCount` 表示复用已确认物料号的数量；`submittedToMesCount` 表示实际提交 MES 的主请求数量。
+
+批量行级状态口径：
+
+| 行级情况 | 批量结果状态 | 是否提交 MES | 说明 |
+| --- | --- | --- | --- |
+| 提单行不存在 | `SKIPPED` | 否 | 返回“提单行不存在”。 |
+| 已是 `SUCCESS` 且已有 `materialNo` | `SKIPPED` | 否 | 返回“MES 物料号已获取”。 |
+| 已是 `PROCESSING` | `SKIPPED` | 否 | 返回“MES 物料号任务处理中”。 |
+| 已是 `CALLBACK_PENDING` | `CALLBACK_PENDING` | 否 | 返回“MES 物料号等待回调”。 |
+| 命中活跃主请求 | `DEDUP_FOLLOWING` | 否 | 只建立 follower 关系，等待主请求即时成功或回调 fan-out。 |
+| 命中唯一历史成功物料号 | `REUSE_SUCCESS` | 否 | 直接复用，不请求 MES。 |
+| 主请求即时成功 | `SUCCESS` | 是 | 写回物料号。 |
+| 主请求被 MES 受理待回调 | `CALLBACK_PENDING` | 是 | 提单行等待回调，任务本身成功完成。 |
+| 主请求调用/响应失败 | `FAILED` | 可能是 | QPO 会记录失败摘要，用户可重试。 |
 
 ## 6. 数据中心回调 QPO（业务来源 MES）
 

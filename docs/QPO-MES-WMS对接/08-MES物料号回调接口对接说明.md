@@ -11,6 +11,8 @@
 - 接口路径：`POST /api/integrations/mes/material-callback`。
 - 请求格式：`application/json`。
 - 认证方式：`Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
+- 鉴权边界：该接口不走普通用户登录态，已从前端登录拦截中排除；后端最终安全边界是入站接口机器 token 校验。
+- 配置来源：优先读取系统配置页 **入站接口 > MES 物料号回调** 的 DB 配置；页面配置不存在时，才兼容 `ERP_PUBLIC_BASE_URL`、`ERP_MES_CALLBACK_TOKEN`、`ERP_MES_CALLBACK_TOKEN_ENABLED` 等老环境 fallback。
 - 主定位键：`mesRequestId`。
 - 交叉校验键：`ticketId`。
 - 去重口径：数据中心只需要转发主 `mesRequestId` 的 MES 结果；同图号版本的 follower 等待行由 QPO 内部 fan-out 写回，数据中心和 MES 都不需要逐行回调。
@@ -23,6 +25,7 @@ QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入�
 {
   "mesRequestId": "MES-123-8f8c2",
   "ticketId": 123,
+  "orderNo": "RFQ-20260721-001",
   "partNo": "P-1001",
   "version": "A",
   "sourceType": "SALES_ORDER"
@@ -33,6 +36,7 @@ QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入�
 
 - `mesRequestId` 是 QPO 每次请求生成的唯一 ID，也是回调主定位键。
 - `ticketId` 是 QPO 已提零件行 ID，用于防止回调串单。
+- `orderNo`、`partNo`、`version`、`sourceType` 等字段只用于业务识别和双方排查；QPO 回调落库不依赖这些字段定位。
 - 如果 QPO 同图号版本去重后把其他零件作为 follower 关联到主请求，数据中心和 MES 都不需要知道 follower 明细，也不需要分别回调 follower。
 
 ## 3. HTTP 契约
@@ -49,6 +53,7 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 - `QPO_INBOUND_CALLBACK_TOKEN` 是 QPO 侧生成的入站回调机器 token，占位符不是实际 token。真实 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次，并通过受控渠道单独交付数据中心。
 - 当 QPO 入站接口配置开启 token 校验时，数据中心必须携带 `Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
 - `ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback；页面入站接口配置存在时，以页面配置为准。数据中心联调方不需要也不应依赖该环境变量名。
+- 如果页面配置存在但未生成 token，且 token 校验开启，即使老环境变量里配置了 token，也会按当前 DB 配置校验并返回 `401`；因此生产联调应以页面展示的 token 状态为准。
 - token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 返回 HTTP `401`。
 - 不要在日志、截图、工单或联调群中明文发送真实 token。
 
@@ -155,12 +160,14 @@ QPO 收到成功回调后按以下顺序处理：
 3. 校验 `ticketId` 不为空。
 4. 按 `mesRequestId` 查询 `order_delivery_ticket_mes_request` 请求流水。
 5. 校验请求流水中的 `ticketId` 和回调 `ticketId` 一致。
-6. 校验当前 `order_delivery_ticket.mes_request_id` 仍等于回调 `mesRequestId`，旧请求回调不能覆盖新请求。
+6. 校验当前 `order_delivery_ticket.mes_request_id` 仍等于回调 `mesRequestId`，旧请求回调不能覆盖新请求；不一致时 QPO 会把对应请求流水标记为 `STALE` 并返回 `409`。
 7. 校验 `status=SUCCESS` 时 `materialNo` 非空且长度不超过 100。
 8. 写回 `order_delivery_ticket.material_no`、`mes_sync_status=SUCCESS`、`mes_synced_at`、`mes_external_task_id`、`mes_callback_received_at` 和回调摘要。
-9. 更新 `order_delivery_ticket_mes_request` 请求流水状态。
+9. 更新 `order_delivery_ticket_mes_request` 请求流水状态、`material_no`、`mes_external_task_id`、`callback_received_at`、`callback_message`、`updated_at` 和完成时间。
 10. 如果来源是销售订单，回写 `sales_order_item.material_no`、`material_no_status=已确认`、`material_no_source=MES_TICKET`、`material_no_source_ticket_id`、`material_no_synced_at`。
 11. 如果当前请求是同图号版本去重主请求，QPO fan-out 写回所有 follower 等待行。
+
+失败回调也会更新请求流水的回调时间、外部流水号、失败摘要和完成时间，并把主提单行及 follower 等待行置为 `FAILED`；HTTP 层仍返回 `200`，响应体 `success=false` 表示业务失败已被 QPO 接收。
 
 ## 7. 同图号版本去重回调规则
 
@@ -194,7 +201,7 @@ MES 不需要：
 | 相同 `mesRequestId` + 相同 `ticketId` + 相同 `materialNo` 重复回调 | 幂等返回成功，不重复污染数据。 |
 | 相同 `mesRequestId` + 不同 `ticketId` | 返回 HTTP `409`，拒绝串单回调。 |
 | 相同 `mesRequestId` + 不同 `materialNo` | 返回 HTTP `409`，拒绝覆盖已确认物料号。 |
-| 旧 `mesRequestId` 回调到当前已有新请求的 ticket | 返回 HTTP `409`，旧回调不能覆盖新请求。 |
+| 旧 `mesRequestId` 回调到当前已有新请求的 ticket | 请求流水标记为 `STALE`，返回 HTTP `409`，旧回调不能覆盖新请求。 |
 | 销售订单零件已有不同且已确认物料号 | 返回 HTTP `409`，不覆盖销售订单主零件表。 |
 | 找不到 `mesRequestId` 请求流水 | 返回 HTTP `404`。 |
 | 缺少 `mesRequestId`、`ticketId` 或成功回调缺少 `materialNo` | 返回 HTTP `400`。 |
