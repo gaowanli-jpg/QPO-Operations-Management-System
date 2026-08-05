@@ -48,7 +48,7 @@ class LockedItemQueryTest {
                         "LockedItemService",
                         "listAllocations",
                         "listTicketAllocations",
-                        "/api/order-delivery/allocations",
+                        "/api/order-delivery/locked-items",
                         "/api/order-delivery/tickets/${ticketId}/allocations",
                         "market:locked-item:view",
                         "/locked-items",
@@ -206,12 +206,17 @@ class LockedItemQueryTest {
                 );
         assertThat(controller)
                 .contains(
-                        "@GetMapping(\"/allocations\")",
+                        "@GetMapping(\"/locked-items\")",
+                        "@GetMapping(\"/locked-items/customers\")",
                         "@GetMapping(\"/tickets/{ticketId}/allocations\")",
                         "@RequirePermission(\"market:locked-item:view\")",
-                        "@GetMapping(\"/allocations/customers\")",
                         "@RequirePermission(\"market:locked-item:customer-select\")",
                         "return lockedItemService.listCustomerOptions(field, keyword)"
+                )
+                .doesNotContain(
+                        "@GetMapping(\"/allocations\")",
+                        "@GetMapping(\"/allocations/customers\")",
+                        "listAllocationCustomers("
                 );
     }
 

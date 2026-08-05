@@ -343,9 +343,9 @@ public Map<String, Object> submitWmsAllocation(@PathVariable Integer ticketId) {
     return Map.of("success", true, "message", "WMS allocation submitted", "task", task);
 }
 
-@GetMapping("/allocations")
+@GetMapping("/locked-items")
 @RequirePermission("market:locked-item:view")
-public LockedItemPageDTO listAllocations(LockedItemQueryReq req) {
+public LockedItemPageDTO listLockedItems(LockedItemQueryReq req) {
     return lockedItemService.listAllocations(req);
 }
 
@@ -543,7 +543,7 @@ export const submitWmsAllocation = (ticketId) => request(`/api/order-delivery/ti
   method: 'POST'
 })
 
-export const listLockedItems = (params = {}) => request('/api/order-delivery/allocations', { params })
+export const listLockedItems = (params = {}) => request('/api/order-delivery/locked-items', { params })
 
 export const listTicketAllocations = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/allocations`)
 ```
@@ -655,7 +655,7 @@ WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} durationMs={}
 扩展 `deliveredItemApi.test.js`：
 
 - `submitWmsAllocation(123)` 调用 `POST /api/order-delivery/tickets/123/wms-allocation`。
-- `listLockedItems(params)` 调用 `/api/order-delivery/allocations`。
+- `listLockedItems(params)` 调用 `/api/order-delivery/locked-items`。
 - `listTicketAllocations(123)` 调用 `/api/order-delivery/tickets/123/allocations`。
 
 新增 `deliveredItemWmsAllocation.test.js`：

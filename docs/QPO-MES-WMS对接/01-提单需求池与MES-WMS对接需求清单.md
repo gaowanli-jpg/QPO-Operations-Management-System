@@ -350,7 +350,7 @@ POST /api/order-delivery/tickets/wms-allocation/batch
 建议接口：
 
 ```text
-GET /api/order-delivery/allocations
+GET /api/order-delivery/locked-items
 GET /api/order-delivery/tickets/{ticketId}/allocations
 ```
 

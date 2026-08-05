@@ -37,6 +37,18 @@ class ProductionItemModuleSplitStage2Test {
     }
 
     @Test
+    void backendDoesNotExposeLegacyAllocationListAliasesAfterModuleSplit() throws IOException {
+        String controller = read(MAIN_JAVA.resolve(Path.of("controller", "OrderDeliveryController.java")));
+
+        assertThat(controller)
+                .doesNotContain(
+                        "@GetMapping(\"/allocations\")",
+                        "@GetMapping(\"/allocations/customers\")",
+                        "listAllocationCustomers("
+                );
+    }
+
+    @Test
     void lockedItemServiceForcesLockedStockScopeAndKeepsPagingDataScopeInDatabase() throws IOException {
         String lockedService = read(MAIN_JAVA.resolve(Path.of("service", "LockedItemService.java")));
 

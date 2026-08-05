@@ -113,20 +113,6 @@ public class OrderDeliveryController {
         return productionItemService.listCustomerOptions(field, keyword);
     }
 
-    @GetMapping("/allocations")
-    @RequirePermission("market:locked-item:view")
-    public LockedItemPageDTO listAllocations(@ModelAttribute LockedItemQueryReq req) {
-        return lockedItemService.listAllocations(req);
-    }
-
-    @GetMapping("/allocations/customers")
-    @RequirePermission("market:locked-item:customer-select")
-    public List<CustomerOptionDTO> listAllocationCustomers(
-            @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return lockedItemService.listCustomerOptions(field, keyword);
-    }
-
     @GetMapping("/tickets/{ticketId}/allocations")
     @RequirePermission("market:locked-item:view")
     public List<LockedItemDTO> listTicketAllocations(@PathVariable Integer ticketId) {
