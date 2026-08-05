@@ -20,11 +20,15 @@
                 <el-form :model="rfqForm" label-width="120px" class="customer-form">
                   <el-row :gutter="20" justify="center">
                     <el-col :xs="24" :sm="22" :md="14" :lg="10" :xl="9" class="customer-input-col">
-                      <el-form-item label="客户名称/代码" required>
-                        <el-input v-model="rfqForm.customerName" placeholder="例如：Tesla-01 或 华为">
+                      <el-form-item label="客户" required>
+                        <el-input
+                          :model-value="rfqCustomerLabel"
+                          readonly
+                          placeholder="请选择客户主数据"
+                        >
                           <template #append>
-                            <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="customerPickerVisible = true">
-                              选择已有客户
+                            <el-button v-permission="'market:rfq:customer-select'" class="existing-customer-button" @click="openRfqCustomerPicker">
+                              选择客户
                             </el-button>
                           </template>
                         </el-input>
@@ -366,7 +370,12 @@ import {
 import { usePendingAction } from '../composables/usePendingAction'
 import { readActionError } from '../utils/actionError'
 
-const rfqForm = reactive({ customerName: '' })
+const rfqForm = reactive({
+  customerId: null,
+  customerCode: '',
+  customerShortName: '',
+  customerName: ''
+})
 const excelFile = ref(null)
 const drawingFiles = ref([])
 const versionDrawingFiles = ref([])
@@ -421,6 +430,14 @@ const salesOrderCustomerLabel = computed(() => {
   ].filter(Boolean)
   return parts.length > 0 ? parts.join(' / ') : ''
 })
+const rfqCustomerLabel = computed(() => {
+  const parts = [
+    rfqForm.customerCode,
+    rfqForm.customerShortName,
+    rfqForm.customerName
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : ''
+})
 
 const handleSalesOrderExcelChange = (uploadFile) => {
   salesOrderFile.value = uploadFile.raw
@@ -443,7 +460,14 @@ const downloadSalesOrderTemplate = () => runAction(DOWNLOAD_SALES_ORDER_TEMPLATE
 
 const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
 
+const openRfqCustomerPicker = () => {
+  customerPickerVisible.value = true
+}
+
 const selectExistingCustomer = (customer) => {
+  rfqForm.customerId = customer?.id || null
+  rfqForm.customerCode = customer?.customerCode || ''
+  rfqForm.customerShortName = customer?.customerShortName || ''
   rfqForm.customerName = resolveCustomerName(customer)
 }
 
@@ -576,7 +600,7 @@ const submitSalesOrderImport = async () => {
 
 // 提交询价单和图纸
 const submitRfqPackage = async () => {
-  if (!rfqForm.customerName) return ElMessage.warning('请填写客户名称！')
+  if (!rfqForm.customerId) return ElMessage.warning('请选择询价单客户！')
   if (!excelFile.value) return ElMessage.warning('请上传客户询价表 Excel！')
 
   return runAction(IMPORT_RFQ_ACTION_KEY, async () => {
@@ -608,6 +632,9 @@ const submitRfqPackage = async () => {
             center: true,
           }
         ).then(() => {
+          rfqForm.customerId = null
+          rfqForm.customerCode = ''
+          rfqForm.customerShortName = ''
           rfqForm.customerName = ''
           excelFile.value = null
           drawingFiles.value = [] // 清空拖拽出来的 PDF

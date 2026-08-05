@@ -58,16 +58,24 @@ describe('QPO customer picker dialog', () => {
     expect(orderPicker).toContain('customer?.customerName')
   })
 
-  test('keeps manual customer entry on RFQ import while adding existing customer selection', () => {
+  test('requires customer master selection on RFQ import instead of manual customer entry', () => {
     const source = readComponent('MarketDashboard.vue')
 
     expect(source).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
-    expect(source).toContain('v-model="rfqForm.customerName"')
-    expect(source).toContain('选择已有客户')
+    expect(source).toContain(':model-value="rfqCustomerLabel"')
+    expect(source).toContain('readonly')
+    expect(source).toContain('placeholder="请选择客户主数据"')
+    expect(source).toContain('选择客户')
     expect(source).toContain('@select="selectExistingCustomer"')
+    expect(source).toContain('rfqForm.customerId = customer?.id || null')
+    expect(source).toContain('rfqForm.customerCode = customer?.customerCode || \'\'')
+    expect(source).toContain('rfqForm.customerShortName = customer?.customerShortName || \'\'')
     expect(source).toContain('rfqForm.customerName = resolveCustomerName(customer)')
+    expect(source).toContain('const rfqCustomerLabel = computed(() =>')
     expect(source).toContain('customer-scope="market-rfq"')
     expect(source).toContain('v-permission="\'market:rfq:customer-select\'"')
+    expect(source).not.toContain('v-model="rfqForm.customerName"')
+    expect(source).not.toContain('选择已有客户')
   })
 
   test('order picker consumers declare module selection scopes', () => {

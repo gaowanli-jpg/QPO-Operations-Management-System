@@ -58,7 +58,11 @@ describe('QPO final UI punch-list polish', () => {
     expect(marketDashboard).not.toContain("rfqForm = reactive({ customerName: '', orderType: '' })")
     expect(marketDashboard).not.toContain('market:rfq:order-type-select')
     expect(marketDashboard).not.toContain("formData.append('orderType'")
-    expect(marketDashboard).toContain("const rfqForm = reactive({ customerName: '' })")
+    expect(marketDashboard).toContain("const rfqForm = reactive({")
+    expect(marketDashboard).toContain("customerId: null")
+    expect(marketDashboard).toContain("customerCode: ''")
+    expect(marketDashboard).toContain("customerShortName: ''")
+    expect(marketDashboard).toContain("customerName: ''")
 
     expect(marketRelease).toContain('v-model="releaseForm.orderType"')
     expect(marketRelease).toContain('release-order-type-select')
