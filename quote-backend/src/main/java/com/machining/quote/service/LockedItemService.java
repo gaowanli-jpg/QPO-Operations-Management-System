@@ -11,17 +11,17 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 public class LockedItemService {
     private static final int TICKET_ALLOCATION_LIMIT = 1000;
+    private static final Set<String> LOCKED_STOCK_TYPES = Set.of("IN_STOCK_LOCK", "IN_PRODUCTION_LOCK");
 
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
     private DataScopeService dataScopeService;
-    @Autowired(required = false)
-    private CustomerMasterService customerMasterService;
 
     public LockedItemPageDTO listAllocations(LockedItemQueryReq req) {
         LockedItemQueryReq effectiveReq = req == null ? new LockedItemQueryReq() : req;
@@ -49,12 +49,9 @@ public class LockedItemService {
     }
 
     public List<String> listCustomers() {
-        if (customerMasterService != null) {
-            return customerMasterService.listCustomerNamesForCurrentScope();
-        }
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
-        query.isNotNull("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)");
-        query.ne("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");
+        applyLockedStockScope(query);
+        applyCustomerPresentScope(query);
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return allocationMapper.selectLockedItemCustomers(query).stream()
                 .filter(this::hasText)
@@ -62,9 +59,6 @@ public class LockedItemService {
     }
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
-        if (customerMasterService != null) {
-            return customerMasterService.listCustomerOptions(field, keyword);
-        }
         return listCustomers().stream()
                 .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
                 .map(this::toCustomerOption)
@@ -73,6 +67,7 @@ public class LockedItemService {
 
     private QueryWrapper<LockedItemDTO> buildQuery(LockedItemQueryReq req) {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
+        applyLockedStockScope(query);
         applyEquals(query, "alloc.customer_name", req.getCustomerName());
         applyLike(query, "alloc.rfq_no", req.getRfqNo());
         applyLike(query, "alloc.part_no", req.getPartNo());
@@ -82,8 +77,7 @@ public class LockedItemService {
         applyLike(query, "alloc.customer_order_no", req.getCustomerOrderNo());
         applyLike(query, "alloc.customer_project_no", req.getCustomerProjectNo());
         applyEquals(query, "alloc.item_type", req.getItemType());
-        applyEquals(query, "alloc.allocation_type", normalizeUpper(req.getAllocationType()));
-        applyEquals(query, "alloc.mes_production_status", normalizeUpper(req.getMesProductionStatus()));
+        applyLockedAllocationType(query, req.getAllocationType());
         applyLike(query, "alloc.wms_production_order_no", req.getWmsProductionOrderNo());
         if (req.getDateFrom() != null) {
             query.ge("alloc.delivery_date", req.getDateFrom());
@@ -93,6 +87,27 @@ public class LockedItemService {
         }
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    private void applyLockedStockScope(QueryWrapper<LockedItemDTO> query) {
+        query.in("alloc.allocation_type", LOCKED_STOCK_TYPES);
+    }
+
+    private void applyLockedAllocationType(QueryWrapper<LockedItemDTO> query, String allocationType) {
+        String normalized = normalizeUpper(allocationType);
+        if (!hasText(normalized)) {
+            return;
+        }
+        if (LOCKED_STOCK_TYPES.contains(normalized)) {
+            query.eq("alloc.allocation_type", normalized);
+        } else {
+            query.apply("1 = 0");
+        }
+    }
+
+    private void applyCustomerPresentScope(QueryWrapper<LockedItemDTO> query) {
+        query.isNotNull("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)");
+        query.ne("COALESCE(alloc.customer_name, ticket.customer_name, rfq.customer_name)", "");
     }
 
     private void applyLike(QueryWrapper<LockedItemDTO> query, String column, String value) {

@@ -10,9 +10,11 @@ import com.machining.quote.dto.LockedItemMesProductionBatchReq;
 import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.LockedItemQueryReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProductionItemQueryReq;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.service.DeliveredItemService;
 import com.machining.quote.service.LockedItemService;
+import com.machining.quote.service.ProductionItemService;
 import com.machining.quote.service.SystemTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +35,8 @@ public class OrderDeliveryController {
     private DeliveredItemService deliveredItemService;
     @Autowired
     private LockedItemService lockedItemService;
+    @Autowired
+    private ProductionItemService productionItemService;
     @Autowired
     private SystemTaskService systemTaskService;
 
@@ -78,6 +82,35 @@ public class OrderDeliveryController {
     @RequirePermission("market:delivered-item:wms-allocate")
     public SystemTask submitWmsAllocationBatch(@RequestBody DeliveryTicketBatchReq req) {
         return systemTaskService.submitWmsAllocationBatchTask(req == null ? null : req.getTicketIds());
+    }
+
+
+    @GetMapping("/locked-items")
+    @RequirePermission("market:locked-item:view")
+    public LockedItemPageDTO listLockedItems(@ModelAttribute LockedItemQueryReq req) {
+        return lockedItemService.listAllocations(req);
+    }
+
+    @GetMapping("/locked-items/customers")
+    @RequirePermission("market:locked-item:customer-select")
+    public List<CustomerOptionDTO> listLockedItemCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return lockedItemService.listCustomerOptions(field, keyword);
+    }
+
+    @GetMapping("/production-items")
+    @RequirePermission("market:production-item:view")
+    public LockedItemPageDTO listProductionItems(@ModelAttribute ProductionItemQueryReq req) {
+        return productionItemService.listProductionItems(req);
+    }
+
+    @GetMapping("/production-items/customers")
+    @RequirePermission("market:production-item:customer-select")
+    public List<CustomerOptionDTO> listProductionItemCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return productionItemService.listCustomerOptions(field, keyword);
     }
 
     @GetMapping("/allocations")

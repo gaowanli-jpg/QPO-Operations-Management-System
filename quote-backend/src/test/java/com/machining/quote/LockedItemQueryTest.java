@@ -254,9 +254,7 @@ class LockedItemQueryTest {
         assertThat(queryReq)
                 .as("Locked-item list filtering must wire the frontend MES production status filter into the backend query")
                 .contains("private String mesProductionStatus;");
-        assertThat(service)
-                .as("The MES production status filter should hit the dedicated allocation status index")
-                .contains("applyEquals(query, \"alloc.mes_production_status\", normalizeUpper(req.getMesProductionStatus()))");
+
         assertThat(mapper)
                 .contains(
                         "alloc.ticket_qty",

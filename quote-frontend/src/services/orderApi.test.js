@@ -35,6 +35,7 @@ describe('orderApi', () => {
     await orderApi.listCustomers('sales-order')
     await orderApi.listCustomers('delivered-item')
     await orderApi.listCustomers('locked-item')
+    await orderApi.listCustomers('production-item')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/rfq/customers')
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/customers')
@@ -44,7 +45,8 @@ describe('orderApi', () => {
     expect(request).toHaveBeenNthCalledWith(6, '/api/order-management/customers')
     expect(request).toHaveBeenNthCalledWith(7, '/api/market/sales-order-management/customers')
     expect(request).toHaveBeenNthCalledWith(8, '/api/order-delivery/tickets/customers')
-    expect(request).toHaveBeenNthCalledWith(9, '/api/order-delivery/allocations/customers')
+    expect(request).toHaveBeenNthCalledWith(9, '/api/order-delivery/locked-items/customers')
+    expect(request).toHaveBeenNthCalledWith(10, '/api/order-delivery/production-items/customers')
   })
 
   test('listOrders forwards query params', async () => {
@@ -80,26 +82,26 @@ describe('orderApi', () => {
   })
 
   test('exposes order status management actions with dedicated endpoints', async () => {
-    await orderApi.rollbackQuotedOrder(12, { reason: '重新调整报价交期' })
-    await orderApi.rollbackPricedOrder(12, { reason: '工程重新核价' })
-    await orderApi.discardOrder(12, { reason: '客户取消' })
-    await orderApi.restoreOrder(12, { reason: '客户恢复询价' })
+    await orderApi.rollbackQuotedOrder(12, { reason: '閲嶆柊璋冩暣鎶ヤ环浜ゆ湡' })
+    await orderApi.rollbackPricedOrder(12, { reason: '宸ョ▼閲嶆柊鏍镐环' })
+    await orderApi.discardOrder(12, { reason: '瀹㈡埛鍙栨秷' })
+    await orderApi.restoreOrder(12, { reason: '瀹㈡埛鎭㈠璇环' })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/order-management/orders/12/rollback-quoted', {
       method: 'POST',
-      data: { reason: '重新调整报价交期' }
+      data: { reason: '閲嶆柊璋冩暣鎶ヤ环浜ゆ湡' }
     })
     expect(request).toHaveBeenNthCalledWith(2, '/api/order-management/orders/12/rollback-priced', {
       method: 'POST',
-      data: { reason: '工程重新核价' }
+      data: { reason: '宸ョ▼閲嶆柊鏍镐环' }
     })
     expect(request).toHaveBeenNthCalledWith(3, '/api/order-management/orders/12/discard', {
       method: 'POST',
-      data: { reason: '客户取消' }
+      data: { reason: '瀹㈡埛鍙栨秷' }
     })
     expect(request).toHaveBeenNthCalledWith(4, '/api/order-management/orders/12/restore', {
       method: 'POST',
-      data: { reason: '客户恢复询价' }
+      data: { reason: '瀹㈡埛鎭㈠璇环' }
     })
   })
 

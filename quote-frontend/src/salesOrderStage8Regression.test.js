@@ -52,6 +52,6 @@ describe('sales order independent stage 8 regression', () => {
     expect(deliveredItem).toContain('listDeliveredItems(buildParams())')
     expect(lockedItem).toContain('listLockedItems(buildParams())')
     expect(deliveredItemApi).toContain("request('/api/order-delivery/tickets', { params })")
-    expect(deliveredItemApi).toContain("request('/api/order-delivery/allocations', { params })")
+    expect(deliveredItemApi).toContain("request('/api/order-delivery/locked-items', { params })")
   })
 })

@@ -59,14 +59,22 @@ describe('deliveredItemApi', () => {
     })
   })
 
-  test('listLockedItems calls locked item allocation endpoint with params', async () => {
+  test('listLockedItems calls locked stock result endpoint with params', async () => {
     const params = { allocationType: 'IN_PRODUCTION_LOCK', wmsProductionOrderNo: 'MO-001' }
 
     await deliveredItemApi.listLockedItems(params)
 
-    expect(request).toHaveBeenCalledWith('/api/order-delivery/allocations', { params })
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/locked-items', { params })
   })
 
+
+  test('listProductionItems calls production work pool endpoint with params', async () => {
+    const params = { mesProductionStatus: 'FAILED', partNo: 'P-200' }
+
+    await deliveredItemApi.listProductionItems(params)
+
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/production-items', { params })
+  })
   test('listTicketAllocations loads allocation rows for a delivered ticket', async () => {
     await deliveredItemApi.listTicketAllocations(123)
 

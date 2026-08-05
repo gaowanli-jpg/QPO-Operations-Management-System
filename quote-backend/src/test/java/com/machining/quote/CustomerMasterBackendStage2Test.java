@@ -145,6 +145,7 @@ class CustomerMasterBackendStage2Test {
         String orderService = source("service/OrderManagementService.java");
         String deliveredService = source("service/DeliveredItemService.java");
         String lockedService = source("service/LockedItemService.java");
+        String productionService = source("service/ProductionItemService.java");
         String dataScopeService = source("service/DataScopeService.java");
 
         assertThat(marketController)
@@ -158,11 +159,13 @@ class CustomerMasterBackendStage2Test {
         assertThat(deliveryDocumentController).contains("@RequirePermission(\"market:delivery-document:customer-select\")");
         assertThat(deliveredController)
                 .contains("@RequirePermission(\"market:delivered-item:customer-select\")")
-                .contains("@RequirePermission(\"market:locked-item:customer-select\")");
+                .contains("@RequirePermission(\"market:locked-item:customer-select\")")
+                .contains("@RequirePermission(\"market:production-item:customer-select\")");
 
         assertThat(orderService).contains("CustomerMasterService").contains("listCustomerOptions(field, keyword)");
         assertThat(deliveredService).contains("CustomerMasterService").contains("listCustomerOptions(field, keyword)");
-        assertThat(lockedService).contains("CustomerMasterService").contains("listCustomerOptions(field, keyword)");
+        assertThat(lockedService).doesNotContain("CustomerMasterService").contains("selectLockedItemCustomers(query)");
+        assertThat(productionService).doesNotContain("CustomerMasterService").contains("selectLockedItemCustomers(query)");
         assertThat(dataScopeService).contains("CustomerMasterMapper").contains("customer_master");
     }
 
