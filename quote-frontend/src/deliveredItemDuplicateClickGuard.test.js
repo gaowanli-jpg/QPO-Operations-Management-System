@@ -71,8 +71,8 @@ describe('delivery duplicate click guards', () => {
     }
   })
 
-  test('locked item list keeps query loading scoped while production dispatch uses button-level pending', () => {
-    const source = readSource('components', 'LockedItemManage.vue')
+  test('production item list keeps query loading scoped while production dispatch uses button-level pending', () => {
+    const source = readSource('components', 'ProductionItemManage.vue')
 
     expect(source).toContain('const loading = ref(false)')
     expect(source).toContain('v-loading="loading"')

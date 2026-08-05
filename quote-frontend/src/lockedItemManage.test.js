@@ -55,7 +55,6 @@ describe('LockedItemManage guardrails', () => {
       'customerOrderNo',
       'customerProjectNo',
       'allocationType',
-      'mesProductionStatus',
       'dateRange'
     ]) {
       expect(pageSource).toContain(token)
@@ -71,50 +70,48 @@ describe('LockedItemManage guardrails', () => {
   test('uses workbench filter layout with primary filters, batch actions, and collapsed advanced filters', () => {
     expect(pageSource).toContain('locked-toolbar-main')
     expect(pageSource).toContain('locked-primary-filters')
-    expect(pageSource).toContain('locked-batch-actions')
+    expect(pageSource).not.toContain('locked-batch-actions')
     expect(pageSource).toContain('locked-advanced-filters')
     expect(pageSource).toContain('advancedFiltersVisible = ref(false)')
     expect(pageSource).toContain('advancedFiltersVisible ? \'收起筛选\' : \'高级筛选\'')
     expect(pageSource).toContain('handleResetFilters')
-    expect(pageSource).toContain('下发MES生产')
-    expect(pageSource).toContain('PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION')
-    expect(pageSource).toContain('v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
+    expect(pageSource).not.toContain('下发MES生产')
+    expect(pageSource).not.toContain('PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION')
+    expect(pageSource).not.toContain('v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
   })
 
-  test('supports selecting locked allocation rows for MES production dispatch', () => {
-    expect(pageSource).toContain('@selection-change="handleSelectionChange"')
-    expect(pageSource).toContain('<el-table-column type="selection" width="46" fixed align="center" />')
-    expect(pageSource).toContain('const selectedRows = ref([])')
-    expect(pageSource).toContain('const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))')
-    expect(pageSource).toContain('const handleSelectionChange = (rows) =>')
-    expect(pageSource).toContain('selectedRows.value = rows || []')
+  test('does not allow selecting locked allocation rows for MES production dispatch', () => {
+    expect(pageSource).not.toContain('@selection-change="handleSelectionChange"')
+    expect(pageSource).not.toContain('<el-table-column type="selection" width="46" fixed align="center" />')
+    expect(pageSource).not.toContain('const selectedRows = ref([])')
+    expect(pageSource).not.toContain('const selectedAllocationIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))')
+    expect(pageSource).not.toContain('const handleSelectionChange = (rows) =>')
   })
 
-  test('wires MES production dispatch button with confirmation, pending guard, and API call', () => {
+
+  test('keeps MES production dispatch out of the locked result page', () => {
     expect(apiSource).toContain('submitMesProductionDispatchBatch')
     expect(apiSource).toContain('/api/order-delivery/production-items/mes-production')
-    expect(apiSource).toContain('data: { allocationIds }')
-    expect(pageSource).toContain('submitMesProductionDispatchBatch')
-    expect(pageSource).toContain('ElMessageBox.confirm')
-    expect(pageSource).toContain('确认将选中的待生产锁库零件下发给 MES 生产流程？')
-    expect(pageSource).toContain('非待生产行会自动跳过')
-    expect(pageSource).toContain(':disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"')
-    expect(pageSource).toContain(':loading="isMesProductionDispatchPending"')
-    expect(pageSource).toContain('@click="handleMesProductionDispatch"')
-    expect(pageSource).toContain('return runAction(lockedActionKeys.mesProductionDispatch(), async () =>')
-    expect(pageSource).toContain('await submitMesProductionDispatchBatch(selectedAllocationIds.value)')
+    expect(pageSource).not.toContain('submitMesProductionDispatchBatch')
+    expect(pageSource).not.toContain('ElMessageBox.confirm')
+    expect(pageSource).not.toContain('确认将选中的待生产锁库零件下发给 MES 生产流程？')
+    expect(pageSource).not.toContain('非待生产行会自动跳过')
+    expect(pageSource).not.toContain(':disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"')
+    expect(pageSource).not.toContain(':loading="isMesProductionDispatchPending"')
+    expect(pageSource).not.toContain('@click="handleMesProductionDispatch"')
+    expect(pageSource).not.toContain('return runAction(lockedActionKeys.mesProductionDispatch(), async () =>')
+    expect(pageSource).not.toContain('await submitMesProductionDispatchBatch(selectedAllocationIds.value)')
   })
 
-  test('shows MES production batch result summary and refreshes after submit', () => {
-    expect(pageSource).toContain('mesProductionResult')
-    expect(pageSource).toContain('mes-production-result-surface')
-    expect(pageSource).toContain('MES生产下发结果')
-    expect(pageSource).toContain('成功：{{ formatMesProductionCount(mesProductionResult, \'successCount\') }}')
-    expect(pageSource).toContain('失败：{{ formatMesProductionCount(mesProductionResult, \'failedCount\') }}')
-    expect(pageSource).toContain('跳过：{{ formatMesProductionCount(mesProductionResult, \'skippedCount\') }}')
-    expect(pageSource).toContain('waitMesProductionTaskResult(taskId)')
-    expect(pageSource).toContain('selectedRows.value = []')
-    expect(pageSource).toContain('await loadItems()')
+  test('does not show MES production batch result summary on the locked result page', () => {
+    expect(pageSource).not.toContain('mesProductionResult')
+    expect(pageSource).not.toContain('mes-production-result-surface')
+    expect(pageSource).not.toContain('MES生产下发结果')
+    expect(pageSource).not.toContain("成功：{{ formatMesProductionCount(mesProductionResult, 'successCount') }}")
+    expect(pageSource).not.toContain("失败：{{ formatMesProductionCount(mesProductionResult, 'failedCount') }}")
+    expect(pageSource).not.toContain("跳过：{{ formatMesProductionCount(mesProductionResult, 'skippedCount') }}")
+    expect(pageSource).not.toContain('waitMesProductionTaskResult(taskId)')
+    expect(pageSource).not.toContain('selectedRows.value = []')
   })
 
   test('uses module customer picker and freezes primary versus advanced locked-item filters', () => {
@@ -133,8 +130,7 @@ describe('LockedItemManage guardrails', () => {
     for (const token of [
       'filters.partNo',
       'filters.version',
-      'filters.allocationType',
-      'filters.mesProductionStatus'
+      'filters.allocationType'
     ]) {
       expect(primarySource).toContain(token)
     }
@@ -209,13 +205,13 @@ describe('LockedItemManage guardrails', () => {
   test('localizes allocation types and uses stable tag types', () => {
     expect(pageSource).toContain('IN_STOCK_LOCK')
     expect(pageSource).toContain('IN_PRODUCTION_LOCK')
-    expect(pageSource).toContain('PRODUCTION_REQUIRED')
+    expect(pageSource).not.toContain('PRODUCTION_REQUIRED')
     expect(pageSource).toContain('已入库库存锁定')
     expect(pageSource).toContain('在产库存锁定')
-    expect(pageSource).toContain('待生产数量')
+    expect(pageSource).not.toContain('待生产数量')
     expect(pageSource).toContain("type: 'success'")
     expect(pageSource).toContain("type: 'warning'")
-    expect(pageSource).toContain("type: 'danger'")
+    expect(pageSource).not.toContain("type: 'danger'")
   })
 
   test('supports ticket-specific result entry and Element Plus error feedback', () => {

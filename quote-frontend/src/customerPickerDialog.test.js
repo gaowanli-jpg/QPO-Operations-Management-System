@@ -105,8 +105,9 @@ describe('QPO customer picker dialog', () => {
     expect(salesOrderManage).toContain('v-permission="\'market:sales-order:customer-select\'"')
   })
 
-  test('delivered and locked item modules use their own customer selection scopes', () => {
+  test('delivered, production, and locked item modules use their own customer selection scopes', () => {
     const deliveredManage = readComponent('DeliveredItemManage.vue')
+    const productionManage = readComponent('ProductionItemManage.vue')
     const lockedManage = readComponent('LockedItemManage.vue')
 
     expect(deliveredManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
@@ -114,6 +115,12 @@ describe('QPO customer picker dialog', () => {
     expect(deliveredManage).toContain('v-permission="\'market:delivered-item:customer-select\'"')
     expect(deliveredManage).toContain('@select="handleCustomerSelected"')
     expect(deliveredManage).toContain('filters.customerName = resolveCustomerName(customer)')
+
+    expect(productionManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
+    expect(productionManage).toContain('customer-scope="production-item"')
+    expect(productionManage).toContain('v-permission="\'market:production-item:customer-select\'"')
+    expect(productionManage).toContain('@select="handleCustomerSelected"')
+    expect(productionManage).toContain('filters.customerName = resolveCustomerName(customer)')
 
     expect(lockedManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(lockedManage).toContain('customer-scope="locked-item"')
@@ -127,6 +134,7 @@ describe('QPO customer picker dialog', () => {
       readComponent('OrderManage.vue'),
       readComponent('SalesOrderManage.vue'),
       readComponent('DeliveredItemManage.vue'),
+      readComponent('ProductionItemManage.vue'),
       readComponent('LockedItemManage.vue')
     ]
 
