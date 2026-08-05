@@ -13,7 +13,7 @@ const logDoc = readFileSync(resolve(repoRoot, 'docs', 'QPO日志模块', '03-日
 
 describe('Locked item MES production dispatch stage 6 closure', () => {
   test('keeps frontend dispatch interaction aligned with the documented batch endpoint', () => {
-    expect(apiSource).toContain('/api/order-delivery/allocations/mes-production')
+    expect(apiSource).toContain('/api/order-delivery/production-items/mes-production')
     expect(apiSource).toContain('data: { allocationIds }')
     expect(lockedPageSource).toContain('下发MES生产')
     expect(lockedPageSource).toContain('确认将选中的待生产锁库零件下发给 MES 生产流程')
@@ -22,7 +22,7 @@ describe('Locked item MES production dispatch stage 6 closure', () => {
     expect(lockedPageSource).toContain('successCount')
     expect(lockedPageSource).toContain('failedCount')
     expect(lockedPageSource).toContain('skippedCount')
-    expect(lockedPageSource).toContain('v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
+    expect(lockedPageSource).toContain('v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
   })
 
   test('documents MES production dispatch interface and user permission boundary', () => {
@@ -38,6 +38,6 @@ describe('Locked item MES production dispatch stage 6 closure', () => {
     expect(interfaceDoc).toContain('只下发 `PRODUCTION_REQUIRED`')
     expect(permissionDoc).toContain('market:production-item:mes-production-submit')
     expect(permissionDoc).not.toContain('common:mes-production')
-    expect(logDoc).toContain('LOCKED_ITEM_MES_PRODUCTION_SUBMIT')
+    expect(logDoc).toContain('PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT')
   })
 })

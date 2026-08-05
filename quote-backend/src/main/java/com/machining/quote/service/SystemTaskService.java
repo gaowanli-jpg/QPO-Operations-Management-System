@@ -227,7 +227,7 @@ public class SystemTaskService {
         request.put("allocationIds", normalizedAllocationIds);
         request.put("allocationCount", normalizedAllocationIds.size());
         SystemTask task = createTask("MES_PRODUCTION_DISPATCH", request);
-        recordTaskSubmitAudit("LOCKED_ITEM_MES_PRODUCTION_SUBMIT", "DELIVERY", task, request);
+        recordTaskSubmitAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "DELIVERY", task, request);
         log.info("MES production dispatch submitted taskId={} allocationCount={}",
                 task.getId(), normalizedAllocationIds.size());
         taskExecutor.execute(() -> runTask(task.getId(),

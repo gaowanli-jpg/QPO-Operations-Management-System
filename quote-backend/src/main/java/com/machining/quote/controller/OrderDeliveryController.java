@@ -133,8 +133,8 @@ public class OrderDeliveryController {
         return lockedItemService.listTicketAllocations(ticketId);
     }
 
-    @PostMapping("/allocations/mes-production")
-    @RequirePermission("market:locked-item:mes-production-submit")
+    @PostMapping("/production-items/mes-production")
+    @RequirePermission("market:production-item:mes-production-submit")
     public SystemTask submitMesProduction(@RequestBody LockedItemMesProductionBatchReq req) {
         return systemTaskService.submitMesProductionBatchTask(req == null ? null : req.getAllocationIds());
     }

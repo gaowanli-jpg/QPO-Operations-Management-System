@@ -79,7 +79,7 @@ class LockedItemMesProductionDispatchTest {
                 .containsEntry("allocationIds", List.of(10, 11));
         verify(dispatchService).assertCanAccessAllocations(List.of(10, 11));
         verify(auditService).record(
-                eq("LOCKED_ITEM_MES_PRODUCTION_SUBMIT"),
+                eq("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT"),
                 eq("system_task"),
                 eq(901L),
                 isNull(),
@@ -93,16 +93,20 @@ class LockedItemMesProductionDispatchTest {
     }
 
     @Test
-    void mesProductionEndpointIsPermissionProtected() throws Exception {
+    void productionItemMesProductionEndpointIsPermissionProtectedAndOldEndpointRemoved() throws Exception {
         String controller = java.nio.file.Files.readString(java.nio.file.Path.of(
                 "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java"));
 
         assertThat(controller)
                 .contains(
                         "LockedItemMesProductionBatchReq",
-                        "@PostMapping(\"/allocations/mes-production\")",
-                        "@RequirePermission(\"market:locked-item:mes-production-submit\")",
+                        "@PostMapping(\"/production-items/mes-production\")",
+                        "@RequirePermission(\"market:production-item:mes-production-submit\")",
                         "submitMesProductionBatchTask(req == null ? null : req.getAllocationIds())"
+                )
+                .doesNotContain(
+                        "@PostMapping(\"/allocations/mes-production\")",
+                        "@RequirePermission(\"market:locked-item:mes-production-submit\")"
                 );
     }
 
@@ -175,7 +179,7 @@ class LockedItemMesProductionDispatchTest {
         assertThat(successUpdate.getMesProductionExternalId()).isEqualTo("MES-PROD-1");
         assertThat(successUpdate.getMesProductionRequestId()).isEqualTo(request.getRequestId());
         verify(auditService).record(
-                eq("LOCKED_ITEM_MES_PRODUCTION_SUCCESS"),
+                eq("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS"),
                 eq("order_delivery_ticket_allocation"),
                 eq(1),
                 isNull(),
@@ -353,7 +357,7 @@ class LockedItemMesProductionDispatchTest {
         assertThat(updateCaptor.getValue().getMesProductionStatus()).isEqualTo("FAILED");
         assertThat(updateCaptor.getValue().getMesProductionMessage()).contains("route missing");
         verify(auditService).record(
-                eq("LOCKED_ITEM_MES_PRODUCTION_FAILED"),
+                eq("PRODUCTION_ITEM_MES_PRODUCTION_FAILED"),
                 eq("order_delivery_ticket_allocation"),
                 eq(1),
                 isNull(),

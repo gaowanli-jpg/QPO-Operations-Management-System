@@ -41,7 +41,7 @@
 
         <div class="erp-toolbar-group locked-batch-actions">
           <el-button
-            v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
+            v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
             type="primary"
             plain
             :disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"
@@ -256,7 +256,7 @@ import { getTask } from '../services/taskApi'
 import { usePendingAction } from '../composables/usePendingAction'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
-const LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:locked-item:mes-production-submit'
+const PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:production-item:mes-production-submit'
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 
 const route = useRoute()
@@ -264,7 +264,7 @@ const router = useRouter()
 const { isPending, runAction } = usePendingAction()
 
 const lockedActionKeys = {
-  mesProductionDispatch: () => 'locked-item:mes-production:batch'
+  mesProductionDispatch: () => 'production-item:mes-production:batch'
 }
 
 const filters = reactive({

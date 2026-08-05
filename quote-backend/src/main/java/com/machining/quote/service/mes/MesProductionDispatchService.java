@@ -67,7 +67,7 @@ public class MesProductionDispatchService {
 
     public List<Integer> normalizeAllocationIds(List<Integer> allocationIds) {
         if (allocationIds == null) {
-            throw new RuntimeException("Please select at least one locked item");
+            throw new RuntimeException("Please select at least one production item");
         }
         LinkedHashSet<Integer> normalized = new LinkedHashSet<>();
         for (Integer allocationId : allocationIds) {
@@ -76,7 +76,7 @@ public class MesProductionDispatchService {
             }
         }
         if (normalized.isEmpty()) {
-            throw new RuntimeException("Please select at least one locked item");
+            throw new RuntimeException("Please select at least one production item");
         }
         return new ArrayList<>(normalized);
     }
@@ -108,7 +108,7 @@ public class MesProductionDispatchService {
     private Map<String, Object> dispatchOne(Integer allocationId, Long taskId) {
         OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
         if (allocation == null) {
-            return row(allocationId, STATUS_SKIPPED, "Locked item allocation does not exist", null);
+            return row(allocationId, STATUS_SKIPPED, "Production item allocation does not exist", null);
         }
         String skipReason = skipReason(allocation);
         if (skipReason != null) {
@@ -118,7 +118,7 @@ public class MesProductionDispatchService {
         String validationError = validationError(allocation);
         if (validationError != null) {
             markFailed(allocation, null, validationError);
-            recordAudit("LOCKED_ITEM_MES_PRODUCTION_FAILED", allocation, taskId, null, validationError);
+            recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", allocation, taskId, null, validationError);
             return row(allocationId, STATUS_FAILED, validationError, null);
         }
 
@@ -142,7 +142,7 @@ public class MesProductionDispatchService {
             }
             markSuccess(allocation, requestId, response);
             Map<String, Object> result = resultSummary(allocation, requestId, response);
-            recordAudit("LOCKED_ITEM_MES_PRODUCTION_SUCCESS", allocation, taskId, result, null);
+            recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", allocation, taskId, result, null);
             log.info("MES production dispatch completed allocationId={} requestId={} externalId={} durationMs={}",
                     allocation.getId(), requestId, response.getExternalId(), System.currentTimeMillis() - startedAt);
             return row(allocationId, STATUS_SUCCESS, messageOrDefault(response.getMessage(), "MES production dispatch succeeded"), result);
@@ -151,7 +151,7 @@ public class MesProductionDispatchService {
             markFailed(allocation, requestId, message);
             Map<String, Object> result = resultSummary(allocation, requestId, null);
             result.put("errorMessage", abbreviate(message));
-            recordAudit("LOCKED_ITEM_MES_PRODUCTION_FAILED", allocation, taskId, result, message);
+            recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", allocation, taskId, result, message);
             log.error("MES production dispatch failed allocationId={} requestId={} durationMs={}",
                     allocation.getId(), requestId, System.currentTimeMillis() - startedAt, error);
             return row(allocationId, STATUS_FAILED, message, result);
@@ -368,7 +368,7 @@ public class MesProductionDispatchService {
 
     private String skipReason(OrderDeliveryTicketAllocation allocation) {
         if (!TYPE_PRODUCTION_REQUIRED.equalsIgnoreCase(blankToEmpty(allocation.getAllocationType()))) {
-            return "Only PRODUCTION_REQUIRED locked items can be dispatched to MES production";
+            return "Only PRODUCTION_REQUIRED production items can be dispatched to MES production";
         }
         String status = blankToDefault(allocation.getMesProductionStatus(), STATUS_PENDING);
         if (STATUS_SUCCESS.equalsIgnoreCase(status)) {

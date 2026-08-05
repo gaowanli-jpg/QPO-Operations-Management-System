@@ -80,7 +80,7 @@ describe('delivery duplicate click guards', () => {
     expect(source).toContain('loading.value = false')
     expect(source).toContain("import { usePendingAction } from '../composables/usePendingAction'")
     expect(source).toContain('const { isPending, runAction } = usePendingAction()')
-    expect(source).toContain("mesProductionDispatch: () => 'locked-item:mes-production:batch'")
+    expect(source).toContain("mesProductionDispatch: () => 'production-item:mes-production:batch'")
     expect(source).toContain(':loading="isMesProductionDispatchPending"')
     expect(source).toContain(':disabled="selectedAllocationIds.length === 0 || isMesProductionDispatchPending"')
   })

@@ -28,7 +28,7 @@ export const listProductionItems = (params = {}) => request('/api/order-delivery
 
 export const listTicketAllocations = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/allocations`)
 
-export const submitMesProductionDispatchBatch = (allocationIds = []) => request('/api/order-delivery/allocations/mes-production', {
+export const submitMesProductionDispatchBatch = (allocationIds = []) => request('/api/order-delivery/production-items/mes-production', {
   method: 'POST',
   data: { allocationIds }
 })

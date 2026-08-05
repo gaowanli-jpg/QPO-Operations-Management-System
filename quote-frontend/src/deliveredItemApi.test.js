@@ -84,7 +84,7 @@ describe('deliveredItemApi', () => {
   test('submitMesProductionDispatchBatch posts one MES production task for selected allocation ids', async () => {
     await deliveredItemApi.submitMesProductionDispatchBatch([101, 102])
 
-    expect(request).toHaveBeenCalledWith('/api/order-delivery/allocations/mes-production', {
+    expect(request).toHaveBeenCalledWith('/api/order-delivery/production-items/mes-production', {
       method: 'POST',
       data: { allocationIds: [101, 102] }
     })

@@ -21,7 +21,7 @@ describe('LockedItemManage guardrails', () => {
 
   test('loads locked item allocation rows through delivered item API service', () => {
     expect(apiSource).toContain('listLockedItems')
-    expect(apiSource).toContain('/api/order-delivery/allocations')
+    expect(apiSource).toContain('/api/order-delivery/locked-items')
     expect(apiSource).toContain('listTicketAllocations')
     expect(apiSource).toContain('/api/order-delivery/tickets/${ticketId}/allocations')
     expect(apiSource).toContain('getDeliveredItem')
@@ -77,8 +77,8 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).toContain('advancedFiltersVisible ? \'收起筛选\' : \'高级筛选\'')
     expect(pageSource).toContain('handleResetFilters')
     expect(pageSource).toContain('下发MES生产')
-    expect(pageSource).toContain('LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION')
-    expect(pageSource).toContain('v-permission="LOCKED_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
+    expect(pageSource).toContain('PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION')
+    expect(pageSource).toContain('v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"')
   })
 
   test('supports selecting locked allocation rows for MES production dispatch', () => {
@@ -92,7 +92,7 @@ describe('LockedItemManage guardrails', () => {
 
   test('wires MES production dispatch button with confirmation, pending guard, and API call', () => {
     expect(apiSource).toContain('submitMesProductionDispatchBatch')
-    expect(apiSource).toContain('/api/order-delivery/allocations/mes-production')
+    expect(apiSource).toContain('/api/order-delivery/production-items/mes-production')
     expect(apiSource).toContain('data: { allocationIds }')
     expect(pageSource).toContain('submitMesProductionDispatchBatch')
     expect(pageSource).toContain('ElMessageBox.confirm')

@@ -70,9 +70,9 @@ class LockedItemMesProductionStage6DocumentationTest {
 
         assertThat(read(LOG_OPS_DOC))
                 .contains(
-                        "LOCKED_ITEM_MES_PRODUCTION_SUBMIT",
-                        "LOCKED_ITEM_MES_PRODUCTION_SUCCESS",
-                        "LOCKED_ITEM_MES_PRODUCTION_FAILED",
+                        "PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT",
+                        "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS",
+                        "PRODUCTION_ITEM_MES_PRODUCTION_FAILED",
                         "order_delivery_ticket_allocation",
                         "allocationId",
                         "ticketQty",
