@@ -5,7 +5,6 @@
         <h2>{{ title }}</h2>
         <p v-if="description" class="dashboard-muted">{{ description }}</p>
       </div>
-      <el-tag size="small" effect="plain">{{ formatDashboardNumber(total) }} 项</el-tag>
     </div>
 
     <div v-if="hasData" class="dashboard-chart-card-body">
@@ -21,11 +20,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { PieChart } from 'echarts/charts'
-import { GraphicComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { formatDashboardNumber } from './dashboardNavigation'
 
-echarts.use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
+echarts.use([PieChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const props = defineProps({
   title: {
@@ -46,7 +45,7 @@ const props = defineProps({
   },
   palette: {
     type: Array,
-    default: () => ['#1769aa', '#20724f', '#9a5b13', '#526170']
+    default: () => ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#8B5CF6']
   }
 })
 
@@ -79,7 +78,7 @@ const buildChartOption = () => ({
   legend: {
     type: 'scroll',
     orient: 'vertical',
-    right: 8,
+    right: 6,
     top: 'middle',
     itemWidth: 10,
     itemHeight: 10,
@@ -88,28 +87,16 @@ const buildChartOption = () => ({
       fontSize: 12
     }
   },
-  graphic: [
-    {
-      type: 'text',
-      left: '28%',
-      top: '42%',
-      style: {
-        text: `合计\n${formatDashboardNumber(total.value)}`,
-        fill: '#202a35',
-        fontSize: 14,
-        fontWeight: 700,
-        textAlign: 'center',
-        textVerticalAlign: 'middle',
-        lineHeight: 24
-      }
-    }
-  ],
   series: [
     {
       name: props.title,
       type: 'pie',
-      radius: ['58%', '78%'],
-      center: ['32%', '50%'],
+      radius: '76%',
+      center: ['33%', '50%'],
+      startAngle: 90,
+      animationType: 'expansion',
+      animationDuration: 900,
+      animationEasing: 'cubicOut',
       avoidLabelOverlap: true,
       label: {
         show: false
@@ -119,7 +106,15 @@ const buildChartOption = () => ({
       },
       emphasis: {
         scale: true,
-        scaleSize: 4
+        scaleSize: 5,
+        itemStyle: {
+          shadowBlur: 14,
+          shadowColor: 'rgba(15, 23, 42, 0.18)'
+        }
+      },
+      itemStyle: {
+        borderColor: '#ffffff',
+        borderWidth: 2
       },
       data: chartData.value
     }
@@ -137,16 +132,10 @@ const buildChartOption = () => ({
           bottom: 0,
           top: 'auto'
         },
-        graphic: [
-          {
-            left: 'center',
-            top: '35%'
-          }
-        ],
         series: [
           {
             center: ['50%', '40%'],
-            radius: ['50%', '68%']
+            radius: '68%'
           }
         ]
       }

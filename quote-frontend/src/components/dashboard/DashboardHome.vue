@@ -107,8 +107,8 @@ const dashboardData = ref(emptyDashboardData())
 const loading = ref(false)
 const errorMessage = ref('')
 
-const rfqPalette = ['#526170', '#9a5b13', '#1769aa']
-const salesPalette = ['#1769aa', '#20724f', '#9a5b13', '#526170']
+const rfqPalette = ['#F97316', '#22C55E', '#2563EB']
+const salesPalette = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#8B5CF6']
 
 const updatedAt = computed(() => dashboardData.value.updatedAt || (loading.value ? '加载中' : '--'))
 const summaryCards = computed(() => dashboardData.value.summaryCards)

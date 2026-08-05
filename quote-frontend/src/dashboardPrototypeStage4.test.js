@@ -44,15 +44,21 @@ describe('Dashboard prototype stage 4 ECharts chart card', () => {
     expect(source).toContain('.resize()')
   })
 
-  test('uses donut pie options with tooltip, legend, center total, and clear empty state', () => {
+  test('uses solid animated pie options with tooltip, legend, no duplicate total, and clear empty state', () => {
     expect(existsSync(chartCardPath)).toBe(true)
 
     const source = readSource(chartCardPath)
     expect(source).toContain("type: 'pie'")
-    expect(source).toContain('radius:')
+    expect(source).toContain("radius: '76%'")
+    expect(source).toContain("animationType: 'expansion'")
+    expect(source).toContain('animationDuration: 900')
     expect(source).toContain('tooltip')
     expect(source).toContain('legend')
-    expect(source).toContain('graphic')
+    expect(source).toContain('borderWidth: 2')
+    expect(source).not.toContain('graphic')
+    expect(source).not.toContain('<el-tag')
+    expect(source).not.toContain('formatDashboardNumber(total')
+    expect(source).not.toContain("radius: ['")
     expect(source).toContain('dashboard-chart-empty')
     expect(source).toContain('hasData')
     expect(source).toContain('emptyText')
@@ -67,6 +73,8 @@ describe('Dashboard prototype stage 4 ECharts chart card', () => {
     expect(source).toContain(':data="salesQuotedCustomerDistribution"')
     expect(source).toContain(':palette="rfqPalette"')
     expect(source).toContain(':palette="salesPalette"')
+    expect(source).toContain("const rfqPalette = ['#F97316', '#22C55E', '#2563EB']")
+    expect(source).toContain("const salesPalette = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#8B5CF6']")
     expect(source).toContain('@select="goToItem"')
     expect(source).not.toContain('dashboard-donut-ring')
     expect(source).not.toContain('buildDonutStyle')
