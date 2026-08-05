@@ -17,6 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -108,6 +109,46 @@ class DashboardOverviewStage3Test {
         verify(mapper, never()).countRfqByCustomerAndStatus(any());
         verify(mapper, never()).countDeliveredActive(any());
         verify(mapper, never()).countLockedProductionTodo(any());
+    }
+
+    @Test
+    void productionItemPermissionOwnsDashboardProductionEntries() {
+        DashboardAggregationMapper mapper = mock(DashboardAggregationMapper.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        PermissionService permissionService = mock(PermissionService.class);
+        DashboardOverviewService service = service(mapper, dataScopeService, permissionService,
+                permissions(false, "market:production-item:view"));
+
+        when(mapper.countLockedProductionTodo(any())).thenReturn(4L);
+        when(mapper.countLockedMesProductionFailed(any())).thenReturn(2L);
+
+        DashboardOverviewDTO overview = service.overview();
+
+        assertThat(overview.getSummaryCards()).singleElement().satisfies(card -> {
+            assertThat(card.getKey()).isEqualTo("lockedProduction");
+            assertThat(card.getPermission()).isEqualTo("market:production-item:view");
+            assertThat(card.getTarget()).containsEntry("path", "/production-items");
+            assertThat(card.getTarget()).extractingByKey("query").isEqualTo(Map.of("mesProductionStatus", "PENDING"));
+        });
+        assertThat(overview.getTodoCards()).singleElement().satisfies(card -> {
+            assertThat(card.getKey()).isEqualTo("mesProductionTodo");
+            assertThat(card.getPath()).isEqualTo("/production-items");
+            assertThat(card.getQuery()).containsEntry("mesProductionStatus", "PENDING")
+                    .doesNotContainKey("allocationType");
+            assertThat(card.getPermission()).isEqualTo("market:production-item:view");
+        });
+        assertThat(overview.getAttentionItems()).singleElement().satisfies(item -> {
+            assertThat(item.getKey()).isEqualTo("mesProductionFailed");
+            assertThat(item.getPath()).isEqualTo("/production-items");
+            assertThat(item.getQuery()).containsEntry("mesProductionStatus", "FAILED")
+                    .doesNotContainKey("allocationType");
+            assertThat(item.getPermission()).isEqualTo("market:production-item:view");
+            assertThat(item.getSeverity()).isEqualTo("danger");
+        });
+
+        verify(mapper).countLockedProductionTodo(any());
+        verify(mapper).countLockedMesProductionFailed(any());
+        verify(mapper, never()).countDeliveredActive(any());
     }
 
     @Test

@@ -38,7 +38,7 @@ describe('DeliveredItemManage WMS allocation guardrails', () => {
     expect(pageSource).toContain('确认批量向 WMS 获取')
     expect(pageSource).toContain('submitWmsAllocationBatch(selectedTicketIds.value)')
     expect(pageSource).not.toContain('submitWmsAllocation(row.id)')
-    expect(pageSource).toContain('锁库完成，结果已进入锁库零件模块')
+    expect(pageSource).toContain('锁库完成，库存锁定结果进入锁库零件，待生产数量进入待产零件')
     expect(pageSource).not.toContain('WMS 锁库任务已提交')
     expect(pageSource).not.toContain('批量 WMS 库存任务已提交')
     expect(pageSource).toContain('任务ID')

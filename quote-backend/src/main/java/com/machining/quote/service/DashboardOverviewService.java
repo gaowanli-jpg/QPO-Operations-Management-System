@@ -49,7 +49,7 @@ public class DashboardOverviewService {
             "market:u9-sync:view"
     );
     private static final List<String> DELIVERED_DOMAIN_PERMISSIONS = List.of("market:delivered-item:view");
-    private static final List<String> LOCKED_DOMAIN_PERMISSIONS = List.of("market:locked-item:view");
+    private static final List<String> PRODUCTION_DOMAIN_PERMISSIONS = List.of("market:production-item:view");
     private static final List<String> U9_DOMAIN_PERMISSIONS = List.of("market:u9-sync:view");
 
     @Autowired(required = false)
@@ -86,7 +86,7 @@ public class DashboardOverviewService {
         boolean canSeeRfq = permissionGate.hasAny(RFQ_DOMAIN_PERMISSIONS);
         boolean canSeeSales = permissionGate.hasAny(SALES_DOMAIN_PERMISSIONS);
         boolean canSeeDelivered = permissionGate.hasAny(DELIVERED_DOMAIN_PERMISSIONS);
-        boolean canSeeLocked = permissionGate.hasAny(LOCKED_DOMAIN_PERMISSIONS);
+        boolean canSeeProduction = permissionGate.hasAny(PRODUCTION_DOMAIN_PERMISSIONS);
         boolean canSeeU9 = permissionGate.hasAny(U9_DOMAIN_PERMISSIONS);
 
         List<DashboardStatusCountRow> rfqStatusRows = canSeeRfq
@@ -104,13 +104,13 @@ public class DashboardOverviewService {
         long rfqQuoted = countForStatus(rfqStatusRows, QuoteStatusWorkflow.QUOTED);
         long salesQuoted = salesQuotedRows.stream().mapToLong(this::rowCount).sum();
         long deliveredActive = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredActive(deliveredActiveQuery())) : 0L;
-        long lockedProductionTodo = canSeeLocked ? count(() -> aggregationMapper.countLockedProductionTodo(lockedProductionTodoQuery())) : 0L;
+        long lockedProductionTodo = canSeeProduction ? count(() -> aggregationMapper.countLockedProductionTodo(lockedProductionTodoQuery())) : 0L;
         long deliveredNeedMaterial = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredNeedMaterial(deliveredNeedMaterialQuery())) : 0L;
         long deliveredNeedWms = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredNeedWms(deliveredNeedWmsQuery())) : 0L;
         long mesCallbackPending = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredMesCallbackPending(deliveredMesStatusQuery("CALLBACK_PENDING"))) : 0L;
         long mesFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredMesFailed(deliveredMesStatusQuery("FAILED"))) : 0L;
         long wmsFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredWmsFailed(deliveredWmsStatusQuery("FAILED"))) : 0L;
-        long lockedProductionFailed = canSeeLocked ? count(() -> aggregationMapper.countLockedMesProductionFailed(lockedProductionFailedQuery())) : 0L;
+        long lockedProductionFailed = canSeeProduction ? count(() -> aggregationMapper.countLockedMesProductionFailed(lockedProductionFailedQuery())) : 0L;
         long salesMatchTodo = permissionGate.canAccess("market:sales-match:view")
                 ? count(() -> aggregationMapper.countSalesMatchTodo(salesMatchTodoQuery()))
                 : 0L;
@@ -411,8 +411,8 @@ public class DashboardOverviewService {
                         "进入销售订单继续提单或治理", "success", "/sales-orders", query("status", QuoteStatusWorkflow.QUOTED), "market:sales-order:view"),
                 summaryCard("deliveredActive", "已提未完成", deliveredActive, "行", "等待物料号或库存信息",
                         "处理 MES / WMS 待办", "warning", "/delivered-items", query("flowScope", "ACTIVE"), "market:delivered-item:view"),
-                summaryCard("lockedProduction", "待生产下发", lockedProduction, "行", "锁库后仍需生产",
-                        "进入锁库零件下发生产", "info", "/locked-items", query("allocationType", "PRODUCTION_REQUIRED"), "market:locked-item:view")
+                summaryCard("lockedProduction", "待生产下发", lockedProduction, "行", "WMS 锁库后仍需生产",
+                        "进入待产零件下发生产", "info", "/production-items", query("mesProductionStatus", "PENDING"), "market:production-item:view")
         );
     }
 
@@ -462,8 +462,8 @@ public class DashboardOverviewService {
                         "/delivered-items", query("flowStage", "NEED_MATERIAL"), "market:delivered-item:view", "warning"),
                 todoCard("wmsTodo", "待锁库已提零件", deliveredNeedWms, "行", "进入已提零件获取库存信息",
                         "/delivered-items", query("flowStage", "NEED_WMS"), "market:delivered-item:view", "warning"),
-                todoCard("mesProductionTodo", "待下发 MES 生产", lockedProductionTodo, "行", "进入锁库零件下发 MES 生产",
-                        "/locked-items", query("allocationType", "PRODUCTION_REQUIRED", "mesProductionStatus", "PENDING"), "market:locked-item:view", "info"),
+                todoCard("mesProductionTodo", "待下发 MES 生产", lockedProductionTodo, "行", "进入待产零件下发 MES 生产",
+                        "/production-items", query("mesProductionStatus", "PENDING"), "market:production-item:view", "info"),
                 todoCard("u9SyncReady", "可同步 U9 订单", u9Ready, "单", "整单物料号就绪后进入 U9 同步",
                         "/u9-sync", query("materialReadyStatus", "READY"), "market:u9-sync:view", "success")
         );
@@ -512,8 +512,8 @@ public class DashboardOverviewService {
                         "销售订单同步 U9 失败，可进入 U9 同步重试", "/u9-sync",
                         query("u9SyncStatus", "同步失败"), "market:u9-sync:view", "danger"),
                 attentionItem("mesProductionFailed", "MES 生产下发失败", mesProductionFailed, "行",
-                        "锁库待生产零件下发 MES 失败", "/locked-items",
-                        query("allocationType", "PRODUCTION_REQUIRED", "mesProductionStatus", "FAILED"), "market:locked-item:view", "danger")
+                        "待产零件下发 MES 失败", "/production-items",
+                        query("mesProductionStatus", "FAILED"), "market:production-item:view", "danger")
         );
     }
 

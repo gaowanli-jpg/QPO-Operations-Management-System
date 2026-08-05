@@ -301,6 +301,17 @@ const mesProductionResult = ref(null)
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
+watch(() => route.query.mesProductionStatus, async () => {
+  syncFiltersFromRouteQuery()
+  page.value = 1
+  await loadItems()
+})
+
+const normalizeRouteQueryValue = (value) => Array.isArray(value) ? (value[0] || '') : (value || '')
+
+const syncFiltersFromRouteQuery = () => {
+  filters.mesProductionStatus = normalizeRouteQueryValue(route.query.mesProductionStatus)
+}
 
 const buildParams = () => {
   const params = Object.fromEntries(Object.entries(filters)
@@ -544,7 +555,10 @@ const formatProcessRoute = (route) => {
     .join(' / ') || '-'
 }
 
-onMounted(() => loadItems())
+onMounted(() => {
+  syncFiltersFromRouteQuery()
+  loadItems()
+})
 </script>
 
 <style scoped>

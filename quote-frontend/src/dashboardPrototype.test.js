@@ -37,6 +37,28 @@ describe('Dashboard prototype phase 6 acceptance guard', () => {
     expect(dashboardMockData.salesQuotedCustomerDistribution.some((item) => item.name === '已报价')).toBe(false)
   })
 
+  test('routes production dashboard entries to the production item workbench', async () => {
+    const { dashboardMockData } = await importFile(resolve(dashboardDir, 'dashboardMockData.js'))
+
+    const productionSummary = dashboardMockData.summaryCards.find((item) => item.key === 'lockedProduction')
+    expect(productionSummary?.target?.path).toBe('/production-items')
+    expect(productionSummary?.target?.query).toEqual({ mesProductionStatus: 'PENDING' })
+    expect(productionSummary?.permission).toBe('market:production-item:view')
+    expect(productionSummary?.trendText).toContain('待产零件')
+
+    const productionTodo = dashboardMockData.todoCards.find((item) => item.key === 'mesProductionTodo')
+    expect(productionTodo?.path).toBe('/production-items')
+    expect(productionTodo?.query).toEqual({ mesProductionStatus: 'PENDING' })
+    expect(productionTodo?.permission).toBe('market:production-item:view')
+    expect(productionTodo?.description).toContain('待产零件')
+
+    const productionFailed = dashboardMockData.attentionItems.find((item) => item.key === 'mesProductionFailed')
+    expect(productionFailed?.path).toBe('/production-items')
+    expect(productionFailed?.query).toEqual({ mesProductionStatus: 'FAILED' })
+    expect(productionFailed?.permission).toBe('market:production-item:view')
+    expect(productionFailed?.severity).toBe('danger')
+  })
+
   test('does not use post-ticket statuses as main dashboard chart data', () => {
     const dashboardHomeSource = readFileSync(resolve(dashboardDir, 'DashboardHome.vue'), 'utf8')
     const mockSource = readFileSync(resolve(dashboardDir, 'dashboardMockData.js'), 'utf8')

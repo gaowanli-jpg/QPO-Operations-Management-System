@@ -39,11 +39,11 @@ export const dashboardMockData = {
       title: '待生产下发',
       value: 7,
       unit: '行',
-      helper: '锁库后仍需生产',
-      trendText: '进入锁库零件下发生产',
+      helper: 'WMS 锁库后仍需生产',
+      trendText: '进入待产零件下发生产',
       tone: 'info',
-      target: { path: '/locked-items', query: { allocationType: 'PRODUCTION_REQUIRED' } },
-      permission: 'market:locked-item:view'
+      target: { path: '/production-items', query: { mesProductionStatus: 'PENDING' } },
+      permission: 'market:production-item:view'
     }
   ],
   rfqStatusDistribution: [
@@ -136,6 +136,17 @@ export const dashboardMockData = {
       tone: 'primary'
     },
     {
+      key: 'mesProductionTodo',
+      title: '待下发 MES 生产',
+      value: 7,
+      unit: '行',
+      description: '进入待产零件下发 MES 生产',
+      path: '/production-items',
+      query: { mesProductionStatus: 'PENDING' },
+      permission: 'market:production-item:view',
+      tone: 'info'
+    },
+    {
       key: 'u9SyncReady',
       title: '可同步 U9 订单',
       value: 6,
@@ -179,6 +190,17 @@ export const dashboardMockData = {
       path: '/delivered-items',
       query: { flowStage: 'WMS_FAILED' },
       permission: 'market:delivered-item:view',
+      severity: 'danger'
+    },
+    {
+      key: 'mesProductionFailed',
+      title: 'MES 生产下发失败',
+      value: 1,
+      unit: '行',
+      description: '进入待产零件重试 MES 生产下发',
+      path: '/production-items',
+      query: { mesProductionStatus: 'FAILED' },
+      permission: 'market:production-item:view',
       severity: 'danger'
     }
   ]

@@ -507,7 +507,7 @@ const handleBatchWmsAllocation = async () => {
     try {
       const task = await submitWmsAllocationBatch(selectedTicketIds.value)
       const taskId = taskIdOf(task)
-      ElMessage.success(taskId ? `锁库完成，结果已进入锁库零件模块，任务ID：${taskId}` : '锁库完成，结果已进入锁库零件模块')
+      ElMessage.success(taskId ? `锁库完成，库存锁定结果进入锁库零件，待生产数量进入待产零件，任务ID：${taskId}` : '锁库完成，库存锁定结果进入锁库零件，待生产数量进入待产零件')
       selectedRows.value = []
       await loadItems()
     } catch (error) {

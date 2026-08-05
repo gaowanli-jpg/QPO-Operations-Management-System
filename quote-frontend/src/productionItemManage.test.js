@@ -48,6 +48,13 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).toContain('skippedCount')
   })
 
+  test('hydrates production status filters from dashboard route query', () => {
+    expect(pageSource).toContain('normalizeRouteQueryValue')
+    expect(pageSource).toContain('syncFiltersFromRouteQuery')
+    expect(pageSource).toContain('filters.mesProductionStatus = normalizeRouteQueryValue(route.query.mesProductionStatus)')
+    expect(pageSource).toContain('watch(() => route.query.mesProductionStatus')
+  })
+
   test('shows production status filters but never locked stock type filters', () => {
     expect(pageSource).toContain('mesProductionStatus')
     expect(pageSource).toContain("{ value: 'PENDING', label: '待下发' }")
