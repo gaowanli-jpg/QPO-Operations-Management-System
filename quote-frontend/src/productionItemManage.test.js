@@ -76,4 +76,9 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).toContain('openTicketDetail')
     expect(pageSource).toContain('market:delivered-item:view')
   })
+
+  test('shows customer requirement snapshot beside production item remarks', () => {
+    expect(pageSource).toContain('prop="customerRequirement"')
+    expect(pageSource).toContain('selectedTicketDetail.customerRequirement')
+  })
 })

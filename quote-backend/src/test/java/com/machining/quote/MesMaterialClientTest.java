@@ -46,9 +46,16 @@ class MesMaterialClientTest {
             assertThat(captured.authorization.get()).isNull();
             assertThat(captured.contentType.get()).contains("application/json");
             assertThat(captured.body.get())
-                    .contains("\"ticketId\":123")
+                    .contains("\"customerCode\":\"C-ACME\"")
                     .contains("\"partNo\":\"P-100\"")
-                    .contains("\"internalProjectNo\":\"IP-9\"");
+                    .contains("\"internalProjectNo\":\"IP-9\"")
+                    .doesNotContain("\"sourceType\"")
+                    .doesNotContain("\"ticketId\"")
+                    .doesNotContain("\"rfqId\"")
+                    .doesNotContain("\"orderNo\"")
+                    .doesNotContain("\"rfqNo\"")
+                    .doesNotContain("\"sourceOrderId\"")
+                    .doesNotContain("\"sourceItemId\"");
         } finally {
             server.stop(0);
         }
@@ -205,8 +212,12 @@ class MesMaterialClientTest {
                 "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialClient.java"), StandardCharsets.UTF_8);
 
         assertThat(source)
-                .contains("log.debug(\"MES material resolve request ticketId={}")
+                .contains("log.debug(\"MES material resolve request partNo={}")
                 .doesNotContain(
+                        "req.getSourceType()",
+                        "sourceType={}",
+                        "req.getTicketId()",
+                        "ticketId={}",
                         "mesAuthToken={}",
                         "authToken={}",
                         "requestBody={}",
@@ -260,9 +271,7 @@ class MesMaterialClientTest {
 
     private MesMaterialResolveReq request() {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
-        req.setTicketId(123);
-        req.setRfqId(88);
-        req.setRfqNo("RFQ-1");
+        req.setCustomerCode("C-ACME");
         req.setCustomerName("ACME");
         req.setPartNo("P-100");
         req.setVersion("A");

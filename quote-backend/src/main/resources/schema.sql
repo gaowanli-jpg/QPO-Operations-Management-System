@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     quote_lead_time VARCHAR(50),
     internal_target_lead_time VARCHAR(50),
     remark TEXT,
+    customer_requirement TEXT,
     material_gross_weight NUMERIC(14, 4),
     part_net_weight NUMERIC(14, 4) DEFAULT 0,
     material_data JSONB,
@@ -106,6 +107,7 @@ ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS shipped_qty INTEGER DEFA
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS unshipped_qty INTEGER DEFAULT 0;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS actual_ship_date DATE;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_order_import_record_id BIGINT;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
 ALTER TABLE item_quote_version
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB,
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
@@ -270,6 +272,7 @@ CREATE TABLE IF NOT EXISTS sales_order_item (
     match_status VARCHAR(30),
     match_message TEXT,
     remark TEXT,
+    customer_requirement TEXT,
     status VARCHAR(30) NOT NULL DEFAULT '已报价',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -279,6 +282,7 @@ CREATE TABLE IF NOT EXISTS sales_order_item (
 ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_id BIGINT;
 ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_no VARCHAR(100);
 ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0;
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sales_order_header_no
     ON sales_order_header(sales_order_no);
@@ -421,6 +425,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket (
     start_date DATE,
     delivery_date DATE,
     remark TEXT,
+    customer_requirement TEXT,
     arrange_type VARCHAR(50),
     drawing_url VARCHAR(500),
     process_route JSONB DEFAULT '[]'::jsonb,
@@ -456,6 +461,7 @@ ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS mes_synced_at TIMESTA
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS wms_allocate_status VARCHAR(30) DEFAULT 'PENDING';
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS wms_allocate_message TEXT;
 ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS wms_allocated_at TIMESTAMP;
+ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
 ALTER TABLE order_delivery_ticket
     ALTER COLUMN process_route TYPE JSONB USING NULLIF(process_route::TEXT, '')::JSONB,
     ALTER COLUMN material_data TYPE JSONB USING NULLIF(material_data::TEXT, '')::JSONB;
@@ -488,6 +494,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     material_shape VARCHAR(30),
     surface_treatment VARCHAR(100),
     remark TEXT,
+    customer_requirement TEXT,
     description TEXT,
     delivery_date DATE,
     process_route JSONB DEFAULT '[]'::jsonb,
@@ -524,6 +531,7 @@ ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS engineerin
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS surface_treatment VARCHAR(100);
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS remark TEXT;
+ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS delivery_date DATE;
 ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS process_route JSONB DEFAULT '[]'::jsonb;

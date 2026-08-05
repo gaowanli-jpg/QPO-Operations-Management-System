@@ -170,6 +170,9 @@
           <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.remark) }}</template>
           </el-table-column>
+          <el-table-column prop="customerRequirement" label="客户需求" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.customerRequirement) }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="120" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
@@ -220,6 +223,8 @@
           <el-descriptions-item label="材料类型">{{ formatMaterialShape(selectedTicketDetail.materialData) }}</el-descriptions-item>
           <el-descriptions-item label="毛重">{{ formatWeight(selectedTicketDetail.materialGrossWeight) }}</el-descriptions-item>
           <el-descriptions-item label="净重">{{ formatWeight(selectedTicketDetail.partNetWeight) }}</el-descriptions-item>
+          <el-descriptions-item label="备注">{{ formatDash(selectedTicketDetail.remark) }}</el-descriptions-item>
+          <el-descriptions-item label="客户需求">{{ formatDash(selectedTicketDetail.customerRequirement) }}</el-descriptions-item>
         </el-descriptions>
 
         <section class="detail-section">

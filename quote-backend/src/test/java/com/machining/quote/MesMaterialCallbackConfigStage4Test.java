@@ -77,7 +77,6 @@ class MesMaterialCallbackConfigStage4Test {
         MesIntegrationCallbackController controller = controller(syncService, configService);
         MesMaterialCallbackResp expected = new MesMaterialCallbackResp();
         expected.setSuccess(true);
-        expected.setTicketId(123);
         expected.setMesRequestId("MES-REQ-123");
         when(configService.hasValidBearerToken(any(), eq("Bearer page-generated-token"))).thenReturn(true);
         when(syncService.handleMaterialCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
@@ -171,7 +170,6 @@ class MesMaterialCallbackConfigStage4Test {
     private MesMaterialCallbackReq callback(String materialNo) {
         MesMaterialCallbackReq req = new MesMaterialCallbackReq();
         req.setMesRequestId("MES-REQ-123");
-        req.setTicketId(123);
         req.setStatus("SUCCESS");
         req.setMaterialNo(materialNo);
         return req;

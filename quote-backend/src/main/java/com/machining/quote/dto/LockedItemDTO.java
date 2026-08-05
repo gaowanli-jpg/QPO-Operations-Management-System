@@ -32,6 +32,7 @@ public class LockedItemDTO {
     private String materialShape;
     private String surfaceTreatment;
     private String remark;
+    private String customerRequirement;
     private String description;
     private LocalDate deliveryDate;
     private Object processRoute;

@@ -311,6 +311,54 @@
                   <el-tag v-else type="warning" size="small">未报价</el-tag>
                 </template>
               </el-table-column>
+              <el-table-column prop="remark" label="备注" width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="row-field-editor">
+                    <el-input
+                      v-model="row.remarkDraft"
+                      size="small"
+                      maxlength="500"
+                      clearable
+                      :disabled="!canSelectItem(row)"
+                      class="row-field-input"
+                    />
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canSelectItem(row) || isFieldSaving(row) || submitting"
+                      :loading="isFieldSaving(row)"
+                      @click.stop="saveReleaseItemFields(row)"
+                    >
+                      保存
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="customerRequirement" label="客户需求" width="240" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="row-field-editor">
+                    <el-input
+                      v-model="row.customerRequirementDraft"
+                      size="small"
+                      maxlength="500"
+                      clearable
+                      :disabled="!canSelectItem(row)"
+                      class="row-field-input"
+                    />
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canSelectItem(row) || isFieldSaving(row) || submitting"
+                      :loading="isFieldSaving(row)"
+                      @click.stop="saveReleaseItemFields(row)"
+                    >
+                      保存
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
             </el-table>
             <div v-if="releaseItemTotal" class="erp-pagination">
@@ -517,6 +565,7 @@ import {
   setInternalTargetLeadTime as setInternalTargetLeadTimeRequest,
   shiftInternalTargetLeadTime,
   updateInternalTargetLeadTime,
+  updateReleaseItemFields,
   updateReleaseItemVersion
 } from '../services/marketApi'
 import {
@@ -575,6 +624,7 @@ const releaseActionKeys = {
   replaceDrawings: 'market:release:replace-drawings',
   shiftInternalLeadTime: 'market:release:shift-internal-lead-time',
   setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
+  fields: (releaseItemKey) => `market:release:fields:${releaseItemKey}`,
   version: (itemId) => `market:release:version:${itemId}`,
   internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`,
   generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join(',') || 'none'}`
@@ -585,6 +635,7 @@ const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys
 const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
 const replacingDrawings = computed(() => isPending(releaseActionKeys.replaceDrawings))
 const isVersionSaving = (row) => isPending(releaseActionKeys.version(row?.id))
+const isFieldSaving = (row) => isPending(releaseActionKeys.fields(rowKey(row)))
 const isInternalLeadTimeSaving = (row) => isPending(releaseActionKeys.internalLeadTime(row?.id))
 
 const today = new Date().toISOString().slice(0, 10)
@@ -763,7 +814,9 @@ const setItemList = (rows) => {
   itemList.value = (rows || []).map(row => ({
     ...row,
     internalTargetLeadTimeDraft: row.internalTargetLeadTime || '',
-    versionDraft: row.version || ''
+    versionDraft: row.version || '',
+    remarkDraft: row.remark || '',
+    customerRequirementDraft: row.customerRequirement || ''
   }))
   itemList.value.forEach(item => {
     const key = rowKey(item)
@@ -836,6 +889,41 @@ const saveReleaseItemVersion = async (row) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '版本保存失败。')
+    }
+  })
+}
+
+const saveReleaseItemFields = async (row) => {
+  if (!row?.id) return
+  row.remarkDraft = String(row.remarkDraft ?? '').trim()
+  row.customerRequirementDraft = String(row.customerRequirementDraft ?? '').trim()
+  return runAction(releaseActionKeys.fields(rowKey(row)), async () => {
+    try {
+      const response = await updateReleaseItemFields(row.id, {
+        sourceType: row.sourceType || 'RFQ',
+        sourceOrderId: row.sourceOrderId,
+        rfqId: row.rfqId || selectedRfqId.value,
+        remark: row.remarkDraft,
+        customerRequirement: row.customerRequirementDraft
+      })
+      const savedData = response?.data || {}
+      const saved = {
+        ...row,
+        ...savedData,
+        remarkDraft: savedData.remark || '',
+        customerRequirementDraft: savedData.customerRequirement || ''
+      }
+      const index = itemList.value.findIndex(item => rowKey(item) === rowKey(row))
+      if (index >= 0) {
+        itemList.value.splice(index, 1, saved)
+      }
+      if (selectedItemIdMap[rowKey(row)]) {
+        selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }
+      }
+      ElMessage.success('零件信息已保存。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '零件信息保存失败。')
     }
   })
 }
@@ -1548,6 +1636,16 @@ const statusTagType = (status) => {
 
 .row-version-input {
   width: 72px;
+}
+
+.row-field-editor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.row-field-input {
+  min-width: 130px;
 }
 
 .selection-count {

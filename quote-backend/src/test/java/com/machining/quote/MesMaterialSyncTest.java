@@ -6,12 +6,14 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
@@ -147,10 +149,7 @@ class MesMaterialSyncTest {
         verify(client).resolveMaterial(reqCaptor.capture());
         MesMaterialResolveReq req = reqCaptor.getValue();
         assertThat(req.getMesRequestId()).isNotBlank();
-        assertThat(req.getSourceType()).isEqualTo("RFQ");
-        assertThat(req.getSourceOrderId()).isEqualTo(88L);
-        assertThat(req.getSourceItemId()).isEqualTo(77L);
-        assertThat(req.getOrderNo()).isEqualTo("RFQ-88");
+        assertThat(ReflectionTestUtils.getField(req, "customerCode")).isEqualTo("C-ACME");
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(mesRequestMapper).insert(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());
@@ -266,6 +265,7 @@ class MesMaterialSyncTest {
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderHeaderMapper salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
         MesMaterialClient client = mock(MesMaterialClient.class);
         AuditService auditService = mock(AuditService.class);
         OrderDeliveryTicket ticket = ticket();
@@ -279,8 +279,13 @@ class MesMaterialSyncTest {
         SalesOrderItem salesItem = new SalesOrderItem();
         salesItem.setId(5001L);
         salesItem.setDrawingUrl("/uploads/sales-order/p100.pdf");
+        SalesOrderHeader salesOrder = new SalesOrderHeader();
+        salesOrder.setId(9001L);
+        salesOrder.setCustomerCode("C-SO");
+        salesOrder.setCustomerName("客户A");
         when(ticketMapper.selectById(123)).thenReturn(ticket);
         when(salesOrderItemMapper.selectById(5001L)).thenReturn(salesItem);
+        when(salesOrderHeaderMapper.selectById(9001L)).thenReturn(salesOrder);
         MesMaterialResolveResp response = new MesMaterialResolveResp();
         response.setSuccess(true);
         response.setMaterialNo("MES-SO-7788");
@@ -293,6 +298,7 @@ class MesMaterialSyncTest {
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
 
         Map<String, Object> result = service.syncMaterialNo(123, 9005L);
 
@@ -300,6 +306,9 @@ class MesMaterialSyncTest {
                 .containsEntry("sourceType", "SALES_ORDER")
                 .containsEntry("sourceItemId", 5001L)
                 .containsEntry("materialNo", "MES-SO-7788");
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(client).resolveMaterial(reqCaptor.capture());
+        assertThat(ReflectionTestUtils.getField(reqCaptor.getValue(), "customerCode")).isEqualTo("C-SO");
         ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
         verify(salesOrderItemMapper).updateById(itemCaptor.capture());
         SalesOrderItem update = itemCaptor.getValue();
@@ -526,18 +535,21 @@ class MesMaterialSyncTest {
                 .contains(
                         "class MesMaterialResolveReq",
                         "private String mesRequestId;",
-                        "private Integer ticketId;",
-                        "private Integer rfqId;",
-                        "private String sourceType;",
-                        "private Long sourceOrderId;",
-                        "private Long sourceItemId;",
-                        "private String orderNo;",
-                        "private String rfqNo;",
+                        "private String customerCode;",
                         "private String customerName;",
                         "private String partNo;",
                         "private String version;",
                         "private String drawingUrl;",
                         "private String internalProjectNo;"
+                )
+                .doesNotContain(
+                        "private Integer ticketId;",
+                        "private String sourceType;",
+                        "private Integer rfqId;",
+                        "private Long sourceOrderId;",
+                        "private Long sourceItemId;",
+                        "private String orderNo;",
+                        "private String rfqNo;"
                 );
         assertThat(read(MES_RESP))
                 .contains(
@@ -621,6 +633,7 @@ class MesMaterialSyncTest {
         OrderRfq order = new OrderRfq();
         order.setId(88);
         order.setRfqNo("RFQ-88");
+        order.setCustomerCode("C-ACME");
         order.setCustomerName("ACME");
         return order;
     }

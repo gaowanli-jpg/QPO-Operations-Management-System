@@ -94,18 +94,12 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 ```json
 {
   "mesRequestId": "MES-123-8f8c2",
-  "ticketId": 123,
-  "rfqId": 88,
-  "orderNo": "RFQ-20260721-001",
-  "rfqNo": "RFQ-20260721-001",
+  "customerCode": "CUST-001",
   "customerName": "客户A",
   "partNo": "P-1001",
   "version": "A",
   "drawingUrl": "http://192.168.70.21:8088/uploads/drawings/xxx.pdf",
-  "internalProjectNo": "IP-20260721-001",
-  "sourceType": "RFQ",
-  "sourceOrderId": 88,
-  "sourceItemId": 10086
+  "internalProjectNo": "IP-20260721-001"
 }
 ```
 
@@ -114,18 +108,14 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 | 字段 | 类型 | 是否可能为空 | 说明 |
 | --- | --- | --- | --- |
 | `mesRequestId` | string | 否 | QPO 本次请求唯一标识。MES response 和后续 callback 必须原样返回。 |
-| `ticketId` | integer | 否 | QPO 已提零件行 ID，可作为幂等键之一。 |
-| `rfqId` | integer | 通常否 | QPO 订单/RFQ ID。 |
-| `orderNo` | string | 可能为空 | 当前实现由 QPO 的订单/RFQ 编号字段生成，用于展示和双方排查；回调定位仍以 `mesRequestId` + `ticketId` 为准。 |
-| `rfqNo` | string | 可能为空 | RFQ 编号。 |
+| `customerCode` | string | 可能为空 | 客户编码；RFQ 来源取 QPO 询价订单客户编码，销售订单来源取销售订单客户编码。 |
 | `customerName` | string | 可能为空 | 客户名称。 |
 | `partNo` | string | 否 | 图号，QPO 调用前会校验非空。 |
 | `version` | string | 可能为空字符串 | 版本，QPO 无版本时传空字符串。 |
 | `drawingUrl` | string | 否 | 图纸绝对 URL，QPO 调用前会校验非空。 |
 | `internalProjectNo` | string | 否 | 内部项目号，QPO 调用前会校验非空。 |
-| `sourceType` | string | 否 | 来源类型，当前可能为 `RFQ` 或 `SALES_ORDER`。 |
-| `sourceOrderId` | number | 可能为空 | 来源订单 ID。 |
-| `sourceItemId` | number | 可能为空 | 来源零件 ID。 |
+
+QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`。这些字段属于 QPO 内部定位或展示字段；外部请求和回调定位只依赖 MES 原样返回的 `mesRequestId`。QPO 会在内部请求流水中保存 `mesRequestId -> ticketId` 映射，并根据 QPO 内部来源字段自行判断是否需要回写销售订单零件，不需要 MES 或数据中心感知。
 
 ## 4. MES 响应要求
 
@@ -229,7 +219,7 @@ QPO 前端支持批量选择多个已提零件后提交“获取物料号”任�
 ```text
 用户选择 N 个零件
   -> QPO 创建 1 个批量 system_task
-  -> 任务内部按 ticketId 顺序循环
+  -> 任务内部按 QPO 内部提单行 ID 顺序循环
   -> 每行先按 图号 + 版本 做 QPO 内部去重判断
   -> 只有 MASTER 主请求行会 POST 调 MES
   -> FOLLOWER 关联等待行不调用 MES，等待主请求回调或即时成功分发
@@ -269,7 +259,7 @@ MES 返回待回调后，后续由数据中心调用 QPO 回调接口，把 MES 
 - 独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
 - 接口入口：`POST {QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback`；`QPO_PUBLIC_BASE_URL` 由部署后的可访问地址确定。
 - 认证方式：`Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`；回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供给数据中心，真实 token 单独通过受控渠道交付数据中心。回调接口详情见 `08-MES物料号回调接口对接说明.md`。
-- 定位方式：数据中心转发时必须原样带回 QPO 请求中的主 `mesRequestId`，并带回 `ticketId` 做交叉校验。
+- 定位方式：数据中心转发时只需要原样带回 QPO 请求中的主 `mesRequestId`；QPO 会根据 `mesRequestId` 查询内部请求流水，再定位到对应提单行。
 - 去重口径：同图号版本去重场景下，数据中心只需要转发主 `mesRequestId` 的 MES 结果；关联等待行是 QPO 内部关系，数据中心和 MES 都不需要分别回调每个相同图号版本零件。
 - 写回口径：QPO 收到主请求成功回调后写回 `order_delivery_ticket.material_no`，并 fan-out 写回所有关联等待行；销售订单来源提单行还会同步回写 `sales_order_item.material_no` 与物料号确认字段。
 
@@ -283,7 +273,7 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 - 网络超时导致 QPO 不知道 MES 是否已经处理成功；
 - 测试/联调时重复提交同一条数据。
 
-建议 MES 以 `mesRequestId` 作为一次请求和后续回调的幂等主键，同时可结合 `ticketId`、`internalProjectNo + partNo + version` 做业务幂等判断：
+建议 MES 以 `mesRequestId` 作为一次请求和后续回调的幂等主键，同时可结合 `internalProjectNo + partNo + version` 做业务幂等判断：
 
 - 如果同一零件已经创建过物料号，建议直接返回原 `materialNo`；
 - 不建议因为重复请求创建多个不同物料号；
@@ -314,4 +304,4 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 - QPO 和数据中心确认 QPO 入站回调 URL、`QPO_INBOUND_CALLBACK_TOKEN`、IP 白名单、防火墙策略；QPO 和 MES 确认物料号业务字段与响应口径。
 - 双方确认超时时间、并发上限、是否需要限流。
 - MES 返回 JSON 字段名与本文档一致，尤其是 `success`、`status`、`callbackRequired`、`materialNo`、`message`、`mesRequestId`。
-- 双方约定联调样例数据，并保留 `ticketId` / `mesRequestId` / `externalTraceId` 方便查日志。
+- 双方约定联调样例数据，并保留 `mesRequestId` / `externalTraceId` 方便查日志；`ticketId` 仅作为 QPO 内部日志和请求流水排查字段，不对 MES / 数据中心开放。

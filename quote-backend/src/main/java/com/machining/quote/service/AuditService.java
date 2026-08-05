@@ -324,6 +324,7 @@ public class AuditService {
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "INTERNAL_TARGET_LEAD_TIME_UPDATE" -> "更新内部目标交期";
             case "RELEASE_ITEM_VERSION_UPDATE" -> "议价提单修改零件版本";
+            case "RELEASE_ITEM_FIELD_UPDATE" -> "议价提单修改零件信息";
             case "RELEASE_DRAWING_REPLACE" -> "议价提单替换图纸";
             case "DELIVERY_TICKET_GENERATE" -> "生成提单";
             case "DELIVERY_TICKET_EXPORT" -> "导出提单表";

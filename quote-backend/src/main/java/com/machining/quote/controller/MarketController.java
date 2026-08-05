@@ -10,6 +10,7 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseItemFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.RfqExcelDTO;
@@ -239,6 +240,14 @@ public class MarketController {
             @PathVariable Integer itemId,
             @RequestBody ReleaseItemVersionUpdateReq req) {
         return internalTargetLeadTimeService.updateReleaseItemVersion(itemId, req);
+    }
+
+    @PostMapping("/release/items/{itemId}/fields")
+    @RequirePermission("market:release:create")
+    public Map<String, Object> updateReleaseItemFields(
+            @PathVariable Long itemId,
+            @RequestBody ReleaseItemFieldUpdateReq req) {
+        return internalTargetLeadTimeService.updateReleaseItemFields(itemId, req);
     }
 
     @PostMapping(value = "/release/drawings/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

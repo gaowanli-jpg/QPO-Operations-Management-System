@@ -12,6 +12,46 @@ describe('release version edit stage 3', () => {
 
     expect(apiSource).toContain('updateReleaseItemVersion')
     expect(apiSource).toContain('/api/market/release/items/${itemId}/version')
+    expect(apiSource).toContain('updateReleaseItemFields')
+    expect(apiSource).toContain('/api/market/release/items/${itemId}/fields')
+  })
+
+  test('market release edits row remark and customer requirement like version fields', () => {
+    const source = readSource('components', 'MarketRelease.vue')
+    const fieldSaveBlock = source.slice(
+      source.indexOf('const saveReleaseItemFields = async (row) =>'),
+      source.indexOf('const handleSelectionChange')
+    )
+    const finalUnitPriceIndex = source.indexOf('row.finalUnitPrice')
+    const remarkDraftIndex = source.indexOf('v-model="row.remarkDraft"')
+    const customerRequirementDraftIndex = source.indexOf('v-model="row.customerRequirementDraft"')
+    const statusIndex = source.indexOf('prop="status"', customerRequirementDraftIndex)
+
+    expect(source).toContain('updateReleaseItemFields')
+    expect(source).toContain('fields: (releaseItemKey) => `market:release:fields:${releaseItemKey}`')
+    expect(source).toContain('const isFieldSaving = (row) => isPending(releaseActionKeys.fields(rowKey(row)))')
+    expect(source).toContain('v-model="row.remarkDraft"')
+    expect(source).toContain('v-model="row.customerRequirementDraft"')
+    expect(source).toContain(':loading="isFieldSaving(row)"')
+    expect(source).toContain('@click.stop="saveReleaseItemFields(row)"')
+    expect(source).toContain('remarkDraft: row.remark || \'\'')
+    expect(source).toContain('customerRequirementDraft: row.customerRequirement || \'\'')
+    expect(finalUnitPriceIndex).toBeGreaterThanOrEqual(0)
+    expect(remarkDraftIndex).toBeGreaterThan(finalUnitPriceIndex)
+    expect(customerRequirementDraftIndex).toBeGreaterThan(remarkDraftIndex)
+    expect(statusIndex).toBeGreaterThan(customerRequirementDraftIndex)
+
+    expect(fieldSaveBlock).toContain('return runAction(releaseActionKeys.fields(rowKey(row)), async () =>')
+    expect(fieldSaveBlock).toContain('updateReleaseItemFields(row.id, {')
+    expect(fieldSaveBlock).toContain('sourceType: row.sourceType || \'RFQ\'')
+    expect(fieldSaveBlock).toContain('sourceOrderId: row.sourceOrderId')
+    expect(fieldSaveBlock).toContain('rfqId: row.rfqId || selectedRfqId.value')
+    expect(fieldSaveBlock).toContain('remark: row.remarkDraft')
+    expect(fieldSaveBlock).toContain('customerRequirement: row.customerRequirementDraft')
+    expect(fieldSaveBlock).toContain('itemList.value.splice(index, 1, saved)')
+    expect(fieldSaveBlock).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
+    expect(fieldSaveBlock).not.toContain('clearSelectedRows()')
+    expect(fieldSaveBlock).not.toContain('fetchReleaseItemsBatch()')
   })
 
   test('market release edits one row version without clearing cross-page selection', () => {

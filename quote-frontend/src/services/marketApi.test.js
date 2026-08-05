@@ -280,6 +280,17 @@ describe('marketApi', () => {
     })
   })
 
+  test('updateReleaseItemFields posts item-scoped editable field payload', async () => {
+    const payload = { sourceType: 'SALES_ORDER', sourceOrderId: 2001, remark: 'note', customerRequirement: 'need' }
+
+    await marketApi.updateReleaseItemFields(3001, payload)
+
+    expect(request).toHaveBeenCalledWith('/api/market/release/items/3001/fields', {
+      method: 'POST',
+      data: payload
+    })
+  })
+
   test('does not expose destructive release result delete helpers', () => {
     expect('deleteTicket' in marketApi).toBe(false)
     expect('deleteProcessSheet' in marketApi).toBe(false)

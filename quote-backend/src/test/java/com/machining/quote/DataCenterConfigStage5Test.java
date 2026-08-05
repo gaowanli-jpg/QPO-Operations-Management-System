@@ -158,9 +158,7 @@ class DataCenterConfigStage5Test {
 
     private MesMaterialResolveReq mesMaterialReq() {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
-        req.setTicketId(123);
-        req.setRfqId(88);
-        req.setRfqNo("RFQ-1");
+        req.setCustomerCode("C-ACME");
         req.setCustomerName("ACME");
         req.setPartNo("P-100");
         req.setVersion("A");

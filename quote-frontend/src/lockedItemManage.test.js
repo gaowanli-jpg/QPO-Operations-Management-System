@@ -197,6 +197,11 @@ describe('LockedItemManage guardrails', () => {
     }
   })
 
+  test('shows customer requirement snapshot beside locked item remarks', () => {
+    expect(pageSource).toContain('prop="customerRequirement"')
+    expect(pageSource).toContain('selectedTicketDetail.customerRequirement')
+  })
+
   test('keeps allocation and delivered ticket id tooltips enabled for long ids', () => {
     expect(pageSource).toContain('prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip')
     expect(pageSource).toContain('prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip')

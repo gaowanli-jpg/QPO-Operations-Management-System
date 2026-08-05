@@ -5,7 +5,6 @@ import lombok.Data;
 @Data
 public class MesMaterialCallbackReq {
     private String mesRequestId;
-    private Integer ticketId;
     private String externalTraceId;
     private String status;
     private String materialNo;

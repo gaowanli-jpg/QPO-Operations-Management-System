@@ -334,7 +334,6 @@ class MesMaterialDedupStage4Test {
     private MesMaterialCallbackReq callback(String materialNo) {
         MesMaterialCallbackReq req = new MesMaterialCallbackReq();
         req.setMesRequestId("MES-REQ-123");
-        req.setTicketId(123);
         req.setExternalTraceId("MES-TASK-1");
         req.setStatus("SUCCESS");
         req.setMaterialNo(materialNo);

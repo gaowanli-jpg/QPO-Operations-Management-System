@@ -99,6 +99,8 @@ export const updateInternalTargetLeadTime = (payload) => postJson('/api/market/i
 
 export const updateReleaseItemVersion = (itemId, payload) => postJson(`/api/market/release/items/${itemId}/version`, payload)
 
+export const updateReleaseItemFields = (itemId, payload) => postJson(`/api/market/release/items/${itemId}/fields`, payload)
+
 export const generateTicket = (payload) => postJson('/api/market/generate-ticket', payload)
 
 export const getQuoteProcessSummary = (rfqId) => request(`/api/market/quote-process/${rfqId}/summary`)

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.ReleaseItemFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
@@ -58,23 +59,29 @@ class ReleaseVersionDrawingStage1Test {
         String marketController = source("controller", "MarketController.java");
         assertThat(marketController)
                 .contains("@PostMapping(\"/release/items/{itemId}/version\")")
+                .contains("@PostMapping(\"/release/items/{itemId}/fields\")")
                 .contains("@RequirePermission(\"market:release:create\")")
                 .contains("@PostMapping(value = \"/release/drawings/replace\"")
                 .contains("internalTargetLeadTimeService.updateReleaseItemVersion(itemId, req)")
+                .contains("internalTargetLeadTimeService.updateReleaseItemFields(itemId, req)")
                 .contains("parseReleaseSources(sourcesJson, rfqIdsJson)");
 
         String releaseService = source("service", "InternalTargetLeadTimeService.java");
         assertThat(releaseService)
                 .contains("public Map<String, Object> updateReleaseItemVersion")
+                .contains("public Map<String, Object> updateReleaseItemFields")
                 .contains("public Map<String, Object> replaceReleaseDrawings")
                 .contains("RELEASE_ITEM_VERSION_UPDATE")
+                .contains("RELEASE_ITEM_FIELD_UPDATE")
                 .contains("RELEASE_DRAWING_REPLACE")
                 .contains("Release item version updated")
+                .contains("Release item fields updated")
                 .contains("Release drawings replace completed")
                 .contains("Release drawings replace completed with warnings")
                 .contains("Release drawings replace failed");
 
         assertThat(AuditService.inferModule("RELEASE_ITEM_VERSION_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("RELEASE_ITEM_FIELD_UPDATE")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("RELEASE_DRAWING_REPLACE")).isEqualTo("MARKET");
         assertThat(AuditService.labelForAction("RELEASE_ITEM_VERSION_UPDATE"))
                 .isEqualTo("议价提单修改零件版本");
@@ -111,6 +118,83 @@ class ReleaseVersionDrawingStage1Test {
         verify(itemMapper).updateById(item);
         assertThat(item.getVersion()).isEqualTo("B");
         verify(auditService).record(eq("RELEASE_ITEM_VERSION_UPDATE"), eq("item_quote_version"), eq(201), any(Map.class), any(Map.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void updateReleaseItemFieldsUpdatesRfqItemRemarkAndCustomerRequirement() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, auditService, null);
+        OrderRfq order = releaseOrder(101, "RFQ-101");
+        ItemQuoteVersion item = releaseItem(201, 101, "P-001", "A");
+        item.setRemark("old remark");
+        item.setCustomerRequirement("old requirement");
+        when(orderMapper.selectByIdForUpdate(101)).thenReturn(order);
+        when(itemMapper.selectByIdForUpdate(201)).thenReturn(item);
+        when(itemMapper.selectById(201)).thenAnswer(invocation -> item);
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        ReleaseItemFieldUpdateReq req = new ReleaseItemFieldUpdateReq();
+        req.setSourceType(ReleaseSourceType.RFQ);
+        req.setRfqId(101);
+        req.setRemark(" updated remark ");
+        req.setCustomerRequirement(" pack separately ");
+        Map<String, Object> result = service.updateReleaseItemFields(201L, req);
+
+        assertThat(result).containsEntry("success", true);
+        Map<String, Object> row = (Map<String, Object>) result.get("data");
+        assertThat(row)
+                .containsEntry("id", 201)
+                .containsEntry("sourceType", ReleaseSourceType.RFQ.name())
+                .containsEntry("remark", "updated remark")
+                .containsEntry("customerRequirement", "pack separately");
+        assertThat(item.getRemark()).isEqualTo("updated remark");
+        assertThat(item.getCustomerRequirement()).isEqualTo("pack separately");
+        verify(itemMapper).updateById(item);
+        verify(auditService).record(eq("RELEASE_ITEM_FIELD_UPDATE"), eq("item_quote_version"), eq(201), any(Map.class), any(Map.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void updateReleaseItemFieldsUpdatesSalesOrderItemRemarkAndCustomerRequirement() {
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, auditService, null);
+        SalesOrderHeaderMapper salesOrderHeaderMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
+        SalesOrderHeader order = salesOrder(2001L, "SO-2001");
+        SalesOrderItem item = salesOrderItem(3001L, 2001L, "P-SO-001", "B");
+        item.setRemark("old sales remark");
+        item.setCustomerRequirement("old sales requirement");
+        when(salesOrderHeaderMapper.selectByIdForUpdate(2001L)).thenReturn(order);
+        when(salesOrderItemMapper.selectByIdForUpdate(3001L)).thenReturn(item);
+        when(salesOrderItemMapper.selectById(3001L)).thenReturn(item);
+
+        ReleaseItemFieldUpdateReq req = new ReleaseItemFieldUpdateReq();
+        req.setSourceType(ReleaseSourceType.SALES_ORDER);
+        req.setSourceOrderId(2001L);
+        req.setRemark(" sales remark ");
+        req.setCustomerRequirement(" customer needs clean packing ");
+        Map<String, Object> result = service.updateReleaseItemFields(3001L, req);
+
+        assertThat(result).containsEntry("success", true);
+        Map<String, Object> row = (Map<String, Object>) result.get("data");
+        assertThat(row)
+                .containsEntry("id", 3001L)
+                .containsEntry("sourceType", ReleaseSourceType.SALES_ORDER.name())
+                .containsEntry("remark", "sales remark")
+                .containsEntry("customerRequirement", "customer needs clean packing");
+        assertThat(item.getRemark()).isEqualTo("sales remark");
+        assertThat(item.getCustomerRequirement()).isEqualTo("customer needs clean packing");
+        verify(salesOrderItemMapper).updateById(item);
+        verify(auditService).record(eq("RELEASE_ITEM_FIELD_UPDATE"), eq("sales_order_item"), eq(3001L), any(Map.class), any(Map.class));
     }
 
     @Test

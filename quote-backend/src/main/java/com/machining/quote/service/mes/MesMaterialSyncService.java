@@ -11,11 +11,13 @@ import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
@@ -29,7 +31,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -52,6 +53,8 @@ public class MesMaterialSyncService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired(required = false)
     private SalesOrderItemMapper salesOrderItemMapper;
+    @Autowired(required = false)
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired
     private MesMaterialClient mesMaterialClient;
     @Autowired
@@ -67,18 +70,15 @@ public class MesMaterialSyncService {
         if (mesRequestId == null) {
             throw callbackError(HttpStatus.BAD_REQUEST, "MES 请求ID不能为空");
         }
-        Integer ticketId = req == null ? null : req.getTicketId();
-        if (ticketId == null) {
-            throw callbackError(HttpStatus.BAD_REQUEST, "ticketId 不能为空");
-        }
         String externalTraceId = trimToNull(req.getExternalTraceId());
-        log.info("MES material callback received ticketId={} mesRequestId={} externalTraceId={}",
-                ticketId, mesRequestId, externalTraceId);
+        log.info("MES material callback received mesRequestId={} externalTraceId={}",
+                mesRequestId, externalTraceId);
         OrderDeliveryTicketMesRequest request = loadMesRequest(mesRequestId);
-        if (!Objects.equals(request.getTicketId(), ticketId)) {
+        Integer ticketId = request.getTicketId();
+        if (ticketId == null) {
             recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", null, request, req, STATUS_FAILED,
-                    "MES 回调 ticketId 与请求流水不匹配");
-            throw callbackError(HttpStatus.CONFLICT, "MES 回调 ticketId 与请求流水不匹配");
+                    "MES 请求流水缺少提单行ID");
+            throw callbackError(HttpStatus.INTERNAL_SERVER_ERROR, "MES 请求流水缺少提单行ID");
         }
         OrderDeliveryTicket ticket = loadTicket(ticketId);
         if (!mesRequestId.equals(trimToNull(ticket.getMesRequestId()))) {
@@ -95,7 +95,7 @@ public class MesMaterialSyncService {
                 dedupService.completeMasterFailed(mesRequestId, req.getMessage());
             }
             recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_FAILED", ticket, request, req, STATUS_FAILED, req.getMessage());
-            return callbackResponse(false, "MES 回调失败", ticketId, mesRequestId, null);
+            return callbackResponse(false, "MES 回调失败", mesRequestId, null);
         }
         if (isBlank(materialNo)) {
             throw callbackError(HttpStatus.BAD_REQUEST, "MES 回调物料号不能为空");
@@ -105,7 +105,7 @@ public class MesMaterialSyncService {
                 if (dedupService != null) {
                     dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
                 }
-                return callbackResponse(true, "MES 回调已处理", ticketId, mesRequestId, materialNo);
+                return callbackResponse(true, "MES 回调已处理", mesRequestId, materialNo);
             }
             recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, request, req, STATUS_FAILED,
                     "MES 回调物料号冲突");
@@ -121,7 +121,7 @@ public class MesMaterialSyncService {
         recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS", ticket, request, req, STATUS_SUCCESS, null);
         log.info("MES material callback completed ticketId={} mesRequestId={} materialNo={} durationMs={}",
                 ticketId, mesRequestId, materialNo, System.currentTimeMillis() - startedAt);
-        return callbackResponse(true, "QPO已接收物料号回调", ticketId, mesRequestId, materialNo);
+        return callbackResponse(true, "QPO已接收物料号回调", mesRequestId, materialNo);
     }
 
     public Map<String, Object> syncMaterialNo(Integer ticketId, Long taskId) {
@@ -303,21 +303,30 @@ public class MesMaterialSyncService {
     private MesMaterialResolveReq buildRequest(OrderDeliveryTicket ticket, String mesRequestId) {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
         req.setMesRequestId(mesRequestId);
-        req.setTicketId(ticket.getId());
-        req.setRfqId(ticket.getRfqId());
         req.setPartNo(required(ticket.getPartNo(), "图号不能为空"));
         req.setVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
         req.setInternalProjectNo(required(ticket.getInternalProjectNo(), "内部项目号不能为空"));
         OrderRfq order = orderRfqMapper == null || ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
-        req.setRfqNo(order == null ? ticket.getRfqNo() : order.getRfqNo());
+        req.setCustomerCode(resolveCustomerCode(ticket, order));
         req.setCustomerName(order == null ? ticket.getCustomerName() : order.getCustomerName());
-        req.setSourceType(resolveSourceType(ticket));
-        req.setSourceOrderId(resolveSourceOrderId(ticket));
-        req.setSourceItemId(resolveSourceItemId(ticket));
-        req.setOrderNo(resolveOrderNo(ticket, req.getRfqNo()));
         String drawingUrl = resolveDrawingUrl(ticket);
         req.setDrawingUrl(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空")));
         return req;
+    }
+
+    private String resolveCustomerCode(OrderDeliveryTicket ticket, OrderRfq order) {
+        if (ReleaseSourceType.SALES_ORDER.name().equals(resolveSourceType(ticket))
+                && salesOrderHeaderMapper != null
+                && ticket.getSourceOrderId() != null) {
+            SalesOrderHeader header = salesOrderHeaderMapper.selectById(ticket.getSourceOrderId());
+            if (header != null && !isBlank(header.getCustomerCode())) {
+                return header.getCustomerCode().trim();
+            }
+        }
+        if (order != null && !isBlank(order.getCustomerCode())) {
+            return order.getCustomerCode().trim();
+        }
+        return null;
     }
 
     private void validateResponseSuccess(MesMaterialResolveResp resp, String mesRequestId) {
@@ -591,7 +600,7 @@ public class MesMaterialSyncService {
         if (auditService == null) {
             return;
         }
-        Integer ticketId = ticket == null ? (req == null ? null : req.getTicketId()) : ticket.getId();
+        Integer ticketId = ticket == null ? (request == null ? null : request.getTicketId()) : ticket.getId();
         String mesRequestId = req == null ? null : req.getMesRequestId();
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("ticketId", ticketId);
@@ -625,13 +634,11 @@ public class MesMaterialSyncService {
     private MesMaterialCallbackResp callbackResponse(
             boolean success,
             String message,
-            Integer ticketId,
             String mesRequestId,
             String materialNo) {
         MesMaterialCallbackResp resp = new MesMaterialCallbackResp();
         resp.setSuccess(success);
         resp.setMessage(message);
-        resp.setTicketId(ticketId);
         resp.setMesRequestId(mesRequestId);
         resp.setMaterialNo(trimToNull(materialNo));
         return resp;
@@ -746,27 +753,6 @@ public class MesMaterialSyncService {
 
     private String resolveSourceType(OrderDeliveryTicket ticket) {
         return isBlank(ticket.getSourceType()) ? ReleaseSourceType.RFQ.name() : ticket.getSourceType().trim();
-    }
-
-    private Long resolveSourceOrderId(OrderDeliveryTicket ticket) {
-        if (ticket.getSourceOrderId() != null) {
-            return ticket.getSourceOrderId();
-        }
-        return ticket.getRfqId() == null ? null : ticket.getRfqId().longValue();
-    }
-
-    private Long resolveSourceItemId(OrderDeliveryTicket ticket) {
-        if (ticket.getSourceItemId() != null) {
-            return ticket.getSourceItemId();
-        }
-        return ticket.getItemId() == null ? null : ticket.getItemId().longValue();
-    }
-
-    private String resolveOrderNo(OrderDeliveryTicket ticket, String rfqNo) {
-        if (!isBlank(rfqNo)) {
-            return rfqNo.trim();
-        }
-        return isBlank(ticket.getRfqNo()) ? null : ticket.getRfqNo().trim();
     }
 
     private MesMaterialCallbackException callbackError(HttpStatus status, String message) {

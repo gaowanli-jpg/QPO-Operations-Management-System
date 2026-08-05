@@ -10,6 +10,7 @@ import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseItemFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.ReleaseSourceType;
@@ -207,6 +208,76 @@ public class InternalTargetLeadTimeService {
         result.put("data", savedRow);
         log.info("Release item version updated rfqId={} itemId={} partNo={}",
                 rfqId, item.getId(), normalizePartNo(item.getPartNo()));
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> updateReleaseItemFields(Long itemId, ReleaseItemFieldUpdateReq req) {
+        if (itemId == null) {
+            throw new RuntimeException("Item ID is required");
+        }
+        ReleaseSourceType sourceType = req == null || req.getSourceType() == null
+                ? ReleaseSourceType.RFQ
+                : req.getSourceType();
+        if (sourceType == ReleaseSourceType.SALES_ORDER) {
+            return updateSalesOrderReleaseItemFields(itemId, req);
+        }
+        return updateRfqReleaseItemFields(itemId.intValue(), req);
+    }
+
+    private Map<String, Object> updateRfqReleaseItemFields(Integer itemId, ReleaseItemFieldUpdateReq req) {
+        Integer rfqId = req == null ? null : req.getRfqId();
+        requireOrderForUpdate(rfqId);
+        ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
+        if (item == null || !Objects.equals(rfqId, item.getRfqId())) {
+            throw new RuntimeException("Item does not belong to selected RFQ");
+        }
+        assertReleaseItemMutable(item, listTicketsForItems(rfqId, List.of(item)));
+
+        Map<String, Object> before = buildItemRow(item);
+        item.setRemark(trimToNull(req == null ? null : req.getRemark()));
+        item.setCustomerRequirement(trimToNull(req == null ? null : req.getCustomerRequirement()));
+        itemMapper.updateById(item);
+        ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+        Map<String, Object> savedRow = buildItemRow(saved == null ? item : saved);
+        auditService.record("RELEASE_ITEM_FIELD_UPDATE", "item_quote_version", item.getId(), before, savedRow);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("data", savedRow);
+        log.info("Release item fields updated sourceType={} rfqId={} itemId={} partNo={}",
+                ReleaseSourceType.RFQ.name(), rfqId, item.getId(), normalizePartNo(item.getPartNo()));
+        return result;
+    }
+
+    private Map<String, Object> updateSalesOrderReleaseItemFields(Long itemId, ReleaseItemFieldUpdateReq req) {
+        Long sourceOrderId = req == null ? null : req.getSourceOrderId();
+        if (sourceOrderId == null) {
+            throw new RuntimeException("Sales order ID is required");
+        }
+        Map<Long, SalesOrderHeader> orders = requireSalesOrdersForUpdate(Set.of(sourceOrderId));
+        SalesOrderHeader order = orders.get(sourceOrderId);
+        SalesOrderItem item = salesOrderItemMapper.selectByIdForUpdate(itemId);
+        if (item == null || !Objects.equals(sourceOrderId, item.getSalesOrderId())) {
+            throw new RuntimeException("Item does not belong to selected sales order");
+        }
+        if (!isSalesOrderReleaseItemMutable(item)) {
+            throw new RuntimeException(salesOrderReleaseMutationBlockedReason(item));
+        }
+
+        Map<String, Object> before = buildSalesOrderItemRow(item, order);
+        item.setRemark(trimToNull(req == null ? null : req.getRemark()));
+        item.setCustomerRequirement(trimToNull(req == null ? null : req.getCustomerRequirement()));
+        salesOrderItemMapper.updateById(item);
+        SalesOrderItem saved = salesOrderItemMapper.selectById(item.getId());
+        Map<String, Object> savedRow = buildSalesOrderItemRow(saved == null ? item : saved, order);
+        auditService.record("RELEASE_ITEM_FIELD_UPDATE", "sales_order_item", item.getId(), before, savedRow);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("data", savedRow);
+        log.info("Release item fields updated sourceType={} salesOrderId={} itemId={} partNo={}",
+                ReleaseSourceType.SALES_ORDER.name(), sourceOrderId, item.getId(), normalizePartNo(item.getPartNo()));
         return result;
     }
 
@@ -1289,6 +1360,7 @@ public class InternalTargetLeadTimeService {
         row.put("finalTotalPrice", item.getFinalTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
+        row.put("customerRequirement", item.getCustomerRequirement());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
         boolean canSelect = item.getFinalUnitPrice() != null
@@ -1347,6 +1419,7 @@ public class InternalTargetLeadTimeService {
         row.put("finalTotalPrice", item.getFinalTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
+        row.put("customerRequirement", item.getCustomerRequirement());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
         boolean canSelect = item.getFinalUnitPrice() != null
@@ -1466,6 +1539,14 @@ public class InternalTargetLeadTimeService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private record FilteredReleaseSql(String sql, List<Object> params) {

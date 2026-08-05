@@ -46,9 +46,7 @@ public class MesMaterialClient {
 
     public MesMaterialResolveResp resolveMaterial(MesMaterialResolveReq req) {
         if (useDataCenter()) {
-            log.debug("MES material resolve data center request ticketId={} rfqId={} partNo={}",
-                    req == null ? null : req.getTicketId(),
-                    req == null ? null : req.getRfqId(),
+            log.debug("MES material resolve data center request partNo={}",
                     req == null ? null : req.getPartNo());
             return dataCenterIntegrationClient.call(
                     DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
@@ -73,9 +71,7 @@ public class MesMaterialClient {
         }
         HttpEntity<MesMaterialResolveReq> entity = new HttpEntity<>(req, headers);
         String url = trimRight(config.baseUrl()) + normalizePath(config.materialPath());
-        log.debug("MES material resolve request ticketId={} rfqId={} partNo={}",
-                req == null ? null : req.getTicketId(),
-                req == null ? null : req.getRfqId(),
+        log.debug("MES material resolve request partNo={}",
                 req == null ? null : req.getPartNo());
         try {
             ResponseEntity<MesMaterialResolveResp> response = restTemplate.exchange(

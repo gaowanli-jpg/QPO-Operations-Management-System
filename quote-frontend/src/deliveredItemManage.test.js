@@ -65,6 +65,11 @@ describe('DeliveredItemManage foundation page', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
   })
 
+  test('shows customer requirement snapshot beside delivered item remarks', () => {
+    expect(source).toContain('prop="customerRequirement"')
+    expect(source).toContain('selectedItem.customerRequirement')
+  })
+
   test('keeps delivered ticket id tooltip enabled for long ids', () => {
     expect(source).toContain('prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip')
   })

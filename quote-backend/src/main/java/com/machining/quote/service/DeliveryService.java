@@ -520,6 +520,7 @@ public class DeliveryService {
         ticket.setStartDate(startDate);
         ticket.setDeliveryDate(item.getInternalDeliveryDate() == null ? startDate : item.getInternalDeliveryDate());
         ticket.setRemark(item.getRemark());
+        ticket.setCustomerRequirement(item.getCustomerRequirement());
         ticket.setArrangeType(arrangeType);
         ticket.setDrawingUrl(item.getDrawingUrl());
         ticket.setProcessRoute(item.getProcessRoute());
@@ -630,6 +631,7 @@ public class DeliveryService {
         ticket.setStartDate(startDate);
         ticket.setDeliveryDate(leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)));
         ticket.setRemark(remark);
+        ticket.setCustomerRequirement(item.getCustomerRequirement());
         ticket.setArrangeType(arrangeType);
         ticket.setDrawingUrl(item.getDrawingUrl());
         ticket.setProcessRoute(item.getProcessRoute());

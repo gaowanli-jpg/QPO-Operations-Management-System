@@ -19,6 +19,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -35,6 +39,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class MesMaterialCallbackStage3Test {
+    private static final Path CALLBACK_REQ = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesMaterialCallbackReq.java");
+    private static final Path CALLBACK_RESP = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesMaterialCallbackResp.java");
 
     @Test
     void materialCallbackConfirmsPendingTicketAndSalesOrderItem() {
@@ -55,7 +63,6 @@ class MesMaterialCallbackStage3Test {
         MesMaterialCallbackResp response = service.handleMaterialCallback(callback("MAT-NEW"));
 
         assertThat(response.getSuccess()).isTrue();
-        assertThat(response.getTicketId()).isEqualTo(123);
         assertThat(response.getMesRequestId()).isEqualTo("MES-REQ-123");
         assertThat(response.getMaterialNo()).isEqualTo("MAT-NEW");
         ArgumentCaptor<OrderDeliveryTicket> ticketCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
@@ -151,18 +158,21 @@ class MesMaterialCallbackStage3Test {
     }
 
     @Test
-    void callbackRejectsMismatchedTicketIdWithoutUpdating() {
+    void callbackLocatesTicketFromRequestLedgerWithoutExternalTicketId() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         OrderDeliveryTicketMesRequestMapper requestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
-        when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(requestLedger("CALLBACK_PENDING", 124));
-        wire(service, ticketMapper, requestMapper, mock(SalesOrderItemMapper.class), mock(AuditService.class));
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicket ticket = salesOrderTicket("CALLBACK_PENDING", null);
+        when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(requestLedger("CALLBACK_PENDING", 123));
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        wire(service, ticketMapper, requestMapper, salesOrderItemMapper, mock(AuditService.class));
 
-        assertThatThrownBy(() -> service.handleMaterialCallback(callback("MAT-NEW")))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("ticketId");
+        MesMaterialCallbackResp response = service.handleMaterialCallback(callback("MAT-NEW"));
 
-        verify(ticketMapper, never()).updateById(any());
+        assertThat(response.getSuccess()).isTrue();
+        verify(ticketMapper).selectById(123);
+        verify(ticketMapper).updateById(any(OrderDeliveryTicket.class));
     }
 
     @Test
@@ -224,7 +234,6 @@ class MesMaterialCallbackStage3Test {
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
         MesMaterialCallbackResp expected = new MesMaterialCallbackResp();
         expected.setSuccess(true);
-        expected.setTicketId(123);
         expected.setMesRequestId("MES-REQ-123");
         when(service.handleMaterialCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
@@ -237,6 +246,12 @@ class MesMaterialCallbackStage3Test {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isSameAs(expected);
         verify(service).handleMaterialCallback(any(MesMaterialCallbackReq.class));
+    }
+
+    @Test
+    void callbackDtosDoNotExposeInternalTicketId() throws IOException {
+        assertThat(read(CALLBACK_REQ)).doesNotContain("private Integer ticketId;");
+        assertThat(read(CALLBACK_RESP)).doesNotContain("private Integer ticketId;");
     }
 
     @Test
@@ -284,12 +299,15 @@ class MesMaterialCallbackStage3Test {
     private MesMaterialCallbackReq callback(String materialNo) {
         MesMaterialCallbackReq req = new MesMaterialCallbackReq();
         req.setMesRequestId("MES-REQ-123");
-        req.setTicketId(123);
         req.setExternalTraceId("MES-TASK-1");
         req.setStatus("SUCCESS");
         req.setMaterialNo(materialNo);
         req.setMessage("MES completed");
         return req;
+    }
+
+    private String read(Path path) throws IOException {
+        return Files.readString(path, StandardCharsets.UTF_8).replace("\r\n", "\n");
     }
 
     private OrderDeliveryTicketMesRequest requestLedger(String status, Integer ticketId) {

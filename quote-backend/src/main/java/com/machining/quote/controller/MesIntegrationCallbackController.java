@@ -42,7 +42,6 @@ public class MesIntegrationCallbackController {
         resp.setSuccess(false);
         resp.setMessage(message);
         if (req != null) {
-            resp.setTicketId(req.getTicketId());
             resp.setMesRequestId(req.getMesRequestId());
         }
         return resp;
