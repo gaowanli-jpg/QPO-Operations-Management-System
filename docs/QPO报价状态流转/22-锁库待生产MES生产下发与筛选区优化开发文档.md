@@ -1,6 +1,7 @@
 # 锁库待生产 MES 生产下发与筛选区优化开发文档
 最后更新：2026-08-02
 
+> 阶段 31 当前口径：本文档保留为历史阶段记录，待生产下发职责已被 `31-待产零件与锁库零件模块解耦开发文档.md` 替代。当前用户入口为待产零件 `/production-items`，后端接口为 `POST /api/order-delivery/production-items/mes-production`，权限为 `market:production-item:mes-production-submit`，操作日志动作使用 `PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT / SUCCESS / FAILED`。锁库零件模块只保留库存锁定结果展示。
 ## 1. 背景
 
 当前 QPO 已形成完整的 MES/WMS 主链路：
@@ -12,11 +13,11 @@
   - `IN_PRODUCTION_LOCK`：在产库存锁定。
   - `PRODUCTION_REQUIRED`：待生产数量。
 
-现在需要在 **锁库零件** 模块继续承接待生产流转：用户手动选择待生产零件，将这些待生产信息发送给 MES 的生产流程接口。
+阶段 31 后需要在 **待产零件** 模块承接待生产流转：用户手动选择待生产零件，将这些待生产信息发送给 MES 的生产流程接口。
 
 业务口径：
 
-- 只下发 `allocation_type = PRODUCTION_REQUIRED` 的锁库零件行。
+- 只下发 `allocation_type = PRODUCTION_REQUIRED` 的待产零件行。
 - 普通件父子关系传空数组。
 - 组合件按来源零件查询父子关系，查到就带出，查不到也传空数组，不提示、不阻断。
 - 下发方式为手动触发，交互风格参考已提零件模块顶部批量按钮。
@@ -76,7 +77,7 @@
 
 ### 3.1 业务目标
 
-- 锁库零件模块可以手动选择单个或多个待生产行，下发给 MES 生产流程接口。
+- 待产零件模块可以手动选择单个或多个待生产行，下发给 MES 生产流程接口。
 - 只允许 `PRODUCTION_REQUIRED` 行进入 MES 生产下发。
 - 下发内容包含当前锁库零件表可见的主要字段，以及原始提单数量。
 - 下发内容包含组合件父子关系：
@@ -417,7 +418,7 @@ QPO 处理：
 
 | 权限编码 | 类型 | 父级 | 中文 |
 | --- | --- | --- | --- |
-| `market:locked-item:mes-production-submit` | `BUTTON/API` | `market:locked-item:view` | 锁库零件下发MES生产 |
+| `market:production-item:mes-production-submit` | `BUTTON/API` | `market:locked-item:view` | 待产零件下发MES生产 |
 
 默认角色建议：
 
@@ -433,8 +434,8 @@ QPO 处理：
 扩展 `OrderDeliveryController`：
 
 ```java
-@PostMapping("/allocations/mes-production")
-@RequirePermission("market:locked-item:mes-production-submit")
+@PostMapping("/production-items/mes-production")
+@RequirePermission("market:production-item:mes-production-submit")
 public SystemTask submitMesProduction(@RequestBody LockedItemMesProductionBatchReq req) {
     return systemTaskService.submitMesProductionBatchTask(req == null ? null : req.getAllocationIds());
 }
@@ -626,7 +627,7 @@ LEFT JOIN sales_order_item child ON child.id = relation.child_item_id
 权限：
 
 ```vue
-v-permission="'market:locked-item:mes-production-submit'"
+v-permission="'market:production-item:mes-production-submit'"
 ```
 
 启用规则：
@@ -662,9 +663,9 @@ MES生产下发任务已提交，任务ID：{taskId}
 
 | 动作 | 模块 | targetType | targetId |
 | --- | --- | --- | --- |
-| `LOCKED_ITEM_MES_PRODUCTION_SUBMIT` | `DELIVERY` | `order_delivery_ticket_allocation` | 批量任务可用 taskId 或首个 allocationId |
-| `LOCKED_ITEM_MES_PRODUCTION_SUCCESS` | `DELIVERY` | `order_delivery_ticket_allocation` | allocationId |
-| `LOCKED_ITEM_MES_PRODUCTION_FAILED` | `DELIVERY` | `order_delivery_ticket_allocation` | allocationId |
+| `PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT` | `DELIVERY` | `order_delivery_ticket_allocation` | 批量任务可用 taskId 或首个 allocationId |
+| `PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS` | `DELIVERY` | `order_delivery_ticket_allocation` | allocationId |
+| `PRODUCTION_ITEM_MES_PRODUCTION_FAILED` | `DELIVERY` | `order_delivery_ticket_allocation` | allocationId |
 
 ### 10.2 文件日志
 
@@ -726,9 +727,9 @@ MES production dispatch failed allocationId={} requestId={} durationMs={}
 - 主筛选区只展示客户、图号、版本、分配类型、生产下发状态、搜索、重置、高级筛选。
 - 高级筛选默认收起，包含来源订单号、物料号、内部项目号、客户订单号、客户项目号、交货日期。
 - 批量操作区展示 `下发MES生产`。
-- 无 `market:locked-item:mes-production-submit` 权限时按钮隐藏。
+- 无 `market:production-item:mes-production-submit` 权限时按钮隐藏。
 - 选中行后按钮可用。
-- 批量提交调用 `/api/order-delivery/allocations/mes-production`。
+- 批量提交调用 `/api/order-delivery/production-items/mes-production`。
 - 表格展示原提单数量和 MES 生产状态。
 - 不本地全量过滤。
 
@@ -745,7 +746,7 @@ MES production dispatch failed allocationId={} requestId={} durationMs={}
 - `order_delivery_ticket_allocation` 新增 MES 生产下发状态字段。
 - 回填历史 `ticket_qty`。
 - 更新 `OrderDeliveryTicketAllocation`、`LockedItemDTO`、Mapper。
-- 新增权限 `market:locked-item:mes-production-submit`。
+- 新增权限 `market:production-item:mes-production-submit`。
 - 更新 `PermissionService.defaultPermissions()`。
 - 更新权限清单。
 
@@ -767,7 +768,7 @@ MES production dispatch failed allocationId={} requestId={} durationMs={}
 - 新增请求 / 响应 DTO。
 - 新增批量请求 DTO `LockedItemMesProductionBatchReq`。
 - 扩展 `SystemTaskService`，新增 `MES_PRODUCTION_DISPATCH`。
-- 扩展 `OrderDeliveryController`，新增 `/api/order-delivery/allocations/mes-production`。
+- 扩展 `OrderDeliveryController`，新增 `/api/order-delivery/production-items/mes-production`。
 - 组包时带出所有锁库表展示字段和 `ticketQty`。
 
 验收：

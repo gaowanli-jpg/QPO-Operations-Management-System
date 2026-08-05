@@ -4,12 +4,12 @@
 
 ## 1. 适用范围
 
-本文档描述 QPO 锁库零件模块通过数据中心向 MES 下发待生产零件的接口。该接口只处理 WMS 锁库后仍需生产的 allocation 行，不替代 MES 物料号获取接口，也不处理库存锁定结果回传。
+本文档描述 QPO 待产零件模块通过数据中心向 MES 下发待生产零件的接口。该接口只处理 WMS 锁库后仍需生产的待产 allocation 行，不替代 MES 物料号获取接口，也不处理库存锁定结果回传。
 
-- 用户入口：锁库零件页面手动选择一条或多条待生产行，点击“下发MES生产”。
+- 用户入口：待产零件页面手动选择一条或多条待生产行，点击“下发MES生产”。
 - QPO 后端触发接口：`POST /api/order-delivery/production-items/mes-production`。
 - 数据中心功能接口：`MES_PRODUCTION_DISPATCH`，由数据中心转发到 MES 生产接口。
-- 只下发 `PRODUCTION_REQUIRED`，即 `allocationType = PRODUCTION_REQUIRED` 的锁库 allocation 行。
+- 只下发 `PRODUCTION_REQUIRED`，即 `allocationType = PRODUCTION_REQUIRED` 的待产 allocation 行。
 - 普通件或无父子关系时传空数组，组合件存在关系时带 `assemblyRelations`。
 
 ## 2. 调用方式
