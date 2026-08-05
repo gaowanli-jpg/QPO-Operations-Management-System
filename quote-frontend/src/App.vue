@@ -115,7 +115,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
 const menuGroups = [
-  { key: 'dashboard', title: '首页看板', paths: ['/dashboard'] },
+  { key: 'dashboard', title: '首页', paths: ['/dashboard'] },
   { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/locked-items'] },

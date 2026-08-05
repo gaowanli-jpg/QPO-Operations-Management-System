@@ -22,7 +22,7 @@ describe('Dashboard prototype phase 6 acceptance guard', () => {
   test('keeps the sidebar dashboard menu visible at the top of App shell', () => {
     const appSource = readSource('App.vue')
 
-    expect(appSource).toContain("{ key: 'dashboard', title: '首页看板', paths: ['/dashboard'] }")
+    expect(appSource).toContain("{ key: 'dashboard', title: '首页', paths: ['/dashboard'] }")
     expect(appSource).toContain("'/dashboard': { title: '首页看板'")
     expect(appSource).toContain("if (path === '/dashboard') return true")
   })

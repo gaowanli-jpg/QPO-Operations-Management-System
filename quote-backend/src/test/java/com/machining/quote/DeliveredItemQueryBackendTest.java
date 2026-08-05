@@ -26,6 +26,10 @@ class DeliveredItemQueryBackendTest {
             "src", "main", "resources", "db", "migration", "V52__delivery_part_version_and_exact_customer_filters.sql");
     private static final Path ACTIVE_POOL_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V75__delivered_item_active_pool_indexes.sql");
+    private static final Path INDEX_CLEANUP_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V83__delivery_ticket_index_cleanup.sql");
+    private static final Path SCHEMA_SQL = Path.of(
+            "src", "main", "resources", "schema.sql");
 
     @Test
     void deliveredItemDtosExposeJoinedOrderItemAndExternalSystemFields() throws IOException {
@@ -192,6 +196,8 @@ class DeliveredItemQueryBackendTest {
         String migration = read(QUERY_INDEX_MIGRATION);
         String optimizationMigration = read(QUERY_OPTIMIZATION_MIGRATION);
         String activePoolMigration = read(ACTIVE_POOL_MIGRATION);
+        String indexCleanupMigration = read(INDEX_CLEANUP_MIGRATION);
+        String schema = read(SCHEMA_SQL);
 
         assertThat(migration)
                 .contains(
@@ -227,6 +233,53 @@ class DeliveredItemQueryBackendTest {
                         "CREATE TABLE IF NOT EXISTS delivered_item_history",
                         "DELETE FROM order_delivery_ticket",
                         "INSERT INTO delivered_item_history"
+                );
+        assertThat(indexCleanupMigration)
+                .as("Historical RFQ indexes should be normalized to one canonical paging/detail shape")
+                .contains(
+                        "DROP INDEX IF EXISTS idx_order_delivery_ticket_rfq_id;",
+                        "DROP INDEX IF EXISTS idx_order_delivery_ticket_rfq_item;",
+                        "DROP INDEX IF EXISTS idx_order_delivery_ticket_rfq_item_id;",
+                        "CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_item_id",
+                        "ON order_delivery_ticket(rfq_id, item_id)"
+                )
+                .doesNotContain(
+                        "idx_order_delivery_ticket_customer_name",
+                        "idx_delivery_allocation_customer_name"
+                );
+        assertThat(schema)
+                .as("Fresh schema should include delivered/locked item list indexes that Flyway adds for upgraded databases")
+                .contains(
+                        "idx_order_delivery_ticket_material_no",
+                        "ON order_delivery_ticket(material_no, id)",
+                        "idx_order_delivery_ticket_mes_status",
+                        "ON order_delivery_ticket(mes_sync_status, id)",
+                        "idx_order_delivery_ticket_wms_status",
+                        "ON order_delivery_ticket(wms_allocate_status, id)",
+                        "idx_order_delivery_ticket_internal_project",
+                        "ON order_delivery_ticket(internal_project_no, id)",
+                        "idx_order_delivery_ticket_rfq_no",
+                        "ON order_delivery_ticket(rfq_no, id)",
+                        "idx_order_delivery_ticket_delivery_date",
+                        "ON order_delivery_ticket(delivery_date, id)",
+                        "idx_order_delivery_ticket_active_flow_id",
+                        "idx_order_delivery_ticket_completed_flow_id",
+                        "idx_delivery_allocation_ticket",
+                        "ON order_delivery_ticket_allocation(ticket_id, id)",
+                        "idx_delivery_allocation_material",
+                        "ON order_delivery_ticket_allocation(material_no, id)",
+                        "idx_delivery_allocation_part_version",
+                        "ON order_delivery_ticket_allocation(part_no, version, id)",
+                        "idx_delivery_allocation_type",
+                        "ON order_delivery_ticket_allocation(allocation_type, id)",
+                        "idx_delivery_allocation_rfq_no",
+                        "ON order_delivery_ticket_allocation(rfq_no, id)",
+                        "idx_delivery_allocation_delivery_date",
+                        "ON order_delivery_ticket_allocation(delivery_date, id)"
+                )
+                .doesNotContain(
+                        "idx_order_delivery_ticket_customer_name",
+                        "idx_delivery_allocation_customer_name"
                 );
     }
 

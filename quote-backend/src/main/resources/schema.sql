@@ -546,6 +546,24 @@ ALTER TABLE order_delivery_ticket_allocation
 CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_part_version
     ON order_delivery_ticket(part_no, version, id);
 
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_material_no
+    ON order_delivery_ticket(material_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_mes_status
+    ON order_delivery_ticket(mes_sync_status, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_wms_status
+    ON order_delivery_ticket(wms_allocate_status, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_internal_project
+    ON order_delivery_ticket(internal_project_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_no
+    ON order_delivery_ticket(rfq_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_delivery_date
+    ON order_delivery_ticket(delivery_date, id);
+
 CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_id_id
     ON order_delivery_ticket(rfq_id, id);
 
@@ -554,6 +572,43 @@ CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_item_id
 
 CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_source
     ON order_delivery_ticket(source_type, source_order_id, source_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_active_flow_id
+    ON order_delivery_ticket(id DESC)
+    WHERE NULLIF(BTRIM(material_no), '') IS NULL
+       OR COALESCE(mes_sync_status, 'PENDING') <> 'SUCCESS'
+       OR COALESCE(wms_allocate_status, 'PENDING') <> 'SUCCESS';
+
+CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_completed_flow_id
+    ON order_delivery_ticket(mes_sync_status, wms_allocate_status, id DESC)
+    WHERE NULLIF(BTRIM(material_no), '') IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_ticket
+    ON order_delivery_ticket_allocation(ticket_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_rfq
+    ON order_delivery_ticket_allocation(rfq_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_material
+    ON order_delivery_ticket_allocation(material_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_part_version
+    ON order_delivery_ticket_allocation(part_no, version, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_type
+    ON order_delivery_ticket_allocation(allocation_type, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_wms_order
+    ON order_delivery_ticket_allocation(wms_production_order_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_rfq_no
+    ON order_delivery_ticket_allocation(rfq_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_internal_project
+    ON order_delivery_ticket_allocation(internal_project_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_allocation_delivery_date
+    ON order_delivery_ticket_allocation(delivery_date, id);
 
 CREATE INDEX IF NOT EXISTS idx_delivery_allocation_item_type
     ON order_delivery_ticket_allocation(item_type, id);

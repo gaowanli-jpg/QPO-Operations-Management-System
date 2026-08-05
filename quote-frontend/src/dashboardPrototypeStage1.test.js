@@ -25,7 +25,7 @@ describe('Dashboard prototype stage 1 shell', () => {
   test('keeps the dashboard visible at the top of the sidebar even before backend menu metadata exists', () => {
     const appSource = readSource('App.vue')
 
-    expect(appSource).toContain("{ key: 'dashboard', title: '首页看板', paths: ['/dashboard'] }")
+    expect(appSource).toContain("{ key: 'dashboard', title: '首页', paths: ['/dashboard'] }")
     expect(appSource).toContain("'/dashboard': { title: '首页看板'")
     expect(appSource).toContain("if (path === '/dashboard') return true")
     expect(appSource).toContain("'/dashboard': {")
