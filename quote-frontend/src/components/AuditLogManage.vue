@@ -5,6 +5,11 @@
         <h1 class="erp-page-title">操作日志</h1>
         <p class="erp-page-description">查询系统关键操作、账号安全事件和数据变更记录，用于追溯问题和审计。</p>
       </div>
+      <div class="erp-page-actions">
+        <el-button v-permission="'system:audit:retention'" @click="openRetentionSetting">日志保留策略</el-button>
+        <el-button v-permission="'system:audit:export'" :loading="isPending(auditActionKeys.exportLogs)" :disabled="isPending(auditActionKeys.exportLogs)" @click="exportLogs">导出 CSV</el-button>
+        <el-button :loading="loading" @click="loadLogs">刷新</el-button>
+      </div>
     </header>
 
     <section class="erp-toolbar audit-toolbar">
@@ -34,13 +39,6 @@
           </el-button>
         </div>
 
-        <div class="audit-toolbar-divider" />
-
-        <div class="erp-toolbar-group audit-page-actions">
-          <el-button v-permission="'system:audit:retention'" @click="openRetentionSetting">日志保留策略</el-button>
-          <el-button v-permission="'system:audit:export'" :loading="isPending(auditActionKeys.exportLogs)" :disabled="isPending(auditActionKeys.exportLogs)" @click="exportLogs">导出 CSV</el-button>
-          <el-button :loading="loading" @click="loadLogs">刷新</el-button>
-        </div>
       </div>
 
       <div v-if="advancedFiltersVisible" class="erp-toolbar-group audit-advanced-filters">
@@ -595,23 +593,6 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 
-.audit-page-actions {
-  flex: 0 0 auto;
-  align-self: stretch;
-  justify-content: flex-end;
-  align-content: flex-start;
-  row-gap: 8px;
-  column-gap: 8px;
-  box-sizing: border-box;
-}
-
-.audit-toolbar-divider {
-  align-self: stretch;
-  flex: 0 0 1px;
-  width: 1px;
-  background: var(--erp-border-soft);
-}
-
 .audit-advanced-filters {
   width: 100%;
   padding: 12px;
@@ -734,13 +715,8 @@ onMounted(async () => {
     align-items: stretch;
   }
 
-  .audit-page-actions,
   .audit-primary-filters {
     justify-content: flex-start;
-  }
-
-  .audit-toolbar-divider {
-    display: none;
   }
 }
 

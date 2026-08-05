@@ -57,17 +57,30 @@ describe('QPO audit log module shell', () => {
   })
 
   test('uses compact toolbar-style filters aligned with other QPO modules', () => {
+    const headerBlock = auditLogManage.slice(
+      auditLogManage.indexOf('<header class="erp-page-header audit-log-page-header">'),
+      auditLogManage.indexOf('</header>')
+    )
+    const toolbarBlock = auditLogManage.slice(
+      auditLogManage.indexOf('<section class="erp-toolbar audit-toolbar">'),
+      auditLogManage.indexOf('</section>', auditLogManage.indexOf('<section class="erp-toolbar audit-toolbar">'))
+    )
+
     expect(auditLogManage).toContain('class="erp-toolbar audit-toolbar"')
+    expect(headerBlock).toContain('class="erp-page-actions"')
+    expect(headerBlock).toContain('日志保留策略')
+    expect(headerBlock).toContain('导出 CSV')
+    expect(headerBlock).toContain('刷新')
     expect(auditLogManage).toContain('class="audit-toolbar-main"')
     expect(auditLogManage).toContain('class="erp-toolbar-group audit-primary-filters"')
-    expect(auditLogManage).toContain('class="erp-toolbar-group audit-page-actions"')
     expect(auditLogManage).toContain('class="erp-toolbar-group audit-advanced-filters"')
     expect(auditLogManage).toContain('advancedFiltersVisible')
     expect(auditLogManage).toContain("{{ advancedFiltersVisible ? '收起筛选' : '高级筛选' }}")
-    expect(auditLogManage).toContain('class="audit-toolbar-divider"')
-    expect(auditLogManage).toContain('日志保留策略')
-    expect(auditLogManage).toContain('导出 CSV')
-    expect(auditLogManage).toContain('刷新')
+    expect(toolbarBlock).not.toContain('日志保留策略')
+    expect(toolbarBlock).not.toContain('导出 CSV')
+    expect(toolbarBlock).not.toContain('刷新')
+    expect(auditLogManage).not.toContain('class="erp-toolbar-group audit-page-actions"')
+    expect(auditLogManage).not.toContain('class="audit-toolbar-divider"')
     expect(auditLogManage).not.toContain('audit-filter-grid')
     expect(auditLogManage).not.toContain('class="erp-toolbar-group audit-actions"')
   })
