@@ -21,6 +21,7 @@ import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
+import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -63,6 +64,8 @@ public class MesMaterialSyncService {
     private AuditService auditService;
     @Autowired(required = false)
     private MesMaterialDedupService dedupService;
+    @Autowired(required = false)
+    private SourceItemMaterialNoSyncService sourceItemMaterialNoSyncService;
 
     public MesMaterialCallbackResp handleMaterialCallback(MesMaterialCallbackReq req) {
         long startedAt = System.currentTimeMillis();
@@ -111,10 +114,10 @@ public class MesMaterialSyncService {
                     "MES 回调物料号冲突");
             throw callbackError(HttpStatus.CONFLICT, "MES 回调物料号冲突，不能覆盖已确认物料号");
         }
-        assertSalesOrderItemMaterialWritable(ticket, materialNo);
+        assertSourceItemMaterialWritableForCallback(ticket, materialNo);
         markCallbackSuccess(ticket, mesRequestId, materialNo, req.getMessage(), externalTraceId);
         updateMesRequestFromCallback(mesRequestId, STATUS_SUCCESS, materialNo, externalTraceId, req.getMessage(), true);
-        syncSalesOrderItemMaterialNo(ticket, materialNo, req.getMessage());
+        syncSourceItemMaterialNo(ticket, materialNo, req.getMessage());
         if (dedupService != null) {
             dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
         }
@@ -263,7 +266,7 @@ public class MesMaterialSyncService {
         update.setMesMasterTicketId(dedupResult.getMasterTicketId());
         update.setMesMasterRequestId(dedupResult.getMasterMesRequestId());
         ticketMapper.updateById(update);
-        syncSalesOrderItemMaterialNo(ticket, dedupResult.getMaterialNo(), update.getMesSyncMessage());
+        syncSourceItemMaterialNo(ticket, dedupResult.getMaterialNo(), update.getMesSyncMessage());
         Map<String, Object> result = summary(
                 ticket,
                 taskId,
@@ -408,7 +411,7 @@ public class MesMaterialSyncService {
         update.setMesRequestId(mesRequestId);
         update.setMesExternalTaskId(trimToNull(externalTraceId));
         ticketMapper.updateById(update);
-        syncSalesOrderItemMaterialNo(ticket, materialNo, update.getMesSyncMessage());
+        syncSourceItemMaterialNo(ticket, materialNo, update.getMesSyncMessage());
     }
 
     private void markCallbackPending(OrderDeliveryTicket ticket, String mesRequestId, String externalTraceId, String message) {
@@ -435,6 +438,25 @@ public class MesMaterialSyncService {
         ticketMapper.updateById(update);
     }
 
+    private void assertSourceItemMaterialWritableForCallback(OrderDeliveryTicket ticket, String materialNo) {
+        if (sourceItemMaterialNoSyncService == null) {
+            assertSalesOrderItemMaterialWritable(ticket, materialNo);
+            return;
+        }
+        try {
+            sourceItemMaterialNoSyncService.assertMaterialWritable(ticket, materialNo);
+        } catch (SourceItemMaterialNoSyncService.MaterialNoConflictException error) {
+            throw callbackError(HttpStatus.CONFLICT, error.getMessage());
+        }
+    }
+
+    private void syncSourceItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
+        if (sourceItemMaterialNoSyncService == null) {
+            syncSalesOrderItemMaterialNo(ticket, materialNo, message);
+            return;
+        }
+        sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
+    }
     private void assertSalesOrderItemMaterialWritable(OrderDeliveryTicket ticket, String materialNo) {
         if (salesOrderItemMapper == null
                 || ticket == null

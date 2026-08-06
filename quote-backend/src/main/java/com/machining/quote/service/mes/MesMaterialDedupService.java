@@ -11,6 +11,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesWaiterMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,8 @@ public class MesMaterialDedupService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired(required = false)
     private AuditService auditService;
+    @Autowired(required = false)
+    private SourceItemMaterialNoSyncService sourceItemMaterialNoSyncService;
 
     public String buildDedupKey(OrderDeliveryTicket ticket) {
         String partNo = normalizeKeyPart(ticket == null ? null : ticket.getPartNo());
@@ -182,7 +185,7 @@ public class MesMaterialDedupService {
         }
         ticketMapper.updateById(ticketUpdate);
         if (STATUS_SUCCESS.equals(targetStatus)) {
-            syncSalesOrderItemMaterialNo(follower, materialNo, ticketUpdate.getMesSyncMessage());
+            syncSourceItemMaterialNo(follower, materialNo, ticketUpdate.getMesSyncMessage());
         }
         OrderDeliveryTicketMesWaiter waiterUpdate = new OrderDeliveryTicketMesWaiter();
         waiterUpdate.setWaitStatus(targetStatus);
@@ -197,6 +200,14 @@ public class MesMaterialDedupService {
         UpdateWrapper<OrderDeliveryTicketMesWaiter> wrapper = new UpdateWrapper<>();
         wrapper.eq("id", waiter.getId());
         waiterMapper.update(waiterUpdate, wrapper);
+    }
+
+    private void syncSourceItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
+        if (sourceItemMaterialNoSyncService == null) {
+            syncSalesOrderItemMaterialNo(ticket, materialNo, message);
+            return;
+        }
+        sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
     }
 
     private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {

@@ -233,19 +233,28 @@ class SalesOrderDeliveryTicketStage6Test {
     @Test
     void mesAndWmsPropagateSalesOrderSourceAndMaterialNumber() throws Exception {
         String mesService = read(MAIN_JAVA.resolve(Path.of("service", "mes", "MesMaterialSyncService.java")));
+        String sourceItemService = read(MAIN_JAVA.resolve(Path.of("service", "SourceItemMaterialNoSyncService.java")));
         String wmsService = read(MAIN_JAVA.resolve(Path.of("service", "wms", "WmsAllocationService.java")));
         String taskService = read(MAIN_JAVA.resolve(Path.of("service", "SystemTaskService.java")));
         String batchService = read(MAIN_JAVA.resolve(Path.of("service", "DeliveryIntegrationBatchService.java")));
 
         assertThat(mesService)
                 .contains(
+                        "SourceItemMaterialNoSyncService",
+                        "sourceItemMaterialNoSyncService",
+                        "syncSourceItemMaterialNo(ticket, materialNo, update.getMesSyncMessage())",
+                        "sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message)",
                         "SalesOrderItemMapper",
-                        "salesOrderItemMapper",
-                        "syncSalesOrderItemMaterialNo(ticket, materialNo, update.getMesSyncMessage())",
+                        "salesOrderItemMapper"
+                );
+        assertThat(sourceItemService)
+                .contains(
+                        "SalesOrderItemMapper",
+                        "syncSalesOrderItem",
                         "update.setMaterialNoStatus(MATERIAL_CONFIRMED)",
                         "update.setMaterialNoSource(MATERIAL_SOURCE_MES_TICKET)",
-                        "update.setMaterialNoSourceTicketId(ticket.getId() == null ? null : ticket.getId().longValue())",
-                        "ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())",
+                        "update.setMaterialNoSourceTicketId(ticket == null || ticket.getId() == null ? null : ticket.getId().longValue())",
+                        "ReleaseSourceType.SALES_ORDER.name().equals(sourceType)",
                         "salesOrderItemMapper.updateById(update)"
                 );
         assertThat(wmsService)
