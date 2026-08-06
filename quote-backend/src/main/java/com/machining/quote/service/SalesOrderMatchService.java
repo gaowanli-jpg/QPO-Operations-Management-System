@@ -48,6 +48,8 @@ public class SalesOrderMatchService {
     private static final int REPEAT_SOURCE_KEY_BATCH_SIZE = 200;
     private static final String SOURCE_TYPE_SALES_ORDER = "SALES_ORDER";
     private static final String ACTION = "SALES_ORDER_MATCH_APPLY";
+    private static final String TRIGGER_MANUAL = "MANUAL";
+    private static final String TRIGGER_IMPORT_AUTO = "IMPORT_AUTO";
     private static final String MATCHED = "已匹配";
     private static final String UNMATCHED = "未匹配";
     private static final String SKIPPED = "跳过";
@@ -165,6 +167,20 @@ public class SalesOrderMatchService {
 
     @Transactional
     public SalesOrderMatchApplyResp apply(SalesOrderMatchApplyReq req) {
+        return applyInternal(req, TRIGGER_MANUAL);
+    }
+
+    @Transactional
+    public SalesOrderMatchApplyResp applyImportedOrder(Long salesOrderId) {
+        SalesOrderHeader header = requireMatchableSalesOrder(salesOrderId);
+        SalesOrderMatchApplyReq req = new SalesOrderMatchApplyReq();
+        req.setSalesOrderIds(List.of(header.getId()));
+        req.setSalesOrderItemIds(List.of());
+        req.setApplyAllMatchedInSelectedOrders(false);
+        return applyInternal(req, TRIGGER_IMPORT_AUTO);
+    }
+
+    private SalesOrderMatchApplyResp applyInternal(SalesOrderMatchApplyReq req, String trigger) {
         long startedAt = System.currentTimeMillis();
         validateMatchableOrderIds(req == null ? null : req.getSalesOrderIds());
         List<SalesOrderItem> items = loadApplyItems(req);
@@ -215,9 +231,9 @@ public class SalesOrderMatchService {
         resp.setWarningMessage(unmatchedCount <= 0 ? "" : "未匹配历史生产快照的销售订单零件数：" + unmatchedCount);
         resp.setSuccess(true);
         resp.setMessage("销售匹配补全完成，匹配 " + matchedCount + " 个，未匹配 " + unmatchedCount + " 个，跳过 " + skippedCount + " 个。");
-        recordApplyAudit(headers, resp, startedAt);
-        log.info("Sales order match apply completed orderCount={} itemCount={} matched={} unmatched={} skipped={} durationMs={}",
-                headers.size(), items.size(), matchedCount, unmatchedCount, skippedCount, System.currentTimeMillis() - startedAt);
+        recordApplyAudit(headers, resp, startedAt, trigger);
+        log.info("Sales order match apply completed trigger={} orderCount={} itemCount={} matched={} unmatched={} skipped={} durationMs={}",
+                trigger, headers.size(), items.size(), matchedCount, unmatchedCount, skippedCount, System.currentTimeMillis() - startedAt);
         return resp;
     }
 
@@ -717,11 +733,12 @@ public class SalesOrderMatchService {
         return new ArrayList<>(rows.values());
     }
 
-    private void recordApplyAudit(Map<Long, SalesOrderHeader> headers, SalesOrderMatchApplyResp resp, long startedAt) {
+    private void recordApplyAudit(Map<Long, SalesOrderHeader> headers, SalesOrderMatchApplyResp resp, long startedAt, String trigger) {
         if (auditService == null) {
             return;
         }
         Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("trigger", isBlank(trigger) ? TRIGGER_MANUAL : trigger);
         summary.put("salesOrderIds", new ArrayList<>(headers.keySet()));
         summary.put("salesOrderNos", headers.values().stream().map(SalesOrderHeader::getSalesOrderNo).toList());
         summary.put("selectedItemCount", resp.getTotalItemCount());

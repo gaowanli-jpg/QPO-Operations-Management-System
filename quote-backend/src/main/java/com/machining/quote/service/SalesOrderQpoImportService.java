@@ -7,6 +7,7 @@ import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
+import com.machining.quote.dto.SalesOrderMatchApplyResp;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderImportBatch;
@@ -66,6 +67,8 @@ public class SalesOrderQpoImportService {
     private AuditService auditService;
     @Autowired(required = false)
     private BusinessFileService businessFileService;
+    @Autowired(required = false)
+    private SalesOrderMatchService salesOrderMatchService;
 
     @Transactional
     public SalesOrderQpoImportResp importQpo(MultipartFile excelFile, Long customerId, String documentTypeCode) {
@@ -347,12 +350,78 @@ public class SalesOrderQpoImportService {
             }
         }
 
+        AutoMatchSummary matchSummary = autoCompleteProductionSnapshot(header, record, group.getLines().size());
+
         return new CreatedSalesOrder(
                 header.getId(),
                 header.getSalesOrderNo(),
                 group.getLines().size(),
                 missingPriceCount,
+                matchSummary,
                 drawingBinding.groupSummary(group));
+    }
+
+    private AutoMatchSummary autoCompleteProductionSnapshot(
+            SalesOrderHeader header,
+            SalesOrderImportRecord record,
+            int itemCount) {
+        AutoMatchSummary fallback = new AutoMatchSummary(0, itemCount, itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "");
+        if (salesOrderMatchService == null || header == null || header.getId() == null) {
+            return fallback;
+        }
+        SalesOrderMatchApplyResp matchResp = salesOrderMatchService.applyImportedOrder(header.getId());
+        if (matchResp == null) {
+            return fallback;
+        }
+        AutoMatchSummary summary = new AutoMatchSummary(
+                Math.max(0, matchResp.getMatchedItemCount()),
+                Math.max(0, matchResp.getUnmatchedItemCount()),
+                autoMatchWarning(matchResp, itemCount));
+        syncAutoMatchSummary(header, record, summary);
+        return summary;
+    }
+
+    private String autoMatchWarning(SalesOrderMatchApplyResp matchResp, int itemCount) {
+        if (matchResp == null) {
+            return itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "";
+        }
+        if (!isBlank(matchResp.getWarningMessage())) {
+            return matchResp.getWarningMessage();
+        }
+        return matchResp.getUnmatchedItemCount() > 0 ? WAITING_SNAPSHOT_MESSAGE : "";
+    }
+
+    private void syncAutoMatchSummary(
+            SalesOrderHeader header,
+            SalesOrderImportRecord record,
+            AutoMatchSummary summary) {
+        LocalDateTime now = LocalDateTime.now();
+        header.setMatchedItemCount(summary.matchedItemCount());
+        header.setUnmatchedItemCount(summary.unmatchedItemCount());
+        header.setWarningMessage(summary.warningMessage());
+        header.setUpdatedAt(now);
+        SalesOrderHeader headerUpdate = new SalesOrderHeader();
+        headerUpdate.setId(header.getId());
+        headerUpdate.setMatchedItemCount(summary.matchedItemCount());
+        headerUpdate.setUnmatchedItemCount(summary.unmatchedItemCount());
+        headerUpdate.setWarningMessage(summary.warningMessage());
+        headerUpdate.setUpdatedAt(now);
+        headerMapper.updateById(headerUpdate);
+
+        if (record == null || record.getId() == null) {
+            return;
+        }
+        record.setMatchedItemCount(summary.matchedItemCount());
+        record.setUnmatchedItemCount(summary.unmatchedItemCount());
+        record.setWarningMessage(summary.warningMessage());
+        record.setUpdatedAt(now);
+        SalesOrderImportRecord recordUpdate = new SalesOrderImportRecord();
+        recordUpdate.setId(record.getId());
+        recordUpdate.setMatchedItemCount(summary.matchedItemCount());
+        recordUpdate.setUnmatchedItemCount(summary.unmatchedItemCount());
+        recordUpdate.setWarningMessage(summary.warningMessage());
+        recordUpdate.setUpdatedAt(now);
+        recordMapper.updateById(recordUpdate);
     }
 
     private SalesOrderImportRecord createRecord(
@@ -522,6 +591,7 @@ public class SalesOrderQpoImportService {
         summary.put("unmatchedItemCount", resp.getRows().stream()
                 .mapToInt(row -> row.getUnmatchedItemCount() == null ? 0 : row.getUnmatchedItemCount())
                 .sum());
+        summary.put("autoMatchTrigger", "IMPORT_AUTO");
         summary.put("missingPriceCount", resp.getMissingPriceCount() == null ? 0 : resp.getMissingPriceCount());
         Map<String, Object> drawingReport = resp.getDrawingReport();
         if (drawingReport != null) {
@@ -839,22 +909,35 @@ public class SalesOrderQpoImportService {
             int unmatchedDrawingCount) {
     }
 
+    private record AutoMatchSummary(
+            int matchedItemCount,
+            int unmatchedItemCount,
+            String warningMessage) {
+    }
+
     private record CreatedSalesOrder(
             Long salesOrderId,
             String salesOrderNo,
             int itemCount,
             int missingPriceCount,
+            AutoMatchSummary matchSummary,
             DrawingSummary drawingSummary) {
         private int matchedItemCount() {
-            return 0;
+            return safeMatchSummary().matchedItemCount();
         }
 
         private int unmatchedItemCount() {
-            return itemCount;
+            return safeMatchSummary().unmatchedItemCount();
         }
 
         private String warningMessage() {
-            return itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "";
+            return safeMatchSummary().warningMessage();
+        }
+
+        private AutoMatchSummary safeMatchSummary() {
+            return matchSummary == null
+                    ? new AutoMatchSummary(0, itemCount, itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "")
+                    : matchSummary;
         }
 
         public DrawingSummary drawingSummary() {

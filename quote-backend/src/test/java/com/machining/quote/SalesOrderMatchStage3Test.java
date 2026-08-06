@@ -136,6 +136,53 @@ class SalesOrderMatchStage3Test {
     }
 
     @Test
+    void applyImportedOrderUsesImportAutoTriggerAndKeepsImportedFactsProtected() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setMaterialName("IMPORTED-MATERIAL");
+        item.setSurfaceTreatment("IMPORTED-SURFACE");
+        item.setDrawingUrl("/sales-order/uploaded/P-001.pdf");
+        item.setHasDrawing(true);
+        fixture.withLockedItems(header, List.of(item));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "HISTORY-MATERIAL", "NORMAL");
+        source.setMaterialData(Map.of("name", "HISTORY-MATERIAL", "shape", "BAR", "cost", 50));
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyResp resp = fixture.service.applyImportedOrder(header.getId());
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getMatchedItemCount()).isEqualTo(1);
+        assertThat(resp.getUnmatchedItemCount()).isZero();
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-HISTORY-MATERIAL");
+        assertThat(updated.getMaterialShape()).isNotBlank();
+        assertThat(updated.getMaterialData()).isEqualTo(source.getMaterialData());
+        assertThat(updated.getProcessRoute()).isEqualTo(source.getProcessRoute());
+        assertThat(updated.getFeeData()).isEqualTo(source.getFeeData());
+        assertThat(updated.getMaterialGrossWeight()).isEqualTo(1.25);
+        assertThat(updated.getPartNetWeight()).isEqualTo(0.80);
+        assertThat(updated.getMaterialName()).isEqualTo("IMPORTED-MATERIAL");
+        assertThat(updated.getSurfaceTreatment()).isEqualTo("IMPORTED-SURFACE");
+        assertThat(updated.getDrawingUrl()).isEqualTo("/sales-order/uploaded/P-001.pdf");
+        assertThat(updated.getQty()).isEqualTo(10);
+        assertThat(updated.getMaterialNo()).isEqualTo("MES-MAT-501");
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_MATCH_APPLY"),
+                eq("sales_order_header"),
+                eq(header.getId()),
+                isNull(),
+                afterDataCaptor.capture());
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("trigger", "IMPORT_AUTO")
+                .containsEntry("matchedItemCount", 1)
+                .containsEntry("unmatchedItemCount", 0);
+    }
+
+    @Test
     void applyOrderRejectsNonQuotedSalesOrdersAndLegacyPayloadCannotBypassStatusGuard() {
         Fixture fixture = fixture();
         SalesOrderHeader partial = header(101L, "SOQPO-20260731-001");
