@@ -350,7 +350,7 @@ class SalesOrderMatchStage3Test {
     @Test
     void auditActionIsMarketActionWithReadableLabel() {
         assertThat(AuditService.inferModule("SALES_ORDER_MATCH_APPLY")).isEqualTo("MARKET");
-        assertThat(AuditService.labelForAction("SALES_ORDER_MATCH_APPLY")).contains("销售匹配").contains("补全");
+        assertThat(AuditService.labelForAction("SALES_ORDER_MATCH_APPLY")).contains("异常治理").contains("补全");
     }
 
     private Fixture fixture() {

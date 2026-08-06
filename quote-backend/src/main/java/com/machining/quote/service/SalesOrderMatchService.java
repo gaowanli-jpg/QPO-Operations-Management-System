@@ -230,7 +230,7 @@ public class SalesOrderMatchService {
         resp.setUpdatedItemCount(updatedCount);
         resp.setWarningMessage(unmatchedCount <= 0 ? "" : "未匹配历史生产快照的销售订单零件数：" + unmatchedCount);
         resp.setSuccess(true);
-        resp.setMessage("销售匹配补全完成，匹配 " + matchedCount + " 个，未匹配 " + unmatchedCount + " 个，跳过 " + skippedCount + " 个。");
+        resp.setMessage("异常治理补全完成，匹配 " + matchedCount + " 个，未匹配 " + unmatchedCount + " 个，跳过 " + skippedCount + " 个。");
         recordApplyAudit(headers, resp, startedAt, trigger);
         log.info("Sales order match apply completed trigger={} orderCount={} itemCount={} matched={} unmatched={} skipped={} durationMs={}",
                 trigger, headers.size(), items.size(), matchedCount, unmatchedCount, skippedCount, System.currentTimeMillis() - startedAt);
@@ -795,7 +795,7 @@ public class SalesOrderMatchService {
 
     private void assertMatchableSalesOrder(SalesOrderHeader header) {
         if (header == null || !QuoteStatusWorkflow.QUOTED.equals(header.getStatus())) {
-            throw new RuntimeException("销售匹配只能处理" + QuoteStatusWorkflow.QUOTED + "销售订单，请确认订单状态后重试");
+            throw new RuntimeException("异常治理只能处理" + QuoteStatusWorkflow.QUOTED + "销售订单，请确认订单状态后重试");
         }
     }
 

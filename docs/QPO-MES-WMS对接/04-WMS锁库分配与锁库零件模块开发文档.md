@@ -2,6 +2,8 @@
 
 > 数据中心统一对接阶段 8 收口：WMS 库存锁定底层调用使用 `WMS_INVENTORY_ALLOCATE` endpoint，链路为 `QPO -> 数据中心 -> WMS`。旧 `ERP_WMS_*` 仅作为 deprecated fallback，新部署应优先在系统配置的出站接口中维护数据中心连接和该功能 path。
 
+> 销售订单导入即提单阶段 7 收口：销售订单来源提单行由销售订单导入自动生成，不再要求市场用户手动销售匹配或手动议价提单。销售订单导入后直接进入已提零件需求池，WMS 锁库仍只消费 `order_delivery_ticket` 中已取得 MES 物料号的需求行。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已具备 `order_delivery_ticket_allocation` 锁库拆分明细表和“已提零件”需求池页面。`03-MES物料号同步开发文档.md` 完成后，提单需求行可获得 MES 返回的 `material_no`。

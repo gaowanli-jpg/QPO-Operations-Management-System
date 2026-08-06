@@ -288,7 +288,7 @@ public class AuditService {
             case "QUOTE_TEMPLATE_CONFIG_UPDATE" -> "保存报价模板配置";
             case "RFQ_IMPORT" -> "导入 RFQ";
             case "SALES_ORDER_IMPORT_QPO" -> "导入销售订单到独立主表";
-            case "SALES_ORDER_MATCH_APPLY" -> "销售匹配确认补全";
+            case "SALES_ORDER_MATCH_APPLY" -> "异常治理确认补全";
             case "SALES_ORDER_U9_SYNC" -> "销售订单同步U9";
             case "SALES_ORDER_DISCARD" -> "废弃销售订单";
             case "SALES_ORDER_RESTORE" -> "恢复销售订单";

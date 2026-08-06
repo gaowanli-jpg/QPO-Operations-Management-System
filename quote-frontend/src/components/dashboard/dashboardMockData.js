@@ -18,7 +18,7 @@ export const dashboardMockData = {
       value: 19,
       unit: '单',
       helper: '按客户查看销售订单',
-      trendText: '进入销售订单继续提单或治理',
+      trendText: '查看导入、物料号和 U9 状态',
       tone: 'success',
       target: { path: '/sales-orders', query: { status: '已报价' } },
       permission: 'market:sales-order:view'
@@ -126,10 +126,10 @@ export const dashboardMockData = {
     },
     {
       key: 'salesMatch',
-      title: '待补全销售订单',
+      title: '销售订单异常治理',
       value: 19,
       unit: '单',
-      description: '按销售订单补全真实材料和生产快照',
+      description: '排查历史订单或自动补全异常',
       path: '/sales-match',
       query: { status: '已报价' },
       permission: 'market:sales-match:view',

@@ -8,6 +8,8 @@
 
 > RFQ 主表物料号收口说明：MES 物料号成功后，QPO 必须同时写回提单行和来源零件主表。`source_type = RFQ` 时写回 `item_quote_version.material_no`、`material_no_status = 已确认`、来源 ticket 信息；`source_type = SALES_ORDER` 时写回 `sales_order_item.material_no`、`material_no_status = 已确认`、来源 ticket 信息。后续 U9 判断不再从提单行临时反查物料号，而是以 RFQ / 销售订单各自主表中的已确认物料号作为正式物料号基础；提单行保留为 MES 获取与追溯来源。
 
+> 销售订单导入即提单阶段 7 收口：销售订单来源提单行由销售订单导入自动生成，不再要求市场用户手动销售匹配或手动议价提单。销售订单导入后直接进入已提零件需求池，已提零件向 MES 获取物料号成功后继续回写 `order_delivery_ticket` 和 `sales_order_item`。
+
 > 阶段 22 收口说明：MES 对接现在包含两条独立业务 path：物料号获取继续使用 `ERP_MES_MATERIAL_PATH`，锁库零件待生产下发使用 `ERP_MES_PRODUCTION_PATH`。两者复用 `ERP_MES_BASE_URL`、`ERP_MES_AUTH_TOKEN` 和 `ERP_MES_TIMEOUT_MS`，但请求契约、权限点、操作日志和文件日志事件名彼此独立；待生产下发接口详见 `docs/QPO-MES-WMS对接/09-提供给MES的待生产下发接口对接说明.md`。
 
 > 系统配置阶段 6 收口说明：QPO 通过数据中心获取 MES 物料号，出站配置由 **系统配置 > 出站接口/数据中心配置** 或 `ERP_DATA_CENTER_*` fallback 提供；数据中心调用 QPO 的入站配置由 **系统配置 > 入站接口 > MES 物料号回调** 管理，调用方为数据中心，业务来源为 MES。回调 URL 和机器 token 在页面生成、轮换、启停，真实 token 单独交付数据中心。`ERP_MES_CALLBACK_TOKEN` 与 `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为页面配置不存在时的老环境 deprecated fallback，不作为给数据中心的主要交付变量。

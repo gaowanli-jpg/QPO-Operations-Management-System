@@ -111,7 +111,7 @@ public class DashboardOverviewService {
         long mesFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredMesFailed(deliveredMesStatusQuery("FAILED"))) : 0L;
         long wmsFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredWmsFailed(deliveredWmsStatusQuery("FAILED"))) : 0L;
         long lockedProductionFailed = canSeeProduction ? count(() -> aggregationMapper.countLockedMesProductionFailed(lockedProductionFailedQuery())) : 0L;
-        long salesMatchTodo = permissionGate.canAccess("market:sales-match:view")
+        long salesAnomalyTodo = permissionGate.canAccess("market:sales-match:view")
                 ? count(() -> aggregationMapper.countSalesMatchTodo(salesMatchTodoQuery()))
                 : 0L;
         long u9Ready = canSeeU9 ? count(() -> aggregationMapper.countU9Ready(u9ReadyQuery())) : 0L;
@@ -124,7 +124,7 @@ public class DashboardOverviewService {
                 summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, salesQuoted, deliveredActive, lockedProductionTodo),
                 permissionGate));
         overview.setTodoCards(filterTodoCards(
-                todoCards(rfqUnpriced, rfqPriced, rfqQuoted, salesMatchTodo, deliveredNeedMaterial,
+                todoCards(rfqUnpriced, rfqPriced, rfqQuoted, salesAnomalyTodo, deliveredNeedMaterial,
                         deliveredNeedWms, lockedProductionTodo, u9Ready),
                 permissionGate));
         overview.setAttentionItems(filterAttentionItems(
@@ -408,7 +408,7 @@ public class DashboardOverviewService {
                 summaryCard("rfqTodo", "询价待推进", rfqTodo, "单", "未核价、已核价、已报价",
                         "优先关注工程核价积压", "primary", "/orders", query("status", QuoteStatusWorkflow.UNPRICED), "market:order:view"),
                 summaryCard("salesQuoted", "销售已报价", salesQuoted, "单", "按客户查看销售订单",
-                        "进入销售订单继续提单或治理", "success", "/sales-orders", query("status", QuoteStatusWorkflow.QUOTED), "market:sales-order:view"),
+                        "查看导入、物料号和 U9 状态", "success", "/sales-orders", query("status", QuoteStatusWorkflow.QUOTED), "market:sales-order:view"),
                 summaryCard("deliveredActive", "已提未完成", deliveredActive, "行", "等待物料号或库存信息",
                         "处理 MES / WMS 待办", "warning", "/delivered-items", query("flowScope", "ACTIVE"), "market:delivered-item:view"),
                 summaryCard("lockedProduction", "待生产下发", lockedProduction, "行", "WMS 锁库后仍需生产",
@@ -444,7 +444,7 @@ public class DashboardOverviewService {
             long rfqUnpriced,
             long rfqPriced,
             long rfqQuoted,
-            long salesMatchTodo,
+            long salesAnomalyTodo,
             long deliveredNeedMaterial,
             long deliveredNeedWms,
             long lockedProductionTodo,
@@ -456,7 +456,7 @@ public class DashboardOverviewService {
                         "/quote-process", query("status", QuoteStatusWorkflow.PRICED), "market:quote-process:view", "primary"),
                 todoCard("rfqRelease", "可提单询价订单", rfqQuoted, "单", "进入议价提单处理已报价询价订单",
                         "/release", query("sourceType", "RFQ", "status", QuoteStatusWorkflow.QUOTED), "market:release:view", "success"),
-                todoCard("salesMatch", "待补全销售订单", salesMatchTodo, "单", "按销售订单补全真实材料和生产快照",
+                todoCard("salesMatch", "销售订单异常治理", salesAnomalyTodo, "单", "排查历史订单或自动补全异常",
                         "/sales-match", query("status", QuoteStatusWorkflow.QUOTED), "market:sales-match:view", "primary"),
                 todoCard("materialTodo", "待物料号已提零件", deliveredNeedMaterial, "行", "进入已提零件获取物料号",
                         "/delivered-items", query("flowStage", "NEED_MATERIAL"), "market:delivered-item:view", "warning"),
