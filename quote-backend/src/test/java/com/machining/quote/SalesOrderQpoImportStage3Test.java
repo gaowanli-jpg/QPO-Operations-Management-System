@@ -8,6 +8,7 @@ import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderMatchApplyResp;
 import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderImportBatch;
 import com.machining.quote.entity.SalesOrderImportRecord;
@@ -20,6 +21,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
 import com.machining.quote.service.SalesOrderMatchService;
@@ -427,6 +429,95 @@ class SalesOrderQpoImportStage3Test {
     }
 
     @Test
+    void serviceRunsAutomaticDeliveryTicketGenerationAfterImportAutoMatchAndAuditsTrigger() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderMatchService matchService = mock(SalesOrderMatchService.class);
+        DeliveryService deliveryService = mock(DeliveryService.class);
+        AuditService auditService = mock(AuditService.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                auditService,
+                matchService,
+                deliveryService
+        );
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(301L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(401L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId("P-BLANK".equals(item.getPartNo()) ? 501L : 502L);
+            return 1;
+        }).when(itemMapper).insert(any(SalesOrderItem.class));
+        when(matchService.applyImportedOrder(301L)).thenReturn(matchResp(2, 1, 1, "auto unmatched 1"));
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setId(9001);
+        ticket.setSourceOrderId(301L);
+        when(deliveryService.generateImportedSalesOrderTickets(301L)).thenReturn(List.of(ticket));
+
+        SalesOrderQpoImportResp resp = service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01"
+        );
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(itemMapper, matchService, deliveryService);
+        inOrder.verify(itemMapper, org.mockito.Mockito.times(2)).insert(any(SalesOrderItem.class));
+        inOrder.verify(matchService).applyImportedOrder(301L);
+        inOrder.verify(deliveryService).generateImportedSalesOrderTickets(301L);
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getRows().get(0).getMatchedItemCount()).isEqualTo(1);
+        assertThat(resp.getRows().get(0).getUnmatchedItemCount()).isEqualTo(1);
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("SALES_ORDER_IMPORT_QPO"),
+                eq("sales_order_import_batch"),
+                eq(201L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("autoMatchTrigger", "IMPORT_AUTO")
+                .containsEntry("autoDeliveryTrigger", "SALES_ORDER_IMPORT_AUTO")
+                .containsEntry("autoDeliveryTicketCount", 1);
+    }
+
+    @Test
     void serviceAcceptsSalesOrderDrawingsAndBindsMatchedPdfsToIndependentItems() throws Exception {
         SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
         CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
@@ -784,7 +875,8 @@ class SalesOrderQpoImportStage3Test {
                 itemMapper,
                 dataScopeService,
                 auditService,
-                mock(SalesOrderMatchService.class)
+                mock(SalesOrderMatchService.class),
+                mock(DeliveryService.class)
         );
     }
 
@@ -798,6 +890,31 @@ class SalesOrderQpoImportStage3Test {
             DataScopeService dataScopeService,
             AuditService auditService,
             SalesOrderMatchService salesOrderMatchService) {
+        return service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                dataScopeService,
+                auditService,
+                salesOrderMatchService,
+                mock(DeliveryService.class)
+        );
+    }
+
+    private SalesOrderQpoImportService service(
+            SalesOrderQpoExcelParser parser,
+            CustomerMasterMapper customerMapper,
+            SalesOrderImportBatchMapper batchMapper,
+            SalesOrderImportRecordMapper recordMapper,
+            SalesOrderHeaderMapper headerMapper,
+            SalesOrderItemMapper itemMapper,
+            DataScopeService dataScopeService,
+            AuditService auditService,
+            SalesOrderMatchService salesOrderMatchService,
+            DeliveryService deliveryService) {
         SalesOrderQpoImportService service = new SalesOrderQpoImportService();
         ReflectionTestUtils.setField(service, "excelParser", parser);
         ReflectionTestUtils.setField(service, "customerMapper", customerMapper);
@@ -808,6 +925,7 @@ class SalesOrderQpoImportStage3Test {
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "salesOrderMatchService", salesOrderMatchService);
+        ReflectionTestUtils.setField(service, "deliveryService", deliveryService);
         return service;
     }
 

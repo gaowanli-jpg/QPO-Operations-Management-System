@@ -245,6 +245,70 @@ public class DeliveryService {
                 .toList();
     }
 
+    @Transactional
+    public List<OrderDeliveryTicket> generateImportedSalesOrderTickets(Long salesOrderId) {
+        long startedAt = System.currentTimeMillis();
+        if (salesOrderHeaderMapper == null || salesOrderItemMapper == null) {
+            throw new RuntimeException("销售订单提单服务不可用");
+        }
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单来源 ID 不能为空");
+        }
+        SalesOrderHeader header = salesOrderHeaderMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertSalesOrderDataScope(header);
+        List<SalesOrderDemandLine> demands = listSalesOrderItems(header.getId()).stream()
+                .filter(item -> item != null && item.getId() != null)
+                .map(item -> new SalesOrderDemandLine(item, salesOrderRemainingQty(item)))
+                .filter(demand -> demand.qty() > 0)
+                .toList();
+        if (demands.isEmpty()) {
+            refreshSalesOrderHeaderStatus(header);
+            log.info("Sales order import auto delivery skipped sourceOrderId={} reason=no_remaining_qty durationMs={}",
+                    salesOrderId, System.currentTimeMillis() - startedAt);
+            return List.of();
+        }
+        if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(header.getStatus())) {
+            throw new RuntimeException("只有已报价或部分已提单的销售订单可以自动生成提单");
+        }
+
+        String orderType = firstText(header.getOrderType(), "正式订单");
+        LocalDate startDate = header.getSalesOrderDate() == null ? LocalDate.now() : header.getSalesOrderDate();
+        String projectNo = resolveSalesOrderProjectNo(header);
+        String internalProjectNo = header.getInternalProjectNo();
+        if (isBlank(internalProjectNo)) {
+            throw new RuntimeException("内部项目号不能为空");
+        }
+        String customerOrderNo = header.getCustomerOrderNo();
+        if (isBlank(customerOrderNo)) {
+            throw new RuntimeException("客户订单号不能为空");
+        }
+        String customerProjectNo = firstText(header.getCustomerProjectNo(), "");
+        List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
+        for (SalesOrderDemandLine demand : demands) {
+            OrderDeliveryTicket ticket = insertSalesOrderTicket(
+                    header,
+                    demand.item(),
+                    orderType,
+                    internalProjectNo,
+                    customerOrderNo,
+                    customerProjectNo,
+                    projectNo,
+                    startDate,
+                    demand.qty(),
+                    "计划");
+            createdTickets.add(ticket);
+            applySalesOrderRelease(demand.item(), demand.qty());
+        }
+        refreshSalesOrderHeaderStatus(header);
+        recordSalesOrderImportAutoDeliveryAudit(header, createdTickets, startedAt);
+        log.info("Sales order import auto delivery completed sourceOrderId={} ticketCount={} durationMs={}",
+                salesOrderId, createdTickets.size(), System.currentTimeMillis() - startedAt);
+        return createdTickets;
+    }
+
     public PageResult<ProcessSheetDTO> pageProcessSheets(Integer rfqId, Integer page, Integer pageSize) {
         PageResult<OrderDeliveryTicket> ticketPage = pageTickets(rfqId, page, pageSize);
         List<ProcessSheetDTO> records = ticketPage.getRecords().stream()
@@ -484,6 +548,15 @@ public class DeliveryService {
         }
     }
 
+    private List<SalesOrderItem> listSalesOrderItems(Long salesOrderId) {
+        if (salesOrderId == null) {
+            return List.of();
+        }
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.eq("sales_order_id", salesOrderId).orderByAsc("line_no").orderByAsc("id");
+        return salesOrderItemMapper.selectList(query);
+    }
+
     private OrderDeliveryTicket insertSalesOrderTicket(
             SalesOrderHeader header,
             SalesOrderItem item,
@@ -569,6 +642,26 @@ public class DeliveryService {
             return item.getRemainingQty();
         }
         return Math.max(0, safeInt(item.getQty()) - safeInt(item.getReleasedQty()));
+    }
+
+    private void recordSalesOrderImportAutoDeliveryAudit(
+            SalesOrderHeader header,
+            List<OrderDeliveryTicket> createdTickets,
+            long startedAt) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("trigger", "SALES_ORDER_IMPORT_AUTO");
+        summary.put("sourceType", ReleaseSourceType.SALES_ORDER.name());
+        summary.put("sourceOrderId", header.getId());
+        summary.put("salesOrderNo", header.getSalesOrderNo());
+        summary.put("ticketCount", createdTickets == null ? 0 : createdTickets.size());
+        summary.put("ticketIds", createdTickets == null ? List.of() : createdTickets.stream()
+                .map(OrderDeliveryTicket::getId)
+                .toList());
+        summary.put("durationMs", System.currentTimeMillis() - startedAt);
+        auditService.record("DELIVERY_TICKET_GENERATE", "sales_order_header", header.getId(), null, summary);
     }
 
     private String resolveSalesOrderProjectNo(SalesOrderHeader header) {

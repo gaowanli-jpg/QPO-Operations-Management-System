@@ -195,6 +195,67 @@ class SalesOrderDeliveryTicketStage6Test {
     }
 
     @Test
+    void importAutoSalesOrderTicketsAllowBlankPriceAndAreIdempotent() {
+        DeliveryService service = new DeliveryService();
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        LeadTimeService leadTimeService = new LeadTimeService();
+        List<OrderDeliveryTicket> insertedTickets = new ArrayList<>();
+        SalesOrderHeader header = salesOrderHeader();
+        SalesOrderItem blankPrice = salesOrderItem(1001L, 4, 0, "SO-P-1");
+        blankPrice.setFinalUnitPrice(null);
+        blankPrice.setFinalTotalPrice(null);
+        SalesOrderItem priced = salesOrderItem(1002L, 3, 0, "SO-P-2");
+
+        when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
+        when(itemMapper.selectList(any())).thenReturn(List.of(blankPrice, priced));
+        doAnswer(invocation -> {
+            OrderDeliveryTicket ticket = invocation.getArgument(0);
+            ticket.setId(7100 + insertedTickets.size());
+            insertedTickets.add(ticket);
+            return 1;
+        }).when(ticketMapper).insert(any(OrderDeliveryTicket.class));
+
+        wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
+
+        List<OrderDeliveryTicket> tickets = service.generateImportedSalesOrderTickets(9001L);
+
+        assertThat(tickets).hasSize(2);
+        assertThat(insertedTickets).hasSize(2);
+        assertThat(insertedTickets)
+                .extracting(OrderDeliveryTicket::getSourceType, OrderDeliveryTicket::getSourceOrderId, OrderDeliveryTicket::getSourceItemId)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(ReleaseSourceType.SALES_ORDER.name(), 9001L, 1001L),
+                        org.assertj.core.groups.Tuple.tuple(ReleaseSourceType.SALES_ORDER.name(), 9001L, 1002L));
+        assertThat(insertedTickets).extracting(OrderDeliveryTicket::getQty).containsExactly(4, 3);
+        assertThat(blankPrice.getReleasedQty()).isEqualTo(4);
+        assertThat(blankPrice.getRemainingQty()).isZero();
+        assertThat(blankPrice.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+        assertThat(priced.getReleasedQty()).isEqualTo(3);
+        assertThat(priced.getRemainingQty()).isZero();
+        assertThat(header.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+
+        List<OrderDeliveryTicket> duplicateRun = service.generateImportedSalesOrderTickets(9001L);
+
+        assertThat(duplicateRun).isEmpty();
+        assertThat(insertedTickets).hasSize(2);
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService, atLeastOnce()).record(
+                eq("DELIVERY_TICKET_GENERATE"),
+                eq("sales_order_header"),
+                eq(9001L),
+                isNull(),
+                afterDataCaptor.capture());
+        assertThat(afterDataCaptor.getAllValues()).anySatisfy(afterData -> assertThat((Map<String, Object>) afterData)
+                .containsEntry("trigger", "SALES_ORDER_IMPORT_AUTO")
+                .containsEntry("ticketCount", 2)
+                .containsEntry("sourceType", ReleaseSourceType.SALES_ORDER.name()));
+    }
+
+    @Test
     void downstreamServicesUseTicketSnapshotsAndSourceAwareDataScope() throws Exception {
         String deliveredService = read(MAIN_JAVA.resolve(Path.of("service", "DeliveredItemService.java")));
         String lockedService = read(MAIN_JAVA.resolve(Path.of("service", "LockedItemService.java")));

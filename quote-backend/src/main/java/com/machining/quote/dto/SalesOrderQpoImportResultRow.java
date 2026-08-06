@@ -14,6 +14,7 @@ public class SalesOrderQpoImportResultRow {
     private Integer matchedItemCount;
     private Integer unmatchedItemCount;
     private Integer missingPriceCount;
+    private Integer autoDeliveryTicketCount;
     private Integer uploadedDrawingCount;
     private Integer matchedDrawingCount;
     private Integer missingDrawingCount;
