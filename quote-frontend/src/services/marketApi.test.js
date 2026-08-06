@@ -281,7 +281,14 @@ describe('marketApi', () => {
   })
 
   test('updateReleaseItemFields posts item-scoped editable field payload', async () => {
-    const payload = { sourceType: 'SALES_ORDER', sourceOrderId: 2001, remark: 'note', customerRequirement: 'need' }
+    const payload = {
+      sourceType: 'SALES_ORDER',
+      sourceOrderId: 2001,
+      description: 'desc',
+      surfaceTreatment: 'anodized',
+      remark: 'note',
+      customerRequirement: 'need'
+    }
 
     await marketApi.updateReleaseItemFields(3001, payload)
 

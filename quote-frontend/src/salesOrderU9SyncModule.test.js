@@ -46,7 +46,7 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('class="erp-surface workflow-workspace sales-order-u9-sync-workspace"')
     expect(component).toContain('class="erp-surface sales-order-u9-sync-side-panel"')
     expect(component).toContain('class="erp-table-surface sales-order-u9-sync-main-panel"')
-    expect(component).toContain('class="selected-order-mini-table"')
+    expect(component).toContain('class="selected-order-text"')
     expect(component).toContain('class="sync-condition-panel"')
     expect(component).toContain('class="sync-result-panel"')
     expect(component).toContain('orderPickerVisible')

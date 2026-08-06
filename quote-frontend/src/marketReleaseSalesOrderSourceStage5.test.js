@@ -46,7 +46,8 @@ describe('market release sales order source stage 5', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
     expect(source).toContain('prop="sourceOrderNo" label="来源单号"')
-    expect(source).toContain('prop="sourceType" label="来源"')
+    expect(source).toContain('class="source-order-cell"')
+    expect(source).toContain('sourceTypeLabel(row.sourceType)')
     expect(source).toContain('applyReleaseDefaultsFromOrder(nextOrders[0])')
     expect(source).toContain("if (!wasEmpty || !isSalesOrderSource(order)) return")
     expect(source).toContain('releaseForm.orderType = order.orderType || releaseForm.orderType')

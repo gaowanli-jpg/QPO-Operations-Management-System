@@ -205,12 +205,14 @@
               @selection-change="handleSelectionChange"
             >
               <el-table-column type="selection" width="45" :selectable="canSelectItem" :reserve-selection="true" />
-              <el-table-column prop="sourceType" label="来源" width="90" fixed show-overflow-tooltip />
-              <el-table-column prop="sourceOrderNo" label="来源单号" width="150" fixed show-overflow-tooltip />
-              <el-table-column prop="customerName" label="客户" width="130" show-overflow-tooltip />
-              <el-table-column prop="orderStatus" label="订单状态" width="110" align="center">
+              <el-table-column prop="sourceOrderNo" label="来源单号" width="170" fixed show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-tag :type="statusTagType(row.orderStatus)" size="small">{{ row.orderStatus || '-' }}</el-tag>
+                  <div class="source-order-cell">
+                    <el-tag :type="(row.sourceType || 'RFQ') === 'SALES_ORDER' ? 'success' : 'info'" size="small" effect="plain">
+                      {{ sourceTypeLabel(row.sourceType) }}
+                    </el-tag>
+                    <span class="source-order-no">{{ row.sourceOrderNo || '-' }}</span>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column prop="partNo" label="图号" width="130" fixed show-overflow-tooltip />
@@ -238,17 +240,6 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="图纸" width="80" align="center">
-                <template #default="{ row }">
-                  <el-tag :type="row.hasDrawing || row.drawingUrl ? 'success' : 'warning'" size="small">
-                    {{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="description" label="物料描述" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="qty" label="询价数量" width="90" align="center" />
-              <el-table-column prop="ticketedQty" label="已提单数量" width="105" align="center" />
-              <el-table-column prop="remainingQty" label="剩余可提数量" width="110" align="center" />
               <el-table-column label="类型" width="90" align="center">
                 <template #default="{ row }">
                   <el-tag :type="isAssemblyItem(row) ? 'warning' : 'info'" size="small">
@@ -256,6 +247,16 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="图纸" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.hasDrawing || row.drawingUrl ? 'success' : 'warning'" size="small">
+                    {{ row.hasDrawing || row.drawingUrl ? '已绑定' : '缺图' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="qty" label="询价数量" width="90" align="center" />
+              <el-table-column prop="ticketedQty" label="已提单数量" width="105" align="center" />
+              <el-table-column prop="remainingQty" label="剩余可提数量" width="110" align="center" />
               <el-table-column prop="leadTime" label="客户询价交期" width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.leadTime || '-' }}</template>
               </el-table-column>
@@ -304,11 +305,52 @@
                 </template>
               </el-table-column>
               <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
-              <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
-              <el-table-column label="含税单价" width="110" align="right">
-                <template #default="scope">
-                  <span v-if="scope.row.finalUnitPrice != null">¥ {{ scope.row.finalUnitPrice.toFixed(2) }}</span>
-                  <el-tag v-else type="warning" size="small">未报价</el-tag>
+              <el-table-column prop="description" label="物料描述" width="240" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="row-field-editor">
+                    <el-input
+                      v-model="row.descriptionDraft"
+                      size="small"
+                      maxlength="500"
+                      clearable
+                      :disabled="!canSelectItem(row)"
+                      class="row-field-input"
+                    />
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canSelectItem(row) || isFieldSaving(row) || submitting"
+                      :loading="isFieldSaving(row)"
+                      @click.stop="saveReleaseItemFields(row)"
+                    >
+                      保存
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="surfaceTreatment" label="表面处理" width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="row-field-editor">
+                    <el-input
+                      v-model="row.surfaceTreatmentDraft"
+                      size="small"
+                      maxlength="200"
+                      clearable
+                      :disabled="!canSelectItem(row)"
+                      class="row-field-input"
+                    />
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canSelectItem(row) || isFieldSaving(row) || submitting"
+                      :loading="isFieldSaving(row)"
+                      @click.stop="saveReleaseItemFields(row)"
+                    >
+                      保存
+                    </el-button>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column prop="remark" label="备注" width="220" show-overflow-tooltip>
@@ -815,6 +857,8 @@ const setItemList = (rows) => {
     ...row,
     internalTargetLeadTimeDraft: row.internalTargetLeadTime || '',
     versionDraft: row.version || '',
+    descriptionDraft: row.description || '',
+    surfaceTreatmentDraft: row.surfaceTreatment || '',
     remarkDraft: row.remark || '',
     customerRequirementDraft: row.customerRequirement || ''
   }))
@@ -895,6 +939,8 @@ const saveReleaseItemVersion = async (row) => {
 
 const saveReleaseItemFields = async (row) => {
   if (!row?.id) return
+  row.descriptionDraft = String(row.descriptionDraft ?? '').trim()
+  row.surfaceTreatmentDraft = String(row.surfaceTreatmentDraft ?? '').trim()
   row.remarkDraft = String(row.remarkDraft ?? '').trim()
   row.customerRequirementDraft = String(row.customerRequirementDraft ?? '').trim()
   return runAction(releaseActionKeys.fields(rowKey(row)), async () => {
@@ -903,6 +949,8 @@ const saveReleaseItemFields = async (row) => {
         sourceType: row.sourceType || 'RFQ',
         sourceOrderId: row.sourceOrderId,
         rfqId: row.rfqId || selectedRfqId.value,
+        description: row.descriptionDraft,
+        surfaceTreatment: row.surfaceTreatmentDraft,
         remark: row.remarkDraft,
         customerRequirement: row.customerRequirementDraft
       })
@@ -910,6 +958,8 @@ const saveReleaseItemFields = async (row) => {
       const saved = {
         ...row,
         ...savedData,
+        descriptionDraft: savedData.description || '',
+        surfaceTreatmentDraft: savedData.surfaceTreatment || '',
         remarkDraft: savedData.remark || '',
         customerRequirementDraft: savedData.customerRequirement || ''
       }
@@ -1422,6 +1472,11 @@ const statusTagType = (status) => {
   return 'info'
 }
 
+const sourceTypeLabel = (sourceType) => {
+  if (sourceType === 'SALES_ORDER') return '销售订单'
+  return 'RFQ'
+}
+
 </script>
 
 <style scoped>
@@ -1541,6 +1596,26 @@ const statusTagType = (status) => {
 
 .release-selection-table :deep(.release-item-row--released > td.el-table__cell:first-child) {
   box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.source-order-cell {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.source-order-cell :deep(.el-tag) {
+  flex: 0 0 auto;
+}
+
+.source-order-no {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .full-width {

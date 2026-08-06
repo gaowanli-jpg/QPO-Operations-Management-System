@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.controller.MesIntegrationCallbackController;
 import com.machining.quote.dto.mes.MesMaterialCallbackReq;
 import com.machining.quote.dto.mes.MesMaterialCallbackResp;
@@ -252,6 +253,24 @@ class MesMaterialCallbackStage3Test {
     void callbackDtosDoNotExposeInternalTicketId() throws IOException {
         assertThat(read(CALLBACK_REQ)).doesNotContain("private Integer ticketId;");
         assertThat(read(CALLBACK_RESP)).doesNotContain("private Integer ticketId;");
+    }
+
+    @Test
+    void callbackRequestAcceptsMesFieldAliases() throws IOException {
+        MesMaterialCallbackReq req = new ObjectMapper().readValue("""
+                {
+                  "bizId": "MES-REQ-123",
+                  "status": "SUCCESS",
+                  "productCode": "MAT-NEW",
+                  "externalTraceId": "MP202608050001",
+                  "msg": "MES completed"
+                }
+                """, MesMaterialCallbackReq.class);
+
+        assertThat(req.getMesRequestId()).isEqualTo("MES-REQ-123");
+        assertThat(req.getMaterialNo()).isEqualTo("MAT-NEW");
+        assertThat(req.getMessage()).isEqualTo("MES completed");
+        assertThat(req.getExternalTraceId()).isEqualTo("MP202608050001");
     }
 
     @Test

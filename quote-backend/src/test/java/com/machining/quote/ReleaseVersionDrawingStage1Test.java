@@ -122,7 +122,7 @@ class ReleaseVersionDrawingStage1Test {
 
     @Test
     @SuppressWarnings("unchecked")
-    void updateReleaseItemFieldsUpdatesRfqItemRemarkAndCustomerRequirement() {
+    void updateReleaseItemFieldsUpdatesRfqItemEditablePartFields() {
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
@@ -130,6 +130,8 @@ class ReleaseVersionDrawingStage1Test {
         InternalTargetLeadTimeService service = releaseService(orderMapper, itemMapper, ticketMapper, auditService, null);
         OrderRfq order = releaseOrder(101, "RFQ-101");
         ItemQuoteVersion item = releaseItem(201, 101, "P-001", "A");
+        item.setDescription("old description");
+        item.setSurfaceTreatment("old surface");
         item.setRemark("old remark");
         item.setCustomerRequirement("old requirement");
         when(orderMapper.selectByIdForUpdate(101)).thenReturn(order);
@@ -140,6 +142,8 @@ class ReleaseVersionDrawingStage1Test {
         ReleaseItemFieldUpdateReq req = new ReleaseItemFieldUpdateReq();
         req.setSourceType(ReleaseSourceType.RFQ);
         req.setRfqId(101);
+        req.setDescription(" updated description ");
+        req.setSurfaceTreatment(" anodized ");
         req.setRemark(" updated remark ");
         req.setCustomerRequirement(" pack separately ");
         Map<String, Object> result = service.updateReleaseItemFields(201L, req);
@@ -149,8 +153,12 @@ class ReleaseVersionDrawingStage1Test {
         assertThat(row)
                 .containsEntry("id", 201)
                 .containsEntry("sourceType", ReleaseSourceType.RFQ.name())
+                .containsEntry("description", "updated description")
+                .containsEntry("surfaceTreatment", "anodized")
                 .containsEntry("remark", "updated remark")
                 .containsEntry("customerRequirement", "pack separately");
+        assertThat(item.getDescription()).isEqualTo("updated description");
+        assertThat(item.getSurfaceTreatment()).isEqualTo("anodized");
         assertThat(item.getRemark()).isEqualTo("updated remark");
         assertThat(item.getCustomerRequirement()).isEqualTo("pack separately");
         verify(itemMapper).updateById(item);
@@ -159,7 +167,7 @@ class ReleaseVersionDrawingStage1Test {
 
     @Test
     @SuppressWarnings("unchecked")
-    void updateReleaseItemFieldsUpdatesSalesOrderItemRemarkAndCustomerRequirement() {
+    void updateReleaseItemFieldsUpdatesSalesOrderItemEditablePartFields() {
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
@@ -171,6 +179,8 @@ class ReleaseVersionDrawingStage1Test {
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
         SalesOrderHeader order = salesOrder(2001L, "SO-2001");
         SalesOrderItem item = salesOrderItem(3001L, 2001L, "P-SO-001", "B");
+        item.setDescription("old sales description");
+        item.setSurfaceTreatment("old sales surface");
         item.setRemark("old sales remark");
         item.setCustomerRequirement("old sales requirement");
         when(salesOrderHeaderMapper.selectByIdForUpdate(2001L)).thenReturn(order);
@@ -180,6 +190,8 @@ class ReleaseVersionDrawingStage1Test {
         ReleaseItemFieldUpdateReq req = new ReleaseItemFieldUpdateReq();
         req.setSourceType(ReleaseSourceType.SALES_ORDER);
         req.setSourceOrderId(2001L);
+        req.setDescription(" sales description ");
+        req.setSurfaceTreatment(" passivation ");
         req.setRemark(" sales remark ");
         req.setCustomerRequirement(" customer needs clean packing ");
         Map<String, Object> result = service.updateReleaseItemFields(3001L, req);
@@ -189,8 +201,12 @@ class ReleaseVersionDrawingStage1Test {
         assertThat(row)
                 .containsEntry("id", 3001L)
                 .containsEntry("sourceType", ReleaseSourceType.SALES_ORDER.name())
+                .containsEntry("description", "sales description")
+                .containsEntry("surfaceTreatment", "passivation")
                 .containsEntry("remark", "sales remark")
                 .containsEntry("customerRequirement", "customer needs clean packing");
+        assertThat(item.getDescription()).isEqualTo("sales description");
+        assertThat(item.getSurfaceTreatment()).isEqualTo("passivation");
         assertThat(item.getRemark()).isEqualTo("sales remark");
         assertThat(item.getCustomerRequirement()).isEqualTo("customer needs clean packing");
         verify(salesOrderItemMapper).updateById(item);

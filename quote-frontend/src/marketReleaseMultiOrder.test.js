@@ -40,7 +40,6 @@ describe('market release multi-order stage 2', () => {
 
     expect(source).toContain('prop="sourceOrderNo" label="来源单号"')
     expect(source).toContain('prop="customerName" label="客户"')
-    expect(source).toContain('prop="orderStatus" label="订单状态"')
     expect(source).toContain('class="selected-orders-mini-table"')
     expect(source).toContain('prop="status" label="订单状态"')
     expect(source).toContain('height="132"')

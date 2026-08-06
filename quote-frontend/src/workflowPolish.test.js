@@ -133,6 +133,38 @@ describe('QPO workflow page polish', () => {
     ])
   })
 
+  test('keeps market release candidate item table focused on actionable part fields', () => {
+    const source = readComponent('MarketRelease.vue')
+    const tableStart = source.indexOf('class="release-selection-table"')
+    const tableEnd = source.indexOf('<div v-if="releaseItemTotal"', tableStart)
+    const tableTemplate = source.slice(tableStart, tableEnd)
+
+    expectIncludes(tableTemplate, 'MarketRelease.vue release selection table', [
+      '<el-table-column prop="sourceOrderNo" label="来源单号"',
+      '<el-table-column prop="partNo" label="图号"',
+      '<el-table-column prop="remark" label="备注"',
+      '<el-table-column prop="customerRequirement" label="客户需求"'
+    ])
+    expectExcludes(tableTemplate, 'MarketRelease.vue release selection table', [
+      '<el-table-column prop="sourceType" label="来源"',
+      '<el-table-column prop="customerName" label="客户"',
+      '<el-table-column prop="orderStatus" label="订单状态"',
+      '<el-table-column label="含税单价"'
+    ])
+
+    const versionIndex = tableTemplate.indexOf('prop="version" label="版本"')
+    const typeIndex = tableTemplate.indexOf('label="类型"')
+    const drawingIndex = tableTemplate.indexOf('label="图纸"')
+    const materialIndex = tableTemplate.indexOf('prop="engineeringMaterialName" label="材料"')
+    const descriptionIndex = tableTemplate.indexOf('prop="description" label="物料描述"')
+    const surfaceIndex = tableTemplate.indexOf('prop="surfaceTreatment" label="表面处理"')
+
+    expect(versionIndex).toBeLessThan(typeIndex)
+    expect(typeIndex).toBeLessThan(drawingIndex)
+    expect(materialIndex).toBeLessThan(descriptionIndex)
+    expect(descriptionIndex).toBeLessThan(surfaceIndex)
+  })
+
   test('keeps batch and export actions visually quiet', () => {
     const pages = ['QuoteProcess.vue', 'MarketRelease.vue']
 

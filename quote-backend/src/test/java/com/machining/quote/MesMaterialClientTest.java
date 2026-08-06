@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -33,7 +34,27 @@ class MesMaterialClientTest {
         CapturedRequest captured = new CapturedRequest();
         HttpServer server = server(exchange -> {
             captured.capture(exchange);
-            respond(exchange, 200, "{\"success\":true,\"materialNo\":\"MES-001\",\"message\":\"ok\",\"externalTraceId\":\"T-1\"}");
+            respond(exchange, 200, """
+                    {
+                      "code": 0,
+                      "msg": "ok",
+                      "data": {
+                        "bizId": "REQ-001",
+                        "items": [
+                          {
+                            "taskId": 2,
+                            "taskNo": "MP202608050001",
+                            "drawingNo": "P-100",
+                            "drawingVersion": "A",
+                            "status": "EXISTING_PRODUCT",
+                            "productId": 20,
+                            "productCode": "MES-001",
+                            "productName": "业务演示成品"
+                          }
+                        ]
+                      }
+                    }
+                    """);
         });
         try {
             MesMaterialClient client = client(baseUrl(server), "", "resolve", 1000);
@@ -42,13 +63,25 @@ class MesMaterialClientTest {
 
             assertThat(response.getSuccess()).isTrue();
             assertThat(response.getMaterialNo()).isEqualTo("MES-001");
+            assertThat(response.getMesRequestId()).isEqualTo("REQ-001");
+            assertThat(response.getStatus()).isEqualTo("EXISTING_PRODUCT");
+            assertThat(response.getMessage()).isEqualTo("ok");
+            assertThat(response.getExternalTraceId()).isEqualTo("MP202608050001");
             assertThat(captured.method.get()).isEqualTo("POST");
             assertThat(captured.authorization.get()).isNull();
             assertThat(captured.contentType.get()).contains("application/json");
             assertThat(captured.body.get())
+                    .contains("\"bizId\":\"REQ-001\"")
                     .contains("\"customerCode\":\"C-ACME\"")
-                    .contains("\"partNo\":\"P-100\"")
+                    .contains("\"items\":[")
+                    .contains("\"drawingNo\":\"P-100\"")
+                    .contains("\"drawingVersion\":\"A\"")
+                    .contains("\"drawingUrls\":[\"http://qpo.local/drawing.pdf\"]")
                     .contains("\"internalProjectNo\":\"IP-9\"")
+                    .doesNotContain("\"mesRequestId\"")
+                    .doesNotContain("\"partNo\"")
+                    .doesNotContain("\"version\"")
+                    .doesNotContain("\"drawingUrl\"")
                     .doesNotContain("\"sourceType\"")
                     .doesNotContain("\"ticketId\"")
                     .doesNotContain("\"rfqId\"")
@@ -56,6 +89,43 @@ class MesMaterialClientTest {
                     .doesNotContain("\"rfqNo\"")
                     .doesNotContain("\"sourceOrderId\"")
                     .doesNotContain("\"sourceItemId\"");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void resolveMaterialParsesPendingMesEnvelopeWithoutProductCode() throws IOException {
+        HttpServer server = server(exchange -> respond(exchange, 200, """
+                {
+                  "code": 0,
+                  "msg": "",
+                  "data": {
+                    "bizId": "REQ-PENDING",
+                    "items": [
+                      {
+                        "taskId": 3,
+                        "taskNo": "MP202608040002",
+                        "drawingNo": "P-100",
+                        "drawingVersion": "A",
+                        "status": "PENDING_CREATE",
+                        "productId": null,
+                        "productCode": null,
+                        "productName": null
+                      }
+                    ]
+                  }
+                }
+                """));
+        try {
+            MesMaterialResolveResp response = client(baseUrl(server), "", "resolve", 1000)
+                    .resolveMaterial(request());
+
+            assertThat(response.getSuccess()).isTrue();
+            assertThat(response.getMesRequestId()).isEqualTo("REQ-PENDING");
+            assertThat(response.getStatus()).isEqualTo("PENDING_CREATE");
+            assertThat(response.getMaterialNo()).isNull();
+            assertThat(response.getExternalTraceId()).isEqualTo("MP202608040002");
         } finally {
             server.stop(0);
         }
@@ -212,12 +282,13 @@ class MesMaterialClientTest {
                 "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialClient.java"), StandardCharsets.UTF_8);
 
         assertThat(source)
-                .contains("log.debug(\"MES material resolve request partNo={}")
+                .contains("log.debug(\"MES material resolve request drawingNo={}")
                 .doesNotContain(
                         "req.getSourceType()",
                         "sourceType={}",
                         "req.getTicketId()",
                         "ticketId={}",
+                        "request partNo={}",
                         "mesAuthToken={}",
                         "authToken={}",
                         "requestBody={}",
@@ -271,12 +342,17 @@ class MesMaterialClientTest {
 
     private MesMaterialResolveReq request() {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
+        req.setMesRequestId("REQ-001");
         req.setCustomerCode("C-ACME");
         req.setCustomerName("ACME");
-        req.setPartNo("P-100");
-        req.setVersion("A");
-        req.setDrawingUrl("http://qpo.local/drawing.pdf");
         req.setInternalProjectNo("IP-9");
+        MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        item.setDrawingUrls(List.of("http://qpo.local/drawing.pdf"));
+        item.setRemark("remark");
+        item.setCustomerRequirements("customer req");
+        req.setItems(List.of(item));
         return req;
     }
 

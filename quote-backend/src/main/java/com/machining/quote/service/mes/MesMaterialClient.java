@@ -46,8 +46,7 @@ public class MesMaterialClient {
 
     public MesMaterialResolveResp resolveMaterial(MesMaterialResolveReq req) {
         if (useDataCenter()) {
-            log.debug("MES material resolve data center request partNo={}",
-                    req == null ? null : req.getPartNo());
+            log.debug("MES material resolve data center request drawingNo={}", primaryDrawingNo(req));
             return dataCenterIntegrationClient.call(
                     DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
                     req,
@@ -71,8 +70,7 @@ public class MesMaterialClient {
         }
         HttpEntity<MesMaterialResolveReq> entity = new HttpEntity<>(req, headers);
         String url = trimRight(config.baseUrl()) + normalizePath(config.materialPath());
-        log.debug("MES material resolve request partNo={}",
-                req == null ? null : req.getPartNo());
+        log.debug("MES material resolve request drawingNo={}", primaryDrawingNo(req));
         try {
             ResponseEntity<MesMaterialResolveResp> response = restTemplate.exchange(
                     url,
@@ -144,6 +142,13 @@ public class MesMaterialClient {
         }
         String text = value.replaceAll("\\s+", " ").trim();
         return text.length() <= 200 ? text : text.substring(0, 200) + "...";
+    }
+
+    private String primaryDrawingNo(MesMaterialResolveReq req) {
+        if (req == null || req.getItems() == null || req.getItems().isEmpty() || req.getItems().get(0) == null) {
+            return null;
+        }
+        return req.getItems().get(0).getDrawingNo();
     }
 
     private int timeout(Integer value, int fallback) {

@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -306,14 +307,18 @@ public class MesMaterialSyncService {
     private MesMaterialResolveReq buildRequest(OrderDeliveryTicket ticket, String mesRequestId) {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
         req.setMesRequestId(mesRequestId);
-        req.setPartNo(required(ticket.getPartNo(), "图号不能为空"));
-        req.setVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
         req.setInternalProjectNo(required(ticket.getInternalProjectNo(), "内部项目号不能为空"));
         OrderRfq order = orderRfqMapper == null || ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
         req.setCustomerCode(resolveCustomerCode(ticket, order));
         req.setCustomerName(order == null ? ticket.getCustomerName() : order.getCustomerName());
         String drawingUrl = resolveDrawingUrl(ticket);
-        req.setDrawingUrl(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空")));
+        MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
+        item.setDrawingNo(required(ticket.getPartNo(), "图号不能为空"));
+        item.setDrawingVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
+        item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空"))));
+        item.setRemark(trimToNull(ticket.getRemark()));
+        item.setCustomerRequirements(trimToNull(ticket.getCustomerRequirement()));
+        req.setItems(List.of(item));
         return req;
     }
 
@@ -371,7 +376,10 @@ public class MesMaterialSyncService {
             return false;
         }
         String normalized = status.trim().toUpperCase();
-        return STATUS_CALLBACK_PENDING.equals(normalized) || "PENDING".equals(normalized) || "ACCEPTED".equals(normalized);
+        return STATUS_CALLBACK_PENDING.equals(normalized)
+                || "PENDING_CREATE".equals(normalized)
+                || "PENDING".equals(normalized)
+                || "ACCEPTED".equals(normalized);
     }
 
     private void markProcessing(
@@ -457,6 +465,7 @@ public class MesMaterialSyncService {
         }
         sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
     }
+
     private void assertSalesOrderItemMaterialWritable(OrderDeliveryTicket ticket, String materialNo) {
         if (salesOrderItemMapper == null
                 || ticket == null

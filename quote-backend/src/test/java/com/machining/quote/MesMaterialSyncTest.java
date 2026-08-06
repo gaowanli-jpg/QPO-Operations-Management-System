@@ -124,14 +124,10 @@ class MesMaterialSyncTest {
         when(ticketMapper.selectById(123)).thenReturn(ticket());
         when(orderMapper.selectById(88)).thenReturn(order());
         when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
-        MesMaterialResolveResp response = new MesMaterialResolveResp();
-        response.setSuccess(true);
-        response.setMaterialNo("  MES-7788  ");
-        response.setMessage("created");
+        MesMaterialResolveResp response = mesProductResponse("MES-7788", "EXISTING_PRODUCT", "MP202608050001", "created");
         when(client.resolveMaterial(any())).thenAnswer(invocation -> {
             MesMaterialResolveReq req = invocation.getArgument(0);
-            response.setMesRequestId(req.getMesRequestId());
-            response.setExternalTraceId("MES-TASK-7788");
+            response.getData().setBizId(req.getMesRequestId());
             return response;
         });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
@@ -150,6 +146,12 @@ class MesMaterialSyncTest {
         MesMaterialResolveReq req = reqCaptor.getValue();
         assertThat(req.getMesRequestId()).isNotBlank();
         assertThat(ReflectionTestUtils.getField(req, "customerCode")).isEqualTo("C-ACME");
+        assertThat(req.getItems()).hasSize(1);
+        assertThat(req.getItems().get(0).getDrawingNo()).isEqualTo("P-100");
+        assertThat(req.getItems().get(0).getDrawingVersion()).isEqualTo("A");
+        assertThat(req.getItems().get(0).getDrawingUrls()).containsExactly("http://qpo.local/uploads/drawings/p100.pdf");
+        assertThat(req.getItems().get(0).getRemark()).isEqualTo("release remark");
+        assertThat(req.getItems().get(0).getCustomerRequirements()).isEqualTo("customer needs deburring");
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(mesRequestMapper).insert(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());
@@ -165,7 +167,7 @@ class MesMaterialSyncTest {
         assertThat(success.getMesSyncStatus()).isEqualTo("SUCCESS");
         assertThat(success.getMesSyncMessage()).isEqualTo("created");
         assertThat(success.getMesRequestId()).isEqualTo(req.getMesRequestId());
-        assertThat(success.getMesExternalTaskId()).isEqualTo("MES-TASK-7788");
+        assertThat(success.getMesExternalTaskId()).isEqualTo("MP202608050001");
         assertThat(success.getMesSyncedAt()).isNotNull();
         ArgumentCaptor<Object> auditSummaryCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(
@@ -183,7 +185,7 @@ class MesMaterialSyncTest {
         assertThat(auditSummary)
                 .containsEntry("status", "SUCCESS")
                 .containsEntry("mesRequestId", req.getMesRequestId())
-                .containsEntry("externalTraceId", "MES-TASK-7788");
+                .containsEntry("externalTraceId", "MP202608050001");
     }
 
     @Test
@@ -198,15 +200,10 @@ class MesMaterialSyncTest {
         when(ticketMapper.selectById(123)).thenReturn(ticket());
         when(orderMapper.selectById(88)).thenReturn(order());
         when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
-        MesMaterialResolveResp response = new MesMaterialResolveResp();
-        response.setSuccess(true);
-        response.setCallbackRequired(true);
-        response.setStatus("CALLBACK_PENDING");
-        response.setExternalTraceId("MES-TASK-PENDING");
-        response.setMessage("MES已受理，后续回调");
+        MesMaterialResolveResp response = mesProductResponse(null, "PENDING_CREATE", "MP202608040002", "MES已受理，后续回调");
         when(client.resolveMaterial(any())).thenAnswer(invocation -> {
             MesMaterialResolveReq req = invocation.getArgument(0);
-            response.setMesRequestId(req.getMesRequestId());
+            response.getData().setBizId(req.getMesRequestId());
             return response;
         });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
@@ -219,14 +216,14 @@ class MesMaterialSyncTest {
                 .containsEntry("ticketId", 123)
                 .containsEntry("taskId", 9006L)
                 .containsEntry("status", "CALLBACK_PENDING")
-                .containsEntry("externalTraceId", "MES-TASK-PENDING");
+                .containsEntry("externalTraceId", "MP202608040002");
         assertThat(result).doesNotContainKey("materialNo");
         ArgumentCaptor<OrderDeliveryTicket> updateCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
         verify(ticketMapper).updateById(updateCaptor.capture());
         OrderDeliveryTicket update = updateCaptor.getValue();
         assertThat(update.getMesSyncStatus()).isEqualTo("CALLBACK_PENDING");
         assertThat(update.getMesSyncMessage()).isEqualTo("MES已受理，后续回调");
-        assertThat(update.getMesExternalTaskId()).isEqualTo("MES-TASK-PENDING");
+        assertThat(update.getMesExternalTaskId()).isEqualTo("MP202608040002");
         assertThat(update.getMesRequestId()).isNotBlank();
         ArgumentCaptor<Object> auditSummaryCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(
@@ -244,7 +241,7 @@ class MesMaterialSyncTest {
         assertThat(auditSummary)
                 .containsEntry("status", "CALLBACK_PENDING")
                 .containsEntry("mesRequestId", update.getMesRequestId())
-                .containsEntry("externalTraceId", "MES-TASK-PENDING");
+                .containsEntry("externalTraceId", "MP202608040002");
         verify(auditService, never()).record(
                 eq("DELIVERY_MES_MATERIAL_SYNC_FAILED"),
                 anyString(),
@@ -322,7 +319,7 @@ class MesMaterialSyncTest {
     }
 
     @Test
-    void syncMaterialNoSendsExternalReadableDrawingUrlToMesWithoutRenamingField() {
+    void syncMaterialNoSendsExternalReadableDrawingUrlToMesItemDrawingUrls() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
@@ -350,10 +347,13 @@ class MesMaterialSyncTest {
 
         ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
         verify(client).resolveMaterial(reqCaptor.capture());
-        assertThat(reqCaptor.getValue().getDrawingUrl())
-                .isEqualTo("http://minio-public/qpo-drawings/drawings/p100.pdf");
+        assertThat(reqCaptor.getValue().getItems()).hasSize(1);
+        assertThat(reqCaptor.getValue().getItems().get(0).getDrawingUrls())
+                .containsExactly("http://minio-public/qpo-drawings/drawings/p100.pdf");
         verify(businessFileService).externalReadableUrl("/uploads/drawings/p100.pdf");
-        assertThat(readQuietly(MES_REQ)).contains("private String drawingUrl;");
+        assertThat(readQuietly(MES_REQ))
+                .contains("private java.util.List<String> drawingUrls;")
+                .doesNotContain("private String drawingUrl;");
     }
 
     @Test
@@ -534,15 +534,22 @@ class MesMaterialSyncTest {
         assertThat(read(MES_REQ))
                 .contains(
                         "class MesMaterialResolveReq",
+                        "@JsonProperty(\"bizId\")",
                         "private String mesRequestId;",
                         "private String customerCode;",
                         "private String customerName;",
+                        "private String internalProjectNo;",
+                        "private java.util.List<Item> items;",
+                        "private String drawingNo;",
+                        "private String drawingVersion;",
+                        "private java.util.List<String> drawingUrls;",
+                        "private String remark;",
+                        "private String customerRequirements;"
+                )
+                .doesNotContain(
                         "private String partNo;",
                         "private String version;",
                         "private String drawingUrl;",
-                        "private String internalProjectNo;"
-                )
-                .doesNotContain(
                         "private Integer ticketId;",
                         "private String sourceType;",
                         "private Integer rfqId;",
@@ -554,13 +561,20 @@ class MesMaterialSyncTest {
         assertThat(read(MES_RESP))
                 .contains(
                         "class MesMaterialResolveResp",
+                        "private Integer code;",
                         "private Boolean success;",
                         "private String mesRequestId;",
+                        "@JsonAlias(\"msg\")",
                         "private String status;",
                         "private Boolean callbackRequired;",
                         "private String materialNo;",
                         "private String message;",
-                        "private String externalTraceId;"
+                        "private String externalTraceId;",
+                        "private Data data;",
+                        "private String bizId;",
+                        "private Long taskId;",
+                        "private String taskNo;",
+                        "private String productCode;"
                 );
     }
 
@@ -625,6 +639,8 @@ class MesMaterialSyncTest {
         ticket.setPartNo("P-100");
         ticket.setVersion("A");
         ticket.setInternalProjectNo("IP-9");
+        ticket.setRemark("release remark");
+        ticket.setCustomerRequirement("customer needs deburring");
         ticket.setMesSyncStatus("PENDING");
         return ticket;
     }
@@ -643,5 +659,24 @@ class MesMaterialSyncTest {
         item.setId(77);
         item.setDrawingUrl(drawingUrl);
         return item;
+    }
+
+    private MesMaterialResolveResp mesProductResponse(String productCode, String status, String taskNo, String message) {
+        MesMaterialResolveResp response = new MesMaterialResolveResp();
+        response.setCode(0);
+        response.setMessage(message);
+        MesMaterialResolveResp.Data data = new MesMaterialResolveResp.Data();
+        MesMaterialResolveResp.Item item = new MesMaterialResolveResp.Item();
+        item.setTaskId(2L);
+        item.setTaskNo(taskNo);
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        item.setStatus(status);
+        item.setProductId(productCode == null ? null : 20L);
+        item.setProductCode(productCode);
+        item.setProductName(productCode == null ? null : "业务演示成品");
+        data.setItems(java.util.List.of(item));
+        response.setData(data);
+        return response;
     }
 }

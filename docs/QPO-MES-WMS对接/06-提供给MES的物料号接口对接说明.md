@@ -4,7 +4,7 @@
 
 > 更新说明：本文档原先只描述 MES 在 HTTP response 中同步返回物料号的第一版接口。根据最新联调要求，MES 可以即时返回物料号，也可以先返回“已受理，后续回调”，再通过 QPO 回调接口写回物料号。MES 回调 QPO 的完整接口契约已经拆分为独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
 
-> 阶段 5 收口说明：旧同步响应口径已废弃。MES 可以即时返回物料号，也可以返回已受理并后续回调；两种路径都必须原样返回 QPO 生成的 `mesRequestId`。
+> 阶段 5 收口说明：旧同步响应口径已废弃。MES 可以即时返回物料号，也可以返回已受理并后续回调；MES response 必须在 `data.bizId` 原样返回 QPO 请求中的 `bizId`，后续回调 QPO 时按 08 文档使用 QPO 回调字段 `mesRequestId`。
 
 > 阶段 6 收口说明：QPO 已支持同图号版本去重。去重键固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。相同 `图号 + 版本` 已有活跃主请求时，后续行会成为 QPO 内部关联等待行，不再重复请求 MES；已有唯一成功物料号时，后续行直接复用。MES 仍只回调主 `mesRequestId`，QPO fan-out 写回所有关联等待行。
 
@@ -19,8 +19,8 @@
 - 调用方式：HTTP `POST`，请求体为 `application/json`。
 - 数据中心 endpoint：`MES_MATERIAL_RESOLVE`，默认方法 `POST`，请求适配器 `MES_MATERIAL_V1`，响应适配器 `MES_MATERIAL_RESPONSE_V1`。
 - 返回方式：MES 可以在同一次 HTTP 请求的响应体中同步返回物料号，也可以返回已受理并后续回调。
-- 回调要求：新口径需要 MES 响应和回调都原样带回 QPO 生成的 `mesRequestId`，后续通过 QPO 回调接口写回物料号；同图号版本去重场景下，MES 仍只回调主 `mesRequestId`。
-- 文件访问：QPO 会传 `drawingUrl`，如果 MES 需要下载图纸，MES 服务器必须能在内网访问该 URL。
+- 回调要求：MES response 必须原样带回 QPO 请求中的 `bizId`；后续回调 QPO 时，数据中心取该值填入 QPO 回调字段 `mesRequestId`。同图号版本去重场景下，MES 仍只回调主请求 ID。
+- 文件访问：QPO 会在 `items[].drawingUrls` 传图纸绝对 URL，如果 MES 需要下载图纸，MES 服务器必须能在内网访问该 URL。
 
 简单理解：
 
@@ -29,8 +29,8 @@
   -> QPO 创建内部异步任务
   -> 任务先按 图号 + 版本 做 QPO 内部去重
   -> 主请求经数据中心 MES_MATERIAL_RESOLVE endpoint 转发 MES
-  -> MES 立即在 HTTP response 里返回 materialNo，或返回已受理待回调
-  -> 如果立即返回 materialNo，QPO 保存 materialNo 和同步状态
+  -> MES 立即在 HTTP response 里返回 productCode，或返回已受理待回调
+  -> 如果立即返回 productCode，QPO 保存为 QPO 内部 materialNo 并更新同步状态
   -> 如果待回调，QPO 标记为待MES回调，MES 后续按主 mesRequestId 回调 QPO
   -> 如果有相同图号版本等待行，QPO 自行 fan-out 写回等待行，MES 不需要逐行回调
 ```
@@ -68,7 +68,7 @@ ERP_MES_TIMEOUT_MS=10000
 ERP_PUBLIC_BASE_URL=http://192.168.70.21:8088
 ```
 
-`ERP_PUBLIC_BASE_URL` 用于生成图纸的绝对访问地址。如果 MES 要下载 `drawingUrl`，这个地址必须是 MES 能访问到的内网地址。
+`ERP_PUBLIC_BASE_URL` 用于生成图纸的绝对访问地址。如果 MES 要下载 `items[].drawingUrls` 中的图纸，这个地址必须是 MES 能访问到的内网地址。
 
 > 注意：数据中心链路启用时，物料号获取出站调用不读取 `ERP_MES_BASE_URL` / `ERP_MES_AUTH_TOKEN`；这些变量只保留给直连兜底和本地开发。
 
@@ -93,13 +93,21 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 
 ```json
 {
-  "mesRequestId": "MES-123-8f8c2",
+  "bizId": "MES-123-8f8c2",
   "customerCode": "CUST-001",
   "customerName": "客户A",
-  "partNo": "P-1001",
-  "version": "A",
-  "drawingUrl": "http://192.168.70.21:8088/uploads/drawings/xxx.pdf",
-  "internalProjectNo": "IP-20260721-001"
+  "internalProjectNo": "IP-20260721-001",
+  "items": [
+    {
+      "drawingNo": "P-1001",
+      "drawingVersion": "A",
+      "drawingUrls": [
+        "http://192.168.70.21:8088/uploads/drawings/xxx.pdf"
+      ],
+      "remark": "备注",
+      "customerRequirements": "客户要求"
+    }
+  ]
 }
 ```
 
@@ -107,31 +115,44 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 
 | 字段 | 类型 | 是否可能为空 | 说明 |
 | --- | --- | --- | --- |
-| `mesRequestId` | string | 否 | QPO 本次请求唯一标识。MES response 和后续 callback 必须原样返回。 |
+| `bizId` | string | 否 | QPO 本次请求唯一标识，值等同于 QPO 内部 `mesRequestId`。MES response 必须在 `data.bizId` 原样返回；后续 callback 取该值填入 QPO 回调字段 `mesRequestId`。 |
 | `customerCode` | string | 可能为空 | 客户编码；RFQ 来源取 QPO 询价订单客户编码，销售订单来源取销售订单客户编码。 |
 | `customerName` | string | 可能为空 | 客户名称。 |
-| `partNo` | string | 否 | 图号，QPO 调用前会校验非空。 |
-| `version` | string | 可能为空字符串 | 版本，QPO 无版本时传空字符串。 |
-| `drawingUrl` | string | 否 | 图纸绝对 URL，QPO 调用前会校验非空。 |
 | `internalProjectNo` | string | 否 | 内部项目号，QPO 调用前会校验非空。 |
+| `items` | array | 否 | 零件明细数组。当前 QPO 按已提零件行逐条调用 MES，因此数组通常只有 1 条。 |
+| `items[].drawingNo` | string | 否 | 图号，QPO 调用前会校验非空。 |
+| `items[].drawingVersion` | string | 可能为空字符串 | 版本，QPO 无版本时传空字符串。 |
+| `items[].drawingUrls` | string array | 否 | 图纸绝对 URL 数组；当前每个已提零件通常传 1 个图纸 URL。 |
+| `items[].remark` | string | 可能为空 | 零件备注，来自议价提单 / 已提零件行的备注字段。 |
+| `items[].customerRequirements` | string | 可能为空 | 客户需求，来自议价提单 / 已提零件行的客户需求字段。 |
 
-QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`。这些字段属于 QPO 内部定位或展示字段；外部请求和回调定位只依赖 MES 原样返回的 `mesRequestId`。QPO 会在内部请求流水中保存 `mesRequestId -> ticketId` 映射，并根据 QPO 内部来源字段自行判断是否需要回写销售订单零件，不需要 MES 或数据中心感知。
+QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`。这些字段属于 QPO 内部定位或展示字段；外部请求和回调定位只依赖 QPO 生成的请求 ID（出站请求字段名为 `bizId`，QPO 回调字段名为 `mesRequestId`）。QPO 会在内部请求流水中保存 `mesRequestId -> ticketId` 映射，并根据 QPO 内部来源字段自行判断是否需要回写销售订单零件，不需要 MES 或数据中心感知。
 
 ## 4. MES 响应要求
 
-### 4.1 即时成功响应
+### 4.1 即时返回物料号响应
 
 HTTP 状态码建议返回 `200`，响应体：
 
 ```json
 {
-  "success": true,
-  "status": "SUCCESS",
-  "materialNo": "MAT-000123",
-  "message": "物料号创建成功",
-  "externalTraceId": "MES-TRACE-001",
-  "mesRequestId": "MES-123-8f8c2",
-  "callbackRequired": false
+  "code": 0,
+  "msg": "",
+  "data": {
+    "bizId": "MES-123-8f8c2",
+    "items": [
+      {
+        "taskId": 2,
+        "taskNo": "MP202608050001",
+        "drawingNo": "P-1001",
+        "drawingVersion": "A",
+        "status": "EXISTING_PRODUCT",
+        "productId": 20,
+        "productCode": "MAT-000123",
+        "productName": "业务演示成品"
+      }
+    ]
+  }
 }
 ```
 
@@ -139,21 +160,27 @@ HTTP 状态码建议返回 `200`，响应体：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `success` | boolean | 是 | `true` 表示 MES 处理成功。 |
-| `materialNo` | string | 成功时必填 | MES 返回给 QPO 保存的物料号。 |
-| `status` | string | 建议 | 即时成功返回 `SUCCESS`。 |
-| `mesRequestId` | string | 是 | 必须等于 QPO 请求中的 `mesRequestId`。 |
-| `callbackRequired` | boolean | 建议 | 即时成功返回 `false`。 |
-| `message` | string | 否 | 成功或失败说明，会进入 QPO 状态信息。 |
-| `externalTraceId` | string | 否 | MES 侧流水号，建议返回，方便双方排查。 |
+| `code` | number | 是 | `0` 表示 MES 接收并处理成功；非 `0` 视为业务失败。 |
+| `msg` | string | 否 | 成功或失败说明，会进入 QPO 状态信息。 |
+| `callbackRequired` | boolean | 否 | 顶层待回调标识；待回调时建议返回 `true`，即时返回物料号时可省略或返回 `false`。 |
+| `data.bizId` | string | 是 | 必须等于 QPO 请求中的 `bizId`，也就是 QPO 内部 `mesRequestId`。 |
+| `data.items` | array | 是 | MES 对本次请求明细的处理结果；当前 QPO 通常只读取第一条。 |
+| `data.items[].taskId` | number | 否 | MES 任务 ID，QPO 不作为业务字段使用。 |
+| `data.items[].taskNo` | string | 建议 | MES 任务号，QPO 会作为外部流水号保存，方便双方排查。 |
+| `data.items[].drawingNo` | string | 建议 | MES 返回的图号，用于联调排查。 |
+| `data.items[].drawingVersion` | string | 建议 | MES 返回的版本，用于联调排查。 |
+| `data.items[].status` | string | 是 | 即时已有物料号时可返回 `EXISTING_PRODUCT`；只要 `productCode` 非空，QPO 就按即时成功处理。 |
+| `data.items[].productCode` | string | 成功时必填 | MES 返回给 QPO 保存的物料号。 |
+| `data.items[].productId` | number | 否 | MES 产品 ID，QPO 当前接收但不落库。 |
+| `data.items[].productName` | string | 否 | MES 产品名称，QPO 当前接收但不落库。 |
 
 QPO 成功判定：
 
 - HTTP 为 2xx；
-- `success=true`；
-- `materialNo` 非空；
-- `mesRequestId` 等于 QPO 请求中的 `mesRequestId`；
-- `materialNo` 去掉首尾空格后长度不超过 100。
+- `code=0`；
+- `data.bizId` 等于 QPO 请求中的 `bizId`；
+- `data.items[0].productCode` 非空；
+- `productCode` 去掉首尾空格后长度不超过 100。
 
 QPO 写回结果：已提零件写入 `order_delivery_ticket.material_no`、`mes_sync_status=SUCCESS`、同步时间、MES 外部流水号和状态信息；如果来源是销售订单，还会同步写回 `sales_order_item.material_no`、`material_no_status=已确认`、`material_no_source=MES_TICKET`、`material_no_source_ticket_id`、`material_no_synced_at` 和摘要信息。
 
@@ -163,21 +190,34 @@ QPO 写回结果：已提零件写入 `order_delivery_ticket.material_no`、`mes
 
 ```json
 {
-  "success": true,
-  "status": "CALLBACK_PENDING",
+  "code": 0,
+  "msg": "",
   "callbackRequired": true,
-  "message": "MES已受理，物料号生成后回调QPO",
-  "externalTraceId": "MES-TASK-001",
-  "mesRequestId": "MES-123-8f8c2"
+  "data": {
+    "bizId": "MES-123-8f8c2",
+    "items": [
+      {
+        "taskId": 3,
+        "taskNo": "MP202608040002",
+        "drawingNo": "P-1001",
+        "drawingVersion": "A",
+        "status": "PENDING_CREATE",
+        "productId": null,
+        "productCode": null,
+        "productName": null
+      }
+    ]
+  }
 }
 ```
 
 QPO 待回调判定：
 
 - HTTP 为 2xx；
-- `success=true`；
-- `callbackRequired=true`，或 `status` 为 `CALLBACK_PENDING` / `ACCEPTED` / `PENDING`；
-- `mesRequestId` 等于 QPO 请求中的 `mesRequestId`。
+- `code=0`；
+- `data.bizId` 等于 QPO 请求中的 `bizId`；
+- `data.items[0].productCode` 为空；
+- `callbackRequired=true`，或 `data.items[0].status` 为 `PENDING_CREATE` / `CALLBACK_PENDING` / `ACCEPTED` / `PENDING`。
 
 QPO 处理结果：
 
@@ -191,10 +231,12 @@ QPO 处理结果：
 
 ```json
 {
-  "success": false,
-  "message": "图纸无法识别，缺少材料信息",
-  "externalTraceId": "MES-TRACE-002",
-  "mesRequestId": "MES-123-8f8c2"
+  "code": 500,
+  "msg": "图纸无法识别，缺少材料信息",
+  "data": {
+    "bizId": "MES-123-8f8c2",
+    "items": []
+  }
 }
 ```
 
@@ -203,10 +245,10 @@ QPO 失败判定：
 - HTTP 非 2xx；
 - 连接超时或读取超时；
 - 响应体为空；
-- `success` 不是 `true`；
-- `success=true` 但既没有 `materialNo`，也没有明确 `callbackRequired=true` / 待回调状态；
-- `mesRequestId` 缺失或不等于 QPO 请求中的 `mesRequestId`；
-- `materialNo` 长度超过 100。
+- `code` 不是 `0`；
+- `data.bizId` 缺失或不等于 QPO 请求中的 `bizId`；
+- `code=0` 但既没有 `productCode`，也没有 `callbackRequired=true` 或明确待回调状态；
+- `productCode` 长度超过 100。
 
 失败后 QPO 会把该已提零件的 MES 状态标记为 `FAILED`，用户可重新触发。
 
@@ -273,11 +315,11 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 - 网络超时导致 QPO 不知道 MES 是否已经处理成功；
 - 测试/联调时重复提交同一条数据。
 
-建议 MES 以 `mesRequestId` 作为一次请求和后续回调的幂等主键，同时可结合 `internalProjectNo + partNo + version` 做业务幂等判断：
+建议 MES 以 `bizId` / `mesRequestId` 的同一个请求 ID 作为一次请求和后续回调的幂等主键，同时可结合 `internalProjectNo + items[].drawingNo + items[].drawingVersion` 做业务幂等判断：
 
-- 如果同一零件已经创建过物料号，建议直接返回原 `materialNo`；
+- 如果同一零件已经创建过物料号，建议直接返回原 `productCode`；
 - 不建议因为重复请求创建多个不同物料号；
-- 如果 MES 认为请求重复但不能返回物料号，请返回 `success=false` 和明确 `message`。
+- 如果 MES 认为请求重复但不能返回物料号，请返回非 `0` 的 `code` 和明确 `msg`。
 
 ## 8. 联调验收用例
 
@@ -285,23 +327,23 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 
 | 场景 | MES 返回 | QPO 预期 |
 | --- | --- | --- |
-| 正常创建物料号 | `success=true` + `materialNo` | QPO 保存物料号，状态 `SUCCESS`。 |
-| 已存在物料号 | `success=true` + 已有 `materialNo` | QPO 保存/保持物料号，状态 `SUCCESS`。 |
-| 需要人工维护物料号 | `success=true` + `status=CALLBACK_PENDING` + `callbackRequired=true` + `mesRequestId` | QPO 状态 `CALLBACK_PENDING`，任务成功完成。 |
+| 正常创建物料号 | `code=0` + `data.items[0].productCode` | QPO 保存物料号，状态 `SUCCESS`。 |
+| 已存在物料号 | `code=0` + 已有 `productCode` | QPO 保存/保持物料号，状态 `SUCCESS`。 |
+| 需要人工维护物料号 | `code=0` + `status=PENDING_CREATE` + `productCode=null` | QPO 状态 `CALLBACK_PENDING`，任务成功完成。 |
 | 待回调后成功 | `POST /api/integrations/mes/material-callback` + `materialNo` | QPO 状态 `SUCCESS`，保存物料号。 |
 | 重复相同回调 | 相同 `mesRequestId` + 相同 `materialNo` | QPO 返回成功，数据不重复变更。 |
 | 冲突回调 | 相同 `mesRequestId` + 不同 `materialNo` | QPO 拒绝覆盖，记录冲突。 |
-| 图纸不可识别 | `success=false` + `message` | QPO 状态 `FAILED`，显示失败原因。 |
-| MES 内部异常 | HTTP 500 或 `success=false` | QPO 状态 `FAILED`。 |
+| 图纸不可识别 | 非 `0` 的 `code` + `msg` | QPO 状态 `FAILED`，显示失败原因。 |
+| MES 内部异常 | HTTP 500 或业务失败 | QPO 状态 `FAILED`。 |
 | 响应超时 | 无响应超过超时时间 | QPO 状态 `FAILED`，用户可重试。 |
-| `materialNo` 为空且无待回调标识 | `success=true` 但无物料号、无 `callbackRequired` | QPO 状态 `FAILED`。 |
+| `productCode` 为空且无待回调标识 | `code=0` 但无物料号、无待回调状态 | QPO 状态 `FAILED`。 |
 | 回调 token 错误 | 未带或带错 `QPO_INBOUND_CALLBACK_TOKEN` | QPO 拒绝。 |
 
 ## 9. 双方上线前确认
 
 - QPO 后端服务器能访问 MES 的测试/生产地址。
-- MES 如需下载图纸，MES 服务器能访问 QPO 发出的 `drawingUrl`。
+- MES 如需下载图纸，MES 服务器能访问 QPO 发出的 `items[].drawingUrls`。
 - QPO 和数据中心确认 QPO 入站回调 URL、`QPO_INBOUND_CALLBACK_TOKEN`、IP 白名单、防火墙策略；QPO 和 MES 确认物料号业务字段与响应口径。
 - 双方确认超时时间、并发上限、是否需要限流。
-- MES 返回 JSON 字段名与本文档一致，尤其是 `success`、`status`、`callbackRequired`、`materialNo`、`message`、`mesRequestId`。
+- MES 返回 JSON 字段名与本文档一致，尤其是 `code`、`msg`、`data.bizId`、`data.items[].status`、`data.items[].productCode`。
 - 双方约定联调样例数据，并保留 `mesRequestId` / `externalTraceId` 方便查日志；`ticketId` 仅作为 QPO 内部日志和请求流水排查字段，不对 MES / 数据中心开放。

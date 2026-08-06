@@ -94,7 +94,8 @@ describe('sales match module', () => {
   test('sales match page shows selected order, match condition, preview summary, and apply result', () => {
     const component = readSource('components', 'SalesMatch.vue')
 
-    expect(component).toContain('已选销售订单')
+    expect(component).toContain('class="selected-order-text"')
+    expect(component).toContain('未选择订单')
     expect(component).toContain('匹配条件')
     expect(component).toContain('订单信息')
     expect(component).toContain('previewSummary')

@@ -158,11 +158,15 @@ class DataCenterConfigStage5Test {
 
     private MesMaterialResolveReq mesMaterialReq() {
         MesMaterialResolveReq req = new MesMaterialResolveReq();
+        req.setMesRequestId("MES-REQ-DC");
         req.setCustomerCode("C-ACME");
         req.setCustomerName("ACME");
-        req.setPartNo("P-100");
-        req.setVersion("A");
         req.setInternalProjectNo("IP-9");
+        MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        item.setDrawingUrls(List.of("http://qpo.local/P-100.pdf"));
+        req.setItems(List.of(item));
         return req;
     }
 

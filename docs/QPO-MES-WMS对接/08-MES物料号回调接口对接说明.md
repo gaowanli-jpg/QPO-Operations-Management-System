@@ -23,18 +23,29 @@ QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入�
 
 ```json
 {
-  "mesRequestId": "MES-123-8f8c2",
+  "bizId": "MES-123-8f8c2",
   "customerCode": "CUST-001",
-  "partNo": "P-1001",
-  "version": "A"
+  "customerName": "客户A",
+  "internalProjectNo": "IP-20260721-001",
+  "items": [
+    {
+      "drawingNo": "P-1001",
+      "drawingVersion": "A",
+      "drawingUrls": [
+        "http://192.168.70.21:8088/uploads/drawings/xxx.pdf"
+      ],
+      "remark": "备注",
+      "customerRequirements": "客户要求"
+    }
+  ]
 }
 ```
 
-数据中心转发 MES 回调时，只需要原样带回 `mesRequestId`：
+数据中心转发 MES 回调时，只需要取出 QPO 请求中的 `bizId` 值，并在回调 QPO 时放入 `mesRequestId` 字段。回调接口使用 QPO 自己的扁平 JSON 契约，不使用 MES 响应的 `code/msg/data` 包裹，也不把 `bizId/productCode/msg` 作为对外字段名：
 
-- `mesRequestId` 是 QPO 每次请求生成的唯一 ID，也是回调主定位键。
+- `mesRequestId` 是 QPO 每次请求生成的唯一 ID，也是回调主定位键，值来自 QPO 出站请求里的 `bizId`。
 - `ticketId` 是 QPO 内部请求流水保存的提单行 ID，QPO 会按 `mesRequestId` 自行查询，不要求 MES 或数据中心回传。
-- `customerCode`、`partNo`、`version` 等字段用于 MES 创建物料号；QPO 回调落库不依赖这些字段定位。
+- `customerCode`、`items[].drawingNo`、`items[].drawingVersion`、`items[].remark`、`items[].customerRequirements` 等字段用于 MES 创建物料号；QPO 回调落库不依赖这些字段定位。
 - QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`；数据中心回调 QPO 时也不需要回传这些字段。
 - 如果 QPO 同图号版本去重后把其他零件作为 follower 关联到主请求，数据中心和 MES 都不需要知道 follower 明细，也不需要分别回调 follower。
 
@@ -85,7 +96,7 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `mesRequestId` | string | 是 | QPO 请求 ID，主定位键，必须等于 QPO 调 MES 时传入的 `mesRequestId`。 |
+| `mesRequestId` | string | 是 | QPO 请求 ID，主定位键，必须等于 QPO 调 MES 时传入的 `bizId`。 |
 | `status` | string | 是 | 成功回调固定传 `SUCCESS`。 |
 | `materialNo` | string | 成功时必填 | MES 最终确认的物料号；QPO 会去除首尾空格，长度不能超过 100。 |
 | `externalTraceId` | string | 否 | MES 任务号、流水号或工单号，QPO 会保存用于排查。 |
