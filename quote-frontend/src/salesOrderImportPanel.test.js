@@ -135,12 +135,22 @@ describe('sales order import panel', () => {
     expect(salesOrderPane).not.toContain('label="RFQ号"')
   })
 
-  test('sales order QPO import copy no longer implies U9 sync', () => {
-    expect(salesOrderPane).not.toContain('U9')
-    expect(salesOrderPane).not.toContain('同步')
+  test('sales order QPO import copy does not imply immediate U9 sync', () => {
+    expect(salesOrderPane).not.toContain('导入后同步 U9')
+    expect(salesOrderPane).not.toContain('直接同步 U9')
     expect(salesOrderPane).not.toContain('创建 RFQ')
     expect(salesOrderPane).not.toContain('QPO 主流程')
     expect(marketDashboard).toContain('importSalesOrderToQpo(formData)')
+  })
+
+  test('sales order upload instructions follow the new market template', () => {
+    expect(salesOrderPane).toContain('销售订单 Excel 需包含表头')
+    expect(salesOrderPane).toContain('下单日期、客户订单号、订单类型、内部项目号、图号、订单数量、版本')
+    expect(salesOrderPane).toContain('价格允许为空，但 U9 同步前必须补齐')
+    expect(salesOrderPane).not.toContain('可选表头：序号、客户项目号、客户下单抬头、料号')
+    expect(salesOrderPane).not.toContain('已出数量')
+    expect(salesOrderPane).not.toContain('未出数量')
+    expect(salesOrderPane).not.toContain('未出数量为空时按订单数量-已出数量计算')
   })
 
   test('market API exposes sales order QPO import endpoint under sales-orders namespace', () => {

@@ -28,14 +28,14 @@ class SalesOrderQpoImportStage2Test {
     @Test
     void parsesMarketTemplateAndGroupsRowsByCustomerOrderNoAndInternalProjectNo() throws Exception {
         SalesOrderQpoExcelParseResult result = parser.parse(new ByteArrayInputStream(workbookBytes(List.of(
-                row(1, LocalDate.of(2026, 7, 1), "PO-001", "CP-001", "GSQ1", "\u6837\u54c1\u8ba2\u5355", "MAT-001", "IP-001",
-                        LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5), "P-001", 10, 2, "", "\u652f\u6491\u8154", "6061", "\u9633\u6781", "A",
-                        "11.30", "10.00", "", LocalDate.of(2026, 8, 9), "\u9996\u6279"),
-                row(2, "2026/07/01", "PO-001", "CP-001", "GSQ1", "\u6837\u54c1\u8ba2\u5355", "MAT-002", "IP-001",
-                        "2026-08-02", "2026-08-06", "P-002", 4, 1, 3, "\u8fde\u63a5\u677f", "7075", "/", "B",
+                row(1, LocalDate.of(2026, 7, 1), "PO-001", "CP-001", "GSQ1", "\u6837\u54c1\u8ba2\u5355", "IP-001",
+                        LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5), "P-001", 10, "\u652f\u6491\u8154", "6061", "\u9633\u6781", "A",
+                        "", "", "", LocalDate.of(2026, 8, 9), "\u9996\u6279"),
+                row(2, "2026/07/01", "PO-001", "CP-001", "GSQ1", "\u6837\u54c1\u8ba2\u5355", "IP-001",
+                        "2026-08-02", "2026-08-06", "P-002", 4, "\u8fde\u63a5\u677f", "7075", "/", "B",
                         "12.00", "10.50", "42.00", "", ""),
-                row(3, LocalDate.of(2026, 7, 2), "PO-001", "", "GSQ2", "\u6279\u91cf\u8ba2\u5355", "", "IP-002",
-                        "", "", "P-003", 5, "", "", "", "", "", "C",
+                row(3, LocalDate.of(2026, 7, 2), "PO-001", "", "GSQ2", "\u6279\u91cf\u8ba2\u5355", "IP-002",
+                        "", "", "P-003", 5, "", "", "", "C",
                         "20", "18", "", "", "")
         ))));
 
@@ -56,23 +56,23 @@ class SalesOrderQpoImportStage2Test {
         SalesOrderQpoExcelLineDTO firstLine = firstGroup.getLines().get(0);
         assertThat(firstLine.getSourceRowNumber()).isEqualTo(2);
         assertThat(firstLine.getSalesOrderLineNo()).isEqualTo(1);
-        assertThat(firstLine.getSalesMaterialNo()).isEqualTo("MAT-001");
+        assertThat(firstLine.getSalesMaterialNo()).isNull();
         assertThat(firstLine.getPartNo()).isEqualTo("P-001");
         assertThat(firstLine.getVersion()).isEqualTo("A");
         assertThat(firstLine.getQty()).isEqualTo(10);
-        assertThat(firstLine.getShippedQty()).isEqualTo(2);
-        assertThat(firstLine.getUnshippedQty()).isEqualTo(8);
+        assertThat(firstLine.getShippedQty()).isZero();
+        assertThat(firstLine.getUnshippedQty()).isEqualTo(10);
         assertThat(firstLine.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 1));
         assertThat(firstLine.getInternalDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 5));
         assertThat(firstLine.getActualShipDate()).isEqualTo(LocalDate.of(2026, 8, 9));
-        assertThat(firstLine.getTaxIncludedUnitPrice()).isEqualByComparingTo(new BigDecimal("11.30"));
-        assertThat(firstLine.getUntaxedUnitPrice()).isEqualByComparingTo(new BigDecimal("10.00"));
-        assertThat(firstLine.getTaxIncludedTotalPrice()).isEqualByComparingTo(new BigDecimal("113.00"));
-        assertThat(firstLine.getUntaxedTotalPrice()).isEqualByComparingTo(new BigDecimal("100.00"));
+        assertThat(firstLine.getTaxIncludedUnitPrice()).isNull();
+        assertThat(firstLine.getUntaxedUnitPrice()).isNull();
+        assertThat(firstLine.getTaxIncludedTotalPrice()).isNull();
+        assertThat(firstLine.getUntaxedTotalPrice()).isNull();
 
         SalesOrderQpoExcelLineDTO secondLine = firstGroup.getLines().get(1);
         assertThat(secondLine.getUntaxedTotalPrice()).isEqualByComparingTo(new BigDecimal("42.00"));
-        assertThat(secondLine.getUnshippedQty()).isEqualTo(3);
+        assertThat(secondLine.getUnshippedQty()).isEqualTo(4);
 
         SalesOrderQpoOrderGroupDTO secondGroup = result.getOrders().get(1);
         assertThat(secondGroup.getGroupKey()).isEqualTo("PO-001|IP-002");
@@ -82,33 +82,40 @@ class SalesOrderQpoImportStage2Test {
     @Test
     void rejectsMissingRequiredHeadersWithClearMessage() {
         List<String> headers = fullHeaders().stream()
-                .filter(header -> !header.equals("VAT\u5355\u4ef7-\n\u542b\u7a0e"))
+                .filter(header -> !header.equals("\u56fe\u53f7"))
                 .toList();
 
         assertThatThrownBy(() -> parser.parse(new ByteArrayInputStream(workbookBytes(headers, List.of()))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("\u7f3a\u5931\u8868\u5934")
-                .hasMessageContaining("VAT\u5355\u4ef7-\u542b\u7a0e");
+                .hasMessageContaining("\u56fe\u53f7");
     }
 
     @Test
-    void rejectsRowsMissingRequiredPricesWithRowNumber() {
-        assertThatThrownBy(() -> parser.parse(new ByteArrayInputStream(workbookBytes(List.of(
-                row(1, LocalDate.of(2026, 7, 1), "PO-001", "", "", "\u6837\u54c1\u8ba2\u5355", "", "IP-001",
-                        "", "", "P-001", 10, "", "", "", "", "", "A", "", "10", "", "", "")
-        )))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("\u7b2c2\u884c")
-                .hasMessageContaining("VAT\u5355\u4ef7-\u542b\u7a0e");
+    void ignoresLegacyMaterialAndShippingColumnsWhenOldTemplateIsUploaded() throws Exception {
+        List<String> legacyHeaders = new java.util.ArrayList<>(fullHeaders());
+        legacyHeaders.add(6, "\u6599\u53f7");
+        legacyHeaders.add(12, "\u5df2\u51fa\u6570\u91cf");
+        legacyHeaders.add(13, "\u672a\u51fa\u6570\u91cf");
+
+        SalesOrderQpoExcelParseResult result = parser.parse(new ByteArrayInputStream(workbookBytes(legacyHeaders, List.of(
+                row(1, LocalDate.of(2026, 7, 1), "PO-001", "", "", "\u6837\u54c1\u8ba2\u5355", "LEGACY-MAT", "IP-001",
+                        "", "", "P-001", 10, 2, 8, "", "", "", "A", "", "", "", "", "")
+        ))));
+
+        SalesOrderQpoExcelLineDTO line = result.getOrders().get(0).getLines().get(0);
+        assertThat(line.getSalesMaterialNo()).isNull();
+        assertThat(line.getShippedQty()).isZero();
+        assertThat(line.getUnshippedQty()).isEqualTo(10);
     }
 
     @Test
     void rejectsInconsistentHeaderFieldsInsideSameGroup() {
         assertThatThrownBy(() -> parser.parse(new ByteArrayInputStream(workbookBytes(List.of(
-                row(1, LocalDate.of(2026, 7, 1), "PO-001", "", "", "\u6837\u54c1\u8ba2\u5355", "", "IP-001",
-                        "", "", "P-001", 10, "", "", "", "", "", "A", "11", "10", "", "", ""),
-                row(2, LocalDate.of(2026, 7, 1), "PO-001", "", "", "\u6279\u91cf\u8ba2\u5355", "", "IP-001",
-                        "", "", "P-002", 10, "", "", "", "", "", "A", "11", "10", "", "", "")
+                row(1, LocalDate.of(2026, 7, 1), "PO-001", "", "", "\u6837\u54c1\u8ba2\u5355", "IP-001",
+                        "", "", "P-001", 10, "", "", "", "A", "11", "10", "", "", ""),
+                row(2, LocalDate.of(2026, 7, 1), "PO-001", "", "", "\u6279\u91cf\u8ba2\u5355", "IP-001",
+                        "", "", "P-002", 10, "", "", "", "A", "11", "10", "", "", "")
         )))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("\u7b2c3\u884c")
@@ -171,14 +178,11 @@ class SalesOrderQpoImportStage2Test {
                 "\u5ba2\u6237\n\u9879\u76ee\u53f7",
                 "\u5ba2\u6237\u4e0b\u5355\u62ac\u5934",
                 "\u8ba2\u5355\n\u7c7b\u578b",
-                "\u6599\u53f7",
                 "\u5185\u90e8\u9879\u76ee\u53f7",
                 "\u5ba2\u6237\u4ea4\u671f",
                 "\u5185\u90e8\u4ea4\u671f\n(\u7ed9\u751f\u4ea7\u7684\u4ea4\u671f)",
                 "\u56fe\u53f7",
                 "\u8ba2\u5355\u6570\u91cf",
-                "\u5df2\u51fa\u6570\u91cf",
-                "\u672a\u51fa\u6570\u91cf",
                 "\u63cf\u8ff0",
                 "\u6750\u6599",
                 "\u8868\u9762\u5904\u7406",

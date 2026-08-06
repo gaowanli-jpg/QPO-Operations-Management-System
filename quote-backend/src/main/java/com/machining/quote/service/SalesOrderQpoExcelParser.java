@@ -35,14 +35,11 @@ public class SalesOrderQpoExcelParser {
     private static final String CUSTOMER_PROJECT_NO = "\u5ba2\u6237\u9879\u76ee\u53f7";
     private static final String CUSTOMER_ORDER_TITLE = "\u5ba2\u6237\u4e0b\u5355\u62ac\u5934";
     private static final String ORDER_TYPE = "\u8ba2\u5355\u7c7b\u578b";
-    private static final String SALES_MATERIAL_NO = "\u6599\u53f7";
     private static final String INTERNAL_PROJECT_NO = "\u5185\u90e8\u9879\u76ee\u53f7";
     private static final String CUSTOMER_DELIVERY_DATE = "\u5ba2\u6237\u4ea4\u671f";
     private static final String INTERNAL_DELIVERY_DATE = "\u5185\u90e8\u4ea4\u671f(\u7ed9\u751f\u4ea7\u7684\u4ea4\u671f)";
     private static final String PART_NO = "\u56fe\u53f7";
     private static final String QTY = "\u8ba2\u5355\u6570\u91cf";
-    private static final String SHIPPED_QTY = "\u5df2\u51fa\u6570\u91cf";
-    private static final String UNSHIPPED_QTY = "\u672a\u51fa\u6570\u91cf";
     private static final String DESCRIPTION = "\u63cf\u8ff0";
     private static final String MATERIAL = "\u6750\u6599";
     private static final String SURFACE_TREATMENT = "\u8868\u9762\u5904\u7406";
@@ -60,9 +57,7 @@ public class SalesOrderQpoExcelParser {
             INTERNAL_PROJECT_NO,
             PART_NO,
             QTY,
-            VERSION,
-            TAX_INCLUDED_UNIT_PRICE,
-            UNTAXED_UNIT_PRICE
+            VERSION
     );
 
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
@@ -137,22 +132,16 @@ public class SalesOrderQpoExcelParser {
             FormulaEvaluator evaluator,
             int excelRowNumber) {
         Integer qty = requiredInteger(row, headerIndexes, QTY, formatter, evaluator, excelRowNumber);
-        Integer shippedQty = optionalInteger(row, headerIndexes, SHIPPED_QTY, formatter, evaluator, excelRowNumber, 0);
-        Integer unshippedQty = optionalInteger(row, headerIndexes, UNSHIPPED_QTY, formatter, evaluator, excelRowNumber, null);
-        if (unshippedQty == null) {
-            unshippedQty = qty - shippedQty;
-        }
         if (qty <= 0) {
             throw rowError(excelRowNumber, QTY, "\u5fc5\u987b\u5927\u4e8e 0");
         }
-        if (shippedQty < 0 || unshippedQty < 0) {
-            throw rowError(excelRowNumber, QTY, "\u5df2\u51fa\u6570\u91cf\u548c\u672a\u51fa\u6570\u91cf\u4e0d\u80fd\u5c0f\u4e8e 0");
-        }
+        Integer shippedQty = 0;
+        Integer unshippedQty = qty;
 
-        BigDecimal taxIncludedUnitPrice = requiredDecimal(row, headerIndexes, TAX_INCLUDED_UNIT_PRICE, formatter, evaluator, excelRowNumber);
-        BigDecimal untaxedUnitPrice = requiredDecimal(row, headerIndexes, UNTAXED_UNIT_PRICE, formatter, evaluator, excelRowNumber);
+        BigDecimal taxIncludedUnitPrice = optionalDecimal(row, headerIndexes, TAX_INCLUDED_UNIT_PRICE, formatter, evaluator, excelRowNumber);
+        BigDecimal untaxedUnitPrice = optionalDecimal(row, headerIndexes, UNTAXED_UNIT_PRICE, formatter, evaluator, excelRowNumber);
         BigDecimal untaxedTotalPrice = optionalDecimal(row, headerIndexes, UNTAXED_TOTAL_PRICE, formatter, evaluator, excelRowNumber);
-        if (untaxedTotalPrice == null) {
+        if (untaxedTotalPrice == null && untaxedUnitPrice != null) {
             untaxedTotalPrice = untaxedUnitPrice.multiply(BigDecimal.valueOf(qty));
         }
 
@@ -164,7 +153,7 @@ public class SalesOrderQpoExcelParser {
         line.setCustomerProjectNo(optionalText(row, headerIndexes, CUSTOMER_PROJECT_NO, formatter, evaluator));
         line.setCustomerOrderTitle(optionalText(row, headerIndexes, CUSTOMER_ORDER_TITLE, formatter, evaluator));
         line.setOrderType(requiredText(row, headerIndexes, ORDER_TYPE, formatter, evaluator, excelRowNumber));
-        line.setSalesMaterialNo(optionalText(row, headerIndexes, SALES_MATERIAL_NO, formatter, evaluator));
+        line.setSalesMaterialNo(null);
         line.setInternalProjectNo(requiredText(row, headerIndexes, INTERNAL_PROJECT_NO, formatter, evaluator, excelRowNumber));
         line.setCustomerDeliveryDate(optionalDate(row, headerIndexes, CUSTOMER_DELIVERY_DATE, formatter, evaluator, excelRowNumber));
         line.setInternalDeliveryDate(optionalDate(row, headerIndexes, INTERNAL_DELIVERY_DATE, formatter, evaluator, excelRowNumber));
@@ -178,7 +167,7 @@ public class SalesOrderQpoExcelParser {
         line.setVersion(requiredText(row, headerIndexes, VERSION, formatter, evaluator, excelRowNumber));
         line.setTaxIncludedUnitPrice(taxIncludedUnitPrice);
         line.setUntaxedUnitPrice(untaxedUnitPrice);
-        line.setTaxIncludedTotalPrice(taxIncludedUnitPrice.multiply(BigDecimal.valueOf(qty)));
+        line.setTaxIncludedTotalPrice(taxIncludedUnitPrice == null ? null : taxIncludedUnitPrice.multiply(BigDecimal.valueOf(qty)));
         line.setUntaxedTotalPrice(untaxedTotalPrice);
         line.setActualShipDate(optionalDate(row, headerIndexes, ACTUAL_SHIP_DATE, formatter, evaluator, excelRowNumber));
         line.setRemark(optionalText(row, headerIndexes, REMARK, formatter, evaluator));

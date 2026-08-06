@@ -14,6 +14,10 @@ public class SalesOrderQpoExcelLineDTO {
     private String customerProjectNo;
     private String customerOrderTitle;
     private String orderType;
+    /**
+     * @deprecated 新销售订单模板不再导入销售料号；正式物料号只由 MES 回写 materialNo。
+     */
+    @Deprecated
     private String salesMaterialNo;
     private String internalProjectNo;
     private LocalDate customerDeliveryDate;
