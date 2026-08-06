@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.machining.quote.config.JsonbTypeHandler;
 import lombok.Data;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @TableName(value = "item_quote_version", autoResultMap = true) // 必须加 autoResultMap 开启黑魔法
@@ -37,6 +38,12 @@ public class ItemQuoteVersion {
 
     // 👇 市场部 Excel 导入新增的 5 个业务字段 👇
     private String materialName;      // 材料名称
+    private String materialNo;
+    private String materialNoStatus;
+    private String materialNoSource;
+    private Long materialNoSourceTicketId;
+    private LocalDateTime materialNoSyncedAt;
+    private String materialNoMessage;
     private String engineeringMaterialName; // 工程核价选择的材料
     private String materialShape;
     private String surfaceTreatment;  // 表面处理
