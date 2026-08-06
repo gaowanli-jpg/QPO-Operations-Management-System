@@ -45,7 +45,8 @@ public class SalesOrderQpoImportService {
     private static final String DEFAULT_DOCUMENT_TYPE_CODE = "SO01";
     private static final String QUOTED = "已报价";
     private static final String UNMATCHED = "未匹配";
-    private static final String WAITING_SNAPSHOT_MESSAGE = "已导入价格，未补齐历史生产快照";
+    private static final String MATERIAL_UNCONFIRMED = "未确认";
+    private static final String WAITING_SNAPSHOT_MESSAGE = "已导入销售订单，未补齐历史生产快照";
 
     @Autowired
     private SalesOrderQpoExcelParser excelParser;
@@ -336,16 +337,21 @@ public class SalesOrderQpoImportService {
         headerMapper.updateById(update);
         header.setImportRecordId(record.getId());
 
+        int missingPriceCount = 0;
         for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
             SalesOrderItem item = toItem(header, line, now);
             applyDrawingBinding(item, line, drawingBinding);
             itemMapper.insert(item);
+            if (isMissingPrice(line)) {
+                missingPriceCount++;
+            }
         }
 
         return new CreatedSalesOrder(
                 header.getId(),
                 header.getSalesOrderNo(),
                 group.getLines().size(),
+                missingPriceCount,
                 drawingBinding.groupSummary(group));
     }
 
@@ -389,8 +395,9 @@ public class SalesOrderQpoImportService {
         item.setCustomerOrderNo(line.getCustomerOrderNo());
         item.setCustomerProjectNo(line.getCustomerProjectNo());
         item.setInternalProjectNo(line.getInternalProjectNo());
-        item.setSalesMaterialNo(line.getSalesMaterialNo());
-        item.setMaterialNo(isBlank(line.getSalesMaterialNo()) ? null : line.getSalesMaterialNo());
+        item.setSalesMaterialNo(null);
+        item.setMaterialNo(null);
+        item.setMaterialNoStatus(MATERIAL_UNCONFIRMED);
         item.setCustomerDeliveryDate(line.getCustomerDeliveryDate());
         item.setInternalDeliveryDate(line.getInternalDeliveryDate());
         item.setMaterialName(line.getMaterialName());
@@ -445,6 +452,7 @@ public class SalesOrderQpoImportService {
         resp.setBatchNo(batchNo);
         resp.setTotalOrderCount(parseResult.getOrderCount());
         resp.setTotalLineCount(parseResult.getLineCount());
+        resp.setMissingPriceCount(missingPriceCount(parseResult));
         resp.setDrawingReport(drawingBinding.report());
         return resp;
     }
@@ -460,6 +468,7 @@ public class SalesOrderQpoImportService {
         row.setLineCount(group.getLines().size());
         row.setMatchedItemCount(created.matchedItemCount());
         row.setUnmatchedItemCount(created.unmatchedItemCount());
+        row.setMissingPriceCount(created.missingPriceCount());
         row.setUploadedDrawingCount(created.drawingSummary().uploadedDrawingCount());
         row.setMatchedDrawingCount(created.drawingSummary().matchedItemCount());
         row.setMissingDrawingCount(created.drawingSummary().missingDrawingCount());
@@ -513,6 +522,7 @@ public class SalesOrderQpoImportService {
         summary.put("unmatchedItemCount", resp.getRows().stream()
                 .mapToInt(row -> row.getUnmatchedItemCount() == null ? 0 : row.getUnmatchedItemCount())
                 .sum());
+        summary.put("missingPriceCount", resp.getMissingPriceCount() == null ? 0 : resp.getMissingPriceCount());
         Map<String, Object> drawingReport = resp.getDrawingReport();
         if (drawingReport != null) {
             summary.put("uploadedDrawingCount", drawingReport.get("uploadedDrawingCount"));
@@ -605,6 +615,29 @@ public class SalesOrderQpoImportService {
 
     private int intValue(Object value) {
         return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private int missingPriceCount(SalesOrderQpoExcelParseResult parseResult) {
+        if (parseResult == null || parseResult.getOrders() == null) {
+            return 0;
+        }
+        int count = 0;
+        for (SalesOrderQpoOrderGroupDTO group : parseResult.getOrders()) {
+            if (group == null || group.getLines() == null) {
+                continue;
+            }
+            for (SalesOrderQpoExcelLineDTO line : group.getLines()) {
+                if (isMissingPrice(line)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private boolean isMissingPrice(SalesOrderQpoExcelLineDTO line) {
+        return line == null
+                || (line.getTaxIncludedUnitPrice() == null && line.getUntaxedUnitPrice() == null);
     }
 
     private boolean isPdfDrawing(MultipartFile drawing) {
@@ -810,6 +843,7 @@ public class SalesOrderQpoImportService {
             Long salesOrderId,
             String salesOrderNo,
             int itemCount,
+            int missingPriceCount,
             DrawingSummary drawingSummary) {
         private int matchedItemCount() {
             return 0;

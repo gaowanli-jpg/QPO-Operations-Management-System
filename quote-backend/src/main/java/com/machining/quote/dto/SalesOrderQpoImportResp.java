@@ -15,6 +15,7 @@ public class SalesOrderQpoImportResp {
     private Integer successOrderCount;
     private Integer failedOrderCount;
     private Integer totalLineCount;
+    private Integer missingPriceCount;
     private String errorMessage;
     private Map<String, Object> drawingReport;
     private List<SalesOrderQpoImportResultRow> rows = new ArrayList<>();

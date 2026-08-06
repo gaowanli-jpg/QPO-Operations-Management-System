@@ -139,12 +139,15 @@ class SalesOrderQpoImportStage3Test {
         assertThat(resp.getRows().get(0).getLineCount()).isEqualTo(2);
         assertThat(resp.getRows().get(0).getMatchedItemCount()).isZero();
         assertThat(resp.getRows().get(0).getUnmatchedItemCount()).isEqualTo(2);
+        assertThat(ReflectionTestUtils.getField(resp.getRows().get(0), "missingPriceCount")).isEqualTo(0);
         assertThat(resp.getRows().get(0).getWarningMessage())
                 .contains("\u672a\u8865\u9f50\u5386\u53f2\u751f\u4ea7\u5feb\u7167");
         assertThat(resp.getRows().get(1).getMatchedItemCount()).isZero();
         assertThat(resp.getRows().get(1).getUnmatchedItemCount()).isEqualTo(1);
+        assertThat(ReflectionTestUtils.getField(resp.getRows().get(1), "missingPriceCount")).isEqualTo(0);
         assertThat(resp.getRows().get(1).getWarningMessage())
                 .contains("\u672a\u8865\u9f50\u5386\u53f2\u751f\u4ea7\u5feb\u7167");
+        assertThat(ReflectionTestUtils.getField(resp, "missingPriceCount")).isEqualTo(0);
 
         ArgumentCaptor<SalesOrderImportBatch> batchCaptor = ArgumentCaptor.forClass(SalesOrderImportBatch.class);
         verify(batchMapper).insert(batchCaptor.capture());
@@ -182,8 +185,12 @@ class SalesOrderQpoImportStage3Test {
         assertThat(firstItem.getPartNo()).isEqualTo("P-001");
         assertThat(firstItem.getVersion()).isEqualTo("A");
         assertThat(firstItem.getQty()).isEqualTo(10);
-        assertThat(firstItem.getSalesMaterialNo()).isEqualTo("MAT-001");
-        assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
+        assertThat(firstItem.getSalesMaterialNo()).isNull();
+        assertThat(firstItem.getMaterialNo()).isNull();
+        assertThat(firstItem.getMaterialNoStatus()).isEqualTo("未确认");
+        assertThat(firstItem.getMaterialNoSource()).isNull();
+        assertThat(firstItem.getMaterialNoSourceTicketId()).isNull();
+        assertThat(firstItem.getMaterialNoSyncedAt()).isNull();
         assertThat(firstItem.getTaxIncludedUnitPrice()).isEqualByComparingTo(new BigDecimal("11.30"));
         assertThat(firstItem.getUntaxedUnitPrice()).isEqualByComparingTo(new BigDecimal("10.00"));
         assertThat(firstItem.getTaxIncludedTotalPrice()).isEqualByComparingTo(new BigDecimal("113.00"));
@@ -193,8 +200,9 @@ class SalesOrderQpoImportStage3Test {
         assertThat(firstItem.getRemainingQty()).isEqualTo(10);
         assertThat(firstItem.getStatus()).isEqualTo("已报价");
         SalesOrderItem secondItem = itemCaptor.getAllValues().get(1);
-        assertThat(secondItem.getSalesMaterialNo()).isEmpty();
+        assertThat(secondItem.getSalesMaterialNo()).isNull();
         assertThat(secondItem.getMaterialNo()).isNull();
+        assertThat(secondItem.getMaterialNoStatus()).isEqualTo("未确认");
 
         ArgumentCaptor<SalesOrderImportRecord> recordCaptor = ArgumentCaptor.forClass(SalesOrderImportRecord.class);
         verify(recordMapper, org.mockito.Mockito.times(2)).insert(recordCaptor.capture());
@@ -228,6 +236,89 @@ class SalesOrderQpoImportStage3Test {
                 eq("导入销售订单到独立主表"),
                 isNull()
         );
+    }
+
+    @Test
+    void serviceAllowsBlankPricesAndReportsMissingPriceCount() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                auditService
+        );
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(301L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(401L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+
+        SalesOrderQpoImportResp resp = service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01"
+        );
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getTotalLineCount()).isEqualTo(2);
+        assertThat(ReflectionTestUtils.getField(resp, "missingPriceCount")).isEqualTo(1);
+        assertThat(ReflectionTestUtils.getField(resp.getRows().get(0), "missingPriceCount")).isEqualTo(1);
+
+        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(itemMapper, org.mockito.Mockito.times(2)).insert(itemCaptor.capture());
+        SalesOrderItem blankPriceItem = itemCaptor.getAllValues().get(0);
+        assertThat(blankPriceItem.getPartNo()).isEqualTo("P-BLANK");
+        assertThat(blankPriceItem.getTaxIncludedUnitPrice()).isNull();
+        assertThat(blankPriceItem.getUntaxedUnitPrice()).isNull();
+        assertThat(blankPriceItem.getTaxIncludedTotalPrice()).isNull();
+        assertThat(blankPriceItem.getUntaxedTotalPrice()).isNull();
+        assertThat(blankPriceItem.getFinalUnitPrice()).isNull();
+        assertThat(blankPriceItem.getFinalTotalPrice()).isNull();
+        assertThat(blankPriceItem.getMaterialNo()).isNull();
+        assertThat(blankPriceItem.getMaterialNoStatus()).isEqualTo("未确认");
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("SALES_ORDER_IMPORT_QPO"),
+                eq("sales_order_import_batch"),
+                eq(201L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("missingPriceCount", 1);
     }
 
     @Test
@@ -647,6 +738,25 @@ class SalesOrderQpoImportStage3Test {
         return result;
     }
 
+    private SalesOrderQpoExcelParseResult parseResultWithBlankPrices() {
+        SalesOrderQpoExcelParseResult result = new SalesOrderQpoExcelParseResult();
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey("PO-001|IP-001");
+        group.setCustomerOrderNo("PO-001");
+        group.setInternalProjectNo("IP-001");
+        group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        group.setCustomerProjectNo("CP-001");
+        group.setCustomerOrderTitle("GSQ1");
+        group.setOrderType("样品订单");
+        group.setLines(List.of(blankPriceLine(1, "P-BLANK", "A"), line(2, "P-PRICED", "A", "MAT-OLD", 3)));
+
+        result.setOrders(List.of(group));
+        result.setOrderCount(1);
+        result.setLineCount(2);
+        result.setSourceRowCount(2);
+        return result;
+    }
+
     private BusinessFileService salesOrderImportDrawingStorage() {
         return mock(BusinessFileService.class, invocation -> {
             if ("saveSalesOrderImportDrawing".equals(invocation.getMethod().getName())) {
@@ -695,6 +805,15 @@ class SalesOrderQpoImportStage3Test {
         line.setUntaxedTotalPrice(new BigDecimal("100.00"));
         line.setActualShipDate(LocalDate.of(2026, 8, 9));
         line.setRemark("remark");
+        return line;
+    }
+
+    private SalesOrderQpoExcelLineDTO blankPriceLine(int lineNo, String partNo, String version) {
+        SalesOrderQpoExcelLineDTO line = line(lineNo, partNo, version, "", 2);
+        line.setTaxIncludedUnitPrice(null);
+        line.setUntaxedUnitPrice(null);
+        line.setTaxIncludedTotalPrice(null);
+        line.setUntaxedTotalPrice(null);
         return line;
     }
 }

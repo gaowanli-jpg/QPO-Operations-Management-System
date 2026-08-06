@@ -289,6 +289,9 @@
                   <el-tag type="info">合计 {{ salesOrderImportResult.totalOrderCount || 0 }}</el-tag>
                   <el-tag type="success">成功 {{ salesOrderImportResult.successOrderCount || 0 }}</el-tag>
                   <el-tag type="success">图纸绑定 {{ salesOrderImportResult.drawingReport?.matchedItemCount || 0 }}</el-tag>
+                  <el-tag :type="salesOrderImportResult.missingPriceCount > 0 ? 'warning' : 'info'">
+                    缺价格 {{ salesOrderImportResult.missingPriceCount || 0 }}
+                  </el-tag>
                   <el-tag :type="salesOrderImportResult.drawingReport?.missingDrawingCount > 0 ? 'warning' : 'info'">
                     缺图 {{ salesOrderImportResult.drawingReport?.missingDrawingCount || 0 }}
                   </el-tag>
@@ -319,6 +322,7 @@
                 <el-table-column prop="lineCount" label="零件数" width="90" align="right" />
                 <el-table-column prop="matchedItemCount" label="已补全数" width="110" align="right" />
                 <el-table-column prop="unmatchedItemCount" label="待销售匹配" width="130" align="right" />
+                <el-table-column prop="missingPriceCount" label="缺价格" width="100" align="right" />
                 <el-table-column prop="matchedDrawingCount" label="图纸绑定数" width="120" align="right" />
                 <el-table-column prop="missingDrawingCount" label="缺图数" width="100" align="right" />
                 <el-table-column prop="status" label="状态" width="120" align="center">

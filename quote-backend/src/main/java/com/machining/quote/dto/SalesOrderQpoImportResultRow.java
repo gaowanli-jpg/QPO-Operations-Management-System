@@ -13,6 +13,7 @@ public class SalesOrderQpoImportResultRow {
     private Integer lineCount;
     private Integer matchedItemCount;
     private Integer unmatchedItemCount;
+    private Integer missingPriceCount;
     private Integer uploadedDrawingCount;
     private Integer matchedDrawingCount;
     private Integer missingDrawingCount;
