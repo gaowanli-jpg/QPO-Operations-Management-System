@@ -91,7 +91,7 @@ describe('QPO workflow page polish', () => {
     ])
   })
 
-  test('allows released orders in release picker while keeping item selection guarded', () => {
+  test('excludes fully released orders from release picker while keeping item selection guarded', () => {
     const source = readComponent('MarketRelease.vue')
 
     expectIncludes(source, 'MarketRelease.vue', [
@@ -99,7 +99,7 @@ describe('QPO workflow page polish', () => {
       "row.status !== '已生成提单'",
       "remainingQtyFor(row) > 0"
     ])
-    expect(source).toContain("const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']")
+    expect(source).toContain("const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']")
   })
 
   test('lays out manual internal target date as one compact control row', () => {

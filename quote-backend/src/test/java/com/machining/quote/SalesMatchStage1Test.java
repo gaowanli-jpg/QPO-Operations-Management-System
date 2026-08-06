@@ -15,7 +15,7 @@ class SalesMatchStage1Test {
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path PERMISSION_DOC = Path.of(
-            "..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
+            "..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
 
     @Test
     void migrationAddsSalesMatchPermissionAndAssemblySchema() throws IOException {
@@ -47,16 +47,16 @@ class SalesMatchStage1Test {
     }
 
     @Test
-    void fallbackPermissionCatalogExposesSalesMatchMenuBetweenImportAndQuoteProcess() throws IOException {
+    void fallbackPermissionCatalogExposesAnomalyGovernanceMenuWithCompatibleSalesMatchCodes() throws IOException {
         String permissionService = read(PERMISSION_SERVICE);
 
         assertThat(permissionService)
                 .contains(
-                        "permission(181L, \"MENU\", \"market:sales-match:view\", \"销售匹配\", \"/sales-match\", \"SalesMatch\", true, 120)",
-                        "permission(182L, \"API\", \"market:sales-match:customer-select\", \"销售匹配选择客户\", null, null, false, 121, 181L)",
-                        "permission(183L, \"API\", \"market:sales-match:order-select\", \"销售匹配选择订单\", null, null, false, 122, 181L)",
-                        "permission(184L, \"BUTTON\", \"market:sales-match:apply\", \"确认销售匹配补全\", null, null, false, 123, 181L)",
-                        "permission(185L, \"API\", \"market:sales-match:file-preview\", \"销售匹配预览图纸\", null, null, false, 124, 181L)",
+                        "permission(181L, \"MENU\", \"market:sales-match:view\", \"异常治理\", \"/sales-match\", \"SalesMatch\", true, 120)",
+                        "permission(182L, \"API\", \"market:sales-match:customer-select\", \"异常治理选择客户\", null, null, false, 121, 181L)",
+                        "permission(183L, \"API\", \"market:sales-match:order-select\", \"异常治理选择订单\", null, null, false, 122, 181L)",
+                        "permission(184L, \"BUTTON\", \"market:sales-match:apply\", \"补全异常快照\", null, null, false, 123, 181L)",
+                        "permission(185L, \"API\", \"market:sales-match:file-preview\", \"异常治理预览图纸\", null, null, false, 124, 181L)",
                         "Map.entry(\"market:sales-match:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
                         "Map.entry(\"market:sales-match:apply\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
                 );
@@ -66,17 +66,18 @@ class SalesMatchStage1Test {
     }
 
     @Test
-    void permissionDocumentationListsSalesMatchModule() throws IOException {
+    void permissionDocumentationListsAnomalyGovernanceWithCompatibleCodes() throws IOException {
         String permissionDoc = read(PERMISSION_DOC);
 
         assertThat(permissionDoc)
                 .contains(
-                        "| 销售匹配 | `market:sales-match:view` |",
-                        "| `market:sales-match:view` | 销售匹配 |",
-                        "| `market:sales-match:customer-select` | 销售匹配选择客户 |",
-                        "| `market:sales-match:order-select` | 销售匹配选择订单 |",
-                        "| `market:sales-match:apply` | 确认销售匹配补全 |",
-                        "| `market:sales-match:file-preview` | 销售匹配预览图纸 |",
+                        "异常治理页面仍复用兼容权限 code `market:sales-match:*`",
+                        "| 异常治理 | `market:sales-match:view` |",
+                        "| `market:sales-match:view` | 异常治理 |",
+                        "| `market:sales-match:customer-select` | 异常治理选择客户 |",
+                        "| `market:sales-match:order-select` | 异常治理选择订单 |",
+                        "| `market:sales-match:apply` | 补全异常快照 |",
+                        "| `market:sales-match:file-preview` | 异常治理预览图纸 |",
                         "| `/sales-match` | MARKET, READONLY, ADMIN | market:sales-match:view |"
                 )
                 .doesNotContain("common:sales-match");

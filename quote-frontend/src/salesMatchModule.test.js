@@ -7,21 +7,21 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 describe('sales match module', () => {
-  test('adds sales match route guarded by its own menu permission', () => {
+  test('keeps the anomaly governance route guarded by the compatible sales-match permission', () => {
     const router = readSource('router', 'index.js')
 
     expect(router).toContain("const SalesMatch = () => import('../components/SalesMatch.vue')")
     expect(router).toContain("{ path: '/sales-match', component: SalesMatch, meta: { permission: 'market:sales-match:view' } }")
   })
 
-  test('places sales match between new import and quote process in the market sidebar', () => {
+  test('places anomaly governance between new import and quote process in the market sidebar', () => {
     const app = readSource('App.vue')
 
     expect(app).toContain("paths: ['/market', '/sales-match', '/quote-process'")
-    expect(app).toContain("'/sales-match': { title: '销售匹配', permission: 'market:sales-match:view'")
+    expect(app).toContain("'/sales-match': { title: '异常治理', permission: 'market:sales-match:view'")
 
     const importIndex = app.indexOf("'/market': { title: '新单导入'")
-    const salesMatchIndex = app.indexOf("'/sales-match': { title: '销售匹配'")
+    const salesMatchIndex = app.indexOf("'/sales-match': { title: '异常治理'")
     const quoteProcessIndex = app.indexOf("'/quote-process': { title: '报价处理'")
 
     expect(importIndex).toBeGreaterThanOrEqual(0)
@@ -29,14 +29,15 @@ describe('sales match module', () => {
     expect(quoteProcessIndex).toBeGreaterThan(salesMatchIndex)
   })
 
-  test('creates a standard sales match page using QPO layout', () => {
+  test('creates a standard anomaly governance page using QPO layout', () => {
     const componentPath = resolve(currentDir, 'components', 'SalesMatch.vue')
     expect(existsSync(componentPath)).toBe(true)
 
     const component = readSource('components', 'SalesMatch.vue')
     expect(component).toContain('class="erp-page sales-match-page"')
     expect(component).toContain('class="erp-page-header sales-match-header"')
-    expect(component).toContain('<h1 class="erp-page-title">销售匹配</h1>')
+    expect(component).toContain('<h1 class="erp-page-title">异常治理</h1>')
+    expect(component).toContain('用于排查历史销售订单或自动补全异常，不作为新销售订单日常流程入口。')
     expect(component).toContain('workflow-workspace sales-match-workspace')
     expect(component).toContain('sales-match-side-panel')
     expect(component).toContain('sales-match-main-panel')
@@ -55,7 +56,7 @@ describe('sales match module', () => {
     expect(component).toContain('openOrderPicker')
     expect(component).toContain('handleOrderSelected')
     expect(component).toContain('orderPickerVisible')
-    expect(component).toContain('选择销售订单')
+    expect(component).toContain('选择异常订单')
     expect(component).not.toContain('选择RFQ')
     expect(component).not.toContain('RFQ订单选择')
     expect(component).not.toContain('询价单选择')
@@ -139,7 +140,8 @@ describe('sales match module', () => {
     expect(component).toContain('材料形态')
     expect(component).toContain('空缺生产快照')
     expect(component).toContain('保护字段摘要')
-    expect(component).toContain('补全生产快照')
+    expect(component).toContain('补全异常快照')
+    expect(component).toContain('异常治理只能处理已报价销售订单。')
     expect(component).toContain('applySalesOrderMatchByOrder(selectedOrderId.value)')
     expect(component).not.toContain('applyAllMatchedInSelectedOrders')
   })

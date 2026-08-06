@@ -1,12 +1,23 @@
 package com.machining.quote;
 
+import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.PageResult;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.service.OrderManagementService;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class SalesOrderReleaseSourceStage5Test {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java", "com", "machining", "quote");
@@ -29,7 +40,7 @@ class SalesOrderReleaseSourceStage5Test {
     }
 
     @Test
-    void releaseOrderSelectionReturnsSourceAwareRfqAndSalesOrderRows() throws Exception {
+    void releaseOrderSelectionReturnsOnlyRfqRows() throws Exception {
         String marketController = source("controller", "MarketController.java");
         String orderService = source("service", "OrderManagementService.java");
 
@@ -39,10 +50,38 @@ class SalesOrderReleaseSourceStage5Test {
                 .contains("orderManagementService.listReleaseOrderSources");
         assertThat(orderService)
                 .contains("public PageResult<Map<String, Object>> listReleaseOrderSources")
+                .contains("listReleaseCandidateOrders(customerName, keyword, status, safePage, safePageSize)")
                 .contains("\"sourceType\", \"RFQ\"")
-                .contains("\"sourceType\", \"SALES_ORDER\"")
                 .contains("\"sourceOrderId\"")
-                .contains("salesOrderHeaderMapper");
+                .doesNotContain("salesOrderHeaderMapper")
+                .doesNotContain("listReleaseSalesOrderCandidates")
+                .doesNotContain("buildReleaseSalesOrderSourceRow");
+    }
+
+    @Test
+    void releaseOrderSelectionUsesOnlyRfqMapperForUiCandidates() {
+        OrderManagementService service = new OrderManagementService();
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        ReflectionTestUtils.setField(service, "orderMapper", orderMapper);
+
+        OrderRfq rfq = new OrderRfq();
+        rfq.setId(1001);
+        rfq.setRfqNo("RFQ-1001");
+        rfq.setCustomerName("ACME");
+        rfq.setStatus(QuoteStatusWorkflow.QUOTED);
+
+        when(orderMapper.selectCount(any())).thenReturn(1L);
+        when(orderMapper.selectList(any())).thenReturn(List.of(rfq));
+
+        PageResult<Map<String, Object>> page = service.listReleaseOrderSources(null, null, null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0))
+                .containsEntry("sourceType", "RFQ")
+                .containsEntry("sourceOrderNo", "RFQ-1001");
+        assertThat(OrderManagementService.class.getDeclaredFields())
+                .extracting("name")
+                .doesNotContain("salesOrderHeaderMapper");
     }
 
     @Test

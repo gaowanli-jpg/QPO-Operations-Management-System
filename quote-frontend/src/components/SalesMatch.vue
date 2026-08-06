@@ -2,8 +2,8 @@
   <section class="erp-page sales-match-page">
     <header class="erp-page-header sales-match-header">
       <div>
-        <h1 class="erp-page-title">销售匹配</h1>
-        <p class="erp-page-description">选择已报价销售订单，预览历史生产快照命中情况，并按整单补全空缺生产信息。</p>
+        <h1 class="erp-page-title">异常治理</h1>
+        <p class="erp-page-description">用于排查历史销售订单或自动补全异常，不作为新销售订单日常流程入口。</p>
       </div>
       <div class="erp-page-actions sales-match-header-actions">
         <el-button
@@ -12,7 +12,7 @@
           type="primary"
           @click="openOrderPicker"
         >
-          选择销售订单
+          选择异常订单
         </el-button>
         <el-button :loading="previewLoading" @click="refreshCurrentState">刷新</el-button>
         <el-tooltip :disabled="!applyDisabledReason" :content="applyDisabledReason" placement="top">
@@ -24,7 +24,7 @@
               :disabled="!canApply"
               @click="applyMatch"
             >
-              补全生产快照
+              补全异常快照
             </el-button>
           </span>
         </el-tooltip>
@@ -168,7 +168,7 @@
           stripe
           height="640"
           v-loading="previewLoading"
-          empty-text="请先选择销售订单"
+          empty-text="请先选择异常订单"
         >
           <el-table-column prop="partNo" label="图号" min-width="140" fixed show-overflow-tooltip />
           <el-table-column prop="lineNo" label="行号" width="72" align="center" />
@@ -224,7 +224,7 @@
 
     <OrderPickerDialog
       v-model="orderPickerVisible"
-      title="选择销售订单"
+      title="选择异常销售订单"
       customer-scope="sales-match"
       order-scope="sales-match"
       :allowed-statuses="SALES_MATCH_ALLOWED_STATUSES"
@@ -312,17 +312,17 @@ const customerDisplay = computed(() => {
 })
 
 const itemPanelTitle = computed(() => {
-  if (!selectedOrder.value) return '请点击右上角选择已报价销售订单。'
+  if (!selectedOrder.value) return '请点击右上角选择已报价异常订单。'
   if (previewLoading.value) return '正在加载销售订单整单零件预览。'
   return `${selectedOrder.value.salesOrderNo || '未编号销售订单'} / ${selectedOrder.value.customerName || '未指定客户'}`
 })
 
 const applyDisabledReason = computed(() => {
-  if (isPending(salesMatchActionKeys.apply)) return '销售匹配补全正在提交，请稍候。'
-  if (!selectedOrder.value) return '请先选择已报价销售订单。'
-  if (previewLoading.value) return '正在加载销售订单匹配预览。'
-  if (currentOrderStatus.value !== '已报价') return '销售匹配只能处理已报价销售订单。'
-  if (!previewData.value) return '请先选择销售订单并加载整单预览。'
+  if (isPending(salesMatchActionKeys.apply)) return '异常快照补全正在提交，请稍候。'
+  if (!selectedOrder.value) return '请先选择已报价异常订单。'
+  if (previewLoading.value) return '正在加载异常治理预览。'
+  if (currentOrderStatus.value !== '已报价') return '异常治理只能处理已报价销售订单。'
+  if (!previewData.value) return '请先选择异常订单并加载整单预览。'
   return ''
 })
 
@@ -347,7 +347,7 @@ const normalizeSalesOrder = (order = {}) => {
 const handleOrderSelected = async (order) => {
   const normalized = normalizeSalesOrder(order)
   if (!normalized.salesOrderId) {
-    ElMessage.warning('请选择有效的销售订单。')
+    ElMessage.warning('请选择有效的异常订单。')
     return
   }
   selectedOrder.value = normalized
@@ -359,7 +359,7 @@ const handleOrderSelected = async (order) => {
 
 const refreshCurrentState = async () => {
   if (!selectedOrder.value) {
-    ElMessage.warning('请先选择销售订单。')
+    ElMessage.warning('请先选择异常订单。')
     return
   }
   await previewSelectedOrder({ silent: false, preserveResult: true })
@@ -367,7 +367,7 @@ const refreshCurrentState = async () => {
 
 const previewSelectedOrder = async ({ silent = false, preserveResult = false } = {}) => {
   if (!selectedOrderId.value) {
-    if (!silent) ElMessage.warning('请先选择销售订单。')
+    if (!silent) ElMessage.warning('请先选择异常订单。')
     return
   }
   previewLoading.value = true
@@ -389,7 +389,7 @@ const previewSelectedOrder = async ({ silent = false, preserveResult = false } =
     if (!preserveResult) {
       applyResult.value = null
     }
-    ElMessage.error(requestErrorMessage(error, '销售匹配预览失败。'))
+    ElMessage.error(requestErrorMessage(error, '异常治理预览失败。'))
   } finally {
     previewLoading.value = false
   }
@@ -404,7 +404,7 @@ const applyMatch = async () => {
     try {
       await ElMessageBox.confirm(
         `确认对销售订单 ${selectedOrder.value.salesOrderNo || ''} 整单补全空缺生产快照？导入材料、表面处理、图纸、价格、数量、交期、客户字段和物料号不会被改写。`,
-        '确认补全生产快照',
+        '确认补全异常快照',
         {
           type: 'warning',
           confirmButtonText: '确认补全',
@@ -418,13 +418,13 @@ const applyMatch = async () => {
       const response = await applySalesOrderMatchByOrder(selectedOrderId.value)
       applyResult.value = response || {}
       if (response?.success === false) {
-        ElMessage.warning(response?.message || '销售匹配补全返回失败，请查看补全结果。')
+        ElMessage.warning(response?.message || '异常快照补全返回失败，请查看补全结果。')
       } else {
-        ElMessage.success(response?.message || '销售匹配补全完成。')
+        ElMessage.success(response?.message || '异常快照补全完成。')
       }
       await previewSelectedOrder({ silent: true, preserveResult: true })
     } catch (error) {
-      ElMessage.error(requestErrorMessage(error, '销售匹配补全失败。'))
+      ElMessage.error(requestErrorMessage(error, '异常快照补全失败。'))
     }
   })
 }

@@ -47,14 +47,14 @@ class SalesOrderMatchStage5DocumentationTest {
     }
 
     @Test
-    void permissionDocStatesPhase5ReusesExistingSalesMatchPermissions() throws IOException {
+    void permissionDocStatesAnomalyGovernanceReusesExistingSalesMatchCodes() throws IOException {
         assertThat(read(PERMISSION_DOC))
                 .contains(
-                        "销售匹配订单级工作台阶段 5 不新增权限",
-                        "继续复用 `market:sales-match:*`",
-                        "`market:sales-match:view` 控制页面入口和订单级预览",
-                        "`market:sales-match:order-select` 控制共享销售订单选择弹窗",
-                        "`market:sales-match:apply` 控制整单补全生产快照")
+                        "异常治理页面仍复用兼容权限 code `market:sales-match:*`",
+                        "| 异常治理 | `market:sales-match:view` |",
+                        "`market:sales-match:view` 控制左侧“异常治理”入口",
+                        "`market:sales-match:order-select` 控制异常治理销售订单选择",
+                        "`market:sales-match:apply` 控制补全异常快照写操作")
                 .doesNotContain(
                         "market:sales-match:item-select",
                         "market:sales-match:overwrite");

@@ -8,11 +8,9 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
-import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
-import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.util.DrawingPartNoResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +39,6 @@ public class OrderManagementService {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
-    @Autowired
-    private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired
     private OrderFilePathService orderFilePathService;
     @Autowired
@@ -160,17 +156,11 @@ public class OrderManagementService {
             Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        rows.addAll(listOrders(customerName, keyword, status, 1, 100).getRecords().stream()
+        PageResult<OrderRfq> rfqPage = listReleaseCandidateOrders(customerName, keyword, status, safePage, safePageSize);
+        List<Map<String, Object>> rows = rfqPage.getRecords().stream()
                 .map(this::buildReleaseRfqSourceRow)
-                .toList());
-        rows.addAll(listReleaseSalesOrderCandidates(customerName, keyword, status).stream()
-                .map(this::buildReleaseSalesOrderSourceRow)
-                .toList());
-        rows.sort((left, right) -> Long.compare(safeLong(right.get("sortId")), safeLong(left.get("sortId"))));
-        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
-        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
-        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
+                .toList();
+        return PageResult.of(rows, rfqPage.getTotal(), safePage, safePageSize);
     }
 
     public List<String> listCustomers() {
@@ -503,25 +493,6 @@ public class OrderManagementService {
         return summary;
     }
 
-    private List<SalesOrderHeader> listReleaseSalesOrderCandidates(String customerName, String keyword, String status) {
-        if (salesOrderHeaderMapper == null) {
-            return List.of();
-        }
-        String normalizedStatus = isBlank(status) ? null : status.trim();
-        if (normalizedStatus != null && !QuoteStatusWorkflow.canReadReleaseWorkspace(normalizedStatus)) {
-            return List.of();
-        }
-        QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
-        applySalesOrderFilters(query, customerName, keyword, status);
-        if (normalizedStatus == null) {
-            query.in("status", QuoteStatusWorkflow.QUOTED, QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
-        }
-        query.orderByDesc("id").last("LIMIT 100");
-        return salesOrderHeaderMapper.selectList(query).stream()
-                .filter(this::canAccessSalesOrder)
-                .toList();
-    }
-
     private Map<String, Object> buildReleaseRfqSourceRow(OrderRfq order) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", order.getId());
@@ -535,69 +506,6 @@ public class OrderManagementService {
         row.put("createdAt", order.getCreatedAt());
         row.put("sortId", order.getId());
         return row;
-    }
-
-    private Map<String, Object> buildReleaseSalesOrderSourceRow(SalesOrderHeader order) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("id", order.getId());
-        row.put("sourceType", "SALES_ORDER");
-        row.put("sourceOrderId", order.getId());
-        row.put("sourceOrderNo", order.getSalesOrderNo());
-        row.put("salesOrderNo", order.getSalesOrderNo());
-        row.put("customerName", order.getCustomerName());
-        row.put("customerOrderNo", order.getCustomerOrderNo());
-        row.put("customerProjectNo", order.getCustomerProjectNo());
-        row.put("internalProjectNo", order.getInternalProjectNo());
-        row.put("orderType", order.getOrderType());
-        row.put("status", order.getStatus());
-        row.put("createdAt", order.getCreatedAt());
-        row.put("sortId", order.getId());
-        return row;
-    }
-
-    private void applySalesOrderFilters(QueryWrapper<SalesOrderHeader> query, String customerName, String keyword, String status) {
-        if (!isBlank(customerName)) {
-            query.eq("customer_name", customerName.trim());
-        }
-        if (!isBlank(status)) {
-            query.eq("status", status.trim());
-        }
-        if (!isBlank(keyword)) {
-            String text = keyword.trim();
-            query.and(wrapper -> wrapper
-                    .like("sales_order_no", text)
-                    .or()
-                    .like("customer_order_no", text)
-                    .or()
-                    .like("internal_project_no", text)
-                    .or()
-                    .like("status", text));
-        }
-    }
-
-    private boolean canAccessSalesOrder(SalesOrderHeader order) {
-        if (dataScopeService == null || order == null) {
-            return true;
-        }
-        try {
-            dataScopeService.assertCanAccessOrder(toOrderScopeProxy(order));
-            return true;
-        } catch (RuntimeException e) {
-            String message = e.getMessage();
-            if (message != null && message.startsWith("No data permission for order ")) {
-                return false;
-            }
-            throw e;
-        }
-    }
-
-    private OrderRfq toOrderScopeProxy(SalesOrderHeader order) {
-        OrderRfq proxy = new OrderRfq();
-        proxy.setId(order.getId() == null ? null : order.getId().intValue());
-        proxy.setCustomerName(order.getCustomerName());
-        proxy.setCreatedBy(order.getCreatedBy() == null ? null : order.getCreatedBy().intValue());
-        proxy.setOwnerUserId(order.getOwnerUserId());
-        return proxy;
     }
 
     private Map<Integer, ItemStats> loadItemStats(List<Integer> rfqIds) {
@@ -669,10 +577,6 @@ public class OrderManagementService {
 
     private static Number numberValue(Object value) {
         return value instanceof Number number ? number : 0;
-    }
-
-    private static long safeLong(Object value) {
-        return value instanceof Number number ? number.longValue() : 0L;
     }
 
     private static class ItemStats {

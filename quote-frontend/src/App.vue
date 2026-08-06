@@ -125,7 +125,7 @@ const menuGroups = [
 const menuMetaByPath = {
   '/dashboard': { title: '首页看板', icon: DataBoard },
   '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
-  '/sales-match': { title: '销售匹配', permission: 'market:sales-match:view', icon: Files },
+  '/sales-match': { title: '异常治理', permission: 'market:sales-match:view', icon: Files },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
   '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
   '/u9-sync': { title: 'U9同步', permission: 'market:u9-sync:view', icon: Document },
@@ -192,8 +192,8 @@ const shellMetaByPath = {
     description: '导入客户询价表和图纸，推送工程评估。'
   },
   '/sales-match': {
-    title: '销售匹配',
-    description: '选择销售订单，预览并补全历史生产快照。'
+    title: '异常治理',
+    description: '排查历史销售订单或自动补全异常，不作为新销售订单日常流程入口。'
   },
   '/quote-process': {
     title: '报价处理',

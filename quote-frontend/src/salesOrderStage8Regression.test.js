@@ -30,7 +30,7 @@ describe('sales order independent stage 8 regression', () => {
     expect(salesOrderPane).not.toContain('label="RFQ')
   })
 
-  test('keeps RFQ and sales order release paging source-aware while downstream pages stay server paged', () => {
+  test('keeps RFQ release paging source-aware while downstream pages stay server paged', () => {
     const marketRelease = readSource('components', 'MarketRelease.vue')
     const deliveryDocument = readSource('components', 'DeliveryDocumentManage.vue')
     const deliveredItem = readSource('components', 'DeliveredItemManage.vue')
@@ -42,7 +42,10 @@ describe('sales order independent stage 8 regression', () => {
     expect(marketRelease).toContain("sourceType: row?.sourceType || 'RFQ'")
     expect(marketRelease).toContain('sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value)')
     expect(marketRelease).toContain('sourceItemId: Number(row?.sourceItemId ?? row?.id)')
+    expect(marketRelease).toContain("sourceType: 'RFQ'")
     expect(marketRelease).toContain('sources: selectedOrderSources.value')
+    expect(marketRelease).not.toContain('getSalesOrder')
+    expect(marketRelease).not.toContain('SALES_ORDER')
     expect(marketApi).toContain("listReleaseItemsBatch = (payload) => postJson('/api/market/release/items/batch', payload)")
     expect(marketRelease).not.toContain('fetchAllReleaseItems')
 

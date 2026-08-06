@@ -208,7 +208,7 @@
               <el-table-column prop="sourceOrderNo" label="来源单号" width="170" fixed show-overflow-tooltip>
                 <template #default="{ row }">
                   <div class="source-order-cell">
-                    <el-tag :type="(row.sourceType || 'RFQ') === 'SALES_ORDER' ? 'success' : 'info'" size="small" effect="plain">
+                    <el-tag type="info" size="small" effect="plain">
                       {{ sourceTypeLabel(row.sourceType) }}
                     </el-tag>
                     <span class="source-order-no">{{ row.sourceOrderNo || '-' }}</span>
@@ -615,7 +615,6 @@ import {
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
 import { usePendingAction } from '../composables/usePendingAction'
-import { getSalesOrder } from '../services/orderApi'
 
 const selectedRfqId = ref(null)
 const selectedOrders = ref([])
@@ -642,22 +641,18 @@ const clientSkippedReplacementFiles = ref([])
 const loading = ref(false)
 let syncingReleaseItemSelection = false
 
-const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
+const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']
 
 const toReleaseOrderSource = (order) => ({
-  sourceType: order?.sourceType || 'RFQ',
-  sourceOrderId: Number(order?.sourceOrderId ?? order?.id)
+  sourceType: 'RFQ',
+  sourceOrderId: Number(order?.sourceOrderId ?? order?.rfqId ?? order?.id)
 })
 const sourceKey = (source) => `${source?.sourceType || 'RFQ'}:${source?.sourceOrderId ?? source?.id ?? ''}`
 const rowKey = (row) => row?.releaseItemKey || `${row?.sourceType || 'RFQ'}:${row?.sourceItemId ?? row?.id ?? ''}`
-const isSalesOrderSource = (source) => source?.sourceType === 'SALES_ORDER'
 const selectedOrderSources = computed(() => selectedOrders.value.map(toReleaseOrderSource))
 const selectedOrderKeys = computed(() => selectedOrderSources.value.map(sourceKey))
 const selectedRfqIds = computed(() => selectedOrderSources.value
   .filter(source => source.sourceType === 'RFQ')
-  .map(source => source.sourceOrderId))
-const selectedSalesOrderIds = computed(() => selectedOrderSources.value
-  .filter(source => source.sourceType === 'SALES_ORDER')
   .map(source => source.sourceOrderId))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
 const { isPending, runAction } = usePendingAction()
@@ -738,19 +733,11 @@ const openOrderPicker = () => {
 const firstSelectedRfqId = () => selectedOrderSources.value
   .find(source => source.sourceType === 'RFQ')?.sourceOrderId || null
 
-const applyReleaseDefaultsFromOrder = (order) => {
-  const wasEmpty = selectedOrders.value.length === 0
-  if (!wasEmpty || !isSalesOrderSource(order)) return
-  releaseForm.orderType = order.orderType || releaseForm.orderType
-  releaseForm.internalProjectNo = order.internalProjectNo || releaseForm.internalProjectNo
-  releaseForm.customerOrderNo = order.customerOrderNo || releaseForm.customerOrderNo
-  releaseForm.customerProjectNo = order.customerProjectNo || releaseForm.customerProjectNo
-}
-
 const handleOrderSelected = async (orderOrOrders) => {
   const incomingOrders = Array.isArray(orderOrOrders) ? orderOrOrders : [orderOrOrders]
   const existingKeys = new Set(selectedOrderKeys.value)
   const nextOrders = incomingOrders
+    .filter(order => (order?.sourceType || 'RFQ') === 'RFQ')
     .filter(order => order?.id && !existingKeys.has(sourceKey(toReleaseOrderSource(order))))
   if (nextOrders.length === 0) return
 
@@ -759,7 +746,6 @@ const handleOrderSelected = async (orderOrOrders) => {
     resetReleaseFormForOrders()
     clearSelectedRows()
   }
-  applyReleaseDefaultsFromOrder(nextOrders[0])
   selectedOrders.value = [...selectedOrders.value, ...nextOrders]
   selectedRfqId.value = firstSelectedRfqId()
   resetReleasePagination()
@@ -1022,10 +1008,6 @@ const groupSelectedRowsBySource = (rows) => {
 }
 
 const orderSourceNo = (order, source) => {
-  const sourceType = source?.sourceType || order?.sourceType || 'RFQ'
-  if (sourceType === 'SALES_ORDER') {
-    return order?.sourceOrderNo || order?.salesOrderNo || source?.sourceOrderId || sourceKey(source)
-  }
   return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || sourceKey(source)
 }
 
@@ -1052,16 +1034,7 @@ const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) 
       return { sourceType: 'RFQ', sourceOrderId: rfqId, orderInfo: null }
     }
   }))
-  const refreshedSalesOrders = await Promise.all(selectedSalesOrderIds.value.map(async (salesOrderId) => {
-    try {
-      const response = await getSalesOrder(salesOrderId)
-      return { sourceType: 'SALES_ORDER', sourceOrderId: salesOrderId, orderInfo: response.orderInfo || {} }
-    } catch (error) {
-      console.error(error)
-      return { sourceType: 'SALES_ORDER', sourceOrderId: salesOrderId, orderInfo: null }
-    }
-  }))
-  const refreshedOrders = [...refreshedRfqOrders, ...refreshedSalesOrders]
+  const refreshedOrders = refreshedRfqOrders
   selectedOrders.value = selectedOrders.value.map(order => {
     const source = toReleaseOrderSource(order)
     const refreshed = refreshedOrders.find(item =>
@@ -1402,7 +1375,7 @@ const submitTicket = async () => {
       const successItemIds = new Set()
       for (const { source, rows } of releaseGroups.values()) {
         const payload = {
-          ...(source.sourceType === 'RFQ' ? { rfqId: source.sourceOrderId } : {}),
+          rfqId: source.sourceOrderId,
           orderType: releaseForm.orderType,
           internalProjectNo,
           customerOrderNo,
@@ -1413,7 +1386,7 @@ const submitTicket = async () => {
             sourceType: row?.sourceType || 'RFQ',
             sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value),
             sourceItemId: Number(row?.sourceItemId ?? row?.id),
-            itemId: (row?.sourceType || 'RFQ') === 'RFQ' ? row.id : undefined,
+            itemId: row.id,
             acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)
           }))
         }
@@ -1472,8 +1445,7 @@ const statusTagType = (status) => {
   return 'info'
 }
 
-const sourceTypeLabel = (sourceType) => {
-  if (sourceType === 'SALES_ORDER') return '销售订单'
+const sourceTypeLabel = () => {
   return 'RFQ'
 }
 

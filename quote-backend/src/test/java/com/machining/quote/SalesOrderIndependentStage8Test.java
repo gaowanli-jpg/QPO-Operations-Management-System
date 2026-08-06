@@ -109,9 +109,15 @@ class SalesOrderIndependentStage8Test {
                 .doesNotContain("rfqId")
                 .doesNotContain("rfqNo");
         assertThat(orderService)
-                .contains("row.put(\"sourceType\", \"SALES_ORDER\")")
-                .contains("row.put(\"sourceOrderNo\", order.getSalesOrderNo())")
-                .contains("row.put(\"salesOrderNo\", order.getSalesOrderNo())")
+                .contains("listReleaseCandidateOrders(customerName, keyword, status, safePage, safePageSize)")
+                .contains("row.put(\"sourceType\", \"RFQ\")")
+                .contains("row.put(\"sourceOrderNo\", order.getRfqNo())")
+                .contains("row.put(\"rfqNo\", order.getRfqNo())")
+                .doesNotContain("buildReleaseSalesOrderSourceRow")
+                .doesNotContain("salesOrderHeaderMapper")
+                .doesNotContain("row.put(\"sourceType\", \"SALES_ORDER\")")
+                .doesNotContain("row.put(\"sourceOrderNo\", order.getSalesOrderNo())")
+                .doesNotContain("row.put(\"salesOrderNo\", order.getSalesOrderNo())")
                 .doesNotContain("row.put(\"rfqNo\", order.getSalesOrderNo())");
         assertThat(releaseService)
                 .contains("header.sales_order_no AS source_order_no")

@@ -73,7 +73,7 @@ describe('market release multi-order stage 2', () => {
     expect(source).not.toContain('parsePartSelection(selectedRfqId.value, formData)')
   })
 
-  test('market release groups generated tickets by source and refreshes selected orders', () => {
+  test('market release groups generated tickets by RFQ source and refreshes selected RFQ orders', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const submitBlock = source.slice(
       source.indexOf('const submitTicket = async () =>'),
@@ -82,10 +82,10 @@ describe('market release multi-order stage 2', () => {
 
     expect(source).toContain('const groupSelectedRowsBySource = (rows) =>')
     expect(source).toContain('const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) =>')
-    expect(source).toContain('const selectedSalesOrderIds = computed(() => selectedOrderSources.value')
-    expect(source).toContain('getSalesOrder')
-    expect(source).toContain('selectedSalesOrderIds.value.map(async (salesOrderId) =>')
-    expect(source).toContain("sourceType: 'SALES_ORDER'")
+    expect(source).toContain('const refreshedOrders = refreshedRfqOrders')
+    expect(source).not.toContain('getSalesOrder')
+    expect(source).not.toContain('selectedSalesOrderIds')
+    expect(source).not.toContain("sourceType: 'SALES_ORDER'")
     expect(source).toContain('response.orderInfo || {}')
     expect(submitBlock).toContain('const releaseGroups = groupSelectedRowsBySource(orderedSelectedRows)')
     expect(submitBlock).toContain('for (const { source, rows } of releaseGroups.values())')
