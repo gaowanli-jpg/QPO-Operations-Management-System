@@ -136,6 +136,25 @@
           <el-descriptions-item label="U9状态">{{ orderDetail.orderInfo?.u9SyncStatus || '-' }}</el-descriptions-item>
         </el-descriptions>
 
+        <div class="auto-release-summary">
+          <div class="auto-release-summary-card">
+            <span>自动提单行</span>
+            <strong>{{ autoReleaseSummary.ticketCount }}</strong>
+          </div>
+          <div class="auto-release-summary-card">
+            <span>自动提单数量</span>
+            <strong>{{ autoReleaseSummary.ticketQty }}</strong>
+          </div>
+          <div class="auto-release-summary-card">
+            <span>已提 / 总数</span>
+            <strong>{{ autoReleaseSummary.releasedQuantity }} / {{ autoReleaseSummary.totalQuantity }}</strong>
+          </div>
+          <div class="auto-release-summary-card">
+            <span>工艺表行</span>
+            <strong>{{ autoReleaseSummary.processSheetCount }}</strong>
+          </div>
+        </div>
+
         <div class="detail-actions">
           <el-alert
             :title="`当前缺图零件：${drawingSummary?.missingDrawingCount || 0} 个`"
@@ -156,6 +175,14 @@
               <el-table-column prop="version" label="版本" width="80" align="center" />
               <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="materialNoStatus" label="物料号状态" width="120" show-overflow-tooltip />
+              <el-table-column prop="matchStatus" label="匹配状态" width="120" align="center" show-overflow-tooltip>
+                <template #default="scope">
+                  <el-tag :type="matchStatusTagType(scope.row.matchStatus)" size="small">{{ scope.row.matchStatus || '-' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="matchMessage" label="匹配说明" min-width="180" show-overflow-tooltip>
+                <template #default="scope">{{ scope.row.matchMessage || '-' }}</template>
+              </el-table-column>
               <el-table-column prop="qty" label="数量" width="80" align="center" />
               <el-table-column prop="status" label="状态" width="110" align="center" />
               <el-table-column label="图纸" width="90" align="center">
@@ -166,7 +193,6 @@
                 </template>
               </el-table-column>
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="salesMaterialNo" label="销售料号" min-width="130" show-overflow-tooltip />
               <el-table-column prop="orderType" label="订单类型" width="120" show-overflow-tooltip />
               <el-table-column prop="customerOrderNo" label="客户订单号" min-width="140" show-overflow-tooltip />
               <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip />
@@ -333,7 +359,7 @@ const SALES_ORDER_STATUS_ACTIONS = [
     errorMessage: '恢复销售订单失败。',
     confirmTitle: '恢复销售订单',
     confirmButtonText: '确认恢复',
-    confirmMessage: (row) => `确认将废弃销售订单「${row.salesOrderNo || row.id}」恢复为“已报价”吗？恢复后可继续销售匹配、议价提单和 U9 同步链路。`
+    confirmMessage: (row) => `确认将废弃销售订单「${row.salesOrderNo || row.id}」恢复为“已报价”吗？恢复后用于异常治理或重新处理，不再进入旧的手工议价提单链路。`
   }
 ]
 
@@ -371,6 +397,16 @@ const customerPickerVisible = ref(false)
 
 const missingDrawingItems = computed(() => drawingSummary.value?.missingItems || detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(salesOrderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
+const autoReleaseSummary = computed(() => {
+  const summary = orderDetail.value?.summary || {}
+  return {
+    ticketCount: numberOrZero(summary.ticketCount),
+    ticketQty: numberOrZero(summary.ticketQty),
+    releasedQuantity: numberOrZero(summary.releasedQuantity),
+    totalQuantity: numberOrZero(summary.totalQuantity),
+    processSheetCount: numberOrZero(summary.processSheetCount)
+  }
+})
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {
@@ -658,6 +694,18 @@ const statusTagType = (status) => {
   return 'info'
 }
 
+const matchStatusTagType = (status) => {
+  if (status === '已匹配') return 'success'
+  if (status === '未匹配') return 'warning'
+  if (status === '匹配失败') return 'danger'
+  return 'info'
+}
+
+function numberOrZero(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
 const formatMoney = (value) => {
   if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
@@ -791,6 +839,38 @@ const formatRoute = (route) => {
 .supplement-descriptions :deep(.el-descriptions__label) {
   color: var(--erp-text-secondary);
   background: #f5f7fb;
+}
+
+.auto-release-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.auto-release-summary-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-soft);
+}
+
+.auto-release-summary-card span {
+  display: block;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.auto-release-summary-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--erp-text);
+  font-size: 18px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-actions {
@@ -940,6 +1020,10 @@ const formatRoute = (route) => {
   .sales-order-filter-group {
     justify-content: flex-start;
   }
+
+  .auto-release-summary {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -948,6 +1032,10 @@ const formatRoute = (route) => {
   .status-filter {
     width: 100%;
     flex-basis: auto;
+  }
+
+  .auto-release-summary {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -180,6 +180,35 @@ class SalesOrderU9SyncModuleStage2Test {
     }
 
     @Test
+    void previewBlocksMissingPriceRowsBeforeU9Sync() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
+        SalesOrderItem missingPrice = item(5001L, header.getId(), "P-001", "MAT-READY-001", "已确认");
+        missingPrice.setFinalUnitPrice(null);
+        missingPrice.setTaxIncludedUnitPrice(null);
+        missingPrice.setUntaxedUnitPrice(null);
+        missingPrice.setUntaxedTotalPrice(null);
+
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of(missingPrice));
+
+        SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
+
+        assertThat(resp.getSyncReady()).isFalse();
+        assertThat(resp.getBlockedReason()).contains("价格");
+        assertThat(resp.getLines()).singleElement()
+                .satisfies(line -> {
+                    assertThat(line.getMaterialNo()).isEqualTo("MAT-READY-001");
+                    assertThat(line.getFinalUnitPrice()).isNull();
+                    assertThat(line.getReady()).isFalse();
+                    assertThat(line.getBlockedReason()).contains("价格");
+                });
+        verify(fixture.headerMapper, never()).updateById(any());
+        verify(fixture.itemMapper, never()).updateById(any());
+        verify(fixture.u9Client, never()).create(any());
+    }
+
+    @Test
     void previewShowsStatusAndSyncBlockersWithoutTouchingDatabase() {
         Fixture fixture = fixture();
         SalesOrderHeader quoted = header(9001L, "SOQPO-001", QuoteStatusWorkflow.QUOTED, "未同步");

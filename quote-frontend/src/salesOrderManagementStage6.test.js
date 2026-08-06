@@ -79,4 +79,15 @@ describe('sales order management stage 6 regression coverage', () => {
     expect(salesOrderManage).toContain('page: detailItemPagination.page')
     expect(salesOrderManage).toContain('pageSize: detailItemPagination.pageSize')
   })
+
+  test('aligns sales order detail with auto release and material number ownership', () => {
+    expect(salesOrderManage).not.toContain('prop="salesMaterialNo"')
+    expect(salesOrderManage).not.toContain('销售料号')
+    expect(salesOrderManage).toContain('autoReleaseSummary')
+    expect(salesOrderManage).toContain('ticketCount')
+    expect(salesOrderManage).toContain('ticketQty')
+    expect(salesOrderManage).toContain('matchStatus')
+    expect(salesOrderManage).toContain('matchMessage')
+    expect(salesOrderManage).not.toContain('销售匹配、议价提单')
+  })
 })

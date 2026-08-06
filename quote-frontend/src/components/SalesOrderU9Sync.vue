@@ -195,11 +195,16 @@
           <el-table-column prop="blockedReason" label="阻断原因" min-width="190" show-overflow-tooltip>
             <template #default="{ row }">{{ row.blockedReason || '-' }}</template>
           </el-table-column>
+          <el-table-column prop="finalUnitPrice" label="U9可用价格" width="118" align="right">
+            <template #default="{ row }">
+              <el-tag v-if="row.finalUnitPrice == null" :type="priceMissingTagType(row)" size="small">价格缺失</el-tag>
+              <span v-else>{{ formatMoney(row.finalUnitPrice) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="salesOrderDate" label="下单日期" width="116">
             <template #default="{ row }">{{ formatDate(row.salesOrderDate) }}</template>
           </el-table-column>
           <el-table-column prop="customerOrderTitle" label="客户下单抬头" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="salesMaterialNo" label="料号" min-width="130" show-overflow-tooltip />
           <el-table-column prop="customerDeliveryDate" label="客户交期" width="116">
             <template #default="{ row }">{{ formatDate(row.customerDeliveryDate) }}</template>
           </el-table-column>
@@ -454,6 +459,8 @@ const materialStatusTagType = (status) => {
   if (status === '未确认') return 'warning'
   return 'info'
 }
+
+const priceMissingTagType = (row) => (row?.finalUnitPrice == null ? 'warning' : 'success')
 
 const formatDate = (value) => {
   if (!value) return '-'

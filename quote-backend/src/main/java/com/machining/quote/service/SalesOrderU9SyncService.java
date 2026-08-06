@@ -354,9 +354,9 @@ public class SalesOrderU9SyncService {
         line.setDeliveryDate(preferredDeliveryDate(item));
         line.setActualShipDate(item.getActualShipDate());
         line.setRemark(item.getRemark());
-        boolean ready = isConfirmedMaterialNo(item);
-        line.setReady(ready);
-        line.setBlockedReason(ready ? "" : materialBlockedReason(item));
+        String blockedReason = itemBlockedReason(item);
+        line.setReady(isBlank(blockedReason));
+        line.setBlockedReason(blockedReason);
         return line;
     }
 
@@ -468,6 +468,10 @@ public class SalesOrderU9SyncService {
         if (stats.missingOrUnconfirmed() > 0) {
             return "存在未取得或未确认物料号的销售订单零件：" + stats.missingOrUnconfirmed();
         }
+        long missingPriceCount = missingPriceCount(items);
+        if (missingPriceCount > 0) {
+            return "存在价格为空的销售订单零件：" + missingPriceCount;
+        }
         return "";
     }
 
@@ -502,6 +506,26 @@ public class SalesOrderU9SyncService {
             return "物料号未确认";
         }
         return "";
+    }
+
+    private String itemBlockedReason(SalesOrderItem item) {
+        if (!isFullyReleased(item)) {
+            return "尚未全部生成提单";
+        }
+        String materialReason = materialBlockedReason(item);
+        if (!isBlank(materialReason)) {
+            return materialReason;
+        }
+        if (preferredPrice(item) == null) {
+            return "价格为空";
+        }
+        return "";
+    }
+
+    private long missingPriceCount(List<SalesOrderItem> items) {
+        return safeList(items).stream()
+                .filter(item -> preferredPrice(item) == null)
+                .count();
     }
 
     private BigDecimal preferredPrice(SalesOrderItem item) {
@@ -718,6 +742,9 @@ public class SalesOrderU9SyncService {
             }
             if (!isConfirmedMaterialNo(item)) {
                 return "销售订单零件 " + itemLabel(item) + " 未取得或未确认物料号，不能同步 U9";
+            }
+            if (preferredPrice(item) == null) {
+                return "销售订单零件 " + itemLabel(item) + " 价格不能为空，不能同步 U9";
             }
         }
         return fallback;
