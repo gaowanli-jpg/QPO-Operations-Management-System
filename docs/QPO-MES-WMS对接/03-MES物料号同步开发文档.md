@@ -6,6 +6,8 @@
 
 > 阶段 6 收口说明：第 19 号文档已把 MES 物料号同步扩展为 **同图号版本去重** 口径。QPO 对同一 `图号 + 版本` 同一时间只保留一个活跃 MES 主请求；同批量相同 `图号 + 版本` 只打 MES 一次；跨批次待回调时相同 `图号 + 版本` 不再打 MES；跨批次已成功且只有一个成功物料号时直接复用物料号；跨批次存在多个不同成功物料号时不自动复用，按正常请求调用 MES。MES 仍只回调主 `mesRequestId`，QPO 收到主请求即时成功或回调成功后负责 fan-out 写回所有关联等待行；销售订单 U9 同步前能看到等待行物料号已确认。
 
+> RFQ 主表物料号收口说明：MES 物料号成功后，QPO 必须同时写回提单行和来源零件主表。`source_type = RFQ` 时写回 `item_quote_version.material_no`、`material_no_status = 已确认`、来源 ticket 信息；`source_type = SALES_ORDER` 时写回 `sales_order_item.material_no`、`material_no_status = 已确认`、来源 ticket 信息。后续 U9 判断不再从提单行临时反查物料号，而是以 RFQ / 销售订单各自主表中的已确认物料号作为正式物料号基础；提单行保留为 MES 获取与追溯来源。
+
 > 阶段 22 收口说明：MES 对接现在包含两条独立业务 path：物料号获取继续使用 `ERP_MES_MATERIAL_PATH`，锁库零件待生产下发使用 `ERP_MES_PRODUCTION_PATH`。两者复用 `ERP_MES_BASE_URL`、`ERP_MES_AUTH_TOKEN` 和 `ERP_MES_TIMEOUT_MS`，但请求契约、权限点、操作日志和文件日志事件名彼此独立；待生产下发接口详见 `docs/QPO-MES-WMS对接/09-提供给MES的待生产下发接口对接说明.md`。
 
 > 系统配置阶段 6 收口说明：QPO 通过数据中心获取 MES 物料号，出站配置由 **系统配置 > 出站接口/数据中心配置** 或 `ERP_DATA_CENTER_*` fallback 提供；数据中心调用 QPO 的入站配置由 **系统配置 > 入站接口 > MES 物料号回调** 管理，调用方为数据中心，业务来源为 MES。回调 URL 和机器 token 在页面生成、轮换、启停，真实 token 单独交付数据中心。`ERP_MES_CALLBACK_TOKEN` 与 `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为页面配置不存在时的老环境 deprecated fallback，不作为给数据中心的主要交付变量。
@@ -320,7 +322,7 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 }
 ```
 
-QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。回调 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次并通过受控渠道交付数据中心。
+QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；RFQ 来源提单行同步回写 `item_quote_version.material_no` 与物料号确认字段，销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。回调 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次并通过受控渠道交付数据中心。
 
 ## 8. 后端设计
 
@@ -461,7 +463,7 @@ mes_master_request_id = FOLLOWER 关联的主 mesRequestId
 
 - MASTER 即时成功或回调成功时，QPO fan-out 写回所有 `order_delivery_ticket_mes_waiter` 等待行。
 - 等待行写入同一个 `materialNo`，状态变为 `SUCCESS`。
-- 销售订单来源等待行同步回写 `sales_order_item.material_no` 和 `material_no_status = 已确认`，因此销售订单 U9 同步前能看到等待行物料号已确认。
+- RFQ 来源等待行同步回写 `item_quote_version.material_no` 和 `material_no_status = 已确认`，销售订单来源等待行同步回写 `sales_order_item.material_no` 和 `material_no_status = 已确认`，因此后续 RFQ / 销售订单 U9 同步前都能从来源主表看到等待行物料号已确认。
 - MES 仍只回调主 `mesRequestId`，不需要知道 QPO 内部有哪些关联等待行。
 
 请求前校验：
@@ -638,7 +640,7 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 - `DELIVERY_MES_MATERIAL_SYNC_FAILED` 中文化。
 - `DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS` / `FAILED` / `CONFLICT` 中文化。
 - 回调成功写回 `order_delivery_ticket`。
-- 销售订单来源回调成功写回 `sales_order_item`。
+- RFQ 来源回调成功写回 `item_quote_version`；销售订单来源回调成功写回 `sales_order_item`。
 - 重复回调幂等、冲突回调拒绝覆盖、旧 `mesRequestId` 回调不覆盖新请求。
 - 回调 token 缺失 / 错误被拒绝。
 - 批量任务待回调计数正确。
@@ -808,7 +810,7 @@ npm run build
 - 已提零件页面可以触发 MES 物料号任务。
 - MES 返回成功时，物料号写回 `order_delivery_ticket.material_no`。
 - MES 返回待回调时，已提零件进入 `CALLBACK_PENDING`，后台任务成功完成。
-- MES 回调成功时，物料号写回 `order_delivery_ticket.material_no`；销售订单来源同步回写 `sales_order_item.material_no` 和确认状态。
+- MES 回调成功时，物料号写回 `order_delivery_ticket.material_no`；RFQ 来源同步回写 `item_quote_version.material_no` 和确认状态，销售订单来源同步回写 `sales_order_item.material_no` 和确认状态。
 - 同图号版本去重后，关联等待行不重复调用 MES；MES 仍只回调主 `mesRequestId`，QPO 负责分发写回等待行。
 - MES 返回失败或异常时，状态和失败摘要可见。
 - 操作日志可查提交、已受理待回调、即时成功、回调成功、失败和冲突。

@@ -159,6 +159,16 @@
             <el-table :data="detailItemList" border stripe height="360" v-loading="detailItemsLoading">
               <el-table-column prop="partNo" label="图号" min-width="140" fixed show-overflow-tooltip />
               <el-table-column prop="version" label="版本" width="80" align="center" />
+              <el-table-column prop="materialNo" label="物料号" min-width="130" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.materialNo || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="materialNoStatus" label="物料号状态" width="116" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="materialStatusTagType(row.materialNoStatus)" size="small">
+                    {{ row.materialNoStatus || '未确认' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="description" label="物料描述" min-width="180" show-overflow-tooltip />
               <el-table-column prop="qty" label="数量" width="70" align="center" />
               <el-table-column prop="status" label="状态" width="110" align="center" />
@@ -409,6 +419,13 @@ const RELEASED_ORDER_STATUS_ACTION_DISABLED_REASON = '询价订单已生成提�
 
 const missingDrawingItems = computed(() => detailItemList.value.filter(item => !item.drawingUrl))
 const supplementUploadPending = computed(() => isPending(orderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
+
+const materialStatusTagType = (status) => {
+  if (status === '已确认') return 'success'
+  if (status === '获取失败') return 'danger'
+  if (status === '未确认') return 'warning'
+  return 'info'
+}
 
 const isOrderStatusPending = (row) => isPending(orderActionKeys.statusChange(row?.id))
 
