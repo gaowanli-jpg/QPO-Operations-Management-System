@@ -284,7 +284,7 @@ class CoreWorkflowIntegrationTests {
 
         internalTargetLeadTimeService.setLeadTimes(setReq);
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
+        req.setRfqIds(List.of(order.getId()));
         req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-DATE");
         req.setCustomerOrderNo("CO-DATE");
@@ -327,7 +327,7 @@ class CoreWorkflowIntegrationTests {
         itemMapper.insert(item);
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
+        req.setRfqIds(List.of(order.getId()));
         req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-001");
         req.setCustomerOrderNo("CO-001");
@@ -380,7 +380,7 @@ class CoreWorkflowIntegrationTests {
         ItemQuoteVersion third = quotedItem(order, "SEQ-C");
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
+        req.setRfqIds(List.of(order.getId()));
         req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-SEQUENCE");
         req.setCustomerOrderNo("CO-SEQUENCE");
@@ -455,7 +455,7 @@ class CoreWorkflowIntegrationTests {
                 .isEqualTo(engineeringMaterial);
 
         DeliveryGenerateReq deliveryReq = new DeliveryGenerateReq();
-        deliveryReq.setRfqId(order.getId());
+        deliveryReq.setRfqIds(List.of(order.getId()));
         deliveryReq.setOrderType("正式订单");
         deliveryReq.setInternalProjectNo("IP-APS-MAT");
         deliveryReq.setCustomerOrderNo("CO-APS-MAT");
@@ -1137,13 +1137,13 @@ class CoreWorkflowIntegrationTests {
 
     private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item, int acceptedQty, String orderType) {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
+        req.setRfqIds(List.of(order.getId()));
         req.setOrderType(orderType);
         req.setInternalProjectNo("IP-" + order.getId() + "-" + acceptedQty);
         req.setCustomerOrderNo("CO-" + order.getId() + "-" + acceptedQty);
         req.setCustomerProjectNo("CP-" + order.getId());
         req.setArrangeType("计划");
-        req.setStartDate(LocalDate.of(2026, 4, 1));
+        req.setSalesOrderDate(LocalDate.of(2026, 4, 1));
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(acceptedQty);

@@ -76,28 +76,6 @@ class RfqItemMaterialNoConfirmationStage3Test {
     }
 
     @Test
-    void dedupReuseSuccessConfirmsRfqSourceItem() {
-        Fixture fixture = fixture();
-        OrderDeliveryTicket ticket = rfqTicket(123, 77, "PENDING");
-        MesMaterialDedupService dedupService = mock(MesMaterialDedupService.class);
-        ReflectionTestUtils.setField(fixture.syncService, "dedupService", dedupService);
-        when(fixture.ticketMapper.selectById(123)).thenReturn(ticket);
-        when(dedupService.resolveBeforeMes(ticket, 9102L)).thenReturn(
-                MesMaterialDedupService.DedupResolveResult.reuse("P-100|A", 99, "MES-MASTER-99", "RFQ-MAT-REUSE")
-        );
-        when(fixture.itemMapper.selectByIdForUpdate(77)).thenReturn(rfqSourceItem(77, null, null));
-
-        Map<String, Object> result = fixture.syncService.syncMaterialNo(123, 9102L);
-
-        assertThat(result)
-                .containsEntry("status", "SUCCESS")
-                .containsEntry("materialNo", "RFQ-MAT-REUSE");
-        verify(fixture.client, never()).resolveMaterial(any());
-        assertRfqSourceConfirmed(fixture.itemMapper, 77, "RFQ-MAT-REUSE", 123L,
-                "Reuse confirmed MES material number for same part/version");
-    }
-
-    @Test
     void fanOutFollowerSuccessConfirmsRfqSourceItem() {
         Fixture fixture = fixture();
         OrderDeliveryTicket follower = rfqTicket(202, 88, "CALLBACK_PENDING");

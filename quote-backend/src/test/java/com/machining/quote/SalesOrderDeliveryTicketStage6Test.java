@@ -493,7 +493,7 @@ class SalesOrderDeliveryTicketStage6Test {
         req.setInternalProjectNo("IP-SO-1");
         req.setCustomerOrderNo("CO-SO-1");
         req.setCustomerProjectNo("CP-SO-1");
-        req.setStartDate(LocalDate.of(2026, 8, 1));
+        req.setSalesOrderDate(LocalDate.of(2026, 8, 1));
         req.setArrangeType("计划");
         req.setItems(itemQtyById.entrySet().stream()
                 .map(entry -> {

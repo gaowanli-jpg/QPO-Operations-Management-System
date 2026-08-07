@@ -16,6 +16,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.LeadTimeService;
+import com.machining.quote.service.RfqReleaseBatchValidationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -142,6 +143,9 @@ class DeliveryMaterialNoInheritanceStage4Test {
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "auditService", mock(AuditService.class));
         ReflectionTestUtils.setField(service, "leadTimeService", new LeadTimeService());
+        RfqReleaseBatchValidationService validationService = new RfqReleaseBatchValidationService();
+        ReflectionTestUtils.setField(validationService, "orderRfqMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "rfqReleaseBatchValidationService", validationService);
     }
 
     private void wireSalesOrder(
@@ -170,7 +174,7 @@ class DeliveryMaterialNoInheritanceStage4Test {
 
     private DeliveryGenerateReq rfqRequest(int rfqId, int itemId) {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(rfqId);
+        req.setRfqIds(List.of(rfqId));
         req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-RFQ-1");
         req.setCustomerOrderNo("CO-RFQ-1");

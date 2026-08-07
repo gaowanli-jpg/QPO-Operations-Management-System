@@ -62,20 +62,23 @@ describe('market release stage 5 cleanup', () => {
       'releaseForm.orderType',
       'releaseForm.internalProjectNo',
       'releaseForm.customerOrderNo',
-      'releaseForm.startDate',
+      'releaseForm.salesOrderDate',
+      'releaseForm.documentTypeCode',
+      'releaseForm.customerOrderTitle',
       'releaseForm.arrangeType',
       '@click="submitTicket"',
       'generateTicket(payload)',
-      'groupSelectedRowsBySource(orderedSelectedRows)',
-      'await refreshSelectedOrdersAfterGeneration(successItemIds)'
+      'const batchRfqIds = selectedRowsRfqIds()',
+      'rfqIds: batchRfqIds',
+      'await refreshSelectedOrdersAfterGeneration(new Set(orderedSelectedRows.map(rowKey)))'
     ])
   })
 
   test('guides users to delivery documents after successful ticket generation', () => {
     expectIncludes([
-      '可到「提单表据」查看和导出',
-      '部分生成成功',
-      'formatGenerationFailures(failedResults)'
+      'response.message',
+      'response.ticketCount',
+      '提单生成请求失败'
     ])
   })
 })

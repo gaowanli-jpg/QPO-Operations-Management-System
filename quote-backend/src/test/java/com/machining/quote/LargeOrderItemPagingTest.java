@@ -343,7 +343,7 @@ class LargeOrderItemPagingTest {
                 .contains("quoteProcessService.saveQuoteSheet(rfqId)");
         assertThat(method(source("controller", "MarketController.java"), "generateDeliveryTicket"))
                 .doesNotContain("RequestParam(value = \"page\"")
-                .contains("deliveryService.generateTickets(req)");
+                .contains("deliveryService.generateRfqReleaseBatch(req)");
     }
 
     @Test

@@ -7,13 +7,16 @@ import java.util.List;
 
 @Data
 public class DeliveryGenerateReq {
-    private Integer rfqId;
+    private List<Integer> rfqIds;
+    private String documentTypeCode;
+    private LocalDate salesOrderDate;
+    private String customerOrderTitle;
+    private String releaseBatchKey;
     private String orderType;
     private String projectNo;
     private String internalProjectNo;
     private String customerOrderNo;
     private String customerProjectNo;
-    private LocalDate startDate;
     private String arrangeType;
     private List<DeliveryItemReq> items;
 

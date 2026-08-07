@@ -99,6 +99,6 @@ describe('release version edit stage 3', () => {
     expect(source).toContain('const selectedRows = computed(() => Object.values(selectedItemIdMap))')
     expect(source).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
     expect(submitBlock).toContain('const orderedSelectedRows = selectedRowsInItemOrder()')
-    expect(submitBlock).toContain('items: rows.map(row => ({')
+    expect(submitBlock).toContain('items: orderedSelectedRows.map(row => ({')
   })
 })

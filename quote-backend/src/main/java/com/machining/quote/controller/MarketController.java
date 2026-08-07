@@ -7,6 +7,7 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveryGenerateReq;
+import com.machining.quote.dto.DeliveryBatchResultDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
@@ -14,6 +15,7 @@ import com.machining.quote.dto.ReleaseItemFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemOrderFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -202,13 +204,8 @@ public class MarketController {
 
     @PostMapping("/generate-ticket")
     @RequirePermission("market:release:create")
-    public Map<String, Object> generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {
-        Map<String, Object> result = new HashMap<>();
-        List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
-        result.put("success", true);
-        result.put("message", "提单已生成，共拆分 " + tickets.size() + " 行。");
-        result.put("data", tickets);
-        return result;
+    public DeliveryBatchResultDTO generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {
+        return deliveryService.generateRfqReleaseBatch(req);
     }
 
     @GetMapping("/release/summary/{rfqId}")
@@ -232,6 +229,7 @@ public class MarketController {
     @PostMapping("/release/items/batch")
     @RequirePermission("market:release:view")
     public PageResult<Map<String, Object>> listReleaseItemsBatch(@RequestBody ReleaseItemBatchQueryReq req) {
+        requireRfqOnlySources(req == null ? null : req.getSources());
         return internalTargetLeadTimeService.pageItemRowsBatch(req);
     }
 
@@ -248,6 +246,9 @@ public class MarketController {
     public Map<String, Object> updateReleaseItemFields(
             @PathVariable Long itemId,
             @RequestBody ReleaseItemFieldUpdateReq req) {
+        if (req != null && req.getSourceType() == ReleaseSourceType.SALES_ORDER) {
+            throw new RuntimeException("议价提单只支持 RFQ 询价订单，销售订单由导入流程自动生成提单");
+        }
         return internalTargetLeadTimeService.updateReleaseItemFields(itemId, req);
     }
 
@@ -266,8 +267,10 @@ public class MarketController {
             @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
             @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        List<ReleaseOrderSource> sources = parseReleaseSources(sourcesJson, rfqIdsJson);
+        requireRfqOnlySources(sources);
         return internalTargetLeadTimeService.replaceReleaseDrawings(
-                parseReleaseSources(sourcesJson, rfqIdsJson),
+                sources,
                 drawings,
                 versionDrawings);
     }
@@ -304,8 +307,10 @@ public class MarketController {
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "rfqIds", required = false) String rfqIdsJson,
             @RequestParam(value = "sources", required = false) String sourcesJson) {
+        List<ReleaseOrderSource> sources = parseReleaseSources(sourcesJson, rfqIdsJson);
+        requireRfqOnlySources(sources);
         return internalTargetLeadTimeService.matchPartSelectionBatch(
-                parseReleaseSources(sourcesJson, rfqIdsJson),
+                sources,
                 partSelectionImportService.readPartSelectionRows(excelFile));
     }
 
@@ -749,6 +754,13 @@ public class MarketController {
         return parseRfqIds(rfqIdsJson).stream()
                 .map(ReleaseOrderSource::rfq)
                 .toList();
+    }
+
+    private void requireRfqOnlySources(List<ReleaseOrderSource> sources) {
+        if (sources != null && sources.stream()
+                .anyMatch(source -> source != null && source.getSourceType() == ReleaseSourceType.SALES_ORDER)) {
+            throw new RuntimeException("议价提单只支持 RFQ 询价订单，销售订单由导入流程自动生成提单");
+        }
     }
 
     private static <T> PageResult<T> page(List<T> allRows, Integer page, Integer pageSize) {

@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.DeliveryBatchResultDTO;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
@@ -61,73 +62,76 @@ public class DeliveryService {
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
     @Autowired(required = false)
     private SalesOrderItemMapper salesOrderItemMapper;
+    @Autowired
+    private RfqReleaseBatchValidationService rfqReleaseBatchValidationService;
+
+    @Transactional
+    public List<OrderDeliveryTicket> generateRfqTickets(DeliveryGenerateReq req) {
+        requireRfqOnlyRequest(req);
+        return generateRfqBatchTickets(req, rfqReleaseBatchValidationService.validate(req), System.currentTimeMillis());
+    }
+
+    @Transactional
+    public DeliveryBatchResultDTO generateRfqReleaseBatch(DeliveryGenerateReq req) {
+        long startedAt = System.currentTimeMillis();
+        RfqReleaseBatchValidationService.BatchContext context = rfqReleaseBatchValidationService.validate(req);
+        List<OrderDeliveryTicket> tickets = generateRfqBatchTickets(req, context, startedAt);
+        return buildBatchResult(context, tickets);
+    }
 
     @Transactional
     public List<OrderDeliveryTicket> generateTickets(DeliveryGenerateReq req) {
-        Integer rfqId = req == null ? null : req.getRfqId();
+        List<Integer> rfqIds = req == null || req.getRfqIds() == null ? List.of() : req.getRfqIds();
         int selectedItemCount = req == null || req.getItems() == null ? 0 : req.getItems().size();
         long startedAt = System.currentTimeMillis();
-        log.info("Delivery ticket generation started rfqId={} selectedItemCount={}", rfqId, selectedItemCount);
+        log.info("Delivery ticket generation started rfqIds={} selectedItemCount={}", rfqIds, selectedItemCount);
         try {
-        if (req == null) {
-            throw new RuntimeException("提单参数不能为空");
-        }
-        if (req.getItems() == null || req.getItems().isEmpty()) {
-            throw new RuntimeException("请至少选择一个通过议价的零件");
-        }
-        if (isSalesOrderRequest(req)) {
-            return generateSalesOrderTickets(req, startedAt);
-        }
-        if (req.getRfqId() == null) {
-            throw new RuntimeException("询价单 ID 不能为空");
-        }
-
-        OrderRfq order = orderRfqMapper.selectByIdForUpdate(req.getRfqId());
-        if (order == null) {
-            throw new RuntimeException("询价单不存在");
-        }
-
-        assertOrderDataScope(order);
-        if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
-            if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
-                throw new RuntimeException("请先在报价处理模块保存报价单后再生成提单");
+            if (req == null) {
+                throw new RuntimeException("提单参数不能为空");
             }
-            throw new RuntimeException("只有已报价订单可以生成提单");
+            if (req.getItems() == null || req.getItems().isEmpty()) {
+                throw new RuntimeException("请至少选择一个通过议价的零件");
+            }
+            if (isSalesOrderRequest(req)) {
+                return generateSalesOrderTickets(req, startedAt);
+            }
+            normalizeLegacyRfqRequest(req);
+            return generateRfqBatchTickets(req, rfqReleaseBatchValidationService.validate(req), startedAt);
+        } catch (RuntimeException e) {
+            if (isBusinessFailure(e)) {
+                log.warn("Delivery ticket generation failed rfqIds={} selectedItemCount={} durationMs={} reason={}",
+                        rfqIds, selectedItemCount, System.currentTimeMillis() - startedAt, e.getMessage());
+            } else {
+                log.error("Delivery ticket generation failed rfqIds={} selectedItemCount={} durationMs={}",
+                        rfqIds, selectedItemCount, System.currentTimeMillis() - startedAt, e);
+            }
+            throw e;
         }
-        String orderType = normalizeOrderType(req.getOrderType());
-        LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
-        String projectNo = isBlank(req.getProjectNo()) ? resolveProjectNo(order) : req.getProjectNo().trim();
-        String internalProjectNo = req.getInternalProjectNo() == null ? "" : req.getInternalProjectNo().trim();
-        if (internalProjectNo.isEmpty()) {
-            throw new RuntimeException("内部项目号不能为空");
+    }
+
+    private List<OrderDeliveryTicket> generateRfqBatchTickets(
+            DeliveryGenerateReq req,
+            RfqReleaseBatchValidationService.BatchContext context,
+            long startedAt) {
+        Map<Integer, OrderRfq> lockedOrders = new LinkedHashMap<>();
+        for (Integer rfqId : context.rfqIds()) {
+            OrderRfq order = orderRfqMapper.selectByIdForUpdate(rfqId);
+            if (order == null) {
+                throw new RuntimeException("议价提单批次包含不存在或无权访问的询价单");
+            }
+            assertOrderDataScope(order);
+            if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
+                throw new RuntimeException("只有已报价订单可以生成提单");
+            }
+            lockedOrders.put(rfqId, order);
         }
-        if (internalProjectNo.length() > 100) {
-            throw new RuntimeException("内部项目号不能超过 100 个字符");
-        }
-        String customerOrderNo = req.getCustomerOrderNo() == null ? "" : req.getCustomerOrderNo().trim();
-        if (customerOrderNo.isEmpty()) {
-            throw new RuntimeException("客户订单号不能为空");
-        }
-        if (customerOrderNo.length() > 100) {
-            throw new RuntimeException("客户订单号不能超过 100 个字符");
-        }
-        String customerProjectNo = req.getCustomerProjectNo() == null ? "" : req.getCustomerProjectNo().trim();
-        if (customerProjectNo.length() > 100) {
-            throw new RuntimeException("客户项目号不能超过 100 个字符");
-        }
-        String arrangeType = isBlank(req.getArrangeType()) ? "计划" : req.getArrangeType().trim();
 
         Map<Integer, ItemQuoteVersion> lockedItemMap = lockRequestedItems(req.getItems());
         Map<Integer, DemandLine> demandByItemId = new LinkedHashMap<>();
         for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
-            ItemQuoteVersion item = lockedItemMap.get(line.getItemId());
-            if (item == null) {
-                throw new RuntimeException("零件不存在，ID=" + line.getItemId());
-            }
-            if (!req.getRfqId().equals(item.getRfqId())) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 不属于当前询价单");
-            }
-
+            Integer itemId = resolveRfqItemId(line);
+            ItemQuoteVersion item = lockedItemMap.get(itemId);
+            rfqReleaseBatchValidationService.validateLockedItem(line, item, context);
             int acceptedQty = line.getAcceptedQty() == null ? safeInt(item.getQty()) : line.getAcceptedQty();
             if (acceptedQty <= 0) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
@@ -143,17 +147,9 @@ public class DeliveryService {
             if (item.getTaxIncludedUnitPrice() == null) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 尚未核价，不能生成提单");
             }
-            if (demand.qty() > safeInt(item.getQty())) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty() + " 超过询价数量 " + safeInt(item.getQty()));
-            }
             int ticketedQty = ticketedQty(item);
             int remainingQty = remainingQty(item, ticketedQty);
-            if (remainingQty <= 0) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 已全部提单，不能重复生成");
-            }
             if (demand.qty() > remainingQty) {
-                log.warn("Delivery ticket quantity exceeds remaining rfqId={} itemId={} partNo={} requestedQty={} ticketedQty={} remainingQty={}",
-                        item.getRfqId(), item.getId(), item.getPartNo(), demand.qty(), ticketedQty, remainingQty);
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty()
                         + " 超过剩余可提数量 " + remainingQty);
             }
@@ -162,31 +158,78 @@ public class DeliveryService {
         List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
         for (DemandLine demand : demandByItemId.values()) {
             ItemQuoteVersion item = demand.item();
-            int acceptedQty = demand.qty();
-
-            OrderDeliveryTicket ticket = insertTicket(order, item, orderType, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, startDate, acceptedQty,
-                    item.getRemark(), arrangeType);
-            createdTickets.add(ticket);
+            OrderRfq order = lockedOrders.get(item.getRfqId());
+            String orderType = effectiveOrderType(item, context.orderType());
+            String internalProjectNo = firstText(item.getInternalProjectNo(), context.internalProjectNo());
+            String customerOrderNo = firstText(item.getCustomerOrderNo(), context.customerOrderNo());
+            String customerProjectNo = firstText(item.getCustomerProjectNo(), context.customerProjectNo());
+            LocalDate salesOrderDate = item.getSalesOrderDate() == null
+                    ? context.salesOrderDate() : item.getSalesOrderDate();
+            String projectNo = isBlank(context.projectNo()) ? resolveProjectNo(order) : context.projectNo();
+            createdTickets.add(insertTicket(
+                    order, item, orderType, internalProjectNo, customerOrderNo, customerProjectNo,
+                    projectNo, salesOrderDate, demand.qty(), item.getRemark(), context.arrangeType()));
         }
 
         for (DemandLine demand : demandByItemId.values()) {
             refreshItemTicketStatus(demand.item());
         }
-        refreshOrderTicketStatus(order.getId());
-        auditService.record("DELIVERY_TICKET_GENERATE", "order_rfq", order.getId(), null, createdTickets);
-        log.info("Delivery ticket generation completed rfqId={} ticketCount={} dynamicProcessSheetCount={} durationMs={}",
-                order.getId(), createdTickets.size(), createdTickets.size(), System.currentTimeMillis() - startedAt);
-        return createdTickets;
-        } catch (RuntimeException e) {
-            if (isBusinessFailure(e)) {
-                log.warn("Delivery ticket generation failed rfqId={} selectedItemCount={} durationMs={} reason={}",
-                        rfqId, selectedItemCount, System.currentTimeMillis() - startedAt, e.getMessage());
-            } else {
-                log.error("Delivery ticket generation failed rfqId={} selectedItemCount={} durationMs={}",
-                        rfqId, selectedItemCount, System.currentTimeMillis() - startedAt, e);
-            }
-            throw e;
+        for (Integer rfqId : context.rfqIds()) {
+            refreshOrderTicketStatus(rfqId);
         }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("rfqIds", context.rfqIds());
+        summary.put("ticketCount", createdTickets.size());
+        summary.put("releaseBatchKeySummary", context.releaseBatchKeySummary());
+        for (Integer rfqId : context.rfqIds()) {
+            auditService.record("DELIVERY_TICKET_GENERATE", "order_rfq", rfqId, null, summary);
+        }
+        log.info("Delivery ticket generation completed rfqIds={} ticketCount={} durationMs={}",
+                context.rfqIds(), createdTickets.size(), System.currentTimeMillis() - startedAt);
+        return createdTickets;
+    }
+
+    private void normalizeLegacyRfqRequest(DeliveryGenerateReq req) {
+        if (req.getRfqIds() == null || req.getRfqIds().size() != 1) {
+            return;
+        }
+        Integer rfqId = req.getRfqIds().get(0);
+        if (req.getSalesOrderDate() == null) {
+            req.setSalesOrderDate(LocalDate.now());
+        }
+        if (isBlank(req.getReleaseBatchKey())) {
+            req.setReleaseBatchKey("legacy-rfq-" + rfqId);
+        }
+        for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
+            if (line == null) {
+                continue;
+            }
+            if (line.getSourceType() == null) {
+                line.setSourceType(ReleaseSourceType.RFQ);
+            }
+            if (line.getSourceOrderId() == null) {
+                line.setSourceOrderId(rfqId.longValue());
+            }
+            if (line.getSourceItemId() == null && line.getItemId() != null) {
+                line.setSourceItemId(line.getItemId().longValue());
+            }
+        }
+    }
+
+    private DeliveryBatchResultDTO buildBatchResult(
+            RfqReleaseBatchValidationService.BatchContext context,
+            List<OrderDeliveryTicket> tickets) {
+        DeliveryBatchResultDTO result = new DeliveryBatchResultDTO();
+        result.setSuccess(true);
+        result.setMessage("提单已生成，共 " + tickets.size() + " 行。");
+        result.setSourceRfqIds(context.rfqIds());
+        result.setTicketCount(tickets.size());
+        result.setConfirmedMaterialCount((int) tickets.stream()
+                .filter(ticket -> MES_SUCCESS.equals(ticket.getMesSyncStatus()))
+                .count());
+        result.setPendingMaterialCount(tickets.size() - result.getConfirmedMaterialCount());
+        result.setTicketIds(tickets.stream().map(OrderDeliveryTicket::getId).toList());
+        return result;
     }
 
     public List<OrderDeliveryTicket> listTickets(Integer rfqId) {
@@ -403,6 +446,13 @@ public class DeliveryService {
                 .anyMatch(line -> ReleaseSourceType.SALES_ORDER.equals(line.getSourceType()));
     }
 
+    private void requireRfqOnlyRequest(DeliveryGenerateReq req) {
+        if (req != null && req.getItems() != null && req.getItems().stream()
+                .anyMatch(line -> line != null && ReleaseSourceType.SALES_ORDER.equals(line.getSourceType()))) {
+            throw new RuntimeException("议价提单只支持 RFQ 询价订单，销售订单由导入流程自动生成提单");
+        }
+    }
+
     private List<OrderDeliveryTicket> generateSalesOrderTickets(DeliveryGenerateReq req, long startedAt) {
         if (salesOrderHeaderMapper == null || salesOrderItemMapper == null) {
             throw new RuntimeException("销售订单提单服务不可用");
@@ -418,7 +468,7 @@ public class DeliveryService {
         }
 
         String orderType = normalizeOrderType(firstText(req.getOrderType(), header.getOrderType()));
-        LocalDate startDate = req.getStartDate() == null ? LocalDate.now() : req.getStartDate();
+        LocalDate startDate = req.getSalesOrderDate() == null ? LocalDate.now() : req.getSalesOrderDate();
         String projectNo = isBlank(req.getProjectNo()) ? resolveSalesOrderProjectNo(header) : req.getProjectNo().trim();
         String internalProjectNo = firstText(req.getInternalProjectNo(), header.getInternalProjectNo());
         if (isBlank(internalProjectNo)) {
@@ -777,7 +827,7 @@ public class DeliveryService {
 
     private Map<Integer, ItemQuoteVersion> lockRequestedItems(List<DeliveryGenerateReq.DeliveryItemReq> lines) {
         List<Integer> itemIds = lines.stream()
-                .map(DeliveryGenerateReq.DeliveryItemReq::getItemId)
+                .map(this::resolveRfqItemId)
                 .filter(id -> id != null)
                 .distinct()
                 .sorted(Comparator.naturalOrder())
@@ -790,6 +840,28 @@ public class DeliveryService {
             }
         }
         return result;
+    }
+
+    private Integer resolveRfqItemId(DeliveryGenerateReq.DeliveryItemReq line) {
+        if (line == null) {
+            throw new RuntimeException("提单零件不能为空");
+        }
+        Long sourceItemId = line.getSourceItemId();
+        if (sourceItemId != null) {
+            if (sourceItemId > Integer.MAX_VALUE || sourceItemId < Integer.MIN_VALUE) {
+                throw new RuntimeException("提单零件 ID 无效");
+            }
+            return sourceItemId.intValue();
+        }
+        if (line.getItemId() == null) {
+            throw new RuntimeException("提单零件 ID 不能为空");
+        }
+        return line.getItemId();
+    }
+
+    private String effectiveOrderType(ItemQuoteVersion item, String defaultOrderType) {
+        String itemOrderType = firstText(item == null ? null : item.getOrderType(), defaultOrderType);
+        return ALLOWED_ORDER_TYPES.contains(itemOrderType) ? itemOrderType : defaultOrderType;
     }
 
     private void refreshItemTicketStatus(ItemQuoteVersion item) {

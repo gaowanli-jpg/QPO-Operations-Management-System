@@ -173,7 +173,7 @@ class AssemblyWorkflowIntegrationTests {
         submitAssembly(parent, 5.0, child(parent, child, 2));
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
+        req.setRfqIds(List.of(order.getId()));
         req.setOrderType("正式订单");
         req.setInternalProjectNo("IP-ASSY");
         req.setCustomerOrderNo("CO-ASSY");

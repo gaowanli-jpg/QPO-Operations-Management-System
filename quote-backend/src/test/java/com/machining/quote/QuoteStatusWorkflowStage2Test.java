@@ -182,12 +182,12 @@ class QuoteStatusWorkflowStage2Test {
 
     private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item) {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setRfqId(order.getId());
+        req.setRfqIds(List.of(order.getId()));
         req.setOrderType("正式订单");
         req.setInternalProjectNo("IPN-" + order.getId());
         req.setCustomerOrderNo("CO-" + order.getId());
         req.setCustomerProjectNo("CP-" + order.getId());
-        req.setStartDate(LocalDate.of(2026, 4, 1));
+        req.setSalesOrderDate(LocalDate.of(2026, 4, 1));
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(1);

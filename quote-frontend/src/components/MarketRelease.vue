@@ -44,9 +44,17 @@
                   <el-option label="正式订单" value="正式订单" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="开工日期">
+              <el-form-item label="单据类型" required>
+                <el-input
+                  v-model="releaseForm.documentTypeCode"
+                  maxlength="50"
+                  placeholder="请输入单据类型编码"
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item label="下单日期" required>
                 <el-date-picker
-                  v-model="releaseForm.startDate"
+                  v-model="releaseForm.salesOrderDate"
                   type="date"
                   value-format="YYYY-MM-DD"
                   class="full-width"
@@ -136,6 +144,13 @@
                 clearable
                 class="release-meta-input"
               />
+              <el-input
+                v-model="releaseForm.customerOrderTitle"
+                placeholder="请输入客户下单抬头（可选）"
+                maxlength="255"
+                clearable
+                class="release-meta-input"
+              />
             </div>
 
             <div class="erp-dialog-footer main-actions">
@@ -144,7 +159,7 @@
                 size="large"
                 class="workflow-primary-action"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0 || !releaseForm.orderType || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting"
+                :disabled="selectedRows.length === 0 || !releaseForm.orderType || !releaseForm.documentTypeCode.trim() || !releaseForm.salesOrderDate || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -677,13 +692,16 @@ const isInternalLeadTimeSaving = (row) => isPending(releaseActionKeys.internalLe
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
+  documentTypeCode: 'SO01',
+  salesOrderDate: today,
+  customerOrderTitle: '',
   orderType: '',
   internalProjectNo: '',
   customerOrderNo: '',
   customerProjectNo: '',
-  startDate: today,
   arrangeType: '计划'
 })
+const releaseBatchState = reactive({ fingerprint: '', key: '' })
 
 const pagedReleaseItems = computed(() => itemList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
@@ -832,10 +850,15 @@ const fetchReleaseItemsBatch = async () => {
 }
 
 const resetReleaseFormForOrders = () => {
+  releaseForm.documentTypeCode = 'SO01'
+  releaseForm.salesOrderDate = today
+  releaseForm.customerOrderTitle = ''
   releaseForm.orderType = ''
   releaseForm.internalProjectNo = ''
   releaseForm.customerOrderNo = ''
   releaseForm.customerProjectNo = ''
+  releaseBatchState.fingerprint = ''
+  releaseBatchState.key = ''
 }
 
 const setItemList = (rows) => {
@@ -991,36 +1014,18 @@ const selectedRowsRfqIds = () => {
     .filter(Boolean))]
 }
 
-const groupSelectedRowsBySource = (rows) => {
-  const groups = new Map()
-  ;(rows || []).forEach(row => {
-    const sourceType = row?.sourceType || 'RFQ'
-    const sourceOrderId = Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value)
-    if (!sourceOrderId) return
-    const source = { sourceType, sourceOrderId }
-    const key = sourceKey(source)
-    if (!groups.has(key)) {
-      groups.set(key, { source, rows: [] })
-    }
-    groups.get(key).rows.push(row)
-  })
-  return groups
-}
-
 const orderSourceNo = (order, source) => {
   return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || sourceKey(source)
 }
 
-const orderLabelBySource = (source) => {
-  const key = sourceKey(source)
-  const order = selectedOrders.value.find(item => sourceKey(toReleaseOrderSource(item)) === key)
-  return orderSourceNo(order, source)
-}
-
-const formatGenerationFailures = (failedResults) => {
-  return failedResults
-    .map(result => `${orderLabelBySource(result.source)}：${result.message}`)
-    .join('；')
+const nextReleaseBatchKey = (payload) => {
+  const fingerprint = JSON.stringify(payload)
+  if (releaseBatchState.fingerprint !== fingerprint || !releaseBatchState.key) {
+    releaseBatchState.fingerprint = fingerprint
+    releaseBatchState.key = globalThis.crypto?.randomUUID?.()
+      || `rfq-release-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+  return releaseBatchState.key
 }
 
 const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) => {
@@ -1340,12 +1345,16 @@ const submitTicket = async () => {
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
   if (!selectedOrders.value.length) return ElMessage.warning('请先选择订单。')
   if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')
+  const documentTypeCode = releaseForm.documentTypeCode.trim()
+  if (!documentTypeCode) return ElMessage.warning('请填写单据类型编码后再生成正式提单。')
+  if (!releaseForm.salesOrderDate) return ElMessage.warning('请选择下单日期后再生成正式提单。')
   const internalProjectNo = releaseForm.internalProjectNo.trim()
   if (!internalProjectNo) return ElMessage.warning('请填写内部项目号后再生成正式提单。')
   const customerOrderNo = releaseForm.customerOrderNo.trim()
   if (!customerOrderNo) return ElMessage.warning('请填写客户订单号后再生成正式提单。')
   const customerProjectNo = releaseForm.customerProjectNo.trim()
   const orderedSelectedRows = selectedRowsInItemOrder()
+  const batchRfqIds = selectedRowsRfqIds()
 
   const unquoted = orderedSelectedRows.filter(row => row.taxIncludedUnitPrice == null)
   if (unquoted.length > 0) {
@@ -1357,73 +1366,49 @@ const submitTicket = async () => {
     return ElMessage.warning(`有 ${overRemaining.length} 个零件的通过数量超过剩余可提数量。`)
   }
 
-  const releaseGroups = groupSelectedRowsBySource(orderedSelectedRows)
-  if (releaseGroups.size === 0) {
+  if (batchRfqIds.length === 0) {
     return ElMessage.warning('已选零件缺少订单信息，无法生成正式提单。')
   }
 
   return runAction(releaseActionKeys.generateTicket(), async () => {
     await ElMessageBox.confirm(
-      `确认按 ${releaseGroups.size} 个订单生成 ${orderedSelectedRows.length} 个零件的正式提单？通过数量不能超过剩余可提数量。`,
+      `确认将同一客户的 ${batchRfqIds.length} 个询价单合并为一个提单批次，共 ${orderedSelectedRows.length} 个零件？`,
       '生成提单确认',
       { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
     )
 
     try {
-      const successfulResults = []
-      const failedResults = []
-      const successItemIds = new Set()
-      for (const { source, rows } of releaseGroups.values()) {
-        const payload = {
-          rfqId: source.sourceOrderId,
-          orderType: releaseForm.orderType,
-          internalProjectNo,
-          customerOrderNo,
-          customerProjectNo,
-          startDate: releaseForm.startDate,
-          arrangeType: releaseForm.arrangeType,
-          items: rows.map(row => ({
-            sourceType: row?.sourceType || 'RFQ',
-            sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value),
-            sourceItemId: Number(row?.sourceItemId ?? row?.id),
-            itemId: row.id,
-            acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)
-          }))
-        }
-        try {
-          const response = await generateTicket(payload)
-          if (response.success) {
-            successfulResults.push({ source, rows, response })
-            rows.forEach(row => successItemIds.add(rowKey(row)))
-          } else {
-            failedResults.push({ source, rows, message: response.message || '提单生成失败。' })
-          }
-        } catch (error) {
-          console.error(error)
-          failedResults.push({
-            source,
-            rows,
-            message: error.response?.data?.message || error.message || '提单生成请求失败。'
-          })
-        }
+      const payload = {
+        rfqIds: batchRfqIds,
+        documentTypeCode,
+        salesOrderDate: releaseForm.salesOrderDate,
+        customerOrderTitle: releaseForm.customerOrderTitle.trim(),
+        orderType: releaseForm.orderType,
+        internalProjectNo,
+        customerOrderNo,
+        customerProjectNo,
+        arrangeType: releaseForm.arrangeType,
+        items: orderedSelectedRows.map(row => ({
+          sourceType: 'RFQ',
+          sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value),
+          sourceItemId: Number(row?.sourceItemId ?? row?.id),
+          itemId: row.id,
+          acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)
+        }))
       }
-
-      if (successfulResults.length > 0) {
-        await refreshSelectedOrdersAfterGeneration(successItemIds)
+      const releaseBatchKey = nextReleaseBatchKey(payload)
+      payload.releaseBatchKey = releaseBatchKey
+      const response = await generateTicket(payload)
+      if (!response?.success) {
+        throw new Error(response?.message || '提单生成失败。')
       }
-
-      if (failedResults.length === 0) {
-        const successItemCount = successfulResults.reduce((total, result) => total + result.rows.length, 0)
-        ElMessage.success(`已按 ${successfulResults.length} 个订单生成 ${successItemCount} 项提单，可到「提单表据」查看和导出。`)
-      } else if (successfulResults.length > 0) {
-        const failureText = formatGenerationFailures(failedResults)
-        ElMessage.warning(`部分生成成功：成功 ${successfulResults.length} 个订单，失败 ${failedResults.length} 个订单。${failureText}`)
-      } else {
-        ElMessage.error(`提单生成失败：${formatGenerationFailures(failedResults)}`)
-      }
+      await refreshSelectedOrdersAfterGeneration(new Set(orderedSelectedRows.map(rowKey)))
+      releaseBatchState.fingerprint = ''
+      releaseBatchState.key = ''
+      ElMessage.success(response.message || `已生成 ${response.ticketCount || orderedSelectedRows.length} 项提单。`)
     } catch (error) {
       console.error(error)
-      ElMessage.error(error.response?.data?.message || '提单生成请求失败。')
+      ElMessage.error(error.response?.data?.message || error.message || '提单生成请求失败。')
     }
   })
 }
