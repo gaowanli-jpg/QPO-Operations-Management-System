@@ -72,8 +72,6 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     process_route JSONB,
     fee_data JSONB,
     base_cost NUMERIC(12, 2),
-    final_unit_price NUMERIC(12, 2),
-    final_total_price NUMERIC(12, 2),
     tax_included_unit_price NUMERIC(12, 2),
     untaxed_unit_price NUMERIC(12, 2),
     tax_included_total_price NUMERIC(12, 2),
@@ -116,7 +114,7 @@ ALTER TABLE item_quote_version
 CREATE INDEX IF NOT EXISTS idx_item_quote_version_repeat_released_key
     ON item_quote_version(part_no, version, id DESC)
     WHERE status = '已提单'
-      AND final_unit_price IS NOT NULL
+      AND tax_included_unit_price IS NOT NULL
       AND material_data IS NOT NULL
       AND process_route IS NOT NULL;
 
@@ -248,8 +246,6 @@ CREATE TABLE IF NOT EXISTS sales_order_item (
     untaxed_unit_price NUMERIC(14, 4),
     tax_included_total_price NUMERIC(14, 2),
     untaxed_total_price NUMERIC(14, 2),
-    final_unit_price NUMERIC(14, 4),
-    final_total_price NUMERIC(14, 2),
     shipped_qty INTEGER DEFAULT 0,
     unshipped_qty INTEGER DEFAULT 0,
     released_qty INTEGER DEFAULT 0,
