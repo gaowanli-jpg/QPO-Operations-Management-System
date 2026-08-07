@@ -19,6 +19,7 @@ import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.SystemTaskService;
@@ -121,6 +122,7 @@ class MesMaterialSyncTest {
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         MesMaterialClient client = mock(MesMaterialClient.class);
         AuditService auditService = mock(AuditService.class);
+        SourceItemMaterialNoSyncService sourceSyncService = mock(SourceItemMaterialNoSyncService.class);
         when(ticketMapper.selectById(123)).thenReturn(ticket());
         when(orderMapper.selectById(88)).thenReturn(order());
         when(itemMapper.selectById(77)).thenReturn(item("/uploads/drawings/p100.pdf"));
@@ -131,8 +133,11 @@ class MesMaterialSyncTest {
             return response;
         });
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        when(sourceSyncService.syncConfirmedMaterialNo(any(), eq("MES-7788"), eq("created")))
+                .thenReturn(new SourceItemMaterialNoSyncService.MaterialNoSyncResult(1, 1, 1, 1, 0));
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
         ReflectionTestUtils.setField(service, "mesRequestMapper", mesRequestMapper);
+        ReflectionTestUtils.setField(service, "sourceItemMaterialNoSyncService", sourceSyncService);
 
         Map<String, Object> result = service.syncMaterialNo(123, 9001L);
 
@@ -140,7 +145,12 @@ class MesMaterialSyncTest {
                 .containsEntry("ticketId", 123)
                 .containsEntry("taskId", 9001L)
                 .containsEntry("status", "SUCCESS")
-                .containsEntry("materialNo", "MES-7788");
+                .containsEntry("materialNo", "MES-7788")
+                .containsEntry("sourceSyncTargetCount", 2)
+                .containsEntry("sourceSyncUpdatedCount", 2)
+                .containsEntry("sourceSyncIdempotentCount", 0)
+                .containsEntry("rfqSourceUpdatedCount", 1)
+                .containsEntry("salesOrderSourceUpdatedCount", 1);
         ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
         verify(client).resolveMaterial(reqCaptor.capture());
         MesMaterialResolveReq req = reqCaptor.getValue();
@@ -185,7 +195,11 @@ class MesMaterialSyncTest {
         assertThat(auditSummary)
                 .containsEntry("status", "SUCCESS")
                 .containsEntry("mesRequestId", req.getMesRequestId())
-                .containsEntry("externalTraceId", "MP202608050001");
+                .containsEntry("externalTraceId", "MP202608050001")
+                .containsEntry("sourceSyncTargetCount", 2)
+                .containsEntry("sourceSyncUpdatedCount", 2)
+                .containsEntry("rfqSourceUpdatedCount", 1)
+                .containsEntry("salesOrderSourceUpdatedCount", 1);
     }
 
     @Test
@@ -282,6 +296,7 @@ class MesMaterialSyncTest {
         salesOrder.setCustomerName("客户A");
         when(ticketMapper.selectById(123)).thenReturn(ticket);
         when(salesOrderItemMapper.selectById(5001L)).thenReturn(salesItem);
+        when(salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(salesItem);
         when(salesOrderHeaderMapper.selectById(9001L)).thenReturn(salesOrder);
         MesMaterialResolveResp response = new MesMaterialResolveResp();
         response.setSuccess(true);
@@ -296,13 +311,20 @@ class MesMaterialSyncTest {
         wireSyncService(service, ticketMapper, orderMapper, itemMapper, client, auditService);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
         ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", salesOrderHeaderMapper);
+        SourceItemMaterialNoSyncService sourceSyncService = new SourceItemMaterialNoSyncService();
+        ReflectionTestUtils.setField(sourceSyncService, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "sourceItemMaterialNoSyncService", sourceSyncService);
 
         Map<String, Object> result = service.syncMaterialNo(123, 9005L);
 
         assertThat(result)
                 .containsEntry("sourceType", "SALES_ORDER")
                 .containsEntry("sourceItemId", 5001L)
-                .containsEntry("materialNo", "MES-SO-7788");
+                .containsEntry("materialNo", "MES-SO-7788")
+                .containsEntry("sourceSyncTargetCount", 1)
+                .containsEntry("sourceSyncUpdatedCount", 1)
+                .containsEntry("rfqSourceUpdatedCount", 0)
+                .containsEntry("salesOrderSourceUpdatedCount", 1);
         ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
         verify(client).resolveMaterial(reqCaptor.capture());
         assertThat(ReflectionTestUtils.getField(reqCaptor.getValue(), "customerCode")).isEqualTo("C-SO");

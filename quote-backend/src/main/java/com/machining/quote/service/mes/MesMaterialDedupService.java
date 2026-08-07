@@ -5,11 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.OrderDeliveryTicketMesWaiter;
-import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesWaiterMapper;
-import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import org.slf4j.Logger;
@@ -35,8 +33,6 @@ public class MesMaterialDedupService {
     public static final String RESULT_MASTER_CREATED = "MASTER_CREATED";
     public static final String RESULT_FOLLOW_EXISTING_ACTIVE = "FOLLOW_EXISTING_ACTIVE";
     private static final String STATUS_WAITING = "WAITING";
-    private static final String MATERIAL_CONFIRMED = "\u5df2\u786e\u8ba4";
-    private static final String MATERIAL_SOURCE_MES_TICKET = "MES_TICKET";
 
     @Autowired(required = false)
     private OrderDeliveryTicketMapper ticketMapper;
@@ -44,11 +40,8 @@ public class MesMaterialDedupService {
     private OrderDeliveryTicketMesRequestMapper mesRequestMapper;
     @Autowired(required = false)
     private OrderDeliveryTicketMesWaiterMapper waiterMapper;
-    @Autowired(required = false)
-    private SalesOrderItemMapper salesOrderItemMapper;
-    @Autowired(required = false)
     private AuditService auditService;
-    @Autowired(required = false)
+    @Autowired
     private SourceItemMaterialNoSyncService sourceItemMaterialNoSyncService;
 
     public String buildDedupKey(OrderDeliveryTicket ticket) {
@@ -108,9 +101,11 @@ public class MesMaterialDedupService {
             }
             int successCount = 0;
             int failedCount = 0;
+            SourceSyncAccumulator sourceSync = new SourceSyncAccumulator();
             for (OrderDeliveryTicketMesWaiter waiter : waiters) {
                 try {
-                    updateWaiterFromMaster(waiter, targetStatus, materialNo, message, externalTraceId);
+                    sourceSync.add(updateWaiterFromMaster(
+                            waiter, targetStatus, materialNo, message, externalTraceId));
                     successCount++;
                 } catch (RuntimeException error) {
                     failedCount++;
@@ -124,14 +119,25 @@ public class MesMaterialDedupService {
                     );
                 }
             }
-            recordFanoutAudit(waiters.get(0), masterMesRequestId, targetStatus, materialNo, waiters.size(), successCount, failedCount);
+            recordFanoutAudit(
+                    waiters.get(0),
+                    masterMesRequestId,
+                    targetStatus,
+                    materialNo,
+                    waiters.size(),
+                    successCount,
+                    failedCount,
+                    sourceSync);
             if (failedCount == 0) {
                 log.info(
-                        "MES material dedup fanout completed masterTicketId={} mesRequestId={} waiterCount={} materialNo={}",
+                        "MES material dedup fanout completed masterTicketId={} mesRequestId={} waiterCount={} "
+                                + "materialNo={} sourceTargetCount={} sourceUpdatedCount={}",
                         waiters.get(0).getMasterTicketId(),
                         masterMesRequestId,
                         waiters.size(),
-                        materialNo
+                        materialNo,
+                        sourceSync.targetCount,
+                        sourceSync.updatedCount
                 );
             }
         } catch (RuntimeException error) {
@@ -155,14 +161,14 @@ public class MesMaterialDedupService {
         return waiterMapper.selectList(wrapper);
     }
 
-    private void updateWaiterFromMaster(
+    private SourceItemMaterialNoSyncService.MaterialNoSyncResult updateWaiterFromMaster(
             OrderDeliveryTicketMesWaiter waiter,
             String targetStatus,
             String materialNo,
             String message,
             String externalTraceId) {
         if (waiter == null || waiter.getWaiterTicketId() == null) {
-            return;
+            return SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
         }
         OrderDeliveryTicket follower = ticketMapper.selectById(waiter.getWaiterTicketId());
         if (follower == null) {
@@ -173,14 +179,15 @@ public class MesMaterialDedupService {
         ticketUpdate.setMesSyncStatus(targetStatus);
         ticketUpdate.setMesSyncMessage(fanoutMessage(targetStatus, message));
         ticketUpdate.setMesExternalTaskId(trimToNull(externalTraceId));
+        SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
+                SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
         if (STATUS_SUCCESS.equals(targetStatus)) {
+            sourceSyncResult = syncSourceItemMaterialNo(
+                    follower, materialNo, ticketUpdate.getMesSyncMessage());
             ticketUpdate.setMaterialNo(materialNo);
             ticketUpdate.setMesSyncedAt(LocalDateTime.now());
         }
         ticketMapper.updateById(ticketUpdate);
-        if (STATUS_SUCCESS.equals(targetStatus)) {
-            syncSourceItemMaterialNo(follower, materialNo, ticketUpdate.getMesSyncMessage());
-        }
         OrderDeliveryTicketMesWaiter waiterUpdate = new OrderDeliveryTicketMesWaiter();
         waiterUpdate.setWaitStatus(targetStatus);
         waiterUpdate.setWaitMessage(ticketUpdate.getMesSyncMessage());
@@ -194,32 +201,17 @@ public class MesMaterialDedupService {
         UpdateWrapper<OrderDeliveryTicketMesWaiter> wrapper = new UpdateWrapper<>();
         wrapper.eq("id", waiter.getId());
         waiterMapper.update(waiterUpdate, wrapper);
+        return sourceSyncResult;
     }
 
-    private void syncSourceItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
+    private SourceItemMaterialNoSyncService.MaterialNoSyncResult syncSourceItemMaterialNo(
+            OrderDeliveryTicket ticket,
+            String materialNo,
+            String message) {
         if (sourceItemMaterialNoSyncService == null) {
-            syncSalesOrderItemMaterialNo(ticket, materialNo, message);
-            return;
+            return SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
         }
-        sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
-    }
-
-    private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
-        if (salesOrderItemMapper == null
-                || ticket == null
-                || ticket.getSourceItemId() == null
-                || !isSalesOrderSource(ticket)) {
-            return;
-        }
-        SalesOrderItem update = new SalesOrderItem();
-        update.setId(ticket.getSourceItemId());
-        update.setMaterialNo(materialNo);
-        update.setMaterialNoStatus(MATERIAL_CONFIRMED);
-        update.setMaterialNoSource(MATERIAL_SOURCE_MES_TICKET);
-        update.setMaterialNoSourceTicketId(ticket.getId() == null ? null : ticket.getId().longValue());
-        update.setMaterialNoSyncedAt(LocalDateTime.now());
-        update.setMaterialNoMessage(abbreviate(message));
-        salesOrderItemMapper.updateById(update);
+        return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
     }
 
     private void recordFanoutAudit(
@@ -229,7 +221,8 @@ public class MesMaterialDedupService {
             String materialNo,
             int waiterCount,
             int successCount,
-            int failedCount) {
+            int failedCount,
+            SourceSyncAccumulator sourceSync) {
         if (auditService == null || firstWaiter == null) {
             return;
         }
@@ -241,6 +234,7 @@ public class MesMaterialDedupService {
         summary.put("waiterCount", waiterCount);
         summary.put("successCount", successCount);
         summary.put("failedCount", failedCount);
+        appendSourceSyncSummary(summary, sourceSync);
         if (!isBlank(materialNo)) {
             summary.put("materialNo", materialNo);
         }
@@ -284,6 +278,7 @@ public class MesMaterialDedupService {
         summary.put("status", targetStatus);
         summary.put("waiterCount", 0);
         summary.put("failedCount", 1);
+        appendSourceSyncSummary(summary, new SourceSyncAccumulator());
         if (!isBlank(materialNo)) {
             summary.put("materialNo", materialNo);
         }
@@ -443,10 +438,6 @@ public class MesMaterialDedupService {
         return STATUS_CALLBACK_PENDING.equals(status) ? STATUS_CALLBACK_PENDING : STATUS_PROCESSING;
     }
 
-    private boolean isSalesOrderSource(OrderDeliveryTicket ticket) {
-        return ticket.getSourceType() != null && "SALES_ORDER".equalsIgnoreCase(ticket.getSourceType().trim());
-    }
-
     private String trimToNull(String value) {
         return isBlank(value) ? null : value.trim();
     }
@@ -458,6 +449,34 @@ public class MesMaterialDedupService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void appendSourceSyncSummary(Map<String, Object> summary, SourceSyncAccumulator sourceSync) {
+        SourceSyncAccumulator result = sourceSync == null ? new SourceSyncAccumulator() : sourceSync;
+        summary.put("sourceSyncTargetCount", result.targetCount);
+        summary.put("sourceSyncUpdatedCount", result.updatedCount);
+        summary.put("sourceSyncIdempotentCount", result.idempotentCount);
+        summary.put("rfqSourceUpdatedCount", result.rfqUpdatedCount);
+        summary.put("salesOrderSourceUpdatedCount", result.salesOrderUpdatedCount);
+    }
+
+    private static final class SourceSyncAccumulator {
+        private int targetCount;
+        private int updatedCount;
+        private int idempotentCount;
+        private int rfqUpdatedCount;
+        private int salesOrderUpdatedCount;
+
+        private void add(SourceItemMaterialNoSyncService.MaterialNoSyncResult result) {
+            if (result == null) {
+                return;
+            }
+            targetCount += result.targetCount();
+            updatedCount += result.updatedCount();
+            idempotentCount += result.idempotentCount();
+            rfqUpdatedCount += result.rfqUpdatedCount();
+            salesOrderUpdatedCount += result.salesOrderUpdatedCount();
+        }
     }
 
     public static class DedupResolveResult {

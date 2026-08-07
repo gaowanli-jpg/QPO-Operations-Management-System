@@ -10,4 +10,7 @@ import org.apache.ibatis.annotations.Select;
 public interface SalesOrderItemMapper extends BaseMapper<SalesOrderItem> {
     @Select("SELECT * FROM sales_order_item WHERE id = #{id} FOR UPDATE")
     SalesOrderItem selectByIdForUpdate(@Param("id") Long id);
+
+    @Select("SELECT * FROM sales_order_item WHERE source_ticket_id = #{ticketId} FOR UPDATE")
+    SalesOrderItem selectBySourceTicketIdForUpdate(@Param("ticketId") Integer ticketId);
 }

@@ -17,6 +17,9 @@ import java.util.List;
 
 @Mapper
 public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicket> {
+    @Select("SELECT * FROM order_delivery_ticket WHERE id = #{id} FOR UPDATE")
+    OrderDeliveryTicket selectByIdForUpdate(@Param("id") Integer id);
+
     @Select("""
             <script>
             SELECT

@@ -437,8 +437,8 @@ class SalesOrderDeliveryTicketStage6Test {
                 .contains(
                         "SourceItemMaterialNoSyncService",
                         "sourceItemMaterialNoSyncService",
-                        "syncSourceItemMaterialNo(ticket, materialNo, update.getMesSyncMessage())",
-                        "sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message)",
+                        "syncSourceItemMaterialNo(ticket, materialNo, syncMessage)",
+                        "return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message)",
                         "SalesOrderItemMapper",
                         "salesOrderItemMapper"
                 );
@@ -448,7 +448,8 @@ class SalesOrderDeliveryTicketStage6Test {
                         "syncSalesOrderItem",
                         "update.setMaterialNoStatus(MATERIAL_CONFIRMED)",
                         "update.setMaterialNoSource(MATERIAL_SOURCE_MES_TICKET)",
-                        "update.setMaterialNoSourceTicketId(ticket == null || ticket.getId() == null ? null : ticket.getId().longValue())",
+                        "update.setMaterialNoSourceTicketId(sourceTicketId)",
+                        "selectBySourceTicketIdForUpdate",
                         "ReleaseSourceType.SALES_ORDER.name().equals(sourceType)",
                         "salesOrderItemMapper.updateById(update)"
                 );

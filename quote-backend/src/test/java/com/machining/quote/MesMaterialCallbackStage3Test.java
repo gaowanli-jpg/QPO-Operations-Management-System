@@ -12,6 +12,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import org.junit.jupiter.api.Test;
@@ -58,7 +59,7 @@ class MesMaterialCallbackStage3Test {
         item.setId(5001L);
         when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(request);
         when(ticketMapper.selectById(123)).thenReturn(ticket);
-        when(salesOrderItemMapper.selectById(5001L)).thenReturn(item);
+        when(salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(item);
         wire(service, ticketMapper, requestMapper, salesOrderItemMapper, auditService);
 
         MesMaterialCallbackResp response = service.handleMaterialCallback(callback("MAT-NEW"));
@@ -95,29 +96,39 @@ class MesMaterialCallbackStage3Test {
         assertThat(requestUpdate.getCallbackMessage()).isEqualTo("MES completed");
         assertThat(requestUpdate.getCallbackReceivedAt()).isNotNull();
         assertThat(requestUpdate.getCompletedAt()).isNotNull();
+        ArgumentCaptor<Object> auditSummaryCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(
                 eq("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS"),
                 eq("order_delivery_ticket"),
                 eq(123),
                 isNull(),
-                any(Map.class),
+                auditSummaryCaptor.capture(),
                 eq("DELIVERY"),
                 eq("SUCCESS"),
                 contains("mesRequestId=MES-REQ-123"),
                 isNull()
         );
+        assertThat((Map<String, Object>) auditSummaryCaptor.getValue())
+                .containsEntry("sourceSyncTargetCount", 1)
+                .containsEntry("sourceSyncUpdatedCount", 1)
+                .containsEntry("sourceSyncIdempotentCount", 0)
+                .containsEntry("rfqSourceUpdatedCount", 0)
+                .containsEntry("salesOrderSourceUpdatedCount", 1);
     }
 
     @Test
-    void duplicateSameCallbackReturnsSuccessWithoutRewritingTicketOrSalesOrderItem() {
+    void duplicateSameCallbackRepairsBlankSalesOrderItemWithoutRewritingTicket() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         OrderDeliveryTicketMesRequestMapper requestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
         SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryTicket ticket = salesOrderTicket("SUCCESS", "MAT-NEW");
         ticket.setMesSyncedAt(LocalDateTime.now().minusMinutes(5));
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(5001L);
         when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(requestLedger("SUCCESS", 123));
         when(ticketMapper.selectById(123)).thenReturn(ticket);
+        when(salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(item);
         wire(service, ticketMapper, requestMapper, salesOrderItemMapper, mock(AuditService.class));
 
         MesMaterialCallbackResp response = service.handleMaterialCallback(callback("MAT-NEW"));
@@ -125,7 +136,10 @@ class MesMaterialCallbackStage3Test {
         assertThat(response.getSuccess()).isTrue();
         assertThat(response.getMessage()).contains("已处理");
         verify(ticketMapper, never()).updateById(any());
-        verify(salesOrderItemMapper, never()).updateById(any());
+        ArgumentCaptor<SalesOrderItem> salesCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(salesOrderItemMapper).updateById(salesCaptor.capture());
+        assertThat(salesCaptor.getValue().getMaterialNo()).isEqualTo("MAT-NEW");
+        assertThat(salesCaptor.getValue().getMaterialNoStatus()).isEqualTo("已确认");
     }
 
     @Test
@@ -159,6 +173,42 @@ class MesMaterialCallbackStage3Test {
     }
 
     @Test
+    void sourceItemConflictRejectsCallbackAndRecordsConflictAudit() {
+        MesMaterialSyncService service = syncService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketMesRequestMapper requestMapper = mock(OrderDeliveryTicketMesRequestMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = salesOrderTicket("CALLBACK_PENDING", null);
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(5001L);
+        item.setMaterialNo("MAT-OLD");
+        item.setMaterialNoStatus("已确认");
+        when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(requestLedger("CALLBACK_PENDING", 123));
+        when(ticketMapper.selectById(123)).thenReturn(ticket);
+        when(salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(item);
+        wire(service, ticketMapper, requestMapper, salesOrderItemMapper, auditService);
+
+        assertThatThrownBy(() -> service.handleMaterialCallback(callback("MAT-NEW")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不能覆盖");
+
+        verify(ticketMapper, never()).updateById(any());
+        verify(salesOrderItemMapper, never()).updateById(any());
+        verify(auditService).record(
+                eq("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT"),
+                eq("order_delivery_ticket"),
+                eq(123),
+                isNull(),
+                any(Map.class),
+                eq("DELIVERY"),
+                eq("FAILED"),
+                contains("mesRequestId=MES-REQ-123"),
+                contains("不能覆盖")
+        );
+    }
+
+    @Test
     void callbackLocatesTicketFromRequestLedgerWithoutExternalTicketId() {
         MesMaterialSyncService service = syncService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
@@ -167,6 +217,9 @@ class MesMaterialCallbackStage3Test {
         OrderDeliveryTicket ticket = salesOrderTicket("CALLBACK_PENDING", null);
         when(requestMapper.selectOne(any(Wrapper.class))).thenReturn(requestLedger("CALLBACK_PENDING", 123));
         when(ticketMapper.selectById(123)).thenReturn(ticket);
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(5001L);
+        when(salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(item);
         wire(service, ticketMapper, requestMapper, salesOrderItemMapper, mock(AuditService.class));
 
         MesMaterialCallbackResp response = service.handleMaterialCallback(callback("MAT-NEW"));
@@ -313,6 +366,9 @@ class MesMaterialCallbackStage3Test {
         ReflectionTestUtils.setField(service, "mesRequestMapper", requestMapper);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", salesOrderItemMapper);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        SourceItemMaterialNoSyncService sourceSyncService = new SourceItemMaterialNoSyncService();
+        ReflectionTestUtils.setField(sourceSyncService, "salesOrderItemMapper", salesOrderItemMapper);
+        ReflectionTestUtils.setField(service, "sourceItemMaterialNoSyncService", sourceSyncService);
     }
 
     private MesMaterialCallbackReq callback(String materialNo) {

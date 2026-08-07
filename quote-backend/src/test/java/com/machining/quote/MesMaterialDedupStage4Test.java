@@ -18,6 +18,7 @@ import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
+import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialDedupService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
@@ -49,7 +50,12 @@ class MesMaterialDedupStage4Test {
         when(fixture.ticketMapper.selectById(201)).thenReturn(follower);
         when(fixture.requestMapper.selectOne(any(Wrapper.class))).thenReturn(masterRequest("CALLBACK_PENDING"));
         when(fixture.waiterMapper.selectList(any())).thenReturn(List.of(waiter(701L, 201, "CALLBACK_PENDING")));
-        when(fixture.salesOrderItemMapper.selectById(5001L)).thenReturn(new SalesOrderItem());
+        SalesOrderItem masterItem = new SalesOrderItem();
+        masterItem.setId(5001L);
+        SalesOrderItem followerItem = new SalesOrderItem();
+        followerItem.setId(6001L);
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(masterItem);
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(6001L)).thenReturn(followerItem);
         when(fixture.ticketMapper.updateById(any())).thenReturn(1);
         when(fixture.waiterMapper.update(any(), any())).thenReturn(1);
 
@@ -80,17 +86,24 @@ class MesMaterialDedupStage4Test {
                     assertThat(update.getMaterialNoSource()).isEqualTo("MES_TICKET");
                     assertThat(update.getMaterialNoSourceTicketId()).isEqualTo(201L);
                 });
+        ArgumentCaptor<Object> auditSummaryCaptor = ArgumentCaptor.forClass(Object.class);
         verify(fixture.auditService).record(
                 eq("DELIVERY_MES_MATERIAL_DEDUP_FANOUT"),
                 eq("order_delivery_ticket"),
                 eq(123),
                 isNull(),
-                any(Map.class),
+                auditSummaryCaptor.capture(),
                 eq("DELIVERY"),
                 eq("SUCCESS"),
                 contains("mesRequestId=MES-REQ-123"),
                 isNull()
         );
+        assertThat((Map<String, Object>) auditSummaryCaptor.getValue())
+                .containsEntry("sourceSyncTargetCount", 1)
+                .containsEntry("sourceSyncUpdatedCount", 1)
+                .containsEntry("sourceSyncIdempotentCount", 0)
+                .containsEntry("rfqSourceUpdatedCount", 0)
+                .containsEntry("salesOrderSourceUpdatedCount", 1);
     }
 
     @Test
@@ -106,6 +119,12 @@ class MesMaterialDedupStage4Test {
         when(fixture.ticketMapper.updateById(any())).thenReturn(1);
         when(fixture.waiterMapper.selectList(any())).thenReturn(List.of(waiter(702L, 202, "WAITING")));
         when(fixture.waiterMapper.update(any(), any())).thenReturn(1);
+        SalesOrderItem masterItem = new SalesOrderItem();
+        masterItem.setId(5001L);
+        ItemQuoteVersion followerItem = new ItemQuoteVersion();
+        followerItem.setId(77);
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(masterItem);
+        when(fixture.itemMapper.selectByIdForUpdate(77)).thenReturn(followerItem);
         when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
             MesMaterialResolveReq req = invocation.getArgument(0);
             MesMaterialResolveResp resp = successResponse("MAT-FAST");
@@ -230,15 +249,22 @@ class MesMaterialDedupStage4Test {
         fixture.client = mock(MesMaterialClient.class);
         fixture.businessFileService = mock(BusinessFileService.class);
         fixture.auditService = mock(AuditService.class);
+        fixture.sourceSyncService = new SourceItemMaterialNoSyncService();
         fixture.dedupService = new MesMaterialDedupService();
         fixture.syncService = new MesMaterialSyncService();
 
         when(fixture.orderMapper.selectById(88)).thenReturn(order());
         when(fixture.itemMapper.selectById(77)).thenReturn(item());
         when(fixture.businessFileService.externalReadableUrl(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        wireSourceSync(fixture);
         wireDedup(fixture);
         wireSync(fixture);
         return fixture;
+    }
+
+    private void wireSourceSync(Fixture fixture) {
+        ReflectionTestUtils.setField(fixture.sourceSyncService, "itemMapper", fixture.itemMapper);
+        ReflectionTestUtils.setField(fixture.sourceSyncService, "salesOrderItemMapper", fixture.salesOrderItemMapper);
     }
 
     private void wireDedup(Fixture fixture) {
@@ -246,11 +272,8 @@ class MesMaterialDedupStage4Test {
         ReflectionTestUtils.setField(fixture.dedupService, "mesRequestMapper", fixture.requestMapper);
         ReflectionTestUtils.setField(fixture.dedupService, "waiterMapper", fixture.waiterMapper);
         ReflectionTestUtils.setField(fixture.dedupService, "auditService", fixture.auditService);
-        try {
-            ReflectionTestUtils.setField(fixture.dedupService, "salesOrderItemMapper", fixture.salesOrderItemMapper);
-        } catch (IllegalArgumentException ignored) {
-            // Stage 4 production field is absent before the fan-out implementation.
-        }
+        ReflectionTestUtils.setField(
+                fixture.dedupService, "sourceItemMaterialNoSyncService", fixture.sourceSyncService);
     }
 
     private void wireSync(Fixture fixture) {
@@ -263,6 +286,8 @@ class MesMaterialDedupStage4Test {
         ReflectionTestUtils.setField(fixture.syncService, "businessFileService", fixture.businessFileService);
         ReflectionTestUtils.setField(fixture.syncService, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(fixture.syncService, "dedupService", fixture.dedupService);
+        ReflectionTestUtils.setField(
+                fixture.syncService, "sourceItemMaterialNoSyncService", fixture.sourceSyncService);
     }
 
     private OrderDeliveryTicket masterTicket(String status, String materialNo) {
@@ -377,6 +402,7 @@ class MesMaterialDedupStage4Test {
         private MesMaterialClient client;
         private BusinessFileService businessFileService;
         private AuditService auditService;
+        private SourceItemMaterialNoSyncService sourceSyncService;
         private MesMaterialDedupService dedupService;
         private MesMaterialSyncService syncService;
     }

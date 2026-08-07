@@ -51,12 +51,13 @@ class SourceItemMaterialNoSyncServiceTest {
         item.setMaterialNoStatus("已确认");
         when(fixture.itemMapper.selectByIdForUpdate(77)).thenReturn(item);
 
-        fixture.service.syncConfirmedMaterialNo(ticket, "RFQ-MAT-001", "callback replay");
+        SourceItemMaterialNoSyncService.MaterialNoSyncResult result =
+                fixture.service.syncConfirmedMaterialNo(ticket, "RFQ-MAT-001", "callback replay");
 
-        ArgumentCaptor<ItemQuoteVersion> captor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
-        verify(fixture.itemMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getMaterialNo()).isEqualTo("RFQ-MAT-001");
-        assertThat(captor.getValue().getMaterialNoMessage()).isEqualTo("callback replay");
+        verify(fixture.itemMapper, never()).updateById(org.mockito.ArgumentMatchers.any());
+        assertThat(result.rfqTargetCount()).isEqualTo(1);
+        assertThat(result.updatedCount()).isZero();
+        assertThat(result.idempotentCount()).isEqualTo(1);
     }
 
     @Test

@@ -42,8 +42,6 @@ public class MesMaterialSyncService {
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
-    private static final String MATERIAL_CONFIRMED = "已确认";
-    private static final String MATERIAL_SOURCE_MES_TICKET = "MES_TICKET";
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -65,7 +63,7 @@ public class MesMaterialSyncService {
     private AuditService auditService;
     @Autowired(required = false)
     private MesMaterialDedupService dedupService;
-    @Autowired(required = false)
+    @Autowired
     private SourceItemMaterialNoSyncService sourceItemMaterialNoSyncService;
 
     public MesMaterialCallbackResp handleMaterialCallback(MesMaterialCallbackReq req) {
@@ -106,23 +104,42 @@ public class MesMaterialSyncService {
         }
         if (STATUS_SUCCESS.equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
             if (materialNo.equals(ticket.getMaterialNo().trim())) {
+                SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
+                        syncSourceItemMaterialNoForCallback(
+                                ticket, materialNo, req.getMessage(), request, req);
                 if (dedupService != null) {
                     dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
                 }
+                recordCallbackAudit(
+                        "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS",
+                        ticket,
+                        request,
+                        req,
+                        STATUS_SUCCESS,
+                        null,
+                        sourceSyncResult);
                 return callbackResponse(true, "MES 回调已处理", mesRequestId, materialNo);
             }
             recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT", ticket, request, req, STATUS_FAILED,
                     "MES 回调物料号冲突");
             throw callbackError(HttpStatus.CONFLICT, "MES 回调物料号冲突，不能覆盖已确认物料号");
         }
-        assertSourceItemMaterialWritableForCallback(ticket, materialNo);
+        SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
+                syncSourceItemMaterialNoForCallback(
+                        ticket, materialNo, req.getMessage(), request, req);
         markCallbackSuccess(ticket, mesRequestId, materialNo, req.getMessage(), externalTraceId);
         updateMesRequestFromCallback(mesRequestId, STATUS_SUCCESS, materialNo, externalTraceId, req.getMessage(), true);
-        syncSourceItemMaterialNo(ticket, materialNo, req.getMessage());
         if (dedupService != null) {
             dedupService.completeMasterSuccess(mesRequestId, materialNo, req.getMessage(), externalTraceId);
         }
-        recordCallbackAudit("DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS", ticket, request, req, STATUS_SUCCESS, null);
+        recordCallbackAudit(
+                "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS",
+                ticket,
+                request,
+                req,
+                STATUS_SUCCESS,
+                null,
+                sourceSyncResult);
         log.info("MES material callback completed ticketId={} mesRequestId={} materialNo={} durationMs={}",
                 ticketId, mesRequestId, materialNo, System.currentTimeMillis() - startedAt);
         return callbackResponse(true, "QPO已接收物料号回调", mesRequestId, materialNo);
@@ -162,7 +179,12 @@ public class MesMaterialSyncService {
             validateResponseSuccess(resp, mesRequestId);
             String materialNo = normalizeMaterialNo(resp);
             if (!isBlank(materialNo)) {
-                markSuccess(ticket, mesRequestId, materialNo, resp == null ? null : resp.getMessage(), resp == null ? null : resp.getExternalTraceId());
+                SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult = markSuccess(
+                        ticket,
+                        mesRequestId,
+                        materialNo,
+                        resp == null ? null : resp.getMessage(),
+                        resp == null ? null : resp.getExternalTraceId());
                 updateMesRequest(mesRequestId, STATUS_SUCCESS, materialNo, resp == null ? null : resp.getExternalTraceId(), resp == null ? null : resp.getMessage(), true);
                 if (dedupService != null) {
                     dedupService.completeMasterSuccess(
@@ -173,6 +195,7 @@ public class MesMaterialSyncService {
                     );
                 }
                 Map<String, Object> summary = summary(ticket, taskId, mesRequestId, materialNo, STATUS_SUCCESS, resp == null ? null : resp.getExternalTraceId());
+                appendSourceSyncSummary(summary, sourceSyncResult);
                 recordAudit(
                         "DELIVERY_MES_MATERIAL_SYNC_SUCCESS",
                         ticket,
@@ -181,7 +204,8 @@ public class MesMaterialSyncService {
                         materialNo,
                         STATUS_SUCCESS,
                         resp == null ? null : resp.getExternalTraceId(),
-                        null
+                        null,
+                        sourceSyncResult
                 );
                 log.info("MES material sync completed ticketId={} taskId={} rfqId={} partNo={} materialNo={} durationMs={}",
                         ticket.getId(), taskId, ticket.getRfqId(), ticket.getPartNo(), materialNo,
@@ -373,17 +397,25 @@ public class MesMaterialSyncService {
         }
     }
 
-    private void markSuccess(OrderDeliveryTicket ticket, String mesRequestId, String materialNo, String message, String externalTraceId) {
+    private SourceItemMaterialNoSyncService.MaterialNoSyncResult markSuccess(
+            OrderDeliveryTicket ticket,
+            String mesRequestId,
+            String materialNo,
+            String message,
+            String externalTraceId) {
+        String syncMessage = isBlank(message) ? "MES material resolved" : message.trim();
+        SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult =
+                syncSourceItemMaterialNo(ticket, materialNo, syncMessage);
         OrderDeliveryTicket update = new OrderDeliveryTicket();
         update.setId(ticket.getId());
         update.setMaterialNo(materialNo);
         update.setMesSyncStatus(STATUS_SUCCESS);
-        update.setMesSyncMessage(isBlank(message) ? "MES material resolved" : message.trim());
+        update.setMesSyncMessage(syncMessage);
         update.setMesSyncedAt(LocalDateTime.now());
         update.setMesRequestId(mesRequestId);
         update.setMesExternalTaskId(trimToNull(externalTraceId));
         ticketMapper.updateById(update);
-        syncSourceItemMaterialNo(ticket, materialNo, update.getMesSyncMessage());
+        return sourceSyncResult;
     }
 
     private void markCallbackPending(OrderDeliveryTicket ticket, String mesRequestId, String externalTraceId, String message) {
@@ -410,62 +442,34 @@ public class MesMaterialSyncService {
         ticketMapper.updateById(update);
     }
 
-    private void assertSourceItemMaterialWritableForCallback(OrderDeliveryTicket ticket, String materialNo) {
-        if (sourceItemMaterialNoSyncService == null) {
-            assertSalesOrderItemMaterialWritable(ticket, materialNo);
-            return;
-        }
+    private SourceItemMaterialNoSyncService.MaterialNoSyncResult syncSourceItemMaterialNoForCallback(
+            OrderDeliveryTicket ticket,
+            String materialNo,
+            String message,
+            OrderDeliveryTicketMesRequest request,
+            MesMaterialCallbackReq req) {
         try {
-            sourceItemMaterialNoSyncService.assertMaterialWritable(ticket, materialNo);
+            return syncSourceItemMaterialNo(ticket, materialNo, message);
         } catch (SourceItemMaterialNoSyncService.MaterialNoConflictException error) {
+            recordCallbackAudit(
+                    "DELIVERY_MES_MATERIAL_CALLBACK_CONFLICT",
+                    ticket,
+                    request,
+                    req,
+                    STATUS_FAILED,
+                    error.getMessage());
             throw callbackError(HttpStatus.CONFLICT, error.getMessage());
         }
     }
 
-    private void syncSourceItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
+    private SourceItemMaterialNoSyncService.MaterialNoSyncResult syncSourceItemMaterialNo(
+            OrderDeliveryTicket ticket,
+            String materialNo,
+            String message) {
         if (sourceItemMaterialNoSyncService == null) {
-            syncSalesOrderItemMaterialNo(ticket, materialNo, message);
-            return;
+            return SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
         }
-        sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
-    }
-
-    private void assertSalesOrderItemMaterialWritable(OrderDeliveryTicket ticket, String materialNo) {
-        if (salesOrderItemMapper == null
-                || ticket == null
-                || ticket.getSourceItemId() == null
-                || !ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())) {
-            return;
-        }
-        SalesOrderItem item = salesOrderItemMapper.selectById(ticket.getSourceItemId());
-        if (item == null || isBlank(item.getMaterialNo())) {
-            return;
-        }
-        if (materialNo.equals(item.getMaterialNo().trim())) {
-            return;
-        }
-        if (MATERIAL_CONFIRMED.equals(item.getMaterialNoStatus())) {
-            throw callbackError(HttpStatus.CONFLICT, "销售订单零件已确认不同物料号，不能覆盖");
-        }
-        throw callbackError(HttpStatus.CONFLICT, "销售订单零件已有不同物料号，不能覆盖");
-    }
-
-    private void syncSalesOrderItemMaterialNo(OrderDeliveryTicket ticket, String materialNo, String message) {
-        if (salesOrderItemMapper == null
-                || ticket == null
-                || ticket.getSourceItemId() == null
-                || !ReleaseSourceType.SALES_ORDER.name().equals(ticket.getSourceType())) {
-            return;
-        }
-        SalesOrderItem update = new SalesOrderItem();
-        update.setId(ticket.getSourceItemId());
-        update.setMaterialNo(materialNo);
-        update.setMaterialNoStatus(MATERIAL_CONFIRMED);
-        update.setMaterialNoSource(MATERIAL_SOURCE_MES_TICKET);
-        update.setMaterialNoSourceTicketId(ticket.getId() == null ? null : ticket.getId().longValue());
-        update.setMaterialNoSyncedAt(LocalDateTime.now());
-        update.setMaterialNoMessage(abbreviate(message));
-        salesOrderItemMapper.updateById(update);
+        return sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, message);
     }
 
     private String resolveDrawingUrl(OrderDeliveryTicket ticket) {
@@ -543,15 +547,40 @@ public class MesMaterialSyncService {
             String result,
             String externalTraceId,
             String errorMessage) {
+        recordAudit(
+                action,
+                ticket,
+                taskId,
+                mesRequestId,
+                materialNo,
+                result,
+                externalTraceId,
+                errorMessage,
+                SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty());
+    }
+
+    private void recordAudit(
+            String action,
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            String mesRequestId,
+            String materialNo,
+            String result,
+            String externalTraceId,
+            String errorMessage,
+            SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult) {
         if (auditService == null) {
             return;
         }
+        Map<String, Object> auditSummary = summary(
+                ticket, taskId, mesRequestId, materialNo, result, externalTraceId);
+        appendSourceSyncSummary(auditSummary, sourceSyncResult);
         auditService.record(
                 action,
                 "order_delivery_ticket",
                 ticket.getId(),
                 null,
-                summary(ticket, taskId, mesRequestId, materialNo, result, externalTraceId),
+                auditSummary,
                 "DELIVERY",
                 result,
                 AuditService.labelForAction(action) + " ticketId=" + ticket.getId() + " taskId=" + taskId + " mesRequestId=" + mesRequestId,
@@ -566,6 +595,24 @@ public class MesMaterialSyncService {
             MesMaterialCallbackReq req,
             String result,
             String errorMessage) {
+        recordCallbackAudit(
+                action,
+                ticket,
+                request,
+                req,
+                result,
+                errorMessage,
+                SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty());
+    }
+
+    private void recordCallbackAudit(
+            String action,
+            OrderDeliveryTicket ticket,
+            OrderDeliveryTicketMesRequest request,
+            MesMaterialCallbackReq req,
+            String result,
+            String errorMessage,
+            SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult) {
         if (auditService == null) {
             return;
         }
@@ -587,6 +634,7 @@ public class MesMaterialSyncService {
         if (request != null) {
             summary.put("requestStatus", request.getRequestStatus());
         }
+        appendSourceSyncSummary(summary, sourceSyncResult);
         auditService.record(
                 action,
                 "order_delivery_ticket",
@@ -633,6 +681,19 @@ public class MesMaterialSyncService {
             summary.put("externalTraceId", externalTraceId.trim());
         }
         return summary;
+    }
+
+    private void appendSourceSyncSummary(
+            Map<String, Object> summary,
+            SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult) {
+        SourceItemMaterialNoSyncService.MaterialNoSyncResult result = sourceSyncResult == null
+                ? SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty()
+                : sourceSyncResult;
+        summary.put("sourceSyncTargetCount", result.targetCount());
+        summary.put("sourceSyncUpdatedCount", result.updatedCount());
+        summary.put("sourceSyncIdempotentCount", result.idempotentCount());
+        summary.put("rfqSourceUpdatedCount", result.rfqUpdatedCount());
+        summary.put("salesOrderSourceUpdatedCount", result.salesOrderUpdatedCount());
     }
 
     private void appendDedupSummary(

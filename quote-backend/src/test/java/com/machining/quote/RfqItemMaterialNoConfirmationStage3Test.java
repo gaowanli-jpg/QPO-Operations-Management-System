@@ -85,6 +85,9 @@ class RfqItemMaterialNoConfirmationStage3Test {
         when(fixture.waiterMapper.selectList(any())).thenReturn(List.of(waiter(702L, 202)));
         when(fixture.ticketMapper.selectById(202)).thenReturn(follower);
         when(fixture.itemMapper.selectByIdForUpdate(88)).thenReturn(rfqSourceItem(88, null, null));
+        SalesOrderItem derivedSalesItem = new SalesOrderItem();
+        derivedSalesItem.setId(6002L);
+        when(fixture.salesOrderItemMapper.selectBySourceTicketIdForUpdate(202)).thenReturn(derivedSalesItem);
 
         fixture.dedupService.completeMasterSuccess("MES-REQ-123", "RFQ-MAT-FANOUT", "MES completed", "MES-TASK-1");
 
@@ -94,6 +97,11 @@ class RfqItemMaterialNoConfirmationStage3Test {
         assertThat(ticketCaptor.getValue().getMaterialNo()).isEqualTo("RFQ-MAT-FANOUT");
         assertThat(ticketCaptor.getValue().getMesSyncStatus()).isEqualTo("SUCCESS");
         assertRfqSourceConfirmed(fixture.itemMapper, 88, "RFQ-MAT-FANOUT", 202L, "MES completed");
+        ArgumentCaptor<SalesOrderItem> salesCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(fixture.salesOrderItemMapper).updateById(salesCaptor.capture());
+        assertThat(salesCaptor.getValue().getId()).isEqualTo(6002L);
+        assertThat(salesCaptor.getValue().getMaterialNo()).isEqualTo("RFQ-MAT-FANOUT");
+        assertThat(salesCaptor.getValue().getMaterialNoStatus()).isEqualTo(MATERIAL_CONFIRMED);
     }
 
     @Test
@@ -118,7 +126,9 @@ class RfqItemMaterialNoConfirmationStage3Test {
         OrderDeliveryTicket ticket = salesOrderTicket();
         when(fixture.ticketMapper.selectById(123)).thenReturn(ticket);
         when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
-        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(new SalesOrderItem());
+        SalesOrderItem sourceItem = new SalesOrderItem();
+        sourceItem.setId(5001L);
+        when(fixture.salesOrderItemMapper.selectByIdForUpdate(5001L)).thenReturn(sourceItem);
         when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
             MesMaterialResolveResp response = successResponse("SO-MAT-001", "MES sales success");
             response.setMesRequestId(invocation.getArgument(0, com.machining.quote.dto.mes.MesMaterialResolveReq.class).getMesRequestId());
