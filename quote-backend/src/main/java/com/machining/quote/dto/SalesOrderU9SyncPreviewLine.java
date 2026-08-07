@@ -25,6 +25,7 @@ public class SalesOrderU9SyncPreviewLine {
     private Integer shippedQty;
     private Integer unshippedQty;
     private BigDecimal taxIncludedUnitPrice;
+    private BigDecimal taxIncludedTotalPrice;
     private BigDecimal untaxedUnitPrice;
     private BigDecimal untaxedTotalPrice;
     private LocalDate deliveryDate;

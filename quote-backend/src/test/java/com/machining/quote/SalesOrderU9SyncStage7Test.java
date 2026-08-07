@@ -59,12 +59,36 @@ class SalesOrderU9SyncStage7Test {
     }
 
     @Test
+    void onlyUntaxedPriceFailsBeforeCallingDataCenterOrU9() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
+        SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", null);
+        item.setUntaxedUnitPrice(new BigDecimal("16.37"));
+        markConfirmed(item, "MAT-CONFIRMED-001", 4);
+        fixture.withOrder(header, List.of(item));
+
+        SalesOrderU9SyncResp resp = fixture.service.syncSalesOrders(List.of(header.getId()));
+
+        assertThat(resp.isSuccess()).isFalse();
+        assertThat(resp.getStatus()).isEqualTo("FAILED");
+        assertThat(resp.getMessage()).contains("含税单价为空");
+        assertThat(resp.getRows()).singleElement()
+                .satisfies(row -> assertThat(row.getErrorMessage()).contains("含税单价为空"));
+        verify(fixture.u9Client, never()).create(any());
+
+        SalesOrderHeader failureUpdate = fixture.lastHeaderUpdate();
+        assertThat(failureUpdate.getU9SyncStatus()).isEqualTo("同步失败");
+        assertThat(failureUpdate.getU9SyncMessage()).contains("含税单价为空");
+    }
+
+    @Test
     void successfulSyncBuildsU9RequestFromSalesOrderItemsAndWritesU9Codes() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
         header.setDocumentTypeCode("SO88");
         header.setCustomerCode("CUST-001");
         SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
+        item.setUntaxedUnitPrice(new BigDecimal("16.37"));
         markConfirmed(item, "MAT-CONFIRMED-001", 4);
         fixture.withOrder(header, List.of(item));
         when(fixture.u9Client.create(any())).thenReturn(apiResult(0,
@@ -94,6 +118,7 @@ class SalesOrderU9SyncStage7Test {
                     assertThat(line.getCustomerItemNo()).isEqualTo("SALES-MAT-001");
                     assertThat(line.getOrderByQtyTU()).isEqualByComparingTo("4");
                     assertThat(line.getOrderPriceTC()).isEqualByComparingTo("18.50");
+                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("18.50");
                     assertThat(line.getSOShiplineDTOList()).singleElement()
                             .satisfies(shipLine -> {
                                 assertThat(shipLine.getItemCode()).isEqualTo("MAT-CONFIRMED-001");

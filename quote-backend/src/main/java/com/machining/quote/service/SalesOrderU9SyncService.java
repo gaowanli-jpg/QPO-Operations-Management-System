@@ -241,7 +241,7 @@ public class SalesOrderU9SyncService {
     private U9SalesOrderLineDTO toU9Line(SalesOrderHeader header, SalesOrderItem item, int sequence) {
         String materialNo = required(item.getMaterialNo(), "销售订单零件 " + itemLabel(item) + " 未取得物料号，不能同步 U9");
         BigDecimal qty = requiredQty(item);
-        BigDecimal price = requiredPrice(item);
+        BigDecimal price = requiredTaxIncludedPrice(item);
         String unit = "PCS";
 
         U9SalesOrderLineDTO line = new U9SalesOrderLineDTO();
@@ -348,6 +348,7 @@ public class SalesOrderU9SyncService {
         line.setShippedQty(item.getShippedQty());
         line.setUnshippedQty(item.getUnshippedQty());
         line.setTaxIncludedUnitPrice(item.getTaxIncludedUnitPrice());
+        line.setTaxIncludedTotalPrice(item.getTaxIncludedTotalPrice());
         line.setUntaxedUnitPrice(item.getUntaxedUnitPrice());
         line.setUntaxedTotalPrice(item.getUntaxedTotalPrice());
         line.setDeliveryDate(preferredDeliveryDate(item));
@@ -467,9 +468,9 @@ public class SalesOrderU9SyncService {
         if (stats.missingOrUnconfirmed() > 0) {
             return "存在未取得或未确认物料号的销售订单零件：" + stats.missingOrUnconfirmed();
         }
-        long missingPriceCount = missingPriceCount(items);
-        if (missingPriceCount > 0) {
-            return "存在价格为空的销售订单零件：" + missingPriceCount;
+        long missingTaxIncludedPriceCount = missingTaxIncludedPriceCount(items);
+        if (missingTaxIncludedPriceCount > 0) {
+            return "存在含税单价为空的销售订单零件：" + missingTaxIncludedPriceCount;
         }
         return "";
     }
@@ -515,23 +516,16 @@ public class SalesOrderU9SyncService {
         if (!isBlank(materialReason)) {
             return materialReason;
         }
-        if (preferredPrice(item) == null) {
-            return "价格为空";
+        if (item.getTaxIncludedUnitPrice() == null) {
+            return "含税单价为空";
         }
         return "";
     }
 
-    private long missingPriceCount(List<SalesOrderItem> items) {
+    private long missingTaxIncludedPriceCount(List<SalesOrderItem> items) {
         return safeList(items).stream()
-                .filter(item -> preferredPrice(item) == null)
+                .filter(item -> item.getTaxIncludedUnitPrice() == null)
                 .count();
-    }
-
-    private BigDecimal preferredPrice(SalesOrderItem item) {
-        if (item.getTaxIncludedUnitPrice() != null) {
-            return item.getTaxIncludedUnitPrice();
-        }
-        return item.getUntaxedUnitPrice();
     }
 
     private LocalDate preferredDeliveryDate(SalesOrderItem item) {
@@ -704,10 +698,10 @@ public class SalesOrderU9SyncService {
         return BigDecimal.valueOf(item.getQty());
     }
 
-    private BigDecimal requiredPrice(SalesOrderItem item) {
-        BigDecimal price = preferredPrice(item);
+    private BigDecimal requiredTaxIncludedPrice(SalesOrderItem item) {
+        BigDecimal price = item.getTaxIncludedUnitPrice();
         if (price == null) {
-            throw new RuntimeException("销售订单零件 " + item.getPartNo() + " 价格不能为空，不能同步 U9");
+            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 含税单价为空，不能同步 U9");
         }
         return price;
     }
@@ -736,8 +730,8 @@ public class SalesOrderU9SyncService {
             if (!isConfirmedMaterialNo(item)) {
                 return "销售订单零件 " + itemLabel(item) + " 未取得或未确认物料号，不能同步 U9";
             }
-            if (preferredPrice(item) == null) {
-                return "销售订单零件 " + itemLabel(item) + " 价格不能为空，不能同步 U9";
+            if (item.getTaxIncludedUnitPrice() == null) {
+                return "销售订单零件 " + itemLabel(item) + " 含税单价为空，不能同步 U9";
             }
         }
         return fallback;

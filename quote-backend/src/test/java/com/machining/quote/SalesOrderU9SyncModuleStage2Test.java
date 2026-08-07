@@ -180,13 +180,14 @@ class SalesOrderU9SyncModuleStage2Test {
     }
 
     @Test
-    void previewBlocksMissingPriceRowsBeforeU9Sync() {
+    void previewBlocksRowsWithOnlyUntaxedPriceBeforeU9Sync() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
         SalesOrderItem missingPrice = item(5001L, header.getId(), "P-001", "MAT-READY-001", "已确认");
         missingPrice.setTaxIncludedUnitPrice(null);
-        missingPrice.setUntaxedUnitPrice(null);
-        missingPrice.setUntaxedTotalPrice(null);
+        missingPrice.setTaxIncludedTotalPrice(null);
+        missingPrice.setUntaxedUnitPrice(new BigDecimal("10.92"));
+        missingPrice.setUntaxedTotalPrice(new BigDecimal("54.60"));
 
         when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
         when(fixture.itemMapper.selectList(any())).thenReturn(List.of(missingPrice));
@@ -194,13 +195,15 @@ class SalesOrderU9SyncModuleStage2Test {
         SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
 
         assertThat(resp.getSyncReady()).isFalse();
-        assertThat(resp.getBlockedReason()).contains("价格");
+        assertThat(resp.getBlockedReason()).contains("含税单价为空");
         assertThat(resp.getLines()).singleElement()
                 .satisfies(line -> {
                     assertThat(line.getMaterialNo()).isEqualTo("MAT-READY-001");
                     assertThat(line.getTaxIncludedUnitPrice()).isNull();
+                    assertThat(line.getTaxIncludedTotalPrice()).isNull();
+                    assertThat(line.getUntaxedUnitPrice()).isEqualByComparingTo("10.92");
                     assertThat(line.getReady()).isFalse();
-                    assertThat(line.getBlockedReason()).contains("价格");
+                    assertThat(line.getBlockedReason()).isEqualTo("含税单价为空");
                 });
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());
@@ -294,6 +297,7 @@ class SalesOrderU9SyncModuleStage2Test {
         item.setMaterialNoSource("MES_TICKET");
         item.setMaterialNoSyncedAt(LocalDateTime.of(2026, 7, 31, 10, 0));
         item.setTaxIncludedUnitPrice(new BigDecimal("12.34"));
+        item.setTaxIncludedTotalPrice(new BigDecimal("61.70"));
         item.setUntaxedUnitPrice(new BigDecimal("10.92"));
         item.setUntaxedTotalPrice(new BigDecimal("54.60"));
         item.setActualShipDate(LocalDate.of(2026, 8, 25));
