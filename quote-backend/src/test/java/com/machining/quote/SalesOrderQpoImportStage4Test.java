@@ -78,8 +78,6 @@ class SalesOrderQpoImportStage4Test {
         assertThat(enriched.getUntaxedUnitPrice()).isEqualByComparingTo(new BigDecimal("10.00"));
         assertThat(enriched.getTaxIncludedTotalPrice()).isEqualByComparingTo(new BigDecimal("113.00"));
         assertThat(enriched.getUntaxedTotalPrice()).isEqualByComparingTo(new BigDecimal("100.00"));
-        assertThat(enriched.getFinalUnitPrice()).isEqualByComparingTo(new BigDecimal("11.30"));
-        assertThat(enriched.getFinalTotalPrice()).isEqualByComparingTo(new BigDecimal("113.00"));
         assertThat(enriched.getCustomerOrderNo()).isEqualTo("PO-001");
         assertThat(enriched.getCustomerProjectNo()).isEqualTo("CP-001");
         assertThat(enriched.getInternalProjectNo()).isEqualTo("IP-001");
@@ -161,8 +159,6 @@ class SalesOrderQpoImportStage4Test {
         item.setUntaxedUnitPrice(new BigDecimal("10.00"));
         item.setTaxIncludedTotalPrice(new BigDecimal("113.00"));
         item.setUntaxedTotalPrice(new BigDecimal("100.00"));
-        item.setFinalUnitPrice(new BigDecimal("11.30"));
-        item.setFinalTotalPrice(new BigDecimal("113.00"));
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }
@@ -186,11 +182,9 @@ class SalesOrderQpoImportStage4Test {
         source.setQuoteMode("ASSEMBLY");
         source.setAssemblyFee(12.5);
         source.setBaseCost(99.75);
-        source.setFinalUnitPrice(999.0);
-        source.setFinalTotalPrice(9990.0);
         source.setTaxIncludedUnitPrice(999.0);
-        source.setUntaxedUnitPrice(888.0);
         source.setTaxIncludedTotalPrice(9990.0);
+        source.setUntaxedUnitPrice(888.0);
         source.setUntaxedTotalPrice(8880.0);
         return source;
     }

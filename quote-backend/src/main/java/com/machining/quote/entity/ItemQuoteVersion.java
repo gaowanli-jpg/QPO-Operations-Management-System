@@ -68,13 +68,11 @@ public class ItemQuoteVersion {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private Object feeData;
 
-    // 利润与最终价格字段
+    // 核价成本与正式价格字段
     private Double baseCost;
-    private Double finalUnitPrice;
-    private Double finalTotalPrice;
     private Double taxIncludedUnitPrice;
-    private Double untaxedUnitPrice;
     private Double taxIncludedTotalPrice;
+    private Double untaxedUnitPrice;
     private Double untaxedTotalPrice;
     @Deprecated
     private Integer shippedQty;

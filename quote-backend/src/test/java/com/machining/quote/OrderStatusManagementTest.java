@@ -104,7 +104,7 @@ class OrderStatusManagementTest {
         assertThat(updated.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
         assertThat(updated.getQuoteLeadTime()).isEqualTo("2026-03-20");
         assertThat(updated.getDrawingUrl()).isEqualTo("/uploads/drawing.pdf");
-        assertThat(updated.getFinalUnitPrice()).isEqualTo(12.3);
+        assertThat(updated.getTaxIncludedUnitPrice()).isEqualTo(12.3);
         assertThat(updated.getProcessRoute()).isEqualTo(List.of(Map.of("processName", "表面处理")));
         verify(fixture.auditService).record(
                 eq("ORDER_STATUS_ROLLBACK_QUOTED"),
@@ -294,8 +294,8 @@ class OrderStatusManagementTest {
         item.setStatus(status);
         item.setQuoteLeadTime("2026-03-20");
         item.setDrawingUrl("/uploads/drawing.pdf");
-        item.setFinalUnitPrice(12.3);
-        item.setFinalTotalPrice(24.6);
+        item.setTaxIncludedUnitPrice(12.3);
+        item.setTaxIncludedTotalPrice(24.6);
         item.setProcessRoute(List.of(Map.of("processName", "表面处理")));
         return item;
     }

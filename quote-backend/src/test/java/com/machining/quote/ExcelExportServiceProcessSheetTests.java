@@ -64,8 +64,8 @@ class ExcelExportServiceProcessSheetTests {
         item.setVersion("A");
         item.setQty(2);
         item.setUnit("件");
-        item.setFinalUnitPrice(12.3);
-        item.setFinalTotalPrice(24.6);
+        item.setTaxIncludedUnitPrice(12.3);
+        item.setTaxIncludedTotalPrice(24.6);
         item.setLeadTime("2026-03-20");
         item.setQuoteLeadTime("2026-03-25");
         item.setRemark("客户备注");

@@ -251,8 +251,8 @@ class QuoteStatusWorkflowStage2Test {
         item.setLeadTime(quoteLeadTime);
         item.setQuoteLeadTime(quoteLeadTime);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
-        item.setFinalUnitPrice(10.0);
-        item.setFinalTotalPrice(10.0);
+        item.setTaxIncludedUnitPrice(10.0);
+        item.setTaxIncludedTotalPrice(10.0);
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
     }

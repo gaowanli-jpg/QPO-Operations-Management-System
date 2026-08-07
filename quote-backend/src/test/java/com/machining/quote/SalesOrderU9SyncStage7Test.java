@@ -234,7 +234,6 @@ class SalesOrderU9SyncStage7Test {
         item.setPartNo("P-" + id);
         item.setDescription("零件 " + id);
         item.setSalesMaterialNo(salesMaterialNo);
-        item.setFinalUnitPrice(price);
         item.setTaxIncludedUnitPrice(price);
         item.setVersion("A");
         item.setQty(1);

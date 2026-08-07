@@ -350,7 +350,6 @@ public class SalesOrderU9SyncService {
         line.setTaxIncludedUnitPrice(item.getTaxIncludedUnitPrice());
         line.setUntaxedUnitPrice(item.getUntaxedUnitPrice());
         line.setUntaxedTotalPrice(item.getUntaxedTotalPrice());
-        line.setFinalUnitPrice(preferredPrice(item));
         line.setDeliveryDate(preferredDeliveryDate(item));
         line.setActualShipDate(item.getActualShipDate());
         line.setRemark(item.getRemark());
@@ -529,9 +528,6 @@ public class SalesOrderU9SyncService {
     }
 
     private BigDecimal preferredPrice(SalesOrderItem item) {
-        if (item.getFinalUnitPrice() != null) {
-            return item.getFinalUnitPrice();
-        }
         if (item.getTaxIncludedUnitPrice() != null) {
             return item.getTaxIncludedUnitPrice();
         }
@@ -709,10 +705,7 @@ public class SalesOrderU9SyncService {
     }
 
     private BigDecimal requiredPrice(SalesOrderItem item) {
-        BigDecimal price = item.getFinalUnitPrice() == null ? item.getTaxIncludedUnitPrice() : item.getFinalUnitPrice();
-        if (price == null) {
-            price = item.getUntaxedUnitPrice();
-        }
+        BigDecimal price = preferredPrice(item);
         if (price == null) {
             throw new RuntimeException("销售订单零件 " + item.getPartNo() + " 价格不能为空，不能同步 U9");
         }

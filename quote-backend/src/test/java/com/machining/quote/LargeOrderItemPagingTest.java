@@ -150,7 +150,7 @@ class LargeOrderItemPagingTest {
 
         String serviceSource = assertSourceContains("service", "OrderItemPageService.java", "COUNT(*) AS item_count");
         assertThat(serviceSource)
-                .contains("SUM(CASE WHEN final_unit_price IS NOT NULL THEN 1 ELSE 0 END)")
+                .contains("SUM(CASE WHEN tax_included_unit_price IS NOT NULL THEN 1 ELSE 0 END)")
                 .contains("SUM(CASE WHEN status =");
     }
 
@@ -633,14 +633,14 @@ class LargeOrderItemPagingTest {
         return order;
     }
 
-    private ItemQuoteVersion createItem(OrderRfq order, String partNo, String status, Double finalUnitPrice, String drawingUrl) {
+    private ItemQuoteVersion createItem(OrderRfq order, String partNo, String status, Double taxIncludedUnitPrice, String drawingUrl) {
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setRfqId(order.getId());
         item.setPartNo(partNo);
         item.setVersion("A");
         item.setQty(1);
         item.setStatus(status);
-        item.setFinalUnitPrice(finalUnitPrice);
+        item.setTaxIncludedUnitPrice(taxIncludedUnitPrice);
         item.setDrawingUrl(drawingUrl);
         itemMapper.insert(item);
         return item;

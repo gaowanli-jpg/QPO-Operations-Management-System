@@ -135,7 +135,7 @@ public class DeliveryService {
 
         for (DemandLine demand : demandByItemId.values()) {
             ItemQuoteVersion item = demand.item();
-            if (item.getFinalUnitPrice() == null) {
+            if (item.getTaxIncludedUnitPrice() == null) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 尚未核价，不能生成提单");
             }
             if (demand.qty() > safeInt(item.getQty())) {
@@ -459,7 +459,7 @@ public class DeliveryService {
 
         for (SalesOrderDemandLine demand : demandByItemId.values()) {
             SalesOrderItem item = demand.item();
-            if (item.getFinalUnitPrice() == null) {
+            if (item.getTaxIncludedUnitPrice() == null) {
                 throw new RuntimeException("销售订单零件 " + salesOrderItemLabel(item) + " 尚未报价，不能生成提单");
             }
             int remainingQty = salesOrderRemainingQty(item);
@@ -776,7 +776,7 @@ public class DeliveryService {
         List<OrderDeliveryTicket> tickets = ticketMapper.selectList(qw);
         int generatedQty = tickets.stream().mapToInt(ticket -> safeInt(ticket.getQty())).sum();
         if (generatedQty <= 0) {
-            item.setStatus(item.getFinalUnitPrice() == null ? QuoteStatusWorkflow.UNPRICED : QuoteStatusWorkflow.QUOTED);
+            item.setStatus(item.getTaxIncludedUnitPrice() == null ? QuoteStatusWorkflow.UNPRICED : QuoteStatusWorkflow.QUOTED);
         } else if (generatedQty < safeInt(item.getQty())) {
             item.setStatus(QuoteStatusWorkflow.QUOTED);
         } else {
@@ -825,7 +825,7 @@ public class DeliveryService {
         }
 
         List<ItemQuoteVersion> quotedItems = items.stream()
-                .filter(item -> item.getFinalUnitPrice() != null)
+                .filter(item -> item.getTaxIncludedUnitPrice() != null)
                 .toList();
         if (quotedItems.isEmpty()) {
             order.setStatus("部分已提单");
@@ -849,7 +849,7 @@ public class DeliveryService {
         if (drawableItems.isEmpty()) {
             return QuoteStatusWorkflow.UNPRICED;
         }
-        boolean allQuoted = drawableItems.stream().allMatch(item -> item.getFinalUnitPrice() != null);
+        boolean allQuoted = drawableItems.stream().allMatch(item -> item.getTaxIncludedUnitPrice() != null);
         if (allQuoted) {
             return QuoteStatusWorkflow.QUOTED;
         }

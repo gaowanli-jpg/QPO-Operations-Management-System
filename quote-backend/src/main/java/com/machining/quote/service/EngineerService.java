@@ -212,9 +212,9 @@ public class EngineerService {
         double markupCost = feeBreakdown.stream()
                 .mapToDouble(row -> doubleValue(row.get("cost")) == null ? 0.0 : doubleValue(row.get("cost")))
                 .sum();
-        double finalUnitPrice = baseCost + markupCost;
-        double finalTotalPrice = finalUnitPrice * qty;
-        double untaxedUnitPrice = untaxedUnitPrice(finalUnitPrice, feeBreakdown);
+        double taxIncludedUnitPrice = baseCost + markupCost;
+        double taxIncludedTotalPrice = taxIncludedUnitPrice * qty;
+        double untaxedUnitPrice = untaxedUnitPrice(taxIncludedUnitPrice, feeBreakdown);
         double untaxedTotalPrice = untaxedUnitPrice * qty;
 
         item.setMaterialData(materialData);
@@ -227,18 +227,16 @@ public class EngineerService {
         item.setQuoteMode(QUOTE_MODE_NORMAL);
         item.setAssemblyFee(0.0);
         item.setBaseCost(baseCost);
-        item.setFinalUnitPrice(finalUnitPrice);
-        item.setFinalTotalPrice(finalTotalPrice);
-        item.setTaxIncludedUnitPrice(finalUnitPrice);
-        item.setTaxIncludedTotalPrice(finalTotalPrice);
+        item.setTaxIncludedUnitPrice(taxIncludedUnitPrice);
+        item.setTaxIncludedTotalPrice(taxIncludedTotalPrice);
         item.setUntaxedUnitPrice(untaxedUnitPrice);
         item.setUntaxedTotalPrice(untaxedTotalPrice);
         item.setStatus(QuoteStatusWorkflow.PRICED);
 
         deleteAssemblyRelations(item.getId());
         itemMapper.updateById(item);
-        log.info("Item quote saved rfqId={} itemId={} partNo={} quoteMode={} baseCost={} finalUnitPrice={} toStatus={}",
-                item.getRfqId(), item.getId(), item.getPartNo(), QUOTE_MODE_NORMAL, baseCost, finalUnitPrice,
+        log.info("Item quote saved rfqId={} itemId={} partNo={} quoteMode={} baseCost={} taxIncludedUnitPrice={} toStatus={}",
+                item.getRfqId(), item.getId(), item.getPartNo(), QUOTE_MODE_NORMAL, baseCost, taxIncludedUnitPrice,
                 QuoteStatusWorkflow.PRICED);
     }
 
@@ -255,11 +253,11 @@ public class EngineerService {
         List<Map<String, Object>> childSummary = new ArrayList<>();
         for (QuoteSubmitReq.AssemblyChildDTO childLine : normalizedChildren) {
             ItemQuoteVersion child = itemMapper.selectById(childLine.getChildItemId());
-            if (child.getFinalUnitPrice() == null) {
+            if (child.getTaxIncludedUnitPrice() == null) {
                 throw new RuntimeException("子件 " + itemLabel(child) + " 尚未核价，不能作为组合件子件");
             }
             double qtyPerParent = nonNegativeOrZero(childLine.getQtyPerParent());
-            double childAmount = child.getFinalUnitPrice() * qtyPerParent;
+            double childAmount = child.getTaxIncludedUnitPrice() * qtyPerParent;
             childrenTotal += childAmount;
 
             Map<String, Object> row = new LinkedHashMap<>();
@@ -268,7 +266,7 @@ public class EngineerService {
             row.put("version", child.getVersion());
             row.put("description", child.getDescription());
             row.put("qtyPerParent", qtyPerParent);
-            row.put("finalUnitPrice", child.getFinalUnitPrice());
+            row.put("taxIncludedUnitPrice", child.getTaxIncludedUnitPrice());
             row.put("lineAmount", childAmount);
             childSummary.add(row);
         }
@@ -277,10 +275,10 @@ public class EngineerService {
         List<Map<String, Object>> assemblyFeeBreakdown = calculateAssemblyFeeMarkupFees(safeAssemblyFee);
         double assemblyFeeMarkupCost = sumFeeCosts(assemblyFeeBreakdown);
         double baseCost = childrenTotal + safeAssemblyFee;
-        double finalUnitPrice = baseCost + assemblyFeeMarkupCost;
+        double taxIncludedUnitPrice = baseCost + assemblyFeeMarkupCost;
         int parentQty = parent.getQty() == null ? 0 : parent.getQty();
-        double finalTotalPrice = finalUnitPrice * parentQty;
-        double untaxedUnitPrice = untaxedUnitPrice(finalUnitPrice, assemblyFeeBreakdown);
+        double taxIncludedTotalPrice = taxIncludedUnitPrice * parentQty;
+        double untaxedUnitPrice = untaxedUnitPrice(taxIncludedUnitPrice, assemblyFeeBreakdown);
         double untaxedTotalPrice = untaxedUnitPrice * parentQty;
 
         Map<String, Object> materialData = new LinkedHashMap<>();
@@ -323,17 +321,15 @@ public class EngineerService {
         parent.setMaterialGrossWeight(0.0);
         parent.setPartNetWeight(0.0);
         parent.setBaseCost(baseCost);
-        parent.setFinalUnitPrice(finalUnitPrice);
-        parent.setFinalTotalPrice(finalTotalPrice);
-        parent.setTaxIncludedUnitPrice(finalUnitPrice);
-        parent.setTaxIncludedTotalPrice(finalTotalPrice);
+        parent.setTaxIncludedUnitPrice(taxIncludedUnitPrice);
+        parent.setTaxIncludedTotalPrice(taxIncludedTotalPrice);
         parent.setUntaxedUnitPrice(untaxedUnitPrice);
         parent.setUntaxedTotalPrice(untaxedTotalPrice);
         parent.setStatus(QuoteStatusWorkflow.PRICED);
         itemMapper.updateById(parent);
-        log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} finalUnitPrice={} toStatus={}",
+        log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} taxIncludedUnitPrice={} toStatus={}",
                 parent.getRfqId(), parent.getId(), parent.getPartNo(), childrenTotal, safeAssemblyFee,
-                assemblyFeeMarkupCost, finalUnitPrice, QuoteStatusWorkflow.PRICED);
+                assemblyFeeMarkupCost, taxIncludedUnitPrice, QuoteStatusWorkflow.PRICED);
     }
 
     public List<Map<String, Object>> listAssemblyRelations(Integer parentItemId) {
@@ -358,7 +354,7 @@ public class EngineerService {
                         row.put("description", child.getDescription());
                         row.put("qty", child.getQty());
                         row.put("quoteMode", normalizeQuoteMode(child.getQuoteMode()));
-                        row.put("finalUnitPrice", child.getFinalUnitPrice());
+                        row.put("taxIncludedUnitPrice", child.getTaxIncludedUnitPrice());
                         row.put("status", child.getStatus());
                     }
                     return row;
@@ -477,7 +473,7 @@ public class EngineerService {
 
     private boolean isRefreshableNormalQuote(ItemQuoteVersion item) {
         return item != null
-                && item.getFinalUnitPrice() != null
+                && item.getTaxIncludedUnitPrice() != null
                 && (item.getMaterialData() != null || item.getProcessRoute() != null);
     }
 
@@ -511,7 +507,7 @@ public class EngineerService {
                 if (QUOTE_MODE_ASSEMBLY.equals(normalizeQuoteMode(child.getQuoteMode()))) {
                     refreshedCount += refreshAssemblyQuoteRecursive(child, itemMap, refreshedAssemblies, visiting);
                 }
-                if (child.getFinalUnitPrice() == null) {
+                if (child.getTaxIncludedUnitPrice() == null) {
                     throw new RuntimeException("子件 " + itemLabel(child) + " 尚未核价，无法刷新组合件");
                 }
 
@@ -540,15 +536,17 @@ public class EngineerService {
         List<ItemAssemblyRelation> parentRelations = assemblyRelationMapper.selectList(qw);
         for (ItemAssemblyRelation relation : parentRelations) {
             ItemQuoteVersion parent = itemMapper.selectById(relation.getParentItemId());
-            if (parent == null || parent.getFinalUnitPrice() == null) {
+            if (parent == null || parent.getTaxIncludedUnitPrice() == null) {
                 continue;
             }
             UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
             update.eq("id", parent.getId())
                     .set("status", QuoteStatusWorkflow.UNPRICED)
                     .set("base_cost", null)
-                    .set("final_unit_price", null)
-                    .set("final_total_price", null)
+                    .set("tax_included_unit_price", null)
+                    .set("tax_included_total_price", null)
+                    .set("untaxed_unit_price", null)
+                    .set("untaxed_total_price", null)
                     .set("fee_data", null);
             itemMapper.update(null, update);
             markAncestorAssembliesPending(parent.getId(), visited);
@@ -568,7 +566,7 @@ public class EngineerService {
 
         List<String> unquotedItems = items.stream()
                 .filter(this::hasDrawing)
-                .filter(item -> item.getFinalUnitPrice() == null)
+                .filter(item -> item.getTaxIncludedUnitPrice() == null)
                 .map(this::itemLabel)
                 .toList();
         if (!unquotedItems.isEmpty()) {
@@ -577,7 +575,7 @@ public class EngineerService {
 
         int noDrawingCount = 0;
         for (ItemQuoteVersion item : items) {
-            if (!hasDrawing(item) && item.getFinalUnitPrice() == null) {
+            if (!hasDrawing(item) && item.getTaxIncludedUnitPrice() == null) {
                 item.setStatus(QuoteStatusWorkflow.NO_DRAWING);
                 itemMapper.updateById(item);
                 noDrawingCount++;
@@ -667,7 +665,7 @@ public class EngineerService {
                 handledItemIds.add(item.getId());
                 continue;
             }
-            if (item.getFinalUnitPrice() != null) {
+            if (item.getTaxIncludedUnitPrice() != null) {
                 skippedItems.add(buildSkipInfo(item, "当前零件已有报价，未覆盖"));
                 handledItemIds.add(item.getId());
                 continue;
@@ -699,7 +697,7 @@ public class EngineerService {
                 skippedItems.add(buildSkipInfo(item, "当前零件无图，暂不自动核价"));
                 continue;
             }
-            if (item.getFinalUnitPrice() != null) {
+            if (item.getTaxIncludedUnitPrice() != null) {
                 skippedItems.add(buildSkipInfo(item, "当前零件已有报价，未覆盖"));
                 continue;
             }
@@ -734,7 +732,7 @@ public class EngineerService {
         if (!hasDrawing(currentItem)) {
             return "当前零件无图，暂不自动核价";
         }
-        if (currentItem.getFinalUnitPrice() != null) {
+        if (currentItem.getTaxIncludedUnitPrice() != null) {
             handledItemIds.add(currentItem.getId());
             return null;
         }
@@ -791,7 +789,7 @@ public class EngineerService {
             if (skippedReason != null) {
                 return "子件 " + itemLabel(historicalChild) + " " + skippedReason;
             }
-            if (currentChild.getFinalUnitPrice() == null) {
+            if (currentChild.getTaxIncludedUnitPrice() == null) {
                 return "子件 " + itemLabel(historicalChild) + " 尚未核价，需手动补齐";
             }
 
@@ -827,8 +825,8 @@ public class EngineerService {
                                       List<Map<String, Object>> appliedItems) {
         handledItemIds.add(item.getId());
         Map<String, Object> applied = buildRepeatItemInfo(item, source);
-        applied.put("finalUnitPrice", item.getFinalUnitPrice());
-        applied.put("finalTotalPrice", item.getFinalTotalPrice());
+        applied.put("taxIncludedUnitPrice", item.getTaxIncludedUnitPrice());
+        applied.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         applied.put("quoteMode", normalizeQuoteMode(item.getQuoteMode()));
         appliedItems.add(applied);
     }
@@ -886,8 +884,6 @@ public class EngineerService {
         copy.setMaterialGrossWeight(source.getMaterialGrossWeight());
         copy.setPartNetWeight(source.getPartNetWeight());
         copy.setBaseCost(source.getBaseCost());
-        copy.setFinalUnitPrice(source.getFinalUnitPrice());
-        copy.setFinalTotalPrice(source.getFinalTotalPrice());
         copy.setTaxIncludedUnitPrice(source.getTaxIncludedUnitPrice());
         copy.setTaxIncludedTotalPrice(source.getTaxIncludedTotalPrice());
         copy.setUntaxedUnitPrice(source.getUntaxedUnitPrice());
@@ -1049,7 +1045,7 @@ public class EngineerService {
     private boolean hasReusableQuote(ItemQuoteVersion item) {
         return item != null
                 && QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                && item.getFinalUnitPrice() != null
+                && item.getTaxIncludedUnitPrice() != null
                 && item.getMaterialData() != null
                 && item.getProcessRoute() != null;
     }
@@ -1133,7 +1129,7 @@ public class EngineerService {
         row.put("sourceProjectName", source.order().getProjectName());
         row.put("sourceItemId", source.item().getId());
         row.put("sourceVersion", normalizeVersion(source.item().getVersion()));
-        row.put("sourceFinalUnitPrice", source.item().getFinalUnitPrice());
+        row.put("sourceTaxIncludedUnitPrice", source.item().getTaxIncludedUnitPrice());
         row.put("sourceProcessRoute", source.item().getProcessRoute());
         return row;
     }
@@ -1305,12 +1301,12 @@ public class EngineerService {
                 .sum();
     }
 
-    private double untaxedUnitPrice(double finalUnitPrice, List<Map<String, Object>> feeRows) {
+    private double untaxedUnitPrice(double taxIncludedUnitPrice, List<Map<String, Object>> feeRows) {
         double taxCost = sumTaxFeeCosts(feeRows);
         if (taxCost <= 0) {
-            return finalUnitPrice;
+            return taxIncludedUnitPrice;
         }
-        return Math.max(0.0, finalUnitPrice - taxCost);
+        return Math.max(0.0, taxIncludedUnitPrice - taxCost);
     }
 
     private double sumTaxFeeCosts(List<Map<String, Object>> feeRows) {

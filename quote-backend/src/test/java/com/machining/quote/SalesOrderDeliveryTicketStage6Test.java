@@ -206,8 +206,8 @@ class SalesOrderDeliveryTicketStage6Test {
         List<OrderDeliveryTicket> insertedTickets = new ArrayList<>();
         SalesOrderHeader header = salesOrderHeader();
         SalesOrderItem blankPrice = salesOrderItem(1001L, 4, 0, "SO-P-1");
-        blankPrice.setFinalUnitPrice(null);
-        blankPrice.setFinalTotalPrice(null);
+        blankPrice.setTaxIncludedUnitPrice(null);
+        blankPrice.setTaxIncludedTotalPrice(null);
         SalesOrderItem priced = salesOrderItem(1002L, 3, 0, "SO-P-2");
 
         when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
@@ -402,8 +402,8 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setMaterialName("6061");
         item.setEngineeringMaterialName("7075");
         item.setSurfaceTreatment("Anodized");
-        item.setFinalUnitPrice(BigDecimal.valueOf(12.34));
-        item.setFinalTotalPrice(BigDecimal.valueOf(12.34 * qty));
+        item.setTaxIncludedUnitPrice(BigDecimal.valueOf(12.34));
+        item.setTaxIncludedTotalPrice(BigDecimal.valueOf(12.34 * qty));
         item.setInternalDeliveryDate(LocalDate.of(2026, 8, 15));
         item.setProcessRoute(List.of(Map.of("processName", "CNC")));
         item.setMaterialData(Map.of("name", "7075"));

@@ -17,7 +17,6 @@ public class SalesOrderMatchItemRow {
     private String surfaceTreatment;
     private String materialNo;
     private BigDecimal taxIncludedUnitPrice;
-    private BigDecimal finalUnitPrice;
     private String currentMatchStatus;
     private String matchMessage;
     private Integer matchedRfqId;

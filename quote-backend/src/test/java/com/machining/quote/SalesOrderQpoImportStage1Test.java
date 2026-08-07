@@ -166,8 +166,6 @@ class SalesOrderQpoImportStage1Test {
                 0.5
         );
 
-        assertThat((Double) ReflectionTestUtils.getField(item, "finalUnitPrice")).isCloseTo(123.0, within(0.000001));
-        assertThat((Double) ReflectionTestUtils.getField(item, "finalTotalPrice")).isCloseTo(246.0, within(0.000001));
         assertThat((Double) ReflectionTestUtils.getField(item, "taxIncludedUnitPrice")).isCloseTo(123.0, within(0.000001));
         assertThat((Double) ReflectionTestUtils.getField(item, "taxIncludedTotalPrice")).isCloseTo(246.0, within(0.000001));
         assertThat((Double) ReflectionTestUtils.getField(item, "untaxedUnitPrice")).isCloseTo(110.0, within(0.000001));

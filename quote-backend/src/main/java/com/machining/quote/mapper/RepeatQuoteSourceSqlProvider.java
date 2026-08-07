@@ -35,7 +35,7 @@ public class RepeatQuoteSourceSqlProvider {
                       AND h.version = k.version
                       %s
                       AND h.status = '%s'
-                      AND h.final_unit_price IS NOT NULL
+                      AND h.tax_included_unit_price IS NOT NULL
                       AND h.material_data IS NOT NULL
                       AND h.process_route IS NOT NULL
                     ORDER BY h.id DESC

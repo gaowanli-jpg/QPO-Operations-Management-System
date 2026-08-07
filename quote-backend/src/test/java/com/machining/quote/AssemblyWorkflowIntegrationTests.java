@@ -73,8 +73,8 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(saved.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(saved.getAssemblyFee()).isEqualTo(50.0);
         assertThat(saved.getBaseCost()).isEqualTo(90.0);
-        assertThat(saved.getFinalUnitPrice()).isEqualTo(106.5);
-        assertThat(saved.getFinalTotalPrice()).isEqualTo(319.5);
+        assertThat(saved.getTaxIncludedUnitPrice()).isEqualTo(106.5);
+        assertThat(saved.getTaxIncludedTotalPrice()).isEqualTo(319.5);
         List<Map<String, Object>> feeRows = (List<Map<String, Object>>) saved.getFeeData();
         assertThat(feeRows).hasSize(3);
         assertThat(feeRows)
@@ -96,12 +96,12 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion child = createPendingItem(order, "REF-CHILD", 2);
         submitNormalQuoteWithBaseCost(child, 100.0);
         child = itemMapper.selectById(child.getId());
-        assertThat(child.getFinalUnitPrice()).isCloseTo(143.0, within(0.000001));
+        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(143.0, within(0.000001));
 
         ItemQuoteVersion parent = createPendingItem(order, "REF-PARENT", 1);
         submitAssembly(parent, 50.0, child(parent, child, 1));
         parent = itemMapper.selectById(parent.getId());
-        assertThat(parent.getFinalUnitPrice()).isCloseTo(209.5, within(0.000001));
+        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(209.5, within(0.000001));
 
         upsertMarkupFee("管理费", 10.0, 2);
 
@@ -112,8 +112,8 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(result.get("refreshedCount")).isEqualTo(2);
         assertThat(result.get("normalCount")).isEqualTo(1);
         assertThat(result.get("assemblyCount")).isEqualTo(1);
-        assertThat(child.getFinalUnitPrice()).isCloseTo(148.0, within(0.000001));
-        assertThat(parent.getFinalUnitPrice()).isCloseTo(214.5, within(0.000001));
+        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(148.0, within(0.000001));
+        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(214.5, within(0.000001));
     }
 
     @Test
@@ -150,9 +150,15 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion invalidParent = itemMapper.selectById(parent.getId());
         ItemQuoteVersion invalidGrandParent = itemMapper.selectById(grandParent.getId());
         assertThat(invalidParent.getStatus()).isEqualTo("未核价");
-        assertThat(invalidParent.getFinalUnitPrice()).isNull();
+        assertThat(invalidParent.getTaxIncludedUnitPrice()).isNull();
+        assertThat(invalidParent.getTaxIncludedTotalPrice()).isNull();
+        assertThat(invalidParent.getUntaxedUnitPrice()).isNull();
+        assertThat(invalidParent.getUntaxedTotalPrice()).isNull();
         assertThat(invalidGrandParent.getStatus()).isEqualTo("未核价");
-        assertThat(invalidGrandParent.getFinalUnitPrice()).isNull();
+        assertThat(invalidGrandParent.getTaxIncludedUnitPrice()).isNull();
+        assertThat(invalidGrandParent.getTaxIncludedTotalPrice()).isNull();
+        assertThat(invalidGrandParent.getUntaxedUnitPrice()).isNull();
+        assertThat(invalidGrandParent.getUntaxedTotalPrice()).isNull();
     }
 
     @Test
@@ -235,10 +241,10 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion savedChild = itemMapper.selectById(currentChild.getId());
         ItemQuoteVersion savedParent = itemMapper.selectById(currentParent.getId());
         assertThat(result.get("appliedCount")).isEqualTo(2);
-        assertThat(savedChild.getFinalUnitPrice()).isNotNull();
+        assertThat(savedChild.getTaxIncludedUnitPrice()).isNotNull();
         assertThat(savedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(savedParent.getAssemblyFee()).isEqualTo(30.0);
-        assertThat(savedParent.getFinalUnitPrice()).isNotNull();
+        assertThat(savedParent.getTaxIncludedUnitPrice()).isNotNull();
 
         QueryWrapper<ItemAssemblyRelation> relationQw = new QueryWrapper<>();
         relationQw.eq("parent_item_id", currentParent.getId());
@@ -289,7 +295,7 @@ class AssemblyWorkflowIntegrationTests {
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
         assertThat(result.get("appliedCount")).isEqualTo(3);
-        assertThat(itemMapper.selectById(currentLeaf.getId()).getFinalUnitPrice()).isNotNull();
+        assertThat(itemMapper.selectById(currentLeaf.getId()).getTaxIncludedUnitPrice()).isNotNull();
         assertThat(itemMapper.selectById(currentMiddle.getId()).getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(itemMapper.selectById(currentTop.getId()).getQuoteMode()).isEqualTo("ASSEMBLY");
 
@@ -345,7 +351,7 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(result.get("appliedCount")).isEqualTo(0);
         assertThat(saved.getQuoteMode()).isEqualTo(before.getQuoteMode());
         assertThat(saved.getAssemblyFee()).isEqualTo(before.getAssemblyFee());
-        assertThat(saved.getFinalUnitPrice()).isNull();
+        assertThat(saved.getTaxIncludedUnitPrice()).isNull();
         assertThat(saved.getStatus()).isEqualTo("待核价");
         List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
         assertThat(skippedItems).extracting(row -> row.get("reason").toString())
@@ -384,7 +390,7 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion savedChild = itemMapper.selectById(currentChild.getId());
         ItemQuoteVersion savedParent = itemMapper.selectById(currentParent.getId());
         assertThat(result.get("appliedCount")).isEqualTo(2);
-        assertThat(savedChild.getFinalUnitPrice()).isNotNull();
+        assertThat(savedChild.getTaxIncludedUnitPrice()).isNotNull();
         assertThat(savedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(savedParent.getAssemblyFee()).isEqualTo(25.0);
 
@@ -421,8 +427,8 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion item = createPendingItem(order, partNo, qty);
         item.setQuoteMode("NORMAL");
         item.setBaseCost(unitPrice);
-        item.setFinalUnitPrice(unitPrice);
-        item.setFinalTotalPrice(unitPrice * qty);
+        item.setTaxIncludedUnitPrice(unitPrice);
+        item.setTaxIncludedTotalPrice(unitPrice * qty);
         item.setStatus("已报价");
         itemMapper.updateById(item);
         return itemMapper.selectById(item.getId());

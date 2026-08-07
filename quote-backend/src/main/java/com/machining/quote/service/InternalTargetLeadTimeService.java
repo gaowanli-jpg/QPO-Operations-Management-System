@@ -611,8 +611,8 @@ public class InternalTargetLeadTimeService {
                         item.lead_time,
                         item.quote_lead_time,
                         item.internal_target_lead_time,
-                        item.final_unit_price,
-                        item.final_total_price,
+                        item.tax_included_unit_price,
+                        item.tax_included_total_price,
                         item.status,
                         item.remark,
                         item.quote_mode,
@@ -652,8 +652,8 @@ public class InternalTargetLeadTimeService {
                         CAST(item.customer_delivery_date AS VARCHAR) AS lead_time,
                         CAST(item.internal_delivery_date AS VARCHAR) AS quote_lead_time,
                         CAST(NULL AS VARCHAR) AS internal_target_lead_time,
-                        item.final_unit_price,
-                        item.final_total_price,
+                        item.tax_included_unit_price,
+                        item.tax_included_total_price,
                         item.status,
                         item.remark,
                         item.quote_mode,
@@ -700,7 +700,7 @@ public class InternalTargetLeadTimeService {
         Long sourceItemId = longValue(raw, "source_item_id");
         int ticketedQty = number(raw, "ticketed_qty");
         int remainingQty = number(raw, "remaining_qty");
-        Object finalUnitPrice = value(raw, "final_unit_price");
+        Object taxIncludedUnitPrice = value(raw, "tax_included_unit_price");
         String status = text(raw, "status");
 
         row.put("id", sourceItemId);
@@ -731,19 +731,19 @@ public class InternalTargetLeadTimeService {
         row.put("effectiveDeliveryLeadTime", value(raw, "internal_target_lead_time") != null
                 ? value(raw, "internal_target_lead_time")
                 : value(raw, "quote_lead_time"));
-        row.put("finalUnitPrice", finalUnitPrice);
-        row.put("finalTotalPrice", value(raw, "final_total_price"));
+        row.put("taxIncludedUnitPrice", taxIncludedUnitPrice);
+        row.put("taxIncludedTotalPrice", value(raw, "tax_included_total_price"));
         row.put("status", status);
         row.put("remark", value(raw, "remark"));
         row.put("quoteMode", value(raw, "quote_mode"));
         row.put("assemblyFee", value(raw, "assembly_fee"));
-        boolean canSelect = finalUnitPrice != null
+        boolean canSelect = taxIncludedUnitPrice != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
                 && !QuoteStatusWorkflow.RELEASED.equals(status)
                 && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(status);
         row.put("canSelect", canSelect);
-        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(finalUnitPrice, remainingQty, status));
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(taxIncludedUnitPrice, remainingQty, status));
         return row;
     }
 
@@ -1360,14 +1360,14 @@ public class InternalTargetLeadTimeService {
         row.put("effectiveDeliveryLeadTime", effectiveDeliveryLeadTime);
         row.put("deliveryParsedDate", leadTimeService.parsedDateText(effectiveDeliveryLeadTime));
         row.put("canAutoShiftInternalLeadTime", leadTimeService.canAutoShift(effectiveDeliveryLeadTime));
-        row.put("finalUnitPrice", item.getFinalUnitPrice());
-        row.put("finalTotalPrice", item.getFinalTotalPrice());
+        row.put("taxIncludedUnitPrice", item.getTaxIncludedUnitPrice());
+        row.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
         row.put("customerRequirement", item.getCustomerRequirement());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
-        boolean canSelect = item.getFinalUnitPrice() != null
+        boolean canSelect = item.getTaxIncludedUnitPrice() != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
                 && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
@@ -1419,24 +1419,24 @@ public class InternalTargetLeadTimeService {
         row.put("quoteLeadTime", item.getInternalDeliveryDate() == null ? null : item.getInternalDeliveryDate().toString());
         row.put("internalTargetLeadTime", null);
         row.put("effectiveDeliveryLeadTime", item.getInternalDeliveryDate() == null ? null : item.getInternalDeliveryDate().toString());
-        row.put("finalUnitPrice", item.getFinalUnitPrice());
-        row.put("finalTotalPrice", item.getFinalTotalPrice());
+        row.put("taxIncludedUnitPrice", item.getTaxIncludedUnitPrice());
+        row.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
         row.put("customerRequirement", item.getCustomerRequirement());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
-        boolean canSelect = item.getFinalUnitPrice() != null
+        boolean canSelect = item.getTaxIncludedUnitPrice() != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
                 && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
                 && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
         row.put("canSelect", canSelect);
-        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(item.getFinalUnitPrice(), remainingQty, item.getStatus()));
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(item.getTaxIncludedUnitPrice(), remainingQty, item.getStatus()));
         return row;
     }
     private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
-        if (item.getFinalUnitPrice() == null) {
+        if (item.getTaxIncludedUnitPrice() == null) {
             return "Item is not quoted";
         }
         if (remainingQty <= 0) {
@@ -1450,8 +1450,8 @@ public class InternalTargetLeadTimeService {
         return "";
     }
 
-    private String releaseBlockedReasonFromValues(Object finalUnitPrice, int remainingQty, String status) {
-        if (finalUnitPrice == null) {
+    private String releaseBlockedReasonFromValues(Object taxIncludedUnitPrice, int remainingQty, String status) {
+        if (taxIncludedUnitPrice == null) {
             return "Item is not quoted";
         }
         if (remainingQty <= 0) {

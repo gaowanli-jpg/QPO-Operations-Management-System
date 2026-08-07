@@ -516,7 +516,7 @@ public class OrderManagementService {
         qw.select(
                 "rfq_id",
                 "COUNT(*) AS item_count",
-                "SUM(CASE WHEN final_unit_price IS NOT NULL THEN 1 ELSE 0 END) AS quoted_count",
+                "SUM(CASE WHEN tax_included_unit_price IS NOT NULL THEN 1 ELSE 0 END) AS quoted_count",
                 "SUM(CASE WHEN drawing_url IS NULL OR drawing_url = '' THEN 1 ELSE 0 END) AS missing_drawing_count"
         );
         qw.in("rfq_id", rfqIds);

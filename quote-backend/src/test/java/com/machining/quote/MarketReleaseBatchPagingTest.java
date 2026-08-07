@@ -309,7 +309,7 @@ class MarketReleaseBatchPagingTest {
         item.setPartNo(partNo);
         item.setVersion(version);
         item.setQty(1);
-        item.setFinalUnitPrice(10.0);
+        item.setTaxIncludedUnitPrice(10.0);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }

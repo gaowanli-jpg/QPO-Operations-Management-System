@@ -195,7 +195,7 @@ public class OrderItemPageService {
         Map<String, Object> row = jdbcTemplate.queryForMap("""
                 SELECT
                     COUNT(*) AS item_count,
-                    SUM(CASE WHEN final_unit_price IS NOT NULL THEN 1 ELSE 0 END) AS priced_count,
+                    SUM(CASE WHEN tax_included_unit_price IS NOT NULL THEN 1 ELSE 0 END) AS priced_count,
                     SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS quoted_count,
                     SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) AS released_count,
                     SUM(CASE WHEN drawing_url IS NULL OR BTRIM(drawing_url) = '' THEN 1 ELSE 0 END) AS missing_drawing_count

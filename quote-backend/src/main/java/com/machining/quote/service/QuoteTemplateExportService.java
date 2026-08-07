@@ -152,8 +152,8 @@ public class QuoteTemplateExportService {
         double processCost = sumProcessCost(processRoutes);
         double markupCost = sumCost(feeRows);
         double baseCost = item.getBaseCost() == null ? materialCost + processCost : item.getBaseCost();
-        double unitPrice = item.getFinalUnitPrice() == null ? materialCost + processCost + markupCost : item.getFinalUnitPrice();
-        double totalPrice = item.getFinalTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getFinalTotalPrice();
+        double unitPrice = item.getTaxIncludedUnitPrice() == null ? materialCost + processCost + markupCost : item.getTaxIncludedUnitPrice();
+        double totalPrice = item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice();
         boolean missingDrawing = isMissingDrawing(item);
 
         setByHeader(row, columns.headers(), "序号", index);

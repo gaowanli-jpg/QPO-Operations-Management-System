@@ -44,8 +44,6 @@ public class SalesOrderItem {
     private BigDecimal untaxedUnitPrice;
     private BigDecimal taxIncludedTotalPrice;
     private BigDecimal untaxedTotalPrice;
-    private BigDecimal finalUnitPrice;
-    private BigDecimal finalTotalPrice;
     private Integer shippedQty;
     private Integer unshippedQty;
     private Integer releasedQty;

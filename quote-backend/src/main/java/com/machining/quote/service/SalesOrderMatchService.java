@@ -589,7 +589,6 @@ public class SalesOrderMatchService {
         fields.put("qty", current.getQty());
         fields.put("materialNo", defaultText(current.getMaterialNo(), ""));
         fields.put("taxIncludedUnitPrice", current.getTaxIncludedUnitPrice());
-        fields.put("finalUnitPrice", current.getFinalUnitPrice());
         fields.put("customerOrderNo", defaultText(current.getCustomerOrderNo(), ""));
         fields.put("internalProjectNo", defaultText(current.getInternalProjectNo(), ""));
         return fields;
@@ -641,7 +640,6 @@ public class SalesOrderMatchService {
         row.setSurfaceTreatment(item.getSurfaceTreatment());
         row.setMaterialNo(item.getMaterialNo());
         row.setTaxIncludedUnitPrice(item.getTaxIncludedUnitPrice());
-        row.setFinalUnitPrice(item.getFinalUnitPrice());
         row.setCurrentMatchStatus(defaultText(item.getMatchStatus(), MATCH_STATUS_PENDING));
         row.setMatchMessage(item.getMatchMessage());
         row.setMatchedRfqId(item.getMatchedRfqId());

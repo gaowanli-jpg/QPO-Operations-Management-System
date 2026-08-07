@@ -102,8 +102,6 @@ class SalesOrderMatchStage3Test {
         assertThat(updated.getUntaxedUnitPrice()).isEqualByComparingTo("10.00");
         assertThat(updated.getTaxIncludedTotalPrice()).isEqualByComparingTo("113.00");
         assertThat(updated.getUntaxedTotalPrice()).isEqualByComparingTo("100.00");
-        assertThat(updated.getFinalUnitPrice()).isEqualByComparingTo("11.30");
-        assertThat(updated.getFinalTotalPrice()).isEqualByComparingTo("113.00");
         assertThat(updated.getCustomerOrderNo()).isEqualTo("PO-101");
         assertThat(updated.getCustomerProjectNo()).isEqualTo("CP-101");
         assertThat(updated.getInternalProjectNo()).isEqualTo("IP-101");
@@ -404,8 +402,6 @@ class SalesOrderMatchStage3Test {
         item.setUntaxedUnitPrice(new BigDecimal("10.00"));
         item.setTaxIncludedTotalPrice(new BigDecimal("113.00"));
         item.setUntaxedTotalPrice(new BigDecimal("100.00"));
-        item.setFinalUnitPrice(new BigDecimal("11.30"));
-        item.setFinalTotalPrice(new BigDecimal("113.00"));
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         item.setMatchStatus("待匹配");
         item.setAssemblyRelationStatus("不适用");
@@ -431,7 +427,7 @@ class SalesOrderMatchStage3Test {
         source.setQuoteMode(quoteMode);
         source.setAssemblyFee(12.5);
         source.setBaseCost(99.75);
-        source.setFinalUnitPrice(999.0);
+        source.setTaxIncludedUnitPrice(999.0);
         return source;
     }
 

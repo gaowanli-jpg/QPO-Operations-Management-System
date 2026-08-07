@@ -321,8 +321,8 @@ class CoreWorkflowIntegrationTests {
         item.setQuoteLeadTime("2026-03-25");
         item.setInternalTargetLeadTime("2026-03-22");
         item.setDrawingUrl("/uploads/test/P-100.pdf");
-        item.setFinalUnitPrice(10.0);
-        item.setFinalTotalPrice(50.0);
+        item.setTaxIncludedUnitPrice(10.0);
+        item.setTaxIncludedTotalPrice(50.0);
         item.setStatus("已报价");
         itemMapper.insert(item);
 
@@ -682,8 +682,8 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setDrawingUrl("/uploads/test/P-200.pdf");
         historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
         historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
-        historicalItem.setFinalUnitPrice(20.0);
-        historicalItem.setFinalTotalPrice(20.0);
+        historicalItem.setTaxIncludedUnitPrice(20.0);
+        historicalItem.setTaxIncludedTotalPrice(20.0);
         historicalItem.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         itemMapper.insert(historicalItem);
 
@@ -750,7 +750,7 @@ class CoreWorkflowIntegrationTests {
 
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
-        assertThat(saved.getFinalUnitPrice()).isNotNull();
+        assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
         assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
     }
 
@@ -784,7 +784,7 @@ class CoreWorkflowIntegrationTests {
 
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         assertThat(result.get("appliedCount")).isEqualTo(0);
-        assertThat(saved.getFinalUnitPrice()).isNull();
+        assertThat(saved.getTaxIncludedUnitPrice()).isNull();
         assertThat(saved.getStatus()).isEqualTo("待核价");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
@@ -823,7 +823,7 @@ class CoreWorkflowIntegrationTests {
         Map<String, Object> row = repeatItems.get(0);
         assertThat(row.get("sourceItemId")).isEqualTo(newer.getId());
         assertThat(row.get("sourceItemId")).isNotEqualTo(older.getId());
-        assertThat(row.get("sourceFinalUnitPrice")).isEqualTo(30.0);
+        assertThat(row.get("sourceTaxIncludedUnitPrice")).isEqualTo(30.0);
     }
 
     @Test
@@ -893,7 +893,7 @@ class CoreWorkflowIntegrationTests {
                 .contains("idx_item_quote_version_repeat_released_key")
                 .contains("ON item_quote_version(part_no, version, id DESC)")
                 .contains("WHERE status = '\u5df2\u63d0\u5355'")
-                .contains("final_unit_price IS NOT NULL")
+                .contains("tax_included_unit_price IS NOT NULL")
                 .contains("material_data IS NOT NULL")
                 .contains("process_route IS NOT NULL");
         assertThat(combined)
@@ -925,8 +925,8 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setMaterialName("45#钢");
         historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
         historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
-        historicalItem.setFinalUnitPrice(20.0);
-        historicalItem.setFinalTotalPrice(20.0);
+        historicalItem.setTaxIncludedUnitPrice(20.0);
+        historicalItem.setTaxIncludedTotalPrice(20.0);
         historicalItem.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         itemMapper.insert(historicalItem);
 
@@ -960,7 +960,7 @@ class CoreWorkflowIntegrationTests {
         ItemQuoteVersion savedItem = itemMapper.selectById(currentItem.getId());
         OrderRfq savedOrder = orderMapper.selectById(currentOrder.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
-        assertThat(savedItem.getFinalUnitPrice()).isNotNull();
+        assertThat(savedItem.getTaxIncludedUnitPrice()).isNotNull();
         assertThat(savedItem.getStatus())
                 .as("重复历史核价只套用工程核价结果，仍需市场保存报价单后才进入已报价")
                 .isEqualTo(QuoteStatusWorkflow.PRICED);
@@ -979,8 +979,8 @@ class CoreWorkflowIntegrationTests {
         item.setDescription(partNo + "描述");
         item.setQty(1);
         item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
-        item.setFinalUnitPrice(10.0);
-        item.setFinalTotalPrice(10.0);
+        item.setTaxIncludedUnitPrice(10.0);
+        item.setTaxIncludedTotalPrice(10.0);
         item.setStatus("已报价");
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
@@ -1014,8 +1014,8 @@ class CoreWorkflowIntegrationTests {
         item.setMaterialName("45#钢");
         item.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", unitPrice));
         item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
-        item.setFinalUnitPrice(unitPrice);
-        item.setFinalTotalPrice(unitPrice);
+        item.setTaxIncludedUnitPrice(unitPrice);
+        item.setTaxIncludedTotalPrice(unitPrice);
         item.setStatus(status);
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
@@ -1072,8 +1072,8 @@ class CoreWorkflowIntegrationTests {
             item.setQty(1);
             item.setStatus(i < quotedCount ? "已报价" : "待核价");
             if (i < quotedCount) {
-                item.setFinalUnitPrice(10.0);
-                item.setFinalTotalPrice(10.0);
+                item.setTaxIncludedUnitPrice(10.0);
+                item.setTaxIncludedTotalPrice(10.0);
             }
             if (i >= missingDrawingCount) {
                 item.setDrawingUrl("/uploads/test/" + rfqPrefix + "-P" + i + ".pdf");

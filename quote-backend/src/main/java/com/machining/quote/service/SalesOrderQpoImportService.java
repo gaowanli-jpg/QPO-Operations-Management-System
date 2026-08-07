@@ -488,8 +488,6 @@ public class SalesOrderQpoImportService {
         item.setUntaxedUnitPrice(line.getUntaxedUnitPrice());
         item.setTaxIncludedTotalPrice(line.getTaxIncludedTotalPrice());
         item.setUntaxedTotalPrice(line.getUntaxedTotalPrice());
-        item.setFinalUnitPrice(line.getTaxIncludedUnitPrice());
-        item.setFinalTotalPrice(line.getTaxIncludedTotalPrice());
         item.setShippedQty(line.getShippedQty());
         item.setUnshippedQty(line.getUnshippedQty());
         item.setReleasedQty(0);

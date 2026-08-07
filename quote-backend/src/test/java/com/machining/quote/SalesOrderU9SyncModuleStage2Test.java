@@ -184,7 +184,6 @@ class SalesOrderU9SyncModuleStage2Test {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
         SalesOrderItem missingPrice = item(5001L, header.getId(), "P-001", "MAT-READY-001", "已确认");
-        missingPrice.setFinalUnitPrice(null);
         missingPrice.setTaxIncludedUnitPrice(null);
         missingPrice.setUntaxedUnitPrice(null);
         missingPrice.setUntaxedTotalPrice(null);
@@ -199,7 +198,7 @@ class SalesOrderU9SyncModuleStage2Test {
         assertThat(resp.getLines()).singleElement()
                 .satisfies(line -> {
                     assertThat(line.getMaterialNo()).isEqualTo("MAT-READY-001");
-                    assertThat(line.getFinalUnitPrice()).isNull();
+                    assertThat(line.getTaxIncludedUnitPrice()).isNull();
                     assertThat(line.getReady()).isFalse();
                     assertThat(line.getBlockedReason()).contains("价格");
                 });
@@ -294,7 +293,6 @@ class SalesOrderU9SyncModuleStage2Test {
         item.setMaterialNoStatus(materialNoStatus);
         item.setMaterialNoSource("MES_TICKET");
         item.setMaterialNoSyncedAt(LocalDateTime.of(2026, 7, 31, 10, 0));
-        item.setFinalUnitPrice(new BigDecimal("12.34"));
         item.setTaxIncludedUnitPrice(new BigDecimal("12.34"));
         item.setUntaxedUnitPrice(new BigDecimal("10.92"));
         item.setUntaxedTotalPrice(new BigDecimal("54.60"));

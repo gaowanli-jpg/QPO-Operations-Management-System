@@ -97,8 +97,8 @@ class QuoteExportProcessMergeTests {
         ));
         item.setFeeData(List.of());
         item.setBaseCost(530.0);
-        item.setFinalUnitPrice(530.0);
-        item.setFinalTotalPrice(530.0);
+        item.setTaxIncludedUnitPrice(530.0);
+        item.setTaxIncludedTotalPrice(530.0);
         itemMapper.insert(item);
     }
 

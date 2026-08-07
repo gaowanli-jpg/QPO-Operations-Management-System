@@ -199,8 +199,6 @@ class SalesOrderQpoImportStage3Test {
         assertThat(firstItem.getUntaxedUnitPrice()).isEqualByComparingTo(new BigDecimal("10.00"));
         assertThat(firstItem.getTaxIncludedTotalPrice()).isEqualByComparingTo(new BigDecimal("113.00"));
         assertThat(firstItem.getUntaxedTotalPrice()).isEqualByComparingTo(new BigDecimal("100.00"));
-        assertThat(firstItem.getFinalUnitPrice()).isEqualByComparingTo(new BigDecimal("11.30"));
-        assertThat(firstItem.getFinalTotalPrice()).isEqualByComparingTo(new BigDecimal("113.00"));
         assertThat(firstItem.getRemainingQty()).isEqualTo(10);
         assertThat(firstItem.getStatus()).isEqualTo("已报价");
         SalesOrderItem secondItem = itemCaptor.getAllValues().get(1);
@@ -304,8 +302,6 @@ class SalesOrderQpoImportStage3Test {
         assertThat(blankPriceItem.getUntaxedUnitPrice()).isNull();
         assertThat(blankPriceItem.getTaxIncludedTotalPrice()).isNull();
         assertThat(blankPriceItem.getUntaxedTotalPrice()).isNull();
-        assertThat(blankPriceItem.getFinalUnitPrice()).isNull();
-        assertThat(blankPriceItem.getFinalTotalPrice()).isNull();
         assertThat(blankPriceItem.getMaterialNo()).isNull();
         assertThat(blankPriceItem.getMaterialNoStatus()).isEqualTo("未确认");
 

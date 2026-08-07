@@ -227,8 +227,8 @@ class QuoteTemplateExportServiceTests {
             item.setProcessRoute(processRoutes());
             item.setFeeData(feeRows());
             item.setBaseCost(70.0);
-            item.setFinalUnitPrice(90.0);
-            item.setFinalTotalPrice(180.0);
+            item.setTaxIncludedUnitPrice(90.0);
+            item.setTaxIncludedTotalPrice(180.0);
             itemMapper.insert(item);
         }
     }
@@ -252,8 +252,8 @@ class QuoteTemplateExportServiceTests {
         item.setProcessRoute(processRoutes);
         item.setFeeData(List.of());
         item.setBaseCost(530.0);
-        item.setFinalUnitPrice(530.0);
-        item.setFinalTotalPrice(530.0);
+        item.setTaxIncludedUnitPrice(530.0);
+        item.setTaxIncludedTotalPrice(530.0);
         itemMapper.insert(item);
     }
 

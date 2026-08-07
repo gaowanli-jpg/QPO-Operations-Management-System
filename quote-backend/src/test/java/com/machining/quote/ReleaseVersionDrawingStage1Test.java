@@ -492,7 +492,7 @@ class ReleaseVersionDrawingStage1Test {
         item.setVersion(version);
         item.setDescription("release item");
         item.setQty(1);
-        item.setFinalUnitPrice(10.0);
+        item.setTaxIncludedUnitPrice(10.0);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }
@@ -516,7 +516,7 @@ class ReleaseVersionDrawingStage1Test {
         item.setQty(2);
         item.setReleasedQty(0);
         item.setRemainingQty(2);
-        item.setFinalUnitPrice(java.math.BigDecimal.TEN);
+        item.setTaxIncludedUnitPrice(java.math.BigDecimal.TEN);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }

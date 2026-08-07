@@ -229,7 +229,7 @@ public class QuoteProcessService {
 
             List<String> unpricedItems = items.stream()
                     .filter(this::hasDrawing)
-                    .filter(item -> item.getFinalUnitPrice() == null)
+                    .filter(item -> item.getTaxIncludedUnitPrice() == null)
                     .map(this::itemLabel)
                     .toList();
             if (!unpricedItems.isEmpty()) {
@@ -415,7 +415,7 @@ public class QuoteProcessService {
     private int markPricedItemsAsQuoted(List<ItemQuoteVersion> items) {
         int updated = 0;
         for (ItemQuoteVersion item : items) {
-            if (!hasDrawing(item) || item.getFinalUnitPrice() == null) {
+            if (!hasDrawing(item) || item.getTaxIncludedUnitPrice() == null) {
                 continue;
             }
             if (QuoteStatusWorkflow.QUOTED.equals(item.getStatus())) {
@@ -462,8 +462,8 @@ public class QuoteProcessService {
         row.put("effectiveLeadTime", effectiveLeadTime);
         row.put("parsedDate", leadTimeService.parsedDateText(effectiveLeadTime));
         row.put("canAutoShift", leadTimeService.canAutoShift(effectiveLeadTime));
-        row.put("finalUnitPrice", item.getFinalUnitPrice());
-        row.put("finalTotalPrice", item.getFinalTotalPrice());
+        row.put("taxIncludedUnitPrice", item.getTaxIncludedUnitPrice());
+        row.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
         row.put("quoteMode", item.getQuoteMode());

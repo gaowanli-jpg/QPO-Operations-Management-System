@@ -307,7 +307,6 @@ class SalesOrderMatchStage2Test {
         item.setInternalProjectNo("IP-" + salesOrderId);
         item.setMaterialNo("MES-MAT-" + id);
         item.setTaxIncludedUnitPrice(new BigDecimal("11.30"));
-        item.setFinalUnitPrice(new BigDecimal("11.30"));
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         item.setMatchStatus("待匹配");
         item.setAssemblyRelationStatus("不适用");
@@ -333,7 +332,7 @@ class SalesOrderMatchStage2Test {
         source.setQuoteMode("ASSEMBLY");
         source.setAssemblyFee(12.5);
         source.setBaseCost(99.75);
-        source.setFinalUnitPrice(999.0);
+        source.setTaxIncludedUnitPrice(999.0);
         return source;
     }
 

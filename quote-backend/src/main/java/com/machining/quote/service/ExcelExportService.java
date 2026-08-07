@@ -343,8 +343,8 @@ public class ExcelExportService {
             return row;
         }
 
-        double unitPrice = item.getFinalUnitPrice() == null ? 0.0 : item.getFinalUnitPrice();
-        double totalPrice = item.getFinalTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getFinalTotalPrice();
+        double unitPrice = item.getTaxIncludedUnitPrice() == null ? 0.0 : item.getTaxIncludedUnitPrice();
+        double totalPrice = item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice();
         row.add(unitPrice);
         row.add(totalPrice);
         row.add(safe(resolveQuoteExportLeadTime(item, true)));
@@ -385,8 +385,8 @@ public class ExcelExportService {
         double processCost = sumProcessCost(processRoutes);
         double markupCost = sumCost(feeRows);
         double baseCost = item.getBaseCost() == null ? materialCost + processCost : item.getBaseCost();
-        double unitPrice = item.getFinalUnitPrice() == null ? materialCost + processCost + markupCost : item.getFinalUnitPrice();
-        double totalPrice = item.getFinalTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getFinalTotalPrice();
+        double unitPrice = item.getTaxIncludedUnitPrice() == null ? materialCost + processCost + markupCost : item.getTaxIncludedUnitPrice();
+        double totalPrice = item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice();
 
         List<Object> row = new ArrayList<>();
         row.add(index);
