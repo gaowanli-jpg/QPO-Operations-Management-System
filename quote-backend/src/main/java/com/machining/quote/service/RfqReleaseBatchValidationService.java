@@ -34,6 +34,21 @@ public class RfqReleaseBatchValidationService {
     private DataScopeService dataScopeService;
 
     public BatchContext validate(DeliveryGenerateReq req) {
+        return validate(req, false);
+    }
+
+    public BatchContext validateReplay(DeliveryGenerateReq req) {
+        return validate(req, true);
+    }
+
+    public String requireReleaseBatchKey(DeliveryGenerateReq req) {
+        if (req == null) {
+            throw new RuntimeException("提单参数不能为空");
+        }
+        return normalizeRequired(req.getReleaseBatchKey(), "提单批次键", MAX_BATCH_KEY_LENGTH);
+    }
+
+    private BatchContext validate(DeliveryGenerateReq req, boolean replay) {
         if (req == null) {
             throw new RuntimeException("提单参数不能为空");
         }
@@ -44,7 +59,7 @@ public class RfqReleaseBatchValidationService {
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new RuntimeException("请至少选择一个通过议价的零件");
         }
-        String releaseBatchKey = normalizeRequired(req.getReleaseBatchKey(), "提单批次键", MAX_BATCH_KEY_LENGTH);
+        String releaseBatchKey = requireReleaseBatchKey(req);
         String documentTypeCode = normalizeRequired(
                 defaultText(req.getDocumentTypeCode(), "SO01"), "单据类型编码", MAX_DOCUMENT_TYPE_CODE_LENGTH);
         LocalDate salesOrderDate = req.getSalesOrderDate();
@@ -65,7 +80,7 @@ public class RfqReleaseBatchValidationService {
         Map<Integer, OrderRfq> orders = loadAccessibleOrders(rfqIds);
         String customerName = null;
         for (OrderRfq order : orders.values()) {
-            if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
+            if (!replay && !QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
                 if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
                     throw new RuntimeException("请先在报价处理模块保存报价单后再生成提单");
                 }

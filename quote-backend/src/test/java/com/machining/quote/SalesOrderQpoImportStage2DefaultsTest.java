@@ -18,6 +18,7 @@ import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.SalesOrderMatchService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
+import com.machining.quote.service.SalesOrderNumberService;
 import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderImportBatchMapper;
@@ -276,6 +277,7 @@ class SalesOrderQpoImportStage2DefaultsTest {
         ReflectionTestUtils.setField(service, "businessFileService", mock(BusinessFileService.class));
         ReflectionTestUtils.setField(service, "salesOrderMatchService", mock(SalesOrderMatchService.class));
         ReflectionTestUtils.setField(service, "deliveryService", mock(DeliveryService.class));
+        ReflectionTestUtils.setField(service, "salesOrderNumberService", new SalesOrderNumberService());
         return service;
     }
 

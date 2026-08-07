@@ -25,6 +25,7 @@ import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
 import com.machining.quote.service.SalesOrderMatchService;
+import com.machining.quote.service.SalesOrderNumberService;
 import com.machining.quote.storage.StorageType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -927,6 +928,7 @@ class SalesOrderQpoImportStage3Test {
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "salesOrderMatchService", salesOrderMatchService);
         ReflectionTestUtils.setField(service, "deliveryService", deliveryService);
+        ReflectionTestUtils.setField(service, "salesOrderNumberService", new SalesOrderNumberService());
         return service;
     }
 

@@ -232,6 +232,26 @@ public class DataScopeService {
         }
     }
 
+    public void assignCurrentOwnership(SalesOrderHeader order) {
+        if (order == null) {
+            return;
+        }
+        AuthContext.SessionUser current = AuthContext.get();
+        if (current == null) {
+            return;
+        }
+        SystemUser systemUser = loadSystemUser(current.id());
+        if (order.getCreatedBy() == null) {
+            order.setCreatedBy(current.id().longValue());
+        }
+        if (order.getOwnerUserId() == null) {
+            order.setOwnerUserId(current.id());
+        }
+        if (order.getOwnerDeptId() == null && systemUser != null) {
+            order.setOwnerDeptId(systemUser.getDeptId());
+        }
+    }
+
     public List<String> listCustomerOptions() {
         if (customerMasterMapper != null) {
             QueryWrapper<CustomerMaster> query = new QueryWrapper<>();

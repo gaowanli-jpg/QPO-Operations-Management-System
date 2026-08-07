@@ -73,6 +73,8 @@ public class SalesOrderQpoImportService {
     private SalesOrderMatchService salesOrderMatchService;
     @Autowired(required = false)
     private DeliveryService deliveryService;
+    @Autowired
+    private SalesOrderNumberService salesOrderNumberService;
 
     @Transactional
     public SalesOrderQpoImportResp importQpo(MultipartFile excelFile, Long customerId, String documentTypeCode) {
@@ -761,7 +763,7 @@ public class SalesOrderQpoImportService {
     }
 
     private String nextBatchNo() {
-        return "SOQPO" + System.currentTimeMillis();
+        return salesOrderNumberService.nextImportBatchNo();
     }
 
     private String safeFileName(String fileName) {

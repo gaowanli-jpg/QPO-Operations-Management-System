@@ -10,4 +10,10 @@ import org.apache.ibatis.annotations.Select;
 public interface SalesOrderHeaderMapper extends BaseMapper<SalesOrderHeader> {
     @Select("SELECT * FROM sales_order_header WHERE id = #{id} FOR UPDATE")
     SalesOrderHeader selectByIdForUpdate(@Param("id") Long id);
+
+    @Select("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(#{batchKey}, 0))) AS batch_lock")
+    Integer lockReleaseBatch(@Param("batchKey") String batchKey);
+
+    @Select("SELECT * FROM sales_order_header WHERE source_release_batch_key = #{batchKey}")
+    SalesOrderHeader selectByReleaseBatchKey(@Param("batchKey") String batchKey);
 }

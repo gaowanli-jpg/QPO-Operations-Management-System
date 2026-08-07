@@ -7,12 +7,10 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseSourceType;
-import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -33,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class DeliveryService {
@@ -49,8 +48,6 @@ public class DeliveryService {
     @Autowired
     private OrderRfqMapper orderRfqMapper;
     @Autowired
-    private ItemQuoteVersionMapper itemMapper;
-    @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private AuditService auditService;
@@ -63,20 +60,17 @@ public class DeliveryService {
     @Autowired(required = false)
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
-    private RfqReleaseBatchValidationService rfqReleaseBatchValidationService;
+    private RfqReleaseSalesOrderService rfqReleaseSalesOrderService;
 
     @Transactional
     public List<OrderDeliveryTicket> generateRfqTickets(DeliveryGenerateReq req) {
         requireRfqOnlyRequest(req);
-        return generateRfqBatchTickets(req, rfqReleaseBatchValidationService.validate(req), System.currentTimeMillis());
+        return rfqReleaseSalesOrderService.loadTickets(rfqReleaseSalesOrderService.generate(req));
     }
 
     @Transactional
     public DeliveryBatchResultDTO generateRfqReleaseBatch(DeliveryGenerateReq req) {
-        long startedAt = System.currentTimeMillis();
-        RfqReleaseBatchValidationService.BatchContext context = rfqReleaseBatchValidationService.validate(req);
-        List<OrderDeliveryTicket> tickets = generateRfqBatchTickets(req, context, startedAt);
-        return buildBatchResult(context, tickets);
+        return rfqReleaseSalesOrderService.generate(req);
     }
 
     @Transactional
@@ -96,7 +90,7 @@ public class DeliveryService {
                 return generateSalesOrderTickets(req, startedAt);
             }
             normalizeLegacyRfqRequest(req);
-            return generateRfqBatchTickets(req, rfqReleaseBatchValidationService.validate(req), startedAt);
+            return rfqReleaseSalesOrderService.loadTickets(rfqReleaseSalesOrderService.generate(req));
         } catch (RuntimeException e) {
             if (isBusinessFailure(e)) {
                 log.warn("Delivery ticket generation failed rfqIds={} selectedItemCount={} durationMs={} reason={}",
@@ -109,86 +103,6 @@ public class DeliveryService {
         }
     }
 
-    private List<OrderDeliveryTicket> generateRfqBatchTickets(
-            DeliveryGenerateReq req,
-            RfqReleaseBatchValidationService.BatchContext context,
-            long startedAt) {
-        Map<Integer, OrderRfq> lockedOrders = new LinkedHashMap<>();
-        for (Integer rfqId : context.rfqIds()) {
-            OrderRfq order = orderRfqMapper.selectByIdForUpdate(rfqId);
-            if (order == null) {
-                throw new RuntimeException("议价提单批次包含不存在或无权访问的询价单");
-            }
-            assertOrderDataScope(order);
-            if (!QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
-                throw new RuntimeException("只有已报价订单可以生成提单");
-            }
-            lockedOrders.put(rfqId, order);
-        }
-
-        Map<Integer, ItemQuoteVersion> lockedItemMap = lockRequestedItems(req.getItems());
-        Map<Integer, DemandLine> demandByItemId = new LinkedHashMap<>();
-        for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
-            Integer itemId = resolveRfqItemId(line);
-            ItemQuoteVersion item = lockedItemMap.get(itemId);
-            rfqReleaseBatchValidationService.validateLockedItem(line, item, context);
-            int acceptedQty = line.getAcceptedQty() == null ? safeInt(item.getQty()) : line.getAcceptedQty();
-            if (acceptedQty <= 0) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
-            }
-            if (acceptedQty > safeInt(item.getQty())) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量不能超过询价数量");
-            }
-            addDeliveryDemand(item, acceptedQty, demandByItemId);
-        }
-
-        for (DemandLine demand : demandByItemId.values()) {
-            ItemQuoteVersion item = demand.item();
-            if (item.getTaxIncludedUnitPrice() == null) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 尚未核价，不能生成提单");
-            }
-            int ticketedQty = ticketedQty(item);
-            int remainingQty = remainingQty(item, ticketedQty);
-            if (demand.qty() > remainingQty) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + demand.qty()
-                        + " 超过剩余可提数量 " + remainingQty);
-            }
-        }
-
-        List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
-        for (DemandLine demand : demandByItemId.values()) {
-            ItemQuoteVersion item = demand.item();
-            OrderRfq order = lockedOrders.get(item.getRfqId());
-            String orderType = effectiveOrderType(item, context.orderType());
-            String internalProjectNo = firstText(item.getInternalProjectNo(), context.internalProjectNo());
-            String customerOrderNo = firstText(item.getCustomerOrderNo(), context.customerOrderNo());
-            String customerProjectNo = firstText(item.getCustomerProjectNo(), context.customerProjectNo());
-            LocalDate salesOrderDate = item.getSalesOrderDate() == null
-                    ? context.salesOrderDate() : item.getSalesOrderDate();
-            String projectNo = isBlank(context.projectNo()) ? resolveProjectNo(order) : context.projectNo();
-            createdTickets.add(insertTicket(
-                    order, item, orderType, internalProjectNo, customerOrderNo, customerProjectNo,
-                    projectNo, salesOrderDate, demand.qty(), item.getRemark(), context.arrangeType()));
-        }
-
-        for (DemandLine demand : demandByItemId.values()) {
-            refreshItemTicketStatus(demand.item());
-        }
-        for (Integer rfqId : context.rfqIds()) {
-            refreshOrderTicketStatus(rfqId);
-        }
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("rfqIds", context.rfqIds());
-        summary.put("ticketCount", createdTickets.size());
-        summary.put("releaseBatchKeySummary", context.releaseBatchKeySummary());
-        for (Integer rfqId : context.rfqIds()) {
-            auditService.record("DELIVERY_TICKET_GENERATE", "order_rfq", rfqId, null, summary);
-        }
-        log.info("Delivery ticket generation completed rfqIds={} ticketCount={} durationMs={}",
-                context.rfqIds(), createdTickets.size(), System.currentTimeMillis() - startedAt);
-        return createdTickets;
-    }
-
     private void normalizeLegacyRfqRequest(DeliveryGenerateReq req) {
         if (req.getRfqIds() == null || req.getRfqIds().size() != 1) {
             return;
@@ -198,7 +112,7 @@ public class DeliveryService {
             req.setSalesOrderDate(LocalDate.now());
         }
         if (isBlank(req.getReleaseBatchKey())) {
-            req.setReleaseBatchKey("legacy-rfq-" + rfqId);
+            req.setReleaseBatchKey("legacy-rfq-" + rfqId + "-" + UUID.randomUUID());
         }
         for (DeliveryGenerateReq.DeliveryItemReq line : req.getItems()) {
             if (line == null) {
@@ -214,22 +128,6 @@ public class DeliveryService {
                 line.setSourceItemId(line.getItemId().longValue());
             }
         }
-    }
-
-    private DeliveryBatchResultDTO buildBatchResult(
-            RfqReleaseBatchValidationService.BatchContext context,
-            List<OrderDeliveryTicket> tickets) {
-        DeliveryBatchResultDTO result = new DeliveryBatchResultDTO();
-        result.setSuccess(true);
-        result.setMessage("提单已生成，共 " + tickets.size() + " 行。");
-        result.setSourceRfqIds(context.rfqIds());
-        result.setTicketCount(tickets.size());
-        result.setConfirmedMaterialCount((int) tickets.stream()
-                .filter(ticket -> MES_SUCCESS.equals(ticket.getMesSyncStatus()))
-                .count());
-        result.setPendingMaterialCount(tickets.size() - result.getConfirmedMaterialCount());
-        result.setTicketIds(tickets.stream().map(OrderDeliveryTicket::getId).toList());
-        return result;
     }
 
     public List<OrderDeliveryTicket> listTickets(Integer rfqId) {
@@ -432,12 +330,6 @@ public class DeliveryService {
         }
         return normalized;
     }
-    private void assertOrderDataScope(OrderRfq order) {
-        if (dataScopeService != null) {
-            dataScopeService.assertCanAccessOrder(order);
-        }
-    }
-
     private boolean isSalesOrderRequest(DeliveryGenerateReq req) {
         if (req == null || req.getItems() == null) {
             return false;
@@ -754,46 +646,6 @@ public class DeliveryService {
         return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
     }
 
-    private OrderDeliveryTicket insertTicket(OrderRfq order, ItemQuoteVersion item, String orderType, String internalProjectNo,
-                                             String customerOrderNo, String customerProjectNo, String projectNo,
-                                             LocalDate startDate, int qty, String remark, String arrangeType) {
-        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
-        ticket.setRfqId(order.getId());
-        ticket.setRfqNo(order.getRfqNo());
-        ticket.setCustomerName(order.getCustomerName());
-        ticket.setItemId(item.getId());
-        ticket.setSourceType(ReleaseSourceType.RFQ.name());
-        ticket.setSourceOrderId(order.getId() == null ? null : order.getId().longValue());
-        ticket.setSourceItemId(item.getId() == null ? null : item.getId().longValue());
-        ticket.setOrderType(orderType);
-        ticket.setInternalProjectNo(internalProjectNo);
-        ticket.setCustomerOrderNo(customerOrderNo);
-        ticket.setCustomerProjectNo(customerProjectNo);
-        ticket.setProjectNo(projectNo);
-        ticket.setItemType(resolveItemType(item));
-        ticket.setPartNo(item.getPartNo());
-        ticket.setDescription(item.getDescription());
-        ticket.setQty(qty);
-        ticket.setMaterialName(item.getMaterialName());
-        ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
-        ticket.setMaterialShape(resolveMaterialShape(item));
-        ticket.setSurfaceTreatment(item.getSurfaceTreatment());
-        ticket.setVersion(item.getVersion());
-        ticket.setStartDate(startDate);
-        ticket.setDeliveryDate(leadTimeService.resolveDeliveryDate(startDate, leadTimeService.effectiveDeliveryLeadTime(item)));
-        ticket.setRemark(remark);
-        ticket.setCustomerRequirement(item.getCustomerRequirement());
-        ticket.setArrangeType(arrangeType);
-        ticket.setDrawingUrl(item.getDrawingUrl());
-        ticket.setProcessRoute(item.getProcessRoute());
-        ticket.setMaterialData(item.getMaterialData());
-        ticket.setMaterialGrossWeight(item.getMaterialGrossWeight());
-        ticket.setPartNetWeight(item.getPartNetWeight());
-        initializeMesMaterialState(ticket, item.getMaterialNo(), item.getMaterialNoStatus(), item.getMaterialNoSyncedAt());
-        ticketMapper.insert(ticket);
-        return ticket;
-    }
-
     private void initializeMesMaterialState(
             OrderDeliveryTicket ticket,
             String materialNo,
@@ -811,149 +663,6 @@ public class DeliveryService {
         ticket.setMesSyncStatus(MES_PENDING);
         ticket.setMesSyncMessage(null);
         ticket.setMesSyncedAt(null);
-    }
-
-    private String resolveMaterialShape(ItemQuoteVersion item) {
-        return MaterialDataResolver.materialShape(item);
-    }
-
-    private void addDeliveryDemand(ItemQuoteVersion item, int qty, Map<Integer, DemandLine> demandByItemId) {
-        if (item == null || qty <= 0) {
-            return;
-        }
-        demandByItemId.merge(item.getId(), new DemandLine(item, qty),
-                (left, right) -> new DemandLine(left.item(), left.qty() + right.qty()));
-    }
-
-    private Map<Integer, ItemQuoteVersion> lockRequestedItems(List<DeliveryGenerateReq.DeliveryItemReq> lines) {
-        List<Integer> itemIds = lines.stream()
-                .map(this::resolveRfqItemId)
-                .filter(id -> id != null)
-                .distinct()
-                .sorted(Comparator.naturalOrder())
-                .toList();
-        Map<Integer, ItemQuoteVersion> result = new HashMap<>();
-        for (Integer itemId : itemIds) {
-            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
-            if (item != null) {
-                result.put(itemId, item);
-            }
-        }
-        return result;
-    }
-
-    private Integer resolveRfqItemId(DeliveryGenerateReq.DeliveryItemReq line) {
-        if (line == null) {
-            throw new RuntimeException("提单零件不能为空");
-        }
-        Long sourceItemId = line.getSourceItemId();
-        if (sourceItemId != null) {
-            if (sourceItemId > Integer.MAX_VALUE || sourceItemId < Integer.MIN_VALUE) {
-                throw new RuntimeException("提单零件 ID 无效");
-            }
-            return sourceItemId.intValue();
-        }
-        if (line.getItemId() == null) {
-            throw new RuntimeException("提单零件 ID 不能为空");
-        }
-        return line.getItemId();
-    }
-
-    private String effectiveOrderType(ItemQuoteVersion item, String defaultOrderType) {
-        String itemOrderType = firstText(item == null ? null : item.getOrderType(), defaultOrderType);
-        return ALLOWED_ORDER_TYPES.contains(itemOrderType) ? itemOrderType : defaultOrderType;
-    }
-
-    private void refreshItemTicketStatus(ItemQuoteVersion item) {
-        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", item.getRfqId());
-        if (item.getId() != null) {
-            qw.eq("item_id", item.getId());
-        } else {
-            qw.eq("part_no", item.getPartNo());
-            qw.eq("version", normalizeVersion(item.getVersion()));
-        }
-        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(qw);
-        int generatedQty = tickets.stream().mapToInt(ticket -> safeInt(ticket.getQty())).sum();
-        if (generatedQty <= 0) {
-            item.setStatus(item.getTaxIncludedUnitPrice() == null ? QuoteStatusWorkflow.UNPRICED : QuoteStatusWorkflow.QUOTED);
-        } else if (generatedQty < safeInt(item.getQty())) {
-            item.setStatus(QuoteStatusWorkflow.QUOTED);
-        } else {
-            item.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
-        }
-        itemMapper.updateById(item);
-    }
-
-    private void refreshOrderTicketStatus(Integer rfqId) {
-        if (rfqId == null) {
-            return;
-        }
-        OrderRfq order = orderRfqMapper.selectById(rfqId);
-        if (order == null) {
-            return;
-        }
-
-        QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
-        itemQw.eq("rfq_id", rfqId).orderByAsc("id");
-        List<ItemQuoteVersion> items = itemMapper.selectList(itemQw);
-        if (items.isEmpty()) {
-            order.setStatus(QuoteStatusWorkflow.UNPRICED);
-            orderRfqMapper.updateById(order);
-            return;
-        }
-
-        QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
-        ticketQw.eq("rfq_id", rfqId);
-        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(ticketQw);
-        int totalTicketQty = tickets.stream().mapToInt(ticket -> safeInt(ticket.getQty())).sum();
-        if (totalTicketQty <= 0) {
-            order.setStatus(resolveQuoteStatus(items));
-            orderRfqMapper.updateById(order);
-            return;
-        }
-
-        Map<Integer, Integer> qtyByItemId = new HashMap<>();
-        Map<String, Integer> legacyQtyByPartVersion = new HashMap<>();
-        for (OrderDeliveryTicket ticket : tickets) {
-            int qty = safeInt(ticket.getQty());
-            if (ticket.getItemId() != null) {
-                qtyByItemId.merge(ticket.getItemId(), qty, Integer::sum);
-            } else if (!isBlank(ticket.getPartNo())) {
-                legacyQtyByPartVersion.merge(itemKey(ticket.getPartNo(), ticket.getVersion()), qty, Integer::sum);
-            }
-        }
-
-        List<ItemQuoteVersion> quotedItems = items.stream()
-                .filter(item -> item.getTaxIncludedUnitPrice() != null)
-                .toList();
-        if (quotedItems.isEmpty()) {
-            order.setStatus("部分已提单");
-            orderRfqMapper.updateById(order);
-            return;
-        }
-
-        boolean allQuotedItemsTicketed = quotedItems.stream().allMatch(item -> {
-            int generatedQty = qtyByItemId.getOrDefault(item.getId(), 0)
-                    + legacyQtyByPartVersion.getOrDefault(itemKey(item.getPartNo(), item.getVersion()), 0);
-            return generatedQty >= safeInt(item.getQty());
-        });
-        order.setStatus(allQuotedItemsTicketed ? "已生成提单" : "部分已提单");
-        orderRfqMapper.updateById(order);
-    }
-
-    private String resolveQuoteStatus(List<ItemQuoteVersion> items) {
-        List<ItemQuoteVersion> drawableItems = items.stream()
-                .filter(item -> !isBlank(item.getDrawingUrl()))
-                .toList();
-        if (drawableItems.isEmpty()) {
-            return QuoteStatusWorkflow.UNPRICED;
-        }
-        boolean allQuoted = drawableItems.stream().allMatch(item -> item.getTaxIncludedUnitPrice() != null);
-        if (allQuoted) {
-            return QuoteStatusWorkflow.QUOTED;
-        }
-        return QuoteStatusWorkflow.UNPRICED;
     }
 
     private ProcessSheetDTO buildProcessSheet(OrderDeliveryTicket ticket) {
@@ -980,40 +689,6 @@ public class DeliveryService {
         return sheet;
     }
 
-    private int ticketedQty(ItemQuoteVersion item) {
-        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", item.getRfqId());
-        return ticketMapper.selectList(qw).stream()
-                .filter(ticket -> matchesTicketItem(item, ticket))
-                .mapToInt(ticket -> safeInt(ticket.getQty()))
-                .sum();
-    }
-
-    private boolean matchesTicketItem(ItemQuoteVersion item, OrderDeliveryTicket ticket) {
-        if (item.getId() != null && item.getId().equals(ticket.getItemId())) {
-            return true;
-        }
-        return ticket.getItemId() == null
-                && normalizePartNo(item.getPartNo()).equals(normalizePartNo(ticket.getPartNo()))
-                && normalizeVersion(item.getVersion()).equals(normalizeVersion(ticket.getVersion()));
-    }
-
-    private int remainingQty(ItemQuoteVersion item, int ticketedQty) {
-        return Math.max(0, safeInt(item.getQty()) - ticketedQty);
-    }
-
-    private String itemKey(String partNo, String version) {
-        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
-    }
-
-    private String itemLabel(ItemQuoteVersion item) {
-        return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
-    }
-
-    private String resolveItemType(ItemQuoteVersion item) {
-        return "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode()) ? "组合件" : "普通件";
-    }
-
     private String normalizePartNo(String partNo) {
         return partNo == null ? "" : partNo.trim().toUpperCase();
     }
@@ -1021,13 +696,6 @@ public class DeliveryService {
     private String normalizeVersion(String version) {
         String normalized = version == null ? "" : version.trim().toUpperCase();
         return normalized;
-    }
-
-    private String resolveProjectNo(OrderRfq order) {
-        if (!isBlank(order.getRfqNo())) {
-            return order.getRfqNo();
-        }
-        return isBlank(order.getProjectName()) ? "" : order.getProjectName();
     }
 
     private String firstText(String preferred, String fallback) {
@@ -1058,9 +726,6 @@ public class DeliveryService {
             return DEFAULT_PAGE_SIZE;
         }
         return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    private record DemandLine(ItemQuoteVersion item, int qty) {
     }
 
     private record SalesOrderDemandLine(SalesOrderItem item, int qty) {

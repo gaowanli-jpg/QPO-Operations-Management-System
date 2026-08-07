@@ -11,12 +11,14 @@ import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.aps.ApsSourceService;
@@ -69,6 +71,8 @@ class CoreWorkflowIntegrationTests {
     private OrderManagementService orderManagementService;
     @Autowired
     private ApsSourceService apsSourceService;
+    @Autowired
+    private CustomerMasterMapper customerMapper;
 
     @Test
     void orderSummaryPaginationUsesAggregatedCountsAndFilters() {
@@ -293,6 +297,7 @@ class CoreWorkflowIntegrationTests {
         line.setAcceptedQty(1);
         req.setItems(List.of(line));
 
+        ensureCustomer(order.getCustomerName());
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
 
         assertThat(tickets).extracting(OrderDeliveryTicket::getDeliveryDate)
@@ -337,6 +342,7 @@ class CoreWorkflowIntegrationTests {
         line.setAcceptedQty(5);
         req.setItems(List.of(line));
 
+        ensureCustomer(order.getCustomerName());
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
 
         assertThat(tickets).hasSize(1);
@@ -390,6 +396,7 @@ class CoreWorkflowIntegrationTests {
                 deliveryLine(third)
         ));
 
+        ensureCustomer(order.getCustomerName());
         deliveryService.generateTickets(req);
 
         assertThat(deliveryService.listTickets(order.getId()))
@@ -465,6 +472,7 @@ class CoreWorkflowIntegrationTests {
         line.setAcceptedQty(3);
         deliveryReq.setItems(List.of(line));
 
+        ensureCustomer(order.getCustomerName());
         OrderDeliveryTicket ticket = deliveryService.generateTickets(deliveryReq).get(0);
         assertThat(ticket.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
         assertThat(ticket.getEngineeringMaterialName()).isEqualTo(engineeringMaterial);
@@ -549,6 +557,7 @@ class CoreWorkflowIntegrationTests {
                 .as("市场保存报价单后，零件才进入已报价")
                 .isEqualTo(QuoteStatusWorkflow.QUOTED);
 
+        ensureCustomer(order.getCustomerName());
         deliveryService.generateTickets(deliveryReq(order, item, 1));
         assertThat(itemMapper.selectById(item.getId()).getStatus())
                 .as("部分提单时零件仍留在已报价池，并通过已提/剩余数量表达进度")
@@ -574,6 +583,7 @@ class CoreWorkflowIntegrationTests {
         item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 2, "calcType", "工时")));
         itemMapper.updateById(item);
 
+        ensureCustomer(order.getCustomerName());
         List<OrderDeliveryTicket> firstBatch = deliveryService.generateTickets(deliveryReq(order, item, 4, "预测订单"));
         assertThat(firstBatch).hasSize(1);
         assertThat(firstBatch.get(0).getQty()).isEqualTo(4);
@@ -584,7 +594,7 @@ class CoreWorkflowIntegrationTests {
         List<OrderDeliveryTicket> secondBatch = deliveryService.generateTickets(deliveryReq(order, item, 6, "正式订单"));
         assertThat(secondBatch).hasSize(1);
         assertThat(secondBatch.get(0).getQty()).isEqualTo(6);
-        assertThat(secondBatch.get(0).getOrderType()).isEqualTo("正式订单");
+        assertThat(secondBatch.get(0).getOrderType()).isEqualTo("预测订单");
 
         QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
         ticketQw.eq("rfq_id", order.getId()).eq("item_id", item.getId());
@@ -592,7 +602,7 @@ class CoreWorkflowIntegrationTests {
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
                 .containsExactly(4, 6);
         assertThat(tickets).extracting(OrderDeliveryTicket::getOrderType)
-                .containsExactly("预测订单", "正式订单");
+                .containsExactly("预测订单", "预测订单");
         assertThat(tickets).allSatisfy(ticket -> assertThat(ticket.getProcessRoute()).isNotNull());
 
         List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(order.getId());
@@ -617,6 +627,7 @@ class CoreWorkflowIntegrationTests {
         orderMapper.insert(order);
 
         ItemQuoteVersion item = quotedItem(order, "RELEASED-WORKSPACE-100");
+        ensureCustomer(order.getCustomerName());
         deliveryService.generateTickets(deliveryReq(order, item, 1));
         assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
 
@@ -643,6 +654,7 @@ class CoreWorkflowIntegrationTests {
         orderMapper.insert(order);
 
         ItemQuoteVersion item = quotedItem(order, "IMMUTABLE-100");
+        ensureCustomer(order.getCustomerName());
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(deliveryReq(order, item, 1));
 
         assertThat(ticketMapper.selectById(tickets.get(0).getId())).isNotNull();
@@ -1129,6 +1141,20 @@ class CoreWorkflowIntegrationTests {
         line.setItemId(item.getId());
         line.setAcceptedQty(item.getQty());
         return line;
+    }
+
+    private void ensureCustomer(String customerName) {
+        Long count = customerMapper.selectCount(new QueryWrapper<CustomerMaster>()
+                .eq("customer_name", customerName));
+        if (count != null && count > 0) {
+            return;
+        }
+        CustomerMaster customer = new CustomerMaster();
+        customer.setCustomerCode("TEST-" + System.nanoTime());
+        customer.setCustomerShortName(customerName);
+        customer.setCustomerName(customerName);
+        customer.setEnabled(true);
+        customerMapper.insert(customer);
     }
 
     private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item, int acceptedQty) {

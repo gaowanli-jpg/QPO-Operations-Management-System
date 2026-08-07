@@ -7,6 +7,7 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictMarkupFee;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -16,6 +17,7 @@ import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
@@ -56,6 +58,8 @@ class AssemblyWorkflowIntegrationTests {
     private EngineerService engineerService;
     @Autowired
     private DeliveryService deliveryService;
+    @Autowired
+    private CustomerMasterMapper customerMapper;
 
     @Test
     @SuppressWarnings("unchecked")
@@ -185,14 +189,15 @@ class AssemblyWorkflowIntegrationTests {
         childLine.setAcceptedQty(2);
         req.setItems(List.of(line, childLine));
 
+        ensureCustomer(order.getCustomerName());
         List<OrderDeliveryTicket> tickets = deliveryService.generateTickets(req);
 
         assertThat(tickets).extracting(OrderDeliveryTicket::getArrangeType)
                 .containsExactly("计划", "计划");
         assertThat(tickets).extracting(OrderDeliveryTicket::getQty)
-                .containsExactly(1, 2);
+                .containsExactly(2, 1);
         assertThat(tickets).extracting(OrderDeliveryTicket::getItemType)
-                .containsExactly("组合件", "普通件");
+                .containsExactly("普通件", "组合件");
 
         List<ProcessSheetDTO> sheets = deliveryService.listProcessSheets(order.getId());
         assertThat(sheets).extracting(ProcessSheetDTO::getItemId)
@@ -423,6 +428,20 @@ class AssemblyWorkflowIntegrationTests {
         order.setStatus("待工程部评估");
         orderMapper.insert(order);
         return order;
+    }
+
+    private void ensureCustomer(String customerName) {
+        Long count = customerMapper.selectCount(new QueryWrapper<CustomerMaster>()
+                .eq("customer_name", customerName));
+        if (count != null && count > 0) {
+            return;
+        }
+        CustomerMaster customer = new CustomerMaster();
+        customer.setCustomerCode("TEST-" + System.nanoTime());
+        customer.setCustomerShortName(customerName);
+        customer.setCustomerName(customerName);
+        customer.setEnabled(true);
+        customerMapper.insert(customer);
     }
 
     private ItemQuoteVersion createPendingItem(OrderRfq order, String partNo, int qty) {

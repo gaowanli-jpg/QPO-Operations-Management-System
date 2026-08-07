@@ -31,7 +31,7 @@ class RfqReleaseBatchStage3Test {
         String controller = read(BACKEND_SOURCE.resolve(Path.of("controller", "MarketController.java")));
         String dto = read(BACKEND_SOURCE.resolve(Path.of("dto", "DeliveryBatchResultDTO.java")));
         String validation = read(BACKEND_SOURCE.resolve(Path.of("service", "RfqReleaseBatchValidationService.java")));
-        String delivery = read(BACKEND_SOURCE.resolve(Path.of("service", "DeliveryService.java")));
+        String releaseSalesOrder = read(BACKEND_SOURCE.resolve(Path.of("service", "RfqReleaseSalesOrderService.java")));
 
         assertThat(controller).contains(
                 "public DeliveryBatchResultDTO generateDeliveryTicket",
@@ -47,7 +47,7 @@ class RfqReleaseBatchStage3Test {
                 "assertCanAccessOrder",
                 "customerName",
                 "releaseBatchKey");
-        assertThat(delivery)
+        assertThat(releaseSalesOrder)
                 .contains("releaseBatchKeySummary")
                 .doesNotContain("summary.put(\"releaseBatchKey\", context.releaseBatchKey())");
     }

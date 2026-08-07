@@ -5,10 +5,12 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryBatchResultDTO;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.DeliveryService;
@@ -21,7 +23,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = {
         "erp.auth.enabled=false",
@@ -35,6 +36,8 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
     @Autowired
     private OrderRfqMapper orderMapper;
     @Autowired
+    private CustomerMasterMapper customerMapper;
+    @Autowired
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -42,6 +45,7 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
     @Test
     void generatesOneAtomicTicketBatchForMultipleRfqsAndDoesNotDuplicateCompletedRetry() {
         String customerName = "阶段3同客户-" + System.nanoTime();
+        customer(customerName);
         OrderRfq firstOrder = order(customerName, "STAGE3-A");
         OrderRfq secondOrder = order(customerName, "STAGE3-B");
         ItemQuoteVersion firstItem = item(firstOrder, "STAGE3-PART-A", 2);
@@ -56,8 +60,8 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
         assertThat(result.getTicketIds()).hasSize(2);
         assertThat(ticketCount(firstOrder.getId(), secondOrder.getId())).isEqualTo(2);
 
-        assertThatThrownBy(() -> deliveryService.generateRfqReleaseBatch(req))
-                .hasMessageContaining("已报价");
+        DeliveryBatchResultDTO replay = deliveryService.generateRfqReleaseBatch(req);
+        assertThat(replay.getTicketIds()).containsExactlyElementsOf(result.getTicketIds());
         assertThat(ticketCount(firstOrder.getId(), secondOrder.getId())).isEqualTo(2);
     }
 
@@ -74,6 +78,15 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
         order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);
         return order;
+    }
+
+    private void customer(String customerName) {
+        CustomerMaster customer = new CustomerMaster();
+        customer.setCustomerCode("STAGE3-" + System.nanoTime());
+        customer.setCustomerShortName(customerName);
+        customer.setCustomerName(customerName);
+        customer.setEnabled(true);
+        customerMapper.insert(customer);
     }
 
     private ItemQuoteVersion item(OrderRfq order, String partNo, int qty) {

@@ -16,6 +16,7 @@ class MaterialShapeSnapshotTest {
     private static final Path ALLOCATION = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicketAllocation.java");
     private static final Path ENGINEER_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "EngineerService.java");
     private static final Path DELIVERY_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "DeliveryService.java");
+    private static final Path RFQ_RELEASE_SALES_ORDER_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "RfqReleaseSalesOrderService.java");
     private static final Path SALES_MATCH_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderMatchService.java");
     private static final Path SALES_REPEAT_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderRepeatEnrichmentService.java");
     private static final Path MES_REQ = Path.of("src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesProductionDispatchReq.java");
@@ -35,10 +36,9 @@ class MaterialShapeSnapshotTest {
         assertThat(read(ENGINEER_SERVICE))
                 .contains("item.setMaterialShape(materialShape(materialData))");
         assertThat(read(DELIVERY_SERVICE))
-                .contains(
-                        "ticket.setMaterialShape(resolveMaterialShape(item))",
-                        "ticket.setMaterialShape(resolveSalesOrderMaterialShape(item))"
-                );
+                .contains("ticket.setMaterialShape(resolveSalesOrderMaterialShape(item))");
+        assertThat(read(RFQ_RELEASE_SALES_ORDER_SERVICE))
+                .contains("ticket.setMaterialShape(MaterialDataResolver.materialShape(item))");
         assertThat(read(SALES_MATCH_SERVICE))
                 .contains(
                         "String materialShape = resolveMaterialShape(source)",

@@ -111,13 +111,13 @@ class SalesOrderDeliveryTicketStage6Test {
 
     @Test
     void rfqGenerationWritesSourceIdentityForBackwardCompatibleTickets() throws Exception {
-        String deliveryService = read(MAIN_JAVA.resolve(Path.of("service", "DeliveryService.java")));
+        String releaseSalesOrderService = read(MAIN_JAVA.resolve(Path.of("service", "RfqReleaseSalesOrderService.java")));
 
-        assertThat(deliveryService)
+        assertThat(releaseSalesOrderService)
                 .contains(
-                        "ticket.setSourceType(ReleaseSourceType.RFQ.name())",
-                        "ticket.setSourceOrderId(order.getId() == null ? null : order.getId().longValue())",
-                        "ticket.setSourceItemId(item.getId() == null ? null : item.getId().longValue())"
+                        "ticket.setSourceType(SOURCE_RFQ)",
+                        "ticket.setSourceOrderId(order.getId().longValue())",
+                        "ticket.setSourceItemId(item.getId().longValue())"
                 );
     }
 
