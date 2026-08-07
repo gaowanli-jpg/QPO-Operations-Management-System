@@ -1,5 +1,7 @@
 # 34-统一价格字段并删除 final 价格字段开发文档
 
+> 2026-08-07 阶段 5 已完成：当前数据库 schema version 为 `87`，运行时代码、业务 SQL、实体、DTO 和前端组件只使用四个正式价格字段。本文后续出现的 `final_*` 仅用于说明历史迁移、冲突校验、删除动作和旧版本依据，不代表现行字段。
+
 ## 1. 文档目的
 
 本文档用于清理 QPO 中重复的最终价格字段，统一 RFQ 询价零件和销售订单零件的价格数据模型、核价判断、提单校验、U9 同步和前端展示口径。
@@ -21,7 +23,7 @@
 
 ## 2. 背景与当前问题
 
-### 2.1 当前字段状态
+### 2.1 迁移前字段状态（历史快照）
 
 `item_quote_version` 和 `sales_order_item` 目前都存在两套含义重复的最终价格字段：
 
@@ -32,7 +34,7 @@
 
 历史原因是：`final_*` 在基线表中先存在，后续为了表达含税 / 未税价格又增加了 `tax_included_*` 和 `untaxed_*`。当前大量流程仍读取 `final_*`，导致同一业务价格需要维护两套字段。
 
-### 2.2 当前代码依赖
+### 2.2 迁移前代码依赖（历史快照）
 
 `final_*` 当前参与以下业务行为，必须全部替换：
 
@@ -736,6 +738,8 @@ rg -n "final_unit_price|final_total_price|finalUnitPrice|finalTotalPrice" `
 
 ### 阶段 5：文档与全量回归
 
+状态：已完成（2026-08-07）。
+
 目标：价格口径、部署口径、日志口径和全链路回归完整收口。
 
 修改：
@@ -753,6 +757,13 @@ rg -n "final_unit_price|final_total_price|finalUnitPrice|finalTotalPrice" `
 - 文档不再把 `final_*` 描述为现行字段。
 - 运行时代码、业务 SQL、实体、DTO 和前端组件不引用旧字段。
 - RFQ 核价 / 提单、销售订单导入 / 自动提单、MES、WMS、待产、锁库和 U9 主链路可串通。
+
+本阶段验证结果：
+
+- 后端 `mvnw.cmd test`：`722` 个测试通过，`0` failures，`0` errors。
+- 前端 `npm test`：`100` 个测试文件、`525` 个测试通过；`npm run build` 通过。
+- `docker compose --env-file erp.env up -d --build backend` 后容器为 `healthy`，Flyway schema version 为 `87`。
+- 旧字段扫描仅保留历史迁移、迁移验证测试和 U9 外部协议字段 `FinallyPriceTC`；现行运行时代码和业务文档无旧字段引用。
 
 ## 13. 最终验收标准
 

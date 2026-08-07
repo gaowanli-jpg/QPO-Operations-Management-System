@@ -409,7 +409,7 @@
               子件含税汇总：¥ {{ assemblyChildrenTotal.toFixed(2) }}，
               组装费：¥ {{ Number(assemblyFee || 0).toFixed(2) }}，
               组装费附加费用：¥ {{ assemblyFeeMarkupTotal.toFixed(2) }}，
-              父件含税单价：¥ {{ assemblyFinalUnitPrice.toFixed(2) }}
+              父件含税单价：¥ {{ assemblyTaxIncludedUnitPrice.toFixed(2) }}
             </div>
             <div v-if="assemblyFeeMarkupRows.length" class="assembly-fee-breakdown">
               <el-tag
@@ -1181,7 +1181,7 @@ const assemblyFeeMarkupRows = computed(() => assemblyMarkupFeeOptions.value
 
 const assemblyFeeMarkupTotal = computed(() => assemblyFeeMarkupRows.value.reduce((sum, row) => sum + numberOrZero(row.cost), 0))
 
-const assemblyFinalUnitPrice = computed(() => assemblyChildrenTotal.value + numberOrZero(assemblyFee.value) + assemblyFeeMarkupTotal.value)
+const assemblyTaxIncludedUnitPrice = computed(() => assemblyChildrenTotal.value + numberOrZero(assemblyFee.value) + assemblyFeeMarkupTotal.value)
 
 const numericSortNo = (value) => {
   const numericValue = Number(value)

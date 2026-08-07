@@ -3,6 +3,8 @@
 
 > 状态：已废弃，已被新方案取代。2026-07-30 复盘后确认，销售订单不再写入 `order_rfq` / `item_quote_version`，改为独立 `sales_order_header` / `sales_order_item`，并通过来源适配层进入议价提单。最新实施依据见 `docs/QPO报价状态流转/14-销售订单独立主表开发文档.md`。本文档仅保留历史方案和决策痕迹，不再作为开发执行文档。
 
+> 2026-08-07 价格字段收口：本文中的现行价格说明以 34 号文档为准，正式字段为四个 `tax_included_*` / `untaxed_*` 字段。`final_*` 只可能出现在历史讨论语境，不代表当前数据库或运行时字段；导入、自动提单允许价格为空，U9 同步前必须补含税单价。
+
 ## 1. 背景
 
 市场部销售订单场景已经从“导入后立即同步 U9”调整为“两步走”：
@@ -41,11 +43,11 @@
 - `部分已提单`
 - `已生成提单`
 
-正式生成提单要求订单状态为 `已报价` 或 `部分已提单`。因此销售订单导入只要创建 `order_rfq.status = 已报价`，并保证被选零件有 `final_unit_price`，即可沿用现有提单准入。当前系统页面和报价单导出都把 `final_unit_price / final_total_price` 当作含税价展示，因此后续新增价格字段时，`final_*` 保持兼容含税价口径。
+正式生成提单要求订单状态为 `已报价` 或 `部分已提单`。因此销售订单导入只要创建 `order_rfq.status = 已报价`，并保证被选零件有 `tax_included_unit_price`，即可沿用现有提单准入。当前系统页面和报价单导出直接使用 `tax_included_unit_price / tax_included_total_price` 展示含税价，不再维护重复兼容字段。
 
 ### 4.2 不能复用现有重复件自动核价方法
 
-现有 `EngineerService.applyRepeatQuotes()` 是给 `未核价` 订单使用的自动核价逻辑，会跳过已经存在 `finalUnitPrice` 的零件。销售订单导入的零件已经带价格，所以本阶段不能直接调用该方法。
+现有 `EngineerService.applyRepeatQuotes()` 是给 `未核价` 订单使用的自动核价逻辑，会跳过已经存在 `taxIncludedUnitPrice` 的零件。销售订单导入的零件已经带价格，所以本阶段不能直接调用该方法。
 
 应新增一个“销售订单历史快照补齐”方法，复用现有重复源查询口径，但只补齐生产快照，不覆盖销售订单导入价格。
 
@@ -65,8 +67,8 @@
 | 未税总价 | `untaxed_total_price` | 税费前金额，通常为未税单价 × 数量 |
 | 含税单价 | `tax_included_unit_price` | 含税单件价格 |
 | 含税总价 | `tax_included_total_price` | 含税金额，通常为含税单价 × 数量 |
-| 兼容最终单价 | `final_unit_price` | 继续兼容现有页面、提单准入和报价单导出，口径等同含税单价 |
-| 兼容最终总价 | `final_total_price` | 继续兼容现有页面、提单准入和报价单导出，口径等同含税总价 |
+| 含税单价 | `tax_included_unit_price` | 现有页面、提单准入和报价单导出的正式含税单价 |
+| 含税金额 | `tax_included_total_price` | 现有页面和报价单导出的正式含税金额 |
 
 原零件核价流程也应写入这四个新字段：如果费用明细中能识别税费行，则未税价为税费前金额，含税价为当前最终价；如果当前费用配置没有税费行，则未税价和含税价可相同。这样历史零件、销售订单零件、报价单导出和后续 U9 同步都能追溯完整价格来源。
 
@@ -94,7 +96,7 @@
 | 材料 | `item_quote_version.material_name` | 否 | 历史匹配可进一步补 `material_data` |
 | 表面处理 | `item_quote_version.surface_treatment` | 否 | 直接作为零件快照 |
 | 版本 | `item_quote_version.version` | 是 | 重复匹配主键之一 |
-| VAT单价-含税 | `item_quote_version.tax_included_unit_price`，同步 `final_unit_price` | 是 | 含税单价快照，现有提单准入和报价单导出沿用该口径 |
+| VAT单价-含税 | `item_quote_version.tax_included_unit_price` | 是 | 含税单价快照，现有提单准入和报价单导出沿用该口径 |
 | 未税单价(CNY) | `item_quote_version.untaxed_unit_price` | 是 | 未税单价快照 |
 | （未税）金额 | `item_quote_version.untaxed_total_price` | 否 | 为空时按未税单价 × 数量计算 |
 | 实际出货日期 | `item_quote_version.actual_ship_date` | 否 | 销售订单行快照 |
@@ -276,8 +278,8 @@ Content-Type: multipart/form-data
 - `untaxed_total_price = （未税）金额`，为空时按未税单价 × 数量计算。
 - `tax_included_unit_price = VAT单价-含税`。
 - `tax_included_total_price = VAT单价-含税 × 数量`。
-- `final_unit_price = tax_included_unit_price`。
-- `final_total_price = tax_included_total_price`。
+- `tax_included_unit_price` 直接保存模板含税单价。
+- `tax_included_total_price` 直接保存模板含税金额或按数量计算的结果。
 - `material_name / surface_treatment / description / remark / qty / part_no / version` 按模板写入。
 - `order_type / customer_order_no / customer_project_no / internal_project_no` 写行快照。
 - `internal_delivery_date` 同步到 `internal_target_lead_time` 的展示值，方便现有页面兼容。
@@ -293,7 +295,7 @@ Content-Type: multipart/form-data
 重复源仍使用“已提单历史零件”口径：
 
 - 历史零件 `status = 已提单`。
-- 历史零件有 `final_unit_price`。
+- 历史零件有 `tax_included_unit_price`。
 - 历史零件有 `material_data`。
 - 历史零件有 `process_route`。
 - 按最新 `item_quote_version.id DESC` 取一条。
@@ -313,8 +315,8 @@ Content-Type: multipart/form-data
 
 不覆盖字段：
 
-- `final_unit_price`
-- `final_total_price`
+- `tax_included_unit_price`
+- `tax_included_total_price`
 - `untaxed_unit_price`
 - `untaxed_total_price`
 - `tax_included_unit_price`
@@ -461,7 +463,7 @@ Sales order QPO import failed batchNo={} durationMs={}
 - 扩展 `order_rfq` 字段。
 - 扩展 `item_quote_version` 字段。
 - 扩展 `sales_order_import_batch / record` 的 QPO 导入关联字段。
-- 原零件核价保存逻辑同步写入 `untaxed_unit_price / untaxed_total_price / tax_included_unit_price / tax_included_total_price`，其中 `final_unit_price / final_total_price` 继续兼容含税价。
+- 原零件核价保存逻辑统一写入 `untaxed_unit_price / untaxed_total_price / tax_included_unit_price / tax_included_total_price`，不再写重复兼容价格字段。
 - 更新 `schema.sql`。
 - 更新 `OrderRfq.java` / `ItemQuoteVersion.java` / 销售订单导入记录实体。
 - 更新权限清单、日志运维说明、销售订单直提讨论文档。
@@ -471,7 +473,7 @@ Sales order QPO import failed batchNo={} durationMs={}
 - 主表字段能完整承载模板头信息和行信息。
 - 原 RFQ 零件完成核价后，四个价格追溯字段同步落库。
 - 迁移可重复执行。
-- 不改变现有 RFQ 导入、报价、议价提单字段语义；`final_*` 继续作为现有含税最终价兼容字段。
+- 不改变现有 RFQ 导入、报价、议价提单字段语义；`tax_included_*` 是现行正式含税价格字段。
 
 ### 阶段 2：市场实际模板解析
 
@@ -501,7 +503,7 @@ Sales order QPO import failed batchNo={} durationMs={}
 - 新增 `SalesOrderQpoImportService`。
 - 创建 `order_rfq.status = 已报价`。
 - 创建 `item_quote_version.status = 已报价`。
-- 写入未税单价、未税总价、含税单价、含税总价，并同步 `final_*` 为含税价。
+- 写入未税单价、未税总价、含税单价、含税总价，并同步 `tax_included_*` 为含税价。
 - 写入导入批次、记录、RFQ 关联。
 - 接入 `SALES_ORDER_IMPORT_QPO` 操作日志。
 
@@ -510,7 +512,7 @@ Sales order QPO import failed batchNo={} durationMs={}
 - 无 `market:rfq:import-sales-order` 不能调用接口。
 - 成功导入返回 `rfqNo`。
 - 订单和零件均为 `已报价`。
-- 销售订单导入零件的四个价格字段均可追溯，`final_unit_price / final_total_price` 与含税价一致。
+- 销售订单导入零件的四个价格字段均可追溯，`tax_included_unit_price / tax_included_total_price` 与含税价一致。
 - 数据权限按导入客户和归属用户生效。
 
 ### 阶段 4：重复匹配补齐生产快照
@@ -583,7 +585,7 @@ Sales order QPO import failed batchNo={} durationMs={}
 
 - 销售订单导入按市场实际模板创建 QPO 订单和零件。
 - 订单 / 零件状态为 `已报价`。
-- 价格字段写入 `untaxed_unit_price / untaxed_total_price / tax_included_unit_price / tax_included_total_price`，并同步 `final_unit_price / final_total_price` 作为含税兼容价。
+- 价格字段只写入 `untaxed_unit_price / untaxed_total_price / tax_included_unit_price / tax_included_total_price`，不再同步重复兼容字段。
 - 重复匹配补齐生产快照，未匹配有清晰提示。
 - 销售订单能被 `议价提单` 选择并生成正式提单。
 - 权限沿用 `market:rfq:import-sales-order`，后端强制校验。
