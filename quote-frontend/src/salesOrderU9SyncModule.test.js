@@ -52,11 +52,14 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('orderPickerVisible')
     expect(component).toContain('openOrderPicker')
     expect(component).toContain('handleOrderSelected')
+    expect(component).toContain('<dt>订单来源</dt>')
+    expect(component).toContain('orderSourceLabel')
+    expect(component).toContain("if (!source.sourceType && !source.sourceLabel) return '-'")
     expect(component).not.toContain('class="erp-toolbar"')
     expect(component).not.toContain('order-picker-toolbar')
     expect(component).not.toContain('sales-order-u9-sync-summary-grid')
     expect(component).not.toContain('<el-option label="已报价"')
-    expect(component).not.toContain('RFQ')
+    expect(component).toContain('RFQ 议价提单派生')
     expect(component).not.toContain('sales-order-u9-sync-placeholder')
     expect(component).not.toContain('background: transparent;')
     expect(component).not.toContain('box-shadow: none;')
@@ -76,6 +79,20 @@ describe('sales order U9 sync module', () => {
     expect(picker).toContain('orderNoText')
     expect(picker).toContain('salesOrderNo')
     expect(picker).toContain('salesOrderId')
+    expect(picker).toContain('v-if="showOrderSource"')
+    expect(picker).toContain('prop="sourceLabel" label="订单来源"')
+    expect(picker).toContain("props.orderScope === 'u9-sync'")
+  })
+
+  test('loads the sales order supplied by the release-result route query', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+
+    expect(component).toContain("import { useRoute } from 'vue-router'")
+    expect(component).toContain('const route = useRoute()')
+    expect(component).toContain('route.query.salesOrderId')
+    expect(component).toContain('normalizeRouteSalesOrderId')
+    expect(component).toContain("await handleOrderSelected({ salesOrderId })")
+    expect(component).toContain('{ immediate: true }')
   })
 
   test('gates submit action and disables sync when the selected order is blocked', () => {

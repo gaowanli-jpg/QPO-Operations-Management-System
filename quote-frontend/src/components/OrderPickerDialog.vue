@@ -63,6 +63,9 @@
             <template #default="{ row }">{{ orderNoText(row) }}</template>
           </el-table-column>
           <el-table-column prop="customerName" label="客户" min-width="150" show-overflow-tooltip />
+          <el-table-column v-if="showOrderSource" prop="sourceLabel" label="订单来源" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ sourceLabelText(row) }}</template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" width="120" align="center">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
@@ -216,6 +219,7 @@ const pendingSelectedOrderCount = computed(() => Object.keys(pendingSelectedOrde
 const orderTypeLabel = computed(() => ORDER_TYPE_LABEL_BY_SCOPE[props.orderScope] || 'RFQ 订单')
 const orderNoColumnLabel = computed(() => SALES_ORDER_SCOPES.includes(props.orderScope) ? '销售订单号' : 'RFQ号')
 const keywordPlaceholder = computed(() => SALES_ORDER_SCOPES.includes(props.orderScope) ? '搜索销售订单号' : '搜索 RFQ 号')
+const showOrderSource = computed(() => props.orderScope === 'u9-sync')
 
 const resolveOrderSourceType = (order) => (
   SALES_ORDER_SCOPES.includes(props.orderScope) ? 'SALES_ORDER' : (order?.sourceType || 'RFQ')
@@ -223,6 +227,8 @@ const resolveOrderSourceType = (order) => (
 const resolveOrderId = (order) => order?.sourceOrderId ?? order?.salesOrderId ?? order?.id ?? ''
 const orderSourceKey = (order) => `${resolveOrderSourceType(order)}:${resolveOrderId(order)}`
 const orderNoText = (row) => row?.salesOrderNo || row?.sourceOrderNo || row?.rfqNo || row?.orderNo || row?.id || '-'
+const sourceLabelText = (row) => row?.sourceLabel
+  || (row?.sourceType === 'RFQ_RELEASE' ? 'RFQ 议价提单派生' : '销售订单导入')
 
 const statusOptions = computed(() => {
   const allowed = props.allowedStatuses.filter(Boolean)

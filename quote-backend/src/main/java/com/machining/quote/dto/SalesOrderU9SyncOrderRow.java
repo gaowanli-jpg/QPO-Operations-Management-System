@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 public class SalesOrderU9SyncOrderRow {
     private Long salesOrderId;
     private String salesOrderNo;
+    private String sourceType;
+    private String sourceLabel;
     private String customerName;
     private String customerShortName;
     private String customerCode;

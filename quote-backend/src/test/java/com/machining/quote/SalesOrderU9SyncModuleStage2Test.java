@@ -6,6 +6,7 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
+import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
@@ -56,6 +57,8 @@ class SalesOrderU9SyncModuleStage2Test {
         Fixture fixture = fixture();
         SalesOrderHeader released = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
         SalesOrderHeader quoted = header(9002L, "SOQPO-002", QuoteStatusWorkflow.QUOTED, "未同步");
+        released.setSourceType("RFQ_RELEASE");
+        quoted.setSourceType("DIRECT_IMPORT");
         SalesOrderItem readyItem = item(5001L, released.getId(), "P-001", "MAT-001", "已确认");
         SalesOrderItem missingItem = item(5002L, released.getId(), "P-002", null, "未确认");
         SalesOrderItem quotedItem = item(5003L, quoted.getId(), "P-003", "MAT-003", "已确认");
@@ -73,6 +76,8 @@ class SalesOrderU9SyncModuleStage2Test {
                 .satisfies(row -> {
                     assertThat(row.getSalesOrderId()).isEqualTo(released.getId());
                     assertThat(row.getSalesOrderNo()).isEqualTo("SOQPO-001");
+                    assertThat(row.getSourceType()).isEqualTo("RFQ_RELEASE");
+                    assertThat(row.getSourceLabel()).isEqualTo("RFQ 议价提单派生");
                     assertThat(row.getCustomerCode()).isEqualTo("CUST-A");
                     assertThat(row.getCustomerShortName()).isEqualTo("客户简称A");
                     assertThat(row.getCustomerName()).isEqualTo("客户A");
@@ -89,6 +94,9 @@ class SalesOrderU9SyncModuleStage2Test {
                     assertThat(row.getSyncReady()).isFalse();
                     assertThat(row.getBlockedReason()).contains("物料号");
                 });
+        assertThat(result.getRecords().get(1))
+                .extracting(SalesOrderU9SyncOrderRow::getSourceType, SalesOrderU9SyncOrderRow::getSourceLabel)
+                .containsExactly("DIRECT_IMPORT", "销售订单导入");
         assertThat(result.getRecords().get(1).getBlockedReason()).contains("尚未生成 QPO 提单");
         verify(fixture.dataScopeService).applySalesOrderScope(any());
         verify(fixture.u9Client, never()).create(any());
@@ -98,6 +106,7 @@ class SalesOrderU9SyncModuleStage2Test {
     void previewUsesSalesOrderItemMaterialNoAndDoesNotCallU9OrDeliveryTicketsOrWriteDatabase() throws Exception {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
+        header.setSourceType("RFQ_RELEASE");
         SalesOrderItem ready = item(5001L, header.getId(), "P-001", "MAT-READY-001", "已确认");
         ready.setMaterialNoSource("MES_TICKET");
         ready.setMaterialNoSourceTicketId(3001L);
@@ -112,6 +121,8 @@ class SalesOrderU9SyncModuleStage2Test {
 
         assertThat(resp.getSalesOrderId()).isEqualTo(header.getId());
         assertThat(resp.getSalesOrderNo()).isEqualTo("SOQPO-001");
+        assertThat(resp.getSourceType()).isEqualTo("RFQ_RELEASE");
+        assertThat(resp.getSourceLabel()).isEqualTo("RFQ 议价提单派生");
         assertThat(resp.getOrderBy()).isEqualTo("CUST-A");
         assertThat(resp.getCustomerCode()).isEqualTo("CUST-A");
         assertThat(resp.getCustomerShortName()).isEqualTo("客户简称A");
@@ -234,6 +245,29 @@ class SalesOrderU9SyncModuleStage2Test {
                 .contains("已同步");
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());
+        verify(fixture.u9Client, never()).create(any());
+    }
+
+    @Test
+    void derivedOrderMissingCustomerOrDocumentTypeIsRejectedBeforeExternalSync() {
+        Fixture fixture = fixture();
+        SalesOrderHeader missingCustomer = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
+        missingCustomer.setSourceType("RFQ_RELEASE");
+        missingCustomer.setCustomerCode(null);
+        SalesOrderHeader missingDocumentType = header(9002L, "SOQPO-002", QuoteStatusWorkflow.RELEASED, "未同步");
+        missingDocumentType.setSourceType("RFQ_RELEASE");
+        missingDocumentType.setDocumentTypeCode(null);
+
+        when(fixture.headerMapper.selectByIdForUpdate(missingCustomer.getId())).thenReturn(missingCustomer);
+        when(fixture.headerMapper.selectByIdForUpdate(missingDocumentType.getId())).thenReturn(missingDocumentType);
+
+        SalesOrderU9SyncResp response = fixture.service.syncSalesOrders(
+                List.of(missingCustomer.getId(), missingDocumentType.getId()));
+
+        assertThat(response.getRows()).anySatisfy(row ->
+                assertThat(row.getErrorMessage()).contains("客户编码不能为空"));
+        assertThat(response.getRows()).anySatisfy(row ->
+                assertThat(row.getErrorMessage()).contains("单据类型编码不能为空"));
         verify(fixture.u9Client, never()).create(any());
     }
 

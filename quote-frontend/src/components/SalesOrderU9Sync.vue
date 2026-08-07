@@ -86,6 +86,10 @@
               <dd>{{ customerDisplay }}</dd>
             </div>
             <div>
+              <dt>订单来源</dt>
+              <dd>{{ orderSourceLabel }}</dd>
+            </div>
+            <div>
               <dt>单据类型编码</dt>
               <dd>{{ orderField('documentTypeCode') }}</dd>
             </div>
@@ -246,9 +250,10 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
 import { usePendingAction } from '../composables/usePendingAction'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
@@ -265,6 +270,7 @@ const u9SyncActionKeys = {
 }
 
 const { isPending, runAction } = usePendingAction()
+const route = useRoute()
 
 const selectedOrder = ref(null)
 const selectedOrderId = ref(null)
@@ -292,6 +298,13 @@ const customerDisplay = computed(() => {
     .filter((value, index, array) => array.indexOf(value) === index && value !== customerName)
   if (customerName && extras.length > 0) return `${customerName}（${extras.join(' / ')}）`
   return customerName || extras.join(' / ') || '-'
+})
+
+const orderSourceLabel = computed(() => {
+  const source = previewData.value || selectedOrder.value || {}
+  if (source.sourceLabel) return source.sourceLabel
+  if (!source.sourceType && !source.sourceLabel) return '-'
+  return source.sourceType === 'RFQ_RELEASE' ? 'RFQ 议价提单派生' : '销售订单导入'
 })
 
 const itemPanelTitle = computed(() => {
@@ -470,6 +483,22 @@ const formatMoney = (value) => {
   if (Number.isNaN(amount)) return String(value)
   return amount.toFixed(2)
 }
+
+const normalizeRouteSalesOrderId = (value) => {
+  const raw = Array.isArray(value) ? value[0] : value
+  const id = Number(raw)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+watch(
+  () => route.query.salesOrderId,
+  async value => {
+    const salesOrderId = normalizeRouteSalesOrderId(value)
+    if (!salesOrderId || (salesOrderId === selectedOrderId.value && previewData.value)) return
+    await handleOrderSelected({ salesOrderId })
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

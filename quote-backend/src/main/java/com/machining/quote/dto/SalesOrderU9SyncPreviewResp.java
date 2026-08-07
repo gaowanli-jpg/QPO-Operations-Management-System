@@ -10,6 +10,8 @@ import java.util.List;
 public class SalesOrderU9SyncPreviewResp {
     private Long salesOrderId;
     private String salesOrderNo;
+    private String sourceType;
+    private String sourceLabel;
     private String documentNo;
     private String customerName;
     private String customerShortName;

@@ -47,6 +47,7 @@ public class SalesOrderU9SyncService {
     private static final String RESP_SUCCESS = "SUCCESS";
     private static final String RESP_FAILED = "FAILED";
     private static final String RESP_PARTIAL = "PARTIAL_SUCCESS";
+    private static final String SOURCE_RFQ_RELEASE = "RFQ_RELEASE";
     private static final int MAX_PAGE_SIZE = 100;
 
     @Autowired
@@ -92,6 +93,8 @@ public class SalesOrderU9SyncService {
         SalesOrderU9SyncPreviewResp resp = new SalesOrderU9SyncPreviewResp();
         resp.setSalesOrderId(header.getId());
         resp.setSalesOrderNo(header.getSalesOrderNo());
+        resp.setSourceType(header.getSourceType());
+        resp.setSourceLabel(sourceLabel(header.getSourceType()));
         resp.setDocumentNo(header.getDocumentNo());
         resp.setCustomerName(header.getCustomerName());
         resp.setCustomerShortName(header.getCustomerShortName());
@@ -304,6 +307,8 @@ public class SalesOrderU9SyncService {
         SalesOrderU9SyncOrderRow row = new SalesOrderU9SyncOrderRow();
         row.setSalesOrderId(header.getId());
         row.setSalesOrderNo(header.getSalesOrderNo());
+        row.setSourceType(header.getSourceType());
+        row.setSourceLabel(sourceLabel(header.getSourceType()));
         row.setCustomerName(header.getCustomerName());
         row.setCustomerShortName(header.getCustomerShortName());
         row.setCustomerCode(header.getCustomerCode());
@@ -423,6 +428,12 @@ public class SalesOrderU9SyncService {
         if (dataScopeService != null) {
             dataScopeService.applySalesOrderScope(query);
         }
+    }
+
+    private String sourceLabel(String sourceType) {
+        return SOURCE_RFQ_RELEASE.equalsIgnoreCase(sourceType)
+                ? "RFQ 议价提单派生"
+                : "销售订单导入";
     }
 
     private MaterialStats materialStats(List<SalesOrderItem> items) {

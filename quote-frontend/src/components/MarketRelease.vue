@@ -9,6 +9,29 @@
 
     </header>
 
+    <el-alert
+      v-if="releaseResult?.salesOrderId"
+      class="release-derived-order-result"
+      type="success"
+      :closable="false"
+      show-icon
+    >
+      <template #title>
+        已生成派生销售订单，可进入 U9 同步
+      </template>
+      <div class="release-derived-order-result-content">
+        <span>本批次提单已进入已提零件，后续可在 U9 同步页面继续处理。</span>
+        <el-button
+          v-permission="'market:u9-sync:view'"
+          type="primary"
+          link
+          @click="openDerivedOrderU9"
+        >
+          进入 U9 同步
+        </el-button>
+      </div>
+    </el-alert>
+
     <section class="erp-surface workflow-workspace release-workspace">
       <el-row :gutter="16">
         <el-col :span="6">
@@ -611,6 +634,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {
@@ -652,9 +676,11 @@ const replacementDrawingFiles = ref([])
 const replacementVersionDrawingFiles = ref([])
 const replacementDrawingResult = ref(null)
 const clientSkippedReplacementFiles = ref([])
+const releaseResult = ref(null)
 
 const loading = ref(false)
 let syncingReleaseItemSelection = false
+const router = useRouter()
 
 const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']
 
@@ -702,6 +728,15 @@ const releaseForm = reactive({
   arrangeType: '计划'
 })
 const releaseBatchState = reactive({ fingerprint: '', key: '' })
+
+const openDerivedOrderU9 = () => {
+  const salesOrderId = Number(releaseResult.value?.salesOrderId)
+  if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) {
+    ElMessage.warning('当前提单结果缺少有效的派生销售订单。')
+    return
+  }
+  router.push({ path: '/u9-sync', query: { salesOrderId: String(salesOrderId) } })
+}
 
 const pagedReleaseItems = computed(() => itemList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
@@ -1402,6 +1437,7 @@ const submitTicket = async () => {
       if (!response?.success) {
         throw new Error(response?.message || '提单生成失败。')
       }
+      releaseResult.value = response
       await refreshSelectedOrdersAfterGeneration(new Set(orderedSelectedRows.map(rowKey)))
       releaseBatchState.fingerprint = ''
       releaseBatchState.key = ''
@@ -1446,6 +1482,17 @@ const sourceTypeLabel = () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
+}
+
+.release-derived-order-result {
+  margin: 0 0 16px;
+}
+
+.release-derived-order-result-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .release-page-header h2 {
