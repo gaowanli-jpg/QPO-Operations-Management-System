@@ -755,6 +755,109 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void repeatQuoteCopiesConfirmedMaterialNoToRfqMainItem() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-MATERIAL-NO-" + System.nanoTime());
+        historicalOrder.setCustomerName("历史物料号客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = releasedReusableItem(historicalOrder, "RFQ-MAT-001", "A", 20.0);
+        historicalItem.setMaterialNo("MES-RFQ-001");
+        historicalItem.setMaterialNoStatus("已确认");
+        historicalItem.setMaterialNoSource("MES_TICKET");
+        historicalItem.setMaterialNoSourceTicketId(7001L);
+        itemMapper.updateById(historicalItem);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-MATERIAL-NO-" + System.nanoTime());
+        currentOrder.setCustomerName("当前物料号客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "RFQ-MAT-001", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(result.get("materialNoCopiedCount")).isEqualTo(1);
+        assertThat(result.get("materialNoSkippedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoConflictCount")).isEqualTo(0);
+        assertThat(saved.getMaterialNo()).isEqualTo("MES-RFQ-001");
+        assertThat(saved.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(saved.getMaterialNoSource()).isEqualTo("MES_TICKET");
+        assertThat(saved.getMaterialNoSourceTicketId()).isEqualTo(7001L);
+        List<Map<String, Object>> appliedItems = (List<Map<String, Object>>) result.get("appliedItems");
+        assertThat(appliedItems).singleElement()
+                .satisfies(row -> assertThat(row.get("materialNoReuseStatus")).isEqualTo("COPIED"));
+    }
+
+    @Test
+    void repeatQuoteReusesQuoteSnapshotWhenSourceMaterialNoIsUnconfirmed() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-UNCONFIRMED-MATERIAL-" + System.nanoTime());
+        historicalOrder.setCustomerName("未确认物料号客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = releasedReusableItem(historicalOrder, "RFQ-MAT-002", "A", 22.0);
+        historicalItem.setMaterialNo(null);
+        historicalItem.setMaterialNoStatus("未确认");
+        itemMapper.updateById(historicalItem);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-UNCONFIRMED-MATERIAL-" + System.nanoTime());
+        currentOrder.setCustomerName("当前未确认物料号客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "RFQ-MAT-002", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(result.get("materialNoCopiedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoSkippedCount")).isEqualTo(1);
+        assertThat(result.get("materialNoConflictCount")).isEqualTo(0);
+        assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
+        assertThat(saved.getMaterialNo()).isNull();
+        assertThat(saved.getMaterialNoStatus()).isEqualTo("未确认");
+    }
+
+    @Test
+    void repeatQuoteKeepsExistingRfqMaterialNoWhenHistoricalMaterialNoConflicts() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-CONFLICT-MATERIAL-" + System.nanoTime());
+        historicalOrder.setCustomerName("冲突物料号客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = releasedReusableItem(historicalOrder, "RFQ-MAT-003", "A", 24.0);
+        historicalItem.setMaterialNo("MES-RFQ-HISTORY");
+        historicalItem.setMaterialNoStatus("已确认");
+        itemMapper.updateById(historicalItem);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-CONFLICT-MATERIAL-" + System.nanoTime());
+        currentOrder.setCustomerName("当前冲突物料号客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "RFQ-MAT-003", "A");
+        currentItem.setMaterialNo("MES-RFQ-CURRENT");
+        currentItem.setMaterialNoStatus("已确认");
+        itemMapper.updateById(currentItem);
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(result.get("materialNoCopiedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoSkippedCount")).isEqualTo(0);
+        assertThat(result.get("materialNoConflictCount")).isEqualTo(1);
+        assertThat(saved.getMaterialNo()).isEqualTo("MES-RFQ-CURRENT");
+        assertThat(saved.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
+    }
+
+    @Test
     void repeatQuoteIgnoresNonReleasedHistoryEvenWhenDeliveryTicketExists() {
         String customerName = "非已提单重复客户-" + System.nanoTime();
         OrderRfq historicalOrder = new OrderRfq();

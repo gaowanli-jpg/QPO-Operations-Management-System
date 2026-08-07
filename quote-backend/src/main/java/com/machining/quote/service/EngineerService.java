@@ -64,6 +64,8 @@ public class EngineerService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private SystemTaskGuardService taskGuardService;
+    @Autowired(required = false)
+    private ConfirmedMaterialNoReuseService confirmedMaterialNoReuseService = new ConfirmedMaterialNoReuseService();
 
     @Transactional
     public void calculateAndSaveQuote(QuoteSubmitReq req) {
@@ -708,10 +710,20 @@ public class EngineerService {
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
+        int materialNoCopiedCount = countMaterialNoReuse(appliedItems, "COPIED");
+        int materialNoSkippedCount = countMaterialNoReuse(appliedItems, "IDEMPOTENT")
+                + countMaterialNoReuse(appliedItems, "NOT_APPLICABLE");
+        int materialNoConflictCount = countMaterialNoReuse(appliedItems, "CONFLICT");
         result.put("success", true);
-        result.put("message", "重复订单自动核价完成，已套用 " + appliedItems.size() + " 个零件，请工程师审核后手动完成核价提交。");
+        result.put("message", "重复订单自动核价完成，已套用 " + appliedItems.size()
+                + " 个零件；物料号补全 " + materialNoCopiedCount + " 个，物料号跳过 "
+                + materialNoSkippedCount + " 个，物料号冲突 " + materialNoConflictCount
+                + " 个，请工程师审核后手动完成核价提交。");
         result.put("appliedCount", appliedItems.size());
         result.put("skippedCount", skippedItems.size());
+        result.put("materialNoCopiedCount", materialNoCopiedCount);
+        result.put("materialNoSkippedCount", materialNoSkippedCount);
+        result.put("materialNoConflictCount", materialNoConflictCount);
         result.put("appliedItems", appliedItems);
         result.put("skippedItems", skippedItems);
         return result;
@@ -800,8 +812,9 @@ public class EngineerService {
             currentChildren.add(child);
         }
 
+        MaterialNoReuseResult materialNoResult = reuseConfirmedMaterialNo(currentParent, sourceParent);
         saveAssemblyQuote(currentParent, sourceParent.getAssemblyFee(), currentChildren);
-        addAppliedRepeatItem(currentParent, source, handledItemIds, appliedItems);
+        addAppliedRepeatItem(currentParent, source, materialNoResult, handledItemIds, appliedItems);
         return null;
     }
 
@@ -815,12 +828,14 @@ public class EngineerService {
 
         Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
         List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
+        MaterialNoReuseResult materialNoResult = reuseConfirmedMaterialNo(currentItem, sourceItem);
         saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight());
-        addAppliedRepeatItem(currentItem, source, handledItemIds, appliedItems);
+        addAppliedRepeatItem(currentItem, source, materialNoResult, handledItemIds, appliedItems);
     }
 
     private void addAppliedRepeatItem(ItemQuoteVersion item,
                                       RepeatSource source,
+                                      MaterialNoReuseResult materialNoResult,
                                       Set<Integer> handledItemIds,
                                       List<Map<String, Object>> appliedItems) {
         handledItemIds.add(item.getId());
@@ -828,7 +843,38 @@ public class EngineerService {
         applied.put("taxIncludedUnitPrice", item.getTaxIncludedUnitPrice());
         applied.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         applied.put("quoteMode", normalizeQuoteMode(item.getQuoteMode()));
+        applied.put("materialNoReuseStatus", materialNoResult == null ? null : materialNoResult.status().name());
+        applied.put("materialNoReuseMessage", materialNoReuseMessage(materialNoResult));
         appliedItems.add(applied);
+    }
+
+    private MaterialNoReuseResult reuseConfirmedMaterialNo(ItemQuoteVersion target, ItemQuoteVersion source) {
+        try {
+            return confirmedMaterialNoReuseService.copyToRfqItem(target, source);
+        } catch (ConfirmedMaterialNoReuseService.MaterialNoConflictException ex) {
+            return new MaterialNoReuseResult(MaterialNoReuseResult.Status.CONFLICT);
+        }
+    }
+
+    private int countMaterialNoReuse(List<Map<String, Object>> appliedItems, String status) {
+        if (appliedItems == null || isBlank(status)) {
+            return 0;
+        }
+        return (int) appliedItems.stream()
+                .filter(item -> status.equals(item.get("materialNoReuseStatus")))
+                .count();
+    }
+
+    private String materialNoReuseMessage(MaterialNoReuseResult result) {
+        if (result == null || result.status() == null) {
+            return null;
+        }
+        return switch (result.status()) {
+            case COPIED -> "已补全 MES 已确认物料号";
+            case IDEMPOTENT -> "物料号已一致，跳过覆盖";
+            case NOT_APPLICABLE -> "来源未确认，跳过物料号复用";
+            case CONFLICT -> "目标已有不同物料号，未覆盖";
+        };
     }
 
     private Map<String, ItemQuoteVersion> buildCurrentItemByKey(List<ItemQuoteVersion> currentItems) {
