@@ -317,8 +317,12 @@ class SalesOrderQpoImportStage3Test {
                 any(String.class),
                 isNull()
         );
-        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+        Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData)
                 .containsEntry("missingPriceCount", 1);
+        assertThat(String.valueOf(afterData))
+                .doesNotContain("FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED")
+                .doesNotContain("multipart");
     }
 
     @Test
@@ -373,7 +377,7 @@ class SalesOrderQpoImportStage3Test {
                         "excelFile",
                         "sales-order.xlsx",
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                        "FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
                 "SO01"
