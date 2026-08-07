@@ -532,6 +532,7 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setReleasedQty(releasedQty);
         item.setRemainingQty(qty - releasedQty);
         item.setMaterialNo("MAT-" + id);
+        item.setMaterialNoStatus("已确认");
         item.setDrawingUrl("/drawings/" + partNo + ".pdf");
         item.setMaterialName("6061");
         item.setEngineeringMaterialName("7075");
