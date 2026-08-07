@@ -195,11 +195,14 @@
           <el-table-column prop="blockedReason" label="阻断原因" min-width="190" show-overflow-tooltip>
             <template #default="{ row }">{{ row.blockedReason || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="finalUnitPrice" label="U9可用价格" width="118" align="right">
+          <el-table-column prop="taxIncludedUnitPrice" label="U9含税单价" width="128" align="right">
             <template #default="{ row }">
-              <el-tag v-if="row.finalUnitPrice == null" :type="priceMissingTagType(row)" size="small">价格缺失</el-tag>
-              <span v-else>{{ formatMoney(row.finalUnitPrice) }}</span>
+              <el-tag v-if="row.taxIncludedUnitPrice == null" :type="priceMissingTagType(row)" size="small">含税单价缺失</el-tag>
+              <span v-else>{{ formatMoney(row.taxIncludedUnitPrice) }}</span>
             </template>
+          </el-table-column>
+          <el-table-column prop="taxIncludedTotalPrice" label="含税金额" width="118" align="right">
+            <template #default="{ row }">{{ formatMoney(row.taxIncludedTotalPrice) }}</template>
           </el-table-column>
           <el-table-column prop="salesOrderDate" label="下单日期" width="116">
             <template #default="{ row }">{{ formatDate(row.salesOrderDate) }}</template>
@@ -220,9 +223,6 @@
           <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
           <el-table-column prop="materialName" label="材料" min-width="110" show-overflow-tooltip />
           <el-table-column prop="surfaceTreatment" label="表面处理" min-width="110" show-overflow-tooltip />
-          <el-table-column prop="taxIncludedUnitPrice" label="VAT单价-含税" width="120" align="right">
-            <template #default="{ row }">{{ formatMoney(row.taxIncludedUnitPrice) }}</template>
-          </el-table-column>
           <el-table-column prop="untaxedUnitPrice" label="未税单价(CNY)" width="122" align="right">
             <template #default="{ row }">{{ formatMoney(row.untaxedUnitPrice) }}</template>
           </el-table-column>
@@ -460,7 +460,7 @@ const materialStatusTagType = (status) => {
   return 'info'
 }
 
-const priceMissingTagType = (row) => (row?.finalUnitPrice == null ? 'warning' : 'success')
+const priceMissingTagType = (row) => (row?.taxIncludedUnitPrice == null ? 'warning' : 'success')
 
 const formatDate = (value) => {
   if (!value) return '-'

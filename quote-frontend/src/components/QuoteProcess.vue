@@ -201,7 +201,7 @@
               </el-table-column>
               <el-table-column label="含税单价" width="110" align="right">
                 <template #default="{ row }">
-                  <span v-if="row.finalUnitPrice != null">¥ {{ Number(row.finalUnitPrice).toFixed(2) }}</span>
+                  <span v-if="row.taxIncludedUnitPrice != null">¥ {{ Number(row.taxIncludedUnitPrice).toFixed(2) }}</span>
                   <el-tag v-else type="warning" size="small">未报价</el-tag>
                 </template>
               </el-table-column>

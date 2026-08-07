@@ -1347,7 +1347,7 @@ const submitTicket = async () => {
   const customerProjectNo = releaseForm.customerProjectNo.trim()
   const orderedSelectedRows = selectedRowsInItemOrder()
 
-  const unquoted = orderedSelectedRows.filter(row => row.finalUnitPrice == null)
+  const unquoted = orderedSelectedRows.filter(row => row.taxIncludedUnitPrice == null)
   if (unquoted.length > 0) {
     return ElMessage.warning(`仍有 ${unquoted.length} 个零件未报价，暂不生成提单。`)
   }

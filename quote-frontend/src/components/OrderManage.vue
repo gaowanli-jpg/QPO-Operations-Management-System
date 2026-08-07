@@ -174,7 +174,7 @@
               <el-table-column prop="status" label="状态" width="110" align="center" />
               <el-table-column label="含税单价" width="110" align="right">
                 <template #default="scope">
-                  {{ scope.row.finalUnitPrice ? `¥ ${scope.row.finalUnitPrice.toFixed(2)}` : '-' }}
+                  {{ scope.row.taxIncludedUnitPrice ? `¥ ${scope.row.taxIncludedUnitPrice.toFixed(2)}` : '-' }}
                 </template>
               </el-table-column>
               <el-table-column label="图纸" width="90" align="center">

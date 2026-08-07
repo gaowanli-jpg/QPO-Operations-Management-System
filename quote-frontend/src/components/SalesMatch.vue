@@ -266,7 +266,7 @@ const FIELD_LABELS = {
   qty: '数量',
   materialNo: '物料号',
   taxIncludedUnitPrice: '含税单价',
-  finalUnitPrice: '最终单价',
+  taxIncludedTotalPrice: '含税金额',
   customerOrderNo: '客户订单号',
   internalProjectNo: '内部项目号'
 }

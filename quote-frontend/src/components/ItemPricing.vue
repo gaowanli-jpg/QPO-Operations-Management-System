@@ -140,10 +140,10 @@
             </template>
           </el-table-column>
           <el-table-column label="含税单价" width="110" align="right">
-            <template #default="scope"><span v-if="scope.row.finalUnitPrice != null" class="success-price">¥ {{ scope.row.finalUnitPrice.toFixed(2) }}</span></template>
+            <template #default="scope"><span v-if="scope.row.taxIncludedUnitPrice != null" class="success-price">¥ {{ scope.row.taxIncludedUnitPrice.toFixed(2) }}</span></template>
           </el-table-column>
-          <el-table-column label="单项合计" width="110" align="right">
-            <template #default="scope"><span v-if="scope.row.finalTotalPrice != null" class="danger-price">¥ {{ scope.row.finalTotalPrice.toFixed(2) }}</span></template>
+          <el-table-column label="含税金额" width="110" align="right">
+            <template #default="scope"><span v-if="scope.row.taxIncludedTotalPrice != null" class="danger-price">¥ {{ scope.row.taxIncludedTotalPrice.toFixed(2) }}</span></template>
           </el-table-column>
           <el-table-column prop="status" label="状态" width="100" align="center" />
           <el-table-column label="操作" width="120" align="center" fixed="right">
@@ -383,7 +383,7 @@
               </el-col>
               <el-col :span="6">
                 <div class="assembly-line-price">
-                  {{ child.finalUnitPrice != null ? `¥ ${(Number(child.finalUnitPrice) * Number(child.qtyPerParent || 0)).toFixed(2)}` : '子件未核价' }}
+                  {{ child.taxIncludedUnitPrice != null ? `¥ ${(Number(child.taxIncludedUnitPrice) * Number(child.qtyPerParent || 0)).toFixed(2)}` : '子件未核价' }}
                 </div>
               </el-col>
               <el-col :span="4">
@@ -519,7 +519,7 @@
         </el-table-column>
         <el-table-column label="含税单价" width="110" align="right">
           <template #default="{ row }">
-            <span v-if="row.finalUnitPrice != null">¥ {{ Number(row.finalUnitPrice).toFixed(2) }}</span>
+            <span v-if="row.taxIncludedUnitPrice != null">¥ {{ Number(row.taxIncludedUnitPrice).toFixed(2) }}</span>
             <el-tag v-else type="warning" size="small">未核价</el-tag>
           </template>
         </el-table-column>
@@ -1162,7 +1162,7 @@ watch(
 )
 
 const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum, child) => {
-  const unitPrice = Number(child.finalUnitPrice)
+  const unitPrice = Number(child.taxIncludedUnitPrice)
   const qty = Number(child.qtyPerParent || 0)
   return Number.isFinite(unitPrice) ? sum + unitPrice * qty : sum
 }, 0))
@@ -1209,7 +1209,7 @@ const createAssemblyChildRow = (source = {}) => {
     partNo: source.partNo || option?.partNo || '',
     version: source.version || option?.version || '',
     description: source.description || option?.description || '',
-    finalUnitPrice: source.finalUnitPrice ?? option?.finalUnitPrice ?? null,
+    taxIncludedUnitPrice: source.taxIncludedUnitPrice ?? option?.taxIncludedUnitPrice ?? null,
     status: source.status || option?.status || ''
   }
 }
@@ -1278,7 +1278,7 @@ const confirmAssemblyChildPicker = () => {
       partNo: row.partNo,
       version: row.version,
       description: row.description,
-      finalUnitPrice: row.finalUnitPrice,
+      taxIncludedUnitPrice: row.taxIncludedUnitPrice,
       status: row.status
     }))
   })
@@ -1547,7 +1547,7 @@ const submitCurrentQuote = async () => {
     if (validChildren.length === 0) {
       return ElMessage.warning('组合件至少需要选择一个子件。')
     }
-    const unquotedChildren = assemblyChildren.value.filter(child => child.childItemId && child.finalUnitPrice == null)
+    const unquotedChildren = assemblyChildren.value.filter(child => child.childItemId && child.taxIncludedUnitPrice == null)
     if (unquotedChildren.length > 0) {
       return ElMessage.warning('组合件存在未核价子件，请先完成子件核价。')
     }

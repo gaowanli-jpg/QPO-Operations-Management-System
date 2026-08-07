@@ -101,7 +101,8 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('prop="u9OrderCode"')
     expect(component).toContain('prop="materialNo" label="物料号"')
     expect(component).toContain('prop="materialNoStatus"')
-    expect(component).toContain('prop="finalUnitPrice"')
+    expect(component).toContain('prop="taxIncludedUnitPrice"')
+    expect(component).toContain('含税单价缺失')
     expect(component).toContain('priceMissingTagType')
     expect(component).toContain('prop="errorMessage"')
     expect(component).not.toContain('prop="salesMaterialNo"')
@@ -149,7 +150,8 @@ describe('sales order U9 sync module', () => {
       'label="数量"',
       'label="就绪"',
       'label="阻断原因"',
-      'prop="finalUnitPrice"',
+      'prop="taxIncludedUnitPrice"',
+      'label="含税金额"',
       'label="下单日期"',
       'label="客户下单抬头"',
       'label="客户交期"',
@@ -159,7 +161,6 @@ describe('sales order U9 sync module', () => {
       'label="描述"',
       'label="材料"',
       'label="表面处理"',
-      'label="VAT单价-含税"',
       'label="未税单价(CNY)"',
       'label="（未税）金额"',
       'label="实际出货日期"',

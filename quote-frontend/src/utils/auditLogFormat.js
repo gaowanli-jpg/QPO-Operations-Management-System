@@ -41,8 +41,10 @@ export const FIELD_LABELS = {
   feeData: '费用数据',
   materialData: '材料数据',
   baseCost: '基础成本',
-  finalUnitPrice: '最终单价',
-  finalTotalPrice: '最终总价'
+  taxIncludedUnitPrice: '含税单价',
+  taxIncludedTotalPrice: '含税金额',
+  untaxedUnitPrice: '未税单价',
+  untaxedTotalPrice: '未税金额'
 }
 
 export const parseAuditJson = (value) => {
