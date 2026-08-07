@@ -283,7 +283,7 @@ class SalesOrderQpoImportStage3Test {
                         "excelFile",
                         "sales-order.xlsx",
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                        "FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED".getBytes(StandardCharsets.UTF_8)
                 ),
                 7L,
                 "SO01"
@@ -724,7 +724,8 @@ class SalesOrderQpoImportStage3Test {
                 .doesNotContain("P-100_A.pdf")
                 .doesNotContain("MockMultipartFile")
                 .doesNotContain("multipart")
-                .doesNotContain("p1");
+                .doesNotContain("p1")
+                .doesNotContain("FULL-EXCEL-CONTENT-SHOULD-NOT-BE-LOGGED");
     }
 
     @Test

@@ -80,6 +80,19 @@ class SalesOrderImportStage7DocumentationTest {
     }
 
     @Test
+    void salesOrderImportDocDescribesOrderDefaultMatrixAndLineOverrides() throws IOException {
+        String salesOrderDoc = read(SALES_ORDER_DOC);
+
+        assertThat(salesOrderDoc)
+                .contains("页面额外提供客户选择、单据类型编码和订单默认信息矩阵")
+                .contains("订单头字段以下单页面填写的订单默认信息为准")
+                .contains("Excel 中 `下单日期 / 客户订单号 / 客户项目号 / 客户下单抬头 / 订单类型 / 内部项目号` 为可选的零件级覆盖列")
+                .contains("行内为空或列不存在时继承页面订单默认信息")
+                .contains("一次导入只创建一个 `sales_order_header`")
+                .contains("自动提单优先使用 `sales_order_item` 行级有效字段，空值再回退 `sales_order_header`");
+    }
+
+    @Test
     void permissionsAndLogsDocumentNoNewPermissionAndImportChainSummary() throws IOException {
         String permissionDoc = read(PERMISSION_DOC);
         String logDocs = read(LOG_OPS_DOC) + "\n" + read(FILE_LOG_DOC);

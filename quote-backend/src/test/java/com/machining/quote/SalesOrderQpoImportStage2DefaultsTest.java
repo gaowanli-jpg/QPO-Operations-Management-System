@@ -31,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -193,6 +194,7 @@ class SalesOrderQpoImportStage2DefaultsTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void servicePersistsHeaderDefaultsAndItemLineEffectiveValues() throws Exception {
         SalesOrderQpoImportService service = service();
         SalesOrderQpoImportDefaultsDTO defaults = defaults();
@@ -245,6 +247,20 @@ class SalesOrderQpoImportStage2DefaultsTest {
         assertThat(fallbackItem.getCustomerOrderTitle()).isEqualTo("A-TITLE");
         assertThat(fallbackItem.getOrderType()).isEqualTo("正式订单");
         assertThat(fallbackItem.getInternalProjectNo()).isEqualTo("A-IP");
+
+        var recordCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderImportRecord.class);
+        verify(recordMapper(service)).insert(recordCaptor.capture());
+        Map<String, Object> requestSummary = (Map<String, Object>) recordCaptor.getValue().getRequestSummaryJson();
+        assertThat(requestSummary)
+                .containsEntry("customerOrderNo", "A-PO")
+                .containsEntry("internalProjectNo", "A-IP")
+                .containsEntry("salesOrderDate", LocalDate.of(2026, 7, 1))
+                .containsEntry("orderType", "正式订单")
+                .containsEntry("lineCount", 2);
+        assertThat(String.valueOf(requestSummary))
+                .doesNotContain("B-PO")
+                .doesNotContain("B-IP")
+                .doesNotContain("B-TITLE");
     }
 
     private SalesOrderQpoImportService service() {

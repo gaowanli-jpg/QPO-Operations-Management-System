@@ -35,8 +35,14 @@ describe('marketApi', () => {
     expect('importSalesOrder' in marketApi).toBe(false)
   })
 
-  test('importSalesOrderToQpo uploads sales order form data to QPO flow endpoint', async () => {
+  test('importSalesOrderToQpo uploads caller-built order defaults as multipart form data', async () => {
     const formData = new FormData()
+    formData.append('salesOrderDate', '2026-07-01')
+    formData.append('customerOrderNo', 'PO-001')
+    formData.append('customerProjectNo', 'CP-001')
+    formData.append('customerOrderTitle', '默认抬头')
+    formData.append('orderType', '正式订单')
+    formData.append('internalProjectNo', 'IP-001')
 
     await marketApi.importSalesOrderToQpo(formData)
 
