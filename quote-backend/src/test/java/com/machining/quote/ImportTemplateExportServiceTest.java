@@ -65,7 +65,7 @@ class ImportTemplateExportServiceTest {
     }
 
     @Test
-    void salesOrderTemplateUsesParserHeadersAndMarksRequiredColumns() throws Exception {
+    void salesOrderTemplateMarksOrderDefaultsAsOptionalLineOverrides() throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         service.exportSalesOrderImportTemplate(response);
@@ -83,12 +83,21 @@ class ImportTemplateExportServiceTest {
                     "（未税）金额", "实际出货日期", "备注"
             );
             assertThat(styleAt(dataSheet, 0).getFillPattern()).isEqualTo(FillPatternType.SOLID_FOREGROUND);
-            assertThat(styleAt(dataSheet, 1).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 14).getFillForegroundColor());
-            assertThat(styleAt(dataSheet, 0).getFillForegroundColor()).isNotEqualTo(styleAt(dataSheet, 1).getFillForegroundColor());
-            assertThat(styleAt(dataSheet, 15).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 0).getFillForegroundColor());
-            assertThat(styleAt(dataSheet, 16).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 0).getFillForegroundColor());
-            assertThat(helpSheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("必填");
+            assertThat(styleAt(dataSheet, 9).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 10).getFillForegroundColor());
+            assertThat(styleAt(dataSheet, 9).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 14).getFillForegroundColor());
+            assertThat(styleAt(dataSheet, 1).getFillForegroundColor()).isNotEqualTo(styleAt(dataSheet, 9).getFillForegroundColor());
+            assertThat(styleAt(dataSheet, 2).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 1).getFillForegroundColor());
+            assertThat(styleAt(dataSheet, 5).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 1).getFillForegroundColor());
+            assertThat(styleAt(dataSheet, 6).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 1).getFillForegroundColor());
+            assertThat(helpSheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("选填");
+            assertThat(helpSheet.getRow(10).getCell(1).getStringCellValue()).isEqualTo("必填");
+            assertThat(helpSheet.getRow(11).getCell(1).getStringCellValue()).isEqualTo("必填");
+            assertThat(helpSheet.getRow(15).getCell(1).getStringCellValue()).isEqualTo("必填");
             assertThat(helpSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("选填");
+            assertThat(helpSheet.getRow(2).getCell(3).getStringCellValue()).contains("为空时继承页面订单默认信息");
+            assertThat(helpSheet.getRow(3).getCell(3).getStringCellValue()).contains("为空时继承页面订单默认信息");
+            assertThat(helpSheet.getRow(6).getCell(3).getStringCellValue()).contains("为空时继承页面订单默认信息");
+            assertThat(helpSheet.getRow(7).getCell(3).getStringCellValue()).contains("为空时继承页面订单默认信息");
         }
     }
 

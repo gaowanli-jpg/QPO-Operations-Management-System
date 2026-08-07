@@ -163,7 +163,7 @@
             <div class="import-step import-step-sales-order-document">
               <div class="section-title">
                 <span class="step-index">02</span>
-                <span>步骤 2：单据类型编码</span>
+                <span>步骤 2：单据类型与订单信息</span>
               </div>
               <div class="form-box step-panel">
                 <el-form :model="salesOrderForm" label-width="120px" class="customer-form sales-order-form">
@@ -175,10 +175,75 @@
                           placeholder="SO01"
                           maxlength="50"
                           clearable
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
                         />
                       </el-form-item>
                     </el-col>
                   </el-row>
+                  <div class="sales-order-default-group">
+                    <div class="sales-order-default-title">订单默认信息</div>
+                    <div class="sales-order-default-grid">
+                      <el-form-item label="下单日期" required>
+                        <el-date-picker
+                          v-model="salesOrderForm.salesOrderDate"
+                          type="date"
+                          value-format="YYYY-MM-DD"
+                          placeholder="请选择下单日期"
+                          class="full-width"
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                        />
+                      </el-form-item>
+                      <el-form-item label="客户订单号" required>
+                        <el-input
+                          v-model.trim="salesOrderForm.customerOrderNo"
+                          placeholder="请输入客户订单号"
+                          maxlength="100"
+                          clearable
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                        />
+                      </el-form-item>
+                      <el-form-item label="客户项目号">
+                        <el-input
+                          v-model.trim="salesOrderForm.customerProjectNo"
+                          placeholder="请输入客户项目号"
+                          maxlength="100"
+                          clearable
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                        />
+                      </el-form-item>
+                      <el-form-item label="客户下单抬头">
+                        <el-input
+                          v-model.trim="salesOrderForm.customerOrderTitle"
+                          placeholder="请输入客户下单抬头"
+                          maxlength="255"
+                          clearable
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                        />
+                      </el-form-item>
+                      <el-form-item label="订单类型" required>
+                        <el-select
+                          v-model="salesOrderForm.orderType"
+                          placeholder="请选择订单类型"
+                          clearable
+                          class="full-width"
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                        >
+                          <el-option label="预测订单" value="预测订单" />
+                          <el-option label="备货订单" value="备货订单" />
+                          <el-option label="正式订单" value="正式订单" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="内部项目号" required>
+                        <el-input
+                          v-model.trim="salesOrderForm.internalProjectNo"
+                          placeholder="请输入内部项目号"
+                          maxlength="100"
+                          clearable
+                          :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
+                        />
+                      </el-form-item>
+                    </div>
+                  </div>
                 </el-form>
               </div>
             </div>
@@ -190,7 +255,7 @@
               </div>
               <div class="upload-box step-panel">
                 <el-alert
-                  title="销售订单 Excel 需包含表头：下单日期、客户订单号、订单类型、内部项目号、图号、订单数量、版本；可选表头：序号、客户项目号、客户下单抬头、客户交期、内部交期(给生产的交期)、描述、材料、表面处理、VAT单价-含税、未税单价(CNY)、（未税）金额、实际出货日期、备注。价格允许为空，但 U9 同步前必须补齐。日期字段（下单日期、客户交期、内部交期、实际出货日期）支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8、2026年3月8日）或 Excel 日期序列号（如 46089）；订单数量必须为正整数；（未税）金额为空且未税单价存在时按未税单价×订单数量计算。同一客户订单号+内部项目号下的下单日期、客户项目号、客户下单抬头、订单类型必须一致；客户和单据类型在前两步选择。"
+                  title="销售订单 Excel 需包含表头：图号、订单数量、版本；可选表头：序号、下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号、客户交期、内部交期(给生产的交期)、描述、材料、表面处理、VAT单价-含税、未税单价(CNY)、（未税）金额、实际出货日期、备注。订单级字段以下方“订单默认信息”为准；Excel 行内同名字段仅作为零件级覆盖值，行内为空时继承订单默认信息。价格允许为空，但 U9 同步前必须补齐。日期字段（下单日期、客户交期、内部交期、实际出货日期）支持具体日期（如 2026-03-08、2026-3-8、2026.03.08、2026.3.8、2026/3/8、2026年3月8日）或 Excel 日期序列号（如 46089）；订单数量必须为正整数；（未税）金额为空且未税单价存在时按未税单价×订单数量计算。客户和单据类型在前两步选择。"
                   type="info"
                   show-icon
                   :closable="false"
@@ -391,7 +456,13 @@ const salesOrderForm = reactive({
   customerCode: '',
   customerShortName: '',
   customerName: '',
-  documentTypeCode: 'SO01'
+  documentTypeCode: 'SO01',
+  salesOrderDate: '',
+  customerOrderNo: '',
+  customerProjectNo: '',
+  customerOrderTitle: '',
+  orderType: '',
+  internalProjectNo: ''
 })
 const salesOrderFile = ref(null)
 const salesOrderDrawingFiles = ref([])
@@ -549,13 +620,26 @@ const buildDrawingReportHtml = (report) => {
 
 const submitSalesOrderImport = async () => {
   if (!salesOrderForm.customerId) return ElMessage.warning('请选择销售订单客户！')
+  const documentTypeCode = salesOrderForm.documentTypeCode.trim()
+  const customerOrderNo = salesOrderForm.customerOrderNo.trim()
+  const internalProjectNo = salesOrderForm.internalProjectNo.trim()
+  if (!documentTypeCode) return ElMessage.warning('请填写单据类型编码！')
+  if (!salesOrderForm.salesOrderDate) return ElMessage.warning('请选择销售订单下单日期！')
+  if (!customerOrderNo) return ElMessage.warning('请填写客户订单号！')
+  if (!salesOrderForm.orderType) return ElMessage.warning('请选择订单类型！')
+  if (!internalProjectNo) return ElMessage.warning('请填写内部项目号！')
   if (!salesOrderFile.value) return ElMessage.warning('请上传销售订单 Excel！')
 
   return runAction(IMPORT_SALES_ORDER_ACTION_KEY, async () => {
     const formData = new FormData()
-    const documentTypeCode = salesOrderForm.documentTypeCode.trim() || 'SO01'
     formData.append('customerId', String(salesOrderForm.customerId))
     formData.append('documentTypeCode', documentTypeCode)
+    formData.append('salesOrderDate', salesOrderForm.salesOrderDate)
+    formData.append('customerOrderNo', customerOrderNo)
+    formData.append('customerProjectNo', salesOrderForm.customerProjectNo.trim())
+    formData.append('customerOrderTitle', salesOrderForm.customerOrderTitle.trim())
+    formData.append('orderType', salesOrderForm.orderType)
+    formData.append('internalProjectNo', internalProjectNo)
     formData.append('excelFile', salesOrderFile.value)
     salesOrderDrawingFiles.value.forEach(file => {
       formData.append('drawings', file)
@@ -587,6 +671,12 @@ const submitSalesOrderImport = async () => {
           salesOrderForm.customerShortName = ''
           salesOrderForm.customerName = ''
           salesOrderForm.documentTypeCode = 'SO01'
+          salesOrderForm.salesOrderDate = ''
+          salesOrderForm.customerOrderNo = ''
+          salesOrderForm.customerProjectNo = ''
+          salesOrderForm.customerOrderTitle = ''
+          salesOrderForm.orderType = ''
+          salesOrderForm.internalProjectNo = ''
           salesOrderFile.value = null
           salesOrderDrawingFiles.value = []
           salesOrderVersionDrawingFiles.value = []
@@ -739,8 +829,35 @@ const submitRfqPackage = async () => {
   margin-bottom: 0;
 }
 
+.sales-order-form :deep(.el-input),
+.sales-order-form :deep(.el-select),
+.sales-order-form :deep(.el-date-editor) {
+  width: 100%;
+}
+
 .customer-input-col {
   max-width: 560px;
+}
+
+.sales-order-default-group {
+  margin-top: 18px;
+}
+
+.sales-order-default-title {
+  margin-bottom: 12px;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+  font-weight: 700;
+}
+
+.sales-order-default-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.sales-order-default-grid :deep(.el-form-item__content) {
+  min-width: 0;
 }
 
 .existing-customer-button {
@@ -876,6 +993,10 @@ const submitRfqPackage = async () => {
   }
 
   .drawing-upload-dual-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-order-default-grid {
     grid-template-columns: 1fr;
   }
 

@@ -53,11 +53,15 @@ describe('QPO final UI punch-list polish', () => {
   test('keeps RFQ import free of order type and moves order type selection to release generation', () => {
     const marketDashboard = readSource('components', 'MarketDashboard.vue')
     const marketRelease = readSource('components', 'MarketRelease.vue')
+    const rfqSubmitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitRfqPackage'),
+      marketDashboard.indexOf('</script>')
+    )
 
     expect(marketDashboard).not.toContain('import-step-order-type')
     expect(marketDashboard).not.toContain("rfqForm = reactive({ customerName: '', orderType: '' })")
     expect(marketDashboard).not.toContain('market:rfq:order-type-select')
-    expect(marketDashboard).not.toContain("formData.append('orderType'")
+    expect(rfqSubmitBlock).not.toContain("formData.append('orderType'")
     expect(marketDashboard).toContain("const rfqForm = reactive({")
     expect(marketDashboard).toContain("customerId: null")
     expect(marketDashboard).toContain("customerCode: ''")

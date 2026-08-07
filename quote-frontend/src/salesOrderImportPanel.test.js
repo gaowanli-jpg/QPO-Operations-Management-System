@@ -49,22 +49,86 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain("formData.append('documentTypeCode'")
   })
 
-  test('sales order mode follows RFQ step rhythm with document type and drawing upload separated', () => {
+  test('sales order mode follows RFQ step rhythm with document type and order defaults separated', () => {
     expect(salesOrderPane).toContain('步骤 1：客户基础信息')
-    expect(salesOrderPane).toContain('步骤 2：单据类型编码')
+    expect(salesOrderPane).toContain('步骤 2：单据类型与订单信息')
     expect(salesOrderPane).toContain('步骤 3：上传销售订单（Excel）')
     expect(salesOrderPane).toContain('步骤 4：上传关联图纸（PDF）')
 
     const customerStep = salesOrderPane.slice(
       salesOrderPane.indexOf('步骤 1：客户基础信息'),
-      salesOrderPane.indexOf('步骤 2：单据类型编码')
+      salesOrderPane.indexOf('步骤 2：单据类型与订单信息')
     )
     expect(customerStep).toContain(':model-value="salesOrderCustomerLabel"')
     expect(customerStep).not.toContain('documentTypeCode')
 
-    expect(salesOrderPane.indexOf('步骤 1：客户基础信息')).toBeLessThan(salesOrderPane.indexOf('步骤 2：单据类型编码'))
-    expect(salesOrderPane.indexOf('步骤 2：单据类型编码')).toBeLessThan(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）'))
+    expect(salesOrderPane.indexOf('步骤 1：客户基础信息')).toBeLessThan(salesOrderPane.indexOf('步骤 2：单据类型与订单信息'))
+    expect(salesOrderPane.indexOf('步骤 2：单据类型与订单信息')).toBeLessThan(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）'))
     expect(salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）')).toBeLessThan(salesOrderPane.indexOf('步骤 4：上传关联图纸（PDF）'))
+  })
+
+  test('sales order step 2 renders the order default information matrix', () => {
+    const documentStep = salesOrderPane.slice(
+      salesOrderPane.indexOf('步骤 2：单据类型与订单信息'),
+      salesOrderPane.indexOf('步骤 3：上传销售订单（Excel）')
+    )
+
+    expect(documentStep).toContain('class="sales-order-default-grid"')
+    expect(documentStep).toContain('label="单据类型编码"')
+    expect(documentStep).toContain('label="下单日期"')
+    expect(documentStep).toContain('v-model="salesOrderForm.salesOrderDate"')
+    expect(documentStep).toContain('label="客户订单号"')
+    expect(documentStep).toContain('v-model.trim="salesOrderForm.customerOrderNo"')
+    expect(documentStep).toContain('label="客户项目号"')
+    expect(documentStep).toContain('v-model.trim="salesOrderForm.customerProjectNo"')
+    expect(documentStep).toContain('label="客户下单抬头"')
+    expect(documentStep).toContain('v-model.trim="salesOrderForm.customerOrderTitle"')
+    expect(documentStep).toContain('label="订单类型"')
+    expect(documentStep).toContain('v-model="salesOrderForm.orderType"')
+    expect(documentStep).toContain('label="内部项目号"')
+    expect(documentStep).toContain('v-model.trim="salesOrderForm.internalProjectNo"')
+    expect(documentStep).toContain('<el-option label="预测订单" value="预测订单" />')
+    expect(documentStep).toContain('<el-option label="备货订单" value="备货订单" />')
+    expect(documentStep).toContain('<el-option label="正式订单" value="正式订单" />')
+  })
+
+  test('sales order import validates required order defaults before submit', () => {
+    const submitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitSalesOrderImport'),
+      marketDashboard.indexOf('// 提交询价单和图纸')
+    )
+
+    expect(submitBlock).toContain("salesOrderForm.documentTypeCode.trim()")
+    expect(submitBlock).toContain("ElMessage.warning('请填写单据类型编码！')")
+    expect(submitBlock).toContain("ElMessage.warning('请选择销售订单下单日期！')")
+    expect(submitBlock).toContain("ElMessage.warning('请填写客户订单号！')")
+    expect(submitBlock).toContain("ElMessage.warning('请选择订单类型！')")
+    expect(submitBlock).toContain("ElMessage.warning('请填写内部项目号！')")
+    expect(submitBlock.indexOf("请填写内部项目号")).toBeLessThan(submitBlock.indexOf("请上传销售订单 Excel"))
+  })
+
+  test('sales order import submits all order defaults in multipart form data', () => {
+    const submitBlock = marketDashboard.slice(
+      marketDashboard.indexOf('const submitSalesOrderImport'),
+      marketDashboard.indexOf('// 提交询价单和图纸')
+    )
+
+    expect(submitBlock).toContain("formData.append('salesOrderDate', salesOrderForm.salesOrderDate)")
+    expect(submitBlock).toContain("formData.append('customerOrderNo', customerOrderNo)")
+    expect(submitBlock).toContain("formData.append('customerProjectNo', salesOrderForm.customerProjectNo.trim())")
+    expect(submitBlock).toContain("formData.append('customerOrderTitle', salesOrderForm.customerOrderTitle.trim())")
+    expect(submitBlock).toContain("formData.append('orderType', salesOrderForm.orderType)")
+    expect(submitBlock).toContain("formData.append('internalProjectNo', internalProjectNo)")
+  })
+
+  test('sales order default matrix is responsive and does not overflow on small screens', () => {
+    expect(marketDashboard).toContain('.sales-order-default-grid')
+    expect(marketDashboard).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));')
+    expect(marketDashboard).toContain('.sales-order-default-grid :deep(.el-form-item__content)')
+    expect(marketDashboard).toContain('min-width: 0;')
+    expect(marketDashboard).toContain('@media (max-width: 900px)')
+    expect(marketDashboard).toContain('.sales-order-default-grid {')
+    expect(marketDashboard).toContain('grid-template-columns: 1fr;')
   })
 
   test('RFQ import uses the same clean step workflow surface as sales order import', () => {
@@ -149,9 +213,12 @@ describe('sales order import panel', () => {
 
   test('sales order upload instructions follow the new market template', () => {
     expect(salesOrderPane).toContain('销售订单 Excel 需包含表头')
-    expect(salesOrderPane).toContain('下单日期、客户订单号、订单类型、内部项目号、图号、订单数量、版本')
+    expect(salesOrderPane).toContain('图号、订单数量、版本')
+    expect(salesOrderPane).toContain('可选表头：序号、下单日期、客户订单号、客户项目号、客户下单抬头、订单类型、内部项目号')
+    expect(salesOrderPane).toContain('订单级字段以下方“订单默认信息”为准')
+    expect(salesOrderPane).toContain('Excel 行内同名字段仅作为零件级覆盖值')
     expect(salesOrderPane).toContain('价格允许为空，但 U9 同步前必须补齐')
-    expect(salesOrderPane).not.toContain('可选表头：序号、客户项目号、客户下单抬头、料号')
+    expect(salesOrderPane).not.toContain('同一客户订单号+内部项目号')
     expect(salesOrderPane).not.toContain('已出数量')
     expect(salesOrderPane).not.toContain('未出数量')
     expect(salesOrderPane).not.toContain('未出数量为空时按订单数量-已出数量计算')
