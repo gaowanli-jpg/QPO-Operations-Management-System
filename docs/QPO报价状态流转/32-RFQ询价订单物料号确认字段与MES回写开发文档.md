@@ -459,3 +459,9 @@ npm run build
 - 后续待产 / 锁库 / MES 生产下发链路不回退。
 - 不新增用户权限。
 - 操作日志和文件日志不记录完整外部响应、token 或 Authorization header。
+
+### 阶段 8 收口补充：派生销售订单承接 U9
+
+RFQ 议价提单生成的销售订单零件通过 ticket 关联承接 RFQ 主表的已确认物料号。MES 双写完成后，`item_quote_version` 与 `sales_order_item` 的确认元组保持一致；WMS 仍使用 ticket 物料号，U9 使用派生销售订单零件物料号。
+
+该能力复用现有议价提单、已提零件和 U9 权限，不新增权限 code。普通查询和 U9 预览不记操作日志，日志与文件日志不记录认证信息或完整外部报文。

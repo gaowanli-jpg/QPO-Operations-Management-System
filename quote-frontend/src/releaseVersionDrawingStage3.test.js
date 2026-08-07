@@ -18,6 +18,7 @@ describe('release version edit stage 3', () => {
 
   test('market release edits row part description surface remark and customer requirement like version fields', () => {
     const source = readSource('components', 'MarketRelease.vue')
+    const draftSource = readSource('components', 'marketReleaseDrafts.js')
     const fieldSaveBlock = source.slice(
       source.indexOf('const saveReleaseItemFields = async (row) =>'),
       source.indexOf('const handleSelectionChange')
@@ -38,10 +39,11 @@ describe('release version edit stage 3', () => {
     expect(source).toContain('v-model="row.customerRequirementDraft"')
     expect(source).toContain(':loading="isFieldSaving(row)"')
     expect(source).toContain('@click.stop="saveReleaseItemFields(row)"')
-    expect(source).toContain('descriptionDraft: row.description || \'\'')
-    expect(source).toContain('surfaceTreatmentDraft: row.surfaceTreatment || \'\'')
-    expect(source).toContain('remarkDraft: row.remark || \'\'')
-    expect(source).toContain('customerRequirementDraft: row.customerRequirement || \'\'')
+    expect(source).toContain("import { hydrateReleaseItemDrafts } from './marketReleaseDrafts'")
+    expect(draftSource).toContain("descriptionDraft: 'description'")
+    expect(draftSource).toContain("surfaceTreatmentDraft: 'surfaceTreatment'")
+    expect(draftSource).toContain("remarkDraft: 'remark'")
+    expect(draftSource).toContain("customerRequirementDraft: 'customerRequirement'")
     expect(materialIndex).toBeGreaterThanOrEqual(0)
     expect(descriptionDraftIndex).toBeGreaterThan(materialIndex)
     expect(surfaceTreatmentDraftIndex).toBeGreaterThan(descriptionDraftIndex)

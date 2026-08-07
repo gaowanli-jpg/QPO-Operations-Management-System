@@ -304,6 +304,25 @@ describe('marketApi', () => {
     })
   })
 
+  test('updateReleaseItemOrderFields posts all RFQ item order fields in one request', async () => {
+    const payload = {
+      rfqId: 18,
+      salesOrderDate: '2026-08-08',
+      customerOrderNo: 'PO-18',
+      customerProjectNo: 'PROJECT-18',
+      customerOrderTitle: '正式订单',
+      orderType: '正式订单',
+      internalProjectNo: 'INTERNAL-18'
+    }
+
+    await marketApi.updateReleaseItemOrderFields(3001, payload)
+
+    expect(request).toHaveBeenCalledWith('/api/market/release/items/3001/order-fields', {
+      method: 'POST',
+      data: payload
+    })
+  })
+
   test('does not expose destructive release result delete helpers', () => {
     expect('deleteTicket' in marketApi).toBe(false)
     expect('deleteProcessSheet' in marketApi).toBe(false)

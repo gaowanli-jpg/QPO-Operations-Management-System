@@ -3,34 +3,56 @@
     <header class="erp-page-header release-page-header">
           <div>
             <h2>议价提单</h2>
-            <p>选择客户最终通过的零件，生成正式提单和对应工艺表。</p>
+            <p>同一客户可选择多个询价单，一批生成一张销售订单和对应提单。</p>
           </div>
           <div class="erp-page-actions release-page-actions"><el-button v-permission="'market:release:order-select'" :icon="DocumentChecked" type="primary" :loading="loading" @click="openOrderPicker">选择订单</el-button></div>
 
     </header>
 
-    <el-alert
-      v-if="releaseResult?.salesOrderId"
-      class="release-derived-order-result"
-      type="success"
-      :closable="false"
-      show-icon
-    >
-      <template #title>
-        已生成派生销售订单，可进入 U9 同步
-      </template>
-      <div class="release-derived-order-result-content">
-        <span>本批次提单已进入已提零件，后续可在 U9 同步页面继续处理。</span>
-        <el-button
-          v-permission="'market:u9-sync:view'"
-          type="primary"
-          link
-          @click="openDerivedOrderU9"
-        >
-          进入 U9 同步
-        </el-button>
+    <section v-if="releaseResult?.salesOrderId" class="erp-surface release-derived-order-result">
+      <div class="release-result-header">
+        <div>
+          <div class="release-result-kicker">批次处理完成</div>
+          <h3>已生成提单和 U9 销售订单</h3>
+          <p>本批次已进入已提零件，后续可在 U9 同步页面继续处理。</p>
+        </div>
+        <div class="release-result-actions">
+          <el-button
+            v-permission="'market:sales-order:view'"
+            size="small"
+            plain
+            @click="openDerivedOrderSalesOrder"
+          >
+            查看销售订单
+          </el-button>
+          <el-button
+            v-permission="'market:u9-sync:view'"
+            size="small"
+            type="primary"
+            plain
+            @click="openDerivedOrderU9"
+          >
+            进入 U9 同步
+          </el-button>
+          <el-button
+            v-permission="'market:delivered-item:view'"
+            size="small"
+            plain
+            @click="openDerivedOrderDeliveredItems"
+          >
+            查看已提零件
+          </el-button>
+        </div>
       </div>
-    </el-alert>
+      <div class="release-result-summary-grid">
+        <div><span>销售订单号</span><strong>{{ releaseResult.salesOrderNo || '-' }}</strong></div>
+        <div><span>单据编号</span><strong>{{ releaseResult.documentNo || '-' }}</strong></div>
+        <div><span>来源 RFQ</span><strong>{{ releaseResult.sourceRfqIds?.length ?? 0 }}</strong></div>
+        <div><span>提单行数</span><strong>{{ releaseResult.ticketCount ?? 0 }}</strong></div>
+        <div><span>MES 已确认</span><strong class="release-result-success">{{ releaseResult.confirmedMaterialCount ?? 0 }}</strong></div>
+        <div><span>MES 待获取</span><strong class="release-result-warning">{{ releaseResult.pendingMaterialCount ?? 0 }}</strong></div>
+      </div>
+    </section>
 
     <section class="erp-surface workflow-workspace release-workspace">
       <el-row :gutter="16">
@@ -59,38 +81,54 @@
               </el-table-column>
             </el-table>
 
-            <el-form label-width="80px" class="ticket-form">
-              <el-form-item label="订单类型" required>
-                <el-select v-model="releaseForm.orderType" class="full-width release-order-type-select" placeholder="请选择订单类型" clearable>
-                  <el-option label="预测订单" value="预测订单" />
-                  <el-option label="备货订单" value="备货订单" />
-                  <el-option label="正式订单" value="正式订单" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="单据类型" required>
-                <el-input
-                  v-model="releaseForm.documentTypeCode"
-                  maxlength="50"
-                  placeholder="请输入单据类型编码"
-                  clearable
-                />
-              </el-form-item>
-              <el-form-item label="下单日期" required>
-                <el-date-picker
-                  v-model="releaseForm.salesOrderDate"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  class="full-width"
-                />
-              </el-form-item>
-              <el-form-item label="安排类型">
-                <el-select v-model="releaseForm.arrangeType" class="full-width">
-                  <el-option label="计划" value="计划" />
-                  <el-option label="加急" value="加急" />
-                  <el-option label="备货" value="备货" />
-                </el-select>
-              </el-form-item>
-            </el-form>
+            <section class="release-order-default-panel">
+              <div class="panel-title compact">订单默认信息</div>
+              <p class="release-order-default-hint">一批生成一张销售订单；零件值优先，空值继承订单默认信息。</p>
+              <el-form label-width="80px" class="ticket-form">
+                <el-form-item label="单据类型" required>
+                  <el-input
+                    v-model="releaseForm.documentTypeCode"
+                    maxlength="50"
+                    placeholder="请输入单据类型编码"
+                    clearable
+                  />
+                </el-form-item>
+                <el-form-item label="下单日期" required>
+                  <el-date-picker
+                    v-model="releaseForm.salesOrderDate"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    class="full-width"
+                  />
+                </el-form-item>
+                <el-form-item label="客户订单号" required>
+                  <el-input v-model="releaseForm.customerOrderNo" placeholder="请输入客户订单号" maxlength="100" clearable />
+                </el-form-item>
+                <el-form-item label="客户项目号">
+                  <el-input v-model="releaseForm.customerProjectNo" placeholder="请输入客户项目号（可选）" maxlength="100" clearable />
+                </el-form-item>
+                <el-form-item label="客户下单抬头">
+                  <el-input v-model="releaseForm.customerOrderTitle" placeholder="请输入客户下单抬头（可选）" maxlength="255" clearable />
+                </el-form-item>
+                <el-form-item label="订单类型" required>
+                  <el-select v-model="releaseForm.orderType" class="full-width release-order-type-select" placeholder="请选择订单类型" clearable>
+                    <el-option label="预测订单" value="预测订单" />
+                    <el-option label="备货订单" value="备货订单" />
+                    <el-option label="正式订单" value="正式订单" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="内部项目号" required>
+                  <el-input v-model="releaseForm.internalProjectNo" placeholder="请输入内部项目号" maxlength="100" clearable />
+                </el-form-item>
+                <el-form-item label="安排类型">
+                  <el-select v-model="releaseForm.arrangeType" class="full-width">
+                    <el-option label="计划" value="计划" />
+                    <el-option label="加急" value="加急" />
+                    <el-option label="备货" value="备货" />
+                  </el-select>
+                </el-form-item>
+              </el-form>
+            </section>
 
             <div class="internal-lead-panel">
               <div class="panel-title compact">内部目标交期调整</div>
@@ -145,44 +183,13 @@
               <div class="selection-count">已选 {{ selectedRows.length }} 项</div>
             </div>
 
-            <div class="internal-project-panel">
-              <div class="panel-title compact">内部项目号</div>
-              <el-input
-                v-model="releaseForm.internalProjectNo"
-                placeholder="请输入内部项目号"
-                maxlength="100"
-                clearable
-              />
-              <el-input
-                v-model="releaseForm.customerOrderNo"
-                placeholder="请输入客户订单号"
-                maxlength="100"
-                clearable
-                class="release-meta-input"
-              />
-              <el-input
-                v-model="releaseForm.customerProjectNo"
-                placeholder="请输入客户项目号（可选）"
-                maxlength="100"
-                clearable
-                class="release-meta-input"
-              />
-              <el-input
-                v-model="releaseForm.customerOrderTitle"
-                placeholder="请输入客户下单抬头（可选）"
-                maxlength="255"
-                clearable
-                class="release-meta-input"
-              />
-            </div>
-
             <div class="erp-dialog-footer main-actions">
               <el-button v-permission="'market:release:create'"
                 type="primary"
                 size="large"
                 class="workflow-primary-action"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0 || !releaseForm.orderType || !releaseForm.documentTypeCode.trim() || !releaseForm.salesOrderDate || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting"
+                :disabled="selectedRows.length === 0 || selectedRowsWithUnsavedOrderFields.length > 0 || !releaseForm.orderType || !releaseForm.documentTypeCode.trim() || !releaseForm.salesOrderDate || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -439,6 +446,103 @@
                   </div>
                 </template>
               </el-table-column>
+              <el-table-column label="下单日期" width="150" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-date-picker
+                    v-model="row.salesOrderDateDraft"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    size="small"
+                    clearable
+                    :placeholder="orderFieldPlaceholder(row, 'salesOrderDate')"
+                    :disabled="!canEditReleaseItemOrderFields(row)"
+                    class="row-order-date-picker"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="客户订单号" width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-model="row.customerOrderNoDraft"
+                    size="small"
+                    maxlength="100"
+                    clearable
+                    :placeholder="orderFieldPlaceholder(row, 'customerOrderNo')"
+                    :disabled="!canEditReleaseItemOrderFields(row)"
+                    class="row-order-field-input"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="客户项目号" width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-model="row.customerProjectNoDraft"
+                    size="small"
+                    maxlength="100"
+                    clearable
+                    :placeholder="orderFieldPlaceholder(row, 'customerProjectNo')"
+                    :disabled="!canEditReleaseItemOrderFields(row)"
+                    class="row-order-field-input"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="客户下单抬头" width="210" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-model="row.customerOrderTitleDraft"
+                    size="small"
+                    maxlength="255"
+                    clearable
+                    :placeholder="orderFieldPlaceholder(row, 'customerOrderTitle')"
+                    :disabled="!canEditReleaseItemOrderFields(row)"
+                    class="row-order-field-input"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="订单类型" width="170" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-select
+                    v-model="row.orderTypeDraft"
+                    size="small"
+                    clearable
+                    :placeholder="orderFieldPlaceholder(row, 'orderType')"
+                    :disabled="!canEditReleaseItemOrderFields(row)"
+                    class="row-order-type-select"
+                  >
+                    <el-option label="预测订单" value="预测订单" />
+                    <el-option label="备货订单" value="备货订单" />
+                    <el-option label="正式订单" value="正式订单" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="内部项目号" width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    v-model="row.internalProjectNoDraft"
+                    size="small"
+                    maxlength="100"
+                    clearable
+                    :placeholder="orderFieldPlaceholder(row, 'internalProjectNo')"
+                    :disabled="!canEditReleaseItemOrderFields(row)"
+                    class="row-order-field-input"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="订单信息操作" width="136" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    v-permission="'market:release:create'"
+                    size="small"
+                    type="primary"
+                    plain
+                    :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row) || isOrderFieldsSaving(row) || submitting"
+                    :loading="isOrderFieldsSaving(row)"
+                    @click.stop="saveReleaseItemOrderFields(row)"
+                  >
+                    保存订单信息
+                  </el-button>
+                </template>
+              </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
             </el-table>
             <div v-if="releaseItemTotal" class="erp-pagination">
@@ -647,6 +751,7 @@ import {
   shiftInternalTargetLeadTime,
   updateInternalTargetLeadTime,
   updateReleaseItemFields,
+  updateReleaseItemOrderFields,
   updateReleaseItemVersion
 } from '../services/marketApi'
 import {
@@ -654,6 +759,7 @@ import {
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
 import { usePendingAction } from '../composables/usePendingAction'
+import { hydrateReleaseItemDrafts } from './marketReleaseDrafts'
 
 const selectedRfqId = ref(null)
 const selectedOrders = ref([])
@@ -681,6 +787,7 @@ const releaseResult = ref(null)
 const loading = ref(false)
 let syncingReleaseItemSelection = false
 const router = useRouter()
+const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
 
 const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']
 
@@ -703,6 +810,7 @@ const releaseActionKeys = {
   shiftInternalLeadTime: 'market:release:shift-internal-lead-time',
   setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
   fields: (releaseItemKey) => `market:release:fields:${releaseItemKey}`,
+  orderFields: (releaseItemKey) => `market:release:order-fields:${releaseItemKey}`,
   version: (itemId) => `market:release:version:${itemId}`,
   internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`,
   generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join(',') || 'none'}`
@@ -738,8 +846,27 @@ const openDerivedOrderU9 = () => {
   router.push({ path: '/u9-sync', query: { salesOrderId: String(salesOrderId) } })
 }
 
+const openDerivedOrderSalesOrder = () => {
+  const salesOrderId = Number(releaseResult.value?.salesOrderId)
+  if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) {
+    ElMessage.warning('当前提单结果缺少有效的派生销售订单。')
+    return
+  }
+  router.push({ path: '/sales-orders', query: { salesOrderId: String(salesOrderId) } })
+}
+
+const openDerivedOrderDeliveredItems = () => {
+  const salesOrderId = Number(releaseResult.value?.salesOrderId)
+  if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) {
+    ElMessage.warning('当前提单结果缺少有效的派生销售订单。')
+    return
+  }
+  router.push({ path: '/delivered-items', query: { salesOrderId: String(salesOrderId) } })
+}
+
 const pagedReleaseItems = computed(() => itemList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
+const selectedRowsWithUnsavedOrderFields = computed(() => selectedRows.value.filter(hasUnsavedOrderFieldDraft))
 const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => rowKey(row))))
 const replacementReplacedItems = computed(() => replacementDrawingResult.value?.replacedItems || [])
 const replacementUnmatchedDrawings = computed(() => replacementDrawingResult.value?.unmatchedDrawings || [])
@@ -897,15 +1024,9 @@ const resetReleaseFormForOrders = () => {
 }
 
 const setItemList = (rows) => {
-  itemList.value = (rows || []).map(row => ({
-    ...row,
-    internalTargetLeadTimeDraft: row.internalTargetLeadTime || '',
-    versionDraft: row.version || '',
-    descriptionDraft: row.description || '',
-    surfaceTreatmentDraft: row.surfaceTreatment || '',
-    remarkDraft: row.remark || '',
-    customerRequirementDraft: row.customerRequirement || ''
-  }))
+  itemList.value = (rows || []).map(row => (
+    hydrateReleaseItemDrafts(row, selectedItemIdMap[rowKey(row)])
+  ))
   itemList.value.forEach(item => {
     const key = rowKey(item)
     const remainingQty = remainingQtyFor(item)
@@ -923,7 +1044,7 @@ const remainingQtyFor = (row) => {
   return Number.isFinite(qty) ? Math.max(0, qty) : 0
 }
 
-const RELEASED_ITEM_STATUSES = new Set(['已生成提单', '已提单', '已部分提单'])
+const RELEASED_ITEM_STATUSES = new Set(['已生成提单', '已提单'])
 
 const isFullyReleasedReleaseItem = (row) => {
   const status = String(row?.status || '').trim()
@@ -944,9 +1065,37 @@ const canSelectItem = (row) => {
   if (row?.canSelect === false) return false
   return row.status !== '已生成提单'
     && row.status !== '已提单'
-    && row.status !== '已部分提单'
     && remainingQtyFor(row) > 0
 }
+
+const canEditReleaseItemOrderFields = (row) => !isFullyReleasedReleaseItem(row)
+
+const normalizeOrderFieldDraft = (value) => {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  return normalized || null
+}
+
+const orderFieldDefaults = {
+  salesOrderDate: 'salesOrderDate',
+  customerOrderNo: 'customerOrderNo',
+  customerProjectNo: 'customerProjectNo',
+  customerOrderTitle: 'customerOrderTitle',
+  orderType: 'orderType',
+  internalProjectNo: 'internalProjectNo'
+}
+
+const orderFieldPlaceholder = (row, field) => {
+  if (normalizeOrderFieldDraft(row?.[field])) return ''
+  const defaultValue = releaseForm[orderFieldDefaults[field]]
+  return defaultValue ? `继承 ${defaultValue}` : '继承订单默认'
+}
+
+const hasUnsavedOrderFieldDraft = (row) => Object.entries(orderFieldDefaults).some(([field, draftField]) => (
+  normalizeOrderFieldDraft(row?.[`${draftField}Draft`]) !== normalizeOrderFieldDraft(row?.[field])
+))
+
+const isOrderFieldsSaving = (row) => isPending(releaseActionKeys.orderFields(rowKey(row)))
 
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
@@ -1018,6 +1167,48 @@ const saveReleaseItemFields = async (row) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '零件信息保存失败。')
+    }
+  })
+}
+
+const saveReleaseItemOrderFields = async (row) => {
+  const rowRfqId = row?.rfqId || row?.sourceOrderId || selectedRfqId.value
+  if (!rowRfqId || !row?.id || !canEditReleaseItemOrderFields(row)) return
+
+  return runAction(releaseActionKeys.orderFields(rowKey(row)), async () => {
+    try {
+      const response = await updateReleaseItemOrderFields(row.id, {
+        rfqId: rowRfqId,
+        salesOrderDate: normalizeOrderFieldDraft(row.salesOrderDateDraft),
+        customerOrderNo: normalizeOrderFieldDraft(row.customerOrderNoDraft),
+        customerProjectNo: normalizeOrderFieldDraft(row.customerProjectNoDraft),
+        customerOrderTitle: normalizeOrderFieldDraft(row.customerOrderTitleDraft),
+        orderType: normalizeOrderFieldDraft(row.orderTypeDraft),
+        internalProjectNo: normalizeOrderFieldDraft(row.internalProjectNoDraft)
+      })
+      const savedData = response?.data || {}
+      const saved = {
+        ...row,
+        ...savedData,
+        salesOrderDateDraft: savedData.salesOrderDate || '',
+        customerOrderNoDraft: savedData.customerOrderNo || '',
+        customerProjectNoDraft: savedData.customerProjectNo || '',
+        customerOrderTitleDraft: savedData.customerOrderTitle || '',
+        orderTypeDraft: savedData.orderType || '',
+        internalProjectNoDraft: savedData.internalProjectNo || ''
+      }
+      const key = rowKey(row)
+      const index = itemList.value.findIndex(item => rowKey(item) === key)
+      if (index >= 0) {
+        itemList.value.splice(index, 1, saved)
+      }
+      if (selectedItemIdMap[key]) {
+        selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...saved }
+      }
+      ElMessage.success('零件订单信息已保存。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '零件订单信息保存失败。'))
     }
   })
 }
@@ -1378,6 +1569,9 @@ const saveInternalTargetLeadTime = async (row) => {
 
 const submitTicket = async () => {
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
+  if (selectedRowsWithUnsavedOrderFields.value.length > 0) {
+    return ElMessage.warning('请先保存已选零件的订单信息草稿，再生成正式提单。')
+  }
   if (!selectedOrders.value.length) return ElMessage.warning('请先选择订单。')
   if (!releaseForm.orderType) return ElMessage.warning('请选择订单类型后再生成正式提单。')
   const documentTypeCode = releaseForm.documentTypeCode.trim()
@@ -1486,13 +1680,82 @@ const sourceTypeLabel = () => {
 
 .release-derived-order-result {
   margin: 0 0 16px;
+  padding: 16px;
 }
 
-.release-derived-order-result-content {
+.release-result-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.release-result-kicker {
+  color: var(--erp-success);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.release-result-header h3 {
+  margin: 4px 0 0;
+  color: var(--erp-text);
+  font-size: 16px;
+}
+
+.release-result-header p {
+  margin: 5px 0 0;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.release-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.release-result-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.release-result-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.release-result-summary-grid > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-soft);
+}
+
+.release-result-summary-grid span {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.release-result-summary-grid strong {
+  overflow: hidden;
+  color: var(--erp-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-result-summary-grid .release-result-success {
+  color: var(--erp-success);
+}
+
+.release-result-summary-grid .release-result-warning {
+  color: var(--erp-warning);
 }
 
 .release-page-header h2 {
@@ -1554,9 +1817,20 @@ const sourceTypeLabel = () => {
 }
 
 .ticket-form {
+  margin-top: 0;
+}
+
+.release-order-default-panel {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--erp-border-soft);
+}
+
+.release-order-default-hint {
+  margin: -4px 0 14px;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .import-action-row {
@@ -1725,6 +1999,13 @@ const sourceTypeLabel = () => {
 
 .row-field-input {
   min-width: 130px;
+}
+
+.row-order-date-picker,
+.row-order-field-input,
+.row-order-type-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .selection-count {
@@ -1979,6 +2260,19 @@ const sourceTypeLabel = () => {
 
   .replacement-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .release-result-header {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .release-result-actions {
+    justify-content: flex-start;
+  }
+
+  .release-result-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .drawing-replace-dual-grid {

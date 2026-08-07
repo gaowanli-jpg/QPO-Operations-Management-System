@@ -909,3 +909,9 @@ MES 需要支持：
 - 重复回调幂等，不同物料号冲突不覆盖。
 - 日志不记录 token、密钥、Authorization header、完整请求体或完整回调体。
 - 原 RFQ 提单、已提零件、WMS 锁库、销售订单 U9 同步流程不回退。
+
+### 阶段 8 收口补充：RFQ 派生销售订单双写
+
+RFQ 议价提单生成的 ticket 通过 `sales_order_item.source_ticket_id` 关联派生销售订单零件。MES 即时成功、异步回调、活动主请求完成和 follower fan-out 都使用同一双写服务，幂等写回 `item_quote_version` 与 `sales_order_item`；冲突物料号不覆盖任一主表。
+
+销售订单直接导入来源仍只回写 `sales_order_item`。回调接口只返回和记录安全摘要，不记录 token、密钥、Authorization header、完整外部请求体或响应体；普通读取不记操作日志。

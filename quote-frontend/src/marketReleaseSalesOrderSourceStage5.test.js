@@ -58,7 +58,11 @@ describe('market release RFQ-only source governance stage 5', () => {
     expect(source).not.toContain('releaseForm.customerProjectNo = order.customerProjectNo || releaseForm.customerProjectNo')
     expect(source).toContain("const orderSourceNo = (order, source) => {")
     expect(source).toContain("return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || sourceKey(source)")
-    expect(source).not.toContain('salesOrderNo')
+    const orderSelectionBlock = source.slice(
+      source.indexOf('const toReleaseOrderSource = (order) =>'),
+      source.indexOf('const openDerivedOrderU9 = () =>')
+    )
+    expect(orderSelectionBlock).not.toContain('salesOrderNo')
     expect(source).not.toContain("return order?.sourceOrderNo || order?.rfqNo || source?.sourceOrderId || key")
   })
 

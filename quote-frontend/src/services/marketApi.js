@@ -101,6 +101,8 @@ export const updateReleaseItemVersion = (itemId, payload) => postJson(`/api/mark
 
 export const updateReleaseItemFields = (itemId, payload) => postJson(`/api/market/release/items/${itemId}/fields`, payload)
 
+export const updateReleaseItemOrderFields = (itemId, payload) => postJson(`/api/market/release/items/${itemId}/order-fields`, payload)
+
 export const generateTicket = (payload) => postJson('/api/market/generate-ticket', payload)
 
 export const getQuoteProcessSummary = (rfqId) => request(`/api/market/quote-process/${rfqId}/summary`)
