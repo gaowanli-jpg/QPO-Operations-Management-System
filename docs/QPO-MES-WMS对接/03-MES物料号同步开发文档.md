@@ -4,7 +4,7 @@
 
 > 阶段 5 收口说明：正式联调口径同时支持 **即时返回物料号** 和 **受理后回调物料号**。QPO 每次请求生成 `mesRequestId`，MES 响应和后续回调必须原样带回；回调接口为 `POST /api/integrations/mes/material-callback`。待回调响应下 `system_task` 按成功完成，提单行进入 `CALLBACK_PENDING`。本次不新增用户权限，继续使用 `market:delivered-item:mes-sync` 触发获取 / 重试；MES 回调接口使用机器 token，不挂用户权限。
 
-> 阶段 6 收口说明：第 19 号文档已把 MES 物料号同步扩展为 **同图号版本去重** 口径。QPO 对同一 `图号 + 版本` 同一时间只保留一个活跃 MES 主请求；同批量相同 `图号 + 版本` 只打 MES 一次；跨批次待回调时相同 `图号 + 版本` 不再打 MES；跨批次已成功且只有一个成功物料号时直接复用物料号；跨批次存在多个不同成功物料号时不自动复用，按正常请求调用 MES。MES 仍只回调主 `mesRequestId`，QPO 收到主请求即时成功或回调成功后负责 fan-out 写回所有关联等待行；销售订单 U9 同步前能看到等待行物料号已确认。
+> 阶段 6 最终收口说明：已确认物料号复用前移到 RFQ 重复件核价和销售订单自动异常治理匹配，提单行继承确认结果。只有未确认行进入 MES；QPO 对同一 `图号 + 版本` 同一时间只保留一个活动主请求，后续行成为 follower，不再重复请求 MES。没有活动主请求时创建新的主请求，不查询其他历史成功提单行。MES 仍只回调主 `mesRequestId`，QPO 收到主请求即时成功或回调成功后负责 QPO fan-out 写回所有 follower。
 
 > RFQ 主表物料号收口说明：MES 物料号成功后，QPO 必须同时写回提单行和来源零件主表。`source_type = RFQ` 时写回 `item_quote_version.material_no`、`material_no_status = 已确认`、来源 ticket 信息；`source_type = SALES_ORDER` 时写回 `sales_order_item.material_no`、`material_no_status = 已确认`、来源 ticket 信息。后续 U9 判断不再从提单行临时反查物料号，而是以 RFQ / 销售订单各自主表中的已确认物料号作为正式物料号基础；提单行保留为 MES 获取与追溯来源。
 
@@ -299,7 +299,7 @@ QPO 处理规则：
 - 超时，判定失败。
 - `materialNo` 去除首尾空格后保存，长度超过 100 拒绝保存并标记失败。
 - MES 返回待回调时，`system_task` 不长时间挂起，按成功完成；批量任务中该行计入 `callbackPendingCount`，不计入失败。
-- 同图号版本去重后，批量任务同时返回 `dedupFollowerCount`、`reusedMaterialCount`、`submittedToMesCount`：分别表示关联等待未重复发 MES、复用已确认物料号、实际提交 MES 的数量。
+- 同图号版本去重后，批量任务返回 `dedupFollowerCount`、`submittedToMesCount`：分别表示关联活动主请求、未重复发送 MES 的 follower 数量，以及实际提交 MES 的主请求数量。
 
 ### 7.3 数据中心回调 QPO（业务来源 MES）
 
@@ -789,8 +789,8 @@ npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 - `npm run build` 通过。
 - 同批量相同 `图号 + 版本` 只打 MES 一次。
 - 跨批次待回调时相同 `图号 + 版本` 不再打 MES。
-- 跨批次已成功且只有一个成功物料号时，相同 `图号 + 版本` 直接复用物料号。
-- 跨批次存在多个不同成功物料号时，相同 `图号 + 版本` 不自动复用，按正常请求调用 MES。
+- 跨批次没有活动主请求时，相同 `图号 + 版本` 创建新的主请求并调用 MES。
+- 已确认物料号由 RFQ 重复件核价或销售订单自动异常治理匹配在提单前复用，已提零件不扫描历史成功提单行。
 - MES 回调一次可写回所有等待行。
 - 销售订单 U9 同步前能看到等待行物料号已确认。
 

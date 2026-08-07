@@ -2,6 +2,8 @@
 
 最后更新：2026-08-01
 
+> 2026-08-07 最终收口：已确认物料号由 RFQ 重复件核价或销售订单自动异常治理匹配在前置阶段复用，提单行直接继承。只有来源主表尚未确认物料号的提单行才进入 MES；MES 去重只查询同一 `图号 + 版本` 的活动主请求，后续行作为 follower 等待，QPO fan-out 写回结果，不扫描其他历史成功提单行。
+
 ## 1. 背景与结论
 
 当前 **已提零件** 模块已经支持用户单条或批量点击 **获取物料号**，后端创建 `MES_MATERIAL_SYNC` / `MES_MATERIAL_BATCH_SYNC` 异步任务，并调用 MES 获取正式物料号。现有实现默认 MES 必须在同一次 HTTP response 中返回 `materialNo`；如果 MES 返回成功但没有物料号，QPO 会按失败处理。
@@ -196,6 +198,8 @@ CREATE INDEX IF NOT EXISTS idx_delivery_mes_request_external_task
 ```
 
 原 `mes_request_id` 仍只表示当前 ticket 自己真实发起的 MES 请求；follower 行不得共用主请求的 `mes_request_id`，只能通过 `mes_master_request_id` 和等待表追溯主请求。
+
+当前去重边界只包含活动主请求和 follower：没有活动主请求时创建新的主请求，并由数据库唯一约束兜底并发；存在活动主请求时建立 follower。历史成功提单行不参与本阶段查询，历史确认物料号由前置匹配和提单继承负责。
 
 ### 5.4 销售订单物料号回写字段
 

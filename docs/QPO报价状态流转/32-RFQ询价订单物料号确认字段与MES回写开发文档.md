@@ -13,14 +13,14 @@ RFQ / 询价订单来源目前只把 MES 物料号沉淀在已提零件表，`it
 1. 数据库目前没有已获取过物料号的 RFQ 提单行，本次不做历史数据兼容回填。
 2. 不按 `图号 + 版本` 批量回写所有 RFQ 历史零件，只回写当前提单行的来源零件：`order_delivery_ticket.source_item_id -> item_quote_version.id`。
 3. RFQ 和销售订单统一采用“主表已确认物料号”口径，后续 U9 同步只读取各自订单主表 / 零件表中的已确认物料号。
-4. MES 去重逻辑继续按 `图号 + 版本` 控制是否重复调用 MES，但去重结果写回主表时仍必须落到每条 follower / reused / master 对应的来源零件行。
+4. 前置重复件核价负责复制来源已确认物料号；未取得确认物料号的提单行进入 MES 后，去重逻辑只按 `图号 + 版本` 处理活动 master / follower，结果写回每条对应来源零件行。
 5. 不新增用户权限。已提零件获取 MES 物料号仍使用现有 `market:delivered-item:mes-sync`，RFQ U9 后续如独立成模块再单独设计权限。
 6. 不新增高频读日志。主表物料号回写属于 MES 物料号同步写操作的一部分，沿用现有 MES 任务 / 回调 / fan-out 审计和文件日志口径。
 
 ## 3. 目标
 
 - `item_quote_version` 能保存 MES 确认物料号和来源追溯。
-- RFQ 提单行在 MES 即时成功、MES 回调成功、去重复用成功、fan-out follower 成功时，都能同步回写来源 RFQ 零件。
+- RFQ 零件可在前置重复件核价时获得已确认物料号，提单行继承该确认结果；未确认行在 MES 即时成功、MES 回调成功或 fan-out follower 成功时同步回写来源 RFQ 零件。
 - 销售订单现有回写逻辑不回退。
 - 后续 RFQ 接入 U9 时，可以直接判断 `item_quote_version.material_no_status = '已确认'`。
 - 冲突回调不覆盖 RFQ 或销售订单主表已确认的不同物料号。
@@ -206,7 +206,9 @@ sourceItemMaterialNoSyncService.syncConfirmedMaterialNo(ticket, materialNo, mess
 
 1. MES 即时成功：`markSuccess(...)` 内同步回写来源主表。
 2. MES 回调成功：`handleMaterialCallback(...)` 成功路径同步回写来源主表。
-3. 去重复用成功：`completeDedupReuse(...)` 同步回写来源主表。
+3. 主请求成功后的 fan-out：由 `MesMaterialDedupService` 同步回写所有 follower 来源主表。
+
+前置重复件核价和提单行继承不调用本服务的 MES HTTP 路径：`EngineerService` 先把已确认物料号元组写入当前 `item_quote_version`，`DeliveryService` 再把物料号复制到提单行并初始化 `mes_sync_status = SUCCESS`。
 
 要求：
 
@@ -314,8 +316,9 @@ docs/QPO日志模块/04-主流程文件日志规范化开发文档.md
    - 重复相同物料号回调幂等。
    - 不同物料号冲突回调不覆盖 ticket 和 `item_quote_version`。
 
-4. 去重复用测试：
-   - RFQ ticket 复用同图号版本唯一成功物料号时，ticket 成功，`item_quote_version` 同步已确认。
+4. 前置匹配与提单继承测试：
+   - RFQ 前置重复件核价复制已确认物料号元组。
+   - 提单行继承主表物料号并初始化 `SUCCESS`，不进入 MES 待处理池。
 
 5. fan-out follower 测试：
    - 主请求回调一次，RFQ follower ticket 写回物料号。
@@ -397,7 +400,6 @@ npm run build
 
 - 改造 `MesMaterialSyncService` 即时成功路径。
 - 改造 `MesMaterialSyncService` 回调成功路径。
-- 改造 `MesMaterialSyncService` 去重复用成功路径。
 - 改造 `MesMaterialDedupService` fan-out follower 成功路径。
 - 保证冲突回调不覆盖来源主表。
 
@@ -405,9 +407,15 @@ npm run build
 
 - RFQ MES 即时成功后，`item_quote_version.material_no_status = 已确认`。
 - RFQ MES 回调成功后，`item_quote_version.material_no_status = 已确认`。
-- RFQ 去重复用成功后，`item_quote_version.material_no_status = 已确认`。
 - RFQ follower fan-out 成功后，`item_quote_version.material_no_status = 已确认`。
 - 销售订单来源仍回写 `sales_order_item`。
+
+### 阶段 6 补充：前置复用与活动请求去重
+
+- RFQ 前置重复件核价可以复制已确认物料号确认元组。
+- 提单行继承来源主表确认物料号并直接进入 `SUCCESS`。
+- 已提零件 MES 去重只负责活动主请求和 follower，不查询其他历史成功提单行。
+- 主请求即时成功或回调成功后，QPO fan-out 写回 follower 和各自来源主表。
 
 ### 阶段 4：页面展示与文档收口
 
@@ -451,4 +459,3 @@ npm run build
 - 后续待产 / 锁库 / MES 生产下发链路不回退。
 - 不新增用户权限。
 - 操作日志和文件日志不记录完整外部响应、token 或 Authorization header。
-
