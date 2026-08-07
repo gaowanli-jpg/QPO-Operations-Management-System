@@ -11,6 +11,7 @@ import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
 import com.machining.quote.dto.ReleaseItemFieldUpdateReq;
+import com.machining.quote.dto.ReleaseItemOrderFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.ReleaseSourceType;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -46,6 +48,12 @@ import java.util.Set;
 @Service
 public class InternalTargetLeadTimeService {
     private static final Logger log = LoggerFactory.getLogger(InternalTargetLeadTimeService.class);
+    private static final Set<String> RELEASE_ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
+    private static final int CUSTOMER_ORDER_NO_MAX_LENGTH = 120;
+    private static final int CUSTOMER_PROJECT_NO_MAX_LENGTH = 120;
+    private static final int CUSTOMER_ORDER_TITLE_MAX_LENGTH = 255;
+    private static final int ORDER_TYPE_MAX_LENGTH = 20;
+    private static final int INTERNAL_PROJECT_NO_MAX_LENGTH = 120;
     private static final int DEFAULT_PAGE = 1;
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 100;
@@ -223,6 +231,119 @@ public class InternalTargetLeadTimeService {
             return updateSalesOrderReleaseItemFields(itemId, req);
         }
         return updateRfqReleaseItemFields(itemId.intValue(), req);
+    }
+
+    @Transactional
+    public Map<String, Object> updateReleaseItemOrderFields(
+            Integer itemId,
+            ReleaseItemOrderFieldUpdateReq req) {
+        if (itemId == null) {
+            throw new RuntimeException("Item ID is required");
+        }
+        if (req == null) {
+            throw new RuntimeException("Request body is required");
+        }
+
+        requireOrderForUpdate(req.getRfqId());
+        ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
+        if (item == null || !Objects.equals(req.getRfqId(), item.getRfqId())) {
+            throw new RuntimeException("Item does not belong to selected RFQ");
+        }
+        assertReleaseItemMutable(item, listTicketsForItems(req.getRfqId(), List.of(item)));
+
+        LocalDate salesOrderDate = req.getSalesOrderDate();
+        String customerOrderNo = normalizeReleaseOrderText(
+                req.getCustomerOrderNo(), "客户订单号", CUSTOMER_ORDER_NO_MAX_LENGTH);
+        String customerProjectNo = normalizeReleaseOrderText(
+                req.getCustomerProjectNo(), "客户项目号", CUSTOMER_PROJECT_NO_MAX_LENGTH);
+        String customerOrderTitle = normalizeReleaseOrderText(
+                req.getCustomerOrderTitle(), "客户下单抬头", CUSTOMER_ORDER_TITLE_MAX_LENGTH);
+        String orderType = normalizeReleaseOrderType(req.getOrderType());
+        String internalProjectNo = normalizeReleaseOrderText(
+                req.getInternalProjectNo(), "内部项目号", INTERNAL_PROJECT_NO_MAX_LENGTH);
+        List<String> changedFields = changedReleaseOrderFields(
+                item,
+                salesOrderDate,
+                customerOrderNo,
+                customerProjectNo,
+                customerOrderTitle,
+                orderType,
+                internalProjectNo);
+
+        Map<String, Object> before = buildItemRow(item);
+        item.setSalesOrderDate(salesOrderDate);
+        item.setCustomerOrderNo(customerOrderNo);
+        item.setCustomerProjectNo(customerProjectNo);
+        item.setCustomerOrderTitle(customerOrderTitle);
+        item.setOrderType(orderType);
+        item.setInternalProjectNo(internalProjectNo);
+        itemMapper.updateById(item);
+
+        ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+        Map<String, Object> savedRow = buildItemRow(saved == null ? item : saved);
+        auditService.record(
+                "RELEASE_ITEM_ORDER_FIELDS_UPDATE",
+                "item_quote_version",
+                item.getId(),
+                before,
+                savedRow);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("data", savedRow);
+        result.put("changedFields", changedFields);
+        log.info("Release item order fields updated rfqId={} itemId={} partNo={} changedFields={}",
+                req.getRfqId(), item.getId(), normalizePartNo(item.getPartNo()), changedFields);
+        return result;
+    }
+
+    private List<String> changedReleaseOrderFields(
+            ItemQuoteVersion item,
+            LocalDate salesOrderDate,
+            String customerOrderNo,
+            String customerProjectNo,
+            String customerOrderTitle,
+            String orderType,
+            String internalProjectNo) {
+        List<String> changedFields = new ArrayList<>();
+        if (!Objects.equals(item.getSalesOrderDate(), salesOrderDate)) {
+            changedFields.add("salesOrderDate");
+        }
+        if (!Objects.equals(item.getCustomerOrderNo(), customerOrderNo)) {
+            changedFields.add("customerOrderNo");
+        }
+        if (!Objects.equals(item.getCustomerProjectNo(), customerProjectNo)) {
+            changedFields.add("customerProjectNo");
+        }
+        if (!Objects.equals(item.getCustomerOrderTitle(), customerOrderTitle)) {
+            changedFields.add("customerOrderTitle");
+        }
+        if (!Objects.equals(item.getOrderType(), orderType)) {
+            changedFields.add("orderType");
+        }
+        if (!Objects.equals(item.getInternalProjectNo(), internalProjectNo)) {
+            changedFields.add("internalProjectNo");
+        }
+        return changedFields;
+    }
+
+    private String normalizeReleaseOrderType(String value) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.length() > ORDER_TYPE_MAX_LENGTH || !RELEASE_ORDER_TYPES.contains(normalized)) {
+            throw new RuntimeException("订单类型只能是预测订单、备货订单或正式订单");
+        }
+        return normalized;
+    }
+
+    private String normalizeReleaseOrderText(String value, String fieldName, int maxLength) {
+        String normalized = trimToNull(value);
+        if (normalized != null && normalized.length() > maxLength) {
+            throw new RuntimeException(fieldName + "长度不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private Map<String, Object> updateRfqReleaseItemFields(Integer itemId, ReleaseItemFieldUpdateReq req) {
