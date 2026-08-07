@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
+import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
@@ -143,6 +144,18 @@ public class SalesOrderQpoImportService {
                 drawingBinding.unmatchedDrawingCount(),
                 System.currentTimeMillis() - startedAt);
         return resp;
+    }
+
+    @Transactional
+    public SalesOrderQpoImportResp importQpo(
+            MultipartFile excelFile,
+            Long customerId,
+            String documentTypeCode,
+            SalesOrderQpoImportDefaultsDTO defaults,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        validateImportDefaults(defaults);
+        return importQpo(excelFile, customerId, documentTypeCode, drawings, versionDrawings);
     }
 
     private SalesOrderQpoExcelParseResult parse(MultipartFile excelFile) {
@@ -654,6 +667,21 @@ public class SalesOrderQpoImportService {
     private void validateFile(MultipartFile excelFile) {
         if (excelFile == null || excelFile.isEmpty()) {
             throw new IllegalArgumentException("请上传销售订单 Excel 文件");
+        }
+    }
+
+    private void validateImportDefaults(SalesOrderQpoImportDefaultsDTO defaults) {
+        if (defaults == null || defaults.getSalesOrderDate() == null) {
+            throw new IllegalArgumentException("请填写下单日期");
+        }
+        if (isBlank(defaults.getCustomerOrderNo())) {
+            throw new IllegalArgumentException("请填写客户订单号");
+        }
+        if (isBlank(defaults.getOrderType())) {
+            throw new IllegalArgumentException("请填写订单类型");
+        }
+        if (isBlank(defaults.getInternalProjectNo())) {
+            throw new IllegalArgumentException("请填写内部项目号");
         }
     }
 
