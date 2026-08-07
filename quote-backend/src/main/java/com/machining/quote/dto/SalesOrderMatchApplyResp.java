@@ -14,6 +14,9 @@ public class SalesOrderMatchApplyResp {
     private int unmatchedItemCount;
     private int skippedItemCount;
     private int updatedItemCount;
+    private int materialNoCopiedCount;
+    private int materialNoSkippedCount;
+    private int materialNoConflictCount;
     private String warningMessage;
     private List<SalesOrderMatchApplyRow> rows = new ArrayList<>();
 }

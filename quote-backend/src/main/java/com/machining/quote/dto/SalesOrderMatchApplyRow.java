@@ -16,5 +16,7 @@ public class SalesOrderMatchApplyRow {
     private Integer sourceItemId;
     private String matchStatus;
     private String matchMessage;
+    private String materialNoReuseStatus;
+    private String materialNoReuseMessage;
     private String assemblyRelationStatus;
 }

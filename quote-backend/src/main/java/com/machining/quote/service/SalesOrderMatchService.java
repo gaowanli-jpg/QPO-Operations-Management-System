@@ -74,6 +74,8 @@ public class SalesOrderMatchService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private ConfirmedMaterialNoReuseService confirmedMaterialNoReuseService = new ConfirmedMaterialNoReuseService();
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
         if (dataScopeService == null) {
@@ -199,26 +201,37 @@ public class SalesOrderMatchService {
         int unmatchedCount = 0;
         int skippedCount = 0;
         int updatedCount = 0;
+        int materialNoCopiedCount = 0;
+        int materialNoSkippedCount = 0;
+        int materialNoConflictCount = 0;
         for (SalesOrderItem item : items) {
             SalesOrderHeader header = headers.get(item.getSalesOrderId());
             ItemQuoteVersion source = sourceByKey.get(itemKey(item.getPartNo(), item.getVersion()));
             SalesOrderMatchApplyRow row;
+            MaterialNoReuseResult materialNoResult;
             if (shouldSkipApply(item)) {
                 markSkipped(item);
-                row = toApplyRow(header, item, source, false, false, true);
+                materialNoResult = new MaterialNoReuseResult(MaterialNoReuseResult.Status.NOT_APPLICABLE);
+                row = toApplyRow(header, item, source, false, false, true, materialNoResult);
                 skippedCount++;
             } else if (source == null) {
                 markUnmatched(item);
+                materialNoResult = confirmedMaterialNoReuseService.copyToSalesOrderItem(item, null);
                 salesOrderItemMapper.updateById(item);
-                row = toApplyRow(header, item, null, false, true, false);
+                row = toApplyRow(header, item, null, false, true, false, materialNoResult);
                 unmatchedCount++;
                 updatedCount++;
             } else {
-                applyProductionSnapshot(item, source, req);
+                materialNoResult = applyProductionSnapshot(item, source, req);
                 salesOrderItemMapper.updateById(item);
-                row = toApplyRow(header, item, source, true, true, false);
+                row = toApplyRow(header, item, source, true, true, false, materialNoResult);
                 matchedCount++;
                 updatedCount++;
+            }
+            switch (materialNoResult.status()) {
+                case COPIED -> materialNoCopiedCount++;
+                case IDEMPOTENT, NOT_APPLICABLE -> materialNoSkippedCount++;
+                case CONFLICT -> materialNoConflictCount++;
             }
             resp.getRows().add(row);
         }
@@ -228,12 +241,21 @@ public class SalesOrderMatchService {
         resp.setUnmatchedItemCount(unmatchedCount);
         resp.setSkippedItemCount(skippedCount);
         resp.setUpdatedItemCount(updatedCount);
+        resp.setMaterialNoCopiedCount(materialNoCopiedCount);
+        resp.setMaterialNoSkippedCount(materialNoSkippedCount);
+        resp.setMaterialNoConflictCount(materialNoConflictCount);
         resp.setWarningMessage(unmatchedCount <= 0 ? "" : "未匹配历史生产快照的销售订单零件数：" + unmatchedCount);
         resp.setSuccess(true);
-        resp.setMessage("异常治理补全完成，匹配 " + matchedCount + " 个，未匹配 " + unmatchedCount + " 个，跳过 " + skippedCount + " 个。");
+        resp.setMessage("异常治理补全完成，匹配 " + matchedCount + " 个，未匹配 " + unmatchedCount
+                + " 个，跳过 " + skippedCount + " 个；物料号补全 " + materialNoCopiedCount
+                + " 个，物料号跳过 " + materialNoSkippedCount + " 个，物料号冲突 "
+                + materialNoConflictCount + " 个。");
         recordApplyAudit(headers, resp, startedAt, trigger);
-        log.info("Sales order match apply completed trigger={} orderCount={} itemCount={} matched={} unmatched={} skipped={} durationMs={}",
-                trigger, headers.size(), items.size(), matchedCount, unmatchedCount, skippedCount, System.currentTimeMillis() - startedAt);
+        log.info("Sales order match apply completed trigger={} orderCount={} itemCount={} matched={} unmatched={} skipped={} "
+                        + "materialNoCopied={} materialNoSkipped={} materialNoConflict={} durationMs={}",
+                trigger, headers.size(), items.size(), matchedCount, unmatchedCount, skippedCount,
+                materialNoCopiedCount, materialNoSkippedCount, materialNoConflictCount,
+                System.currentTimeMillis() - startedAt);
         return resp;
     }
 
@@ -373,7 +395,10 @@ public class SalesOrderMatchService {
         return result;
     }
 
-    private void applyProductionSnapshot(SalesOrderItem item, ItemQuoteVersion source, SalesOrderMatchApplyReq req) {
+    private MaterialNoReuseResult applyProductionSnapshot(
+            SalesOrderItem item,
+            ItemQuoteVersion source,
+            SalesOrderMatchApplyReq req) {
         String engineeringMaterialName = resolveEngineeringMaterialName(source);
         String materialShape = resolveMaterialShape(source);
         if (isBlank(item.getEngineeringMaterialName()) && !isBlank(engineeringMaterialName)) {
@@ -415,9 +440,20 @@ public class SalesOrderMatchService {
         item.setMatchedRfqId(source.getRfqId());
         item.setMatchedItemId(source.getId());
         item.setMatchStatus(MATCHED);
-        item.setMatchMessage("已补全历史生产快照：RFQ " + source.getRfqId() + " / item " + source.getId());
+        MaterialNoReuseResult materialNoResult;
+        try {
+            materialNoResult = confirmedMaterialNoReuseService.copyToSalesOrderItem(item, source);
+        } catch (ConfirmedMaterialNoReuseService.MaterialNoConflictException ex) {
+            materialNoResult = new MaterialNoReuseResult(MaterialNoReuseResult.Status.CONFLICT);
+            item.setMatchMessage("已补全历史生产快照：RFQ " + source.getRfqId() + " / item " + source.getId()
+                    + "；物料号冲突，未覆盖已有物料号");
+        }
+        if (materialNoResult.status() != MaterialNoReuseResult.Status.CONFLICT) {
+            item.setMatchMessage("已补全历史生产快照：RFQ " + source.getRfqId() + " / item " + source.getId());
+        }
         item.setAssemblyRelationStatus(resolveAssemblyRelationStatus(item, source));
         item.setUpdatedAt(LocalDateTime.now());
+        return materialNoResult;
     }
 
     private String resolveAssemblyRelationStatus(SalesOrderItem item, ItemQuoteVersion source) {
@@ -655,7 +691,8 @@ public class SalesOrderMatchService {
             ItemQuoteVersion source,
             boolean matched,
             boolean updated,
-            boolean skipped) {
+            boolean skipped,
+            MaterialNoReuseResult materialNoResult) {
         SalesOrderMatchApplyRow row = new SalesOrderMatchApplyRow();
         row.setSalesOrderId(item.getSalesOrderId());
         row.setSalesOrderItemId(item.getId());
@@ -669,8 +706,22 @@ public class SalesOrderMatchService {
         row.setSourceItemId(source == null ? null : source.getId());
         row.setMatchStatus(item.getMatchStatus());
         row.setMatchMessage(item.getMatchMessage());
+        row.setMaterialNoReuseStatus(materialNoResult == null ? null : materialNoResult.status().name());
+        row.setMaterialNoReuseMessage(materialNoReuseMessage(materialNoResult));
         row.setAssemblyRelationStatus(defaultText(item.getAssemblyRelationStatus(), ASSEMBLY_RELATION_NOT_APPLICABLE));
         return row;
+    }
+
+    private String materialNoReuseMessage(MaterialNoReuseResult result) {
+        if (result == null || result.status() == null) {
+            return null;
+        }
+        return switch (result.status()) {
+            case COPIED -> "已补全 MES 已确认物料号";
+            case IDEMPOTENT -> "物料号已一致，跳过覆盖";
+            case NOT_APPLICABLE -> "来源未确认，跳过物料号复用";
+            case CONFLICT -> "目标已有不同物料号，未覆盖";
+        };
     }
 
     private boolean shouldSkipApply(SalesOrderItem item) {
@@ -744,6 +795,9 @@ public class SalesOrderMatchService {
         summary.put("unmatchedItemCount", resp.getUnmatchedItemCount());
         summary.put("skippedItemCount", resp.getSkippedItemCount());
         summary.put("updatedItemCount", resp.getUpdatedItemCount());
+        summary.put("materialNoCopiedCount", resp.getMaterialNoCopiedCount());
+        summary.put("materialNoSkippedCount", resp.getMaterialNoSkippedCount());
+        summary.put("materialNoConflictCount", resp.getMaterialNoConflictCount());
         summary.put("durationMs", System.currentTimeMillis() - startedAt);
         Object targetId = headers.size() == 1 ? headers.keySet().iterator().next() : new ArrayList<>(headers.keySet()).toString();
         auditService.record(ACTION, "sales_order_header", targetId, null, summary);

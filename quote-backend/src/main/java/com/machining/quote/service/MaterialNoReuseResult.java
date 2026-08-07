@@ -4,6 +4,7 @@ public record MaterialNoReuseResult(Status status) {
     public enum Status {
         COPIED,
         IDEMPOTENT,
-        NOT_APPLICABLE
+        NOT_APPLICABLE,
+        CONFLICT
     }
 }

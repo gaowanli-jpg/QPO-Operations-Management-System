@@ -181,6 +181,97 @@ class SalesOrderMatchStage3Test {
     }
 
     @Test
+    void applyCopiesConfirmedMaterialNoToSalesOrderAndReportsMaterialNoCompletion() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setMaterialNo(null);
+        item.setMaterialNoStatus("未确认");
+        fixture.withLockedItems(header, List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL");
+        source.setMaterialNo("MES-HISTORY-001");
+        source.setMaterialNoStatus("已确认");
+        source.setMaterialNoSource("MES_TICKET");
+        source.setMaterialNoSourceTicketId(3001L);
+        source.setMaterialNoMessage("历史 MES 确认");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyResp resp = fixture.service.apply(applyReq(List.of(item.getId())));
+
+        assertThat(resp.getMaterialNoCopiedCount()).isEqualTo(1);
+        assertThat(resp.getMaterialNoSkippedCount()).isZero();
+        assertThat(resp.getMaterialNoConflictCount()).isZero();
+        assertThat(resp.getMessage()).contains("物料号补全 1 个", "物料号跳过 0 个", "物料号冲突 0 个");
+        assertThat(resp.getRows()).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getMaterialNoReuseStatus()).isEqualTo("COPIED");
+                    assertThat(row.getMaterialNoReuseMessage()).isEqualTo("已补全 MES 已确认物料号");
+                });
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getMaterialNo()).isEqualTo("MES-HISTORY-001");
+        assertThat(updated.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(updated.getMaterialNoSource()).isEqualTo("MES_TICKET");
+        assertThat(updated.getMaterialNoSourceTicketId()).isEqualTo(3001L);
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-历史材料");
+    }
+
+    @Test
+    void applySkipsUnconfirmedSourceMaterialNoAndKeepsSnapshotCompletion() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setMaterialNo(null);
+        item.setMaterialNoStatus("未确认");
+        fixture.withLockedItems(header, List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL");
+        source.setMaterialNo("MES-UNCONFIRMED-001");
+        source.setMaterialNoStatus("未确认");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyResp resp = fixture.service.apply(applyReq(List.of(item.getId())));
+
+        assertThat(resp.getMaterialNoCopiedCount()).isZero();
+        assertThat(resp.getMaterialNoSkippedCount()).isEqualTo(1);
+        assertThat(resp.getMaterialNoConflictCount()).isZero();
+        assertThat(resp.getRows()).singleElement()
+                .satisfies(row -> assertThat(row.getMaterialNoReuseStatus()).isEqualTo("NOT_APPLICABLE"));
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getMaterialNo()).isNull();
+        assertThat(updated.getMaterialNoStatus()).isEqualTo("未确认");
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-历史材料");
+    }
+
+    @Test
+    void applyReportsMaterialNoConflictWithoutBlockingOtherSnapshotFields() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setMaterialNo("MES-CURRENT-001");
+        item.setMaterialNoStatus("已确认");
+        fixture.withLockedItems(header, List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL");
+        source.setMaterialNo("MES-HISTORY-001");
+        source.setMaterialNoStatus("已确认");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchApplyResp resp = fixture.service.apply(applyReq(List.of(item.getId())));
+
+        assertThat(resp.getMaterialNoCopiedCount()).isZero();
+        assertThat(resp.getMaterialNoSkippedCount()).isZero();
+        assertThat(resp.getMaterialNoConflictCount()).isEqualTo(1);
+        assertThat(resp.getRows()).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getMaterialNoReuseStatus()).isEqualTo("CONFLICT");
+                    assertThat(row.getMaterialNoReuseMessage()).contains("已有不同物料号");
+                });
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getMaterialNo()).isEqualTo("MES-CURRENT-001");
+        assertThat(updated.getMaterialNoStatus()).isEqualTo("已确认");
+        assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-历史材料");
+        assertThat(updated.getMatchStatus()).isEqualTo("已匹配");
+    }
+
+    @Test
     void applyOrderRejectsNonQuotedSalesOrdersAndLegacyPayloadCannotBypassStatusGuard() {
         Fixture fixture = fixture();
         SalesOrderHeader partial = header(101L, "SOQPO-20260731-001");
