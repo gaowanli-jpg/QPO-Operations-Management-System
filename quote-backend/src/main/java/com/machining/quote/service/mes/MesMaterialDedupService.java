@@ -32,10 +32,8 @@ public class MesMaterialDedupService {
     public static final String STATUS_FAILED = "FAILED";
     public static final String ROLE_MASTER = "MASTER";
     public static final String ROLE_FOLLOWER = "FOLLOWER";
-    public static final String ROLE_REUSED = "REUSED";
     public static final String RESULT_MASTER_CREATED = "MASTER_CREATED";
     public static final String RESULT_FOLLOW_EXISTING_ACTIVE = "FOLLOW_EXISTING_ACTIVE";
-    public static final String RESULT_REUSE_SUCCESS = "REUSE_SUCCESS";
     private static final String STATUS_WAITING = "WAITING";
     private static final String MATERIAL_CONFIRMED = "\u5df2\u786e\u8ba4";
     private static final String MATERIAL_SOURCE_MES_TICKET = "MES_TICKET";
@@ -64,10 +62,6 @@ public class MesMaterialDedupService {
 
     public DedupResolveResult resolveBeforeMes(OrderDeliveryTicket ticket, Long taskId) {
         String dedupKey = buildDedupKey(ticket);
-        ReusableMaterial reusable = findReusableMaterial(ticket, dedupKey);
-        if (reusable != null) {
-            return DedupResolveResult.reuse(dedupKey, reusable.ticketId(), reusable.mesRequestId(), reusable.materialNo());
-        }
         OrderDeliveryTicketMesRequest activeMaster = findActiveMaster(dedupKey);
         if (activeMaster != null) {
             return createFollower(ticket, taskId, dedupKey, activeMaster);
@@ -332,40 +326,6 @@ public class MesMaterialDedupService {
         return "MES material dedup fanout updated";
     }
 
-    private ReusableMaterial findReusableMaterial(OrderDeliveryTicket ticket, String dedupKey) {
-        if (ticketMapper == null) {
-            return null;
-        }
-        String partNo = normalizeKeyPart(ticket.getPartNo());
-        String normalizedVersion = normalizeKeyPart(ticket.getVersion());
-        final String version = normalizedVersion.isEmpty() ? "-" : normalizedVersion;
-        QueryWrapper<OrderDeliveryTicket> wrapper = new QueryWrapper<>();
-        wrapper.eq("mes_sync_status", STATUS_SUCCESS)
-                .isNotNull("material_no")
-                .and(match -> match.eq("mes_dedup_key", dedupKey)
-                        .or()
-                        .apply(
-                                "upper(trim(part_no)) = {0} AND coalesce(nullif(upper(trim(version)), ''), '-') = {1}",
-                                partNo,
-                                version
-                        ));
-        if (ticket.getId() != null) {
-            wrapper.ne("id", ticket.getId());
-        }
-        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(wrapper);
-        Map<String, ReusableMaterial> materials = new LinkedHashMap<>();
-        for (OrderDeliveryTicket candidate : tickets) {
-            String materialNo = normalizeMaterialNo(candidate.getMaterialNo());
-            if (!materialNo.isEmpty()) {
-                materials.putIfAbsent(
-                        materialNo,
-                        new ReusableMaterial(candidate.getId(), candidate.getMesRequestId(), materialNo)
-                );
-            }
-        }
-        return materials.size() == 1 ? materials.values().iterator().next() : null;
-    }
-
     private OrderDeliveryTicketMesRequest findActiveMaster(String dedupKey) {
         if (mesRequestMapper == null || isBlank(dedupKey)) {
             return null;
@@ -500,34 +460,28 @@ public class MesMaterialDedupService {
         return value == null || value.trim().isEmpty();
     }
 
-    private record ReusableMaterial(Integer ticketId, String mesRequestId, String materialNo) {
-    }
-
     public static class DedupResolveResult {
         private final String type;
         private final String dedupKey;
         private final Integer masterTicketId;
         private final String masterMesRequestId;
         private final String status;
-        private final String materialNo;
 
         private DedupResolveResult(
                 String type,
                 String dedupKey,
                 Integer masterTicketId,
                 String masterMesRequestId,
-                String status,
-                String materialNo) {
+                String status) {
             this.type = type;
             this.dedupKey = dedupKey;
             this.masterTicketId = masterTicketId;
             this.masterMesRequestId = masterMesRequestId;
             this.status = status;
-            this.materialNo = materialNo;
         }
 
         public static DedupResolveResult master(String dedupKey) {
-            return new DedupResolveResult(RESULT_MASTER_CREATED, dedupKey, null, null, STATUS_PROCESSING, null);
+            return new DedupResolveResult(RESULT_MASTER_CREATED, dedupKey, null, null, STATUS_PROCESSING);
         }
 
         public static DedupResolveResult follow(
@@ -540,23 +494,7 @@ public class MesMaterialDedupService {
                     dedupKey,
                     masterTicketId,
                     masterMesRequestId,
-                    status,
-                    null
-            );
-        }
-
-        public static DedupResolveResult reuse(
-                String dedupKey,
-                Integer sourceTicketId,
-                String sourceMesRequestId,
-                String materialNo) {
-            return new DedupResolveResult(
-                    RESULT_REUSE_SUCCESS,
-                    dedupKey,
-                    sourceTicketId,
-                    sourceMesRequestId,
-                    STATUS_SUCCESS,
-                    materialNo
+                    status
             );
         }
 
@@ -578,14 +516,6 @@ public class MesMaterialDedupService {
 
         public String getStatus() {
             return status;
-        }
-
-        public String getMaterialNo() {
-            return materialNo;
-        }
-
-        public boolean isReuseSuccess() {
-            return RESULT_REUSE_SUCCESS.equals(type);
         }
 
         public boolean isFollowExistingActive() {

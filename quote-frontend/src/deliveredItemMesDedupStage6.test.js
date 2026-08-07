@@ -14,7 +14,7 @@ describe('DeliveredItemManage MES dedup stage 6 regression', () => {
     expect(pageSource).toContain("const DELIVERED_ITEM_MES_SYNC_PERMISSION = 'market:delivered-item:mes-sync'")
     expect(pageSource).toContain('v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"')
     expect(pageSource).toContain("item.mesRequestRole !== 'FOLLOWER'")
-    expect(pageSource).toContain('已关联同图号版本主请求，未重复发送MES')
+    expect(pageSource).toContain('已关联同图号版本 MES 主请求，等待主请求结果')
     expect(pageSource).not.toContain('market:delivered-item:mes-dedup')
     expect(pageSource).not.toContain('market:delivered-item:dedup')
   })

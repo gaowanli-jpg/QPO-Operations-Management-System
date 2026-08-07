@@ -135,9 +135,6 @@ public class MesMaterialSyncService {
         MesMaterialDedupService.DedupResolveResult dedupResult = dedupService == null
                 ? null
                 : dedupService.resolveBeforeMes(ticket, taskId);
-        if (dedupResult != null && dedupResult.isReuseSuccess()) {
-            return completeDedupReuse(ticket, taskId, dedupResult, startedAt);
-        }
         if (dedupResult != null && dedupResult.isFollowExistingActive()) {
             return completeDedupFollow(ticket, taskId, dedupResult, startedAt);
         }
@@ -249,39 +246,6 @@ public class MesMaterialSyncService {
         if (STATUS_CALLBACK_PENDING.equalsIgnoreCase(status)) {
             throw new RuntimeException("MES material sync is waiting for callback");
         }
-    }
-
-    private Map<String, Object> completeDedupReuse(
-            OrderDeliveryTicket ticket,
-            Long taskId,
-            MesMaterialDedupService.DedupResolveResult dedupResult,
-            long startedAt) {
-        OrderDeliveryTicket update = new OrderDeliveryTicket();
-        update.setId(ticket.getId());
-        update.setMaterialNo(dedupResult.getMaterialNo());
-        update.setMesSyncStatus(STATUS_SUCCESS);
-        update.setMesSyncMessage("Reuse confirmed MES material number for same part/version");
-        update.setMesSyncedAt(LocalDateTime.now());
-        update.setMesDedupKey(dedupResult.getDedupKey());
-        update.setMesRequestRole(MesMaterialDedupService.ROLE_REUSED);
-        update.setMesMasterTicketId(dedupResult.getMasterTicketId());
-        update.setMesMasterRequestId(dedupResult.getMasterMesRequestId());
-        ticketMapper.updateById(update);
-        syncSourceItemMaterialNo(ticket, dedupResult.getMaterialNo(), update.getMesSyncMessage());
-        Map<String, Object> result = summary(
-                ticket,
-                taskId,
-                null,
-                dedupResult.getMaterialNo(),
-                STATUS_SUCCESS,
-                null
-        );
-        appendDedupSummary(result, dedupResult);
-        recordDedupAudit("DELIVERY_MES_MATERIAL_DEDUP_REUSE", ticket, taskId, result, STATUS_SUCCESS, null);
-        log.info("MES material dedup reuse ticketId={} materialNo={} dedupKey={} durationMs={}",
-                ticket.getId(), dedupResult.getMaterialNo(), dedupResult.getDedupKey(),
-                System.currentTimeMillis() - startedAt);
-        return result;
     }
 
     private Map<String, Object> completeDedupFollow(
@@ -595,32 +559,6 @@ public class MesMaterialSyncService {
         );
     }
 
-    private void recordDedupAudit(
-            String action,
-            OrderDeliveryTicket ticket,
-            Long taskId,
-            Map<String, Object> summary,
-            String result,
-            String errorMessage) {
-        if (auditService == null) {
-            return;
-        }
-        auditService.record(
-                action,
-                "order_delivery_ticket",
-                ticket.getId(),
-                null,
-                summary,
-                "DELIVERY",
-                result,
-                AuditService.labelForAction(action)
-                        + " ticketId=" + ticket.getId()
-                        + " taskId=" + taskId
-                        + " dedupKey=" + summary.get("dedupKey"),
-                errorMessage
-        );
-    }
-
     private void recordCallbackAudit(
             String action,
             OrderDeliveryTicket ticket,
@@ -704,9 +642,7 @@ public class MesMaterialSyncService {
         summary.put("dedupKey", dedupResult.getDedupKey());
         String role = MesMaterialDedupService.RESULT_MASTER_CREATED.equals(dedupResult.getType())
                 ? MesMaterialDedupService.ROLE_MASTER
-                : (dedupResult.isReuseSuccess()
-                        ? MesMaterialDedupService.ROLE_REUSED
-                        : MesMaterialDedupService.ROLE_FOLLOWER);
+                : MesMaterialDedupService.ROLE_FOLLOWER;
         summary.put("mesRequestRole", role);
         if (dedupResult.getMasterTicketId() != null) {
             summary.put("masterTicketId", dedupResult.getMasterTicketId());

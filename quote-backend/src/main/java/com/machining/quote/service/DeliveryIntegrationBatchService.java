@@ -19,11 +19,9 @@ public class DeliveryIntegrationBatchService {
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final String STATUS_DEDUP_FOLLOWING = "DEDUP_FOLLOWING";
     private static final String STATUS_FAILED = "FAILED";
-    private static final String STATUS_REUSE_SUCCESS = "REUSE_SUCCESS";
     private static final String STATUS_SKIPPED = "SKIPPED";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String DEDUP_FOLLOW_EXISTING_ACTIVE = "FOLLOW_EXISTING_ACTIVE";
-    private static final String DEDUP_REUSE_SUCCESS = "REUSE_SUCCESS";
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -172,11 +170,6 @@ public class DeliveryIntegrationBatchService {
             row.put("submittedToMes", false);
             return row;
         }
-        if (DEDUP_REUSE_SUCCESS.equals(dedupResult)) {
-            Map<String, Object> row = row(ticketId, STATUS_REUSE_SUCCESS, "复用同图号版本已确认物料号", result);
-            row.put("submittedToMes", false);
-            return row;
-        }
         if (isCallbackPendingResult(result)) {
             Map<String, Object> row = row(ticketId, STATUS_CALLBACK_PENDING, "MES 已受理，等待回调", result);
             row.put("submittedToMes", true);
@@ -193,12 +186,11 @@ public class DeliveryIntegrationBatchService {
         summary.put("taskId", taskId);
         summary.put("totalCount", rows.size());
         if (TASK_MES_MATERIAL_BATCH_SYNC.equals(taskType)) {
-            summary.put("successCount", countAny(rows, STATUS_SUCCESS, STATUS_REUSE_SUCCESS));
+            summary.put("successCount", count(rows, STATUS_SUCCESS));
             summary.put("callbackPendingCount", countAny(rows, STATUS_CALLBACK_PENDING, STATUS_DEDUP_FOLLOWING));
             summary.put("failedCount", count(rows, STATUS_FAILED));
             summary.put("skippedCount", count(rows, STATUS_SKIPPED));
             summary.put("dedupFollowerCount", count(rows, STATUS_DEDUP_FOLLOWING));
-            summary.put("reusedMaterialCount", count(rows, STATUS_REUSE_SUCCESS));
             summary.put("submittedToMesCount", countSubmittedToMes(rows));
         } else {
             summary.put("successCount", count(rows, STATUS_SUCCESS));

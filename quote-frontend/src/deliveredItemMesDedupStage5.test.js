@@ -7,7 +7,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const pageSource = readFileSync(resolve(currentDir, 'components', 'DeliveredItemManage.vue'), 'utf8')
 
 describe('DeliveredItemManage MES dedup stage 5 display', () => {
-  test('shows MES dedup trace fields and follower explanation in the detail drawer', () => {
+  test('shows MES dedup trace fields and follower waiting explanation in the detail drawer', () => {
     const drawerSource = pageSource.slice(pageSource.indexOf('<el-drawer'))
 
     for (const token of [
@@ -20,27 +20,28 @@ describe('DeliveredItemManage MES dedup stage 5 display', () => {
       'label="去重键"',
       'selectedItem.mesDedupKey',
       'dedupFollowerNote(selectedItem)',
-      '已关联同图号版本主请求，未重复发送MES'
+      '已关联同图号版本 MES 主请求，等待主请求结果'
     ]) {
       expect(drawerSource).toContain(token)
     }
   })
 
-  test('renders MES batch dedup result counts with business labels', () => {
+  test('renders only active follower and actual MES submission counts', () => {
     for (const token of [
       "import { getTask } from '../services/taskApi'",
       'mesBatchResult',
       'waitMesBatchTaskResult(taskId)',
       'getTask(taskId)',
       'formatMesBatchCount(mesBatchResult, \'dedupFollowerCount\')',
-      'formatMesBatchCount(mesBatchResult, \'reusedMaterialCount\')',
       'formatMesBatchCount(mesBatchResult, \'submittedToMesCount\')',
       '关联待回调',
-      '复用已确认物料号',
       '实际提交MES'
     ]) {
       expect(pageSource).toContain(token)
     }
+    expect(pageSource).not.toContain('reusedMaterialCount')
+    expect(pageSource).not.toContain('复用已确认物料号')
+    expect(pageSource).not.toContain('REUSED')
   })
 
   test('keeps follower rows from showing a repeat MES submit action while waiting', () => {

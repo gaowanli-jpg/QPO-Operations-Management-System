@@ -80,7 +80,6 @@ class MesMaterialDedupStage3Test {
                 .containsEntry("failedCount", 0)
                 .containsEntry("skippedCount", 0)
                 .containsEntry("dedupFollowerCount", 1)
-                .containsEntry("reusedMaterialCount", 0)
                 .containsEntry("submittedToMesCount", 1);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
         assertThat(rows)
@@ -96,7 +95,7 @@ class MesMaterialDedupStage3Test {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mesBatchReportsReusedMaterialRowsSeparatelyFromNormalSuccess() {
+    void mesBatchReportsOnlyNormalSuccessAndFollowerRows() {
         DeliveryIntegrationBatchService batchService = new DeliveryIntegrationBatchService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         MesMaterialSyncService mesSyncService = mock(MesMaterialSyncService.class);
@@ -115,7 +114,7 @@ class MesMaterialDedupStage3Test {
                 "ticketId", 402,
                 "status", "SUCCESS",
                 "materialNo", "MAT-401",
-                "dedupResult", "REUSE_SUCCESS",
+                "dedupResult", "MASTER_CREATED",
                 "dedupKey", "P-REUSE|A"
         ));
 
@@ -125,13 +124,13 @@ class MesMaterialDedupStage3Test {
                 .containsEntry("successCount", 2)
                 .containsEntry("callbackPendingCount", 0)
                 .containsEntry("dedupFollowerCount", 0)
-                .containsEntry("reusedMaterialCount", 1)
-                .containsEntry("submittedToMesCount", 1);
+                .containsEntry("submittedToMesCount", 2)
+                .doesNotContainKey("reusedMaterialCount");
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
         assertThat(rows)
                 .extracting(row -> row.get("status"))
-                .containsExactly("SUCCESS", "REUSE_SUCCESS");
-        assertThat(rows.get(1).get("message")).asString().contains("复用");
+                .containsExactly("SUCCESS", "SUCCESS");
+        assertThat(rows.get(1).get("message")).asString().contains("MES 物料号同步成功");
     }
 
     private Fixture fixture() {

@@ -91,7 +91,6 @@
         </div>
         <div class="mes-batch-result-tags">
           <el-tag type="warning">关联待回调：{{ formatMesBatchCount(mesBatchResult, 'dedupFollowerCount') }}</el-tag>
-          <el-tag type="success">复用已确认物料号：{{ formatMesBatchCount(mesBatchResult, 'reusedMaterialCount') }}</el-tag>
           <el-tag type="primary">实际提交MES：{{ formatMesBatchCount(mesBatchResult, 'submittedToMesCount') }}</el-tag>
         </div>
       </div>
@@ -579,13 +578,12 @@ const callbackStatusSummary = (selectedItem) => {
 
 const mesRequestRoleText = (role) => ({
   MASTER: '主请求',
-  FOLLOWER: '关联等待',
-  REUSED: '复用成功'
+  FOLLOWER: '关联等待'
 }[role] || '-')
 
 const dedupFollowerNote = (item) => {
   if (!item || item.mesRequestRole !== 'FOLLOWER') return ''
-  return '已关联同图号版本主请求，未重复发送MES'
+  return '已关联同图号版本 MES 主请求，等待主请求结果'
 }
 
 const mesBatchResultOf = (task) => {

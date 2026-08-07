@@ -38,12 +38,20 @@ import static org.mockito.Mockito.when;
 
 class MesMaterialDedupStage2Test {
     @Test
-    void syncMaterialNoReusesUniqueSuccessfulMaterialWithoutCallingMes() {
+    void syncMaterialNoLongerReusesHistoricalSuccessfulMaterial() {
         Fixture fixture = fixture(ticket(201, "P-100", "A", "PENDING"));
         OrderDeliveryTicket historical = ticket(101, "P-100", "A", "SUCCESS");
         historical.setMaterialNo("MAT-777");
         when(fixture.ticketMapper.selectList(any())).thenReturn(List.of(historical));
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(null);
+        when(fixture.mesRequestMapper.insert(any())).thenReturn(1);
         when(fixture.ticketMapper.updateById(any())).thenReturn(1);
+        MesMaterialResolveResp response = successResponse("MES-NEW");
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            response.setMesRequestId(req.getMesRequestId());
+            return response;
+        });
 
         Map<String, Object> result = fixture.syncService.syncMaterialNo(201, 9101L);
 
@@ -51,29 +59,10 @@ class MesMaterialDedupStage2Test {
                 .containsEntry("ticketId", 201)
                 .containsEntry("taskId", 9101L)
                 .containsEntry("status", "SUCCESS")
-                .containsEntry("materialNo", "MAT-777")
-                .containsEntry("dedupResult", "REUSE_SUCCESS")
-                .containsEntry("dedupKey", "P-100|A");
-        verify(fixture.client, never()).resolveMaterial(any());
-        verify(fixture.mesRequestMapper, never()).insert(any());
-        ArgumentCaptor<OrderDeliveryTicket> updateCaptor = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
-        verify(fixture.ticketMapper).updateById(updateCaptor.capture());
-        OrderDeliveryTicket update = updateCaptor.getValue();
-        assertThat(update.getMesSyncStatus()).isEqualTo("SUCCESS");
-        assertThat(update.getMaterialNo()).isEqualTo("MAT-777");
-        assertThat(update.getMesDedupKey()).isEqualTo("P-100|A");
-        assertThat(update.getMesRequestRole()).isEqualTo("REUSED");
-        verify(fixture.auditService).record(
-                eq("DELIVERY_MES_MATERIAL_DEDUP_REUSE"),
-                eq("order_delivery_ticket"),
-                eq(201),
-                isNull(),
-                any(),
-                eq("DELIVERY"),
-                eq("SUCCESS"),
-                contains("dedupKey=P-100|A"),
-                isNull()
-        );
+                .containsEntry("materialNo", "MES-NEW");
+        verify(fixture.client).resolveMaterial(any());
+        verify(fixture.mesRequestMapper).insert(any());
+        verify(fixture.ticketMapper, never()).selectList(any());
     }
 
     @Test
