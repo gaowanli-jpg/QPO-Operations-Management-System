@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
+import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -25,7 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 @Service
 public class SalesOrderQpoExcelParser {
@@ -51,10 +51,6 @@ public class SalesOrderQpoExcelParser {
     private static final String REMARK = "\u5907\u6ce8";
 
     private static final List<String> REQUIRED_HEADERS = List.of(
-            SALES_ORDER_DATE,
-            CUSTOMER_ORDER_NO,
-            ORDER_TYPE,
-            INTERNAL_PROJECT_NO,
             PART_NO,
             QTY,
             VERSION
@@ -68,6 +64,10 @@ public class SalesOrderQpoExcelParser {
     );
 
     public SalesOrderQpoExcelParseResult parse(InputStream inputStream) {
+        return parse(inputStream, null);
+    }
+
+    public SalesOrderQpoExcelParseResult parse(InputStream inputStream, SalesOrderQpoImportDefaultsDTO defaults) {
         try (Workbook workbook = WorkbookFactory.create(inputStream)) {
             if (workbook.getNumberOfSheets() == 0) {
                 throw new IllegalArgumentException("\u9500\u552e\u8ba2\u5355\u5bfc\u5165\u8868\u683c\u4e3a\u7a7a");
@@ -79,6 +79,7 @@ public class SalesOrderQpoExcelParser {
             validateHeaders(header.indexes());
 
             Map<String, SalesOrderQpoOrderGroupDTO> groups = new LinkedHashMap<>();
+            SalesOrderQpoOrderGroupDTO group = null;
             int sourceRowCount = 0;
             int lineCount = 0;
             for (int rowIndex = header.rowIndex() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
@@ -87,27 +88,32 @@ public class SalesOrderQpoExcelParser {
                     continue;
                 }
                 int excelRowNumber = rowIndex + 1;
-                SalesOrderQpoExcelLineDTO line = parseLine(row, header.indexes(), formatter, evaluator, excelRowNumber);
+                SalesOrderQpoExcelLineDTO line = parseLine(row, header.indexes(), formatter, evaluator, excelRowNumber, defaults);
                 sourceRowCount++;
                 lineCount++;
 
-                String groupKey = line.getCustomerOrderNo() + "|" + line.getInternalProjectNo();
-                SalesOrderQpoOrderGroupDTO group = groups.get(groupKey);
                 if (group == null) {
                     group = new SalesOrderQpoOrderGroupDTO();
-                    group.setGroupKey(groupKey);
-                    group.setCustomerOrderNo(line.getCustomerOrderNo());
-                    group.setInternalProjectNo(line.getInternalProjectNo());
-                    group.setSalesOrderDate(line.getSalesOrderDate());
-                    group.setCustomerProjectNo(line.getCustomerProjectNo());
-                    group.setCustomerOrderTitle(line.getCustomerOrderTitle());
-                    group.setOrderType(line.getOrderType());
-                    groups.put(groupKey, group);
-                } else {
-                    validateGroupField(groupKey, excelRowNumber, SALES_ORDER_DATE, group.getSalesOrderDate(), line.getSalesOrderDate());
-                    validateGroupField(groupKey, excelRowNumber, CUSTOMER_PROJECT_NO, group.getCustomerProjectNo(), line.getCustomerProjectNo());
-                    validateGroupField(groupKey, excelRowNumber, CUSTOMER_ORDER_TITLE, group.getCustomerOrderTitle(), line.getCustomerOrderTitle());
-                    validateGroupField(groupKey, excelRowNumber, ORDER_TYPE, group.getOrderType(), line.getOrderType());
+                    group.setGroupKey(resolveGroupKey(defaults, line));
+                    group.setCustomerOrderNo(resolveGroupValue(
+                            defaults == null ? null : defaults.getCustomerOrderNo(),
+                            line.getCustomerOrderNo()));
+                    group.setInternalProjectNo(resolveGroupValue(
+                            defaults == null ? null : defaults.getInternalProjectNo(),
+                            line.getInternalProjectNo()));
+                    group.setSalesOrderDate(resolveGroupValue(
+                            defaults == null ? null : defaults.getSalesOrderDate(),
+                            line.getSalesOrderDate()));
+                    group.setCustomerProjectNo(resolveGroupValue(
+                            defaults == null ? null : defaults.getCustomerProjectNo(),
+                            line.getCustomerProjectNo()));
+                    group.setCustomerOrderTitle(resolveGroupValue(
+                            defaults == null ? null : defaults.getCustomerOrderTitle(),
+                            line.getCustomerOrderTitle()));
+                    group.setOrderType(resolveGroupValue(
+                            defaults == null ? null : defaults.getOrderType(),
+                            line.getOrderType()));
+                    groups.put(group.getGroupKey(), group);
                 }
                 group.getLines().add(line);
             }
@@ -130,7 +136,8 @@ public class SalesOrderQpoExcelParser {
             Map<String, Integer> headerIndexes,
             DataFormatter formatter,
             FormulaEvaluator evaluator,
-            int excelRowNumber) {
+            int excelRowNumber,
+            SalesOrderQpoImportDefaultsDTO defaults) {
         Integer qty = requiredInteger(row, headerIndexes, QTY, formatter, evaluator, excelRowNumber);
         if (qty <= 0) {
             throw rowError(excelRowNumber, QTY, "\u5fc5\u987b\u5927\u4e8e 0");
@@ -148,13 +155,19 @@ public class SalesOrderQpoExcelParser {
         SalesOrderQpoExcelLineDTO line = new SalesOrderQpoExcelLineDTO();
         line.setSourceRowNumber(excelRowNumber);
         line.setSalesOrderLineNo(optionalInteger(row, headerIndexes, LINE_NO, formatter, evaluator, excelRowNumber, null));
-        line.setSalesOrderDate(requiredDate(row, headerIndexes, SALES_ORDER_DATE, formatter, evaluator, excelRowNumber));
-        line.setCustomerOrderNo(requiredText(row, headerIndexes, CUSTOMER_ORDER_NO, formatter, evaluator, excelRowNumber));
-        line.setCustomerProjectNo(optionalText(row, headerIndexes, CUSTOMER_PROJECT_NO, formatter, evaluator));
-        line.setCustomerOrderTitle(optionalText(row, headerIndexes, CUSTOMER_ORDER_TITLE, formatter, evaluator));
-        line.setOrderType(requiredText(row, headerIndexes, ORDER_TYPE, formatter, evaluator, excelRowNumber));
+        line.setSalesOrderDate(fallbackDate(row, headerIndexes, SALES_ORDER_DATE, formatter, evaluator, excelRowNumber,
+                defaults == null ? null : defaults.getSalesOrderDate()));
+        line.setCustomerOrderNo(fallbackText(row, headerIndexes, CUSTOMER_ORDER_NO, formatter, evaluator,
+                defaults == null ? null : defaults.getCustomerOrderNo()));
+        line.setCustomerProjectNo(fallbackText(row, headerIndexes, CUSTOMER_PROJECT_NO, formatter, evaluator,
+                defaults == null ? null : defaults.getCustomerProjectNo()));
+        line.setCustomerOrderTitle(fallbackText(row, headerIndexes, CUSTOMER_ORDER_TITLE, formatter, evaluator,
+                defaults == null ? null : defaults.getCustomerOrderTitle()));
+        line.setOrderType(fallbackText(row, headerIndexes, ORDER_TYPE, formatter, evaluator,
+                defaults == null ? null : defaults.getOrderType()));
         line.setSalesMaterialNo(null);
-        line.setInternalProjectNo(requiredText(row, headerIndexes, INTERNAL_PROJECT_NO, formatter, evaluator, excelRowNumber));
+        line.setInternalProjectNo(fallbackText(row, headerIndexes, INTERNAL_PROJECT_NO, formatter, evaluator,
+                defaults == null ? null : defaults.getInternalProjectNo()));
         line.setCustomerDeliveryDate(optionalDate(row, headerIndexes, CUSTOMER_DELIVERY_DATE, formatter, evaluator, excelRowNumber));
         line.setInternalDeliveryDate(optionalDate(row, headerIndexes, INTERNAL_DELIVERY_DATE, formatter, evaluator, excelRowNumber));
         line.setPartNo(requiredText(row, headerIndexes, PART_NO, formatter, evaluator, excelRowNumber));
@@ -178,7 +191,9 @@ public class SalesOrderQpoExcelParser {
         for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             Map<String, Integer> indexes = buildHeaderIndexes(row, formatter, evaluator);
-            if (indexes.containsKey(normalizeHeader(CUSTOMER_ORDER_NO)) || indexes.containsKey(normalizeHeader(PART_NO))) {
+            if (indexes.containsKey(normalizeHeader(PART_NO))
+                    && indexes.containsKey(normalizeHeader(QTY))
+                    && indexes.containsKey(normalizeHeader(VERSION))) {
                 return new HeaderContext(rowIndex, indexes);
             }
         }
@@ -356,11 +371,43 @@ public class SalesOrderQpoExcelParser {
         throw rowError(excelRowNumber, header, "\u4e0d\u662f\u6709\u6548\u65e5\u671f");
     }
 
-    private void validateGroupField(String groupKey, int excelRowNumber, String field, Object expected, Object actual) {
-        if (!Objects.equals(expected, actual)) {
-            throw new IllegalArgumentException("\u9500\u552e\u8ba2\u5355\u5bfc\u5165\u8868\u683c\u7b2c" + excelRowNumber
-                    + "\u884c\u540c\u4e00\u8ba2\u5355\u5206\u7ec4[" + groupKey + "]\u7684" + field + "\u4e0d\u4e00\u81f4");
-        }
+    private String fallbackText(
+            Row row,
+            Map<String, Integer> headerIndexes,
+            String header,
+            DataFormatter formatter,
+            FormulaEvaluator evaluator,
+            String defaultValue) {
+        String value = optionalText(row, headerIndexes, header, formatter, evaluator);
+        return value.isEmpty() ? clean(defaultValue) : value;
+    }
+
+    private LocalDate fallbackDate(
+            Row row,
+            Map<String, Integer> headerIndexes,
+            String header,
+            DataFormatter formatter,
+            FormulaEvaluator evaluator,
+            int excelRowNumber,
+            LocalDate defaultValue) {
+        LocalDate value = optionalDate(row, headerIndexes, header, formatter, evaluator, excelRowNumber);
+        return value == null ? defaultValue : value;
+    }
+
+    private String resolveGroupKey(SalesOrderQpoImportDefaultsDTO defaults, SalesOrderQpoExcelLineDTO line) {
+        return resolveGroupValue(defaults == null ? null : defaults.getCustomerOrderNo(),
+                line == null ? null : line.getCustomerOrderNo())
+                + "|" + resolveGroupValue(defaults == null ? null : defaults.getInternalProjectNo(),
+                line == null ? null : line.getInternalProjectNo());
+    }
+
+    private String resolveGroupValue(String defaultValue, String lineValue) {
+        String cleanedDefault = clean(defaultValue);
+        return cleanedDefault.isEmpty() ? clean(lineValue) : cleanedDefault;
+    }
+
+    private LocalDate resolveGroupValue(LocalDate defaultValue, LocalDate lineValue) {
+        return defaultValue != null ? defaultValue : lineValue;
     }
 
     private boolean isBlankRow(Row row, DataFormatter formatter, FormulaEvaluator evaluator) {

@@ -76,7 +76,7 @@ public class SalesOrderQpoImportService {
 
     @Transactional
     public SalesOrderQpoImportResp importQpo(MultipartFile excelFile, Long customerId, String documentTypeCode) {
-        return importQpo(excelFile, customerId, documentTypeCode, null, null);
+        return importQpoInternal(excelFile, customerId, documentTypeCode, null, null, null);
     }
 
     @Transactional
@@ -85,7 +85,7 @@ public class SalesOrderQpoImportService {
             Long customerId,
             String documentTypeCode,
             List<MultipartFile> drawings) {
-        return importQpo(excelFile, customerId, documentTypeCode, drawings, null);
+        return importQpoInternal(excelFile, customerId, documentTypeCode, null, drawings, null);
     }
 
     @Transactional
@@ -155,7 +155,65 @@ public class SalesOrderQpoImportService {
             List<MultipartFile> drawings,
             List<MultipartFile> versionDrawings) {
         validateImportDefaults(defaults);
-        return importQpo(excelFile, customerId, documentTypeCode, drawings, versionDrawings);
+        return importQpoInternal(excelFile, customerId, documentTypeCode, defaults, drawings, versionDrawings);
+    }
+
+    private SalesOrderQpoImportResp importQpoInternal(
+            MultipartFile excelFile,
+            Long customerId,
+            String documentTypeCode,
+            SalesOrderQpoImportDefaultsDTO defaults,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        validateFile(excelFile);
+        CustomerMaster customer = requireCustomer(customerId);
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessCustomer(customer);
+        }
+        String effectiveDocumentType = effectiveDocumentType(documentTypeCode);
+        String batchNo = nextBatchNo();
+        String sourceFileName = safeFileName(excelFile.getOriginalFilename());
+        long startedAt = System.currentTimeMillis();
+
+        SalesOrderQpoExcelParseResult parseResult = parse(excelFile, defaults);
+        if (parseResult.getOrderCount() <= 0 || parseResult.getOrders().isEmpty()) {
+            throw new IllegalArgumentException("销售订单表格没有可导入的订单");
+        }
+        validateDuplicateImports(customer, parseResult.getOrders());
+        DrawingBindingResult drawingBinding = bindDrawings(customer, batchNo, parseResult, drawings, versionDrawings);
+
+        SalesOrderImportBatch batch = createBatch(batchNo, sourceFileName, parseResult);
+        batchMapper.insert(batch);
+
+        SalesOrderQpoImportResp resp = baseResponse(batchNo, parseResult, drawingBinding);
+        int sequence = 1;
+        for (SalesOrderQpoOrderGroupDTO group : parseResult.getOrders()) {
+            CreatedSalesOrder created = createSalesOrderGroup(
+                    batch,
+                    customer,
+                    effectiveDocumentType,
+                    group,
+                    batchNo,
+                    sequence++,
+                    drawingBinding
+            );
+            resp.getRows().add(successRow(created, group));
+        }
+        resp.setSuccess(true);
+        resp.setStatus(STATUS_SUCCESS);
+        resp.setSuccessOrderCount(resp.getRows().size());
+        resp.setFailedOrderCount(0);
+        audit(batch, resp, customer, effectiveDocumentType, startedAt);
+        log.info("Sales order independent import completed batchNo={} orderCount={} lineCount={} uploadedDrawingCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
+                batchNo,
+                resp.getTotalOrderCount(),
+                resp.getTotalLineCount(),
+                drawingBinding.uploadedDrawingCount(),
+                drawingBinding.matchedItemCount(),
+                drawingBinding.missingDrawingCount(),
+                drawingBinding.unmatchedDrawingCount(),
+                System.currentTimeMillis() - startedAt);
+        return resp;
     }
 
     private SalesOrderQpoExcelParseResult parse(MultipartFile excelFile) {
@@ -163,6 +221,18 @@ public class SalesOrderQpoImportService {
             return excelParser.parse(excelFile.getInputStream());
         } catch (IOException e) {
             throw new RuntimeException("销售订单导入表格读取失败：" + safeError(e.getMessage()), e);
+        }
+    }
+
+    private SalesOrderQpoExcelParseResult parse(
+            MultipartFile excelFile,
+            SalesOrderQpoImportDefaultsDTO defaults) {
+        try {
+            return defaults == null
+                    ? excelParser.parse(excelFile.getInputStream())
+                    : excelParser.parse(excelFile.getInputStream(), defaults);
+        } catch (IOException e) {
+            throw new RuntimeException("閿€鍞鍗曞鍏ヨ〃鏍艰鍙栧け璐ワ細" + safeError(e.getMessage()), e);
         }
     }
 
