@@ -551,6 +551,7 @@ public class SalesOrderQpoImportService {
     private SalesOrderItem toItem(SalesOrderHeader header, SalesOrderQpoExcelLineDTO line, LocalDateTime now) {
         SalesOrderItem item = new SalesOrderItem();
         item.setSalesOrderId(header.getId());
+        item.setSalesOrderDate(line.getSalesOrderDate());
         item.setLineNo(line.getSalesOrderLineNo());
         item.setPartNo(line.getPartNo());
         item.setDescription(line.getDescription());
@@ -559,6 +560,7 @@ public class SalesOrderQpoImportService {
         item.setOrderType(line.getOrderType());
         item.setCustomerOrderNo(line.getCustomerOrderNo());
         item.setCustomerProjectNo(line.getCustomerProjectNo());
+        item.setCustomerOrderTitle(line.getCustomerOrderTitle());
         item.setInternalProjectNo(line.getInternalProjectNo());
         item.setSalesMaterialNo(null);
         item.setMaterialNo(null);

@@ -1,8 +1,16 @@
 package com.machining.quote;
 
 import com.machining.quote.controller.SalesOrderQpoImportController;
+import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
+import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
+import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
+import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderImportBatch;
+import com.machining.quote.entity.SalesOrderImportRecord;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
@@ -29,7 +37,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -182,6 +192,61 @@ class SalesOrderQpoImportStage2DefaultsTest {
                 parser(service));
     }
 
+    @Test
+    void servicePersistsHeaderDefaultsAndItemLineEffectiveValues() throws Exception {
+        SalesOrderQpoImportService service = service();
+        SalesOrderQpoImportDefaultsDTO defaults = defaults();
+        SalesOrderQpoExcelParseResult parseResult = parseResultWithLineOverride();
+        when(customerMapper(service).selectById(7L)).thenReturn(customer());
+        when(parser(service).parse(any(), same(defaults))).thenReturn(parseResult);
+        when(headerMapper(service).selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper(service)).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(301L);
+            return 1;
+        }).when(headerMapper(service)).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(401L);
+            return 1;
+        }).when(recordMapper(service)).insert(any(SalesOrderImportRecord.class));
+
+        service.importQpo(excel(), 7L, "SO01", defaults, List.of(), List.of());
+
+        var headerCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderHeader.class);
+        verify(headerMapper(service)).insert(headerCaptor.capture());
+        SalesOrderHeader header = headerCaptor.getValue();
+        assertThat(header.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(header.getCustomerOrderNo()).isEqualTo("A-PO");
+        assertThat(header.getCustomerProjectNo()).isEqualTo("A-CP");
+        assertThat(header.getCustomerOrderTitle()).isEqualTo("A-TITLE");
+        assertThat(header.getOrderType()).isEqualTo("正式订单");
+        assertThat(header.getInternalProjectNo()).isEqualTo("A-IP");
+
+        var itemCaptor = org.mockito.ArgumentCaptor.forClass(SalesOrderItem.class);
+        verify(itemMapper(service), times(2)).insert(itemCaptor.capture());
+        SalesOrderItem overrideItem = itemCaptor.getAllValues().get(0);
+        assertThat(overrideItem.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 7, 2));
+        assertThat(overrideItem.getCustomerOrderNo()).isEqualTo("B-PO");
+        assertThat(overrideItem.getCustomerProjectNo()).isEqualTo("B-CP");
+        assertThat(overrideItem.getCustomerOrderTitle()).isEqualTo("B-TITLE");
+        assertThat(overrideItem.getOrderType()).isEqualTo("样品订单");
+        assertThat(overrideItem.getInternalProjectNo()).isEqualTo("B-IP");
+
+        SalesOrderItem fallbackItem = itemCaptor.getAllValues().get(1);
+        assertThat(fallbackItem.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(fallbackItem.getCustomerOrderNo()).isEqualTo("A-PO");
+        assertThat(fallbackItem.getCustomerProjectNo()).isEqualTo("A-CP");
+        assertThat(fallbackItem.getCustomerOrderTitle()).isEqualTo("A-TITLE");
+        assertThat(fallbackItem.getOrderType()).isEqualTo("正式订单");
+        assertThat(fallbackItem.getInternalProjectNo()).isEqualTo("A-IP");
+    }
+
     private SalesOrderQpoImportService service() {
         SalesOrderQpoImportService service = new SalesOrderQpoImportService();
         ReflectionTestUtils.setField(service, "excelParser", mock(SalesOrderQpoExcelParser.class));
@@ -196,6 +261,74 @@ class SalesOrderQpoImportStage2DefaultsTest {
         ReflectionTestUtils.setField(service, "salesOrderMatchService", mock(SalesOrderMatchService.class));
         ReflectionTestUtils.setField(service, "deliveryService", mock(DeliveryService.class));
         return service;
+    }
+
+    private static SalesOrderQpoImportDefaultsDTO defaults() {
+        SalesOrderQpoImportDefaultsDTO defaults = new SalesOrderQpoImportDefaultsDTO();
+        defaults.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        defaults.setCustomerOrderNo("A-PO");
+        defaults.setCustomerProjectNo("A-CP");
+        defaults.setCustomerOrderTitle("A-TITLE");
+        defaults.setOrderType("正式订单");
+        defaults.setInternalProjectNo("A-IP");
+        return defaults;
+    }
+
+    private static SalesOrderQpoExcelParseResult parseResultWithLineOverride() {
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey("A-PO|A-IP");
+        group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        group.setCustomerOrderNo("A-PO");
+        group.setCustomerProjectNo("A-CP");
+        group.setCustomerOrderTitle("A-TITLE");
+        group.setOrderType("正式订单");
+        group.setInternalProjectNo("A-IP");
+        group.setLines(List.of(
+                line(1, LocalDate.of(2026, 7, 2), "B-PO", "B-CP", "B-TITLE", "样品订单", "B-IP", "P-001"),
+                line(2, LocalDate.of(2026, 7, 1), "A-PO", "A-CP", "A-TITLE", "正式订单", "A-IP", "P-002")
+        ));
+
+        SalesOrderQpoExcelParseResult result = new SalesOrderQpoExcelParseResult();
+        result.setOrders(List.of(group));
+        result.setOrderCount(1);
+        result.setLineCount(2);
+        result.setSourceRowCount(2);
+        return result;
+    }
+
+    private static SalesOrderQpoExcelLineDTO line(
+            int lineNo,
+            LocalDate salesOrderDate,
+            String customerOrderNo,
+            String customerProjectNo,
+            String customerOrderTitle,
+            String orderType,
+            String internalProjectNo,
+            String partNo) {
+        SalesOrderQpoExcelLineDTO line = new SalesOrderQpoExcelLineDTO();
+        line.setSourceRowNumber(lineNo + 1);
+        line.setSalesOrderLineNo(lineNo);
+        line.setSalesOrderDate(salesOrderDate);
+        line.setCustomerOrderNo(customerOrderNo);
+        line.setCustomerProjectNo(customerProjectNo);
+        line.setCustomerOrderTitle(customerOrderTitle);
+        line.setOrderType(orderType);
+        line.setInternalProjectNo(internalProjectNo);
+        line.setPartNo(partNo);
+        line.setQty(1);
+        line.setShippedQty(0);
+        line.setUnshippedQty(1);
+        line.setVersion("A");
+        return line;
+    }
+
+    private static CustomerMaster customer() {
+        CustomerMaster customer = new CustomerMaster();
+        customer.setId(7L);
+        customer.setCustomerCode("C001");
+        customer.setCustomerName("ACME");
+        customer.setEnabled(true);
+        return customer;
     }
 
     private static SalesOrderQpoExcelParser parser(SalesOrderQpoImportService service) {

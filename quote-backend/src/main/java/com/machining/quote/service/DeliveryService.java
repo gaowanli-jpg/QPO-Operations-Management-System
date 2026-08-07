@@ -274,23 +274,26 @@ public class DeliveryService {
             throw new RuntimeException("只有已报价或部分已提单的销售订单可以自动生成提单");
         }
 
-        String orderType = firstText(header.getOrderType(), "正式订单");
-        LocalDate startDate = header.getSalesOrderDate() == null ? LocalDate.now() : header.getSalesOrderDate();
         String projectNo = resolveSalesOrderProjectNo(header);
-        String internalProjectNo = header.getInternalProjectNo();
-        if (isBlank(internalProjectNo)) {
-            throw new RuntimeException("内部项目号不能为空");
-        }
-        String customerOrderNo = header.getCustomerOrderNo();
-        if (isBlank(customerOrderNo)) {
-            throw new RuntimeException("客户订单号不能为空");
-        }
-        String customerProjectNo = firstText(header.getCustomerProjectNo(), "");
         List<OrderDeliveryTicket> createdTickets = new ArrayList<>();
         for (SalesOrderDemandLine demand : demands) {
+            SalesOrderItem item = demand.item();
+            String orderType = firstText(item == null ? null : item.getOrderType(), firstText(header.getOrderType(), "正式订单"));
+            LocalDate startDate = item != null && item.getSalesOrderDate() != null
+                    ? item.getSalesOrderDate()
+                    : (header.getSalesOrderDate() == null ? LocalDate.now() : header.getSalesOrderDate());
+            String internalProjectNo = firstText(item == null ? null : item.getInternalProjectNo(), header.getInternalProjectNo());
+            if (isBlank(internalProjectNo)) {
+                throw new RuntimeException("内部项目号不能为空");
+            }
+            String customerOrderNo = firstText(item == null ? null : item.getCustomerOrderNo(), header.getCustomerOrderNo());
+            if (isBlank(customerOrderNo)) {
+                throw new RuntimeException("客户订单号不能为空");
+            }
+            String customerProjectNo = firstText(item == null ? null : item.getCustomerProjectNo(), header.getCustomerProjectNo());
             OrderDeliveryTicket ticket = insertSalesOrderTicket(
                     header,
-                    demand.item(),
+                    item,
                     orderType,
                     internalProjectNo,
                     customerOrderNo,

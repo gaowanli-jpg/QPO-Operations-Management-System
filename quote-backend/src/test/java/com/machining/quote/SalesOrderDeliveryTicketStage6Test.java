@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -192,6 +193,139 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(header.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
         verify(dataScopeService, atLeastOnce()).assertCanAccessSalesOrder(header);
         verify(auditService, atLeastOnce()).record(eq("DELIVERY_TICKET_GENERATE"), eq("sales_order_header"), eq(9001L), isNull(), any());
+    }
+
+    @Test
+    void importAutoSalesOrderTicketsUseItemSnapshotsBeforeHeaderFallback() {
+        DeliveryService service = new DeliveryService();
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        LeadTimeService leadTimeService = new LeadTimeService();
+        List<OrderDeliveryTicket> insertedTickets = new ArrayList<>();
+        SalesOrderHeader header = salesOrderHeader();
+        header.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        header.setCustomerOrderNo("A-PO");
+        header.setCustomerProjectNo("A-CP");
+        header.setOrderType("正式订单");
+        header.setInternalProjectNo("A-IP");
+        SalesOrderItem override = salesOrderItem(2001L, 5, 0, "SO-P-OVERRIDE");
+        override.setSalesOrderDate(LocalDate.of(2026, 7, 2));
+        override.setCustomerOrderNo("B-PO");
+        override.setCustomerProjectNo("B-CP");
+        override.setCustomerOrderTitle("B-TITLE");
+        override.setOrderType("样品订单");
+        override.setInternalProjectNo("B-IP");
+        SalesOrderItem fallback = salesOrderItem(2002L, 4, 0, "SO-P-FALLBACK");
+        fallback.setSalesOrderDate(null);
+        fallback.setCustomerOrderNo(null);
+        fallback.setCustomerProjectNo(null);
+        fallback.setCustomerOrderTitle(null);
+        fallback.setOrderType(null);
+        fallback.setInternalProjectNo(null);
+
+        when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
+        when(headerMapper.selectById(9001L)).thenReturn(header);
+        when(itemMapper.selectList(any())).thenReturn(List.of(override, fallback));
+        doAnswer(invocation -> {
+            OrderDeliveryTicket ticket = invocation.getArgument(0);
+            ticket.setId(7200 + insertedTickets.size());
+            insertedTickets.add(ticket);
+            return 1;
+        }).when(ticketMapper).insert(any(OrderDeliveryTicket.class));
+
+        wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
+
+        List<OrderDeliveryTicket> tickets = service.generateImportedSalesOrderTickets(9001L);
+
+        assertThat(tickets).hasSize(2);
+        OrderDeliveryTicket overrideTicket = insertedTickets.stream()
+                .filter(ticket -> Long.valueOf(2001L).equals(ticket.getSourceItemId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(overrideTicket.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 2));
+        assertThat(overrideTicket.getCustomerOrderNo()).isEqualTo("B-PO");
+        assertThat(overrideTicket.getCustomerProjectNo()).isEqualTo("B-CP");
+        assertThat(overrideTicket.getOrderType()).isEqualTo("样品订单");
+        assertThat(overrideTicket.getInternalProjectNo()).isEqualTo("B-IP");
+
+        OrderDeliveryTicket fallbackTicket = insertedTickets.stream()
+                .filter(ticket -> Long.valueOf(2002L).equals(ticket.getSourceItemId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(fallbackTicket.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(fallbackTicket.getCustomerOrderNo()).isEqualTo("A-PO");
+        assertThat(fallbackTicket.getCustomerProjectNo()).isEqualTo("A-CP");
+        assertThat(fallbackTicket.getOrderType()).isEqualTo("正式订单");
+        assertThat(fallbackTicket.getInternalProjectNo()).isEqualTo("A-IP");
+    }
+
+    @Test
+    void importAutoSalesOrderTicketsRejectsBlankEffectiveOrderIdentity() {
+        DeliveryService service = new DeliveryService();
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        LeadTimeService leadTimeService = new LeadTimeService();
+        SalesOrderHeader header = salesOrderHeader();
+        header.setSalesOrderDate(null);
+        header.setCustomerOrderNo(null);
+        header.setCustomerProjectNo(null);
+        header.setOrderType(null);
+        header.setInternalProjectNo(null);
+        SalesOrderItem blank = salesOrderItem(3001L, 2, 0, "SO-P-BLANK");
+        blank.setSalesOrderDate(null);
+        blank.setCustomerOrderNo(null);
+        blank.setCustomerProjectNo(null);
+        blank.setOrderType(null);
+        blank.setInternalProjectNo(null);
+
+        when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
+        when(headerMapper.selectById(9001L)).thenReturn(header);
+        when(itemMapper.selectList(any())).thenReturn(List.of(blank));
+
+        wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
+
+        assertThatThrownBy(() -> service.generateImportedSalesOrderTickets(9001L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("内部项目号");
+    }
+
+    @Test
+    void importAutoSalesOrderTicketsRejectsBlankCustomerOrderNoWhenInternalProjectExists() {
+        DeliveryService service = new DeliveryService();
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        LeadTimeService leadTimeService = new LeadTimeService();
+        SalesOrderHeader header = salesOrderHeader();
+        header.setSalesOrderDate(null);
+        header.setCustomerOrderNo(null);
+        header.setCustomerProjectNo("A-CP");
+        header.setOrderType("正式订单");
+        header.setInternalProjectNo("A-IP");
+        SalesOrderItem blank = salesOrderItem(3002L, 2, 0, "SO-P-BLANK-2");
+        blank.setSalesOrderDate(null);
+        blank.setCustomerOrderNo(null);
+        blank.setCustomerProjectNo(null);
+        blank.setOrderType(null);
+        blank.setInternalProjectNo("A-IP");
+
+        when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
+        when(headerMapper.selectById(9001L)).thenReturn(header);
+        when(itemMapper.selectList(any())).thenReturn(List.of(blank));
+
+        wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
+
+        assertThatThrownBy(() -> service.generateImportedSalesOrderTickets(9001L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("客户订单号");
     }
 
     @Test
