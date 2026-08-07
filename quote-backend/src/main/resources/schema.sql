@@ -279,6 +279,8 @@ ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_id BI
 ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_no VARCHAR(100);
 ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0;
 ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS sales_order_date DATE;
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS customer_order_title VARCHAR(255);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sales_order_header_no
     ON sales_order_header(sales_order_no);

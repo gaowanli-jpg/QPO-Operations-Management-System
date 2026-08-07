@@ -18,6 +18,7 @@ public class SalesOrderItem {
     private Long id;
 
     private Long salesOrderId;
+    private LocalDate salesOrderDate;
     private Integer lineNo;
     private String partNo;
     private String description;
@@ -26,6 +27,7 @@ public class SalesOrderItem {
     private String orderType;
     private String customerOrderNo;
     private String customerProjectNo;
+    private String customerOrderTitle;
     private String internalProjectNo;
     private String salesMaterialNo;
     private String materialNo;
