@@ -1064,7 +1064,6 @@ class SalesOrderQpoImportStage3Test {
         line.setUntaxedUnitPrice(new BigDecimal("10.00"));
         line.setTaxIncludedTotalPrice(new BigDecimal("113.00"));
         line.setUntaxedTotalPrice(new BigDecimal("100.00"));
-        line.setActualShipDate(LocalDate.of(2026, 8, 9));
         line.setRemark("remark");
         return line;
     }

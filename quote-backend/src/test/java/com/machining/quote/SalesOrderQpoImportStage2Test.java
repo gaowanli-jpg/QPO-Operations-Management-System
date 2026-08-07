@@ -69,9 +69,9 @@ class SalesOrderQpoImportStage2Test {
                 new ByteArrayInputStream(workbookBytes(fullHeaders(), List.of(
                         row(1, LocalDate.of(2026, 7, 2), "ROW-PO-001", "ROW-CP-001", "ROW-TITLE",
                                 "样品订单", "ROW-IP-001", null, null, "P-001", 10, null, null, null,
-                                "A", null, null, null, null, null),
+                                "A", null, null, null, null),
                         row(2, null, null, null, null, null, null, null, null, "P-002", 5, null,
-                                null, null, "B", null, null, null, null, null)
+                                null, null, "B", null, null, null, null)
                 ))),
                 defaults);
 
@@ -197,7 +197,6 @@ class SalesOrderQpoImportStage2Test {
                 "VAT单价-含税",
                 "未税单价(CNY)",
                 "（未税）金额",
-                "实际出货日期",
                 "备注"
         );
     }

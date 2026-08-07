@@ -34,6 +34,5 @@ public class SalesOrderQpoExcelLineDTO {
     private BigDecimal untaxedUnitPrice;
     private BigDecimal taxIncludedTotalPrice;
     private BigDecimal untaxedTotalPrice;
-    private LocalDate actualShipDate;
     private String remark;
 }

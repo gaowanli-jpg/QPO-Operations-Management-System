@@ -29,7 +29,6 @@ public class SalesOrderU9SyncPreviewLine {
     private BigDecimal untaxedUnitPrice;
     private BigDecimal untaxedTotalPrice;
     private LocalDate deliveryDate;
-    private LocalDate actualShipDate;
     private String remark;
     private Boolean ready;
     private String blockedReason;

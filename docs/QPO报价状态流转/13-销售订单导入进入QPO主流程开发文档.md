@@ -55,7 +55,7 @@
 
 当前 `order_rfq` 只保存 RFQ 号、客户名称、订单类型、状态、工程默认配置和归属信息；当前 `item_quote_version` 已有图号、版本、数量、描述、材料、表面处理、交期、工艺、报价和图纸等字段。
 
-市场实际销售订单模板中的客户订单号、客户项目号、内部项目号、客户下单抬头、销售料号、未税单价、未税总价、含税单价、含税总价、已出数量、未出数量、实际出货日期等字段当前没有完整承载位置。由于这些字段会在 `议价提单` 生成前作为默认参数和提单行快照使用，本阶段优先补齐主表字段。
+市场实际销售订单模板中的客户订单号、客户项目号、内部项目号、客户下单抬头、销售料号、未税单价、未税总价、含税单价、含税总价、已出数量、未出数量等字段当前没有完整承载位置。由于这些字段会在 `议价提单` 生成前作为默认参数和提单行快照使用，本阶段优先补齐主表字段。
 
 ### 4.4 价格追溯口径
 
@@ -99,7 +99,6 @@
 | VAT单价-含税 | `item_quote_version.tax_included_unit_price` | 是 | 含税单价快照，现有提单准入和报价单导出沿用该口径 |
 | 未税单价(CNY) | `item_quote_version.untaxed_unit_price` | 是 | 未税单价快照 |
 | （未税）金额 | `item_quote_version.untaxed_total_price` | 否 | 为空时按未税单价 × 数量计算 |
-| 实际出货日期 | `item_quote_version.actual_ship_date` | 否 | 销售订单行快照 |
 | 备注 | `item_quote_version.remark` | 否 | 原样保存 |
 
 ## 6. 主表字段补齐
@@ -145,7 +144,6 @@
 | `untaxed_total_price` | `NUMERIC(12, 2)` | 未税总价 |
 | `shipped_qty` | `INTEGER DEFAULT 0` | 已出数量 |
 | `unshipped_qty` | `INTEGER DEFAULT 0` | 未出数量 |
-| `actual_ship_date` | `DATE` | 实际出货日期 |
 | `sales_order_import_record_id` | `BIGINT` | 关联导入记录 |
 
 索引建议：

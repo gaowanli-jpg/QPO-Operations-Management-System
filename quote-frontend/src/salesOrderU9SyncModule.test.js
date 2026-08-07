@@ -163,7 +163,6 @@ describe('sales order U9 sync module', () => {
       'label="表面处理"',
       'label="未税单价(CNY)"',
       'label="（未税）金额"',
-      'label="实际出货日期"',
       'label="备注"'
     ]
 
@@ -178,6 +177,7 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('prop="salesMaterialNo"')
     expect(component).not.toContain('label="物料号来源"')
     expect(component).not.toContain('label="来源提单行"')
+    expect(component).not.toContain('label="实际出货日期"')
     expect(component).not.toContain('label="客户订单号"')
     expect(component).not.toContain('label="客户项目号"')
     expect(component).not.toContain('label="订单类型"')

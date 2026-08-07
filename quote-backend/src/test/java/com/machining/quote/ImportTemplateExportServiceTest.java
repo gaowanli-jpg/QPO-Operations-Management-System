@@ -80,8 +80,9 @@ class ImportTemplateExportServiceTest {
                     "序号", "下单日期", "客户订单号", "客户项目号", "客户下单抬头", "订单类型",
                     "内部项目号", "客户交期", "内部交期(给生产的交期)", "图号", "订单数量",
                     "描述", "材料", "表面处理", "版本", "VAT单价-含税", "未税单价(CNY)",
-                    "（未税）金额", "实际出货日期", "备注"
+                    "（未税）金额", "备注"
             );
+            assertThat(headers(dataSheet.getRow(0))).doesNotContain("实际出货日期");
             assertThat(styleAt(dataSheet, 0).getFillPattern()).isEqualTo(FillPatternType.SOLID_FOREGROUND);
             assertThat(styleAt(dataSheet, 9).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 10).getFillForegroundColor());
             assertThat(styleAt(dataSheet, 9).getFillForegroundColor()).isEqualTo(styleAt(dataSheet, 14).getFillForegroundColor());

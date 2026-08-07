@@ -352,7 +352,6 @@ public class SalesOrderU9SyncService {
         line.setUntaxedUnitPrice(item.getUntaxedUnitPrice());
         line.setUntaxedTotalPrice(item.getUntaxedTotalPrice());
         line.setDeliveryDate(preferredDeliveryDate(item));
-        line.setActualShipDate(item.getActualShipDate());
         line.setRemark(item.getRemark());
         String blockedReason = itemBlockedReason(item);
         line.setReady(isBlank(blockedReason));

@@ -47,7 +47,6 @@ public class SalesOrderQpoExcelParser {
     private static final String TAX_INCLUDED_UNIT_PRICE = "VAT\u5355\u4ef7-\u542b\u7a0e";
     private static final String UNTAXED_UNIT_PRICE = "\u672a\u7a0e\u5355\u4ef7(CNY)";
     private static final String UNTAXED_TOTAL_PRICE = "\uff08\u672a\u7a0e\uff09\u91d1\u989d";
-    private static final String ACTUAL_SHIP_DATE = "\u5b9e\u9645\u51fa\u8d27\u65e5\u671f";
     private static final String REMARK = "\u5907\u6ce8";
 
     private static final List<String> REQUIRED_HEADERS = List.of(
@@ -182,7 +181,6 @@ public class SalesOrderQpoExcelParser {
         line.setUntaxedUnitPrice(untaxedUnitPrice);
         line.setTaxIncludedTotalPrice(taxIncludedUnitPrice == null ? null : taxIncludedUnitPrice.multiply(BigDecimal.valueOf(qty)));
         line.setUntaxedTotalPrice(untaxedTotalPrice);
-        line.setActualShipDate(optionalDate(row, headerIndexes, ACTUAL_SHIP_DATE, formatter, evaluator, excelRowNumber));
         line.setRemark(optionalText(row, headerIndexes, REMARK, formatter, evaluator));
         return line;
     }

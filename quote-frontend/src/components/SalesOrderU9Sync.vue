@@ -229,9 +229,6 @@
           <el-table-column prop="untaxedTotalPrice" label="（未税）金额" width="118" align="right">
             <template #default="{ row }">{{ formatMoney(row.untaxedTotalPrice) }}</template>
           </el-table-column>
-          <el-table-column prop="actualShipDate" label="实际出货日期" width="120">
-            <template #default="{ row }">{{ formatDate(row.actualShipDate) }}</template>
-          </el-table-column>
           <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
         </el-table>
       </main>

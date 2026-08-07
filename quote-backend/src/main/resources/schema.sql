@@ -78,7 +78,6 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     untaxed_total_price NUMERIC(12, 2),
     shipped_qty INTEGER DEFAULT 0,
     unshipped_qty INTEGER DEFAULT 0,
-    actual_ship_date DATE,
     sales_order_import_record_id BIGINT,
     status VARCHAR(50),
     drawing_url VARCHAR(500),
@@ -103,7 +102,6 @@ ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS tax_included_total_price
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS untaxed_total_price NUMERIC(12, 2);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS shipped_qty INTEGER DEFAULT 0;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS unshipped_qty INTEGER DEFAULT 0;
-ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS actual_ship_date DATE;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_order_import_record_id BIGINT;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
 ALTER TABLE item_quote_version
@@ -250,7 +248,6 @@ CREATE TABLE IF NOT EXISTS sales_order_item (
     unshipped_qty INTEGER DEFAULT 0,
     released_qty INTEGER DEFAULT 0,
     remaining_qty INTEGER DEFAULT 0,
-    actual_ship_date DATE,
     drawing_url VARCHAR(500),
     has_drawing BOOLEAN DEFAULT FALSE,
     material_gross_weight NUMERIC(14, 4),

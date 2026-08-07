@@ -577,7 +577,6 @@ public class SalesOrderQpoImportService {
         item.setUnshippedQty(line.getUnshippedQty());
         item.setReleasedQty(0);
         item.setRemainingQty(line.getQty());
-        item.setActualShipDate(line.getActualShipDate());
         item.setHasDrawing(false);
         item.setQuoteMode("NORMAL");
         item.setMatchStatus(UNMATCHED);

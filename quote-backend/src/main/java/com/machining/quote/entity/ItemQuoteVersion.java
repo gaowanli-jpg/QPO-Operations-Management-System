@@ -79,8 +79,6 @@ public class ItemQuoteVersion {
     @Deprecated
     private Integer unshippedQty;
     @Deprecated
-    private LocalDate actualShipDate;
-    @Deprecated
     private Long salesOrderImportRecordId;
     private String status; // 状态：未核价 / 已核价 / 已报价 / 已提单 / 无图
 

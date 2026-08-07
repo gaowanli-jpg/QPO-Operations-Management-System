@@ -936,7 +936,6 @@ public class EngineerService {
         copy.setUntaxedTotalPrice(source.getUntaxedTotalPrice());
         copy.setShippedQty(source.getShippedQty());
         copy.setUnshippedQty(source.getUnshippedQty());
-        copy.setActualShipDate(source.getActualShipDate());
         copy.setSalesOrderImportRecordId(source.getSalesOrderImportRecordId());
         copy.setStatus(source.getStatus());
         copy.setDrawingUrl(source.getDrawingUrl());

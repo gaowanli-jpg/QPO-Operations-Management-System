@@ -145,7 +145,6 @@ class SalesOrderU9SyncModuleStage2Test {
                     assertThat(line.getTaxIncludedUnitPrice()).isEqualByComparingTo(ready.getTaxIncludedUnitPrice());
                     assertThat(line.getUntaxedUnitPrice()).isEqualByComparingTo(ready.getUntaxedUnitPrice());
                     assertThat(line.getUntaxedTotalPrice()).isEqualByComparingTo(ready.getUntaxedTotalPrice());
-                    assertThat(line.getActualShipDate()).isEqualTo(ready.getActualShipDate());
                     assertThat(line.getRemark()).isEqualTo(ready.getRemark());
                     assertThat(line.getMaterialNo()).isEqualTo("MAT-READY-001");
                     assertThat(line.getMaterialNoStatus()).isEqualTo("已确认");
@@ -300,7 +299,6 @@ class SalesOrderU9SyncModuleStage2Test {
         item.setTaxIncludedTotalPrice(new BigDecimal("61.70"));
         item.setUntaxedUnitPrice(new BigDecimal("10.92"));
         item.setUntaxedTotalPrice(new BigDecimal("54.60"));
-        item.setActualShipDate(LocalDate.of(2026, 8, 25));
         item.setRemark("销售订单备注");
         item.setStatus(QuoteStatusWorkflow.RELEASED);
         return item;

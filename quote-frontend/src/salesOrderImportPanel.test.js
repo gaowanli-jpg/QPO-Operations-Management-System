@@ -222,6 +222,7 @@ describe('sales order import panel', () => {
     expect(salesOrderPane).not.toContain('已出数量')
     expect(salesOrderPane).not.toContain('未出数量')
     expect(salesOrderPane).not.toContain('未出数量为空时按订单数量-已出数量计算')
+    expect(salesOrderPane).not.toContain('实际出货日期')
   })
 
   test('market API exposes sales order QPO import endpoint under sales-orders namespace', () => {

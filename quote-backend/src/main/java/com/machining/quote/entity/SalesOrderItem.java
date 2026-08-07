@@ -50,7 +50,6 @@ public class SalesOrderItem {
     private Integer unshippedQty;
     private Integer releasedQty;
     private Integer remainingQty;
-    private LocalDate actualShipDate;
     private String drawingUrl;
     private Boolean hasDrawing;
     private Double materialGrossWeight;
