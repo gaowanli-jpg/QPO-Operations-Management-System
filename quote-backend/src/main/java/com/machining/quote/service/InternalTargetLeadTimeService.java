@@ -1343,6 +1343,12 @@ public class InternalTargetLeadTimeService {
         row.put("rfqId", item.getRfqId());
         row.put("partNo", item.getPartNo());
         row.put("version", item.getVersion());
+        row.put("salesOrderDate", item.getSalesOrderDate());
+        row.put("customerOrderNo", item.getCustomerOrderNo());
+        row.put("customerProjectNo", item.getCustomerProjectNo());
+        row.put("customerOrderTitle", item.getCustomerOrderTitle());
+        row.put("orderType", item.getOrderType());
+        row.put("internalProjectNo", item.getInternalProjectNo());
         String drawingUrl = item.getDrawingUrl();
         row.put("drawingUrl", drawingUrl);
         row.put("hasDrawing", drawingUrl != null && !drawingUrl.trim().isEmpty());

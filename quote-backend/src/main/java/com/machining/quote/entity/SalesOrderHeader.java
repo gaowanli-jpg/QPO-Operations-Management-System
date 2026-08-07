@@ -21,6 +21,9 @@ public class SalesOrderHeader {
     private String customerCode;
     private String customerShortName;
     private String customerName;
+    private String sourceType;
+    private String sourceReleaseBatchKey;
+    private String sourceReleaseRequestHash;
     private LocalDate salesOrderDate;
     private String customerOrderNo;
     private String customerProjectNo;

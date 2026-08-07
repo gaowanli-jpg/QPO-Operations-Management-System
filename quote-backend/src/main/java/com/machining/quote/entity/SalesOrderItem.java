@@ -18,6 +18,10 @@ public class SalesOrderItem {
     private Long id;
 
     private Long salesOrderId;
+    private String sourceType;
+    private Long sourceOrderId;
+    private Long sourceItemId;
+    private Integer sourceTicketId;
     private LocalDate salesOrderDate;
     private Integer lineNo;
     private String partNo;

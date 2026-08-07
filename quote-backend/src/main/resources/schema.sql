@@ -50,9 +50,11 @@ CREATE TABLE IF NOT EXISTS item_quote_version (
     qty INTEGER NOT NULL,
     version VARCHAR(20) DEFAULT 'V1',
     order_type VARCHAR(20),
+    sales_order_date DATE,
     sales_order_line_no INTEGER,
     customer_order_no VARCHAR(120),
     customer_project_no VARCHAR(120),
+    customer_order_title VARCHAR(255),
     internal_project_no VARCHAR(120),
     sales_material_no VARCHAR(120),
     customer_delivery_date DATE,
@@ -90,8 +92,10 @@ ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_target_lead_tim
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS material_gross_weight NUMERIC(14, 4);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS part_net_weight NUMERIC(14, 4) DEFAULT 0;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_order_line_no INTEGER;
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_order_date DATE;
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_order_no VARCHAR(120);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_project_no VARCHAR(120);
+ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_order_title VARCHAR(255);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS internal_project_no VARCHAR(120);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS sales_material_no VARCHAR(120);
 ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_delivery_date DATE;
@@ -196,6 +200,9 @@ CREATE TABLE IF NOT EXISTS sales_order_header (
     customer_code VARCHAR(200),
     customer_short_name VARCHAR(200),
     customer_name VARCHAR(200),
+    source_type VARCHAR(30) NOT NULL DEFAULT 'DIRECT_IMPORT',
+    source_release_batch_key VARCHAR(100),
+    source_release_request_hash VARCHAR(64),
     sales_order_date DATE,
     customer_order_no VARCHAR(120),
     customer_project_no VARCHAR(120),
@@ -223,6 +230,10 @@ CREATE TABLE IF NOT EXISTS sales_order_header (
 CREATE TABLE IF NOT EXISTS sales_order_item (
     id BIGSERIAL PRIMARY KEY,
     sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id) ON DELETE CASCADE,
+    source_type VARCHAR(30) NOT NULL DEFAULT 'DIRECT_IMPORT',
+    source_order_id BIGINT,
+    source_item_id BIGINT,
+    source_ticket_id INTEGER,
     line_no INTEGER,
     part_no VARCHAR(100) NOT NULL,
     description TEXT,
@@ -278,6 +289,53 @@ ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS item_count INTEGE
 ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS customer_requirement TEXT;
 ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS sales_order_date DATE;
 ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS customer_order_title VARCHAR(255);
+ALTER TABLE sales_order_header ADD COLUMN IF NOT EXISTS source_type VARCHAR(30);
+ALTER TABLE sales_order_header ADD COLUMN IF NOT EXISTS source_release_batch_key VARCHAR(100);
+ALTER TABLE sales_order_header ADD COLUMN IF NOT EXISTS source_release_request_hash VARCHAR(64);
+UPDATE sales_order_header
+SET source_type = 'DIRECT_IMPORT'
+WHERE source_type IS NULL OR BTRIM(source_type) = '';
+ALTER TABLE sales_order_header
+    ALTER COLUMN source_type SET DEFAULT 'DIRECT_IMPORT',
+    ALTER COLUMN source_type SET NOT NULL;
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS source_type VARCHAR(30);
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS source_order_id BIGINT;
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS source_item_id BIGINT;
+ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS source_ticket_id INTEGER;
+UPDATE sales_order_item
+SET source_type = 'DIRECT_IMPORT'
+WHERE source_type IS NULL OR BTRIM(source_type) = '';
+ALTER TABLE sales_order_item
+    ALTER COLUMN source_type SET DEFAULT 'DIRECT_IMPORT',
+    ALTER COLUMN source_type SET NOT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_sales_order_header_release_source'
+          AND conrelid = 'sales_order_header'::regclass
+    ) THEN
+        ALTER TABLE sales_order_header
+            ADD CONSTRAINT chk_sales_order_header_release_source
+            CHECK (
+                source_type <> 'RFQ_RELEASE'
+                OR (
+                    NULLIF(BTRIM(source_release_batch_key), '') IS NOT NULL
+                    AND NULLIF(BTRIM(source_release_request_hash), '') IS NOT NULL
+                )
+            );
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS sales_order_source_rfq (
+    id BIGSERIAL PRIMARY KEY,
+    sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id) ON DELETE CASCADE,
+    rfq_id INTEGER NOT NULL REFERENCES order_rfq(id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sales_order_source_rfq UNIQUE (sales_order_id, rfq_id)
+);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sales_order_header_no
     ON sales_order_header(sales_order_no);
@@ -291,6 +349,13 @@ CREATE INDEX IF NOT EXISTS idx_sales_order_header_customer
 CREATE INDEX IF NOT EXISTS idx_sales_order_header_customer_order_no
     ON sales_order_header(customer_order_no);
 
+CREATE UNIQUE INDEX IF NOT EXISTS uk_sales_order_header_release_batch
+    ON sales_order_header(source_release_batch_key)
+    WHERE source_release_batch_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_header_source_type_created
+    ON sales_order_header(source_type, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_sales_order_item_order_id_id
     ON sales_order_item(sales_order_id, id);
 
@@ -302,6 +367,19 @@ CREATE INDEX IF NOT EXISTS idx_sales_order_item_part_version_id
 
 CREATE INDEX IF NOT EXISTS idx_sales_order_item_material_no_id
     ON sales_order_item(material_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_item_source_order_item
+    ON sales_order_item(source_type, source_order_id, source_item_id, id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_sales_order_item_source_ticket
+    ON sales_order_item(source_ticket_id)
+    WHERE source_ticket_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_source_rfq_rfq
+    ON sales_order_source_rfq(rfq_id, sales_order_id);
+
+CREATE INDEX IF NOT EXISTS idx_sales_order_source_rfq_sales_order
+    ON sales_order_source_rfq(sales_order_id, rfq_id);
 
 CREATE INDEX IF NOT EXISTS idx_sales_order_import_record_sales_order_id
     ON sales_order_import_record(sales_order_id);
@@ -463,6 +541,20 @@ ALTER TABLE order_delivery_ticket
 ALTER TABLE order_delivery_ticket
     ALTER COLUMN process_route SET DEFAULT '[]'::jsonb,
     ALTER COLUMN material_data SET DEFAULT '{}'::jsonb;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_sales_order_item_source_ticket'
+          AND conrelid = 'sales_order_item'::regclass
+    ) THEN
+        ALTER TABLE sales_order_item
+            ADD CONSTRAINT fk_sales_order_item_source_ticket
+            FOREIGN KEY (source_ticket_id) REFERENCES order_delivery_ticket(id);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation (
     id SERIAL PRIMARY KEY,

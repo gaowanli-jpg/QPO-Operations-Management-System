@@ -21,13 +21,12 @@ public class ItemQuoteVersion {
     private Integer qty;            // 数量
     private String version;         // 版本 (保留你原有的)
     private String orderType;       // 订单类型 (保留你原有的)
+    private LocalDate salesOrderDate;
     @Deprecated
     private Integer salesOrderLineNo;
-    @Deprecated
     private String customerOrderNo;
-    @Deprecated
     private String customerProjectNo;
-    @Deprecated
+    private String customerOrderTitle;
     private String internalProjectNo;
     @Deprecated
     private String salesMaterialNo;
