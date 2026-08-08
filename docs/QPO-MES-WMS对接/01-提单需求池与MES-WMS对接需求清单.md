@@ -1,5 +1,7 @@
 # QPO 提单需求池与 MES/WMS 对接需求清单
 
+> 2026-08-08 两级工艺主数据阶段 15 收口：`order_delivery_ticket.process_route` 统一保存标准工艺快照，内部字段包含 `processDetailId / processCode / categoryName / detailName / hourlyRate / unitWorkHours / lineCost / sortNo`；WMS allocation 复制该快照用于展示和追溯；MES 生产下发只对外传 `processCode / categoryName / detailName / unitWorkHours / sortNo`，不传 QPO 内部工艺成本字段。
+
 ## 1. 背景
 
 QPO 原规划中，`order_delivery_ticket` 作为已提单零件明细表向 APS 提供同步数据。当前需求调整为不再对接 APS，改为对接 MES 和 WMS：
@@ -27,6 +29,7 @@ QPO 原规划中，`order_delivery_ticket` 作为已提单零件明细表向 APS
 - 同一个订单零件 `item_id` 可以因分批提单产生多条需求行。
 - `qty` 表示该提单需求行的原始需求数量。
 - `process_route` 表示本批次提单时的工艺快照。
+- `process_route` 使用两级工艺标准快照，工艺身份以 `processDetailId + processCode + categoryName + detailName` 固化，后续字典价格变化不改写历史提单事实。
 - `material_data`、材料重量、零件净重等字段继续作为提单快照保存。
 - 原始提单需求行不因 WMS 拆分而删除或改写为多行。
 

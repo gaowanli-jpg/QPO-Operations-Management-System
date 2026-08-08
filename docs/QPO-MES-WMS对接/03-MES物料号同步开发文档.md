@@ -16,6 +16,8 @@
 
 > 数据中心统一对接阶段 8 收口：MES 物料号获取底层调用使用 `MES_MATERIAL_RESOLVE` endpoint，链路为 `QPO -> 数据中心 -> MES`。同图号版本去重仍由 QPO 负责，数据中心只需要转发主 `mesRequestId` 的 MES 结果；QPO 收到主请求即时成功或回调成功后负责 fan-out 写回 follower。
 
+> 2026-08-08 两级工艺主数据阶段 15 收口：MES 物料号同步不重新计算工艺路线，也不记录完整 `processRoute` JSON；已提零件只携带提单时固化的标准工艺快照用于后续 WMS、待产、锁库和生产下发追溯。MES 生产下发的结构化工艺路线详见 `09-提供给MES的待生产下发接口对接说明.md`。
+
 ## 1. 背景
 
 `02-基础数据模型与已提零件模块开发文档.md` 完成后，QPO 已经具备：
@@ -66,10 +68,10 @@
   -> 后端校验权限和数据范围
   -> 创建 system_task: MES_MATERIAL_SYNC
   -> ticket.mes_sync_status = PROCESSING
-  -> 先按 图号 + 版本 判断是否可复用或关联活跃主请求
-  -> 如果可复用已确认物料号：不调用 MES，直接写 SUCCESS
+  -> 先按 图号 + 版本 判断是否存在活跃主请求
+  -> 如果提单行已继承前置匹配确认物料号：保持 SUCCESS，不进入 MES 待处理池
   -> 如果已有活跃主请求：不调用 MES，当前行作为 FOLLOWER 等待主请求
-  -> 如果没有可复用结果和活跃主请求：当前行成为 MASTER，异步调用 MES
+  -> 如果没有活跃主请求：当前行成为 MASTER，异步调用 MES
   -> MES 情况 A：即时返回 materialNo
       -> ticket.material_no = materialNo
       -> ticket.mes_sync_status = SUCCESS

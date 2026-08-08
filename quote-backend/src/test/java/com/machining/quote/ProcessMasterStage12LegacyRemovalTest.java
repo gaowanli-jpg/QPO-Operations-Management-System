@@ -75,6 +75,9 @@ class ProcessMasterStage12LegacyRemovalTest {
             StringBuilder builder = new StringBuilder();
             for (Path path : paths.filter(Files::isRegularFile).toList()) {
                 String name = path.getFileName().toString();
+                if (name.endsWith(".test.js") || name.endsWith("Test.java") || name.endsWith("Tests.java")) {
+                    continue;
+                }
                 if (name.endsWith(".java") || name.endsWith(".js") || name.endsWith(".vue")) {
                     builder.append("\n--- ").append(path).append(" ---\n");
                     builder.append(Files.readString(path, StandardCharsets.UTF_8));

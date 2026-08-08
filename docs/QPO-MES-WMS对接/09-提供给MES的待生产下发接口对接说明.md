@@ -2,6 +2,8 @@
 
 > 数据中心统一对接阶段 8 收口：本接口说明交付对象为数据中心。QPO 生产下发底层调用使用 `MES_PRODUCTION_DISPATCH` endpoint，链路为 `QPO -> 数据中心 -> MES`，数据中心负责转发到 MES 生产接口；MES 具体接收 path 由数据中心和 MES 团队在数据中心侧维护。
 
+> 2026-08-08 两级工艺主数据阶段 15 收口：本接口只发送结构化工艺路线 `processCode / categoryName / detailName / unitWorkHours / sortNo`。`hourlyRate / unitRate / lineCost / cost` 等 QPO 内部核价成本字段只保留在 QPO 快照和内部展示中，不进入 MES 生产下发请求。
+
 ## 1. 适用范围
 
 本文档描述 QPO 待产零件模块通过数据中心向 MES 下发待生产零件的接口。该接口只处理 WMS 锁库后仍需生产的待产 allocation 行，不替代 MES 物料号获取接口，也不处理库存锁定结果回传。
