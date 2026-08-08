@@ -256,6 +256,7 @@ import {
 } from '../services/deliveredItemApi'
 import { getTask } from '../services/taskApi'
 import { usePendingAction } from '../composables/usePendingAction'
+import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const PRODUCTION_ITEM_VIEW_PERMISSION = 'market:production-item:view'
 const PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:production-item:mes-production-submit'
@@ -543,22 +544,7 @@ const formatWeight = (value) => {
   return numeric.toFixed(3).replace(/\.?0+$/, '')
 }
 
-const formatProcessRoute = (route) => {
-  if (!route) return '-'
-  let rows = Array.isArray(route) ? route : []
-  if (typeof route === 'string') {
-    try {
-      rows = JSON.parse(route)
-    } catch {
-      rows = []
-    }
-  }
-  if (!Array.isArray(rows) || rows.length === 0) return '-'
-  return rows
-    .map(row => `${row.processName || row.name || ''}${row.inputVal ? `(${row.inputVal})` : ''}`)
-    .filter(Boolean)
-    .join(' / ') || '-'
-}
+const formatProcessRoute = (route) => formatProcessRouteSnapshot(route)
 
 onMounted(() => {
   syncFiltersFromRouteQuery()

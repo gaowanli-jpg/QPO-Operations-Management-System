@@ -213,6 +213,7 @@ import {
   listLockedItems,
   listTicketAllocations
 } from '../services/deliveredItemApi'
+import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
@@ -380,22 +381,7 @@ const formatWeight = (value) => {
   return numeric.toFixed(3).replace(/\.?0+$/, '')
 }
 
-const formatProcessRoute = (route) => {
-  if (!route) return '-'
-  let rows = Array.isArray(route) ? route : []
-  if (typeof route === 'string') {
-    try {
-      rows = JSON.parse(route)
-    } catch {
-      rows = []
-    }
-  }
-  if (!Array.isArray(rows) || rows.length === 0) return '-'
-  return rows
-    .map(row => `${row.processName || row.name || ''}${row.inputVal ? `(${row.inputVal})` : ''}`)
-    .filter(Boolean)
-    .join(' / ') || '-'
-}
+const formatProcessRoute = (route) => formatProcessRouteSnapshot(route)
 
 onMounted(() => loadItems())
 </script>

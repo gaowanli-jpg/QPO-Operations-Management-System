@@ -40,6 +40,10 @@ public class ProcessRouteSnapshotService {
         return text.isBlank() ? null : text;
     }
 
+    public int countSnapshotRows(Object routeObject) {
+        return normalizeRows(routeObject).size();
+    }
+
     private List<Map<String, Object>> normalizeRows(Object routeObject) {
         if (routeObject == null) {
             return List.of();

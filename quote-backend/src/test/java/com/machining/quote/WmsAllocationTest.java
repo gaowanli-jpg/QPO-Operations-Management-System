@@ -128,7 +128,8 @@ class WmsAllocationTest {
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         WmsAllocationClient client = mock(WmsAllocationClient.class);
         AuditService auditService = mock(AuditService.class);
-        when(ticketMapper.selectOne(any())).thenReturn(ticket());
+        OrderDeliveryTicket ticket = ticket();
+        when(ticketMapper.selectOne(any())).thenReturn(ticket);
         when(orderMapper.selectById(88)).thenReturn(order());
         when(client.allocate(any())).thenReturn(successResponse(3, locks(lock("MO-001", 4), lock("MO-002", 2))));
         when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
@@ -144,7 +145,8 @@ class WmsAllocationTest {
                 .containsEntry("allocationCount", 4)
                 .containsEntry("inStockQty", 3)
                 .containsEntry("inProductionQty", 6)
-                .containsEntry("productionRequiredQty", 1);
+                .containsEntry("productionRequiredQty", 1)
+                .containsEntry("processRouteCount", 1);
         ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
         verify(allocationMapper, times(4)).insert(allocationCaptor.capture());
         assertThat(allocationCaptor.getAllValues())
@@ -179,7 +181,9 @@ class WmsAllocationTest {
                     assertSnapshot(row, "getCustomerRequirement", "Customer needs burr-free edges");
                     assertSnapshot(row, "getDescription", "Bracket");
                     assertSnapshot(row, "getDeliveryDate", LocalDate.of(2026, 8, 12));
-                    assertSnapshot(row, "getProcessRoute", List.of(Map.of("processName", "CNC", "inputVal", "2h")));
+                    assertThat(row.getProcessRoute()).isEqualTo(ticket.getProcessRoute());
+                    assertThat(row.getProcessRoute()).isNotSameAs(ticket.getProcessRoute());
+                    assertStandardProcessRoute(row.getProcessRoute());
                     assertSnapshot(row, "getMaterialData", Map.of("shape", "板材", "name", "7075"));
                     assertSnapshot(row, "getMaterialGrossWeight", 12.345);
                     assertSnapshot(row, "getPartNetWeight", 10.2);
@@ -313,7 +317,7 @@ class WmsAllocationTest {
                         "WMS allocation started",
                         "WMS allocation completed",
                         "WMS allocation failed",
-                        "log.error(\"WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} durationMs={}\""
+                        "log.error(\"WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} processRouteCount={} durationMs={}\""
                 );
     }
 
@@ -469,7 +473,7 @@ class WmsAllocationTest {
                         "row.setCustomerRequirement(ticket.getCustomerRequirement())",
                         "row.setDescription(ticket.getDescription())",
                         "row.setDeliveryDate(ticket.getDeliveryDate())",
-                        "row.setProcessRoute(ticket.getProcessRoute())",
+                        "row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))",
                         "row.setMaterialData(ticket.getMaterialData())",
                         "row.setMaterialGrossWeight(ticket.getMaterialGrossWeight())",
                         "row.setPartNetWeight(ticket.getPartNetWeight())",
@@ -568,7 +572,18 @@ class WmsAllocationTest {
         ticket.setCustomerRequirement("Customer needs burr-free edges");
         ticket.setDescription("Bracket");
         ticket.setDeliveryDate(LocalDate.of(2026, 8, 12));
-        ticket.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", "2h")));
+        ticket.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "process"),
+                Map.entry("sortNo", 10),
+                Map.entry("processCategoryId", 3L),
+                Map.entry("processDetailId", 7L),
+                Map.entry("processCode", "PACKAGING"),
+                Map.entry("categoryName", "包装"),
+                Map.entry("detailName", "精细包装"),
+                Map.entry("hourlyRate", 10.0),
+                Map.entry("unitWorkHours", 1.5),
+                Map.entry("lineCost", 15.0))));
         ticket.setMaterialData(Map.of("shape", "板材", "name", "7075"));
         ticket.setMaterialGrossWeight(12.345);
         ticket.setPartNetWeight(10.2);
@@ -614,6 +629,20 @@ class WmsAllocationTest {
         } catch (ReflectiveOperationException error) {
             throw new AssertionError("Allocation snapshot getter missing or inaccessible: " + getterName, error);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertStandardProcessRoute(Object processRoute) {
+        assertThat(processRoute).isInstanceOf(List.class);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) processRoute;
+        assertThat(rows).singleElement().satisfies(route -> {
+            assertThat(route).containsEntry("processCode", "PACKAGING");
+            assertThat(route).containsEntry("categoryName", "包装");
+            assertThat(route).containsEntry("detailName", "精细包装");
+            assertThat(((Number) route.get("hourlyRate")).doubleValue()).isEqualTo(10.0);
+            assertThat(((Number) route.get("unitWorkHours")).doubleValue()).isEqualTo(1.5);
+            assertThat(((Number) route.get("lineCost")).doubleValue()).isEqualTo(15.0);
+        });
     }
 
     private void setSnapshot(Object row, String setterName, Object value) {

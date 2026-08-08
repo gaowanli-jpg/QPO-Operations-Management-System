@@ -291,6 +291,7 @@ import {
 } from '../services/deliveredItemApi'
 import { getTask } from '../services/taskApi'
 import { usePendingAction } from '../composables/usePendingAction'
+import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const router = useRouter()
 const { isPending, runAction } = usePendingAction()
@@ -628,22 +629,7 @@ const formatMesBatchCount = (result, key) => {
   return Number.isFinite(Number(value)) ? Number(value) : 0
 }
 
-const formatProcessRoute = (route) => {
-  if (!route) return '-'
-  let rows = Array.isArray(route) ? route : []
-  if (typeof route === 'string') {
-    try {
-      rows = JSON.parse(route)
-    } catch {
-      rows = []
-    }
-  }
-  if (!Array.isArray(rows) || rows.length === 0) return '-'
-  return rows
-    .map(row => `${row.processName || row.name || ''}${row.inputVal ? `(${row.inputVal})` : ''}`)
-    .filter(Boolean)
-    .join(' / ') || '-'
-}
+const formatProcessRoute = (route) => formatProcessRouteSnapshot(route)
 
 onMounted(() => loadItems())
 </script>

@@ -56,6 +56,8 @@ public class SalesOrderManageService {
     private AuditService auditService;
     @Autowired(required = false)
     private BusinessFileService businessFileService;
+    @Autowired(required = false)
+    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
         if (customerMasterService != null) {
@@ -608,7 +610,7 @@ public class SalesOrderManageService {
         sheet.setHeatTreatment("");
         sheet.setDeliveryDate(ticket.getDeliveryDate());
         sheet.setRemark(ticket.getRemark());
-        sheet.setProcessRoute(ticket.getProcessRoute());
+        sheet.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));
         return sheet;
     }
 

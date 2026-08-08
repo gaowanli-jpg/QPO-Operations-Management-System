@@ -61,6 +61,8 @@ public class DeliveryService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
     private RfqReleaseSalesOrderService rfqReleaseSalesOrderService;
+    @Autowired(required = false)
+    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
 
     @Transactional
     public List<OrderDeliveryTicket> generateRfqTickets(DeliveryGenerateReq req) {
@@ -253,8 +255,8 @@ public class DeliveryService {
         }
         refreshSalesOrderHeaderStatus(header);
         recordSalesOrderImportAutoDeliveryAudit(header, createdTickets, startedAt);
-        log.info("Sales order import auto delivery completed sourceOrderId={} ticketCount={} durationMs={}",
-                salesOrderId, createdTickets.size(), System.currentTimeMillis() - startedAt);
+        log.info("Sales order import auto delivery completed sourceOrderId={} ticketCount={} processRouteCount={} durationMs={}",
+                salesOrderId, createdTickets.size(), countProcessRoutes(createdTickets), System.currentTimeMillis() - startedAt);
         return createdTickets;
     }
 
@@ -440,8 +442,9 @@ public class DeliveryService {
         }
         refreshSalesOrderHeaderStatus(header);
         auditService.record("DELIVERY_TICKET_GENERATE", "sales_order_header", salesOrderId, null, createdTickets);
-        log.info("Delivery ticket generation completed sourceType={} sourceOrderId={} ticketCount={} durationMs={}",
-                ReleaseSourceType.SALES_ORDER.name(), salesOrderId, createdTickets.size(), System.currentTimeMillis() - startedAt);
+        log.info("Delivery ticket generation completed sourceType={} sourceOrderId={} ticketCount={} processRouteCount={} durationMs={}",
+                ReleaseSourceType.SALES_ORDER.name(), salesOrderId, createdTickets.size(), countProcessRoutes(createdTickets),
+                System.currentTimeMillis() - startedAt);
         return createdTickets;
     }
 
@@ -546,7 +549,7 @@ public class DeliveryService {
         ticket.setCustomerRequirement(item.getCustomerRequirement());
         ticket.setArrangeType(arrangeType);
         ticket.setDrawingUrl(item.getDrawingUrl());
-        ticket.setProcessRoute(item.getProcessRoute());
+        ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()));
         ticket.setMaterialData(item.getMaterialData());
         ticket.setMaterialGrossWeight(item.getMaterialGrossWeight());
         ticket.setPartNetWeight(item.getPartNetWeight());
@@ -607,6 +610,7 @@ public class DeliveryService {
         summary.put("sourceOrderId", header.getId());
         summary.put("salesOrderNo", header.getSalesOrderNo());
         summary.put("ticketCount", createdTickets == null ? 0 : createdTickets.size());
+        summary.put("processRouteCount", countProcessRoutes(createdTickets));
         summary.put("ticketIds", createdTickets == null ? List.of() : createdTickets.stream()
                 .map(OrderDeliveryTicket::getId)
                 .toList());
@@ -685,8 +689,17 @@ public class DeliveryService {
         sheet.setHeatTreatment("");
         sheet.setDeliveryDate(ticket.getDeliveryDate());
         sheet.setRemark(ticket.getRemark());
-        sheet.setProcessRoute(ticket.getProcessRoute());
+        sheet.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));
         return sheet;
+    }
+
+    private int countProcessRoutes(List<OrderDeliveryTicket> tickets) {
+        if (tickets == null || tickets.isEmpty()) {
+            return 0;
+        }
+        return tickets.stream()
+                .mapToInt(ticket -> processRouteSnapshotService.countSnapshotRows(ticket.getProcessRoute()))
+                .sum();
     }
 
     private String normalizePartNo(String partNo) {

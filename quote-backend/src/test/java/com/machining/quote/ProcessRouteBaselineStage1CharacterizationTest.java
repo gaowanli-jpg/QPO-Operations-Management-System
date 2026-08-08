@@ -111,15 +111,15 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                         "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))");
         assertThat(deliveryService)
                 .contains(
-                        "ticket.setProcessRoute(item.getProcessRoute())",
-                        "sheet.setProcessRoute(ticket.getProcessRoute())");
+                        "ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()))",
+                        "sheet.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
         assertThat(salesMatchService)
                 .contains(
                         "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))",
                         "row.setSourceProcessRouteSummary(processRouteSnapshotService.formatSnapshot(source.getProcessRoute()))",
                         "processSnapshotAvailable");
         assertThat(wmsAllocationService)
-                .contains("row.setProcessRoute(ticket.getProcessRoute())");
+                .contains("row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
         assertThat(mesProductionService)
                 .contains("req.setProcessRoute(allocation.getProcessRoute())");
         assertThat(mesProductionReq)

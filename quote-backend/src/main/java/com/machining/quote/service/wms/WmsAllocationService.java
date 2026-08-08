@@ -11,6 +11,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.ProcessRouteSnapshotService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,14 +47,17 @@ public class WmsAllocationService {
     private AuditService auditService;
     @Autowired(required = false)
     private TransactionTemplate transactionTemplate;
+    @Autowired(required = false)
+    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
 
     public Map<String, Object> allocate(Integer ticketId, Long taskId) {
         long startedAt = System.currentTimeMillis();
         OrderDeliveryTicket ticket = loadTicketForUpdate(ticketId);
         assertCanStart(ticket);
         OrderRfq order = loadOrder(ticket);
-        log.info("WMS allocation started ticketId={} taskId={} rfqId={} materialNo={} demandQty={}",
-                ticket.getId(), taskId, ticket.getRfqId(), ticket.getMaterialNo(), ticket.getQty());
+        int processRouteCount = processRouteSnapshotService.countSnapshotRows(ticket.getProcessRoute());
+        log.info("WMS allocation started ticketId={} taskId={} rfqId={} materialNo={} demandQty={} processRouteCount={}",
+                ticket.getId(), taskId, ticket.getRfqId(), ticket.getMaterialNo(), ticket.getQty(), processRouteCount);
         markProcessing(ticket);
         try {
             WmsAllocationReq req = buildRequest(ticket, order);
@@ -62,17 +66,17 @@ public class WmsAllocationService {
             writeSuccessRows(ticket, plan, resp.getMessage());
             Map<String, Object> summary = summary(ticket, taskId, plan, resp);
             recordAudit("DELIVERY_WMS_ALLOCATION_SUCCESS", ticket, taskId, summary, "SUCCESS", null);
-            log.info("WMS allocation completed ticketId={} taskId={} allocationCount={} inStockQty={} inProductionQty={} productionRequiredQty={} durationMs={}",
+            log.info("WMS allocation completed ticketId={} taskId={} allocationCount={} inStockQty={} inProductionQty={} productionRequiredQty={} processRouteCount={} durationMs={}",
                     ticket.getId(), taskId, plan.rows().size(), plan.inStockQty(), plan.inProductionQty(),
-                    plan.productionRequiredQty(), System.currentTimeMillis() - startedAt);
+                    plan.productionRequiredQty(), processRouteCount, System.currentTimeMillis() - startedAt);
             return summary;
         } catch (RuntimeException error) {
             markFailed(ticket, error.getMessage());
             Map<String, Object> summary = failureSummary(ticket, taskId, error.getMessage());
             recordAudit("DELIVERY_WMS_ALLOCATION_FAILED", ticket, taskId, summary, "FAILED", error.getMessage());
-            log.error("WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} durationMs={}",
+            log.error("WMS allocation failed ticketId={} taskId={} rfqId={} materialNo={} processRouteCount={} durationMs={}",
                     ticket.getId(), taskId, ticket.getRfqId(), ticket.getMaterialNo(),
-                    System.currentTimeMillis() - startedAt, error);
+                    processRouteCount, System.currentTimeMillis() - startedAt, error);
             throw error;
         }
     }
@@ -234,7 +238,7 @@ public class WmsAllocationService {
         row.setCustomerRequirement(ticket.getCustomerRequirement());
         row.setDescription(ticket.getDescription());
         row.setDeliveryDate(ticket.getDeliveryDate());
-        row.setProcessRoute(ticket.getProcessRoute());
+        row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));
         row.setMaterialData(ticket.getMaterialData());
         row.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
         row.setPartNetWeight(ticket.getPartNetWeight());
@@ -351,6 +355,7 @@ public class WmsAllocationService {
         summary.put("version", ticket.getVersion());
         summary.put("materialNo", ticket.getMaterialNo());
         summary.put("internalProjectNo", ticket.getInternalProjectNo());
+        summary.put("processRouteCount", processRouteSnapshotService.countSnapshotRows(ticket.getProcessRoute()));
         return summary;
     }
 

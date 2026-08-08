@@ -93,7 +93,7 @@ class QuoteStatusWorkflowStage1Test {
                 .contains("private Double materialGrossWeight")
                 .contains("private Double partNetWeight");
         assertThat(deliveryService)
-                .contains("ticket.setProcessRoute(item.getProcessRoute())")
+                .contains("ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()))")
                 .contains("ticket.setMaterialData(item.getMaterialData())")
                 .contains("ticket.setMaterialGrossWeight(item.getMaterialGrossWeight())")
                 .contains("ticket.setPartNetWeight");

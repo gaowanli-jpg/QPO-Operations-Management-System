@@ -167,6 +167,8 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(partialTicket.getMaterialName()).isEqualTo("6061");
         assertThat(partialTicket.getEngineeringMaterialName()).isEqualTo("7075");
         assertThat(partialTicket.getMaterialData()).isEqualTo(Map.of("name", "7075"));
+        assertThat(partialTicket.getProcessRoute()).isEqualTo(first.getProcessRoute());
+        assertThat(partialTicket.getProcessRoute()).isNotSameAs(first.getProcessRoute());
         assertThat(partialTicket.getDrawingUrl()).isEqualTo("/drawings/SO-P-1.pdf");
         assertThat(partialTicket.getRemark()).isEqualTo("Sales order remark SO-P-1");
         assertThat(partialTicket.getCustomerRequirement()).isEqualTo("Customer requirement SO-P-1");
@@ -541,7 +543,18 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setTaxIncludedUnitPrice(BigDecimal.valueOf(12.34));
         item.setTaxIncludedTotalPrice(BigDecimal.valueOf(12.34 * qty));
         item.setInternalDeliveryDate(LocalDate.of(2026, 8, 15));
-        item.setProcessRoute(List.of(Map.of("processName", "CNC")));
+        item.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "process"),
+                Map.entry("sortNo", 10),
+                Map.entry("processCategoryId", 3L),
+                Map.entry("processDetailId", 7L),
+                Map.entry("processCode", "PACKAGING"),
+                Map.entry("categoryName", "包装"),
+                Map.entry("detailName", "精细包装"),
+                Map.entry("hourlyRate", 10.0),
+                Map.entry("unitWorkHours", 1.5),
+                Map.entry("lineCost", 15.0))));
         item.setMaterialData(Map.of("name", "7075"));
         item.setMaterialGrossWeight(2.4);
         item.setPartNetWeight(1.8);
