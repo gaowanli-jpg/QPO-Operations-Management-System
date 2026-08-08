@@ -206,6 +206,9 @@
           <el-table-column prop="surfaceTreatment" label="表面处理" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">{{ row.surfaceTreatment || '-' }}</template>
           </el-table-column>
+          <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatRouteSummary(row.currentProcessRouteSummary || row.sourceProcessRouteSummary) }}</template>
+          </el-table-column>
           <el-table-column label="空缺生产快照" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatFieldSummary(row.changedFields) }}</template>
           </el-table-column>
@@ -478,6 +481,8 @@ const formatSnapshotSource = (fieldValue) => {
   }
   return fieldValue
 }
+
+const formatRouteSummary = (value) => value || '-'
 
 const formatFieldSummary = (fields) => {
   if (!fields || Object.keys(fields).length === 0) return '-'

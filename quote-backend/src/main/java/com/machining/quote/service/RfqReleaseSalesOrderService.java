@@ -92,6 +92,8 @@ public class RfqReleaseSalesOrderService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
 
     @Transactional
     public DeliveryBatchResultDTO generate(DeliveryGenerateReq req) {
@@ -365,7 +367,7 @@ public class RfqReleaseSalesOrderService {
         ticket.setCustomerRequirement(item.getCustomerRequirement());
         ticket.setArrangeType(context.arrangeType());
         ticket.setDrawingUrl(item.getDrawingUrl());
-        ticket.setProcessRoute(item.getProcessRoute());
+        ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()));
         ticket.setMaterialData(item.getMaterialData());
         ticket.setMaterialGrossWeight(item.getMaterialGrossWeight());
         ticket.setPartNetWeight(item.getPartNetWeight());
@@ -425,7 +427,7 @@ public class RfqReleaseSalesOrderService {
         item.setItemType(resolveItemType(source));
         item.setAssemblyRelationStatus(resolveAssemblyStatus(source, selectedRelationParents));
         item.setMaterialData(source.getMaterialData());
-        item.setProcessRoute(source.getProcessRoute());
+        item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()));
         item.setFeeData(source.getFeeData());
         item.setRemark(source.getRemark());
         item.setCustomerRequirement(source.getCustomerRequirement());

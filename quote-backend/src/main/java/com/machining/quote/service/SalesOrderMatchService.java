@@ -76,6 +76,8 @@ public class SalesOrderMatchService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private ConfirmedMaterialNoReuseService confirmedMaterialNoReuseService = new ConfirmedMaterialNoReuseService();
+    @Autowired(required = false)
+    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
         if (dataScopeService == null) {
@@ -429,7 +431,7 @@ public class SalesOrderMatchService {
             item.setMaterialData(source.getMaterialData());
         }
         if (item.getProcessRoute() == null) {
-            item.setProcessRoute(source.getProcessRoute());
+            item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()));
         }
         if (item.getFeeData() == null) {
             item.setFeeData(source.getFeeData());
@@ -577,6 +579,7 @@ public class SalesOrderMatchService {
         row.setQty(item.getQty());
         row.setCurrentMatchStatus(defaultText(item.getMatchStatus(), MATCH_STATUS_PENDING));
         row.setAssemblyRelationStatus(defaultText(item.getAssemblyRelationStatus(), "不适用"));
+        row.setCurrentProcessRouteSummary(processRouteSnapshotService.formatSnapshot(item.getProcessRoute()));
         if (source == null) {
             row.setMaterialShape(item.getMaterialShape());
             row.setMatched(false);
@@ -594,6 +597,7 @@ public class SalesOrderMatchService {
         row.setSurfaceTreatment(source.getSurfaceTreatment());
         row.setQuoteMode(source.getQuoteMode());
         row.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
+        row.setSourceProcessRouteSummary(processRouteSnapshotService.formatSnapshot(source.getProcessRoute()));
         row.setWarningMessage(buildWarningMessage(item, source));
         row.setChangedFields(changedFields(item, source));
         row.setProtectedFields(protectedFields(item, source));

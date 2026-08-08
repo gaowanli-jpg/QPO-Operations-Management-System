@@ -28,6 +28,8 @@ public class SalesOrderMatchPreviewRow {
     private String surfaceTreatment;
     private String quoteMode;
     private String itemType;
+    private String currentProcessRouteSummary;
+    private String sourceProcessRouteSummary;
     private String warningMessage;
     private Map<String, Object> changedFields = new LinkedHashMap<>();
     private Map<String, Object> protectedFields = new LinkedHashMap<>();

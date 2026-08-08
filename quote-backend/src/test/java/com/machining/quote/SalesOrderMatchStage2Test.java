@@ -175,6 +175,8 @@ class SalesOrderMatchStage2Test {
                     assertThat(row.getEngineeringMaterialName()).isEqualTo("ENG-新材料");
                     assertThat(row.getMaterialShape()).isEqualTo("PLATE");
                     assertThat(row.getQuoteMode()).isEqualTo("NORMAL");
+                    assertThat(row.getSourceProcessRouteSummary()).contains("PACKAGING", "包装", "精细包装", "¥10", "¥15");
+                    assertThat(row.getCurrentProcessRouteSummary()).isNull();
                     assertThat(row.getChangedFields()).containsKeys("engineeringMaterialName", "quoteMode");
                     assertThat(row.getProtectedFields()).containsKeys("materialName", "surfaceTreatment", "materialNo");
                 });
@@ -191,7 +193,6 @@ class SalesOrderMatchStage2Test {
         String json = new ObjectMapper().writeValueAsString(resp);
         assertThat(json)
                 .doesNotContain("materialData")
-                .doesNotContain("processRoute")
                 .doesNotContain("feeData")
                 .doesNotContain("MASSIVE_JSON");
     }
@@ -324,7 +325,19 @@ class SalesOrderMatchStage2Test {
         source.setEngineeringMaterialName("ENG-" + materialName);
         source.setSurfaceTreatment("历史表处-" + materialName);
         source.setMaterialData(Map.of("large", "MASSIVE_JSON"));
-        source.setProcessRoute(List.of(Map.of("process", "CNC", "payload", "MASSIVE_JSON")));
+        source.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "process"),
+                Map.entry("processCategoryId", 3L),
+                Map.entry("processDetailId", 7L),
+                Map.entry("processCode", "PACKAGING"),
+                Map.entry("categoryName", "包装"),
+                Map.entry("detailName", "精细包装"),
+                Map.entry("processName", "精细包装"),
+                Map.entry("hourlyRate", 10.0),
+                Map.entry("unitWorkHours", 1.5),
+                Map.entry("lineCost", 15.0),
+                Map.entry("payload", "MASSIVE_JSON"))));
         source.setFeeData(List.of(Map.of("fee", "profit", "payload", "MASSIVE_JSON")));
         source.setDrawingUrl("history/" + partNo + ".pdf");
         source.setMaterialGrossWeight(1.25);

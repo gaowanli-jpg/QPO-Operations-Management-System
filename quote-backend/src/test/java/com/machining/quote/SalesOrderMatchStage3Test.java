@@ -89,6 +89,16 @@ class SalesOrderMatchStage3Test {
         assertThat(updated.getItemType()).isEqualTo("普通件");
         assertThat(updated.getMaterialData()).isEqualTo(source.getMaterialData());
         assertThat(updated.getProcessRoute()).isEqualTo(source.getProcessRoute());
+        assertThat(updated.getProcessRoute()).isNotSameAs(source.getProcessRoute());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> copiedRoute = (List<Map<String, Object>>) updated.getProcessRoute();
+        assertThat(copiedRoute).singleElement().satisfies(route -> {
+            assertThat(route).containsEntry("processCode", "PACKAGING");
+            assertThat(route).containsEntry("categoryName", "包装");
+            assertThat(route).containsEntry("detailName", "精细包装");
+            assertThat(route).containsEntry("hourlyRate", 10.0);
+            assertThat(route).containsEntry("lineCost", 15.0);
+        });
         assertThat(updated.getFeeData()).isEqualTo(source.getFeeData());
         assertThat(updated.getDrawingUrl()).isEqualTo("/sales-order/uploaded/P-001.pdf");
         assertThat(updated.getHasDrawing()).isTrue();
@@ -510,7 +520,22 @@ class SalesOrderMatchStage3Test {
         source.setEngineeringMaterialName("ENG-" + materialName);
         source.setSurfaceTreatment("历史表处-" + materialName);
         source.setMaterialData(Map.of("name", materialName, "cost", 50));
-        source.setProcessRoute(List.of(Map.of("sortNo", 10, "processName", "CNC", "inputVal", 1.5)));
+        source.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "process"),
+                Map.entry("sortNo", 10),
+                Map.entry("processCategoryId", 3L),
+                Map.entry("processDetailId", 7L),
+                Map.entry("processCode", "PACKAGING"),
+                Map.entry("categoryName", "包装"),
+                Map.entry("detailName", "精细包装"),
+                Map.entry("processName", "精细包装"),
+                Map.entry("calcType", "工时"),
+                Map.entry("hourlyRate", 10.0),
+                Map.entry("unitWorkHours", 1.5),
+                Map.entry("inputVal", 1.5),
+                Map.entry("unitRate", 10.0),
+                Map.entry("lineCost", 15.0))));
         source.setFeeData(List.of(Map.of("feeName", "profit", "ratePercent", 10)));
         source.setDrawingUrl("history/" + partNo + ".pdf");
         source.setMaterialGrossWeight(1.25);

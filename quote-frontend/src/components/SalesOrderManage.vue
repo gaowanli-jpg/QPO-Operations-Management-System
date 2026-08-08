@@ -725,10 +725,36 @@ const formatRoute = (route) => {
   }
   if (list.length === 0) return '-'
   return list
-    .map(item => `${item.processName || ''}${item.inputVal ? `(${item.inputVal})` : ''}`)
+    .map(formatProcessRouteRow)
     .filter(Boolean)
     .join(' / ')
 }
+
+const formatProcessRouteRow = (row = {}) => {
+  const isFee = String(row.routeType || '').toUpperCase() === 'FEE' || row.sourceType === 'extra'
+  if (isFee) {
+    const feeName = row.processName || row.detailName || row.name || '费用'
+    return row.lineCost ? `${feeName}（${formatCompactMoney(row.lineCost)}）` : feeName
+  }
+  const identity = [row.processCode, row.categoryName, row.detailName || row.processName || row.name]
+    .filter(Boolean)
+    .join(' / ')
+  const metrics = []
+  const workHours = row.unitWorkHours ?? row.inputVal
+  if (workHours) metrics.push(`${formatCompactNumber(workHours)}h`)
+  if (row.hourlyRate ?? row.unitRate) metrics.push(formatCompactMoney(row.hourlyRate ?? row.unitRate))
+  if (row.lineCost) metrics.push(formatCompactMoney(row.lineCost))
+  if (!identity) return metrics.join(' × ')
+  return metrics.length > 0 ? `${identity}（${metrics.join(' × ')}）` : identity
+}
+
+const formatCompactNumber = (value) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return String(value || '')
+  return number.toFixed(3).replace(/\.?0+$/, '')
+}
+
+const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
 </script>
 
 <style scoped>

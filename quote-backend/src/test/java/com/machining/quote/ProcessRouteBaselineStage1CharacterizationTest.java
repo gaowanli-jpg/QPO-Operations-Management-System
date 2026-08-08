@@ -107,16 +107,16 @@ class ProcessRouteBaselineStage1CharacterizationTest {
 
         assertThat(rfqReleaseService)
                 .contains(
-                        "ticket.setProcessRoute(item.getProcessRoute())",
-                        "item.setProcessRoute(source.getProcessRoute())");
+                        "ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()))",
+                        "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))");
         assertThat(deliveryService)
                 .contains(
                         "ticket.setProcessRoute(item.getProcessRoute())",
                         "sheet.setProcessRoute(ticket.getProcessRoute())");
         assertThat(salesMatchService)
                 .contains(
-                        "if (item.getProcessRoute() == null)",
-                        "item.setProcessRoute(source.getProcessRoute())",
+                        "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))",
+                        "row.setSourceProcessRouteSummary(processRouteSnapshotService.formatSnapshot(source.getProcessRoute()))",
                         "processSnapshotAvailable");
         assertThat(wmsAllocationService)
                 .contains("row.setProcessRoute(ticket.getProcessRoute())");

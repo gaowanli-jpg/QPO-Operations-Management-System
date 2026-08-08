@@ -159,6 +159,7 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
         assertThat(parentSalesItem.getMaterialNoStatus()).isEqualTo("已确认");
         assertThat(parentSalesItem.getMaterialNoSource()).isEqualTo("MES");
         assertThat(parentSalesItem.getTaxIncludedTotalPrice()).isEqualByComparingTo("24.00");
+        assertStandardProcessRoute(parentSalesItem.getProcessRoute());
 
         SalesOrderItem childSalesItem = salesItemBySource.get(child.getId().longValue());
         assertThat(childSalesItem.getSalesOrderDate()).isEqualTo(req.getSalesOrderDate());
@@ -191,6 +192,8 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
         assertThat(parentTicket.getInternalProjectNo()).isEqualTo("ITEM-INTERNAL");
         assertThat(parentTicket.getMaterialNo()).isEqualTo("MES-STAGE4-001");
         assertThat(parentTicket.getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(parentTicket.getProcessRoute()).isEqualTo(parentSalesItem.getProcessRoute());
+        assertStandardProcessRoute(parentTicket.getProcessRoute());
         assertThat(ticketBySource.get(child.getId().longValue()).getMesSyncStatus()).isEqualTo("PENDING");
 
         List<SalesOrderItemAssemblyRelation> relations = salesAssemblyMapper.selectList(
@@ -219,6 +222,23 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
         assertThatThrownBy(() -> deliveryService.generateRfqReleaseBatch(req))
                 .hasMessageContaining("提单批次参数与首次提交不一致");
         assertThat(countHeaders(req.getReleaseBatchKey())).isEqualTo(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertStandardProcessRoute(Object processRoute) {
+        assertThat(processRoute).isInstanceOf(List.class);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) processRoute;
+        assertThat(rows).singleElement().satisfies(route -> {
+            assertThat(route).containsEntry("processCode", "PACKAGING");
+            assertThat(route).containsEntry("categoryName", "包装");
+            assertThat(route).containsEntry("detailName", "精细包装");
+            assertThat(((Number) route.get("processCategoryId")).longValue()).isEqualTo(3L);
+            assertThat(((Number) route.get("processDetailId")).longValue()).isEqualTo(7L);
+            assertThat(((Number) route.get("hourlyRate")).doubleValue()).isEqualTo(10.0);
+            assertThat(((Number) route.get("unitWorkHours")).doubleValue()).isEqualTo(1.5);
+            assertThat(((Number) route.get("lineCost")).doubleValue()).isEqualTo(15.0);
+            assertThat(route).containsEntry("sortNo", 10);
+        });
     }
 
     private CustomerMaster customer(String customerName, String customerCode) {
@@ -257,6 +277,22 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
         item.setUntaxedUnitPrice(10.0);
         item.setUntaxedTotalPrice(10.0 * qty);
         item.setLeadTime("5");
+        item.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "process"),
+                Map.entry("sortNo", 10),
+                Map.entry("processCategoryId", 3L),
+                Map.entry("processDetailId", 7L),
+                Map.entry("processCode", "PACKAGING"),
+                Map.entry("categoryName", "包装"),
+                Map.entry("detailName", "精细包装"),
+                Map.entry("processName", "精细包装"),
+                Map.entry("calcType", "工时"),
+                Map.entry("hourlyRate", 10.0),
+                Map.entry("unitWorkHours", 1.5),
+                Map.entry("inputVal", 1.5),
+                Map.entry("unitRate", 10.0),
+                Map.entry("lineCost", 15.0))));
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         item.setDrawingUrl("/stage4/" + partNo + ".pdf");
         itemMapper.insert(item);
