@@ -14,35 +14,44 @@ class ProcessRouteBaselineStage1CharacterizationTest {
             "..", "docs", "QPO报价状态流转", "38-数据库基线重建与两级工艺主数据全链路重构开发文档.md");
 
     @Test
-    void currentProcessDictionaryIsSingleLayerWithTieredPricesBeforeRefactor() throws IOException {
-        String entity = read(Path.of(
-                "src", "main", "java", "com", "machining", "quote", "entity", "DictProcess.java"));
+    void processDictionaryRuntimeUsesTwoLevelMasterWithoutTieredPrices() throws IOException {
+        Path legacyEntity = Path.of(
+                "src", "main", "java", "com", "machining", "quote", "entity", "DictProcess.java");
+        Path legacyMapper = Path.of(
+                "src", "main", "java", "com", "machining", "quote", "mapper", "DictProcessMapper.java");
+        String categoryEntity = read(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessCategory.java"));
+        String detailEntity = read(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessDetail.java"));
         String schema = read(Path.of("src", "main", "resources", "schema.sql"));
-        String baselineMigration = read(Path.of("src", "main", "resources", "db", "migration", "V1__baseline.sql"));
 
-        assertThat(entity)
-                .as("Stage 1 freezes the legacy process table shape before replacing it with category/detail tables")
+        assertThat(legacyEntity).doesNotExist();
+        assertThat(legacyMapper).doesNotExist();
+        assertThat(categoryEntity)
                 .contains(
-                        "@TableName(\"dict_process\")",
-                        "private String processName;",
-                        "private String calcType;",
-                        "@TableField(\"price_1_5\")",
-                        "private Double price1To5;",
-                        "@TableField(\"price_3000_plus\")",
-                        "private Double price3000Plus;")
-                .doesNotContain("processCode", "processDetailId", "hourlyRate");
+                        "@TableName(\"dict_process_category\")",
+                        "private String processCode;",
+                        "private String categoryName;",
+                        "private BigDecimal hourlyRate;")
+                .doesNotContain("price1To5", "price3000Plus");
+        assertThat(detailEntity)
+                .contains(
+                        "@TableName(\"dict_process_detail\")",
+                        "private Long categoryId;",
+                        "private String detailName;")
+                .doesNotContain("price1To5", "price3000Plus");
         assertThat(schema)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS dict_process",
-                        "process_name VARCHAR(50)",
-                        "price_1_5 NUMERIC(10, 2)",
-                        "price_3000_plus NUMERIC(10, 2)",
-                        "CREATE UNIQUE INDEX IF NOT EXISTS idx_dict_process_name ON dict_process(process_name)");
-        assertThat(baselineMigration)
-                .contains(
-                        "CREATE TABLE IF NOT EXISTS dict_process",
-                        "price_1_5 NUMERIC(10, 2)",
-                        "price_3000_plus NUMERIC(10, 2)");
+                        "CREATE TABLE IF NOT EXISTS dict_process_category",
+                        "process_code VARCHAR(64) NOT NULL",
+                        "hourly_rate NUMERIC(18, 4) NOT NULL DEFAULT 0",
+                        "CREATE TABLE IF NOT EXISTS dict_process_detail",
+                        "category_id BIGINT NOT NULL REFERENCES dict_process_category(id) ON DELETE RESTRICT")
+                .doesNotContain(
+                        "CREATE TABLE IF NOT EXISTS dict_process (",
+                        "price_1_5",
+                        "price_3000_plus",
+                        "idx_dict_process_name");
     }
 
     @Test
@@ -155,11 +164,15 @@ class ProcessRouteBaselineStage1CharacterizationTest {
         assertThat(plan)
                 .contains("APS 相关代码只作为历史兼容读取，不作为新设计目标");
         assertThat(apsSource)
-                .as("The legacy APS reader may still parse old route keys, but Stage 38 must not design around it")
+                .as("The legacy APS endpoint stays read-only, but its work-hour process list now reads the two-level QPO process master")
                 .contains(
+                        "private DictProcessCategoryMapper processCategoryMapper;",
+                        "private DictProcessDetailMapper processDetailMapper;",
+                        "processDetailMapper.selectList(qw)",
+                        "processCategoryMapper.selectList(qw)",
                         "row.get(\"unitRate\")",
                         "row.get(\"lineCost\")")
-                .doesNotContain("dict_process_category", "dict_process_detail", "MesProductionProcessRouteDTO");
+                .doesNotContain("DictProcessMapper", "MesProductionProcessRouteDTO");
     }
 
     private static Path service(String name) {

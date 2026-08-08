@@ -28,7 +28,8 @@ public class AuditLogQueryService {
     private static final List<String> TARGET_TYPES = List.of(
             "erp_user",
             "dict_material",
-            "dict_process",
+            "dict_process_category",
+            "dict_process_detail",
             "dict_markup_fee",
             "dict_assembly_markup_fee",
             "dict_extra_fee_item",

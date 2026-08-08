@@ -7,12 +7,14 @@ import com.machining.quote.dto.aps.ApsDeliveryItemBatchDTO;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.dto.aps.ApsProcessDTO;
 import com.machining.quote.entity.DictExtraFeeItem;
-import com.machining.quote.entity.DictProcess;
+import com.machining.quote.entity.DictProcessCategory;
+import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
-import com.machining.quote.mapper.DictProcessMapper;
+import com.machining.quote.mapper.DictProcessCategoryMapper;
+import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -45,7 +47,9 @@ public class ApsSourceService {
     @Autowired
     private OrderRfqMapper orderRfqMapper;
     @Autowired
-    private DictProcessMapper processMapper;
+    private DictProcessCategoryMapper processCategoryMapper;
+    @Autowired
+    private DictProcessDetailMapper processDetailMapper;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
 
@@ -94,20 +98,41 @@ public class ApsSourceService {
     }
 
     private List<ApsProcessDTO> listWorkHourProcesses() {
-        QueryWrapper<DictProcess> qw = new QueryWrapper<>();
-        qw.orderByAsc("sort_no").orderByAsc("id");
-        return processMapper.selectList(qw).stream()
-                .filter(process -> !stringValue(process.getProcessName()).isEmpty())
-                .map(process -> {
+        QueryWrapper<DictProcessDetail> qw = new QueryWrapper<>();
+        qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
+        List<DictProcessDetail> details = processDetailMapper.selectList(qw);
+        Set<Long> categoryIds = details.stream()
+                .map(DictProcessDetail::getCategoryId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<Long, DictProcessCategory> categories = loadProcessCategories(categoryIds);
+        return details.stream()
+                .filter(detail -> !stringValue(detail.getDetailName()).isEmpty())
+                .filter(detail -> {
+                    DictProcessCategory category = categories.get(detail.getCategoryId());
+                    return category != null && !Boolean.FALSE.equals(category.getEnabled());
+                })
+                .map(detail -> {
+                    DictProcessCategory category = categories.get(detail.getCategoryId());
                     ApsProcessDTO row = new ApsProcessDTO();
-                    row.setSourceId(process.getId());
-                    row.setProcessName(process.getProcessName().trim());
+                    row.setSourceId(toSafeInteger(detail.getId()));
+                    row.setProcessName(detail.getDetailName().trim());
                     row.setProcessType(WORK_HOUR_PROCESS);
                     row.setCalcType(WORK_HOUR);
-                    row.setSortNo(process.getSortNo());
+                    row.setSortNo(firstInt(detail.getSortNo(), category.getSortNo()));
                     return row;
                 })
                 .toList();
+    }
+
+    private Map<Long, DictProcessCategory> loadProcessCategories(Set<Long> categoryIds) {
+        if (categoryIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<DictProcessCategory> qw = new QueryWrapper<>();
+        qw.in("id", categoryIds);
+        return processCategoryMapper.selectList(qw).stream()
+                .collect(Collectors.toMap(DictProcessCategory::getId, Function.identity(), (left, right) -> left));
     }
 
     private List<ApsProcessDTO> listNonWorkHourProcesses() {
@@ -347,6 +372,17 @@ public class ApsSourceService {
     private Integer intValue(Object value) {
         Double number = doubleValue(value);
         return number == null ? null : number.intValue();
+    }
+
+    private Integer firstInt(Integer primary, Integer fallback) {
+        return primary != null ? primary : fallback;
+    }
+
+    private Integer toSafeInteger(Long value) {
+        if (value == null || value > Integer.MAX_VALUE || value < Integer.MIN_VALUE) {
+            return null;
+        }
+        return value.intValue();
     }
 
     private Double doubleValue(Object value) {

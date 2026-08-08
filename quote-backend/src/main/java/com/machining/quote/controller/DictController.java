@@ -6,12 +6,10 @@ import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
-import com.machining.quote.entity.DictProcess;
 import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
-import com.machining.quote.mapper.DictProcessMapper;
 import com.machining.quote.service.AuditService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -24,8 +22,6 @@ import java.util.Map;
 public class DictController {
     @Autowired
     private DictMaterialMapper materialMapper;
-    @Autowired
-    private DictProcessMapper processMapper;
     @Autowired
     private DictMarkupFeeMapper markupFeeMapper;
     @Autowired
@@ -70,43 +66,6 @@ public class DictController {
         materialMapper.deleteById(id);
         auditService.record("DICT_MATERIAL_DELETE", "dict_material", id, before, null);
         return Map.of("success", true, "message", "材料已删除");
-    }
-
-    @GetMapping("/processes")
-    @RequirePermission("engineer:dict:view")
-    public List<DictProcess> listProcesses() {
-        QueryWrapper<DictProcess> qw = new QueryWrapper<>();
-        qw.orderByAsc("sort_no").orderByAsc("id");
-        return processMapper.selectList(qw);
-    }
-
-    @PostMapping("/processes")
-    @RequirePermission("engineer:dict:process-manage")
-    public Map<String, Object> createProcess(@RequestBody DictProcess process) {
-        normalizeProcess(process);
-        processMapper.insert(process);
-        auditService.record("DICT_PROCESS_CREATE", "dict_process", process.getId(), null, process);
-        return Map.of("success", true, "message", "工艺已新增", "data", process);
-    }
-
-    @PutMapping("/processes/{id}")
-    @RequirePermission("engineer:dict:process-manage")
-    public Map<String, Object> updateProcess(@PathVariable Integer id, @RequestBody DictProcess process) {
-        DictProcess before = processMapper.selectById(id);
-        process.setId(id);
-        normalizeProcess(process);
-        processMapper.updateById(process);
-        auditService.record("DICT_PROCESS_UPDATE", "dict_process", id, before, process);
-        return Map.of("success", true, "message", "工艺已更新", "data", process);
-    }
-
-    @DeleteMapping("/processes/{id}")
-    @RequirePermission("engineer:dict:process-manage")
-    public Map<String, Object> deleteProcess(@PathVariable Integer id) {
-        DictProcess before = processMapper.selectById(id);
-        processMapper.deleteById(id);
-        auditService.record("DICT_PROCESS_DELETE", "dict_process", id, before, null);
-        return Map.of("success", true, "message", "工艺已删除");
     }
 
     @GetMapping("/markup-fees")
@@ -248,14 +207,6 @@ public class DictController {
         if (material.getDensity() == null) {
             material.setDensity(firstNonNull(material.getPlateDensity(), material.getBarDensity(), material.getTubeDensity()));
         }
-    }
-
-    private void normalizeProcess(DictProcess process) {
-        if (isBlank(process.getProcessName())) {
-            throw new RuntimeException("工序名称不能为空");
-        }
-        process.setProcessName(process.getProcessName().trim());
-        process.setCalcType("工时");
     }
 
     private void normalizeMarkupFee(DictMarkupFee fee) {

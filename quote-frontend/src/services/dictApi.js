@@ -25,20 +25,6 @@ export const deleteMaterial = (id) => request(`/api/dict/materials/${id}`, {
   method: 'DELETE'
 })
 
-export const listProcesses = () => request('/api/dict/processes')
-
-export const saveProcess = (payload) => {
-  const id = payload?.id
-  return request(id ? `/api/dict/processes/${id}` : '/api/dict/processes', {
-    method: id ? 'PUT' : 'POST',
-    data: payload
-  })
-}
-
-export const deleteProcess = (id) => request(`/api/dict/processes/${id}`, {
-  method: 'DELETE'
-})
-
 export const listProcessCategories = ({ enabledOnly } = {}) => request(
   `/api/dict/process-categories${buildQuery({ enabledOnly })}`
 )

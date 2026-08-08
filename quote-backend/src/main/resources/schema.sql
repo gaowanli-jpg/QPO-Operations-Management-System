@@ -429,24 +429,51 @@ DROP INDEX IF EXISTS idx_dict_material_name;
 CREATE INDEX IF NOT EXISTS idx_dict_material_name ON dict_material(material_name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dict_material_name_remarks ON dict_material(material_name, remarks);
 
-CREATE TABLE IF NOT EXISTS dict_process (
-    id SERIAL PRIMARY KEY,
-    process_name VARCHAR(50),
-    calc_type VARCHAR(20),
-    sort_no INTEGER,
-    price_1_5 NUMERIC(10, 2),
-    price_5_10 NUMERIC(10, 2),
-    price_10_50 NUMERIC(10, 2),
-    price_50_100 NUMERIC(10, 2),
-    price_100_500 NUMERIC(10, 2),
-    price_500_1000 NUMERIC(10, 2),
-    price_1000_3000 NUMERIC(10, 2),
-    price_3000_plus NUMERIC(10, 2)
+CREATE TABLE IF NOT EXISTS dict_process_category (
+    id BIGSERIAL PRIMARY KEY,
+    process_code VARCHAR(64) NOT NULL,
+    category_name VARCHAR(120) NOT NULL,
+    hourly_rate NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    remarks VARCHAR(500),
+    source_type VARCHAR(30) NOT NULL DEFAULT 'LOCAL',
+    mes_external_id VARCHAR(120),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_no INTEGER NOT NULL DEFAULT 0,
+    mes_synced_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_dict_process_category_code UNIQUE (process_code),
+    CONSTRAINT chk_dict_process_category_rate CHECK (hourly_rate >= 0),
+    CONSTRAINT chk_dict_process_category_source CHECK (source_type IN ('LOCAL', 'MES'))
 );
 
-ALTER TABLE dict_process ADD COLUMN IF NOT EXISTS sort_no INTEGER;
+CREATE TABLE IF NOT EXISTS dict_process_detail (
+    id BIGSERIAL PRIMARY KEY,
+    category_id BIGINT NOT NULL REFERENCES dict_process_category(id) ON DELETE RESTRICT,
+    detail_name VARCHAR(120) NOT NULL,
+    detail_remarks VARCHAR(500),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_no INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_dict_process_detail_category_name UNIQUE (category_id, detail_name)
+);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_dict_process_name ON dict_process(process_name);
+CREATE INDEX IF NOT EXISTS idx_dict_process_category_enabled_sort
+    ON dict_process_category(enabled, sort_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_dict_process_category_name
+    ON dict_process_category(category_name, id);
+
+CREATE INDEX IF NOT EXISTS idx_dict_process_category_mes_external
+    ON dict_process_category(mes_external_id)
+    WHERE mes_external_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_dict_process_detail_category_enabled_sort
+    ON dict_process_detail(category_id, enabled, sort_no, id);
+
+CREATE INDEX IF NOT EXISTS idx_dict_process_detail_name
+    ON dict_process_detail(detail_name, id);
 
 CREATE TABLE IF NOT EXISTS dict_markup_fee (
     id SERIAL PRIMARY KEY,
@@ -732,19 +759,25 @@ VALUES
     ('黄铜', '有色金属', '', 8.5000, 8.5000, 45.00, 8.5000, 48.00, 8.5000, 50.00)
 ON CONFLICT (material_name, remarks) DO NOTHING;
 
-INSERT INTO dict_process (
-    process_name, calc_type, sort_no, price_1_5, price_5_10, price_10_50, price_50_100,
-    price_100_500, price_500_1000, price_1000_3000, price_3000_plus
+INSERT INTO dict_process_category (
+    process_code, category_name, hourly_rate, remarks, source_type, enabled, sort_no
 )
 VALUES
-    ('CNC', '工时', 1, 120.00, 100.00, 80.00, 70.00, 60.00, 55.00, 50.00, 45.00),
-    ('线割', '工时', 2, 80.00, 75.00, 70.00, 65.00, 60.00, 55.00, 50.00, 45.00),
-    ('车床', '工时', 3, 100.00, 90.00, 75.00, 65.00, 58.00, 52.00, 48.00, 42.00)
-ON CONFLICT (process_name) DO NOTHING;
+    ('CNC', 'CNC', 120.0000, '本地初始化工艺大类', 'LOCAL', TRUE, 1),
+    ('WIRE_CUT', '线割', 80.0000, '本地初始化工艺大类', 'LOCAL', TRUE, 2),
+    ('LATHE', '车床', 100.0000, '本地初始化工艺大类', 'LOCAL', TRUE, 3)
+ON CONFLICT (process_code) DO NOTHING;
 
-UPDATE dict_process
-SET calc_type = '工时'
-WHERE calc_type IS NULL OR calc_type <> '工时';
+INSERT INTO dict_process_detail (category_id, detail_name, detail_remarks, enabled, sort_no)
+SELECT c.id, seed.detail_name, '本地初始化具体工艺', TRUE, seed.sort_no
+FROM (
+    VALUES
+        ('CNC', 'CNC', 1),
+        ('WIRE_CUT', '线割', 2),
+        ('LATHE', '车床', 3)
+) AS seed(process_code, detail_name, sort_no)
+JOIN dict_process_category c ON c.process_code = seed.process_code
+ON CONFLICT (category_id, detail_name) DO NOTHING;
 
 INSERT INTO dict_markup_fee (fee_name, rate_percent, sort_no, enabled)
 VALUES

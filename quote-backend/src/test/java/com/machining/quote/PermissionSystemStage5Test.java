@@ -54,6 +54,7 @@ class PermissionSystemStage5Test {
         String market = source("MarketController.java");
         String engineer = source("EngineerController.java");
         String dict = source("DictController.java");
+        String processMaster = source("ProcessMasterController.java");
         String quoteProcess = source("QuoteProcessController.java");
         String order = source("OrderManagementController.java");
         String admin = source("AdminController.java");
@@ -88,8 +89,10 @@ class PermissionSystemStage5Test {
         assertThat(dict)
                 .contains("@RequirePermission(\"engineer:dict:view\")")
                 .contains("@RequirePermission(\"engineer:dict:material-manage\")")
-                .contains("@RequirePermission(\"engineer:dict:process-manage\")")
                 .contains("@RequirePermission(\"engineer:dict:fee-manage\")");
+        assertThat(processMaster)
+                .contains("@RequirePermission(\"engineer:dict:view\")")
+                .contains("@RequirePermission(\"engineer:dict:process-manage\")");
         assertThat(quoteProcess)
                 .contains("@RequirePermission(\"market:quote-process:view\")")
                 .contains("@RequirePermission(\"market:quote-process:update-lead-time\")")
