@@ -1,0 +1,21 @@
+package com.machining.quote.dto;
+
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+public class ProcessDetailDTO {
+    private Long id;
+    private Long categoryId;
+    private String processCode;
+    private String categoryName;
+    private BigDecimal hourlyRate;
+    private String detailName;
+    private String detailRemarks;
+    private Boolean enabled;
+    private Integer sortNo;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
