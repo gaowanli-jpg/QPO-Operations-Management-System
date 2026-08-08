@@ -153,6 +153,25 @@ class RfqReleaseDerivedSalesOrderStage1Test {
                 assertThat(tableExists(connection, schema, "sales_order_source_rfq")).isTrue();
                 assertThat(indexExists(connection, schema, "uk_sales_order_header_release_batch")).isTrue();
                 assertThat(indexExists(connection, schema, "uk_sales_order_item_source_ticket")).isTrue();
+
+                insertExplainFixtures(connection, schema);
+                assertExplainUsesIndex(
+                        connection,
+                        "SELECT id FROM sales_order_header WHERE source_release_batch_key = 'batch-1'",
+                        "uk_sales_order_header_release_batch");
+                assertExplainUsesIndex(
+                        connection,
+                        "SELECT sales_order_id FROM sales_order_source_rfq WHERE rfq_id = 2",
+                        "idx_sales_order_source_rfq_rfq");
+                assertExplainUsesIndex(
+                        connection,
+                        "SELECT id FROM sales_order_item WHERE source_type = 'RFQ' "
+                                + "AND source_order_id = 2 AND source_item_id = 12",
+                        "idx_sales_order_item_source_order_item");
+                assertExplainUsesIndex(
+                        connection,
+                        "SELECT id FROM sales_order_item WHERE source_ticket_id = 701",
+                        "uk_sales_order_item_source_ticket");
             } finally {
                 dropTestSchema(connection, schema);
             }
@@ -323,6 +342,42 @@ class RfqReleaseDerivedSalesOrderStage1Test {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getBoolean(1);
             }
+        }
+    }
+
+    private static void insertExplainFixtures(Connection connection, String schema) throws SQLException {
+        setSearchPath(connection, schema);
+        execute(connection, """
+                INSERT INTO sales_order_header (
+                    id, source_type, source_release_batch_key, source_release_request_hash
+                ) VALUES (102, 'RFQ_RELEASE', 'batch-1', repeat('a', 64))
+                """);
+        execute(connection, "INSERT INTO order_rfq(id) VALUES (2)");
+        execute(connection, "INSERT INTO sales_order_source_rfq(sales_order_id, rfq_id) VALUES (102, 2)");
+        execute(connection, "INSERT INTO order_delivery_ticket(id) VALUES (701)");
+        execute(connection, """
+                INSERT INTO sales_order_item (
+                    id, sales_order_id, source_type, source_order_id, source_item_id, source_ticket_id
+                ) VALUES (202, 102, 'RFQ', 2, 12, 701)
+                """);
+        connection.commit();
+    }
+
+    private static void assertExplainUsesIndex(
+            Connection connection,
+            String query,
+            String indexName) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("SET LOCAL enable_seqscan = off");
+            StringBuilder plan = new StringBuilder();
+            try (ResultSet resultSet = statement.executeQuery("EXPLAIN " + query)) {
+                while (resultSet.next()) {
+                    plan.append(resultSet.getString(1)).append('\n');
+                }
+            }
+            assertThat(plan.toString())
+                    .as("EXPLAIN plan for %s", query)
+                    .contains(indexName);
         }
     }
 
