@@ -15,6 +15,60 @@ const numericSortNo = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
+const hasValue = (value) => value !== undefined && value !== null && value !== ''
+
+const numericOrOriginal = (value) => {
+  if (!hasValue(value)) return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : value
+}
+
+const parseProcessDetailIdFromOptionKey = (optionKey) => {
+  const match = String(optionKey || '').match(/^process-detail-(.+)$/)
+  return match?.[1] ? numericOrOriginal(match[1]) : null
+}
+
+const resolveProcessDetailId = (item = {}) => numericOrOriginal(
+  item.processDetailId ?? item.detailId ?? parseProcessDetailIdFromOptionKey(item.optionKey)
+)
+
+const resolveSourceType = (item = {}) => item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process')
+
+const normalizeProcessOptionKey = (item = {}, sourceType = resolveSourceType(item)) => {
+  if (sourceType === 'process') {
+    const processDetailId = resolveProcessDetailId(item)
+    return hasValue(processDetailId) ? `process-detail-${processDetailId}` : ''
+  }
+  return item.optionKey || ''
+}
+
+const normalizeRouteItem = (item = {}, index = 0) => {
+  const sourceType = resolveSourceType(item)
+  const processDetailId = sourceType === 'process' ? resolveProcessDetailId(item) : null
+  const detailName = item.detailName || item.processName || item.feeName || ''
+  const processName = sourceType === 'process' ? detailName : (item.processName || item.feeName || detailName)
+  const legacyProcessIdentity = sourceType === 'process'
+    && !hasValue(processDetailId)
+    && Boolean(item.processName || item.optionKey)
+
+  return {
+    sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
+    optionKey: normalizeProcessOptionKey(item, sourceType),
+    processDetailId,
+    processCategoryId: sourceType === 'process' ? numericOrOriginal(item.processCategoryId ?? item.categoryId) : null,
+    processCode: sourceType === 'process' ? (item.processCode || '') : '',
+    categoryName: sourceType === 'process' ? (item.categoryName || '') : '',
+    detailName: sourceType === 'process' ? detailName : '',
+    hourlyRate: sourceType === 'process' ? numericOrOriginal(item.hourlyRate) : null,
+    processName,
+    calcType: sourceType === 'extra' ? (item.calcType || '非工时费用') : '工时',
+    sourceType,
+    inputVal: item.inputVal,
+    unitWorkHours: item.unitWorkHours ?? item.inputVal,
+    legacyProcessIdentity
+  }
+}
+
 export const sortRouteList = (routes = []) => {
   const withIndex = (routes || []).map((route, index) => ({ route, index }))
   const hasSortNo = withIndex.some(item => numericSortNo(item.route?.sortNo) != null)
@@ -42,14 +96,12 @@ export const normalizeRouteList = (route) => {
       return list
     }
   }
-  return sortRouteList(Array.isArray(list) ? list : []).map((item, index) => ({
-    sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
-    optionKey: item.optionKey || '',
-    processName: item.processName || '',
-    calcType: item.calcType || '工时',
-    sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process'),
-    inputVal: item.inputVal
-  }))
+  return sortRouteList(Array.isArray(list) ? list : []).map(normalizeRouteItem)
+}
+
+export const hasLegacyProcessIdentity = (configOrRoutes) => {
+  const routes = Array.isArray(configOrRoutes) ? configOrRoutes : (configOrRoutes?.processRoute || [])
+  return routes.some(item => item?.legacyProcessIdentity || normalizeRouteItem(item).legacyProcessIdentity)
 }
 
 export const normalizeGlobalConfig = (config) => {

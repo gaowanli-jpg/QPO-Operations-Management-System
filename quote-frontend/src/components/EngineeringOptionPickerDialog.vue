@@ -65,7 +65,18 @@
       </template>
 
       <template v-else>
-        <el-table-column prop="processName" label="工艺/费用名称" min-width="180" fixed show-overflow-tooltip />
+        <el-table-column prop="detailName" label="具体工艺" min-width="170" fixed show-overflow-tooltip>
+          <template #default="{ row }">{{ row.detailName || row.processName || row.feeName || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="processCode" label="大类编码" width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.processCode || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="categoryName" label="大类名称" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.categoryName || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="小时价格" width="120" align="right">
+          <template #default="{ row }">{{ formatHourlyRate(row.hourlyRate) }}</template>
+        </el-table-column>
         <el-table-column label="类型" width="120" align="center">
           <template #default="{ row }">
             <el-tag :type="row.sourceType === 'extra' ? 'warning' : 'info'" size="small">
@@ -138,7 +149,7 @@ const activeKey = ref('')
 const searchPlaceholder = computed(() => (
   props.type === 'material'
     ? '搜索材料名称、类型、备注'
-    : '搜索工艺名称、费用名称、核算方式'
+    : '搜索具体工艺、大类编码、大类名称、费用名称'
 ))
 
 const keyOf = (item) => String(
@@ -152,13 +163,17 @@ const labelOf = (item) => {
   if (props.type === 'material') {
     return item.remarks ? `${item.materialName} ${item.remarks}` : item.materialName
   }
-  return item.label || item.processName || item.feeName || ''
+  return item.label || item.detailName || item.processName || item.feeName || ''
 }
 
 const searchTextOf = (item) => [
   item?.materialName,
   item?.materialType,
   item?.remarks,
+  item?.detailName,
+  item?.processCode,
+  item?.categoryName,
+  item?.hourlyRate,
   item?.processName,
   item?.feeName,
   item?.label,
@@ -210,6 +225,11 @@ const sourceTypeLabel = (row) => (row.sourceType === 'extra' ? '非工时费用'
 const formatNumber = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '-'
+}
+
+const formatHourlyRate = (value) => {
+  const text = formatNumber(value)
+  return text === '-' ? '-' : `${text} 元/小时`
 }
 
 watch(() => props.selectedKey, syncSelectedKey)

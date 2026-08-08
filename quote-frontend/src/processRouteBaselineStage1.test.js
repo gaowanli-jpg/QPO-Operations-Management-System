@@ -27,40 +27,40 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-describe('Stage 38 phase 1 process route baseline', () => {
-  test('global setup currently persists process routes by option key and process name', () => {
+describe('Stage 38 process route frontend contract', () => {
+  test('global setup persists process routes with processDetailId identity when available', () => {
     const store = useGlobalConfigStore()
 
     const config = store.setConfig(38, {
       materialName: '40Cr',
       shape: '棒材',
       processRoute: [
-        { sortNo: 20, optionKey: 'process-2', processName: 'CNC1', calcType: '工时', sourceType: 'process' },
-        { sortNo: 10, optionKey: 'process-1', processName: '铣', calcType: '工时', sourceType: 'process' }
+        { sortNo: 20, processDetailId: 2, processCategoryId: 1, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', hourlyRate: 80, calcType: '工时', sourceType: 'process' },
+        { sortNo: 10, processDetailId: 1, processCategoryId: 1, processCode: 'MILLING', categoryName: '铣削', detailName: '精铣', hourlyRate: 60, calcType: '工时', sourceType: 'process' }
       ]
     })
 
     expect(config.processRoute).toEqual([
-      { sortNo: 10, optionKey: 'process-1', processName: '铣', calcType: '工时', sourceType: 'process', inputVal: undefined },
-      { sortNo: 20, optionKey: 'process-2', processName: 'CNC1', calcType: '工时', sourceType: 'process', inputVal: undefined }
+      expect.objectContaining({ sortNo: 10, optionKey: 'process-detail-1', processDetailId: 1, processCode: 'MILLING', categoryName: '铣削', detailName: '精铣', processName: '精铣', legacyProcessIdentity: false }),
+      expect.objectContaining({ sortNo: 20, optionKey: 'process-detail-2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', legacyProcessIdentity: false })
     ])
-    expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config_38', expect.stringContaining('processName'))
-    expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config', expect.stringContaining('optionKey'))
+    expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config_38', expect.stringContaining('processDetailId'))
+    expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config', expect.stringContaining('process-detail-1'))
   })
 
-  test('normalizeRouteList keeps current legacy process fields sorted by sort number', () => {
+  test('normalizeRouteList sorts routes and marks old processName-only identities', () => {
     const normalized = normalizeRouteList([
       { sortNo: '30', processName: 'CNC-5', calcType: '工时', sourceType: 'process', inputVal: 1.5 },
       { sortNo: '10', processName: '表面处理', calcType: '非工时费用', sourceType: 'extra', inputVal: 200 }
     ])
 
     expect(normalized).toEqual([
-      { sortNo: 10, optionKey: '', processName: '表面处理', calcType: '非工时费用', sourceType: 'extra', inputVal: 200 },
-      { sortNo: 30, optionKey: '', processName: 'CNC-5', calcType: '工时', sourceType: 'process', inputVal: 1.5 }
+      expect.objectContaining({ sortNo: 10, optionKey: '', processName: '表面处理', calcType: '非工时费用', sourceType: 'extra', inputVal: 200, legacyProcessIdentity: false }),
+      expect.objectContaining({ sortNo: 30, optionKey: '', processDetailId: null, processName: 'CNC-5', calcType: '工时', sourceType: 'process', inputVal: 1.5, legacyProcessIdentity: true })
     ])
   })
 
-  test('pricing and global setup pages currently use processName as the route identity', () => {
+  test('global setup has moved to processDetailId while item pricing remains a phase 6 target', () => {
     const itemPricing = readSource('components', 'ItemPricing.vue')
     const globalSetup = readSource('components', 'GlobalSetup.vue')
 
@@ -70,10 +70,10 @@ describe('Stage 38 phase 1 process route baseline', () => {
     expect(itemPricing).toContain('sourceType: p.sourceType || (p.calcType === \'非工时费用\' ? \'extra\' : \'process\')')
     expect(itemPricing).not.toContain('processDetailId: p.processDetailId')
 
-    expect(globalSetup).toContain('processName: item.processName || \'\'')
-    expect(globalSetup).toContain('optionKey: item.optionKey || \'\'')
-    expect(globalSetup).toContain('proc.processName = selected.processName')
-    expect(globalSetup).not.toContain('proc.processDetailId = selected.processDetailId')
+    expect(globalSetup).toContain('processDetailId: item.processDetailId ?? null')
+    expect(globalSetup).toContain('proc.processDetailId = selected.processDetailId')
+    expect(globalSetup).toContain('hasUnresolvedProcessRoute')
+    expect(globalSetup).not.toContain('item.processName === proc.processName && item.sourceType')
   })
 
   test('stage 38 plan documents that these current frontend identities are replacement targets', () => {

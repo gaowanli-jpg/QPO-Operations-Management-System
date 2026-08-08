@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useGlobalConfigStore } from './globalConfigStore'
+import { hasLegacyProcessIdentity, normalizeRouteList, useGlobalConfigStore } from './globalConfigStore'
 
 const createLocalStorage = () => {
   const values = new Map()
@@ -25,7 +25,10 @@ describe('globalConfigStore', () => {
     localStorage.setItem('erp_global_config', JSON.stringify({ materialName: 'fallback', shape: 'bar', processRoute: [] }))
     localStorage.setItem('erp_global_config_12', JSON.stringify({
       materialName: '45#',
-      processRoute: [{ sortNo: '20', processName: 'CNC1' }, { sortNo: '10', processName: 'MILL' }]
+      processRoute: [
+        { sortNo: '20', optionKey: 'process-detail-2', processName: 'CNC1' },
+        { sortNo: '10', processDetailId: 1, processCode: 'MILLING', categoryName: '铣削', detailName: 'MILL' }
+      ]
     }))
     const store = useGlobalConfigStore()
 
@@ -34,6 +37,18 @@ describe('globalConfigStore', () => {
     expect(config.materialName).toBe('45#')
     expect(config.shape).toBe('板材')
     expect(config.processRoute.map(item => item.processName)).toEqual(['MILL', 'CNC1'])
+    expect(config.processRoute.map(item => item.processDetailId)).toEqual([1, 2])
+    expect(config.processRoute.every(item => item.legacyProcessIdentity === false)).toBe(true)
+  })
+
+  test('marks processName-only local routes as legacy reselection candidates', () => {
+    const normalized = normalizeRouteList([{ sortNo: 10, processName: 'CNC1', calcType: '工时', sourceType: 'process' }])
+
+    expect(normalized[0]).toEqual(expect.objectContaining({
+      processDetailId: null,
+      legacyProcessIdentity: true
+    }))
+    expect(hasLegacyProcessIdentity({ processRoute: normalized })).toBe(true)
   })
 
   test('setConfig persists rfq-specific and fallback keys', () => {

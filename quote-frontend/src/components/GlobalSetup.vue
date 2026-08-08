@@ -157,6 +157,14 @@
 
             <section class="erp-dialog-section engineering-config-section">
               <div class="section-title process-title">通用工艺路线排程</div>
+              <el-alert
+                v-if="hasUnresolvedProcessRoute"
+                title="旧工艺模板缺少具体工艺身份，请重新选择具体工艺后再保存。"
+                type="warning"
+                :closable="false"
+                show-icon
+                class="repeat-alert process-identity-alert"
+              />
               <div class="process-box">
                 <el-row :gutter="10" v-for="(proc, index) in config.processRoute" :key="index" class="process-row">
                   <el-col :span="4"><el-tag type="info">第{{ index + 1 }}道</el-tag></el-col>
@@ -265,7 +273,7 @@ import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
-import { useGlobalConfigStore } from '../stores/globalConfigStore'
+import { hasLegacyProcessIdentity, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   createAuthenticatedObjectUrl,
@@ -299,13 +307,12 @@ const itemList = ref([])
 const itemCount = ref(0)
 const previewLimit = ref(10)
 const materialOptions = computed(() => dictionaryStore.materials)
-const processOptions = computed(() => dictionaryStore.processes)
-const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
 const repeatAnalysis = ref(null)
 const engineeringSetupActionKeys = {
   saveSetup: () => `engineer:setup:save-config:${orderInfo.value.id || 'none'}`
 }
 const setupSavePending = computed(() => isPending(engineeringSetupActionKeys.saveSetup()))
+const legacyProcessWarningShown = ref(false)
 
 const selectedOrderLabel = computed(() => (
   orderInfo.value.rfqNo
@@ -323,21 +330,6 @@ const PROCESS_SORT_STEP = 10
 const numericSortNo = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue : null
-}
-const sortRouteList = (routes) => {
-  const withIndex = (routes || []).map((route, index) => ({ route, index }))
-  const hasSortNo = withIndex.some(item => numericSortNo(item.route?.sortNo) != null)
-  if (!hasSortNo) return routes || []
-  return withIndex
-    .sort((a, b) => {
-      const aSort = numericSortNo(a.route?.sortNo)
-      const bSort = numericSortNo(b.route?.sortNo)
-      if (aSort != null && bSort != null && aSort !== bSort) return aSort - bSort
-      if (aSort != null && bSort == null) return -1
-      if (aSort == null && bSort != null) return 1
-      return a.index - b.index
-    })
-    .map(item => item.route)
 }
 const assignProcessSortNos = () => {
   config.processRoute.forEach((proc, index) => {
@@ -357,29 +349,64 @@ const repeatItemMap = computed(() => {
 const config = reactive({
   materialName: '45#',
   shape: '板材',
-  processRoute: [
-    { sortNo: 10, processName: '铣', calcType: '工时', sourceType: 'process' },
-    { sortNo: 20, processName: 'CNC1', calcType: '工时', sourceType: 'process' }
-  ]
+  processRoute: []
 })
+
+const normalizeRouteRow = (item, index) => ({
+  sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
+  optionKey: item.optionKey || '',
+  processDetailId: item.processDetailId ?? null,
+  processCategoryId: item.processCategoryId ?? null,
+  processCode: item.processCode || '',
+  categoryName: item.categoryName || '',
+  detailName: item.detailName || '',
+  hourlyRate: item.hourlyRate ?? null,
+  processName: item.processName || item.detailName || '',
+  calcType: item.calcType || '工时',
+  sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process'),
+  legacyProcessIdentity: Boolean(item.legacyProcessIdentity)
+})
+
+const createBlankProcessRoute = () => ({
+  processName: '',
+  detailName: '',
+  processCode: '',
+  categoryName: '',
+  hourlyRate: null,
+  processDetailId: null,
+  processCategoryId: null,
+  calcType: '工时',
+  sourceType: 'process',
+  optionKey: '',
+  legacyProcessIdentity: false
+})
+
+const isUnresolvedProcessRoute = (proc) => (proc?.sourceType || 'process') === 'process'
+  && (!proc.processDetailId || proc.legacyProcessIdentity)
+
+const hasUnresolvedProcessRoute = computed(() => config.processRoute.some(isUnresolvedProcessRoute))
+
+const notifyLegacyProcessTemplate = () => {
+  if (legacyProcessWarningShown.value) return
+  legacyProcessWarningShown.value = true
+  ElMessage.warning('旧工艺模板缺少具体工艺身份，请重新选择具体工艺后再保存。')
+}
 
 const assignConfig = (source) => {
   if (!source) return
   config.materialName = source.materialName || config.materialName || '45#'
   config.shape = source.shape || config.shape || '板材'
+  const normalizedRoute = normalizeRouteList(source.processRoute || [])
   config.processRoute.splice(
     0,
     config.processRoute.length,
-    ...sortRouteList(source.processRoute || []).map((item, index) => ({
-      sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
-      optionKey: item.optionKey || '',
-      processName: item.processName || '',
-      calcType: item.calcType || '工时',
-      sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process')
-    }))
+    ...normalizedRoute.map(normalizeRouteRow)
   )
   assignProcessSortNos()
   hydrateProcessRoute()
+  if (hasLegacyProcessIdentity({ processRoute: normalizedRoute })) {
+    notifyLegacyProcessTemplate()
+  }
 }
 
 const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
@@ -396,9 +423,14 @@ const selectedMaterialLabel = computed(() => {
 
 const findProcessOption = (proc) => {
   if (!proc) return null
-  return combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
-    || combinedProcessOptions.value.find(item => item.processName === proc.processName && item.sourceType === (proc.sourceType || 'process'))
-    || combinedProcessOptions.value.find(item => item.processName === proc.processName)
+  const sourceType = proc.sourceType || 'process'
+  if (sourceType === 'process') {
+    return combinedProcessOptions.value.find(item => item.sourceType === 'process' && String(item.processDetailId) === String(proc.processDetailId))
+      || combinedProcessOptions.value.find(item => item.sourceType === 'process' && item.optionKey === proc.optionKey && proc.optionKey)
+      || null
+  }
+  return combinedProcessOptions.value.find(item => item.sourceType === sourceType && item.optionKey === proc.optionKey && proc.optionKey)
+    || combinedProcessOptions.value.find(item => item.sourceType === 'extra' && item.processName === proc.processName)
     || null
 }
 
@@ -410,6 +442,15 @@ const selectedProcessOptionKey = computed(() => {
 const formatProcessLabel = (proc, fallback = '请选择工序') => {
   const option = findProcessOption(proc)
   if (option?.label) return option.label
+  if (isUnresolvedProcessRoute(proc) && proc?.processName) return `${proc.processName}（请重新选择具体工艺）`
+  if (proc?.detailName || proc?.processCode || proc?.categoryName) {
+    const detailName = proc.detailName || proc.processName || '-'
+    const processCode = proc.processCode || '-'
+    const categoryName = proc.categoryName || '-'
+    const hourlyRate = Number(proc.hourlyRate)
+    const rateText = Number.isFinite(hourlyRate) ? `${hourlyRate.toFixed(2)}元/小时` : '-'
+    return `${detailName}（${processCode} / ${categoryName} / ${rateText}）`
+  }
   if (proc?.processName) return `${proc.processName}（${proc.calcType || '工时'}）`
   return fallback
 }
@@ -417,9 +458,16 @@ const formatProcessLabel = (proc, fallback = '请选择工序') => {
 const applyProcessSelection = (proc, selected) => {
   if (!proc || !selected) return
   proc.optionKey = selected.optionKey
-  proc.processName = selected.processName
+  proc.processDetailId = selected.processDetailId
+  proc.processCategoryId = selected.processCategoryId
+  proc.processCode = selected.processCode
+  proc.categoryName = selected.categoryName
+  proc.detailName = selected.detailName
+  proc.hourlyRate = selected.hourlyRate
+  proc.processName = selected.detailName || selected.processName
   proc.calcType = selected.calcType
   proc.sourceType = selected.sourceType
+  proc.legacyProcessIdentity = false
 }
 
 const selectMaterial = (material) => {
@@ -439,7 +487,7 @@ const selectProcess = (selected) => {
 }
 
 const addProcess = () => {
-  config.processRoute.push({ processName: '', calcType: '工时', sourceType: 'process', optionKey: '' })
+  config.processRoute.push(createBlankProcessRoute())
   assignProcessSortNos()
 }
 const removeProcess = (index) => {
@@ -448,21 +496,18 @@ const removeProcess = (index) => {
 }
 
 const syncProcessMeta = (proc) => {
-  const selected = combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
+  const selected = findProcessOption(proc)
   if (!selected) return
   applyProcessSelection(proc, selected)
 }
 
 const hydrateProcessRoute = () => {
   config.processRoute.forEach(proc => {
-    if (proc.optionKey) {
-      syncProcessMeta(proc)
+    if ((proc.sourceType || 'process') === 'process' && !proc.processDetailId) {
+      proc.legacyProcessIdentity = Boolean(proc.processName || proc.optionKey)
       return
     }
-    const selected = combinedProcessOptions.value.find(item => item.processName === proc.processName && item.sourceType === (proc.sourceType || 'process'))
-      || combinedProcessOptions.value.find(item => item.processName === proc.processName)
-    if (selected) {
-      proc.optionKey = selected.optionKey
+    if (proc.optionKey || proc.processDetailId) {
       syncProcessMeta(proc)
     }
   })
@@ -475,12 +520,12 @@ const fetchDicts = async () => {
       config.materialName = materialOptions.value[0].materialName
     }
     hydrateProcessRoute()
-    const validOptionKeys = new Set(combinedProcessOptions.value.map(item => item.optionKey))
-    if (config.processRoute.length === 0 || config.processRoute.some(item => !validOptionKeys.has(item.optionKey))) {
+    if (config.processRoute.length === 0) {
+      const defaultProcessOptions = combinedProcessOptions.value.filter(item => item.sourceType === 'process')
       config.processRoute.splice(
         0,
         config.processRoute.length,
-        ...combinedProcessOptions.value.slice(0, 2).map((item, index) => ({
+        ...defaultProcessOptions.slice(0, 2).map((item, index) => ({
           sortNo: (index + 1) * PROCESS_SORT_STEP,
           optionKey: item.optionKey,
           processName: item.processName,
@@ -488,6 +533,9 @@ const fetchDicts = async () => {
           sourceType: item.sourceType
         }))
       )
+      config.processRoute.forEach(syncProcessMeta)
+    } else if (hasUnresolvedProcessRoute.value) {
+      notifyLegacyProcessTemplate()
     }
   } catch (error) {
     console.error(error)
@@ -498,6 +546,9 @@ const fetchDicts = async () => {
 const handleNext = async () => {
   if (!orderInfo.value.id) {
     return ElMessage.warning('请先选择订单并加载数据。')
+  }
+  if (hasUnresolvedProcessRoute.value) {
+    return ElMessage.warning('请重新选择具体工艺后再保存')
   }
 
   return runAction(engineeringSetupActionKeys.saveSetup(), async () => {
@@ -637,19 +688,17 @@ const applyRecommendedConfig = (recommendedConfig) => {
     config.shape = recommendedConfig.shape
   }
   if (recommendedConfig.processRoute?.length > 0) {
+    const normalizedRoute = normalizeRouteList(recommendedConfig.processRoute)
     config.processRoute.splice(
       0,
       config.processRoute.length,
-      ...sortRouteList(recommendedConfig.processRoute).map((item, index) => ({
-        sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
-        optionKey: '',
-        processName: item.processName || '',
-        calcType: item.calcType || '工时',
-        sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process')
-      }))
+      ...normalizedRoute.map(normalizeRouteRow)
     )
     assignProcessSortNos()
     hydrateProcessRoute()
+    if (hasLegacyProcessIdentity({ processRoute: normalizedRoute })) {
+      notifyLegacyProcessTemplate()
+    }
   }
 }
 
