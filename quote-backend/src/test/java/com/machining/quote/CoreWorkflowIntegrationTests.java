@@ -12,6 +12,8 @@ import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.DictProcessCategory;
+import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.dto.ProcessSheetDTO;
@@ -19,6 +21,8 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.CustomerMasterMapper;
+import com.machining.quote.mapper.DictProcessCategoryMapper;
+import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.aps.ApsSourceService;
@@ -32,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -73,6 +78,10 @@ class CoreWorkflowIntegrationTests {
     private ApsSourceService apsSourceService;
     @Autowired
     private CustomerMasterMapper customerMapper;
+    @Autowired
+    private DictProcessCategoryMapper processCategoryMapper;
+    @Autowired
+    private DictProcessDetailMapper processDetailMapper;
 
     @Test
     void orderSummaryPaginationUsesAggregatedCountsAndFilters() {
@@ -447,9 +456,8 @@ class CoreWorkflowIntegrationTests {
         quoteReq.setMaterialData(materialData);
         QuoteSubmitReq.ProcessSubmitDTO process = new QuoteSubmitReq.ProcessSubmitDTO();
         process.setSortNo(10);
-        process.setProcessName("APS-CNC");
-        process.setCalcType("工时");
-        process.setInputVal(2.0);
+        process.setProcessDetailId(ensureTestProcess("TEST_APS_CNC", "APS 测试工艺", "APS-CNC", 10.0).detailId());
+        process.setUnitWorkHours(2.0);
         quoteReq.setProcessRoute(List.of(process));
         engineerService.calculateAndSaveQuote(quoteReq);
 
@@ -580,7 +588,7 @@ class CoreWorkflowIntegrationTests {
         ItemQuoteVersion item = quotedItem(order, "BATCH-100");
         item.setQty(10);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
-        item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 2, "calcType", "工时")));
+        item.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 2.0)));
         itemMapper.updateById(item);
 
         ensureCustomer(order.getCustomerName());
@@ -693,7 +701,7 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setQty(1);
         historicalItem.setDrawingUrl("/uploads/test/P-200.pdf");
         historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
-        historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
+        historicalItem.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 1.0)));
         historicalItem.setTaxIncludedUnitPrice(20.0);
         historicalItem.setTaxIncludedTotalPrice(20.0);
         historicalItem.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
@@ -1039,7 +1047,7 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setDrawingUrl("/uploads/test/AUTO-100.pdf");
         historicalItem.setMaterialName("45#钢");
         historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
-        historicalItem.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
+        historicalItem.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 1.0)));
         historicalItem.setTaxIncludedUnitPrice(20.0);
         historicalItem.setTaxIncludedTotalPrice(20.0);
         historicalItem.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
@@ -1128,12 +1136,67 @@ class CoreWorkflowIntegrationTests {
         item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
         item.setMaterialName("45#钢");
         item.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", unitPrice));
-        item.setProcessRoute(List.of(Map.of("processName", "CNC", "inputVal", 1, "calcType", "工时")));
+        item.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 1.0)));
         item.setTaxIncludedUnitPrice(unitPrice);
         item.setTaxIncludedTotalPrice(unitPrice);
         item.setStatus(status);
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    private Map<String, Object> standardProcessRoute(String processCode,
+                                                     String categoryName,
+                                                     String detailName,
+                                                     double hourlyRate,
+                                                     double unitWorkHours) {
+        TestProcess process = ensureTestProcess(processCode, categoryName, detailName, hourlyRate);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("routeType", "PROCESS");
+        row.put("sourceType", "process");
+        row.put("sortNo", 10);
+        row.put("processCategoryId", process.categoryId());
+        row.put("processDetailId", process.detailId());
+        row.put("processCode", processCode);
+        row.put("categoryName", categoryName);
+        row.put("detailName", detailName);
+        row.put("processName", detailName);
+        row.put("calcType", "工时");
+        row.put("hourlyRate", hourlyRate);
+        row.put("unitWorkHours", unitWorkHours);
+        row.put("inputVal", unitWorkHours);
+        row.put("unitRate", hourlyRate);
+        row.put("lineCost", hourlyRate * unitWorkHours);
+        return row;
+    }
+
+    private TestProcess ensureTestProcess(String processCode, String categoryName, String detailName, double hourlyRate) {
+        DictProcessCategory category = processCategoryMapper.selectOne(new QueryWrapper<DictProcessCategory>()
+                .eq("process_code", processCode));
+        if (category == null) {
+            category = new DictProcessCategory();
+            category.setProcessCode(processCode);
+            category.setCategoryName(categoryName);
+            category.setHourlyRate(BigDecimal.valueOf(hourlyRate));
+            category.setRemarks("test process category");
+            category.setSourceType("LOCAL");
+            category.setEnabled(true);
+            category.setSortNo(0);
+            processCategoryMapper.insert(category);
+        }
+
+        DictProcessDetail detail = processDetailMapper.selectOne(new QueryWrapper<DictProcessDetail>()
+                .eq("category_id", category.getId())
+                .eq("detail_name", detailName));
+        if (detail == null) {
+            detail = new DictProcessDetail();
+            detail.setCategoryId(category.getId());
+            detail.setDetailName(detailName);
+            detail.setDetailRemarks("test process detail");
+            detail.setEnabled(true);
+            detail.setSortNo(0);
+            processDetailMapper.insert(detail);
+        }
+        return new TestProcess(category.getId(), detail.getId());
     }
 
     private DeliveryGenerateReq.DeliveryItemReq deliveryLine(ItemQuoteVersion item) {
@@ -1237,5 +1300,8 @@ class CoreWorkflowIntegrationTests {
         }
         int end = source.indexOf(endToken, start);
         return end < 0 ? source.substring(start) : source.substring(start, end);
+    }
+
+    private record TestProcess(Long categoryId, Long detailId) {
     }
 }

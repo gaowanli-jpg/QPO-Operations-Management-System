@@ -1084,9 +1084,14 @@ const selectedMaterialLabel = computed(() => {
 
 const findProcessOption = (proc) => {
   if (!proc) return null
-  return combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
-    || combinedProcessOptions.value.find(item => item.processName === proc.processName && item.sourceType === (proc.sourceType || 'process'))
-    || combinedProcessOptions.value.find(item => item.processName === proc.processName)
+  const sourceType = resolveProcessSourceType(proc)
+  if (sourceType === 'process') {
+    return combinedProcessOptions.value.find(item => item.sourceType === 'process' && String(item.processDetailId) === String(proc.processDetailId))
+      || combinedProcessOptions.value.find(item => item.sourceType === 'process' && item.optionKey === proc.optionKey && proc.optionKey)
+      || null
+  }
+  return combinedProcessOptions.value.find(item => item.sourceType === sourceType && item.optionKey === proc.optionKey && proc.optionKey)
+    || combinedProcessOptions.value.find(item => item.sourceType === 'extra' && item.processName === proc.processName)
     || null
 }
 
@@ -1098,6 +1103,15 @@ const selectedProcessOptionKey = computed(() => {
 const formatProcessLabel = (proc, fallback = '请选择工序') => {
   const option = findProcessOption(proc)
   if (option?.label) return option.label
+  if (isSelectableProcessRoute(proc) && !proc?.processDetailId && proc?.processName) return `${proc.processName}（请重新选择具体工艺）`
+  if (proc?.detailName || proc?.processCode || proc?.categoryName) {
+    const detailName = proc.detailName || proc.processName || '-'
+    const processCode = proc.processCode || '-'
+    const categoryName = proc.categoryName || '-'
+    const hourlyRate = Number(proc.hourlyRate)
+    const rateText = Number.isFinite(hourlyRate) ? `${hourlyRate.toFixed(2)}元/小时` : '-'
+    return `${detailName}（${processCode} / ${categoryName} / ${rateText}）`
+  }
   if (proc?.processName) return `${proc.processName}（${proc.calcType || '工时'}）`
   return fallback
 }
@@ -1105,7 +1119,13 @@ const formatProcessLabel = (proc, fallback = '请选择工序') => {
 const applyProcessSelection = (proc, selected) => {
   if (!proc || !selected) return
   proc.optionKey = selected.optionKey
-  proc.processName = selected.processName
+  proc.processDetailId = selected.processDetailId
+  proc.processCategoryId = selected.processCategoryId
+  proc.processCode = selected.processCode
+  proc.categoryName = selected.categoryName
+  proc.detailName = selected.detailName
+  proc.hourlyRate = selected.hourlyRate
+  proc.processName = selected.detailName || selected.processName
   proc.calcType = selected.calcType
   proc.sourceType = selected.sourceType
 }
@@ -1188,13 +1208,23 @@ const numericSortNo = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
+const resolveProcessSourceType = (route = {}) => route.sourceType || (route.calcType === '非工时费用' ? 'extra' : 'process')
+const isSelectableProcessRoute = (route = {}) => resolveProcessSourceType(route) === 'process'
+const isExtraFeeRoute = (route = {}) => resolveProcessSourceType(route) === 'extra'
+
 const createProcessRow = (source = {}) => ({
   rowKey: `process-${Date.now()}-${processRouteSeq++}`,
-  processName: source.processName || '',
+  processName: source.sourceType === 'extra' ? (source.processName || '') : (source.detailName || source.processName || ''),
   optionKey: source.optionKey || '',
+  processDetailId: source.processDetailId ?? null,
+  processCategoryId: source.processCategoryId ?? source.categoryId ?? null,
+  processCode: source.processCode || '',
+  categoryName: source.categoryName || '',
+  detailName: source.detailName || '',
+  hourlyRate: source.hourlyRate ?? null,
   calcType: source.calcType || '工时',
   sourceType: source.sourceType || (source.calcType === '非工时费用' ? 'extra' : 'process'),
-  inputVal: numberOrNullForInput(source.inputVal),
+  inputVal: numberOrNullForInput(source.unitWorkHours ?? source.inputVal),
   sortNo: numericSortNo(source.sortNo)
 })
 
@@ -1318,23 +1348,23 @@ const removeProcess = (index) => {
 }
 
 const syncProcessMeta = (proc) => {
-  const selected = combinedProcessOptions.value.find(item => item.optionKey === proc.optionKey)
+  const selected = findProcessOption(proc)
   if (!selected) return
   applyProcessSelection(proc, selected)
 }
 
 const hydrateRouteItem = (proc) => {
-  if (proc.optionKey) {
+  if (isSelectableProcessRoute(proc) && !proc.processDetailId) {
+    return proc
+  }
+  if (proc.optionKey || proc.processDetailId) {
     syncProcessMeta(proc)
     return proc
   }
-  const selected = combinedProcessOptions.value.find(item => item.processName === proc.processName && item.sourceType === (proc.sourceType || 'process'))
-    || combinedProcessOptions.value.find(item => item.processName === proc.processName)
+  if (!isExtraFeeRoute(proc)) return proc
+  const selected = combinedProcessOptions.value.find(item => item.sourceType === 'extra' && item.processName === proc.processName)
   if (selected) {
-    proc.optionKey = selected.optionKey
-    proc.processName = selected.processName
-    proc.calcType = selected.calcType
-    proc.sourceType = selected.sourceType
+    applyProcessSelection(proc, selected)
   }
   return proc
 }
@@ -1373,8 +1403,9 @@ const sortRouteList = (routes) => {
 }
 
 const processRouteKey = (route) => {
-  const sourceType = route.sourceType || (route.calcType === '非工时费用' ? 'extra' : 'process')
-  return `${sourceType}::${route.processName || ''}`
+  const sourceType = resolveProcessSourceType(route)
+  if (sourceType === 'process') return `process::${route.processDetailId || ''}`
+  return `extra::${route.processName || ''}`
 }
 
 const mergeRoutesByGlobalOrder = (savedRoutes, defaultRoutes) => {
@@ -1388,7 +1419,7 @@ const mergeRoutesByGlobalOrder = (savedRoutes, defaultRoutes) => {
   })
 
   return assignProcessSortNos(defaultRows
-    .filter(defaultRoute => defaultRoute.processName)
+    .filter(defaultRoute => isSelectableProcessRoute(defaultRoute) ? defaultRoute.processDetailId : defaultRoute.processName)
     .map(defaultRoute => {
       const savedRoute = savedBuckets.get(processRouteKey(defaultRoute))?.shift()
       return {
@@ -1400,33 +1431,66 @@ const mergeRoutesByGlobalOrder = (savedRoutes, defaultRoutes) => {
 
 const buildQuoteProcessRoute = () => processRoute.value
   .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
-  .filter(p => p.processName && p.inputVal > 0)
-  .map(p => ({
-    sortNo: p.sortNo,
-    processName: p.processName,
-    inputVal: p.inputVal,
-    calcType: p.calcType || '工时'
-  }))
+  .filter(p => p.inputVal > 0 && (isSelectableProcessRoute(p) ? p.processDetailId : p.processName))
+  .map(p => {
+    if (isSelectableProcessRoute(p)) {
+      return {
+        sortNo: p.sortNo,
+        processDetailId: p.processDetailId,
+        unitWorkHours: p.inputVal,
+        calcType: '工时'
+      }
+    }
+    return {
+      sortNo: p.sortNo,
+      processName: p.processName,
+      inputVal: p.inputVal,
+      calcType: '非工时费用',
+      sourceType: 'extra'
+    }
+  })
 
 const buildGlobalProcessRoute = () => processRoute.value
   .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
-  .filter(p => p.processName)
-  .map(p => ({
-    sortNo: p.sortNo,
-    processName: p.processName,
-    optionKey: p.optionKey || '',
-    calcType: p.calcType || '工时',
-    sourceType: p.sourceType || (p.calcType === '非工时费用' ? 'extra' : 'process')
-  }))
+  .filter(p => isSelectableProcessRoute(p) ? p.processDetailId : p.processName)
+  .map(p => {
+    const sourceType = resolveProcessSourceType(p)
+    if (sourceType === 'process') {
+      return {
+        sortNo: p.sortNo,
+        processName: p.detailName || p.processName || '',
+        optionKey: p.optionKey || '',
+        processDetailId: p.processDetailId ?? null,
+        processCategoryId: p.processCategoryId ?? null,
+        processCode: p.processCode || '',
+        categoryName: p.categoryName || '',
+        detailName: p.detailName || p.processName || '',
+        hourlyRate: p.hourlyRate ?? null,
+        calcType: '工时',
+        sourceType
+      }
+    }
+    return {
+      sortNo: p.sortNo,
+      processName: p.processName,
+      optionKey: p.optionKey || '',
+      calcType: '非工时费用',
+      sourceType
+    }
+  })
 
 const comparableProcessRoute = (route) => normalizeRouteList(route)
-  .filter(p => p.processName)
-  .map((p, index) => ({
-    sortNo: (index + 1) * PROCESS_SORT_STEP,
-    processName: p.processName || '',
-    calcType: p.calcType || '工时',
-    sourceType: p.sourceType || (p.calcType === '非工时费用' ? 'extra' : 'process')
-  }))
+  .filter(p => isSelectableProcessRoute(p) ? p.processDetailId : p.processName)
+  .map((p, index) => {
+    const sourceType = resolveProcessSourceType(p)
+    return {
+      sortNo: (index + 1) * PROCESS_SORT_STEP,
+      processDetailId: sourceType === 'process' ? (p.processDetailId ?? null) : null,
+      processName: p.processName || '',
+      calcType: sourceType === 'extra' ? '非工时费用' : '工时',
+      sourceType
+    }
+  })
 
 const syncCurrentRouteToGlobalConfig = async () => {
   const nextProcessRoute = buildGlobalProcessRoute()

@@ -9,7 +9,6 @@ import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
-import com.machining.quote.entity.DictProcess;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
@@ -17,7 +16,6 @@ import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
-import com.machining.quote.mapper.DictProcessMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -47,7 +45,7 @@ public class EngineerService {
     @Autowired
     private ItemAssemblyRelationMapper assemblyRelationMapper;
     @Autowired
-    private DictProcessMapper processMapper;
+    private ProcessRoutePricingService processRoutePricingService;
     @Autowired
     private DictMaterialMapper materialMapper;
     @Autowired
@@ -173,39 +171,24 @@ public class EngineerService {
         String engineeringMaterialName = stringValue(materialData.get("name"));
 
         double totalProcessCost = 0.0;
+        List<Map<String, Object>> pricedProcessRoute = new ArrayList<>();
         Set<String> extraFeeNames = loadEnabledExtraFeeNames();
         if (processRoute != null) {
             for (QuoteSubmitReq.ProcessSubmitDTO process : processRoute) {
-                if (process.getInputVal() == null || process.getInputVal() <= 0) continue;
-
+                if (process == null) continue;
                 if (isExtraFeeProcess(process, extraFeeNames)) {
-                    double lineCost = process.getInputVal();
-                    process.setCalcType("非工时费用");
-                    process.setUnitRate(null);
-                    process.setLineCost(lineCost);
+                    double lineCost = nonNegativeOrZero(process.getInputVal());
+                    if (lineCost <= 0) continue;
+                    pricedProcessRoute.add(extraFeeRouteSnapshot(process, lineCost));
                     totalProcessCost += lineCost;
                     continue;
                 }
 
-                DictProcess dictInfo = findProcess(process.getProcessName());
-                if (dictInfo == null) {
-                    log.warn("Process dictionary missing itemId={} processName={}",
-                            item.getId(), process.getProcessName());
-                    continue;
-                }
-
-                double rate = getTieredRate(dictInfo, qty);
-                if (rate <= 0) {
-                    log.warn("Process rate missing itemId={} processName={} qty={}",
-                            item.getId(), process.getProcessName(), qty);
-                }
-                double lineCost = process.getInputVal() * rate;
-                process.setCalcType("工时");
-                process.setUnitRate(rate);
-                process.setLineCost(lineCost);
-                totalProcessCost += lineCost;
-                log.debug("Process rate matched itemId={} processName={} qty={} rate={}",
-                        item.getId(), process.getProcessName(), qty, rate);
+                List<Map<String, Object>> pricedRows = processRoutePricingService.priceProcessRows(List.of(process));
+                pricedProcessRoute.addAll(pricedRows);
+                totalProcessCost += pricedRows.stream()
+                        .mapToDouble(row -> zeroIfNull(doubleValue(row.get("lineCost"))))
+                        .sum();
             }
         }
 
@@ -222,7 +205,7 @@ public class EngineerService {
         item.setMaterialData(materialData);
         item.setEngineeringMaterialName(engineeringMaterialName);
         item.setMaterialShape(materialShape(materialData));
-        item.setProcessRoute(processRoute);
+        item.setProcessRoute(pricedProcessRoute);
         item.setFeeData(feeBreakdown);
         item.setMaterialGrossWeight(materialGrossWeight);
         item.setPartNetWeight(normalizedPartNetWeight);
@@ -1226,14 +1209,39 @@ public class EngineerService {
         routes.forEach(route -> route.remove("__index"));
     }
 
+    private Map<String, Object> extraFeeRouteSnapshot(QuoteSubmitReq.ProcessSubmitDTO process, double lineCost) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("routeType", "FEE");
+        row.put("sourceType", "extra");
+        row.put("sortNo", process.getSortNo());
+        row.put("processName", process.getProcessName());
+        row.put("calcType", "非工时费用");
+        row.put("inputVal", lineCost);
+        row.put("unitRate", null);
+        row.put("lineCost", lineCost);
+        return row;
+    }
+
     private List<QuoteSubmitReq.ProcessSubmitDTO> toProcessSubmitRows(Object routeObject) {
         List<QuoteSubmitReq.ProcessSubmitDTO> result = new ArrayList<>();
         for (Map<String, Object> row : normalizeProcessRoute(routeObject)) {
             QuoteSubmitReq.ProcessSubmitDTO process = new QuoteSubmitReq.ProcessSubmitDTO();
             process.setSortNo(intValue(row.get("sortNo")));
+            process.setProcessDetailId(longValue(row.get("processDetailId")));
+            process.setProcessCategoryId(longValue(row.get("processCategoryId")));
+            process.setProcessCode(stringValue(row.get("processCode")));
+            process.setCategoryName(stringValue(row.get("categoryName")));
+            process.setDetailName(stringValue(row.get("detailName")));
+            process.setHourlyRate(doubleValue(row.get("hourlyRate")));
+            process.setUnitWorkHours(doubleValue(row.get("unitWorkHours")) == null
+                    ? doubleValue(row.get("inputVal"))
+                    : doubleValue(row.get("unitWorkHours")));
+            process.setSourceType(stringValue(row.get("sourceType")));
             process.setProcessName(stringValue(row.get("processName")));
             process.setCalcType(stringValue(row.get("calcType")));
             process.setInputVal(doubleValue(row.get("inputVal")));
+            process.setUnitRate(doubleValue(row.get("unitRate")));
+            process.setLineCost(doubleValue(row.get("lineCost")));
             result.add(process);
         }
         return result;
@@ -1274,15 +1282,6 @@ public class EngineerService {
         return item.getPartNo() + " / " + normalizeVersion(item.getVersion());
     }
 
-    private DictProcess findProcess(String processName) {
-        if (isBlank(processName)) {
-            return null;
-        }
-        QueryWrapper<DictProcess> qw = new QueryWrapper<>();
-        qw.eq("process_name", processName);
-        return processMapper.selectOne(qw);
-    }
-
     private Set<String> loadEnabledExtraFeeNames() {
         QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
         qw.eq("enabled", true);
@@ -1298,8 +1297,10 @@ public class EngineerService {
 
     private boolean isExtraFeeProcess(QuoteSubmitReq.ProcessSubmitDTO process, Set<String> extraFeeNames) {
         return process != null
-                && !isBlank(process.getProcessName())
-                && extraFeeNames.contains(process.getProcessName().trim());
+                && ("extra".equalsIgnoreCase(process.getSourceType())
+                || "非工时费用".equals(process.getCalcType())
+                || (!isBlank(process.getProcessName())
+                && extraFeeNames.contains(process.getProcessName().trim())));
     }
 
     private List<Map<String, Object>> calculateMarkupFees(double baseCost) {
@@ -1379,17 +1380,6 @@ public class EngineerService {
         return normalized.contains("税")
                 || normalized.contains("tax")
                 || normalized.contains("vat");
-    }
-
-    private double getTieredRate(DictProcess dp, int qty) {
-        if (qty <= 5) return dp.getPrice1To5() != null ? dp.getPrice1To5() : 0;
-        if (qty <= 10) return dp.getPrice5To10() != null ? dp.getPrice5To10() : 0;
-        if (qty <= 50) return dp.getPrice10To50() != null ? dp.getPrice10To50() : 0;
-        if (qty <= 100) return dp.getPrice50To100() != null ? dp.getPrice50To100() : 0;
-        if (qty <= 500) return dp.getPrice100To500() != null ? dp.getPrice100To500() : 0;
-        if (qty <= 1000) return dp.getPrice500To1000() != null ? dp.getPrice500To1000() : 0;
-        if (qty <= 3000) return dp.getPrice1000To3000() != null ? dp.getPrice1000To3000() : 0;
-        return dp.getPrice3000Plus() != null ? dp.getPrice3000Plus() : 0;
     }
 
     private double calculateMaterialCost(Map<String, Object> materialData) {
@@ -1535,6 +1525,11 @@ public class EngineerService {
     private Integer intValue(Object value) {
         Double number = doubleValue(value);
         return number == null ? null : number.intValue();
+    }
+
+    private Long longValue(Object value) {
+        Double number = doubleValue(value);
+        return number == null ? null : number.longValue();
     }
 
     private boolean isBlank(String value) {

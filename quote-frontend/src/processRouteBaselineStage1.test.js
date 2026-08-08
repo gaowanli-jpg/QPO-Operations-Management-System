@@ -60,15 +60,15 @@ describe('Stage 38 process route frontend contract', () => {
     ])
   })
 
-  test('global setup has moved to processDetailId while item pricing remains a phase 6 target', () => {
+  test('global setup and item pricing use processDetailId as the process identity', () => {
     const itemPricing = readSource('components', 'ItemPricing.vue')
     const globalSetup = readSource('components', 'GlobalSetup.vue')
 
-    expect(itemPricing).toContain('return `${sourceType}::${route.processName || \'\'}`')
-    expect(itemPricing).toContain('processName: p.processName')
-    expect(itemPricing).toContain('inputVal: p.inputVal')
-    expect(itemPricing).toContain('sourceType: p.sourceType || (p.calcType === \'非工时费用\' ? \'extra\' : \'process\')')
-    expect(itemPricing).not.toContain('processDetailId: p.processDetailId')
+    expect(itemPricing).toContain('return `process::${route.processDetailId || \'\'}`')
+    expect(itemPricing).toContain('return `extra::${route.processName || \'\'}`')
+    expect(itemPricing).toContain('processDetailId: p.processDetailId')
+    expect(itemPricing).toContain('unitWorkHours: p.inputVal')
+    expect(itemPricing).not.toContain('return `${sourceType}::${route.processName || \'\'}`')
 
     expect(globalSetup).toContain('processDetailId: item.processDetailId ?? null')
     expect(globalSetup).toContain('proc.processDetailId = selected.processDetailId')

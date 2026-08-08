@@ -18,26 +18,30 @@ class EngineerServiceProcessSortTests {
         EngineerService service = new EngineerService();
 
         List<Map<String, Object>> input = List.of(
-                route(20, "CNC2", 2.5),
-                route(10, "MILL", 1.0)
+                route(20, 2L, "CNC2", 2.5),
+                route(10, 1L, "MILL", 1.0)
         );
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> normalized = ReflectionTestUtils.invokeMethod(service, "normalizeProcessRoute", input);
-        assertThat(normalized).extracting(route -> String.valueOf(route.get("processName"))).containsExactly("MILL", "CNC2");
+        assertThat(normalized).extracting(route -> route.get("processDetailId")).containsExactly(1L, 2L);
 
         @SuppressWarnings("unchecked")
         List<QuoteSubmitReq.ProcessSubmitDTO> rows = ReflectionTestUtils.invokeMethod(service, "toProcessSubmitRows", (Object) input);
         assertThat(rows).extracting(QuoteSubmitReq.ProcessSubmitDTO::getSortNo).containsExactly(10, 20);
-        assertThat(rows).extracting(QuoteSubmitReq.ProcessSubmitDTO::getProcessName).containsExactly("MILL", "CNC2");
+        assertThat(rows).extracting(QuoteSubmitReq.ProcessSubmitDTO::getProcessDetailId).containsExactly(1L, 2L);
+        assertThat(rows).extracting(QuoteSubmitReq.ProcessSubmitDTO::getUnitWorkHours).containsExactly(1.0, 2.5);
     }
 
-    private Map<String, Object> route(int sortNo, String processName, double inputVal) {
+    private Map<String, Object> route(int sortNo, long processDetailId, String detailName, double unitWorkHours) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("sortNo", sortNo);
-        row.put("processName", processName);
-        row.put("calcType", "time");
-        row.put("inputVal", inputVal);
+        row.put("processDetailId", processDetailId);
+        row.put("detailName", detailName);
+        row.put("processName", detailName);
+        row.put("calcType", "工时");
+        row.put("unitWorkHours", unitWorkHours);
+        row.put("inputVal", unitWorkHours);
         return row;
     }
 }

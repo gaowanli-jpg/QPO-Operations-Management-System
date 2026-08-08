@@ -46,38 +46,51 @@ class ProcessRouteBaselineStage1CharacterizationTest {
     }
 
     @Test
-    void currentPricingSaveUsesProcessNameAndFreezesUnitRateLineCostSnapshot() throws IOException {
+    void pricingSaveUsesProcessDetailAndCurrentCategoryHourlyRate() throws IOException {
         String submitReq = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "dto", "QuoteSubmitReq.java"));
         String engineerService = read(service("EngineerService.java"));
+        String pricingService = read(service("ProcessRoutePricingService.java"));
 
         assertThat(submitReq)
-                .as("Current quote payload identifies a process by processName; later stages will replace this")
+                .as("Stage 6 quote payload identifies a process by processDetailId and keeps old fields only as compatibility/display inputs")
                 .contains(
                         "private List<ProcessSubmitDTO> processRoute;",
+                        "private Long processDetailId;",
+                        "private Double unitWorkHours;",
+                        "private String processCode;",
+                        "private String categoryName;",
+                        "private String detailName;",
+                        "private Double hourlyRate;",
                         "private String processName;",
                         "private Double inputVal;",
                         "private String calcType;",
                         "private Double unitRate;",
-                        "private Double lineCost;")
-                .doesNotContain("processDetailId", "processCode", "categoryName", "detailName", "hourlyRate", "unitWorkHours");
+                        "private Double lineCost;");
         assertThat(engineerService)
-                .as("Current pricing resolves dict_process by process_name and writes the matched rate into the route snapshot")
+                .as("Stage 6 pricing delegates process rows to the category/detail pricing service and stores the priced snapshot")
                 .contains(
+                        "private ProcessRoutePricingService processRoutePricingService;",
+                        "processRoutePricingService.priceProcessRows(List.of(process))",
+                        "item.setProcessRoute(pricedProcessRoute)",
+                        "toProcessSubmitRows(item.getProcessRoute())")
+                .doesNotContain(
                         "findProcess(process.getProcessName())",
                         "qw.eq(\"process_name\", processName)",
-                        "double rate = getTieredRate(dictInfo, qty)",
-                        "double lineCost = process.getInputVal() * rate",
-                        "process.setCalcType(\"工时\")",
-                        "process.setUnitRate(rate)",
-                        "process.setLineCost(lineCost)",
-                        "item.setProcessRoute(processRoute)");
-        assertThat(engineerService)
+                        "double rate = getTieredRate",
+                        "private double getTieredRate");
+        assertThat(pricingService)
                 .contains(
-                        "private double getTieredRate(DictProcess dp, int qty)",
-                        "if (qty <= 5) return dp.getPrice1To5()",
-                        "if (qty <= 3000) return dp.getPrice1000To3000()",
-                        "return dp.getPrice3000Plus()");
+                        "private DictProcessDetailMapper detailMapper;",
+                        "private DictProcessCategoryMapper categoryMapper;",
+                        "Long processDetailId = row.getProcessDetailId();",
+                        "double hourlyRate = number(category.getHourlyRate());",
+                        "double lineCost = unitWorkHours * hourlyRate;",
+                        "snapshot.put(\"processCode\", category.getProcessCode());",
+                        "snapshot.put(\"categoryName\", category.getCategoryName());",
+                        "snapshot.put(\"detailName\", detail.getDetailName());");
+        assertThat(engineerService)
+                .doesNotContain("getPrice1To5", "getPrice1000To3000", "getPrice3000Plus");
     }
 
     @Test

@@ -63,10 +63,8 @@ class LoggingConventionTest {
 
         assertThat(source)
                 .contains("Item quote saved")
-                .contains("Process rate matched")
-                .contains("Process dictionary missing")
-                .contains("Process rate missing")
                 .contains("Order quote refresh started")
+                .contains("Order quote refresh skipped item")
                 .contains("Order quote refresh completed")
                 .contains("Order quote completed")
                 .contains("Order engineer config saved");
