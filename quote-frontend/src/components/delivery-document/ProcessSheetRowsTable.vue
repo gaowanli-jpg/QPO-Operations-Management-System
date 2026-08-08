@@ -37,10 +37,23 @@
       </el-table-column>
       <el-table-column prop="surfaceTreatment" label="表面处理" width="130" show-overflow-tooltip />
       <el-table-column prop="deliveryDate" label="交期" width="110" />
-      <el-table-column label="工艺路线" min-width="220" show-overflow-tooltip>
-        <template #default="scope">
-          {{ formatRoute(scope.row.processRoute) }}
-        </template>
+      <el-table-column label="大类编码" width="130" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatRouteField(row.processRoute, 'processCode') }}</template>
+      </el-table-column>
+      <el-table-column label="大类名称" width="130" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatRouteField(row.processRoute, 'categoryName') }}</template>
+      </el-table-column>
+      <el-table-column label="具体工艺" min-width="150" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatRouteField(row.processRoute, 'detailName') }}</template>
+      </el-table-column>
+      <el-table-column label="工时" width="90" align="right" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatRouteField(row.processRoute, 'workHours') }}</template>
+      </el-table-column>
+      <el-table-column label="小时价格" width="110" align="right" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatRouteField(row.processRoute, 'hourlyRate') }}</template>
+      </el-table-column>
+      <el-table-column label="金额" width="110" align="right" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatRouteField(row.processRoute, 'lineCost') }}</template>
       </el-table-column>
     </el-table>
     <div v-if="total" class="erp-pagination">
@@ -61,6 +74,7 @@
 
 <script setup>
 import { CLIENT_PAGE_SIZES } from '../../utils/clientPagination'
+import { formatProcessRouteFieldList } from '../../utils/processRouteFormatter'
 
 defineProps({
   rows: {
@@ -108,22 +122,7 @@ const handlePageSizeChange = (value) => {
   emit('page-change', 1)
 }
 
-const formatRoute = (route) => {
-  if (!route) return '-'
-  let list = Array.isArray(route) ? route : []
-  if (typeof route === 'string') {
-    try {
-      list = JSON.parse(route)
-    } catch {
-      list = []
-    }
-  }
-  if (list.length === 0) return '-'
-  return list
-    .map(item => `${item.processName || ''}${item.inputVal ? `(${item.inputVal})` : ''}`)
-    .filter(Boolean)
-    .join(' / ')
-}
+const formatRouteField = (route, field) => formatProcessRouteFieldList(route, field)
 
 const formatWeight = (value) => {
   const number = Number(value)

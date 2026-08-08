@@ -31,7 +31,7 @@ import java.util.Set;
 
 @Service
 public class QuoteTemplateExportService {
-    private static final int PROCESS_BLOCK_WIDTH = 4;
+    private static final int PROCESS_BLOCK_WIDTH = 6;
     private static final int LEGACY_PROCESS_BLOCK_WIDTH = 5;
     private static final int FEE_BLOCK_WIDTH = 2;
     private static final List<String> SIMPLE_HEADERS = List.of(
@@ -176,10 +176,12 @@ public class QuoteTemplateExportService {
                 String processName = i < columns.processNames().size() ? columns.processNames().get(i) : "";
                 QuoteProcessExportSupport.MergedProcess process = processMap.get(processName);
                 if (process != null && !missingDrawing) {
-                    setCell(row, startCol, process.calcType());
-                    setCell(row, startCol + 1, process.inputVal());
-                    setCell(row, startCol + 2, process.weightedUnitRate());
-                    setCell(row, startCol + 3, process.lineCost());
+                    setCell(row, startCol, process.processCode());
+                    setCell(row, startCol + 1, process.categoryName());
+                    setCell(row, startCol + 2, process.detailName());
+                    setCell(row, startCol + 3, process.inputVal());
+                    setCell(row, startCol + 4, process.weightedUnitRate());
+                    setCell(row, startCol + 5, process.lineCost());
                     clearCells(row, startCol + PROCESS_HEADERS.size(), columns.processBlockWidth() - PROCESS_HEADERS.size());
                 } else {
                     clearCells(row, startCol, columns.processBlockWidth());
@@ -378,10 +380,11 @@ public class QuoteTemplateExportService {
 
     private ColumnLayout detectColumnLayout(Sheet sheet, QuoteTemplateService.TemplateLayout layout) {
         Row headerRow = sheet.getRow(layout.headerRowIndex());
-        int processStart = findHeader(headerRow, "工艺名称", 0);
-        int processBlockWidth = processStart >= 0 ? LEGACY_PROCESS_BLOCK_WIDTH : PROCESS_BLOCK_WIDTH;
+        int processStart = findNewProcessStart(headerRow);
+        int processBlockWidth = PROCESS_BLOCK_WIDTH;
         if (processStart < 0) {
-            processStart = findNewProcessStart(headerRow);
+            processStart = findHeader(headerRow, "工艺名称", 0);
+            processBlockWidth = processStart >= 0 ? LEGACY_PROCESS_BLOCK_WIDTH : PROCESS_BLOCK_WIDTH;
         }
         int processSlots = countProcessSlots(headerRow, processStart, processBlockWidth);
         int feeStart = findHeaderContaining(headerRow, "费率(%)",
@@ -393,6 +396,10 @@ public class QuoteTemplateExportService {
 
     private ColumnLayout ensureDetailLayout(Sheet sheet, int processSlots, int feeSlots, QuoteTemplateService.TemplateLayout templateLayout) {
         ColumnLayout layout = detectColumnLayout(sheet, templateLayout);
+        if (layout.processStartCol() >= 0 && layout.processBlockWidth() == LEGACY_PROCESS_BLOCK_WIDTH) {
+            convertLegacyProcessBlocks(sheet, layout, templateLayout);
+            layout = detectColumnLayout(sheet, templateLayout);
+        }
         if (layout.baseCostCol() < 0) {
             int insertAt = findFirstHeader(sheet.getRow(templateLayout.headerRowIndex()), List.of("含税单价", "含税总价", "交货周期", "备注"));
             if (insertAt < 0) {
@@ -431,6 +438,15 @@ public class QuoteTemplateExportService {
         }
 
         return layout;
+    }
+
+    private void convertLegacyProcessBlocks(Sheet sheet, ColumnLayout layout, QuoteTemplateService.TemplateLayout templateLayout) {
+        int slots = Math.max(layout.processSlots(), 1);
+        for (int i = slots - 1; i >= 0; i--) {
+            int insertAt = layout.processStartCol() + i * LEGACY_PROCESS_BLOCK_WIDTH + LEGACY_PROCESS_BLOCK_WIDTH;
+            insertColumns(sheet, insertAt, PROCESS_BLOCK_WIDTH - LEGACY_PROCESS_BLOCK_WIDTH, insertAt - 1, 1);
+        }
+        writeProcessHeaders(sheet, layout.processStartCol(), slots, List.of(), PROCESS_BLOCK_WIDTH, templateLayout);
     }
 
     private int inferProcessSlots(Sheet sheet, ColumnLayout layout, QuoteTemplateService.TemplateLayout templateLayout) {

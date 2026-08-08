@@ -97,9 +97,19 @@ describe('delivery document table components', () => {
       'formatWeight(row.partNetWeight)',
       'prop="surfaceTreatment" label="表面处理" width="130"',
       'prop="deliveryDate" label="交期" width="110"',
-      'label="工艺路线" min-width="220"',
-      'formatRoute(scope.row.processRoute)',
-      '.map(item => `${item.processName || \'\'}${item.inputVal ? `(${item.inputVal})` : \'\'}`)',
+      'label="大类编码" width="130"',
+      'formatRouteField(row.processRoute, \'processCode\')',
+      'label="大类名称" width="130"',
+      'formatRouteField(row.processRoute, \'categoryName\')',
+      'label="具体工艺" min-width="150"',
+      'formatRouteField(row.processRoute, \'detailName\')',
+      'label="工时" width="90" align="right"',
+      'formatRouteField(row.processRoute, \'workHours\')',
+      'label="小时价格" width="110" align="right"',
+      'formatRouteField(row.processRoute, \'hourlyRate\')',
+      'label="金额" width="110" align="right"',
+      'formatRouteField(row.processRoute, \'lineCost\')',
+      "import { formatProcessRouteFieldList } from '../../utils/processRouteFormatter'",
       'return number.toFixed(3).replace(/\\.?0+$/, \'\')'
     ])
   })

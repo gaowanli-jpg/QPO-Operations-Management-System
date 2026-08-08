@@ -1,4 +1,4 @@
-const parseRouteRows = (route) => {
+export const parseProcessRouteRows = (route) => {
   if (!route) return []
   if (Array.isArray(route)) return route
   if (typeof route === 'string') {
@@ -22,6 +22,27 @@ const formatCompactNumber = (value) => {
 
 const formatCompactMoney = (value) => `¥${formatCompactNumber(value)}`
 
+const routeValue = (row = {}, field) => {
+  const isFee = String(row.routeType || '').toUpperCase() === 'FEE' || row.sourceType === 'extra'
+  if (field === 'processCode') return row.processCode || ''
+  if (field === 'categoryName') return row.categoryName || ''
+  if (field === 'detailName') return row.detailName || row.processName || row.name || ''
+  if (field === 'workHours') return isFee ? '' : (row.unitWorkHours ?? row.inputVal ?? '')
+  if (field === 'hourlyRate') return isFee ? '' : (row.hourlyRate ?? row.unitRate ?? '')
+  if (field === 'lineCost') return row.lineCost ?? row.cost ?? ''
+  return row[field] ?? ''
+}
+
+export const formatProcessRouteFieldList = (route, field) => {
+  const rows = parseProcessRouteRows(route)
+  if (rows.length === 0) return '-'
+  const values = rows
+    .map(row => routeValue(row, field))
+    .filter(hasValue)
+    .map(formatCompactNumber)
+  return values.length > 0 ? values.join(' / ') : '-'
+}
+
 const formatRouteRow = (row = {}) => {
   const isFee = String(row.routeType || '').toUpperCase() === 'FEE' || row.sourceType === 'extra'
   if (isFee) {
@@ -43,7 +64,7 @@ const formatRouteRow = (row = {}) => {
 }
 
 export const formatProcessRouteSnapshot = (route) => {
-  const rows = parseRouteRows(route)
+  const rows = parseProcessRouteRows(route)
   if (rows.length === 0) return '-'
   return rows
     .map(formatRouteRow)

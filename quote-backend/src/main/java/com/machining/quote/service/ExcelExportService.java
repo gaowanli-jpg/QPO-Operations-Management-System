@@ -124,13 +124,15 @@ public class ExcelExportService {
     private void exportProcessSheets(Object sourceOrderId, String sourceOrderNo, List<ProcessSheetDTO> sheets, HttpServletResponse response) throws IOException {
         List<List<String>> head = new ArrayList<>();
         for (String title : List.of("序号", "内部项目号", "来源单号", "类型", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
-            head.add(List.of(title));
+            head.add(new ArrayList<>(List.of(title)));
         }
-        head.add(9, List.of("毛重(kg)"));
-        head.add(10, List.of("净重(kg)"));
+        head.add(9, new ArrayList<>(List.of("毛重(kg)")));
+        head.add(10, new ArrayList<>(List.of("净重(kg)")));
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
-            head.add(List.of(String.valueOf(i * 10)));
-            head.add(List.of("工时"));
+            String stepNo = String.valueOf(i * 10);
+            for (String title : QuoteProcessExportSupport.PROCESS_VALUE_HEADERS) {
+                head.add(new ArrayList<>(List.of(stepNo, title)));
+            }
         }
 
         List<List<Object>> rows = new ArrayList<>();
@@ -158,11 +160,16 @@ public class ExcelExportService {
             for (int j = 0; j < MAX_PROCESS_STEPS; j++) {
                 if (j < routes.size()) {
                     Map<String, Object> route = routes.get(j);
-                    row.add(safe(route.get("processName")));
+                    row.add(safe(route.get("processCode")));
+                    row.add(safe(route.get("categoryName")));
+                    row.add(processSheetDetailName(route));
                     row.add(processSheetWorkHour(route));
+                    row.add(processSheetHourlyRate(route));
+                    row.add(processSheetLineCost(route));
                 } else {
-                    row.add("");
-                    row.add("");
+                    for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_VALUE_HEADERS.size(); blank++) {
+                        row.add("");
+                    }
                 }
             }
             rows.add(row);
@@ -405,15 +412,16 @@ public class ExcelExportService {
         for (String processName : processNames) {
             QuoteProcessExportSupport.MergedProcess process = processMap.get(processName);
             if (process != null) {
-                row.add(process.calcType());
+                row.add(process.processCode());
+                row.add(process.categoryName());
+                row.add(process.detailName());
                 row.add(process.inputVal());
                 row.add(process.weightedUnitRate());
                 row.add(process.lineCost());
             } else {
-                row.add("");
-                row.add("");
-                row.add("");
-                row.add("");
+                for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_VALUE_HEADERS.size(); blank++) {
+                    row.add("");
+                }
             }
         }
 
@@ -448,10 +456,9 @@ public class ExcelExportService {
         row.add("");
 
         for (String ignored : processNames) {
-            row.add("");
-            row.add("");
-            row.add("");
-            row.add("");
+            for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_VALUE_HEADERS.size(); blank++) {
+                row.add("");
+            }
         }
 
         for (String ignored : feeNames) {
@@ -627,12 +634,16 @@ public class ExcelExportService {
         if (lineCost != null) {
             return lineCost;
         }
-        double inputVal = firstNonNullDouble(route.get("inputVal"), 0.0);
-        Double unitRate = doubleValue(route.get("unitRate"));
+        double inputVal = firstNonNullDouble(route.get("unitWorkHours"), route.get("inputVal"));
+        Double unitRate = firstNonNullDoubleValue(route.get("hourlyRate"), route.get("unitRate"));
         if (unitRate != null && unitRate > 0) {
             return inputVal * unitRate;
         }
         return inputVal;
+    }
+
+    private String processSheetDetailName(Map<String, Object> route) {
+        return safeText(safe(route.get("detailName")), safe(route.get("processName")));
     }
 
     private String processSheetWorkHour(Map<String, Object> route) {
@@ -641,7 +652,25 @@ public class ExcelExportService {
         if ("非工时费用".equals(calcType) || "extra".equalsIgnoreCase(sourceType)) {
             return "";
         }
-        return safe(route.get("inputVal"));
+        Object value = route.get("unitWorkHours") == null ? route.get("inputVal") : route.get("unitWorkHours");
+        return safe(value);
+    }
+
+    private Object processSheetHourlyRate(Map<String, Object> route) {
+        String calcType = safe(route.get("calcType")).trim();
+        String sourceType = safe(route.get("sourceType")).trim();
+        if ("非工时费用".equals(calcType) || "extra".equalsIgnoreCase(sourceType)) {
+            return "";
+        }
+        return safeNumber(route.get("hourlyRate") == null ? route.get("unitRate") : route.get("hourlyRate"));
+    }
+
+    private Object processSheetLineCost(Map<String, Object> route) {
+        Double cost = doubleValue(route.get("lineCost"));
+        if (cost != null) {
+            return cost;
+        }
+        return processLineCost(route);
     }
 
     private double sumCost(List<Map<String, Object>> rows) {
@@ -659,6 +688,11 @@ public class ExcelExportService {
         }
         value = doubleValue(fallback);
         return value == null ? 0.0 : value;
+    }
+
+    private Double firstNonNullDoubleValue(Object primary, Object fallback) {
+        Double value = doubleValue(primary);
+        return value != null ? value : doubleValue(fallback);
     }
 
     private String formatDate(LocalDate date) {

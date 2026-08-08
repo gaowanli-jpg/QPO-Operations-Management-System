@@ -42,7 +42,7 @@ class QuoteExportProcessMergeTests {
     private ExcelExportService excelExportService;
 
     @Test
-    void detailQuoteExportMergesRepeatedProcessesUnderProcessNameHeaders() throws Exception {
+    void detailQuoteExportMergesByStableProcessIdentityAndKeepsProcessCode() throws Exception {
         OrderRfq order = createQuotedOrder();
         createQuotedItem(order.getId());
 
@@ -53,16 +53,28 @@ class QuoteExportProcessMergeTests {
             Sheet sheet = workbook.getSheetAt(0);
 
             assertThat(rowContains(sheet, 0, "第1道工艺")).isFalse();
-            int millCol = groupHeaderColumn(sheet, "铣");
-            assertThat(text(sheet, 1, millCol)).isEqualTo("类型");
-            assertThat(text(sheet, 1, millCol + 1)).isEqualTo("工时/金额");
-            assertThat(text(sheet, 1, millCol + 2)).isEqualTo("单价");
-            assertThat(text(sheet, 1, millCol + 3)).isEqualTo("费用");
+            int packagingCol = groupHeaderColumn(sheet, "PACKAGING / 精细包装");
+            int surfaceCol = groupHeaderColumn(sheet, "SURFACE / 精细包装");
+            assertThat(text(sheet, 1, packagingCol)).isEqualTo("大类编码");
+            assertThat(text(sheet, 1, packagingCol + 1)).isEqualTo("大类名称");
+            assertThat(text(sheet, 1, packagingCol + 2)).isEqualTo("具体工艺");
+            assertThat(text(sheet, 1, packagingCol + 3)).isEqualTo("工时");
+            assertThat(text(sheet, 1, packagingCol + 4)).isEqualTo("小时价格");
+            assertThat(text(sheet, 1, packagingCol + 5)).isEqualTo("金额");
 
-            assertThat(text(sheet, 2, millCol)).isEqualTo("工时");
-            assertThat(numeric(sheet, 2, millCol + 1)).isEqualTo(4.0);
-            assertThat(numeric(sheet, 2, millCol + 2)).isEqualTo(77.5);
-            assertThat(numeric(sheet, 2, millCol + 3)).isEqualTo(310.0);
+            assertThat(text(sheet, 2, packagingCol)).isEqualTo("PACKAGING");
+            assertThat(text(sheet, 2, packagingCol + 1)).isEqualTo("包装");
+            assertThat(text(sheet, 2, packagingCol + 2)).isEqualTo("精细包装");
+            assertThat(numeric(sheet, 2, packagingCol + 3)).isEqualTo(4.0);
+            assertThat(numeric(sheet, 2, packagingCol + 4)).isEqualTo(77.5);
+            assertThat(numeric(sheet, 2, packagingCol + 5)).isEqualTo(310.0);
+
+            assertThat(text(sheet, 2, surfaceCol)).isEqualTo("SURFACE");
+            assertThat(text(sheet, 2, surfaceCol + 1)).isEqualTo("表面处理");
+            assertThat(text(sheet, 2, surfaceCol + 2)).isEqualTo("精细包装");
+            assertThat(numeric(sheet, 2, surfaceCol + 3)).isEqualTo(2.0);
+            assertThat(numeric(sheet, 2, surfaceCol + 4)).isEqualTo(50.0);
+            assertThat(numeric(sheet, 2, surfaceCol + 5)).isEqualTo(100.0);
         }
     }
 
@@ -91,9 +103,10 @@ class QuoteExportProcessMergeTests {
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         item.setMaterialData(Map.of("weight", 1.0, "cost", 20.0));
         item.setProcessRoute(List.of(
-                route("铣", "工时", 1.0, 70.0, 70.0, 10),
-                route("CNC", "工时", 2.0, 100.0, 200.0, 20),
-                route("铣", "工时", 3.0, 80.0, 240.0, 30)
+                route(7L, "PACKAGING", "包装", "精细包装", 1.0, 70.0, 70.0, 10),
+                route(8L, "CNC", "加工", "CNC", 2.0, 100.0, 200.0, 20),
+                route(7L, "PACKAGING", "包装", "精细包装", 3.0, 80.0, 240.0, 30),
+                route(9L, "SURFACE", "表面处理", "精细包装", 2.0, 50.0, 100.0, 40)
         ));
         item.setFeeData(List.of());
         item.setBaseCost(530.0);
@@ -102,13 +115,16 @@ class QuoteExportProcessMergeTests {
         itemMapper.insert(item);
     }
 
-    private Map<String, Object> route(String processName, String calcType, double inputVal,
-                                      double unitRate, double lineCost, int sortNo) {
+    private Map<String, Object> route(Long processDetailId, String processCode, String categoryName, String detailName,
+                                      double unitWorkHours, double hourlyRate, double lineCost, int sortNo) {
         Map<String, Object> route = new LinkedHashMap<>();
-        route.put("processName", processName);
-        route.put("calcType", calcType);
-        route.put("inputVal", inputVal);
-        route.put("unitRate", unitRate);
+        route.put("processDetailId", processDetailId);
+        route.put("processCode", processCode);
+        route.put("categoryName", categoryName);
+        route.put("detailName", detailName);
+        route.put("processName", detailName);
+        route.put("unitWorkHours", unitWorkHours);
+        route.put("hourlyRate", hourlyRate);
         route.put("lineCost", lineCost);
         route.put("sortNo", sortNo);
         return route;

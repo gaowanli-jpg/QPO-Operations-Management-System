@@ -43,6 +43,7 @@ public class QuoteTemplateService {
     );
     private static final List<String> DETAIL_REQUIRED_HEADERS = List.of("费率(%)", "基础成本");
     private static final List<String> PROMOTED_PROCESS_HEADERS = List.of("类型", "工时/金额", "单价", "费用");
+    private static final List<String> STANDARD_PROCESS_HEADERS = List.of("大类编码", "大类名称", "具体工艺", "工时", "小时价格", "金额");
 
     @Value("${erp.upload-dir}")
     private String uploadDir;
@@ -187,8 +188,8 @@ public class QuoteTemplateService {
             if (!missingDetailHeaders.isEmpty()) {
                 throw new RuntimeException("报价单模板缺少详细报价单必要表头：" + String.join("、", missingDetailHeaders));
             }
-            if (!hasDetailHeader(headers, "工艺名称") && !hasPromotedProcessHeaders(headers)) {
-                throw new RuntimeException("报价单模板缺少详细报价单必要表头：工艺名称或类型、工时/金额、单价、费用");
+            if (!hasDetailHeader(headers, "工艺名称") && !hasPromotedProcessHeaders(headers) && !hasStandardProcessHeaders(headers)) {
+                throw new RuntimeException("报价单模板缺少详细报价单必要表头：工艺名称或大类编码、大类名称、具体工艺、工时、小时价格、金额");
             }
         } catch (RuntimeException e) {
             throw e;
@@ -329,6 +330,11 @@ public class QuoteTemplateService {
 
     private boolean hasPromotedProcessHeaders(Set<String> headers) {
         return PROMOTED_PROCESS_HEADERS.stream()
+                .allMatch(header -> headers.contains(normalizeHeader(header)));
+    }
+
+    private boolean hasStandardProcessHeaders(Set<String> headers) {
+        return STANDARD_PROCESS_HEADERS.stream()
                 .allMatch(header -> headers.contains(normalizeHeader(header)));
     }
 

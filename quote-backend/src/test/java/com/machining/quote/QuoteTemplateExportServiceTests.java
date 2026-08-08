@@ -132,23 +132,29 @@ class QuoteTemplateExportServiceTests {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(groupHeaderCol(sheet, "下料")).isEqualTo(11);
-            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("类型");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("工时/金额");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("单价");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("大类编码");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("大类名称");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("具体工艺");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("工时");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 15)).isEqualTo("小时价格");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 16)).isEqualTo("金额");
             assertThat(rowContains(sheet, HEADER_ROW_INDEX, "运输费率(%)")).isTrue();
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("工时");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 12)).isEqualTo("1");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 13)).isEqualTo("下料");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("1");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 15)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 16)).isEqualTo("10");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "基础成本"))).isEqualTo("70");
         }
     }
 
     @Test
-    void detailTemplateExportMergesRepeatedProcessesUnderProcessNameHeaders() throws Exception {
+    void detailTemplateExportMergesByStableProcessIdentityAndKeepsProcessCode() throws Exception {
         OrderRfq order = createOrder();
         createQuotedItem(order.getId(), List.of(
-                route("铣", "工时", 1.0, 70.0, 70.0, 10),
-                route("CNC", "工时", 2.0, 100.0, 200.0, 20),
-                route("铣", "工时", 3.0, 80.0, 240.0, 30)
+                standardRoute(7L, "PACKAGING", "包装", "精细包装", 1.0, 70.0, 70.0, 10),
+                standardRoute(8L, "CNC", "加工", "CNC", 2.0, 100.0, 200.0, 20),
+                standardRoute(7L, "PACKAGING", "包装", "精细包装", 3.0, 80.0, 240.0, 30),
+                standardRoute(9L, "SURFACE", "表面处理", "精细包装", 2.0, 50.0, 100.0, 40)
         ));
 
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -157,15 +163,26 @@ class QuoteTemplateExportServiceTests {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
-            int millCol = groupHeaderCol(sheet, "铣");
-            assertThat(text(sheet, HEADER_ROW_INDEX, millCol)).isEqualTo("类型");
-            assertThat(text(sheet, HEADER_ROW_INDEX, millCol + 1)).isEqualTo("工时/金额");
-            assertThat(text(sheet, HEADER_ROW_INDEX, millCol + 2)).isEqualTo("单价");
-            assertThat(text(sheet, HEADER_ROW_INDEX, millCol + 3)).isEqualTo("费用");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol)).isEqualTo("工时");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 1)).isEqualTo("4");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 2)).isEqualTo("77.5");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, millCol + 3)).isEqualTo("310");
+            int packagingCol = groupHeaderCol(sheet, "PACKAGING / 精细包装");
+            int surfaceCol = groupHeaderCol(sheet, "SURFACE / 精细包装");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol)).isEqualTo("大类编码");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 1)).isEqualTo("大类名称");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 2)).isEqualTo("具体工艺");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 3)).isEqualTo("工时");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 4)).isEqualTo("小时价格");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 5)).isEqualTo("金额");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol)).isEqualTo("PACKAGING");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 1)).isEqualTo("包装");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 2)).isEqualTo("精细包装");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 3)).isEqualTo("4");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 4)).isEqualTo("77.5");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 5)).isEqualTo("310");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol)).isEqualTo("SURFACE");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 1)).isEqualTo("表面处理");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 2)).isEqualTo("精细包装");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 3)).isEqualTo("2");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 4)).isEqualTo("50");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 5)).isEqualTo("100");
         }
     }
 
@@ -272,6 +289,21 @@ class QuoteTemplateExportServiceTests {
         route.put("calcType", calcType);
         route.put("inputVal", inputVal);
         route.put("unitRate", unitRate);
+        route.put("lineCost", lineCost);
+        route.put("sortNo", sortNo);
+        return route;
+    }
+
+    private Map<String, Object> standardRoute(Long processDetailId, String processCode, String categoryName, String detailName,
+                                              double unitWorkHours, double hourlyRate, double lineCost, int sortNo) {
+        Map<String, Object> route = new LinkedHashMap<>();
+        route.put("processDetailId", processDetailId);
+        route.put("processCode", processCode);
+        route.put("categoryName", categoryName);
+        route.put("detailName", detailName);
+        route.put("processName", detailName);
+        route.put("unitWorkHours", unitWorkHours);
+        route.put("hourlyRate", hourlyRate);
         route.put("lineCost", lineCost);
         route.put("sortNo", sortNo);
         return route;
