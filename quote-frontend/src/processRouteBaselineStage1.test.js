@@ -63,12 +63,22 @@ describe('Stage 38 process route frontend contract', () => {
   test('global setup and item pricing use processDetailId as the process identity', () => {
     const itemPricing = readSource('components', 'ItemPricing.vue')
     const globalSetup = readSource('components', 'GlobalSetup.vue')
+    const comparableBlock = itemPricing.slice(
+      itemPricing.indexOf('const comparableProcessRoute'),
+      itemPricing.indexOf('const syncCurrentRouteToGlobalConfig')
+    )
+    const openDialogBlock = itemPricing.slice(
+      itemPricing.indexOf('const openQuoteDialog'),
+      itemPricing.indexOf('// 智能计算材料费')
+    )
 
-    expect(itemPricing).toContain('return `process::${route.processDetailId || \'\'}`')
-    expect(itemPricing).toContain('return `extra::${route.processName || \'\'}`')
     expect(itemPricing).toContain('processDetailId: p.processDetailId')
     expect(itemPricing).toContain('unitWorkHours: p.inputVal')
+    expect(comparableBlock).toContain('processDetailId: sourceType === \'process\' ? (p.processDetailId ?? null) : null')
+    expect(comparableBlock).toContain('processName: p.processName || \'\'')
+    expect(openDialogBlock).toContain('if (savedProcessRoutes.length > 0)')
     expect(itemPricing).not.toContain('return `${sourceType}::${route.processName || \'\'}`')
+    expect(itemPricing).not.toContain('mergeRoutesByGlobalOrder')
 
     expect(globalSetup).toContain('processDetailId: item.processDetailId ?? null')
     expect(globalSetup).toContain('proc.processDetailId = selected.processDetailId')

@@ -1402,33 +1402,6 @@ const sortRouteList = (routes) => {
     .map(item => item.route)
 }
 
-const processRouteKey = (route) => {
-  const sourceType = resolveProcessSourceType(route)
-  if (sourceType === 'process') return `process::${route.processDetailId || ''}`
-  return `extra::${route.processName || ''}`
-}
-
-const mergeRoutesByGlobalOrder = (savedRoutes, defaultRoutes) => {
-  const savedRows = normalizeRouteList(savedRoutes).map(route => hydrateRouteItem(createProcessRow(route)))
-  const defaultRows = normalizeRouteList(defaultRoutes).map(route => hydrateRouteItem(createProcessRow(route)))
-  const savedBuckets = new Map()
-  savedRows.forEach(route => {
-    const key = processRouteKey(route)
-    if (!savedBuckets.has(key)) savedBuckets.set(key, [])
-    savedBuckets.get(key).push(route)
-  })
-
-  return assignProcessSortNos(defaultRows
-    .filter(defaultRoute => isSelectableProcessRoute(defaultRoute) ? defaultRoute.processDetailId : defaultRoute.processName)
-    .map(defaultRoute => {
-      const savedRoute = savedBuckets.get(processRouteKey(defaultRoute))?.shift()
-      return {
-        ...defaultRoute,
-        inputVal: savedRoute ? savedRoute.inputVal : defaultRoute.inputVal
-      }
-    }))
-}
-
 const buildQuoteProcessRoute = () => processRoute.value
   .map((p, index) => ({ ...p, sortNo: (index + 1) * PROCESS_SORT_STEP }))
   .filter(p => p.inputVal > 0 && (isSelectableProcessRoute(p) ? p.processDetailId : p.processName))
@@ -1540,13 +1513,14 @@ const openQuoteDialog = async (row) => {
   matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
   matForm.netWeight = numberOrNullForInput(row.partNetWeight ?? savedMaterialData.netWeight)
 
-  if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
-    processRoute.value = mergeRoutesByGlobalOrder(row.processRoute, globalConfig.value.processRoute)
-  } else if (row.processRoute) {
-    processRoute.value = assignProcessSortNos(normalizeRouteList(row.processRoute).map(route => hydrateRouteItem(createProcessRow(route))))
-  } else {
+  const savedProcessRoutes = normalizeRouteList(row.processRoute)
+  if (savedProcessRoutes.length > 0) {
+    processRoute.value = assignProcessSortNos(savedProcessRoutes.map(route => hydrateRouteItem(createProcessRow(route))))
+  } else if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
     processRoute.value = assignProcessSortNos(normalizeRouteList(globalConfig.value.processRoute)
       .map(p => hydrateRouteItem(createProcessRow(p))))
+  } else {
+    processRoute.value = []
   }
 
   if (quoteMode.value === 'ASSEMBLY') {

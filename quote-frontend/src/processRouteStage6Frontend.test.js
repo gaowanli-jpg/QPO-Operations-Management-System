@@ -23,11 +23,38 @@ describe('Stage 38 phase 6 item pricing process route payload', () => {
 
   test('ItemPricing keeps processDetailId as route identity while preserving extra fee names', () => {
     const source = readSource('components', 'ItemPricing.vue')
+    const buildQuoteBlock = source.slice(
+      source.indexOf('const buildQuoteProcessRoute'),
+      source.indexOf('const buildGlobalProcessRoute')
+    )
+    const comparableBlock = source.slice(
+      source.indexOf('const comparableProcessRoute'),
+      source.indexOf('const syncCurrentRouteToGlobalConfig')
+    )
 
     expect(source).toContain('processDetailId: source.processDetailId ?? null')
     expect(source).toContain('proc.processDetailId = selected.processDetailId')
-    expect(source).toContain('return `process::${route.processDetailId || \'\'}`')
-    expect(source).toContain('return `extra::${route.processName || \'\'}`')
+    expect(buildQuoteBlock).toContain('processDetailId: p.processDetailId')
+    expect(buildQuoteBlock).toContain('processName: p.processName')
+    expect(comparableBlock).toContain('processDetailId: sourceType === \'process\' ? (p.processDetailId ?? null) : null')
+    expect(comparableBlock).toContain('processName: p.processName || \'\'')
     expect(source).not.toContain('return `${sourceType}::${route.processName || \'\'}`')
+    expect(source).not.toContain('mergeRoutesByGlobalOrder')
+  })
+
+  test('ItemPricing opens existing quoted items with their saved process route before global defaults', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+    const openDialogBlock = source.slice(
+      source.indexOf('const openQuoteDialog'),
+      source.indexOf('// 智能计算材料费')
+    )
+
+    expect(openDialogBlock).toContain('const savedProcessRoutes = normalizeRouteList(row.processRoute)')
+    expect(openDialogBlock).toContain('if (savedProcessRoutes.length > 0)')
+    expect(openDialogBlock).toContain('processRoute.value = assignProcessSortNos(savedProcessRoutes.map(route => hydrateRouteItem(createProcessRow(route))))')
+    expect(openDialogBlock.indexOf('if (savedProcessRoutes.length > 0)')).toBeLessThan(
+      openDialogBlock.indexOf('globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0')
+    )
+    expect(openDialogBlock).not.toContain('mergeRoutesByGlobalOrder(row.processRoute, globalConfig.value.processRoute)')
   })
 })
