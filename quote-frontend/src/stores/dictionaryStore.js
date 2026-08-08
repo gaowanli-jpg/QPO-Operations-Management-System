@@ -4,13 +4,26 @@ import {
   listExtraFeeItems,
   listMarkupFees,
   listMaterials,
-  listProcesses
+  listProcessCategories,
+  listProcessDetails
 } from '../services/dictApi'
+
+const toProcessCompatibilityRow = (item = {}) => ({
+  ...item,
+  id: item.id,
+  processDetailId: item.id,
+  processCategoryId: item.categoryId,
+  processName: item.detailName,
+  calcType: '工时',
+  sourceType: 'process'
+})
 
 export const useDictionaryStore = defineStore('dictionary', {
   state: () => ({
     materials: [],
     processes: [],
+    processCategories: [],
+    processDetails: [],
     extraFeeItems: [],
     markupFees: [],
     assemblyMarkupFees: [],
@@ -21,11 +34,17 @@ export const useDictionaryStore = defineStore('dictionary', {
   }),
   getters: {
     combinedProcessOptions: (state) => [
-      ...state.processes.map(item => ({
-        optionKey: `process-${item.id}`,
-        processName: item.processName,
-        label: `${item.processName}（${item.calcType || '工时'}）`,
-        calcType: item.calcType || '工时',
+      ...state.processDetails.map(item => ({
+        optionKey: `process-detail-${item.id}`,
+        processDetailId: item.id,
+        processCategoryId: item.categoryId,
+        processCode: item.processCode,
+        categoryName: item.categoryName,
+        detailName: item.detailName,
+        hourlyRate: item.hourlyRate,
+        processName: item.detailName,
+        label: `${item.detailName}（${item.processCode || '-'} / ${item.categoryName || '-'} / ${Number(item.hourlyRate || 0).toFixed(2)}元/小时）`,
+        calcType: '工时',
         sourceType: 'process'
       })),
       ...state.extraFeeItems.map(item => ({
@@ -50,6 +69,8 @@ export const useDictionaryStore = defineStore('dictionary', {
         return {
           materials: this.materials,
           processes: this.processes,
+          processCategories: this.processCategories,
+          processDetails: this.processDetails,
           extraFeeItems: this.extraFeeItems,
           markupFees: this.markupFees,
           assemblyMarkupFees: this.assemblyMarkupFees
@@ -60,16 +81,19 @@ export const useDictionaryStore = defineStore('dictionary', {
       try {
         const requests = [
           listMaterials(),
-          listProcesses(),
+          listProcessCategories(),
+          listProcessDetails(),
           listExtraFeeItems({ includeDisabled: includeAllExtraFees })
         ]
         if (includeMarkupFees) {
           requests.push(listMarkupFees())
           requests.push(listAssemblyMarkupFees())
         }
-        const [materials, processes, extraFeeItems, markupFees, assemblyMarkupFees] = await Promise.all(requests)
+        const [materials, processCategories, processDetails, extraFeeItems, markupFees, assemblyMarkupFees] = await Promise.all(requests)
         this.materials = materials || []
-        this.processes = processes || []
+        this.processCategories = processCategories || []
+        this.processDetails = processDetails || []
+        this.processes = this.processDetails.map(toProcessCompatibilityRow)
         this.extraFeeItems = extraFeeItems || []
         if (includeMarkupFees) {
           this.markupFees = markupFees || []
@@ -81,6 +105,8 @@ export const useDictionaryStore = defineStore('dictionary', {
         return {
           materials: this.materials,
           processes: this.processes,
+          processCategories: this.processCategories,
+          processDetails: this.processDetails,
           extraFeeItems: this.extraFeeItems,
           markupFees: this.markupFees,
           assemblyMarkupFees: this.assemblyMarkupFees
@@ -103,8 +129,16 @@ export const useDictionaryStore = defineStore('dictionary', {
         { id: 'fallback-45', materialName: '45#', density: 7850, plateDensity: 7850, platePrice: 7.1, barDensity: 7850, barPrice: 10, tubeDensity: 7850, tubePrice: 10 }
       ]
       this.processes = [
-        { id: 'fallback-mill', processName: '铣' },
-        { id: 'fallback-cnc1', processName: 'CNC1' }
+        { id: 'fallback-mill', processDetailId: 'fallback-mill', processName: '铣', detailName: '铣', processCode: 'MILLING', categoryName: '铣削', hourlyRate: 0, calcType: '工时', sourceType: 'process' },
+        { id: 'fallback-cnc1', processDetailId: 'fallback-cnc1', processName: 'CNC1', detailName: 'CNC1', processCode: 'CNC', categoryName: '数控', hourlyRate: 0, calcType: '工时', sourceType: 'process' }
+      ]
+      this.processCategories = [
+        { id: 'fallback-milling', processCode: 'MILLING', categoryName: '铣削', hourlyRate: 0, enabled: true },
+        { id: 'fallback-cnc', processCode: 'CNC', categoryName: '数控', hourlyRate: 0, enabled: true }
+      ]
+      this.processDetails = [
+        { id: 'fallback-mill', categoryId: 'fallback-milling', processCode: 'MILLING', categoryName: '铣削', detailName: '铣', hourlyRate: 0, enabled: true },
+        { id: 'fallback-cnc1', categoryId: 'fallback-cnc', processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', hourlyRate: 0, enabled: true }
       ]
       this.extraFeeItems = []
       this.markupFees = [

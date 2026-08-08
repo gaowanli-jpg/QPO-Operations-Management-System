@@ -5,13 +5,15 @@ import {
   listExtraFeeItems,
   listMarkupFees,
   listMaterials,
-  listProcesses
+  listProcessCategories,
+  listProcessDetails
 } from '../services/dictApi'
 import { useDictionaryStore } from './dictionaryStore'
 
 vi.mock('../services/dictApi', () => ({
   listMaterials: vi.fn(),
-  listProcesses: vi.fn(),
+  listProcessCategories: vi.fn(),
+  listProcessDetails: vi.fn(),
   listExtraFeeItems: vi.fn(),
   listMarkupFees: vi.fn(),
   listAssemblyMarkupFees: vi.fn()
@@ -25,7 +27,8 @@ beforeEach(() => {
 describe('dictionaryStore', () => {
   test('loadBaseDicts loads materials, processes, extra fees, and markup fees when requested', async () => {
     listMaterials.mockResolvedValue([{ id: 1, materialName: '45#' }])
-    listProcesses.mockResolvedValue([{ id: 2, processName: 'CNC1', calcType: '工时' }])
+    listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'PACKAGING', categoryName: '包装', hourlyRate: 10 }])
+    listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', hourlyRate: 10 }])
     listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: 'Heat Treat' }])
     listMarkupFees.mockResolvedValue([{ id: 4, feeName: '利润', ratePercent: 15 }])
     listAssemblyMarkupFees.mockResolvedValue([{ id: 5, feeName: '组装管理费', ratePercent: 5 }])
@@ -35,6 +38,9 @@ describe('dictionaryStore', () => {
 
     expect(store.materials).toHaveLength(1)
     expect(store.processes).toHaveLength(1)
+    expect(store.processCategories).toHaveLength(1)
+    expect(store.processDetails).toHaveLength(1)
+    expect(store.processes[0]).toEqual(expect.objectContaining({ processName: '精细包装', processDetailId: 2, processCode: 'PACKAGING' }))
     expect(store.extraFeeItems).toHaveLength(1)
     expect(store.markupFees).toHaveLength(1)
     expect(store.assemblyMarkupFees).toHaveLength(1)
@@ -44,7 +50,8 @@ describe('dictionaryStore', () => {
 
   test('combinedProcessOptions combines process and extra fee records', async () => {
     listMaterials.mockResolvedValue([])
-    listProcesses.mockResolvedValue([{ id: 2, processName: 'CNC1', calcType: '工时' }])
+    listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'PACKAGING', categoryName: '包装', hourlyRate: 10 }])
+    listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', hourlyRate: 10 }])
     listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: 'Heat Treat' }])
     listMarkupFees.mockResolvedValue([])
     listAssemblyMarkupFees.mockResolvedValue([])
@@ -53,7 +60,7 @@ describe('dictionaryStore', () => {
     await store.loadBaseDicts({ force: true })
 
     expect(store.combinedProcessOptions).toEqual([
-      expect.objectContaining({ optionKey: 'process-2', processName: 'CNC1', sourceType: 'process' }),
+      expect.objectContaining({ optionKey: 'process-detail-2', processDetailId: 2, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', processName: '精细包装', hourlyRate: 10, sourceType: 'process' }),
       expect.objectContaining({ optionKey: 'extra-3', processName: 'Heat Treat', sourceType: 'extra' })
     ])
   })

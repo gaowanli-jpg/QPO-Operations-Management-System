@@ -69,7 +69,8 @@ describe('admin duplicate click guards', () => {
     expect(sources.org).toContain("postDelete: (postId) => `system:org:post-delete:${postId || 'none'}`")
 
     expect(sources.dict).toContain("saveMaterialDialog: 'engineer:dict:material-save-dialog'")
-    expect(sources.dict).toContain("saveProcessDialog: 'engineer:dict:process-save-dialog'")
+    expect(sources.dict).toContain("saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog'")
+    expect(sources.dict).toContain("saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog'")
     expect(sources.dict).toContain("saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog'")
     expect(sources.dict).toContain("deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`")
 
@@ -142,7 +143,7 @@ describe('admin duplicate click guards', () => {
   test('organization and dictionary pages use dialog scoped saves and row scoped deletes/status changes', () => {
     const departmentSaveBlock = blockBetween(sources.org, 'const submitDepartment = async () =>', 'const toggleDepartmentStatus = async (row) =>')
     const postSaveBlock = blockBetween(sources.org, 'const submitPost = async () =>', 'const togglePostStatus = async (row) =>')
-    const materialSaveBlock = blockBetween(sources.dict, 'const saveMaterial = async () =>', 'const saveProcess = async () =>')
+    const materialSaveBlock = blockBetween(sources.dict, 'const saveMaterial = async () =>', 'const saveProcessCategory = async () =>')
     const extraDeleteBlock = blockBetween(sources.dict, 'const deleteExtraFee = async (row) =>', 'onMounted(loadAll)')
 
     expect(sources.org).toContain(':loading="isPending(orgActionKeys.saveDepartmentDialog)"')

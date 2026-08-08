@@ -3,7 +3,7 @@
     <header class="erp-page-header">
       <div>
         <h1 class="erp-page-title">材料工艺</h1>
-        <p class="erp-page-description">维护材料价格字典和工艺阶梯费率，工程核价会直接读取这里的数据。</p>
+        <p class="erp-page-description">维护材料、两级工艺主数据和费用字典，工程核价会直接读取这里的数据。</p>
       </div>
     </header>
 
@@ -11,7 +11,8 @@
       <div class="erp-toolbar-group material-toolbar">
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
-        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processes'" type="primary" @click="openProcessDialog()">新增工艺</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processCategories'" type="primary" @click="openProcessCategoryDialog()">新增工艺大类</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processDetails'" type="primary" @click="openProcessDetailDialog()">新增具体工艺</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'assemblyMarkupFees'" type="primary" @click="openAssemblyMarkupFeeDialog()">新增组装件费用类</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
@@ -21,136 +22,164 @@
     <section class="erp-table-surface material-table-surface">
       <div class="erp-table-body">
         <el-tabs v-model="activeTab">
-        <el-tab-pane label="材料费用" name="materials">
-          <el-table :data="materials" border stripe height="560" v-loading="loading">
-            <el-table-column prop="materialName" label="材料" width="120" fixed show-overflow-tooltip />
-            <el-table-column prop="materialType" label="材质" width="110" show-overflow-tooltip />
-            <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
-            <el-table-column label="板材密度" width="150" align="right">
-              <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
-            </el-table-column>
-            <el-table-column label="板材单价" width="150" align="right">
-              <template #default="scope">{{ formatPrice(scope.row.platePrice) }}</template>
-            </el-table-column>
-            <el-table-column label="棒材密度" width="150" align="right">
-              <template #default="scope">{{ formatDensity(scope.row.barDensity) }}</template>
-            </el-table-column>
-            <el-table-column label="棒材单价" width="150" align="right">
-              <template #default="scope">{{ formatPrice(scope.row.barPrice) }}</template>
-            </el-table-column>
-            <el-table-column label="管材密度" width="150" align="right">
-              <template #default="scope">{{ formatDensity(scope.row.tubeDensity) }}</template>
-            </el-table-column>
-            <el-table-column label="管材单价" width="150" align="right">
-              <template #default="scope">{{ formatPrice(scope.row.tubePrice) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="150" align="center" fixed="right">
-              <template #default="scope">
-                <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialDeletePending(scope.row)" @click="openMaterialDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialDeletePending(scope.row)" :disabled="isMaterialDeletePending(scope.row)" @click="deleteMaterial(scope.row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
+          <el-tab-pane label="材料费用" name="materials">
+            <el-table :data="materials" border stripe height="560" v-loading="loading">
+              <el-table-column prop="materialName" label="材料" width="120" fixed show-overflow-tooltip />
+              <el-table-column prop="materialType" label="材质" width="110" show-overflow-tooltip />
+              <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
+              <el-table-column label="板材密度" width="150" align="right">
+                <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
+              </el-table-column>
+              <el-table-column label="板材单价" width="150" align="right">
+                <template #default="scope">{{ formatPrice(scope.row.platePrice) }}</template>
+              </el-table-column>
+              <el-table-column label="棒材密度" width="150" align="right">
+                <template #default="scope">{{ formatDensity(scope.row.barDensity) }}</template>
+              </el-table-column>
+              <el-table-column label="棒材单价" width="150" align="right">
+                <template #default="scope">{{ formatPrice(scope.row.barPrice) }}</template>
+              </el-table-column>
+              <el-table-column label="管材密度" width="150" align="right">
+                <template #default="scope">{{ formatDensity(scope.row.tubeDensity) }}</template>
+              </el-table-column>
+              <el-table-column label="管材单价" width="150" align="right">
+                <template #default="scope">{{ formatPrice(scope.row.tubePrice) }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="150" align="center" fixed="right">
+                <template #default="scope">
+                  <div class="erp-table-actions">
+                    <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialDeletePending(scope.row)" @click="openMaterialDialog(scope.row)">编辑</el-button>
+                    <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialDeletePending(scope.row)" :disabled="isMaterialDeletePending(scope.row)" @click="deleteMaterial(scope.row)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
 
-        <el-tab-pane label="工艺费用" name="processes">
-          <el-table :data="processes" border stripe height="560" v-loading="loading">
-            <el-table-column prop="sortNo" label="序号" width="70" align="center" fixed />
-            <el-table-column prop="processName" label="工序" width="120" fixed show-overflow-tooltip />
-            <el-table-column prop="calcType" label="类型" width="100" />
-            <el-table-column prop="price1To5" label="1-5" width="90" align="right" />
-            <el-table-column prop="price5To10" label="5-10" width="90" align="right" />
-            <el-table-column prop="price10To50" label="10-50" width="90" align="right" />
-            <el-table-column prop="price50To100" label="50-100" width="90" align="right" />
-            <el-table-column prop="price100To500" label="100-500" width="100" align="right" />
-            <el-table-column prop="price500To1000" label="500-1000" width="105" align="right" />
-            <el-table-column prop="price1000To3000" label="1000-3000" width="115" align="right" />
-            <el-table-column prop="price3000Plus" label=">3000" width="90" align="right" />
-            <el-table-column label="操作" width="150" align="center" fixed="right">
-              <template #default="scope">
-                <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" :disabled="isProcessDeletePending(scope.row)" @click="openProcessDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:process-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isProcessDeletePending(scope.row)" :disabled="isProcessDeletePending(scope.row)" @click="deleteProcess(scope.row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
+          <el-tab-pane label="工艺大类" name="processCategories">
+            <div class="process-master-grid">
+              <el-table :data="processCategories" border stripe height="560" v-loading="loading">
+                <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+                <el-table-column prop="processCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
+                <el-table-column prop="categoryName" label="工艺名称" min-width="160" show-overflow-tooltip />
+                <el-table-column label="小时价格" width="140" align="right">
+                  <template #default="scope">{{ formatHourlyRate(scope.row.hourlyRate) }}</template>
+                </el-table-column>
+                <el-table-column label="来源" width="110" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.sourceType === 'MES' ? 'success' : 'info'" size="small">{{ sourceTypeText(scope.row.sourceType) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" width="90" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
+                <el-table-column label="操作" width="120" align="center" fixed="right">
+                  <template #default="scope">
+                    <div class="erp-table-actions">
+                      <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" @click="openProcessCategoryDialog(scope.row)">编辑</el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-tab-pane>
 
-        <el-tab-pane label="百分比费用类" name="markupFees">
-          <el-table :data="markupFees" border stripe height="560" v-loading="loading">
-            <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-            <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
-            <el-table-column label="费率" width="120" align="right">
-              <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
-            </el-table-column>
-            <el-table-column label="启用" width="90" align="center">
-              <template #default="scope">
-                <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">
-                  {{ scope.row.enabled ? '启用' : '停用' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="160" align="center" fixed="right">
-              <template #default="scope">
-                <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isMarkupFeeDeletePending(scope.row)" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMarkupFeeDeletePending(scope.row)" :disabled="isMarkupFeeDeletePending(scope.row)" @click="deleteMarkupFee(scope.row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
+          <el-tab-pane label="具体工艺" name="processDetails">
+            <div class="process-master-grid">
+              <el-table :data="processDetails" border stripe height="560" v-loading="loading">
+                <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+                <el-table-column prop="detailName" label="具体工艺" min-width="160" fixed show-overflow-tooltip />
+                <el-table-column prop="processCode" label="大类编码" width="150" show-overflow-tooltip />
+                <el-table-column prop="categoryName" label="大类名称" min-width="150" show-overflow-tooltip />
+                <el-table-column label="大类小时价格" width="150" align="right">
+                  <template #default="scope">{{ formatHourlyRate(scope.row.hourlyRate) }}</template>
+                </el-table-column>
+                <el-table-column prop="detailRemarks" label="具体备注" min-width="200" show-overflow-tooltip />
+                <el-table-column label="状态" width="90" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120" align="center" fixed="right">
+                  <template #default="scope">
+                    <div class="erp-table-actions">
+                      <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" @click="openProcessDetailDialog(scope.row)">编辑</el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-tab-pane>
 
-        <el-tab-pane label="组装件百分比费用类" name="assemblyMarkupFees">
-          <el-table :data="assemblyMarkupFees" border stripe height="560" v-loading="loading">
-            <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-            <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
-            <el-table-column label="费率" width="120" align="right">
-              <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
-            </el-table-column>
-            <el-table-column label="启用" width="90" align="center">
-              <template #default="scope">
-                <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">
-                  {{ scope.row.enabled ? '启用' : '停用' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="160" align="center" fixed="right">
-              <template #default="scope">
-                <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="openAssemblyMarkupFeeDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isAssemblyMarkupFeeDeletePending(scope.row)" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="deleteAssemblyMarkupFee(scope.row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
+          <el-tab-pane label="百分比费用类" name="markupFees">
+            <el-table :data="markupFees" border stripe height="560" v-loading="loading">
+              <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+              <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
+              <el-table-column label="费率" width="120" align="right">
+                <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
+              </el-table-column>
+              <el-table-column label="启用" width="90" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="160" align="center" fixed="right">
+                <template #default="scope">
+                  <div class="erp-table-actions">
+                    <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isMarkupFeeDeletePending(scope.row)" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
+                    <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMarkupFeeDeletePending(scope.row)" :disabled="isMarkupFeeDeletePending(scope.row)" @click="deleteMarkupFee(scope.row)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
 
-        <el-tab-pane label="非工时费用工艺" name="extraFees">
-          <el-table :data="extraFeeItems" border stripe height="560" v-loading="loading">
-            <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-            <el-table-column prop="feeName" label="工艺名称" min-width="180" fixed show-overflow-tooltip />
-            <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
-            <el-table-column label="启用" width="90" align="center">
-              <template #default="scope">
-                <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">
-                  {{ scope.row.enabled ? '启用' : '停用' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="160" align="center" fixed="right">
-              <template #default="scope">
-                <div class="erp-table-actions">
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isExtraFeeDeletePending(scope.row)" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
-                  <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isExtraFeeDeletePending(scope.row)" :disabled="isExtraFeeDeletePending(scope.row)" @click="deleteExtraFee(scope.row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
+          <el-tab-pane label="组装件百分比费用类" name="assemblyMarkupFees">
+            <el-table :data="assemblyMarkupFees" border stripe height="560" v-loading="loading">
+              <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+              <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
+              <el-table-column label="费率" width="120" align="right">
+                <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
+              </el-table-column>
+              <el-table-column label="启用" width="90" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="160" align="center" fixed="right">
+                <template #default="scope">
+                  <div class="erp-table-actions">
+                    <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="openAssemblyMarkupFeeDialog(scope.row)">编辑</el-button>
+                    <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isAssemblyMarkupFeeDeletePending(scope.row)" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="deleteAssemblyMarkupFee(scope.row)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+
+          <el-tab-pane label="非工时费用工艺" name="extraFees">
+            <el-table :data="extraFeeItems" border stripe height="560" v-loading="loading">
+              <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+              <el-table-column prop="feeName" label="工艺名称" min-width="180" fixed show-overflow-tooltip />
+              <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
+              <el-table-column label="启用" width="90" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="160" align="center" fixed="right">
+                <template #default="scope">
+                  <div class="erp-table-actions">
+                    <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isExtraFeeDeletePending(scope.row)" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
+                    <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isExtraFeeDeletePending(scope.row)" :disabled="isExtraFeeDeletePending(scope.row)" @click="deleteExtraFee(scope.row)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
         </el-tabs>
       </div>
     </section>
@@ -235,37 +264,71 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="processDialogVisible" :title="processForm.id ? '编辑工艺' : '新增工艺'" width="860px">
-      <el-form :model="processForm" label-width="110px" class="erp-dialog-form">
-        <el-row :gutter="16">
-          <el-col :span="8">
-            <el-form-item label="序号">
-              <el-input-number v-model="processForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="工序" required>
-              <el-input v-model="processForm.processName" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="类型">
-              <el-tag type="info" size="large">工时</el-tag>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col v-for="field in processPriceFields" :key="field.prop" :span="6">
-            <el-form-item :label="field.label">
-              <el-input-number v-model="processForm[field.prop]" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+    <el-dialog v-model="processCategoryDialogVisible" :title="processCategoryForm.id ? '编辑工艺大类' : '新增工艺大类'" width="720px">
+      <el-form :model="processCategoryForm" label-width="120px" class="erp-dialog-form process-dialog-grid">
+        <el-form-item label="序号">
+          <el-input-number v-model="processCategoryForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
+        </el-form-item>
+        <el-form-item label="工艺编码" required>
+          <el-input v-model="processCategoryForm.processCode" placeholder="例如：PACKAGING" />
+        </el-form-item>
+        <el-form-item label="工艺名称" required>
+          <el-input v-model="processCategoryForm.categoryName" placeholder="例如：包装" />
+        </el-form-item>
+        <el-form-item label="小时价格" required>
+          <div class="unit-input">
+            <el-input-number v-model="processCategoryForm.hourlyRate" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label wide">元/小时</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="来源">
+          <el-select v-model="processCategoryForm.sourceType" class="dialog-select">
+            <el-option label="本地维护" value="LOCAL" />
+            <el-option label="MES同步" value="MES" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="processCategoryForm.enabled" />
+        </el-form-item>
+        <el-form-item label="MES外部ID">
+          <el-input v-model="processCategoryForm.mesExternalId" placeholder="MES 同步后可记录外部 ID" />
+        </el-form-item>
+        <el-form-item label="备注" class="process-dialog-wide">
+          <el-input v-model="processCategoryForm.remarks" type="textarea" :rows="3" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <div class="erp-dialog-footer">
-          <el-button @click="processDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="isPending(dictActionKeys.saveProcessDialog)" :disabled="isPending(dictActionKeys.saveProcessDialog)" @click="saveProcess">保存</el-button>
+          <el-button @click="processCategoryDialogVisible = false">取消</el-button>
+          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="isPending(dictActionKeys.saveProcessCategoryDialog)" :disabled="isPending(dictActionKeys.saveProcessCategoryDialog)" @click="saveProcessCategory">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="processDetailDialogVisible" :title="processDetailForm.id ? '编辑具体工艺' : '新增具体工艺'" width="680px">
+      <el-form :model="processDetailForm" label-width="120px" class="erp-dialog-form process-dialog-grid">
+        <el-form-item label="序号">
+          <el-input-number v-model="processDetailForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
+        </el-form-item>
+        <el-form-item label="工艺大类" required>
+          <el-select v-model="processDetailForm.categoryId" filterable class="dialog-select" placeholder="选择工艺大类">
+            <el-option v-for="category in processCategories" :key="category.id" :label="categoryLabel(category)" :value="category.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="具体工艺" required>
+          <el-input v-model="processDetailForm.detailName" placeholder="例如：精细包装" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="processDetailForm.enabled" />
+        </el-form-item>
+        <el-form-item label="具体备注" class="process-dialog-wide">
+          <el-input v-model="processDetailForm.detailRemarks" type="textarea" :rows="3" placeholder="例如：包装选择精细包装" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="processDetailDialogVisible = false">取消</el-button>
+          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="isPending(dictActionKeys.saveProcessDetailDialog)" :disabled="isPending(dictActionKeys.saveProcessDetailDialog)" @click="saveProcessDetail">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -349,12 +412,12 @@ import {
   deleteExtraFeeItem,
   deleteMarkupFee as deleteMarkupFeeRequest,
   deleteMaterial as deleteMaterialRequest,
-  deleteProcess as deleteProcessRequest,
   saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
   saveExtraFeeItem,
   saveMarkupFee as saveMarkupFeeRequest,
   saveMaterial as saveMaterialRequest,
-  saveProcess as saveProcessRequest
+  saveProcessCategory as saveProcessCategoryRequest,
+  saveProcessDetail as saveProcessDetailRequest
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
@@ -362,7 +425,8 @@ import { usePendingAction } from '../composables/usePendingAction'
 const dictionaryStore = useDictionaryStore()
 const activeTab = ref('materials')
 const materials = computed(() => dictionaryStore.materials)
-const processes = computed(() => dictionaryStore.processes)
+const processCategories = computed(() => dictionaryStore.processCategories)
+const processDetails = computed(() => dictionaryStore.processDetails)
 const markupFees = computed(() => dictionaryStore.markupFees)
 const assemblyMarkupFees = computed(() => dictionaryStore.assemblyMarkupFees)
 const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
@@ -371,42 +435,32 @@ const { isPending, runAction } = usePendingAction()
 
 const dictActionKeys = {
   saveMaterialDialog: 'engineer:dict:material-save-dialog',
-  saveProcessDialog: 'engineer:dict:process-save-dialog',
+  saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog',
+  saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
   saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog',
   saveAssemblyMarkupFeeDialog: 'engineer:dict:assembly-markup-fee-save-dialog',
   saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
   deleteMaterial: (materialId) => `engineer:dict:material-delete:${materialId || 'none'}`,
-  deleteProcess: (processId) => `engineer:dict:process-delete:${processId || 'none'}`,
   deleteMarkupFee: (feeId) => `engineer:dict:markup-fee-delete:${feeId || 'none'}`,
   deleteAssemblyMarkupFee: (feeId) => `engineer:dict:assembly-markup-fee-delete:${feeId || 'none'}`,
   deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`
 }
 
 const isMaterialDeletePending = (row) => isPending(dictActionKeys.deleteMaterial(row?.id))
-const isProcessDeletePending = (row) => isPending(dictActionKeys.deleteProcess(row?.id))
 const isMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteMarkupFee(row?.id))
 const isAssemblyMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteAssemblyMarkupFee(row?.id))
 const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
 const materialDialogVisible = ref(false)
-const processDialogVisible = ref(false)
+const processCategoryDialogVisible = ref(false)
+const processDetailDialogVisible = ref(false)
 const markupFeeDialogVisible = ref(false)
 const assemblyMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
 
-const processPriceFields = [
-  { prop: 'price1To5', label: '1-5' },
-  { prop: 'price5To10', label: '5-10' },
-  { prop: 'price10To50', label: '10-50' },
-  { prop: 'price50To100', label: '50-100' },
-  { prop: 'price100To500', label: '100-500' },
-  { prop: 'price500To1000', label: '500-1000' },
-  { prop: 'price1000To3000', label: '1000-3000' },
-  { prop: 'price3000Plus', label: '>3000' }
-]
-
 const materialForm = reactive(createEmptyMaterial())
-const processForm = reactive(createEmptyProcess())
+const processCategoryForm = reactive(createEmptyProcessCategory())
+const processDetailForm = reactive(createEmptyProcessDetail())
 const markupFeeForm = reactive(createEmptyMarkupFee())
 const assemblyMarkupFeeForm = reactive(createEmptyMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
@@ -423,6 +477,12 @@ const formatPrice = (value) => {
   const text = formatNumber(value, 2)
   return text === '-' ? '-' : `${text} 元/kg`
 }
+const formatHourlyRate = (value) => {
+  const text = formatNumber(value, 2)
+  return text === '-' ? '-' : `${text} 元/小时`
+}
+const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
+const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
 
 function createEmptyMaterial() {
   return {
@@ -439,20 +499,28 @@ function createEmptyMaterial() {
   }
 }
 
-function createEmptyProcess() {
+function createEmptyProcessCategory() {
   return {
     id: null,
     sortNo: 0,
-    processName: '',
-    calcType: '工时',
-    price1To5: 0,
-    price5To10: 0,
-    price10To50: 0,
-    price50To100: 0,
-    price100To500: 0,
-    price500To1000: 0,
-    price1000To3000: 0,
-    price3000Plus: 0
+    processCode: '',
+    categoryName: '',
+    hourlyRate: 0,
+    remarks: '',
+    sourceType: 'LOCAL',
+    mesExternalId: '',
+    enabled: true
+  }
+}
+
+function createEmptyProcessDetail() {
+  return {
+    id: null,
+    sortNo: 0,
+    categoryId: null,
+    detailName: '',
+    detailRemarks: '',
+    enabled: true
   }
 }
 
@@ -493,10 +561,17 @@ const openMaterialDialog = (row) => {
   materialDialogVisible.value = true
 }
 
-const openProcessDialog = (row) => {
-  Object.assign(processForm, createEmptyProcess(), row || {})
-  processForm.calcType = '工时'
-  processDialogVisible.value = true
+const openProcessCategoryDialog = (row) => {
+  Object.assign(processCategoryForm, createEmptyProcessCategory(), row || {})
+  processCategoryForm.sourceType = processCategoryForm.sourceType || 'LOCAL'
+  processCategoryForm.enabled = processCategoryForm.enabled !== false
+  processCategoryDialogVisible.value = true
+}
+
+const openProcessDetailDialog = (row) => {
+  Object.assign(processDetailForm, createEmptyProcessDetail(), row || {})
+  processDetailForm.enabled = processDetailForm.enabled !== false
+  processDetailDialogVisible.value = true
 }
 
 const openMarkupFeeDialog = (row) => {
@@ -530,18 +605,34 @@ const saveMaterial = async () => {
   })
 }
 
-const saveProcess = async () => {
-  if (!processForm.processName) return ElMessage.warning('请填写工序名称。')
-  processForm.calcType = '工时'
-  return runAction(dictActionKeys.saveProcessDialog, async () => {
+const saveProcessCategory = async () => {
+  if (!processCategoryForm.processCode) return ElMessage.warning('请填写工艺编码。')
+  if (!processCategoryForm.categoryName) return ElMessage.warning('请填写工艺名称。')
+  return runAction(dictActionKeys.saveProcessCategoryDialog, async () => {
     try {
-      const response = await saveProcessRequest(processForm)
+      const response = await saveProcessCategoryRequest(processCategoryForm)
       ElMessage.success(response.message || '保存成功')
-      processDialogVisible.value = false
+      processCategoryDialogVisible.value = false
       await dictionaryStore.reloadAfterMutation()
     } catch (error) {
       console.error(error)
-      ElMessage.error('工艺保存失败。')
+      ElMessage.error('工艺大类保存失败。')
+    }
+  })
+}
+
+const saveProcessDetail = async () => {
+  if (!processDetailForm.categoryId) return ElMessage.warning('请选择工艺大类。')
+  if (!processDetailForm.detailName) return ElMessage.warning('请填写具体工艺名称。')
+  return runAction(dictActionKeys.saveProcessDetailDialog, async () => {
+    try {
+      const response = await saveProcessDetailRequest(processDetailForm)
+      ElMessage.success(response.message || '保存成功')
+      processDetailDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('具体工艺保存失败。')
     }
   })
 }
@@ -600,15 +691,6 @@ const deleteMaterial = async (row) => {
   })
 }
 
-const deleteProcess = async (row) => {
-  return runAction(dictActionKeys.deleteProcess(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除工艺「${row.processName}」？`, '删除确认', { type: 'warning' })
-    await deleteProcessRequest(row.id)
-    ElMessage.success('工艺已删除')
-    await dictionaryStore.reloadAfterMutation()
-  })
-}
-
 const deleteMarkupFee = async (row) => {
   return runAction(dictActionKeys.deleteMarkupFee(row.id), async () => {
     await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
@@ -642,18 +724,65 @@ onMounted(loadAll)
 <style scoped>
 .material-toolbar {
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .material-table-surface {
   overflow: hidden;
 }
-.unit-input { display: flex; align-items: center; width: 100%; gap: 8px; }
-.unit-input-control { flex: 1; min-width: 0; }
+
+.process-master-grid {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.process-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.process-dialog-wide {
+  grid-column: 1 / -1;
+}
+
+.unit-input {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
+
+.unit-input-control {
+  flex: 1;
+  min-width: 0;
+}
+
 .unit-label {
   flex: 0 0 52px;
   color: #606266;
   font-size: 13px;
   text-align: left;
   white-space: nowrap;
+}
+
+.unit-label.wide {
+  flex-basis: 64px;
+}
+
+.dialog-number-input,
+.dialog-select {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .material-toolbar {
+    justify-content: flex-start;
+  }
+
+  .process-dialog-grid {
+    display: block;
+  }
 }
 </style>
