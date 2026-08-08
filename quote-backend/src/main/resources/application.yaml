@@ -23,7 +23,7 @@ spring:
       encoding: UTF-8
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
-    baseline-on-migrate: true
+    baseline-on-migrate: false
     locations: classpath:db/migration
   jackson:
     default-property-inclusion: non_null

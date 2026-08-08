@@ -45,7 +45,7 @@ class SalesOrderManagementStage5CleanupTest {
     void permissionFallbackKeepsOldCodesNonAssignableAndOutOfRoleTree() throws Exception {
         String permissionService = source(Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java"));
         String systemRoleService = source(Path.of("src", "main", "java", "com", "machining", "quote", "service", "SystemRoleService.java"));
-        String migration = source(Path.of("src", "main", "resources", "db", "migration", "V72__retire_history_order_semantics.sql"));
+        String migration = source(Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql"));
 
         assertThat(permissionService)
                 .contains("deprecatedPermission(103L, \"BUTTON\", \"market:order:delete\"")
@@ -58,7 +58,8 @@ class SalesOrderManagementStage5CleanupTest {
                 .contains("market:history-order:customer-select")
                 .contains("market:history-order:file-preview")
                 .contains("market:order:delete")
-                .contains("assignable = FALSE");
+                .contains("'/history-orders'")
+                .contains("false);");
     }
 
     private String source(Path path) throws Exception {

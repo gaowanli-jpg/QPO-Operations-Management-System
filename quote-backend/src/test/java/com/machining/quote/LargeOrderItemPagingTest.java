@@ -76,7 +76,7 @@ class LargeOrderItemPagingTest {
         assertThat(MAIN_JAVA.resolve("service").resolve("OrderItemPageService.java")).exists();
 
         String migration = Files.readString(
-                MAIN_RESOURCES.resolve("db").resolve("migration").resolve("V56__large_order_item_paging_indexes.sql"),
+                MAIN_RESOURCES.resolve("db").resolve("migration").resolve("V1__qpo_baseline_schema.sql"),
                 StandardCharsets.UTF_8);
         assertThat(migration)
                 .contains("idx_item_quote_version_rfq_id_id")
@@ -84,9 +84,12 @@ class LargeOrderItemPagingTest {
                 .contains("idx_item_quote_version_rfq_part_version_id")
                 .contains("idx_order_delivery_ticket_rfq_id_id")
                 .contains("idx_order_delivery_ticket_rfq_item_id")
-                .doesNotContain("customer_name");
+                .doesNotContain("idx_item_quote_version_customer_name")
+                .doesNotContain("idx_order_delivery_ticket_customer_name");
 
-        String schema = Files.readString(MAIN_RESOURCES.resolve("schema.sql"), StandardCharsets.UTF_8);
+        String schema = Files.readString(
+                MAIN_RESOURCES.resolve(Path.of("db", "migration", "V1__qpo_baseline_schema.sql")),
+                StandardCharsets.UTF_8);
         assertThat(schema)
                 .contains("idx_item_quote_version_rfq_id_id")
                 .contains("idx_item_quote_version_rfq_status_id")

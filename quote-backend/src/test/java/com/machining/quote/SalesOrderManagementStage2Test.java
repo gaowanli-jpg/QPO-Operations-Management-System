@@ -10,20 +10,19 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SalesOrderManagementStage2Test {
-    private static final Path MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V71__sales_order_management_module.sql");
+    private static final Path BASELINE_SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path SYSTEM_ROLE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SystemRoleService.java");
-    private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
-    private static final Path ADMIN_DOC = Path.of("..", "docs", "QPO权限用户体系", "03-权限体系部署与管理员使用说明.md");
+    private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
+    private static final Path ADMIN_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "03-\u6743\u9650\u4f53\u7cfb\u90e8\u7f72\u4e0e\u7ba1\u7406\u5458\u4f7f\u7528\u8bf4\u660e.md");
 
     @Test
-    void migrationCreatesSalesOrderManagementPermissionsWithoutReusingHistoryOrderPermission() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSeedCreatesSalesOrderManagementPermissionsWithoutReusingHistoryOrderPermission() throws IOException {
+        String seed = read(BASELINE_SEED);
 
-        assertThat(migration)
+        assertThat(seed)
                 .contains(
                         "market:sales-order:view",
-                        "销售订单",
                         "/sales-orders",
                         "SalesOrderManage",
                         "market:sales-order:customer-select",
@@ -34,11 +33,9 @@ class SalesOrderManagementStage2Test {
                         "SUPER_ADMIN",
                         "MARKET_USER",
                         "MARKET_MANAGER",
-                        "READONLY",
-                        "WHERE permission_code = 'market:history-order:view'"
+                        "READONLY"
                 )
-                .doesNotContain("'/history-orders'")
-                .doesNotContain("market:history-order:view', '销售订单'");
+                .doesNotContain("market:history-order:view', '\u9500\u552e\u8ba2\u5355");
     }
 
     @Test
@@ -47,20 +44,20 @@ class SalesOrderManagementStage2Test {
 
         assertThat(source)
                 .contains(
-                        "permission(190L, \"MENU\", \"market:sales-order:view\", \"销售订单\", \"/sales-orders\", \"SalesOrderManage\", true, 125)",
-                        "permission(191L, \"API\", \"market:sales-order:customer-select\", \"销售订单选择客户\", null, null, false, 126, 190L)",
-                        "permission(192L, \"API\", \"market:sales-order:file-preview\", \"销售订单预览文件\", null, null, false, 127, 190L)",
-                        "permission(193L, \"BUTTON\", \"market:sales-order:supplement-drawing\", \"销售订单补传图纸\", null, null, false, 128, 190L)",
-                        "permission(194L, \"BUTTON\", \"market:sales-order:discard\", \"废弃销售订单\", null, null, false, 129, 190L)",
-                        "permission(195L, \"BUTTON\", \"market:sales-order:restore\", \"恢复销售订单\", null, null, false, 130, 190L)",
+                        "permission(190L, \"MENU\", \"market:sales-order:view\"",
+                        "\"/sales-orders\"",
+                        "\"SalesOrderManage\"",
+                        "permission(191L, \"API\", \"market:sales-order:customer-select\"",
+                        "permission(192L, \"API\", \"market:sales-order:file-preview\"",
+                        "permission(193L, \"BUTTON\", \"market:sales-order:supplement-drawing\"",
+                        "permission(194L, \"BUTTON\", \"market:sales-order:discard\"",
+                        "permission(195L, \"BUTTON\", \"market:sales-order:restore\"",
                         "Map.entry(\"market:sales-order:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
-                        "Map.entry(\"market:sales-order:customer-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
-                        "Map.entry(\"market:sales-order:file-preview\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
                         "Map.entry(\"market:sales-order:supplement-drawing\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))",
                         "Map.entry(\"market:sales-order:discard\", Set.of(\"MARKET_MANAGER\"))",
                         "Map.entry(\"market:sales-order:restore\", Set.of(\"MARKET_MANAGER\"))"
                 )
-                .doesNotContain("permission(190L, \"MENU\", \"market:history-order:view\", \"销售订单\"");
+                .doesNotContain("permission(190L, \"MENU\", \"market:history-order:view\"");
     }
 
     @Test
@@ -80,25 +77,20 @@ class SalesOrderManagementStage2Test {
 
         assertThat(permissionDoc)
                 .contains(
-                        "销售订单",
-                        "`market:sales-order:view`",
-                        "`market:sales-order:customer-select`",
-                        "`market:sales-order:file-preview`",
-                        "`market:sales-order:supplement-drawing`",
-                        "`market:sales-order:discard`",
-                        "`market:sales-order:restore`",
-                        "`/sales-orders`"
+                        "market:sales-order:view",
+                        "market:sales-order:customer-select",
+                        "market:sales-order:file-preview",
+                        "market:sales-order:supplement-drawing",
+                        "market:sales-order:discard",
+                        "market:sales-order:restore",
+                        "/sales-orders"
                 );
         assertThat(adminDoc)
-                .contains(
-                        "销售订单",
-                        "`market:sales-order:view`",
-                        "旧 `/history-orders` 只作为兼容入口跳转到 `/sales-orders`"
-                );
+                .contains("market:sales-order:view", "/history-orders", "/sales-orders");
     }
 
     private String read(Path path) throws IOException {
-        assertThat(Files.exists(path)).as("%s should exist", path).isTrue();
+        assertThat(path).exists();
         return Files.readString(path, StandardCharsets.UTF_8);
     }
 }

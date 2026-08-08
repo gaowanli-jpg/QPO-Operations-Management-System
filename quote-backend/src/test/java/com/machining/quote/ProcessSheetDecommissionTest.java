@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProcessSheetDecommissionTest {
     private static final Path QPO_MAIN_JAVA = Path.of("src", "main", "java", "com", "machining", "quote");
     private static final Path QPO_MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
-    private static final Path QPO_SNAPSHOT_DEFAULTS_MIGRATION = QPO_MIGRATIONS.resolve("V37__delivery_ticket_snapshot_defaults.sql");
+    private static final Path QPO_SNAPSHOT_DEFAULTS_MIGRATION = QPO_MIGRATIONS.resolve("V1__qpo_baseline_schema.sql");
     private static final Path APS_SOURCE_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "aps", "ApsSourceService.java");
     private static final Path APS_LEGACY_SOURCE_ROOT = Path.of("..", "aps" + "-system");
 
@@ -81,15 +81,15 @@ class ProcessSheetDecommissionTest {
 
     @Test
     void migrationBackfillsTicketSnapshotsBeforeDroppingRetiredTable() throws IOException {
-        Path migration = QPO_MIGRATIONS.resolve("V36__decommission_order_process_sheet.sql");
+        Path migration = QPO_MIGRATIONS.resolve("V1__qpo_baseline_schema.sql");
 
         assertThat(migration).exists();
         String sql = Files.readString(migration, StandardCharsets.UTF_8);
         assertThat(sql)
-                .contains("UPDATE order_delivery_ticket")
-                .contains("process_route = COALESCE")
-                .contains("material_data = COALESCE")
-                .contains("DROP TABLE IF EXISTS order_process_sheet");
+                .contains("CREATE TABLE order_delivery_ticket")
+                .contains("process_route jsonb DEFAULT '[]'::jsonb")
+                .contains("material_data jsonb DEFAULT '{}'::jsonb")
+                .doesNotContain("CREATE TABLE order_process_sheet");
     }
 
     @Test
@@ -98,9 +98,9 @@ class ProcessSheetDecommissionTest {
         String sql = Files.readString(QPO_SNAPSHOT_DEFAULTS_MIGRATION, StandardCharsets.UTF_8);
 
         assertThat(sql)
-                .contains("process_route = '[]'::jsonb")
-                .contains("material_data = '{}'::jsonb")
-                .contains("ALTER COLUMN process_route SET DEFAULT '[]'::jsonb")
+                .contains("process_route jsonb DEFAULT '[]'::jsonb")
+                .contains("material_data jsonb DEFAULT '{}'::jsonb")
+                .contains("process_route jsonb DEFAULT '[]'::jsonb")
                 .doesNotContain("item_quote_version.process_route");
     }
 

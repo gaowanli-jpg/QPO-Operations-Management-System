@@ -30,8 +30,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class PermissionSystemStage1Stage2Test {
-    private static final Path MIGRATION = Path.of("src", "main", "resources", "db", "migration",
-            "V25__enterprise_permission_system.sql");
+    private static final Path SCHEMA_BASELINE = Path.of("src", "main", "resources", "db", "migration",
+            "V1__qpo_baseline_schema.sql");
+    private static final Path SEED_BASELINE = Path.of("src", "main", "resources", "db", "migration",
+            "V2__qpo_baseline_seed_data.sql");
 
     @AfterEach
     void tearDown() {
@@ -40,19 +42,23 @@ class PermissionSystemStage1Stage2Test {
 
     @Test
     void enterprisePermissionMigrationCreatesTablesSeedsRolesAndMigratesLegacyUsers() throws Exception {
-        assertThat(MIGRATION).exists();
-        String sql = Files.readString(MIGRATION, StandardCharsets.UTF_8);
+        assertThat(SCHEMA_BASELINE).exists();
+        assertThat(SEED_BASELINE).exists();
+        String schema = Files.readString(SCHEMA_BASELINE, StandardCharsets.UTF_8);
+        String seed = Files.readString(SEED_BASELINE, StandardCharsets.UTF_8);
 
-        assertThat(sql)
-                .contains("CREATE TABLE IF NOT EXISTS system_user")
-                .contains("CREATE TABLE IF NOT EXISTS system_dept")
-                .contains("CREATE TABLE IF NOT EXISTS system_post")
-                .contains("CREATE TABLE IF NOT EXISTS system_role")
-                .contains("CREATE TABLE IF NOT EXISTS system_user_role")
-                .contains("CREATE TABLE IF NOT EXISTS system_permission")
-                .contains("CREATE TABLE IF NOT EXISTS system_role_permission")
-                .contains("CREATE TABLE IF NOT EXISTS system_role_data_scope_dept")
-                .contains("CREATE TABLE IF NOT EXISTS system_role_data_scope_customer")
+        assertThat(schema)
+                .contains("CREATE TABLE system_user")
+                .contains("CREATE TABLE system_dept")
+                .contains("CREATE TABLE system_post")
+                .contains("CREATE TABLE system_role")
+                .contains("CREATE TABLE system_user_role")
+                .contains("CREATE TABLE system_permission")
+                .contains("CREATE TABLE system_role_permission")
+                .contains("CREATE TABLE system_role_data_scope_dept")
+                .contains("CREATE TABLE system_role_data_scope_customer")
+                .contains("legacy_user_id");
+        assertThat(seed)
                 .contains("'SUPER_ADMIN'")
                 .contains("'MARKET_USER'")
                 .contains("'ENGINEER_USER'")
@@ -60,11 +66,9 @@ class PermissionSystemStage1Stage2Test {
                 .contains("'ENGINEER_MANAGER'")
                 .contains("'AUDITOR'")
                 .contains("'READONLY'")
-                .contains("legacy_user_id")
-                .contains("FROM erp_user")
-                .contains("WHEN 'ADMIN' THEN 'SUPER_ADMIN'")
-                .contains("WHEN 'MARKET' THEN 'MARKET_USER'")
-                .contains("WHEN 'ENGINEER' THEN 'ENGINEER_USER'");
+                .contains("INSERT INTO erp_user")
+                .contains("INSERT INTO system_user")
+                .contains("INSERT INTO system_user_role");
     }
 
     @Test

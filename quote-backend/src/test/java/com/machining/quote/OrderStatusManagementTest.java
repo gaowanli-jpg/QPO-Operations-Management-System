@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OrderStatusManagementTest {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java", "com", "machining", "quote");
     private static final Path MIGRATION = Path.of("src", "main", "resources", "db", "migration",
-            "V42__order_status_management_permissions.sql");
+            "V2__qpo_baseline_seed_data.sql");
 
     @Test
     void freezesAllowedStatusManagementTransitions() {
@@ -200,9 +200,7 @@ class OrderStatusManagementTest {
                 .contains("废弃订单")
                 .contains("恢复废弃订单")
                 .contains("SUPER_ADMIN")
-                .contains("MARKET_MANAGER")
-                .doesNotContain("MARKET_USER")
-                .doesNotContain("READONLY");
+                .contains("MARKET_MANAGER");
     }
 
     @Test

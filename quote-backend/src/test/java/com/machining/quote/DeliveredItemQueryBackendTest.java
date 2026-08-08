@@ -21,15 +21,15 @@ class DeliveredItemQueryBackendTest {
     private static final Path ORDER_DELIVERY_TICKET_MAPPER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "mapper", "OrderDeliveryTicketMapper.java");
     private static final Path QUERY_INDEX_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path QUERY_OPTIMIZATION_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V52__delivery_part_version_and_exact_customer_filters.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ACTIVE_POOL_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V75__delivered_item_active_pool_indexes.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path INDEX_CLEANUP_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V83__delivery_ticket_index_cleanup.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SCHEMA_SQL = Path.of(
-            "src", "main", "resources", "schema.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
 
     @Test
     void deliveredItemDtosExposeJoinedOrderItemAndExternalSystemFields() throws IOException {
@@ -202,9 +202,9 @@ class DeliveredItemQueryBackendTest {
         assertThat(migration)
                 .contains(
                         "idx_order_delivery_ticket_rfq_no",
-                        "ON order_delivery_ticket(rfq_no, id)",
+                        "ON order_delivery_ticket USING btree (rfq_no, id)",
                         "idx_order_delivery_ticket_delivery_date",
-                        "ON order_delivery_ticket(delivery_date, id)"
+                        "ON order_delivery_ticket USING btree (delivery_date, id)"
                 )
                 .doesNotContain(
                         "idx_order_delivery_ticket_customer_order_no",
@@ -214,36 +214,34 @@ class DeliveredItemQueryBackendTest {
                 .as("Delivered items now support direct part number + version filtering")
                 .contains(
                         "idx_order_delivery_ticket_part_version",
-                        "ON order_delivery_ticket(part_no, version, id)"
+                        "ON order_delivery_ticket USING btree (part_no, version, id)"
                 );
         assertThat(activePoolMigration)
                 .as("Default delivered-item page is an indexed active pool, not a table move")
                 .contains(
                         "idx_order_delivery_ticket_active_flow_id",
-                        "ON order_delivery_ticket(id DESC)",
-                        "NULLIF(BTRIM(material_no), '') IS NULL",
-                        "COALESCE(mes_sync_status, 'PENDING') <> 'SUCCESS'",
-                        "COALESCE(wms_allocate_status, 'PENDING') <> 'SUCCESS'",
+                        "ON order_delivery_ticket USING btree (id DESC)",
+                        "NULLIF(btrim((material_no)::text), ''::text) IS NULL",
+                        "COALESCE(mes_sync_status, 'PENDING'::character varying))::text <> 'SUCCESS'::text",
+                        "COALESCE(wms_allocate_status, 'PENDING'::character varying))::text <> 'SUCCESS'::text",
                         "idx_order_delivery_ticket_completed_flow_id",
-                        "ON order_delivery_ticket(mes_sync_status, wms_allocate_status, id DESC)",
+                        "ON order_delivery_ticket USING btree (mes_sync_status, wms_allocate_status, id DESC)",
                         "idx_delivery_allocation_ticket",
-                        "ON order_delivery_ticket_allocation(ticket_id, id)"
+                        "ON order_delivery_ticket_allocation USING btree (ticket_id, id)"
                 )
                 .doesNotContain(
-                        "CREATE TABLE IF NOT EXISTS delivered_item_history",
+                        "CREATE TABLE delivered_item_history",
                         "DELETE FROM order_delivery_ticket",
                         "INSERT INTO delivered_item_history"
                 );
         assertThat(indexCleanupMigration)
                 .as("Historical RFQ indexes should be normalized to one canonical paging/detail shape")
                 .contains(
-                        "DROP INDEX IF EXISTS idx_order_delivery_ticket_rfq_id;",
-                        "DROP INDEX IF EXISTS idx_order_delivery_ticket_rfq_item;",
-                        "DROP INDEX IF EXISTS idx_order_delivery_ticket_rfq_item_id;",
-                        "CREATE INDEX IF NOT EXISTS idx_order_delivery_ticket_rfq_item_id",
-                        "ON order_delivery_ticket(rfq_id, item_id)"
+                        "CREATE INDEX idx_order_delivery_ticket_rfq_item_id",
+                        "ON order_delivery_ticket USING btree (rfq_id, item_id)"
                 )
                 .doesNotContain(
+                        "idx_order_delivery_ticket_rfq_item ON order_delivery_ticket",
                         "idx_order_delivery_ticket_customer_name",
                         "idx_delivery_allocation_customer_name"
                 );
@@ -251,31 +249,31 @@ class DeliveredItemQueryBackendTest {
                 .as("Fresh schema should include delivered/locked item list indexes that Flyway adds for upgraded databases")
                 .contains(
                         "idx_order_delivery_ticket_material_no",
-                        "ON order_delivery_ticket(material_no, id)",
+                        "ON order_delivery_ticket USING btree (material_no, id)",
                         "idx_order_delivery_ticket_mes_status",
-                        "ON order_delivery_ticket(mes_sync_status, id)",
+                        "ON order_delivery_ticket USING btree (mes_sync_status, id)",
                         "idx_order_delivery_ticket_wms_status",
-                        "ON order_delivery_ticket(wms_allocate_status, id)",
+                        "ON order_delivery_ticket USING btree (wms_allocate_status, id)",
                         "idx_order_delivery_ticket_internal_project",
-                        "ON order_delivery_ticket(internal_project_no, id)",
+                        "ON order_delivery_ticket USING btree (internal_project_no, id)",
                         "idx_order_delivery_ticket_rfq_no",
-                        "ON order_delivery_ticket(rfq_no, id)",
+                        "ON order_delivery_ticket USING btree (rfq_no, id)",
                         "idx_order_delivery_ticket_delivery_date",
-                        "ON order_delivery_ticket(delivery_date, id)",
+                        "ON order_delivery_ticket USING btree (delivery_date, id)",
                         "idx_order_delivery_ticket_active_flow_id",
                         "idx_order_delivery_ticket_completed_flow_id",
                         "idx_delivery_allocation_ticket",
-                        "ON order_delivery_ticket_allocation(ticket_id, id)",
+                        "ON order_delivery_ticket_allocation USING btree (ticket_id, id)",
                         "idx_delivery_allocation_material",
-                        "ON order_delivery_ticket_allocation(material_no, id)",
+                        "ON order_delivery_ticket_allocation USING btree (material_no, id)",
                         "idx_delivery_allocation_part_version",
-                        "ON order_delivery_ticket_allocation(part_no, version, id)",
+                        "ON order_delivery_ticket_allocation USING btree (part_no, version, id)",
                         "idx_delivery_allocation_type",
-                        "ON order_delivery_ticket_allocation(allocation_type, id)",
+                        "ON order_delivery_ticket_allocation USING btree (allocation_type, id)",
                         "idx_delivery_allocation_rfq_no",
-                        "ON order_delivery_ticket_allocation(rfq_no, id)",
+                        "ON order_delivery_ticket_allocation USING btree (rfq_no, id)",
                         "idx_delivery_allocation_delivery_date",
-                        "ON order_delivery_ticket_allocation(delivery_date, id)"
+                        "ON order_delivery_ticket_allocation USING btree (delivery_date, id)"
                 )
                 .doesNotContain(
                         "idx_order_delivery_ticket_customer_name",

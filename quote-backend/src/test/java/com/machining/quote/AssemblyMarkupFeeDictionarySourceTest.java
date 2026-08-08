@@ -18,18 +18,25 @@ class AssemblyMarkupFeeDictionarySourceTest {
     @Test
     void migrationAndSchemaCreateAssemblyMarkupFeeDictionary() throws IOException {
         String migration = Files.readString(
-                MAIN_RESOURCES.resolve("db/migration/V59__assembly_markup_fee_dictionary.sql"),
+                MAIN_RESOURCES.resolve("db/migration/V2__qpo_baseline_seed_data.sql"),
                 StandardCharsets.UTF_8
         );
-        String schema = Files.readString(MAIN_RESOURCES.resolve("schema.sql"), StandardCharsets.UTF_8);
+        String schema = Files.readString(
+                MAIN_RESOURCES.resolve(Path.of("db", "migration", "V1__qpo_baseline_schema.sql")),
+                StandardCharsets.UTF_8
+        );
+        String assemblyFeeSeed = section(
+                migration,
+                "-- Data for Name: dict_assembly_markup_fee",
+                "-- Data for Name: dict_extra_fee_item"
+        );
 
-        assertThat(migration)
-                .contains("CREATE TABLE IF NOT EXISTS dict_assembly_markup_fee")
+        assertThat(assemblyFeeSeed)
                 .contains("INSERT INTO dict_assembly_markup_fee")
-                .contains("FROM dict_markup_fee")
-                .contains("NOT LIKE '%运输%'")
-                .contains("NOT LIKE '%运费%'");
-        assertThat(schema).contains("CREATE TABLE IF NOT EXISTS dict_assembly_markup_fee");
+                .contains("'管理费'", "'利润'", "'税费'")
+                .doesNotContain("'运输费'");
+        assertThat(migration).contains("INSERT INTO dict_markup_fee", "'运输费'");
+        assertThat(schema).contains("CREATE TABLE dict_assembly_markup_fee");
     }
 
     @Test
@@ -76,5 +83,13 @@ class AssemblyMarkupFeeDictionarySourceTest {
 
     private String source(String relativePath) throws IOException {
         return Files.readString(MAIN_JAVA.resolve(relativePath), StandardCharsets.UTF_8);
+    }
+
+    private String section(String source, String startMarker, String endMarker) {
+        int start = source.indexOf(startMarker);
+        int end = source.indexOf(endMarker, start + startMarker.length());
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        return source.substring(start, end);
     }
 }

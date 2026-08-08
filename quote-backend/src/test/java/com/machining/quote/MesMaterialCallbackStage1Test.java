@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MesMaterialCallbackStage1Test {
     private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V73__delivery_ticket_mes_callback.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ORDER_DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERED_ITEM_DTO = Path.of(
@@ -30,16 +30,17 @@ class MesMaterialCallbackStage1Test {
 
         assertThat(migration)
                 .contains(
-                        "ADD COLUMN IF NOT EXISTS mes_request_id VARCHAR(80)",
-                        "ADD COLUMN IF NOT EXISTS mes_external_task_id VARCHAR(120)",
-                        "ADD COLUMN IF NOT EXISTS mes_callback_received_at TIMESTAMP",
-                        "ADD COLUMN IF NOT EXISTS mes_callback_message TEXT",
+                        "mes_request_id character varying(80)",
+                        "mes_external_task_id character varying(120)",
+                        "mes_callback_received_at timestamp without time zone",
+                        "mes_callback_message text",
                         "uk_order_delivery_ticket_mes_request_id",
-                        "WHERE mes_request_id IS NOT NULL",
-                        "CREATE TABLE IF NOT EXISTS order_delivery_ticket_mes_request",
-                        "ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id)",
-                        "mes_request_id VARCHAR(80) NOT NULL",
-                        "request_status VARCHAR(30) NOT NULL DEFAULT 'PROCESSING'",
+                        "mes_request_id IS NOT NULL",
+                        "CREATE TABLE order_delivery_ticket_mes_request",
+                        "ticket_id integer NOT NULL",
+                        "FOREIGN KEY (ticket_id) REFERENCES order_delivery_ticket(id)",
+                        "mes_request_id character varying(80) NOT NULL",
+                        "request_status character varying(30) DEFAULT 'PROCESSING'::character varying NOT NULL",
                         "CALLBACK_PENDING",
                         "uk_delivery_mes_request_request_id",
                         "idx_delivery_mes_request_ticket",

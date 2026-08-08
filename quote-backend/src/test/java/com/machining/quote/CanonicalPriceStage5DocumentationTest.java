@@ -33,7 +33,7 @@ class CanonicalPriceStage5DocumentationTest {
         String legacyCamelUnit = "final" + "UnitPrice";
         String legacyCamelTotal = "final" + "TotalPrice";
 
-        assertThat(read(Path.of("src", "main", "resources", "schema.sql")))
+        assertThat(read(Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql")))
                 .doesNotContain(legacySnakeUnit, legacySnakeTotal);
         assertThat(filesUnder(BACKEND_MAIN.resolve("java")))
                 .allSatisfy(source -> assertThat(source)

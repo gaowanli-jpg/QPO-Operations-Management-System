@@ -50,11 +50,11 @@ class ProcessMasterStage12LegacyRemovalTest {
 
     @Test
     void schemaNoLongerCreatesLegacyDictProcessOrTieredPriceFields() throws IOException {
-        String schema = Files.readString(BACKEND_MAIN.resolve(Path.of("resources", "schema.sql")), StandardCharsets.UTF_8);
+        String schema = Files.readString(BACKEND_MAIN.resolve(Path.of("resources", "db", "migration", "V1__qpo_baseline_schema.sql")), StandardCharsets.UTF_8);
 
         assertThat(schema)
                 .doesNotContain(
-                        "CREATE TABLE IF NOT EXISTS dict_process (",
+                        "CREATE TABLE dict_process (",
                         "INSERT INTO dict_process (",
                         "idx_dict_process_name",
                         "price_1_5",
@@ -66,8 +66,8 @@ class ProcessMasterStage12LegacyRemovalTest {
                         "price_1000_3000",
                         "price_3000_plus")
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS dict_process_category",
-                        "CREATE TABLE IF NOT EXISTS dict_process_detail");
+                        "CREATE TABLE dict_process_category",
+                        "CREATE TABLE dict_process_detail");
     }
 
     private static String readAll(Path root) throws IOException {

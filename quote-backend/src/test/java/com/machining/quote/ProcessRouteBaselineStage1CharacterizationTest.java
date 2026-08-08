@@ -23,7 +23,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                 "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessCategory.java"));
         String detailEntity = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessDetail.java"));
-        String schema = read(Path.of("src", "main", "resources", "schema.sql"));
+        String schema = read(Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql"));
 
         assertThat(legacyEntity).doesNotExist();
         assertThat(legacyMapper).doesNotExist();
@@ -42,13 +42,14 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                 .doesNotContain("price1To5", "price3000Plus");
         assertThat(schema)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS dict_process_category",
-                        "process_code VARCHAR(64) NOT NULL",
-                        "hourly_rate NUMERIC(18, 4) NOT NULL DEFAULT 0",
-                        "CREATE TABLE IF NOT EXISTS dict_process_detail",
-                        "category_id BIGINT NOT NULL REFERENCES dict_process_category(id) ON DELETE RESTRICT")
+                        "CREATE TABLE dict_process_category",
+                        "process_code character varying(64) NOT NULL",
+                        "hourly_rate numeric(18,4) DEFAULT 0 NOT NULL",
+                        "CREATE TABLE dict_process_detail",
+                        "category_id bigint NOT NULL",
+                        "FOREIGN KEY (category_id) REFERENCES dict_process_category(id) ON DELETE RESTRICT")
                 .doesNotContain(
-                        "CREATE TABLE IF NOT EXISTS dict_process (",
+                        "CREATE TABLE dict_process (",
                         "price_1_5",
                         "price_3000_plus",
                         "idx_dict_process_name");

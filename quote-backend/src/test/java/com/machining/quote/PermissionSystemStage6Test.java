@@ -44,12 +44,12 @@ class PermissionSystemStage6Test {
 
     @Test
     void migrationAddsOrderOwnershipColumnsForDataScope() throws Exception {
-        Path migration = MIGRATION_DIR.resolve("V27__data_scope_order_ownership.sql");
+        Path migration = MIGRATION_DIR.resolve("V1__qpo_baseline_schema.sql");
 
         assertThat(migration).exists();
         String sql = Files.readString(migration, StandardCharsets.UTF_8).toLowerCase();
         assertThat(sql)
-                .contains("alter table order_rfq")
+                .contains("create table order_rfq")
                 .contains("created_by")
                 .contains("owner_user_id")
                 .contains("owner_dept_id")

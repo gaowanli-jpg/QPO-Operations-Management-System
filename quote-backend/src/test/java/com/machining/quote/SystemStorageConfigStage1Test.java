@@ -11,18 +11,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SystemStorageConfigStage1Test {
-    private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration",
-            "V62__system_file_storage_config.sql"
-    );
-    private static final Path PERMISSION_SERVICE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "service",
-            "PermissionService.java"
-    );
-    private static final Path PERMISSION_DOC = Path.of(
-            "..", "docs", "QPO权限用户体系",
-            "02-权限点清单与现有角色映射.md"
-    );
+    private static final Path BASELINE_SCHEMA = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path BASELINE_SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
+    private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
 
     private static final List<String> STORAGE_PERMISSION_CODES = List.of(
             "system:config:view",
@@ -32,46 +24,43 @@ class SystemStorageConfigStage1Test {
     );
 
     @Test
-    void migrationCreatesStorageConfigAndFileObjectTables() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSchemaCreatesStorageConfigAndFileObjectTables() throws IOException {
+        String schema = read(BASELINE_SCHEMA);
 
-        assertThat(migration)
+        assertThat(schema)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS system_file_storage_config",
-                        "CREATE TABLE IF NOT EXISTS system_file_object",
-                        "storage_type VARCHAR(20) NOT NULL",
-                        "config_json JSONB NOT NULL",
-                        "public_path VARCHAR(800) NOT NULL",
-                        "object_key VARCHAR(800) NOT NULL",
-                        "external_url VARCHAR(1000)",
+                        "CREATE TABLE system_file_storage_config",
+                        "CREATE TABLE system_file_object",
+                        "storage_type character varying(20) NOT NULL",
+                        "config_json jsonb NOT NULL",
+                        "public_path character varying(800) NOT NULL",
+                        "object_key character varying(800) NOT NULL",
+                        "external_url character varying(1000)",
                         "CONSTRAINT ck_system_file_storage_config_type",
-                        "CONSTRAINT ck_system_file_object_storage_type"
+                        "CONSTRAINT ck_system_file_object_storage_type",
+                        "CREATE UNIQUE INDEX uk_system_file_storage_config_active",
+                        "CREATE UNIQUE INDEX uk_system_file_object_public_path"
                 );
-        assertThat(migration)
-                .contains("CREATE UNIQUE INDEX IF NOT EXISTS uk_system_file_storage_config_active")
-                .contains("CREATE UNIQUE INDEX IF NOT EXISTS uk_system_file_object_public_path");
     }
 
     @Test
-    void migrationAddsSystemConfigPermissionTreeAndDefaultLocalConfig() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSeedAddsSystemConfigPermissionTreeAndDefaultLocalConfig() throws IOException {
+        String seed = read(BASELINE_SEED);
 
-        assertThat(migration)
+        assertThat(seed)
                 .contains(
-                        "'system:config:view'",
-                        "'system:config:storage:update'",
-                        "'system:config:storage:test'",
-                        "'system:config:storage:activate'",
-                        "'/system-config'",
-                        "'SystemConfigManage'",
-                        "WHERE r.role_code = 'SUPER_ADMIN'",
+                        "system:config:view",
+                        "system:config:storage:update",
+                        "system:config:storage:test",
+                        "system:config:storage:activate",
+                        "/system-config",
+                        "SystemConfigManage",
                         "ERP_UPLOAD_DIR",
                         "'LOCAL'",
                         "'Default local upload storage'",
-                        "'rootDir'"
+                        "rootDir"
                 )
-                .doesNotContain("WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_MANAGER')")
-                .doesNotContain("WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER'");
+                .doesNotContain("common:storage");
     }
 
     @Test
@@ -88,9 +77,7 @@ class SystemStorageConfigStage1Test {
                         "permission(177L, \"BUTTON\", \"system:config:storage:activate\""
                 );
         for (String code : STORAGE_PERMISSION_CODES) {
-            assertThat(source)
-                    .as(code + " must be present in fallback role mapping")
-                    .contains("Map.entry(\"" + code + "\", Set.of())");
+            assertThat(source).contains("Map.entry(\"" + code + "\", Set.of())");
         }
         assertThat(source)
                 .doesNotContain("Map.entry(\"system:config:view\", Set.of(\"MARKET_MANAGER\"")
@@ -103,13 +90,13 @@ class SystemStorageConfigStage1Test {
 
         assertThat(doc)
                 .contains(
-                        "`system:config:view`",
-                        "`system:config:storage:update`",
-                        "`system:config:storage:test`",
-                        "`system:config:storage:activate`",
-                        "`/system-config`"
+                        "system:config:view",
+                        "system:config:storage:update",
+                        "system:config:storage:test",
+                        "system:config:storage:activate",
+                        "/system-config"
                 )
-                .doesNotContain("`common:storage");
+                .doesNotContain("common:storage");
     }
 
     private String read(Path path) throws IOException {

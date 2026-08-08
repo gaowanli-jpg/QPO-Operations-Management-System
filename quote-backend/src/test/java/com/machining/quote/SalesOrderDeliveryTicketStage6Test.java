@@ -41,9 +41,9 @@ class SalesOrderDeliveryTicketStage6Test {
     private static final Path BACKEND = Path.of("src", "main");
     private static final Path MAIN_JAVA = BACKEND.resolve(Path.of("java", "com", "machining", "quote"));
     private static final Path MIGRATION = BACKEND.resolve(Path.of("resources", "db", "migration",
-            "V66__delivery_ticket_source_fields.sql"));
+            "V1__qpo_baseline_schema.sql"));
     private static final Path CUSTOMER_REQUIREMENT_MIGRATION = BACKEND.resolve(Path.of("resources", "db", "migration",
-            "V85__release_item_customer_requirement.sql"));
+            "V1__qpo_baseline_schema.sql"));
 
     @Test
     void migrationAndEntitiesAddSourceIdentityToDeliveryTickets() throws Exception {
@@ -56,20 +56,16 @@ class SalesOrderDeliveryTicketStage6Test {
 
         assertThat(migration)
                 .contains(
-                        "ALTER TABLE order_delivery_ticket",
-                        "ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'RFQ'",
-                        "ADD COLUMN IF NOT EXISTS source_order_id BIGINT",
-                        "ADD COLUMN IF NOT EXISTS source_item_id BIGINT",
-                        "ADD COLUMN IF NOT EXISTS drawing_url VARCHAR(500)",
-                        "UPDATE order_delivery_ticket",
-                        "source_type = 'RFQ'",
-                        "source_order_id = rfq_id",
-                        "source_item_id = item_id",
+                        "CREATE TABLE order_delivery_ticket",
+                        "source_type character varying(30) DEFAULT 'RFQ'::character varying NOT NULL",
+                        "source_order_id bigint",
+                        "source_item_id bigint",
+                        "drawing_url character varying(500)",
                         "idx_order_delivery_ticket_source",
-                        "ALTER TABLE order_delivery_ticket_allocation",
-                        "ADD COLUMN IF NOT EXISTS source_type VARCHAR(30)",
-                        "ADD COLUMN IF NOT EXISTS source_order_id BIGINT",
-                        "ADD COLUMN IF NOT EXISTS source_item_id BIGINT"
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "source_type character varying(30)",
+                        "source_order_id bigint",
+                        "source_item_id bigint"
                 );
         assertThat(ticket)
                 .contains(
@@ -102,10 +98,11 @@ class SalesOrderDeliveryTicketStage6Test {
                 );
         assertThat(customerRequirementMigration)
                 .contains(
-                        "ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS customer_requirement TEXT",
-                        "ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS customer_requirement TEXT",
-                        "ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS customer_requirement TEXT",
-                        "ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS customer_requirement TEXT"
+                        "CREATE TABLE item_quote_version",
+                        "CREATE TABLE sales_order_item",
+                        "CREATE TABLE order_delivery_ticket",
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "customer_requirement text"
                 );
     }
 

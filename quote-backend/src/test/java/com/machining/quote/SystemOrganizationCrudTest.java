@@ -138,7 +138,7 @@ class SystemOrganizationCrudTest {
 
     @Test
     void organizationPermissionMigrationSeedsOrgMenuAndSuperAdminGrants() throws Exception {
-        Path migration = Path.of("src/main/resources/db/migration/V40__organization_identity_permissions.sql");
+        Path migration = Path.of("src/main/resources/db/migration/V2__qpo_baseline_seed_data.sql");
 
         assertThat(migration).exists();
         String sql = Files.readString(migration, StandardCharsets.UTF_8);

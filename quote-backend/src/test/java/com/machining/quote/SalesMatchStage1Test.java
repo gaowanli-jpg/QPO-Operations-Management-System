@@ -11,7 +11,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SalesMatchStage1Test {
     private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V68__sales_match_module.sql");
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path BASELINE_SCHEMA = Path.of(
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path PERMISSION_DOC = Path.of(
@@ -21,6 +23,7 @@ class SalesMatchStage1Test {
     void migrationAddsSalesMatchPermissionAndAssemblySchema() throws IOException {
         assertThat(MIGRATION).exists();
         String migration = read(MIGRATION);
+        String schema = read(BASELINE_SCHEMA);
 
         assertThat(migration)
                 .contains(
@@ -30,11 +33,16 @@ class SalesMatchStage1Test {
                         "market:sales-match:apply",
                         "market:sales-match:file-preview",
                         "/sales-match",
-                        "SalesMatch",
+                        "SalesMatch")
+                .doesNotContain("common:sales-match");
+        assertThat(schema)
+                .contains(
                         "assembly_relation_status",
-                        "CREATE TABLE IF NOT EXISTS sales_order_item_assembly_relation",
-                        "parent_item_id BIGINT NOT NULL REFERENCES sales_order_item(id)",
-                        "child_item_id BIGINT NOT NULL REFERENCES sales_order_item(id)",
+                        "CREATE TABLE sales_order_item_assembly_relation",
+                        "parent_item_id bigint NOT NULL",
+                        "child_item_id bigint NOT NULL",
+                        "FOREIGN KEY (parent_item_id) REFERENCES sales_order_item(id) ON DELETE CASCADE",
+                        "FOREIGN KEY (child_item_id) REFERENCES sales_order_item(id) ON DELETE CASCADE",
                         "qty_per_parent",
                         "sort_no",
                         "source_parent_item_id",
@@ -42,7 +50,7 @@ class SalesMatchStage1Test {
                 )
                 .doesNotContain(
                         "common:sales-match",
-                        "sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id)"
+                        "sales_order_id bigint NOT NULL REFERENCES sales_order_header(id)"
                 );
     }
 

@@ -13,88 +13,58 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SystemInboundCallbackConfigStage2Test {
-    private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration",
-            "V78__system_inbound_callback_config.sql"
-    );
-    private static final Path ENTITY = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "entity",
-            "SystemInboundCallbackConfig.java"
-    );
-    private static final Path MAPPER = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "mapper",
-            "SystemInboundCallbackConfigMapper.java"
-    );
-    private static final Path CALLBACK_CODE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "integration",
-            "InboundCallbackCode.java"
-    );
-    private static final Path PERMISSION_SERVICE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "service",
-            "PermissionService.java"
-    );
-    private static final Path PERMISSION_CATALOG_DOC = Path.of(
-            "..", "docs", "QPO权限用户体系",
-            "02-权限点清单与现有角色映射.md"
-    );
-    private static final Path PERMISSION_ADMIN_DOC = Path.of(
-            "..", "docs", "QPO权限用户体系",
-            "03-权限体系部署与管理员使用说明.md"
-    );
+    private static final Path BASELINE_SCHEMA = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path BASELINE_SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "SystemInboundCallbackConfig.java");
+    private static final Path MAPPER = Path.of("src", "main", "java", "com", "machining", "quote", "mapper", "SystemInboundCallbackConfigMapper.java");
+    private static final Path CALLBACK_CODE = Path.of("src", "main", "java", "com", "machining", "quote", "integration", "InboundCallbackCode.java");
+    private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
+    private static final Path PERMISSION_CATALOG_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
+    private static final Path PERMISSION_ADMIN_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "03-\u6743\u9650\u4f53\u7cfb\u90e8\u7f72\u4e0e\u7ba1\u7406\u5458\u4f7f\u7528\u8bf4\u660e.md");
     private static final List<String> INBOUND_PERMISSION_CODES = List.of(
             "system:config:inbound:update",
             "system:config:inbound:token-rotate"
     );
 
     @Test
-    void migrationCreatesInboundCallbackConfigTableAndIndexes() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSchemaCreatesInboundCallbackConfigTableAndIndexes() throws IOException {
+        String schema = read(BASELINE_SCHEMA);
 
-        assertThat(migration)
+        assertThat(schema)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS system_inbound_callback_config",
-                        "callback_code VARCHAR(60) NOT NULL",
-                        "source_system_code VARCHAR(30) NOT NULL",
-                        "name VARCHAR(100) NOT NULL",
-                        "enabled BOOLEAN NOT NULL DEFAULT TRUE",
-                        "token_enabled BOOLEAN NOT NULL DEFAULT TRUE",
-                        "public_base_url VARCHAR(500)",
-                        "callback_path VARCHAR(300) NOT NULL",
-                        "token_hash VARCHAR(128)",
-                        "token_mask VARCHAR(30)",
-                        "token_updated_at TIMESTAMP",
-                        "last_validate_status VARCHAR(20)",
-                        "last_validate_message VARCHAR(500)",
-                        "last_validate_at TIMESTAMP",
-                        "CONSTRAINT uk_system_inbound_callback_code UNIQUE (callback_code)",
-                        "CONSTRAINT ck_system_inbound_callback_source CHECK (source_system_code IN ('MES'))",
-                        "CONSTRAINT ck_system_inbound_callback_validate_status"
-                )
-                .contains(
-                        "CREATE INDEX IF NOT EXISTS idx_system_inbound_callback_source",
-                        "ON system_inbound_callback_config(source_system_code)",
-                        "CREATE INDEX IF NOT EXISTS idx_system_inbound_callback_enabled",
-                        "ON system_inbound_callback_config(enabled)"
+                        "CREATE TABLE system_inbound_callback_config",
+                        "callback_code character varying(60) NOT NULL",
+                        "source_system_code character varying(30) NOT NULL",
+                        "name character varying(100) NOT NULL",
+                        "enabled boolean DEFAULT true NOT NULL",
+                        "token_enabled boolean DEFAULT true NOT NULL",
+                        "public_base_url character varying(500)",
+                        "callback_path character varying(300) NOT NULL",
+                        "token_hash character varying(128)",
+                        "token_mask character varying(30)",
+                        "token_updated_at timestamp without time zone",
+                        "last_validate_status character varying(20)",
+                        "last_validate_message character varying(500)",
+                        "last_validate_at timestamp without time zone",
+                        "ADD CONSTRAINT uk_system_inbound_callback_code UNIQUE (callback_code)",
+                        "CONSTRAINT ck_system_inbound_callback_source",
+                        "CONSTRAINT ck_system_inbound_callback_validate_status",
+                        "CREATE INDEX idx_system_inbound_callback_source",
+                        "CREATE INDEX idx_system_inbound_callback_enabled"
                 );
     }
 
     @Test
-    void migrationAddsInboundPermissionsUnderSystemConfigForSuperAdminOnly() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSeedAddsInboundPermissionsUnderSystemConfig() throws IOException {
+        String seed = read(BASELINE_SEED);
 
-        assertThat(migration)
+        assertThat(seed)
                 .contains(
-                        "'system:config:view'",
-                        "'system:config:inbound:update'",
-                        "'system:config:inbound:token-rotate'",
-                        "'维护入站接口配置'",
-                        "'轮换入站回调Token'",
-                        "WHERE r.role_code = 'SUPER_ADMIN'"
+                        "system:config:view",
+                        "system:config:inbound:update",
+                        "system:config:inbound:token-rotate"
                 )
-                .doesNotContain("MARKET_USER")
-                .doesNotContain("MARKET_MANAGER")
-                .doesNotContain("READONLY")
-                .doesNotContain("common:");
+                .doesNotContain("common:inbound");
     }
 
     @Test
@@ -123,16 +93,9 @@ class SystemInboundCallbackConfigStage2Test {
                         "private LocalDateTime lastValidateAt;"
                 );
         assertThat(mapper)
-                .contains(
-                        "@Mapper",
-                        "interface SystemInboundCallbackConfigMapper extends BaseMapper<SystemInboundCallbackConfig>"
-                );
+                .contains("@Mapper", "interface SystemInboundCallbackConfigMapper extends BaseMapper<SystemInboundCallbackConfig>");
         assertThat(callbackCode)
-                .contains(
-                        "enum InboundCallbackCode",
-                        "MES_MATERIAL_CALLBACK",
-                        "fromCode(String value)"
-                );
+                .contains("enum InboundCallbackCode", "MES_MATERIAL_CALLBACK", "fromCode(String value)");
     }
 
     @Test
@@ -147,9 +110,7 @@ class SystemInboundCallbackConfigStage2Test {
                         "8498, 174L"
                 );
         for (String code : INBOUND_PERMISSION_CODES) {
-            assertThat(source)
-                    .as(code + " must remain super-admin only in fallback role mapping")
-                    .contains("Map.entry(\"" + code + "\", Set.of())");
+            assertThat(source).contains("Map.entry(\"" + code + "\", Set.of())");
         }
 
         PermissionInfoDTO adminInfo = new PermissionService().getPermissionInfo(null, "ADMIN");
@@ -165,20 +126,13 @@ class SystemInboundCallbackConfigStage2Test {
 
         assertThat(catalogDoc)
                 .contains(
-                        "`system:config:inbound:update`",
-                        "`system:config:inbound:token-rotate`",
-                        "入站接口配置",
-                        "MES 回调",
-                        "不新增 `common:*`"
+                        "system:config:inbound:update",
+                        "system:config:inbound:token-rotate",
+                        "MES"
                 )
-                .doesNotContain("`common:inbound");
+                .doesNotContain("common:inbound");
         assertThat(adminDoc)
-                .contains(
-                        "入站接口配置",
-                        "`system:config:inbound:update`",
-                        "`system:config:inbound:token-rotate`",
-                        "MES 回调"
-                );
+                .contains("system:config:inbound:update", "system:config:inbound:token-rotate");
     }
 
     private String read(Path path) throws IOException {

@@ -215,7 +215,7 @@ class CoreWorkflowIntegrationTests {
     @Test
     void quoteLeadTimeCanBeSetInBatchAndClearedToCustomerLeadTime() {
         OrderRfq order = new OrderRfq();
-        order.setRfqNo("QUOTE-DATE-" + System.nanoTime());
+        order.setRfqNo("QUOTE-date-" + System.nanoTime());
         order.setCustomerName("报价交期客户");
         order.setStatus(QuoteStatusWorkflow.PRICED);
         orderMapper.insert(order);
@@ -249,7 +249,7 @@ class CoreWorkflowIntegrationTests {
     @Test
     void quoteLeadTimeBatchSetRejectsInvalidDateWithoutWriting() {
         OrderRfq order = new OrderRfq();
-        order.setRfqNo("QUOTE-BAD-DATE-" + System.nanoTime());
+        order.setRfqNo("QUOTE-BAD-date-" + System.nanoTime());
         order.setCustomerName("报价非法日期客户");
         order.setStatus(QuoteStatusWorkflow.PRICED);
         orderMapper.insert(order);
@@ -269,7 +269,7 @@ class CoreWorkflowIntegrationTests {
     @Test
     void internalTargetLeadTimeCanBeSetClearedAndUsedForDeliveryOutputs() {
         OrderRfq order = new OrderRfq();
-        order.setRfqNo("INTERNAL-DATE-" + System.nanoTime());
+        order.setRfqNo("INTERNAL-date-" + System.nanoTime());
         order.setCustomerName("内部交期客户");
         order.setStatus("已报价");
         orderMapper.insert(order);
@@ -299,8 +299,8 @@ class CoreWorkflowIntegrationTests {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqIds(List.of(order.getId()));
         req.setOrderType("正式订单");
-        req.setInternalProjectNo("IP-DATE");
-        req.setCustomerOrderNo("CO-DATE");
+        req.setInternalProjectNo("IP-date");
+        req.setCustomerOrderNo("CO-date");
         DeliveryGenerateReq.DeliveryItemReq line = new DeliveryGenerateReq.DeliveryItemReq();
         line.setItemId(item.getId());
         line.setAcceptedQty(1);
@@ -1072,26 +1072,28 @@ class CoreWorkflowIntegrationTests {
     @Test
     void repeatReleasedItemLookupUsesPartialIndexWithoutCustomerOrTicketIndex() throws Exception {
         Path migrationPath = Path.of(
-                "src", "main", "resources", "db", "migration", "V55__repeat_quote_released_item_match_index.sql");
+                "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
         assertThat(migrationPath)
                 .as("阶段 1 必须新增重复件已提单历史零件部分索引迁移")
                 .exists();
 
         String migration = Files.readString(migrationPath, StandardCharsets.UTF_8);
-        String schema = source("src/main/resources/schema.sql");
+        String schema = source("src/main/resources/db/migration/V1__qpo_baseline_schema.sql");
         String combined = migration + "\n" + schema;
 
         assertThat(combined)
                 .contains("idx_item_quote_version_repeat_released_key")
-                .contains("ON item_quote_version(part_no, version, id DESC)")
-                .contains("WHERE status = '\u5df2\u63d0\u5355'")
+                .contains("ON item_quote_version USING btree (part_no, version, id DESC)")
+                .contains("'已提单'::text")
                 .contains("tax_included_unit_price IS NOT NULL")
                 .contains("material_data IS NOT NULL")
                 .contains("process_route IS NOT NULL");
         assertThat(combined)
                 .as("重复件匹配不能退回普通全量联合索引")
                 .doesNotContain("item_quote_version(part_no, version, status, id DESC)");
-        assertThat(migration)
+        String repeatIndex = combined.substring(combined.indexOf("idx_item_quote_version_repeat_released_key"));
+        repeatIndex = repeatIndex.substring(0, repeatIndex.indexOf(";"));
+        assertThat(repeatIndex)
                 .as("重复件匹配索引不能新增客户或提单表专用索引")
                 .doesNotContain("customer")
                 .doesNotContain("order_delivery_ticket");

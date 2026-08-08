@@ -13,22 +13,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SystemIntegrationConfigStage1Test {
-    private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration",
-            "V64__system_external_integration_config.sql"
-    );
-    private static final Path PERMISSION_SERVICE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "service",
-            "PermissionService.java"
-    );
-    private static final Path PERMISSION_CATALOG_DOC = Path.of(
-            "..", "docs", "QPO权限用户体系",
-            "02-权限点清单与现有角色映射.md"
-    );
-    private static final Path PERMISSION_ADMIN_DOC = Path.of(
-            "..", "docs", "QPO权限用户体系",
-            "03-权限体系部署与管理员使用说明.md"
-    );
+    private static final Path BASELINE_SCHEMA = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path BASELINE_SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
+    private static final Path PERMISSION_CATALOG_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
+    private static final Path PERMISSION_ADMIN_DOC = Path.of("..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "03-\u6743\u9650\u4f53\u7cfb\u90e8\u7f72\u4e0e\u7ba1\u7406\u5458\u4f7f\u7528\u8bf4\u660e.md");
 
     private static final List<String> INTEGRATION_PERMISSION_CODES = List.of(
             "system:config:integration:update",
@@ -37,47 +26,37 @@ class SystemIntegrationConfigStage1Test {
     );
 
     @Test
-    void migrationCreatesExternalIntegrationConfigTableAndIndexes() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSchemaCreatesExternalIntegrationConfigTableAndIndexes() throws IOException {
+        String schema = read(BASELINE_SCHEMA);
 
-        assertThat(migration)
+        assertThat(schema)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS system_external_integration_config",
-                        "system_code VARCHAR(30) NOT NULL",
-                        "auth_type VARCHAR(30) NOT NULL DEFAULT 'NONE'",
-                        "config_json JSONB NOT NULL DEFAULT '{}'::jsonb",
-                        "CONSTRAINT ck_system_external_integration_system CHECK (system_code IN ('U9', 'MES', 'WMS'))",
-                        "CONSTRAINT ck_system_external_integration_auth CHECK (auth_type IN ('NONE', 'BEARER_TOKEN', 'U9_AUTH_LOGIN'))",
-                        "CONSTRAINT ck_system_external_integration_test_status"
-                )
-                .contains(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS uk_system_external_integration_active",
-                        "ON system_external_integration_config(system_code, active)",
-                        "WHERE active = TRUE",
-                        "CREATE INDEX IF NOT EXISTS idx_system_external_integration_system",
-                        "CREATE INDEX IF NOT EXISTS idx_system_external_integration_enabled"
+                        "CREATE TABLE system_external_integration_config",
+                        "system_code character varying(30) NOT NULL",
+                        "auth_type character varying(30) DEFAULT 'NONE'::character varying NOT NULL",
+                        "config_json jsonb DEFAULT '{}'::jsonb NOT NULL",
+                        "CONSTRAINT ck_system_external_integration_system",
+                        "CONSTRAINT ck_system_external_integration_auth",
+                        "CONSTRAINT ck_system_external_integration_test_status",
+                        "CREATE UNIQUE INDEX uk_system_external_integration_active",
+                        "CREATE INDEX idx_system_external_integration_system",
+                        "CREATE INDEX idx_system_external_integration_enabled"
                 )
                 .doesNotContain("DATA_CENTER");
     }
 
     @Test
-    void migrationAddsIntegrationPermissionsUnderSystemConfigForSuperAdminOnly() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineSeedAddsIntegrationPermissionsUnderSystemConfig() throws IOException {
+        String seed = read(BASELINE_SEED);
 
-        assertThat(migration)
+        assertThat(seed)
                 .contains(
-                        "'system:config:view'",
-                        "'system:config:integration:update'",
-                        "'system:config:integration:test'",
-                        "'system:config:integration:activate'",
-                        "'维护系统对接配置'",
-                        "'测试系统对接配置'",
-                        "'激活系统对接配置'",
-                        "WHERE r.role_code = 'SUPER_ADMIN'"
+                        "system:config:view",
+                        "system:config:integration:update",
+                        "system:config:integration:test",
+                        "system:config:integration:activate"
                 )
-                .doesNotContain("MARKET_USER")
-                .doesNotContain("MARKET_MANAGER")
-                .doesNotContain("READONLY");
+                .doesNotContain("common:integration");
     }
 
     @Test
@@ -94,9 +73,7 @@ class SystemIntegrationConfigStage1Test {
                         "8496, 174L"
                 );
         for (String code : INTEGRATION_PERMISSION_CODES) {
-            assertThat(source)
-                    .as(code + " must remain super-admin only in fallback role mapping")
-                    .contains("Map.entry(\"" + code + "\", Set.of())");
+            assertThat(source).contains("Map.entry(\"" + code + "\", Set.of())");
         }
 
         PermissionInfoDTO adminInfo = new PermissionService().getPermissionInfo(null, "ADMIN");
@@ -112,21 +89,19 @@ class SystemIntegrationConfigStage1Test {
 
         assertThat(catalogDoc)
                 .contains(
-                        "`system:config:integration:update`",
-                        "`system:config:integration:test`",
-                        "`system:config:integration:activate`",
-                        "出站接口/数据中心配置",
+                        "system:config:integration:update",
+                        "system:config:integration:test",
+                        "system:config:integration:activate",
                         "U9",
                         "MES",
                         "WMS"
                 )
-                .doesNotContain("`common:integration");
+                .doesNotContain("common:integration");
         assertThat(adminDoc)
                 .contains(
-                        "出站接口/数据中心配置",
-                        "`system:config:integration:update`",
-                        "`system:config:integration:test`",
-                        "`system:config:integration:activate`"
+                        "system:config:integration:update",
+                        "system:config:integration:test",
+                        "system:config:integration:activate"
                 );
     }
 

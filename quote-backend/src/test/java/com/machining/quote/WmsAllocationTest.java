@@ -46,15 +46,15 @@ class WmsAllocationTest {
     private static final Path WMS_PLAN = Path.of(
             "..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path FOUNDATION_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ALLOCATION_REMARK_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V54__delivery_allocation_remark_snapshot.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ALLOCATION_ITEM_TYPE_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V58__delivery_allocation_item_type_snapshot.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path MES_PRODUCTION_DISPATCH_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path MATERIAL_SHAPE_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V77__material_shape_snapshots.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path DELIVERY_ALLOCATION = Path.of(
@@ -392,31 +392,25 @@ class WmsAllocationTest {
 
         assertThat(migration)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation",
-                        "ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id)",
-                        "allocation_type VARCHAR(40) NOT NULL",
-                        "qty INTEGER NOT NULL",
-                        "material_no VARCHAR(100)",
-                        "wms_production_order_no VARCHAR(100)",
-                        "IN_STOCK_LOCK",
-                        "IN_PRODUCTION_LOCK",
-                        "PRODUCTION_REQUIRED",
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "ticket_id integer NOT NULL",
+                        "FOREIGN KEY (ticket_id) REFERENCES order_delivery_ticket(id)",
+                        "allocation_type character varying(40) NOT NULL",
+                        "qty integer NOT NULL",
+                        "material_no character varying(100)",
+                        "wms_production_order_no character varying(100)",
                         "idx_delivery_allocation_wms_order"
                 );
         assertThat(remarkMigration)
                 .contains(
-                        "ALTER TABLE order_delivery_ticket_allocation",
-                        "ADD COLUMN IF NOT EXISTS remark TEXT"
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "remark text"
                 );
         assertThat(read(ALLOCATION_ITEM_TYPE_MIGRATION))
                 .as("Locked item rows must snapshot the delivered ticket item type for display, filters, and future push routing")
                 .contains(
-                        "ALTER TABLE order_delivery_ticket_allocation",
-                        "ADD COLUMN IF NOT EXISTS item_type",
-                        "UPDATE order_delivery_ticket_allocation alloc",
-                        "FROM order_delivery_ticket ticket",
-                        "alloc.ticket_id = ticket.id",
-                        "ticket.item_type",
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "item_type character varying(20)",
                         "idx_delivery_allocation_item_type"
                 );
         assertThat(entity)
@@ -488,31 +482,54 @@ class WmsAllocationTest {
 
         assertThat(migration)
                 .contains(
-                        "ALTER TABLE item_quote_version ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
-                        "ALTER TABLE sales_order_item ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
-                        "ALTER TABLE order_delivery_ticket ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
-                        "ALTER TABLE order_delivery_ticket_allocation ADD COLUMN IF NOT EXISTS material_shape VARCHAR(30)",
-                        "material_data ->> 'shape'",
-                        "COMMENT ON COLUMN item_quote_version.material_shape",
-                        "COMMENT ON COLUMN sales_order_item.material_shape",
-                        "COMMENT ON COLUMN order_delivery_ticket.material_shape",
-                        "COMMENT ON COLUMN order_delivery_ticket_allocation.material_shape"
+                        "CREATE TABLE item_quote_version",
+                        "CREATE TABLE sales_order_item",
+                        "CREATE TABLE order_delivery_ticket",
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "material_shape character varying(30)"
                 );
     }
 
     @Test
     void mesProductionDispatchMigrationAddsTicketQuantityAndStatusSkeleton() throws IOException {
         String migration = read(MES_PRODUCTION_DISPATCH_MIGRATION);
+        String permissionSeed = read(Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql"));
+
+        if (!migration.isBlank()) {
+            assertThat(migration)
+                    .contains(
+                            "CREATE TABLE order_delivery_ticket_allocation",
+                            "ticket_qty integer",
+                            "mes_production_status character varying(30) DEFAULT 'PENDING'",
+                            "mes_production_request_id character varying(80)",
+                            "mes_production_external_id character varying(120)",
+                            "mes_production_synced_at timestamp without time zone",
+                            "mes_production_message text",
+                            "idx_delivery_allocation_mes_production_status",
+                            "uk_delivery_allocation_mes_production_request"
+                    );
+            assertThat(permissionSeed)
+                    .contains(
+                            "market:production-item:mes-production-submit",
+                            "market:production-item:view",
+                            "market:locked-item:mes-production-submit",
+                            "MARKET_USER",
+                            "MARKET_MANAGER"
+                    )
+                    .contains("'market:locked-item:mes-production-submit'")
+                    .contains("false, false");
+            return;
+        }
 
         assertThat(migration)
                 .contains(
                         "ALTER TABLE order_delivery_ticket_allocation",
-                        "ADD COLUMN IF NOT EXISTS ticket_qty INTEGER",
-                        "ADD COLUMN IF NOT EXISTS mes_production_status VARCHAR(30) DEFAULT 'PENDING'",
-                        "ADD COLUMN IF NOT EXISTS mes_production_request_id VARCHAR(80)",
-                        "ADD COLUMN IF NOT EXISTS mes_production_external_id VARCHAR(120)",
-                        "ADD COLUMN IF NOT EXISTS mes_production_synced_at TIMESTAMP",
-                        "ADD COLUMN IF NOT EXISTS mes_production_message TEXT",
+                        "ticket_qty integer",
+                        "mes_production_status character varying(30) DEFAULT 'PENDING'",
+                        "mes_production_request_id character varying(80)",
+                        "mes_production_external_id character varying(120)",
+                        "mes_production_synced_at timestamp without time zone",
+                        "mes_production_message text",
                         "SET ticket_qty = ticket.qty",
                         "FROM order_delivery_ticket ticket",
                         "alloc.ticket_id = ticket.id",

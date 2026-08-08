@@ -11,34 +11,35 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CustomerMasterStage1Test {
-    private static final Path MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V61__customer_master.sql");
+    private static final Path SCHEMA_BASELINE = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path SEED_BASELINE = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path LOG_DOC = Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md");
 
     @Test
-    void migrationCreatesCustomerMasterAndInitializesHistoricalCustomers() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineCreatesCustomerMasterWithoutOperationalCustomerSeed() throws IOException {
+        String schema = read(SCHEMA_BASELINE);
+        String seed = read(SEED_BASELINE);
 
-        assertThat(migration)
-                .contains("CREATE TABLE IF NOT EXISTS customer_master")
-                .contains("customer_code VARCHAR(200) NOT NULL")
-                .contains("customer_short_name VARCHAR(200) NOT NULL")
-                .contains("customer_name VARCHAR(200) NOT NULL")
+        assertThat(schema)
+                .contains("CREATE TABLE customer_master")
+                .contains("customer_code character varying(200) NOT NULL")
+                .contains("customer_short_name character varying(200) NOT NULL")
+                .contains("customer_name character varying(200) NOT NULL")
                 .contains("uk_customer_master_code")
                 .contains("uk_customer_master_short_name")
-                .contains("uk_customer_master_name")
-                .contains("INSERT INTO customer_master")
-                .contains("SELECT DISTINCT TRIM(customer_name)")
-                .contains("FROM order_rfq")
-                .contains("ON CONFLICT DO NOTHING");
+                .contains("uk_customer_master_name");
+        assertThat(seed)
+                .doesNotContain("INSERT INTO customer_master")
+                .doesNotContain("FROM order_rfq");
     }
 
     @Test
     void migrationAddsSystemCustomerPermissionsAndDefaultRoleGrants() throws IOException {
-        String migration = read(MIGRATION);
+        String seed = read(SEED_BASELINE);
 
-        assertThat(migration)
+        assertThat(seed)
                 .contains("'system:customer:view'")
                 .contains("'system:customer:create'")
                 .contains("'system:customer:update'")

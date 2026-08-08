@@ -11,9 +11,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DeliveredItemFoundationTest {
     private static final Path FOUNDATION_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V45__delivery_ticket_mes_wms_foundation.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path SEED_BASELINE = Path.of(
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
     private static final Path ALLOCATION_SNAPSHOT_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V48__delivery_allocation_snapshot_fields.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ORDER_DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path ORDER_DELIVERY_TICKET_ALLOCATION = Path.of(
@@ -41,13 +43,17 @@ class DeliveredItemFoundationTest {
         assertThat(migration)
                 .as("WMS split rows must be modeled as a child table of order_delivery_ticket")
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS order_delivery_ticket_allocation",
-                        "ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id)",
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "ticket_id integer NOT NULL",
+                        "FOREIGN KEY (ticket_id) REFERENCES order_delivery_ticket(id)",
                         "IN_STOCK_LOCK",
                         "IN_PRODUCTION_LOCK",
                         "PRODUCTION_REQUIRED"
                 );
+        String seed = read(SEED_BASELINE);
         assertThat(migration)
+                .doesNotContain("market:delivered-item:view", "market:delivered-item:file-preview");
+        assertThat(seed)
                 .as("The foundation migration owns the delivered item menu permission")
                 .contains(
                         "market:delivered-item:view",
@@ -63,28 +69,25 @@ class DeliveredItemFoundationTest {
         assertThat(migration)
                 .as("Locked-item rows must physically own the display snapshot, not depend on ticket joins")
                 .contains(
-                        "ALTER TABLE order_delivery_ticket",
-                        "ADD COLUMN IF NOT EXISTS rfq_no",
-                        "ADD COLUMN IF NOT EXISTS customer_name",
-                        "ALTER TABLE order_delivery_ticket_allocation",
-                        "ADD COLUMN IF NOT EXISTS rfq_no",
-                        "ADD COLUMN IF NOT EXISTS customer_order_no",
-                        "ADD COLUMN IF NOT EXISTS customer_project_no",
-                        "ADD COLUMN IF NOT EXISTS material_name",
-                        "ADD COLUMN IF NOT EXISTS engineering_material_name",
-                        "ADD COLUMN IF NOT EXISTS surface_treatment",
-                        "ADD COLUMN IF NOT EXISTS description",
-                        "ADD COLUMN IF NOT EXISTS delivery_date",
-                        "ADD COLUMN IF NOT EXISTS process_route",
-                        "ADD COLUMN IF NOT EXISTS material_data",
-                        "ADD COLUMN IF NOT EXISTS material_gross_weight",
-                        "ADD COLUMN IF NOT EXISTS part_net_weight",
+                        "rfq_no",
+                        "customer_name",
+                        "CREATE TABLE order_delivery_ticket_allocation",
+                        "rfq_no",
+                        "customer_order_no",
+                        "customer_project_no",
+                        "material_name",
+                        "engineering_material_name",
+                        "surface_treatment",
+                        "description",
+                        "delivery_date",
+                        "process_route",
+                        "material_data",
+                        "material_gross_weight",
+                        "part_net_weight"
+                )
+                .doesNotContain(
                         "UPDATE order_delivery_ticket ticket",
-                        "UPDATE order_delivery_ticket_allocation alloc",
-                        "FROM order_delivery_ticket ticket",
-                        "rfq_no = COALESCE(alloc.rfq_no, ticket.rfq_no",
-                        "customer_order_no = COALESCE(alloc.customer_order_no, ticket.customer_order_no)",
-                        "process_route = COALESCE(alloc.process_route, ticket.process_route)"
+                        "UPDATE order_delivery_ticket_allocation alloc"
                 );
     }
 
@@ -132,7 +135,7 @@ class DeliveredItemFoundationTest {
                         "private Double partNetWeight;"
                 );
         assertThat(source)
-                .as("JSONB snapshot fields need explicit type handlers on the allocation entity")
+                .as("jsonb snapshot fields need explicit type handlers on the allocation entity")
                 .contains(
                         "@TableField(typeHandler = JsonbTypeHandler.class)\n    private Object processRoute;",
                         "@TableField(typeHandler = JsonbTypeHandler.class)\n    private Object materialData;"

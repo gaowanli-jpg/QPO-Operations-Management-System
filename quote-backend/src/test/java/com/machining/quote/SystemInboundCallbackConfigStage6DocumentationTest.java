@@ -35,7 +35,7 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path DATA_CENTER_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V81__data_center_integration_config.sql");
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
 
     @Test
     void systemConfigDocsDescribeOutboundInboundSplitAndKeepInboundDetailsInStage4Doc() throws IOException {

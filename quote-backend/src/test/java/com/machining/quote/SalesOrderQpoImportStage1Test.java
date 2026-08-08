@@ -28,8 +28,8 @@ import static org.mockito.Mockito.when;
 
 class SalesOrderQpoImportStage1Test {
     private static final Path INDEPENDENT_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V65__sales_order_independent_tables.sql");
-    private static final Path SCHEMA = Path.of("src", "main", "resources", "schema.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path SCHEMA = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ORDER_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "OrderRfq.java");
     private static final Path ITEM_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "ItemQuoteVersion.java");
     private static final Path SALES_ORDER_HEADER_ENTITY = Path.of(
@@ -57,32 +57,33 @@ class SalesOrderQpoImportStage1Test {
         String schema = read(SCHEMA);
 
         assertThat(migration)
-                .contains("CREATE TABLE IF NOT EXISTS sales_order_header")
-                .contains("sales_order_no VARCHAR(100) NOT NULL")
-                .contains("document_type_code VARCHAR(50) NOT NULL DEFAULT 'SO01'")
-                .contains("customer_id BIGINT")
-                .contains("customer_name VARCHAR(200)")
-                .contains("status VARCHAR(30) NOT NULL DEFAULT '\u5df2\u62a5\u4ef7'")
-                .contains("CREATE TABLE IF NOT EXISTS sales_order_item")
-                .contains("sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id) ON DELETE CASCADE")
-                .contains("sales_material_no VARCHAR(120)")
-                .contains("material_no VARCHAR(120)")
-                .contains("u9_sync_status VARCHAR(30)")
-                .contains("tax_included_unit_price NUMERIC(14, 4)")
-                .contains("untaxed_total_price NUMERIC(14, 2)")
-                .contains("has_drawing BOOLEAN DEFAULT FALSE")
-                .contains("ALTER TABLE sales_order_import_batch ADD COLUMN IF NOT EXISTS import_mode VARCHAR(30) DEFAULT 'U9'")
-                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_id BIGINT")
-                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_no VARCHAR(100)")
-                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0")
-                .contains("COMMENT ON COLUMN order_rfq.source_type IS 'DEPRECATED:")
-                .contains("COMMENT ON COLUMN item_quote_version.sales_order_import_record_id IS 'DEPRECATED:");
+                .contains("CREATE TABLE sales_order_header")
+                .contains("sales_order_no character varying(100) NOT NULL")
+                .contains("document_type_code character varying(50) DEFAULT 'SO01'::character varying NOT NULL")
+                .contains("customer_id bigint")
+                .contains("customer_name character varying(200)")
+                .contains("status character varying(30) DEFAULT")
+                .contains("CREATE TABLE sales_order_item")
+                .contains("sales_order_id bigint NOT NULL")
+                .contains("FOREIGN KEY (sales_order_id) REFERENCES sales_order_header(id) ON DELETE CASCADE")
+                .contains("sales_material_no character varying(120)")
+                .contains("material_no character varying(120)")
+                .contains("u9_sync_status character varying(30)")
+                .contains("tax_included_unit_price numeric(14,4)")
+                .contains("untaxed_total_price numeric(14,2)")
+                .contains("has_drawing boolean DEFAULT false")
+                .contains("CREATE TABLE sales_order_import_batch")
+                .contains("import_mode character varying(20) DEFAULT 'U9'::character varying")
+                .contains("CREATE TABLE sales_order_import_record")
+                .contains("sales_order_id bigint")
+                .contains("sales_order_no character varying(100)")
+                .contains("item_count integer DEFAULT 0");
         assertThat(schema)
-                .contains("CREATE TABLE IF NOT EXISTS sales_order_header")
-                .contains("CREATE TABLE IF NOT EXISTS sales_order_item")
-                .contains("sales_order_id BIGINT NOT NULL REFERENCES sales_order_header(id) ON DELETE CASCADE")
-                .contains("material_no VARCHAR(120)")
-                .contains("ALTER TABLE sales_order_import_record ADD COLUMN IF NOT EXISTS sales_order_id BIGINT");
+                .contains("CREATE TABLE sales_order_header")
+                .contains("CREATE TABLE sales_order_item")
+                .contains("sales_order_id bigint NOT NULL")
+                .contains("material_no character varying(120)")
+                .contains("sales_order_id bigint");
     }
 
     @Test

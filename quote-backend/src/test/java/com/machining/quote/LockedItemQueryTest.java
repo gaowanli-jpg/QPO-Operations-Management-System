@@ -27,13 +27,13 @@ class LockedItemQueryTest {
     private static final Path ORDER_DELIVERY_CONTROLLER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
     private static final Path QUERY_INDEX_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V51__delivery_common_query_indexes.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path MES_PRODUCTION_DISPATCH_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V76__locked_item_mes_production_dispatch.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path MES_PRODUCTION_STATUS_INDEX_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V82__locked_item_mes_production_status_paging_index.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SCHEMA_SQL = Path.of(
-            "src", "main", "resources", "schema.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
 
     @Test
     void lockedItemQueryContractFreezesEndpointsAndPermission() throws IOException {
@@ -280,16 +280,16 @@ class LockedItemQueryTest {
                 .as("Direct production-status filtering should not depend on the status+type composite index for paging")
                 .contains(
                         "idx_delivery_allocation_mes_production_status_id",
-                        "ON order_delivery_ticket_allocation(mes_production_status, id DESC)"
+                        "ON order_delivery_ticket_allocation USING btree (mes_production_status, id DESC)"
                 );
         assertThat(schema)
                 .as("Fresh schema should include the MES production status snapshot fields and the same paging index")
                 .contains(
-                        "ticket_qty INTEGER",
-                        "mes_production_status VARCHAR(30) DEFAULT 'PENDING'",
-                        "mes_production_request_id VARCHAR(80)",
+                        "ticket_qty integer",
+                        "mes_production_status character varying(30) DEFAULT 'PENDING'",
+                        "mes_production_request_id character varying(80)",
                         "idx_delivery_allocation_mes_production_status_id",
-                        "ON order_delivery_ticket_allocation(mes_production_status, id DESC)"
+                        "ON order_delivery_ticket_allocation USING btree (mes_production_status, id DESC)"
                 );
     }
 
@@ -300,11 +300,11 @@ class LockedItemQueryTest {
         assertThat(migration)
                 .contains(
                         "idx_delivery_allocation_rfq_no",
-                        "ON order_delivery_ticket_allocation(rfq_no, id)",
+                        "ON order_delivery_ticket_allocation USING btree (rfq_no, id)",
                         "idx_delivery_allocation_internal_project",
-                        "ON order_delivery_ticket_allocation(internal_project_no, id)",
+                        "ON order_delivery_ticket_allocation USING btree (internal_project_no, id)",
                         "idx_delivery_allocation_delivery_date",
-                        "ON order_delivery_ticket_allocation(delivery_date, id)"
+                        "ON order_delivery_ticket_allocation USING btree (delivery_date, id)"
                 )
                 .doesNotContain(
                         "idx_delivery_allocation_customer_order_no",

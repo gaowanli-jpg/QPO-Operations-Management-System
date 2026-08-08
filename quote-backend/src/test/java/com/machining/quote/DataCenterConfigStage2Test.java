@@ -10,8 +10,11 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DataCenterConfigStage2Test {
-    private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V81__data_center_integration_config.sql"
+    private static final Path SCHEMA_BASELINE = Path.of(
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql"
+    );
+    private static final Path SEED_BASELINE = Path.of(
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql"
     );
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java"
@@ -28,17 +31,17 @@ class DataCenterConfigStage2Test {
 
     @Test
     void migrationCreatesDataCenterConnectionAndEndpointTables() throws IOException {
-        String migration = read(MIGRATION);
+        String schema = read(SCHEMA_BASELINE);
 
-        assertThat(migration)
+        assertThat(schema)
                 .contains(
-                        "CREATE TABLE IF NOT EXISTS system_data_center_config",
-                        "CREATE TABLE IF NOT EXISTS system_data_center_endpoint_config",
-                        "client_secret_cipher TEXT",
-                        "CONSTRAINT ck_system_data_center_grant_type CHECK (grant_type IN ('client_credentials'))",
+                        "CREATE TABLE system_data_center_config",
+                        "CREATE TABLE system_data_center_endpoint_config",
+                        "client_secret_cipher text",
+                        "CONSTRAINT ck_system_data_center_grant_type CHECK",
                         "CONSTRAINT uk_system_data_center_endpoint_code UNIQUE (endpoint_code)",
-                        "CREATE UNIQUE INDEX IF NOT EXISTS uk_system_data_center_active",
-                        "CREATE INDEX IF NOT EXISTS idx_system_data_center_endpoint_target"
+                        "CREATE UNIQUE INDEX uk_system_data_center_active",
+                        "CREATE INDEX idx_system_data_center_endpoint_target"
                 )
                 .doesNotContain(
                         "client_secret=X",
@@ -48,9 +51,9 @@ class DataCenterConfigStage2Test {
 
     @Test
     void migrationSeedsDefaultDataCenterEndpointCodes() throws IOException {
-        String migration = read(MIGRATION);
+        String seed = read(SEED_BASELINE);
 
-        assertThat(migration)
+        assertThat(seed)
                 .contains(
                         "'MES_MATERIAL_RESOLVE'",
                         "'WMS_INVENTORY_ALLOCATE'",
@@ -61,7 +64,8 @@ class DataCenterConfigStage2Test {
                         "'U9_SALES_ORDER_V1'",
                         "'MES_PRODUCTION_DISPATCH_V1'"
                 )
-                .contains("ON CONFLICT (endpoint_code) DO UPDATE");
+                .contains("'MES物料号获取'", "'WMS库存锁定'", "'U9销售订单同步'", "'下发MES生产'")
+                .doesNotContain("ON CONFLICT (endpoint_code) DO UPDATE", "access_token=ey", "client_secret=X");
     }
 
     @Test

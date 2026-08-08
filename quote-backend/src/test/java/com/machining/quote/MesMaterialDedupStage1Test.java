@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MesMaterialDedupStage1Test {
     private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V74__delivery_ticket_mes_dedup.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ORDER_DELIVERY_TICKET = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "OrderDeliveryTicket.java");
     private static final Path MES_REQUEST_ENTITY = Path.of(
@@ -34,26 +34,29 @@ class MesMaterialDedupStage1Test {
 
         assertThat(migration)
                 .contains(
-                        "ADD COLUMN IF NOT EXISTS mes_dedup_key VARCHAR(220)",
-                        "ADD COLUMN IF NOT EXISTS mes_request_role VARCHAR(20)",
-                        "ADD COLUMN IF NOT EXISTS mes_master_ticket_id INTEGER",
-                        "ADD COLUMN IF NOT EXISTS mes_master_request_id VARCHAR(80)",
-                        "ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(220)",
-                        "ADD COLUMN IF NOT EXISTS request_role VARCHAR(20)",
-                        "ADD COLUMN IF NOT EXISTS follower_count INTEGER",
-                        "CREATE TABLE IF NOT EXISTS order_delivery_ticket_mes_waiter",
-                        "master_ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id)",
-                        "master_mes_request_id VARCHAR(80) NOT NULL",
-                        "waiter_ticket_id INTEGER NOT NULL REFERENCES order_delivery_ticket(id)",
+                        "mes_dedup_key character varying(220)",
+                        "mes_request_role character varying(20)",
+                        "mes_master_ticket_id integer",
+                        "mes_master_request_id character varying(80)",
+                        "dedup_key character varying(220)",
+                        "request_role character varying(20)",
+                        "follower_count integer",
+                        "CREATE TABLE order_delivery_ticket_mes_waiter",
+                        "master_ticket_id integer NOT NULL",
+                        "FOREIGN KEY (master_ticket_id) REFERENCES order_delivery_ticket(id)",
+                        "master_mes_request_id character varying(80) NOT NULL",
+                        "waiter_ticket_id integer NOT NULL",
+                        "FOREIGN KEY (waiter_ticket_id) REFERENCES order_delivery_ticket(id)",
                         "uk_delivery_mes_request_active_dedup",
-                        "WHERE request_status IN ('PROCESSING', 'CALLBACK_PENDING')",
+                        "PROCESSING'::character varying",
+                        "CALLBACK_PENDING'::character varying",
                         "uk_delivery_mes_waiter_active_ticket",
                         "idx_delivery_mes_waiter_master_request",
                         "idx_delivery_mes_waiter_dedup");
 
         assertThat(migration)
                 .contains("uk_order_delivery_ticket_mes_request_id")
-                .contains("COMMENT ON TABLE order_delivery_ticket_mes_waiter");
+                .contains("CREATE TABLE order_delivery_ticket_mes_waiter");
     }
 
     @Test

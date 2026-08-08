@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RfqItemMaterialNoConfirmationStage1Test {
     private static final String MATERIAL_UNCONFIRMED = "\u672a\u786e\u8ba4";
     private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V86__rfq_item_material_no_confirmation.sql");
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path ITEM_QUOTE_VERSION = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "ItemQuoteVersion.java");
 
@@ -23,18 +23,16 @@ class RfqItemMaterialNoConfirmationStage1Test {
 
         assertThat(migration)
                 .contains(
-                        "ALTER TABLE item_quote_version",
-                        "ADD COLUMN IF NOT EXISTS material_no VARCHAR(120)",
-                        "ADD COLUMN IF NOT EXISTS material_no_status VARCHAR(30) NOT NULL DEFAULT '" + MATERIAL_UNCONFIRMED + "'",
-                        "ADD COLUMN IF NOT EXISTS material_no_source VARCHAR(30)",
-                        "ADD COLUMN IF NOT EXISTS material_no_source_ticket_id BIGINT",
-                        "ADD COLUMN IF NOT EXISTS material_no_synced_at TIMESTAMP",
-                        "ADD COLUMN IF NOT EXISTS material_no_message TEXT",
-                        "CREATE INDEX IF NOT EXISTS idx_item_quote_version_material_status",
-                        "CREATE INDEX IF NOT EXISTS idx_item_quote_version_material_no_id",
-                        "CREATE INDEX IF NOT EXISTS idx_item_quote_version_material_source_ticket",
-                        "WHERE material_no_source_ticket_id IS NOT NULL",
-                        "COMMENT ON COLUMN item_quote_version.material_no_status")
+                        "material_no character varying(120)",
+                        "material_no_status character varying(30) DEFAULT '" + MATERIAL_UNCONFIRMED + "'::character varying NOT NULL",
+                        "material_no_source character varying(30)",
+                        "material_no_source_ticket_id bigint",
+                        "material_no_synced_at timestamp without time zone",
+                        "material_no_message text",
+                        "CREATE INDEX idx_item_quote_version_material_status",
+                        "CREATE INDEX idx_item_quote_version_material_no_id",
+                        "CREATE INDEX idx_item_quote_version_material_source_ticket",
+                        "WHERE (material_no_source_ticket_id IS NOT NULL)")
                 .doesNotContain(
                         "UPDATE item_quote_version SET material_no = ticket.material_no",
                         "FROM order_delivery_ticket",

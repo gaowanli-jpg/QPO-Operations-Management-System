@@ -46,7 +46,9 @@ class DeliveryDocumentModuleTest {
     private static final Path DELIVERY_DOCUMENT_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "DeliveryDocumentService.java");
     private static final Path DELIVERY_DOCUMENT_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V57__delivery_document_module_permissions.sql");
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path PERMISSION_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private OrderRfqMapper orderRfqMapper;
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
     private DeliveryService deliveryService;
@@ -102,6 +104,7 @@ class DeliveryDocumentModuleTest {
     @Test
     void deliveryDocumentPermissionMigrationAddsIndependentMenuAndExportGrants() throws IOException {
         String migration = read(DELIVERY_DOCUMENT_MIGRATION);
+        String permissionService = read(PERMISSION_SERVICE);
 
         assertThat(migration)
                 .contains(
@@ -116,19 +119,16 @@ class DeliveryDocumentModuleTest {
                         "MARKET_USER",
                         "MARKET_MANAGER",
                         "READONLY"
-                )
-                .doesNotContain(
-                        "market:release:view",
-                        "market:release:reset"
                 );
-        assertThat(migration)
+        assertThat(permissionService)
                 .as("READONLY can view and select, but must not receive delivery document export")
                 .contains(
-                        "p.permission_code IN ('market:delivery-document:view', 'market:delivery-document:customer-select', 'market:delivery-document:order-select')",
-                        "WHERE r.role_code IN ('SUPER_ADMIN', 'MARKET_USER', 'MARKET_MANAGER')",
-                        "AND r.role_code = 'READONLY'",
-                        "AND p.permission_code = 'market:delivery-document:export'"
-                );
+                        "Map.entry(\"market:delivery-document:view\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:delivery-document:customer-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:delivery-document:order-select\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))",
+                        "Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\"))"
+                )
+                .doesNotContain("Map.entry(\"market:delivery-document:export\", Set.of(\"MARKET_USER\", \"MARKET_MANAGER\", \"READONLY\"))");
     }
 
     @Test
