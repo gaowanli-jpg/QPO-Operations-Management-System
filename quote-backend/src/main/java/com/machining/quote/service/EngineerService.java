@@ -284,6 +284,7 @@ public class EngineerService {
         List<Map<String, Object>> processRoute = new ArrayList<>();
         if (safeAssemblyFee > 0) {
             Map<String, Object> assemblyRoute = new LinkedHashMap<>();
+            assemblyRoute.put("routeType", "FEE");
             assemblyRoute.put("sortNo", 10);
             assemblyRoute.put("processName", "组装费");
             assemblyRoute.put("calcType", "非工时费用");
@@ -743,8 +744,7 @@ public class EngineerService {
             if (!hasReusableQuote(sourceItem)) {
                 return "历史重复件缺少可复用核价结果，需手动补齐";
             }
-            applyRepeatNormalQuote(source, currentItem, handledItemIds, appliedItems);
-            return null;
+            return applyRepeatNormalQuote(source, currentItem, handledItemIds, appliedItems);
         } finally {
             visitingItemIds.remove(currentItem.getId());
         }
@@ -801,19 +801,43 @@ public class EngineerService {
         return null;
     }
 
-    private void applyRepeatNormalQuote(RepeatSource source,
-                                        ItemQuoteVersion currentItem,
-                                        Set<Integer> handledItemIds,
-                                        List<Map<String, Object>> appliedItems) {
+    private String applyRepeatNormalQuote(RepeatSource source,
+                                          ItemQuoteVersion currentItem,
+                                          Set<Integer> handledItemIds,
+                                          List<Map<String, Object>> appliedItems) {
         ItemQuoteVersion sourceItem = source.item();
         currentItem.setMaterialName(isBlank(currentItem.getMaterialName()) ? sourceItem.getMaterialName() : currentItem.getMaterialName());
         currentItem.setSurfaceTreatment(isBlank(currentItem.getSurfaceTreatment()) ? sourceItem.getSurfaceTreatment() : currentItem.getSurfaceTreatment());
 
         Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
         List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
+        String processRouteBlockedReason = validateRepeatProcessRoute(processRoute);
+        if (processRouteBlockedReason != null) {
+            return processRouteBlockedReason;
+        }
         MaterialNoReuseResult materialNoResult = reuseConfirmedMaterialNo(currentItem, sourceItem);
         saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight());
         addAppliedRepeatItem(currentItem, source, materialNoResult, handledItemIds, appliedItems);
+        return null;
+    }
+
+    private String validateRepeatProcessRoute(List<QuoteSubmitReq.ProcessSubmitDTO> processRoute) {
+        if (processRoute == null || processRoute.isEmpty()) {
+            return null;
+        }
+        Set<String> extraFeeNames = loadEnabledExtraFeeNames();
+        for (QuoteSubmitReq.ProcessSubmitDTO process : processRoute) {
+            if (process == null || isExtraFeeProcess(process, extraFeeNames)) {
+                continue;
+            }
+            try {
+                processRoutePricingService.priceProcessRows(List.of(process));
+            } catch (IllegalArgumentException | IllegalStateException ex) {
+                String message = isBlank(ex.getMessage()) ? "历史工艺不可用" : ex.getMessage();
+                return message + "，需手动补齐";
+            }
+        }
+        return null;
     }
 
     private void addAppliedRepeatItem(ItemQuoteVersion item,

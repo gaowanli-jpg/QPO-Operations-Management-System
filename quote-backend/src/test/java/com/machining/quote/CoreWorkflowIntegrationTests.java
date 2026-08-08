@@ -844,6 +844,75 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void repeatQuoteRepricesHistoricalProcessRouteWithCurrentCategoryRate() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-PROCESS-REPRICE-" + System.nanoTime());
+        historicalOrder.setCustomerName("历史工艺重算客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = releasedReusableItem(historicalOrder, "RFQ-PROCESS-REPRICE", "A", 20.0);
+
+        Map<String, Object> historicalRoute = ((List<Map<String, Object>>) historicalItem.getProcessRoute()).get(0);
+        DictProcessCategory category = processCategoryMapper.selectById(((Number) historicalRoute.get("processCategoryId")).longValue());
+        category.setHourlyRate(new BigDecimal("25.00"));
+        processCategoryMapper.updateById(category);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-PROCESS-REPRICE-" + System.nanoTime());
+        currentOrder.setCustomerName("当前工艺重算客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "RFQ-PROCESS-REPRICE", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        List<Map<String, Object>> routes = (List<Map<String, Object>>) saved.getProcessRoute();
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(routes).singleElement().satisfies(route -> {
+            assertThat(route).containsEntry("routeType", "PROCESS");
+            assertThat(route.get("processDetailId")).isEqualTo(historicalRoute.get("processDetailId"));
+            assertThat((Double) route.get("unitWorkHours")).isEqualTo(1.0);
+            assertThat((Double) route.get("hourlyRate")).isEqualTo(25.0);
+            assertThat((Double) route.get("lineCost")).isEqualTo(25.0);
+        });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void repeatQuoteSkipsWhenHistoricalProcessDetailIsDisabled() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-PROCESS-DISABLED-" + System.nanoTime());
+        historicalOrder.setCustomerName("历史工艺禁用客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = releasedReusableItem(historicalOrder, "RFQ-PROCESS-DISABLED", "A", 20.0);
+
+        Map<String, Object> historicalRoute = ((List<Map<String, Object>>) historicalItem.getProcessRoute()).get(0);
+        DictProcessDetail detail = processDetailMapper.selectById(((Number) historicalRoute.get("processDetailId")).longValue());
+        detail.setEnabled(false);
+        processDetailMapper.updateById(detail);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-PROCESS-DISABLED-" + System.nanoTime());
+        currentOrder.setCustomerName("当前工艺禁用客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "RFQ-PROCESS-DISABLED", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
+        assertThat(result.get("appliedCount")).isEqualTo(0);
+        assertThat(saved.getTaxIncludedUnitPrice()).isNull();
+        assertThat(saved.getProcessRoute()).isNull();
+        assertThat(skippedItems).extracting(row -> row.get("reason").toString())
+                .anyMatch(reason -> reason.contains("具体工艺已停用") && reason.contains("需手动补齐"));
+    }
+
+    @Test
     void repeatQuoteKeepsExistingRfqMaterialNoWhenHistoricalMaterialNoConflicts() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-CONFLICT-MATERIAL-" + System.nanoTime());

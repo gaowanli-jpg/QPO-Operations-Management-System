@@ -211,6 +211,7 @@ class AssemblyWorkflowIntegrationTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void repeatQuoteReusesHistoricalAssemblyParentWithCurrentChildIds() {
         resetMarkupFeesForAssemblyTest();
         String customerName = "组合重复复用客户-" + System.nanoTime();
@@ -250,6 +251,14 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(savedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(savedParent.getAssemblyFee()).isEqualTo(30.0);
         assertThat(savedParent.getTaxIncludedUnitPrice()).isNotNull();
+        List<Map<String, Object>> parentRoutes = (List<Map<String, Object>>) savedParent.getProcessRoute();
+        assertThat(parentRoutes).singleElement().satisfies(route -> {
+            assertThat(route).containsEntry("routeType", "FEE");
+            assertThat(route).containsEntry("sourceType", "extra");
+            assertThat(route).containsEntry("processName", "组装费");
+            assertThat(route).containsEntry("calcType", "非工时费用");
+            assertThat(route).containsEntry("lineCost", 30.0);
+        });
 
         QueryWrapper<ItemAssemblyRelation> relationQw = new QueryWrapper<>();
         relationQw.eq("parent_item_id", currentParent.getId());
