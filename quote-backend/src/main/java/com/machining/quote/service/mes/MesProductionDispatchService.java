@@ -1,10 +1,13 @@
 package com.machining.quote.service.mes;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.mes.MesProductionAssemblyRelationDTO;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
+import com.machining.quote.dto.mes.MesProductionProcessRouteDTO;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -37,6 +40,9 @@ import java.util.UUID;
 @Service
 public class MesProductionDispatchService {
     private static final Logger log = LoggerFactory.getLogger(MesProductionDispatchService.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final TypeReference<List<Map<String, Object>>> PROCESS_ROUTE_LIST_TYPE = new TypeReference<>() {
+    };
     private static final String TASK_TYPE = "MES_PRODUCTION_DISPATCH";
     private static final String TYPE_PRODUCTION_REQUIRED = "PRODUCTION_REQUIRED";
     private static final String STATUS_PENDING = "PENDING";
@@ -186,12 +192,84 @@ public class MesProductionDispatchService {
         req.setDescription(allocation.getDescription());
         req.setRemark(allocation.getRemark());
         req.setDeliveryDate(allocation.getDeliveryDate());
-        req.setProcessRoute(allocation.getProcessRoute());
+        req.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
         req.setMaterialData(allocation.getMaterialData());
         req.setMaterialGrossWeight(allocation.getMaterialGrossWeight());
         req.setPartNetWeight(allocation.getPartNetWeight());
         req.setAssemblyRelations(buildAssemblyRelations(allocation));
         return req;
+    }
+
+    private List<MesProductionProcessRouteDTO> buildProcessRoute(Object processRoute) {
+        List<MesProductionProcessRouteDTO> result = new ArrayList<>();
+        for (Map<String, Object> row : normalizeProcessRouteRows(processRoute)) {
+            if (isFeeRow(row)) {
+                continue;
+            }
+            String processCode = text(row.get("processCode"));
+            String categoryName = text(row.get("categoryName"));
+            String detailName = firstNonBlank(
+                    text(row.get("detailName")),
+                    text(row.get("processName")),
+                    text(row.get("name")));
+            Double unitWorkHours = firstNumber(row.get("unitWorkHours"), row.get("inputVal"));
+            Integer sortNo = integer(row.get("sortNo"));
+            if (isBlank(processCode) && isBlank(categoryName) && isBlank(detailName)
+                    && unitWorkHours == null && sortNo == null) {
+                continue;
+            }
+            MesProductionProcessRouteDTO dto = new MesProductionProcessRouteDTO();
+            dto.setProcessCode(processCode);
+            dto.setCategoryName(categoryName);
+            dto.setDetailName(detailName);
+            dto.setUnitWorkHours(unitWorkHours);
+            dto.setSortNo(sortNo);
+            result.add(dto);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> normalizeProcessRouteRows(Object processRoute) {
+        if (processRoute == null) {
+            return List.of();
+        }
+        if (processRoute instanceof String text) {
+            if (text.isBlank()) {
+                return List.of();
+            }
+            try {
+                return OBJECT_MAPPER.readValue(text, PROCESS_ROUTE_LIST_TYPE);
+            } catch (Exception ignored) {
+                return List.of();
+            }
+        }
+        if (processRoute instanceof Iterable<?> items) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (Object item : items) {
+                Map<String, Object> row = normalizeProcessRouteRow(item);
+                if (!row.isEmpty()) {
+                    rows.add(row);
+                }
+            }
+            return rows;
+        }
+        Map<String, Object> row = normalizeProcessRouteRow(processRoute);
+        return row.isEmpty() ? List.of() : List.of(row);
+    }
+
+    private Map<String, Object> normalizeProcessRouteRow(Object value) {
+        if (!(value instanceof Map<?, ?> raw)) {
+            return Map.of();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        raw.forEach((key, mapValue) -> result.put(String.valueOf(key), mapValue));
+        return result;
+    }
+
+    private boolean isFeeRow(Map<String, Object> row) {
+        String routeType = text(row.get("routeType"));
+        String sourceType = text(row.get("sourceType"));
+        return "FEE".equalsIgnoreCase(routeType) || "extra".equalsIgnoreCase(sourceType);
     }
 
     private List<MesProductionAssemblyRelationDTO> buildAssemblyRelations(OrderDeliveryTicketAllocation allocation) {
@@ -457,8 +535,61 @@ public class MesProductionDispatchService {
         return value == null ? fallback : value.longValue();
     }
 
-    private String firstNonBlank(String primary, String fallback) {
-        return isBlank(primary) ? fallback : primary;
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String text(Object value) {
+        return value == null ? null : String.valueOf(value).trim();
+    }
+
+    private Double firstNumber(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            Double number = number(value);
+            if (number != null) {
+                return number;
+            }
+        }
+        return null;
+    }
+
+    private Double number(Object value) {
+        if (value instanceof Number numeric) {
+            return numeric.doubleValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Double.parseDouble(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Integer integer(Object value) {
+        if (value instanceof Number numeric) {
+            return numeric.intValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private String abbreviate(String value) {

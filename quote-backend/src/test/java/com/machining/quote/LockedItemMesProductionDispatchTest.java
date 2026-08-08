@@ -1,5 +1,7 @@
 package com.machining.quote;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.dto.LockedItemMesProductionBatchReq;
 import com.machining.quote.dto.mes.MesProductionAssemblyRelationDTO;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
@@ -49,6 +51,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class LockedItemMesProductionDispatchTest {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     @Test
     @SuppressWarnings("unchecked")
     void submitMesProductionBatchTaskCreatesSystemTaskAndDispatchesAsyncWork() {
@@ -165,7 +169,13 @@ class LockedItemMesProductionDispatchTest {
         assertThat(request.getDescription()).isEqualTo("Bracket");
         assertThat(request.getRemark()).isEqualTo("Rush");
         assertThat(request.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 12));
-        assertThat(request.getProcessRoute()).isEqualTo(List.of(Map.of("processName", "CNC")));
+        assertThat(request.getProcessRoute()).singleElement().satisfies(route -> {
+            assertThat(route.getProcessCode()).isNull();
+            assertThat(route.getCategoryName()).isNull();
+            assertThat(route.getDetailName()).isEqualTo("CNC");
+            assertThat(route.getUnitWorkHours()).isNull();
+            assertThat(route.getSortNo()).isNull();
+        });
         assertThat(request.getMaterialData()).isEqualTo(Map.of("shape", "plate"));
         assertThat(request.getMaterialGrossWeight()).isEqualTo(12.3);
         assertThat(request.getPartNetWeight()).isEqualTo(10.2);
@@ -279,6 +289,51 @@ class LockedItemMesProductionDispatchTest {
         assertThat(dto.getSortNo()).isEqualTo(2);
         assertThat(dto.getSourceParentItemId()).isEqualTo(5101);
         assertThat(dto.getSourceChildItemId()).isEqualTo(5102);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void dispatchBatchSendsStructuredProcessRouteWithoutInternalCosts() {
+        MesProductionDispatchService service = new MesProductionDispatchService();
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
+        OrderDeliveryTicketAllocation allocation = allocation(8, "PRODUCTION_REQUIRED", "PENDING");
+        allocation.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "process"),
+                Map.entry("sortNo", 10),
+                Map.entry("processDetailId", 7001L),
+                Map.entry("processCode", "PACKAGING"),
+                Map.entry("categoryName", "包装"),
+                Map.entry("detailName", "精细包装"),
+                Map.entry("unitWorkHours", 1.5),
+                Map.entry("hourlyRate", 10.0),
+                Map.entry("lineCost", 15.0)
+        )));
+        when(allocationMapper.selectById(8)).thenReturn(allocation);
+        when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
+        when(client.dispatch(any())).thenReturn(success("MES-PROD-ROUTE", "accepted"));
+        wireDispatchService(service, allocationMapper, null, client, null, null);
+
+        Map<String, Object> result = service.dispatchBatch(List.of(8), 9108L);
+
+        assertThat(result).containsEntry("successCount", 1);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(client).dispatch(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getProcessRoute()).isInstanceOf(List.class);
+        List<?> routeRows = (List<?>) requestCaptor.getValue().getProcessRoute();
+        assertThat(routeRows).hasSize(1);
+        Object route = routeRows.get(0);
+        assertThat(route.getClass().getSimpleName()).isEqualTo("MesProductionProcessRouteDTO");
+        Map<String, Object> serialized = OBJECT_MAPPER.convertValue(route, new TypeReference<>() {
+        });
+        assertThat(serialized)
+                .containsEntry("processCode", "PACKAGING")
+                .containsEntry("categoryName", "包装")
+                .containsEntry("detailName", "精细包装")
+                .containsEntry("unitWorkHours", 1.5)
+                .containsEntry("sortNo", 10)
+                .doesNotContainKeys("processDetailId", "hourlyRate", "unitRate", "lineCost", "cost", "amount");
     }
 
     @Test

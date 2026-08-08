@@ -33,7 +33,7 @@ public class MesProductionDispatchReq {
     private String description;
     private String remark;
     private LocalDate deliveryDate;
-    private Object processRoute;
+    private List<MesProductionProcessRouteDTO> processRoute;
     private Object materialData;
     private Double materialGrossWeight;
     private Double partNetWeight;

@@ -63,7 +63,15 @@ ERP_MES_TIMEOUT_MS=10000
   "description": "生产备注",
   "remark": "QPO锁库待生产下发",
   "deliveryDate": "2026-08-20",
-  "processRoute": "CNC; 清洗; 检验",
+  "processRoute": [
+    {
+      "processCode": "PACKAGING",
+      "categoryName": "包装",
+      "detailName": "精细包装",
+      "unitWorkHours": 1.5,
+      "sortNo": 10
+    }
+  ],
   "materialData": "材料快照摘要",
   "materialGrossWeight": 1.25,
   "partNetWeight": 0.98,
@@ -113,7 +121,7 @@ ERP_MES_TIMEOUT_MS=10000
 | `description` | 否 | 说明。 |
 | `remark` | 否 | 备注。 |
 | `deliveryDate` | 否 | 交货日期。 |
-| `processRoute` | 否 | 工艺路线快照。 |
+| `processRoute` | 否 | 结构化工艺路线数组。每行只传 `processCode`、`categoryName`、`detailName`、`unitWorkHours`、`sortNo`；不传 QPO 内部工艺成本字段，如 `hourlyRate`、`unitRate`、`lineCost`、`cost`。 |
 | `materialData` | 否 | 材料核价快照，包含真实材料、材料形态、重量、成本、密度、单价等生产核价数据；不等同于销售订单模板导入材料。 |
 | `materialGrossWeight` | 否 | 材料毛重。 |
 | `partNetWeight` | 否 | 零件净重。 |

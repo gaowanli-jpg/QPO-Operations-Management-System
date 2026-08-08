@@ -2,6 +2,7 @@ package com.machining.quote;
 
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
+import com.machining.quote.dto.mes.MesProductionProcessRouteDTO;
 import com.machining.quote.integration.ExternalAuthType;
 import com.machining.quote.integration.ExternalIntegrationConfig;
 import com.machining.quote.integration.ExternalIntegrationConfigService;
@@ -69,6 +70,12 @@ class LockedItemMesProductionClientTest {
                     .contains("\"ticketQty\":10")
                     .contains("\"orderType\":\"SO01\"")
                     .contains("\"internalProjectNo\":\"IP-9\"")
+                    .contains("\"processCode\":\"PACKAGING\"")
+                    .contains("\"categoryName\":\"包装\"")
+                    .contains("\"detailName\":\"精细包装\"")
+                    .contains("\"unitWorkHours\":1.5")
+                    .contains("\"sortNo\":10")
+                    .doesNotContain("lineCost", "hourlyRate")
                     .contains("\"assemblyRelations\":[]");
         } finally {
             server.stop(0);
@@ -263,7 +270,13 @@ class LockedItemMesProductionClientTest {
         req.setDescription("Bracket");
         req.setRemark("Rush");
         req.setDeliveryDate(LocalDate.of(2026, 8, 12));
-        req.setProcessRoute(List.of(Map.of("processName", "CNC")));
+        MesProductionProcessRouteDTO route = new MesProductionProcessRouteDTO();
+        route.setProcessCode("PACKAGING");
+        route.setCategoryName("包装");
+        route.setDetailName("精细包装");
+        route.setUnitWorkHours(1.5);
+        route.setSortNo(10);
+        req.setProcessRoute(List.of(route));
         req.setMaterialData(Map.of("shape", "plate"));
         req.setMaterialGrossWeight(12.3);
         req.setPartNetWeight(10.2);
