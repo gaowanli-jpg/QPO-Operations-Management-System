@@ -564,7 +564,7 @@
       title="选择材料"
       type="material"
       :items="materialOptions"
-      :selected-key="matForm.materialName"
+      :selected-key="matForm.materialCode"
       empty-text="暂无材料字典数据"
       @confirm="selectMaterial"
     />
@@ -644,7 +644,17 @@ const authStore = useAuthStore()
 const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
-const globalConfig = ref({ materialName: '45#', shape: '板材', processRoute: [] }) // 默认保底配置
+const globalConfig = ref({
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
+  shape: '板材',
+  processRoute: [],
+  legacyMaterialIdentity: false
+}) // 默认保底配置
 const { isPending, runAction } = usePendingAction()
 const pricingActionKeys = {
   repeatApply: () => `engineer:pricing:repeat-quote:${rfqId.value || 'none'}`,
@@ -677,7 +687,17 @@ const repeatAnalysis = ref(null)
 
 const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
 
-const defaultGlobalConfig = () => ({ materialName: '45#', shape: '板材', processRoute: [] })
+const defaultGlobalConfig = () => ({
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
+  shape: '板材',
+  processRoute: [],
+  legacyMaterialIdentity: false
+})
 const normalizePartNo = (value) => String(value || '').trim().toUpperCase()
 const normalizeVersion = (value) => {
   const text = String(value || '').trim().toUpperCase()
@@ -686,10 +706,19 @@ const normalizeVersion = (value) => {
 const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 
 const normalizeGlobalConfig = (config) => {
-  if (!config || typeof config !== 'object') return defaultGlobalConfig()
+  const defaults = defaultGlobalConfig()
+  if (!config || typeof config !== 'object') return defaults
+  const materialCode = String(config.materialCode || '').trim()
+  const materialName = config.materialName || config.name || defaults.materialName || ''
   return {
-    materialName: config.materialName || defaultGlobalConfig().materialName,
-    shape: config.shape || defaultGlobalConfig().shape,
+    materialCode,
+    materialName,
+    materialTypeId: config.materialTypeId ?? defaults.materialTypeId,
+    materialTypeCode: config.materialTypeCode || defaults.materialTypeCode,
+    materialTypeName: config.materialTypeName || defaults.materialTypeName,
+    materialCategory: config.materialCategory || defaults.materialCategory,
+    shape: config.shape || defaults.shape,
+    legacyMaterialIdentity: !materialCode && Boolean(materialName),
     processRoute: normalizeRouteList(config.processRoute)
   }
 }
@@ -1067,20 +1096,63 @@ onBeforeUnmount(() => {
   cleanupPdfSrc()
 })
 
-const matForm = reactive({ materialName: '', shape: '', L: null, W: null, T: null, outR: null, inR: null, netWeight: null })
+const matForm = reactive({
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
+  shape: '',
+  L: null,
+  W: null,
+  T: null,
+  outR: null,
+  inR: null,
+  netWeight: null
+})
 const processRoute = ref([])
 let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
 
 const formatMaterialLabel = (material) => {
   if (!material) return ''
-  return material.remarks ? `${material.materialName} ${material.remarks}` : material.materialName
+  const code = material.materialCode || '-'
+  const name = material.materialName || '-'
+  const typeName = material.materialTypeName || '-'
+  const category = material.materialCategory || '-'
+  return material.remarks
+    ? `${code} / ${name} / ${typeName} / ${category} ${material.remarks}`
+    : `${code} / ${name} / ${typeName} / ${category}`
 }
 
 const selectedMaterialLabel = computed(() => {
-  const material = materialOptions.value.find(item => item.materialName === matForm.materialName)
-  return formatMaterialLabel(material) || matForm.materialName || '请选择材质'
+  const material = materialOptions.value.find(item => item.materialCode === matForm.materialCode)
+  if (material) return formatMaterialLabel(material)
+  if (!matForm.materialCode && matForm.materialName) return `${matForm.materialName}（旧材料模板缺少材料编码，请重新选择）`
+  return matForm.materialName || matForm.materialCode || '请选择材质'
 })
+
+const applyMaterialToMatForm = (material) => {
+  if (!material?.materialCode) return
+  matForm.materialCode = material.materialCode
+  matForm.materialName = material.materialName || ''
+  matForm.materialTypeId = material.materialTypeId ?? null
+  matForm.materialTypeCode = material.materialTypeCode || ''
+  matForm.materialTypeName = material.materialTypeName || ''
+  matForm.materialCategory = material.materialCategory || ''
+}
+
+const applyMaterialSnapshotToMatForm = (source = {}) => {
+  const normalized = normalizeGlobalConfig(source)
+  matForm.materialCode = normalized.materialCode
+  matForm.materialName = normalized.materialName
+  matForm.materialTypeId = normalized.materialTypeId
+  matForm.materialTypeCode = normalized.materialTypeCode
+  matForm.materialTypeName = normalized.materialTypeName
+  matForm.materialCategory = normalized.materialCategory
+  matForm.shape = normalized.shape || '板材'
+}
 
 const findProcessOption = (proc) => {
   if (!proc) return null
@@ -1131,8 +1203,7 @@ const applyProcessSelection = (proc, selected) => {
 }
 
 const selectMaterial = (material) => {
-  if (!material?.materialName) return
-  matForm.materialName = material.materialName
+  applyMaterialToMatForm(material)
 }
 
 const openProcessPicker = (index) => {
@@ -1500,11 +1571,21 @@ const openQuoteDialog = async (row) => {
   assemblyFee.value = numberOrNullForInput(row.assemblyFee)
   assemblyChildren.value = []
 
-  // 继承阶段 1 的材料设置
+  // 已核价零件优先使用自己的材料快照；未核价零件才继承订单全局默认材料。
   const savedMaterialData = row.materialData || {}
   const savedDimensions = savedMaterialData.dimensions || {}
-  matForm.materialName = savedMaterialData.name || globalConfig.value.materialName || '45#'
-  matForm.shape = savedMaterialData.shape || globalConfig.value.shape || '板材'
+  const hasSavedMaterialSnapshot = Boolean(savedMaterialData.materialCode || savedMaterialData.materialName || savedMaterialData.name)
+  applyMaterialSnapshotToMatForm(hasSavedMaterialSnapshot
+    ? {
+        materialCode: savedMaterialData.materialCode,
+        materialName: savedMaterialData.materialName || savedMaterialData.name,
+        materialTypeId: savedMaterialData.materialTypeId,
+        materialTypeCode: savedMaterialData.materialTypeCode,
+        materialTypeName: savedMaterialData.materialTypeName,
+        materialCategory: savedMaterialData.materialCategory,
+        shape: savedMaterialData.shape || globalConfig.value.shape || '板材'
+      }
+    : globalConfig.value)
   const savedDimensionUnit = savedMaterialData.dimensionUnit || 'mm'
   matForm.L = toMetricDimension(savedDimensions.L, savedDimensionUnit)
   matForm.W = toMetricDimension(savedDimensions.W, savedDimensionUnit)
@@ -1530,7 +1611,7 @@ const openQuoteDialog = async (row) => {
 
 // 智能计算材料费
 const currentMatInfo = computed(() => {
-  return materialOptions.value.find(item => item.materialName === matForm.materialName) || {
+  return materialOptions.value.find(item => item.materialCode === matForm.materialCode) || {
     density: 0,
     platePrice: 0,
     barPrice: 0,
@@ -1599,12 +1680,22 @@ const submitCurrentQuote = async () => {
       processRoute: []
     }
   } else {
+    if (!matForm.materialCode) {
+      return ElMessage.warning('请重新选择带编码材料后再核价。')
+    }
     const validProcess = buildQuoteProcessRoute()
     payload = {
       itemId: currentRow.value.id,
       quoteMode: 'NORMAL',
       partNetWeight: numberOrZero(matForm.netWeight),
       materialData: {
+        materialId: currentMatInfo.value.id,
+        materialCode: matForm.materialCode,
+        materialName: matForm.materialName,
+        materialTypeId: matForm.materialTypeId,
+        materialTypeCode: matForm.materialTypeCode,
+        materialTypeName: matForm.materialTypeName,
+        materialCategory: matForm.materialCategory,
         name: matForm.materialName,
         shape: matForm.shape,
         volume: calculatedVolume.value,

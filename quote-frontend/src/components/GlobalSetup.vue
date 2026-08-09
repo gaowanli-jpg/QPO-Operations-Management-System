@@ -246,7 +246,7 @@
       title="选择默认材质"
       type="material"
       :items="materialOptions"
-      :selected-key="config.materialName"
+      :selected-key="config.materialCode"
       empty-text="暂无材料字典数据"
       @confirm="selectMaterial"
     />
@@ -273,7 +273,7 @@ import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
-import { hasLegacyProcessIdentity, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
+import { defaultGlobalConfig, hasLegacyMaterialIdentity, hasLegacyProcessIdentity, normalizeGlobalConfig, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   createAuthenticatedObjectUrl,
@@ -346,11 +346,7 @@ const repeatItemMap = computed(() => {
 })
 
 // 全局配置的状态字典
-const config = reactive({
-  materialName: '45#',
-  shape: '板材',
-  processRoute: []
-})
+const config = reactive(defaultGlobalConfig())
 
 const normalizeRouteRow = (item, index) => ({
   sortNo: numericSortNo(item.sortNo) ?? ((index + 1) * PROCESS_SORT_STEP),
@@ -385,6 +381,7 @@ const isUnresolvedProcessRoute = (proc) => (proc?.sourceType || 'process') === '
   && (!proc.processDetailId || proc.legacyProcessIdentity)
 
 const hasUnresolvedProcessRoute = computed(() => config.processRoute.some(isUnresolvedProcessRoute))
+const hasUnresolvedMaterialIdentity = computed(() => !config.materialCode || config.legacyMaterialIdentity)
 
 const notifyLegacyProcessTemplate = () => {
   if (legacyProcessWarningShown.value) return
@@ -392,11 +389,41 @@ const notifyLegacyProcessTemplate = () => {
   ElMessage.warning('旧工艺模板缺少具体工艺身份，请重新选择具体工艺后再保存。')
 }
 
+const legacyMaterialWarningShown = ref(false)
+const notifyLegacyMaterialTemplate = () => {
+  if (legacyMaterialWarningShown.value) return
+  legacyMaterialWarningShown.value = true
+  ElMessage.warning('旧材料模板缺少材料编码，请重新选择带编码材料后再保存。')
+}
+
+const applyMaterialSelectionToConfig = (material) => {
+  if (!material?.materialCode) return
+  config.materialCode = material.materialCode
+  config.materialName = material.materialName || ''
+  config.materialTypeId = material.materialTypeId ?? null
+  config.materialTypeCode = material.materialTypeCode || ''
+  config.materialTypeName = material.materialTypeName || ''
+  config.materialCategory = material.materialCategory || ''
+  config.legacyMaterialIdentity = false
+}
+
+const assignMaterialConfig = (source) => {
+  const normalized = normalizeGlobalConfig(source)
+  config.materialCode = normalized.materialCode
+  config.materialName = normalized.materialName
+  config.materialTypeId = normalized.materialTypeId
+  config.materialTypeCode = normalized.materialTypeCode
+  config.materialTypeName = normalized.materialTypeName
+  config.materialCategory = normalized.materialCategory
+  config.legacyMaterialIdentity = normalized.legacyMaterialIdentity
+}
+
 const assignConfig = (source) => {
   if (!source) return
-  config.materialName = source.materialName || config.materialName || '45#'
-  config.shape = source.shape || config.shape || '板材'
-  const normalizedRoute = normalizeRouteList(source.processRoute || [])
+  const normalizedConfig = normalizeGlobalConfig(source)
+  assignMaterialConfig(normalizedConfig)
+  config.shape = normalizedConfig.shape || config.shape || '板材'
+  const normalizedRoute = normalizedConfig.processRoute || []
   config.processRoute.splice(
     0,
     config.processRoute.length,
@@ -407,18 +434,29 @@ const assignConfig = (source) => {
   if (hasLegacyProcessIdentity({ processRoute: normalizedRoute })) {
     notifyLegacyProcessTemplate()
   }
+  if (hasLegacyMaterialIdentity(normalizedConfig)) {
+    notifyLegacyMaterialTemplate()
+  }
 }
 
 const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
 
 const formatMaterialLabel = (material) => {
   if (!material) return ''
-  return material.remarks ? `${material.materialName} ${material.remarks}` : material.materialName
+  const code = material.materialCode || '-'
+  const name = material.materialName || '-'
+  const typeName = material.materialTypeName || '-'
+  const category = material.materialCategory || '-'
+  return material.remarks
+    ? `${code} / ${name} / ${typeName} / ${category} ${material.remarks}`
+    : `${code} / ${name} / ${typeName} / ${category}`
 }
 
 const selectedMaterialLabel = computed(() => {
-  const material = materialOptions.value.find(item => item.materialName === config.materialName)
-  return formatMaterialLabel(material) || config.materialName || '请选择默认材质'
+  const material = materialOptions.value.find(item => item.materialCode === config.materialCode)
+  if (material) return formatMaterialLabel(material)
+  if (config.legacyMaterialIdentity && config.materialName) return `${config.materialName}（旧材料模板缺少材料编码，请重新选择）`
+  return config.materialName || config.materialCode || '请选择默认材质'
 })
 
 const findProcessOption = (proc) => {
@@ -471,8 +509,7 @@ const applyProcessSelection = (proc, selected) => {
 }
 
 const selectMaterial = (material) => {
-  if (!material?.materialName) return
-  config.materialName = material.materialName
+  applyMaterialSelectionToConfig(material)
 }
 
 const openProcessPicker = (index) => {
@@ -516,8 +553,11 @@ const hydrateProcessRoute = () => {
 const fetchDicts = async () => {
   try {
     await dictionaryStore.loadBaseDicts()
-    if (!config.materialName && materialOptions.value.length > 0) {
-      config.materialName = materialOptions.value[0].materialName
+    if (!config.materialCode && !config.legacyMaterialIdentity && materialOptions.value.length > 0) {
+      applyMaterialSelectionToConfig(materialOptions.value[0])
+    }
+    if (hasLegacyMaterialIdentity(config)) {
+      notifyLegacyMaterialTemplate()
     }
     hydrateProcessRoute()
     if (config.processRoute.length === 0) {
@@ -546,6 +586,9 @@ const fetchDicts = async () => {
 const handleNext = async () => {
   if (!orderInfo.value.id) {
     return ElMessage.warning('请先选择订单并加载数据。')
+  }
+  if (hasUnresolvedMaterialIdentity.value) {
+    return ElMessage.warning('请重新选择带编码材料后再保存')
   }
   if (hasUnresolvedProcessRoute.value) {
     return ElMessage.warning('请重新选择具体工艺后再保存')
@@ -681,8 +724,11 @@ const loadRepeatAnalysis = async (rfqId, skipRecommendedConfig = false) => {
 
 const applyRecommendedConfig = (recommendedConfig) => {
   if (!recommendedConfig) return
-  if (recommendedConfig.materialName) {
-    config.materialName = recommendedConfig.materialName
+  if (recommendedConfig.materialCode || recommendedConfig.materialName || recommendedConfig.name) {
+    assignMaterialConfig(recommendedConfig)
+    if (hasLegacyMaterialIdentity(config)) {
+      notifyLegacyMaterialTemplate()
+    }
   }
   if (recommendedConfig.shape) {
     config.shape = recommendedConfig.shape

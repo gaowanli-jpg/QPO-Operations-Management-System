@@ -5,9 +5,15 @@ const rfqConfigKey = (rfqId) => `erp_global_config_${rfqId}`
 const PROCESS_SORT_STEP = 10
 
 export const defaultGlobalConfig = () => ({
-  materialName: '45#',
+  materialCode: '',
+  materialName: '',
+  materialTypeId: null,
+  materialTypeCode: '',
+  materialTypeName: '',
+  materialCategory: '',
   shape: '板材',
-  processRoute: []
+  processRoute: [],
+  legacyMaterialIdentity: false
 })
 
 const numericSortNo = (value) => {
@@ -104,11 +110,29 @@ export const hasLegacyProcessIdentity = (configOrRoutes) => {
   return routes.some(item => item?.legacyProcessIdentity || normalizeRouteItem(item).legacyProcessIdentity)
 }
 
+const normalizeMaterialIdentity = (config = {}, defaults = defaultGlobalConfig()) => {
+  const materialCode = String(config.materialCode || '').trim()
+  const materialName = config.materialName || config.name || defaults.materialName || ''
+  return {
+    materialCode,
+    materialName,
+    materialTypeId: config.materialTypeId ?? defaults.materialTypeId ?? null,
+    materialTypeCode: config.materialTypeCode || defaults.materialTypeCode || '',
+    materialTypeName: config.materialTypeName || defaults.materialTypeName || '',
+    materialCategory: config.materialCategory || defaults.materialCategory || '',
+    legacyMaterialIdentity: !materialCode && Boolean(materialName)
+  }
+}
+
+export const hasLegacyMaterialIdentity = (config = {}) => Boolean(
+  config?.legacyMaterialIdentity || (!config?.materialCode && (config?.materialName || config?.name))
+)
+
 export const normalizeGlobalConfig = (config) => {
   const defaults = defaultGlobalConfig()
   if (!config || typeof config !== 'object') return defaults
   return {
-    materialName: config.materialName || defaults.materialName,
+    ...normalizeMaterialIdentity(config, defaults),
     shape: config.shape || defaults.shape,
     processRoute: normalizeRouteList(config.processRoute)
   }

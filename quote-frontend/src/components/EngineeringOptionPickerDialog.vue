@@ -43,9 +43,18 @@
       </el-table-column>
 
       <template v-if="type === 'material'">
-        <el-table-column prop="materialName" label="材料名称" min-width="160" fixed show-overflow-tooltip />
-        <el-table-column prop="materialType" label="材料类型" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.materialType || '-' }}</template>
+        <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
+        <el-table-column prop="materialName" label="材料名称" min-width="150" fixed show-overflow-tooltip />
+        <el-table-column prop="materialTypeName" label="材料类型" width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="material-type-cell">
+              <span>{{ row.materialTypeName || '-' }}</span>
+              <small v-if="row.materialTypeCode">{{ row.materialTypeCode }}</small>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.materialCategory || '-' }}</template>
         </el-table-column>
         <el-table-column label="密度" width="100" align="right">
           <template #default="{ row }">{{ formatNumber(row.plateDensity ?? row.density) }}</template>
@@ -148,27 +157,36 @@ const activeKey = ref('')
 
 const searchPlaceholder = computed(() => (
   props.type === 'material'
-    ? '搜索材料名称、类型、备注'
+    ? '搜索材料编码、名称、材料类型、材质分类、备注'
     : '搜索具体工艺、大类编码、大类名称、费用名称'
 ))
 
 const keyOf = (item) => String(
   props.type === 'material'
-    ? (item?.materialName ?? item?.id ?? '')
+    ? (item?.materialCode ?? item?.id ?? '')
     : (item?.optionKey ?? item?.id ?? item?.processName ?? item?.feeName ?? '')
 )
 
 const labelOf = (item) => {
   if (!item) return ''
   if (props.type === 'material') {
-    return item.remarks ? `${item.materialName} ${item.remarks}` : item.materialName
+    const code = item.materialCode || '-'
+    const name = item.materialName || '-'
+    const typeName = item.materialTypeName || '-'
+    const category = item.materialCategory || '-'
+    return item.remarks
+      ? `${code} / ${name} / ${typeName} / ${category} ${item.remarks}`
+      : `${code} / ${name} / ${typeName} / ${category}`
   }
   return item.label || item.detailName || item.processName || item.feeName || ''
 }
 
 const searchTextOf = (item) => [
+  item?.materialCode,
   item?.materialName,
-  item?.materialType,
+  item?.materialTypeCode,
+  item?.materialTypeName,
+  item?.materialCategory,
   item?.remarks,
   item?.detailName,
   item?.processCode,
@@ -245,6 +263,19 @@ watch(() => props.selectedKey, syncSelectedKey)
 
 .keyword-input {
   flex: 1;
+}
+
+.material-type-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.material-type-cell small {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .picker-footer {
