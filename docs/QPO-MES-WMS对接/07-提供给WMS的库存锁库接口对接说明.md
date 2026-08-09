@@ -1,5 +1,7 @@
 # QPO 对接 WMS 库存锁库接口说明
 
+> 2026-08-09 材料主数据阶段 10 收口：QPO 提供给 WMS 的库存锁库请求可携带工程材料身份摘要：`engineeringMaterialCode`、`engineeringMaterialTypeCode`、`engineeringMaterialTypeName`、`engineeringMaterialCategory`、`engineeringMaterialName`、`materialShape`。材料编码、材料类型、材质分类和材料形态分开展示和传递；WMS 返回结果拆分为 allocation 后继续复制这些快照字段，不回传完整 `materialData`。
+
 本文档提供给 WMS 系统开发/实施人员，用于说明 QPO 如何调用 WMS 获取库存锁库和在产锁定信息。
 
 ## 1. 对接结论

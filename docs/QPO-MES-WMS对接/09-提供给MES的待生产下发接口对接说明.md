@@ -4,6 +4,8 @@
 
 > 2026-08-08 两级工艺主数据阶段 15 收口：本接口只发送结构化工艺路线 `processCode / categoryName / detailName / unitWorkHours / sortNo`。`hourlyRate / unitRate / lineCost / cost` 等 QPO 内部核价成本字段只保留在 QPO 快照和内部展示中，不进入 MES 生产下发请求。
 
+> 2026-08-09 材料主数据阶段 10 收口：本接口只发送工程材料身份摘要字段 `engineeringMaterialCode / engineeringMaterialTypeCode / engineeringMaterialTypeName / engineeringMaterialCategory / engineeringMaterialName / materialShape`。材料编码和材料类型用于 MES 生产侧识别或追溯材料摘要，材质分类与材料形态分开；完整 `materialData`、完整材料价格矩阵和 QPO 内部材料成本不进入 MES 生产下发请求。
+
 ## 1. 适用范围
 
 本文档描述 QPO 待产零件模块通过数据中心向 MES 下发待生产零件的接口。该接口只处理 WMS 锁库后仍需生产的待产 allocation 行，不替代 MES 物料号获取接口，也不处理库存锁定结果回传。
@@ -59,7 +61,11 @@ ERP_MES_TIMEOUT_MS=10000
   "customerOrderNo": "CO-001",
   "customerProjectNo": "CP-001",
   "materialName": "铝板",
+  "engineeringMaterialCode": "MAT-AL6061",
   "engineeringMaterialName": "AL6061",
+  "engineeringMaterialTypeCode": "RAW_MATERIAL",
+  "engineeringMaterialTypeName": "原材料",
+  "engineeringMaterialCategory": "铝",
   "materialShape": "板材",
   "surfaceTreatment": "阳极氧化",
   "description": "生产备注",
@@ -74,7 +80,6 @@ ERP_MES_TIMEOUT_MS=10000
       "sortNo": 10
     }
   ],
-  "materialData": "材料快照摘要",
   "materialGrossWeight": 1.25,
   "partNetWeight": 0.98,
   "assemblyRelations": [
@@ -117,14 +122,17 @@ ERP_MES_TIMEOUT_MS=10000
 | `customerOrderNo` | 否 | 客户订单号。 |
 | `customerProjectNo` | 否 | 客户项目号。 |
 | `materialName` | 否 | 生产侧有效材料名称。QPO 按 `engineeringMaterialName -> materialData.name -> 导入材料 material_name` 降级得到，用于 MES 生产侧识别材料。 |
+| `engineeringMaterialCode` | 否 | 工程材料编码，来自 `order_delivery_ticket_allocation.engineering_material_code` 快照。 |
 | `engineeringMaterialName` | 否 | 真实材料 / 核价材料名称，来源于 RFQ 核价或销售匹配补全的 `engineering_material_name`；为空时可结合 `materialData.name` 理解。 |
+| `engineeringMaterialTypeCode` | 否 | 工程材料类型编码，来自材料类型字典快照，例如 `RAW_MATERIAL`。 |
+| `engineeringMaterialTypeName` | 否 | 工程材料类型名称，来自材料类型字典快照，例如 `原材料`。 |
+| `engineeringMaterialCategory` | 否 | 材质分类，保存钢铁、铝、塑料等分类快照。 |
 | `materialShape` | 否 | 材料形态，来自显式快照字段；通常为 `板材 / 棒材 / 管材`，来源于核价材料快照里的 `materialData.shape`。 |
 | `surfaceTreatment` | 否 | 表面处理。 |
 | `description` | 否 | 说明。 |
 | `remark` | 否 | 备注。 |
 | `deliveryDate` | 否 | 交货日期。 |
 | `processRoute` | 否 | 结构化工艺路线数组。每行只传 `processCode`、`categoryName`、`detailName`、`unitWorkHours`、`sortNo`；不传 QPO 内部工艺成本字段，如 `hourlyRate`、`unitRate`、`lineCost`、`cost`。 |
-| `materialData` | 否 | 材料核价快照，包含真实材料、材料形态、重量、成本、密度、单价等生产核价数据；不等同于销售订单模板导入材料。 |
 | `materialGrossWeight` | 否 | 材料毛重。 |
 | `partNetWeight` | 否 | 零件净重。 |
 | `assemblyRelations` | 是 | 组合件父子关系数组；普通件或无父子关系时传空数组。 |

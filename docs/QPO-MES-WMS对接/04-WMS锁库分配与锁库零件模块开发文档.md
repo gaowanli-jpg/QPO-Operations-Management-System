@@ -1,5 +1,7 @@
 # QPO WMS 锁库分配与锁库零件模块开发文档
 
+> 2026-08-09 材料主数据阶段 10 收口：WMS 锁库请求和 allocation 快照展示工程材料身份摘要，字段包含 `engineeringMaterialCode`、`engineeringMaterialTypeCode`、`engineeringMaterialTypeName`、`engineeringMaterialCategory`、`engineeringMaterialName` 和 `materialShape`。其中材料编码用于 QPO 工程材料追溯，材料类型来自可维护字典，材质分类保存材料类别细分，材料形态表示板材、棒材、管材；WMS 与后续待产/锁库展示不得依赖完整 `materialData` 作为接口主字段。
+
 > 数据中心统一对接阶段 8 收口：WMS 库存锁定底层调用使用 `WMS_INVENTORY_ALLOCATE` endpoint，链路为 `QPO -> 数据中心 -> WMS`。旧 `ERP_WMS_*` 仅作为 deprecated fallback，新部署应优先在系统配置的出站接口中维护数据中心连接和该功能 path。
 
 > 销售订单导入即提单阶段 7 收口：销售订单来源提单行由销售订单导入自动生成，不再要求市场用户手动销售匹配或手动议价提单。销售订单导入后直接进入已提零件需求池，WMS 锁库仍只消费 `order_delivery_ticket` 中已取得 MES 物料号的需求行。
