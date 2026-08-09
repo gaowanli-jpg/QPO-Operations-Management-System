@@ -231,6 +231,10 @@ public class WmsAllocationService {
         row.setCustomerOrderNo(ticket.getCustomerOrderNo());
         row.setCustomerProjectNo(ticket.getCustomerProjectNo());
         row.setMaterialName(ticket.getMaterialName());
+        row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());
+        row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());
+        row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());
+        row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());
         row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
         row.setMaterialShape(ticket.getMaterialShape());
         row.setSurfaceTreatment(ticket.getSurfaceTreatment());
@@ -354,6 +358,7 @@ public class WmsAllocationService {
         summary.put("partNo", ticket.getPartNo());
         summary.put("version", ticket.getVersion());
         summary.put("materialNo", ticket.getMaterialNo());
+        summary.put("materialSnapshotAvailable", hasMaterialSnapshot(ticket));
         summary.put("internalProjectNo", ticket.getInternalProjectNo());
         summary.put("processRouteCount", processRouteSnapshotService.countSnapshotRows(ticket.getProcessRoute()));
         return summary;
@@ -387,6 +392,16 @@ public class WmsAllocationService {
     private String abbreviate(String value) {
         String text = value == null ? "" : value.trim();
         return text.length() <= 500 ? text : text.substring(0, 500);
+    }
+
+    private boolean hasMaterialSnapshot(OrderDeliveryTicket ticket) {
+        return ticket != null && (!isBlank(ticket.getEngineeringMaterialCode())
+                || !isBlank(ticket.getEngineeringMaterialTypeCode())
+                || !isBlank(ticket.getEngineeringMaterialTypeName())
+                || !isBlank(ticket.getEngineeringMaterialCategory())
+                || !isBlank(ticket.getEngineeringMaterialName())
+                || !isBlank(ticket.getMaterialShape())
+                || ticket.getMaterialData() != null);
     }
 
     private boolean isBlank(String value) {

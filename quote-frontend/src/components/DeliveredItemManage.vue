@@ -145,11 +145,17 @@
           <el-table-column prop="customerProjectNo" label="客户项目号" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ row.customerProjectNo || '-' }}</template>
           </el-table-column>
+          <el-table-column label="材料编码" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialCode(row) }}</template>
+          </el-table-column>
+          <el-table-column label="材料类型" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialType(row) }}</template>
+          </el-table-column>
           <el-table-column label="材料" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatMaterialName(row) }}</template>
           </el-table-column>
-          <el-table-column label="材料类型" width="110" align="center">
-            <template #default="{ row }">{{ formatMaterialShape(row.materialData) }}</template>
+          <el-table-column label="材料形态" width="110" align="center">
+            <template #default="{ row }">{{ formatMaterialShape(row) }}</template>
           </el-table-column>
           <el-table-column label="毛重" width="100" align="right">
             <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
@@ -241,8 +247,10 @@
           <el-descriptions-item label="内部项目号">{{ selectedItem.internalProjectNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户订单号">{{ selectedItem.customerOrderNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户项目号">{{ selectedItem.customerProjectNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="材料编码">{{ formatMaterialCode(selectedItem) }}</el-descriptions-item>
+          <el-descriptions-item label="材料类型">{{ formatMaterialType(selectedItem) }}</el-descriptions-item>
           <el-descriptions-item label="材料">{{ formatMaterialName(selectedItem) }}</el-descriptions-item>
-          <el-descriptions-item label="材料类型">{{ formatMaterialShape(selectedItem.materialData) }}</el-descriptions-item>
+          <el-descriptions-item label="材料形态">{{ formatMaterialShape(selectedItem) }}</el-descriptions-item>
           <el-descriptions-item label="毛重">{{ formatWeight(selectedItem.materialGrossWeight) }}</el-descriptions-item>
           <el-descriptions-item label="净重">{{ formatWeight(selectedItem.partNetWeight) }}</el-descriptions-item>
           <el-descriptions-item label="交货日期">{{ selectedItem.deliveryDate || '-' }}</el-descriptions-item>
@@ -542,11 +550,24 @@ const normalizeObject = (value) => {
   return {}
 }
 
-const formatMaterialName = (row) => row?.engineeringMaterialName || row?.materialName || '-'
+const formatMaterialCode = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.engineeringMaterialCode || data.materialCode || '-'
+}
 
-const formatMaterialShape = (materialData) => {
-  const data = normalizeObject(materialData)
-  return data.shape || data.materialShape || data.materialType || '-'
+const formatMaterialType = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.engineeringMaterialTypeName || row?.engineeringMaterialTypeCode || data.materialTypeName || data.materialTypeCode || '-'
+}
+
+const formatMaterialName = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.engineeringMaterialName || data.materialName || data.name || row?.materialName || '-'
+}
+
+const formatMaterialShape = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.materialShape || data.shape || data.materialShape || '-'
 }
 
 const formatWeight = (value) => {

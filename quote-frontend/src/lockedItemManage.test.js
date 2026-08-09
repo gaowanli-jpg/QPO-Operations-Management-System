@@ -172,8 +172,10 @@ describe('LockedItemManage guardrails', () => {
       '内部项目号',
       '客户订单号',
       '客户项目号',
-      '材料',
+      '材料编码',
       '材料类型',
+      '材料',
+      '材料形态',
       '毛重',
       '净重',
       '工艺路线',
@@ -192,7 +194,7 @@ describe('LockedItemManage guardrails', () => {
       cursor = nextIndex
     }
 
-    for (const helper of ['formatMaterialName', 'formatMaterialShape', 'formatWeight', 'formatProcessRoute']) {
+    for (const helper of ['formatMaterialCode', 'formatMaterialType', 'formatMaterialName', 'formatMaterialShape', 'formatWeight', 'formatProcessRoute']) {
       expect(pageSource).toContain(helper)
     }
   })

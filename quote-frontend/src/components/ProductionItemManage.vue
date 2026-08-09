@@ -143,11 +143,17 @@
           <el-table-column prop="customerProjectNo" label="客户项目号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.customerProjectNo) }}</template>
           </el-table-column>
+          <el-table-column label="材料编码" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialCode(row) }}</template>
+          </el-table-column>
+          <el-table-column label="材料类型" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialType(row) }}</template>
+          </el-table-column>
           <el-table-column label="材料" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ formatMaterialName(row) }}</template>
           </el-table-column>
-          <el-table-column label="材料类型" width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatMaterialShape(row.materialData) }}</template>
+          <el-table-column label="材料形态" width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatMaterialShape(row) }}</template>
           </el-table-column>
           <el-table-column prop="materialGrossWeight" label="毛重" width="100" align="right">
             <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
@@ -219,8 +225,10 @@
           <el-descriptions-item label="内部项目号">{{ formatDash(selectedTicketDetail.internalProjectNo) }}</el-descriptions-item>
           <el-descriptions-item label="客户订单号">{{ formatDash(selectedTicketDetail.customerOrderNo) }}</el-descriptions-item>
           <el-descriptions-item label="客户项目号">{{ formatDash(selectedTicketDetail.customerProjectNo) }}</el-descriptions-item>
+          <el-descriptions-item label="材料编码">{{ formatMaterialCode(selectedTicketDetail) }}</el-descriptions-item>
+          <el-descriptions-item label="材料类型">{{ formatMaterialType(selectedTicketDetail) }}</el-descriptions-item>
           <el-descriptions-item label="材料">{{ formatMaterialName(selectedTicketDetail) }}</el-descriptions-item>
-          <el-descriptions-item label="材料类型">{{ formatMaterialShape(selectedTicketDetail.materialData) }}</el-descriptions-item>
+          <el-descriptions-item label="材料形态">{{ formatMaterialShape(selectedTicketDetail) }}</el-descriptions-item>
           <el-descriptions-item label="毛重">{{ formatWeight(selectedTicketDetail.materialGrossWeight) }}</el-descriptions-item>
           <el-descriptions-item label="净重">{{ formatWeight(selectedTicketDetail.partNetWeight) }}</el-descriptions-item>
           <el-descriptions-item label="备注">{{ formatDash(selectedTicketDetail.remark) }}</el-descriptions-item>
@@ -530,11 +538,24 @@ const normalizeObject = (value) => {
   return {}
 }
 
-const formatMaterialName = (row) => row?.engineeringMaterialName || row?.materialName || '-'
+const formatMaterialCode = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.engineeringMaterialCode || data.materialCode || '-'
+}
 
-const formatMaterialShape = (materialData) => {
-  const data = normalizeObject(materialData)
-  return data.shape || data.materialShape || data.materialType || '-'
+const formatMaterialType = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.engineeringMaterialTypeName || row?.engineeringMaterialTypeCode || data.materialTypeName || data.materialTypeCode || '-'
+}
+
+const formatMaterialName = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.engineeringMaterialName || data.materialName || data.name || row?.materialName || '-'
+}
+
+const formatMaterialShape = (row) => {
+  const data = normalizeObject(row?.materialData)
+  return row?.materialShape || data.shape || data.materialShape || '-'
 }
 
 const formatWeight = (value) => {

@@ -162,6 +162,10 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(partialTicket.getRfqNo()).isEqualTo("SO-QPO-001");
         assertThat(partialTicket.getMaterialNo()).isEqualTo("MAT-1001");
         assertThat(partialTicket.getMaterialName()).isEqualTo("6061");
+        assertSnapshot(partialTicket, "getEngineeringMaterialCode", "EMC-1001");
+        assertSnapshot(partialTicket, "getEngineeringMaterialTypeCode", "RAW_MATERIAL");
+        assertSnapshot(partialTicket, "getEngineeringMaterialTypeName", "Raw Material");
+        assertSnapshot(partialTicket, "getEngineeringMaterialCategory", "ALUMINUM");
         assertThat(partialTicket.getEngineeringMaterialName()).isEqualTo("7075");
         assertThat(partialTicket.getMaterialData()).isEqualTo(Map.of("name", "7075"));
         assertThat(partialTicket.getProcessRoute()).isEqualTo(first.getProcessRoute());
@@ -535,6 +539,10 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setMaterialNoStatus("已确认");
         item.setDrawingUrl("/drawings/" + partNo + ".pdf");
         item.setMaterialName("6061");
+        item.setEngineeringMaterialCode("EMC-" + id);
+        item.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        item.setEngineeringMaterialTypeName("Raw Material");
+        item.setEngineeringMaterialCategory("ALUMINUM");
         item.setEngineeringMaterialName("7075");
         item.setSurfaceTreatment("Anodized");
         item.setTaxIncludedUnitPrice(BigDecimal.valueOf(12.34));
@@ -560,6 +568,15 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setCustomerRequirement("Customer requirement " + partNo);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
+    }
+
+    private void assertSnapshot(Object row, String getterName, Object expectedValue) {
+        try {
+            Object actual = row.getClass().getMethod(getterName).invoke(row);
+            assertThat(actual).isEqualTo(expectedValue);
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Snapshot getter missing or inaccessible: " + getterName, error);
+        }
     }
 
     private String read(Path path) throws Exception {

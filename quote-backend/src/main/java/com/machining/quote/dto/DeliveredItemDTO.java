@@ -28,7 +28,11 @@ public class DeliveredItemDTO {
     private String projectNo;
     private String itemType;
     private String materialName;
+    private String engineeringMaterialCode;
     private String engineeringMaterialName;
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private String materialShape;
     private String surfaceTreatment;
     private String drawingUrl;

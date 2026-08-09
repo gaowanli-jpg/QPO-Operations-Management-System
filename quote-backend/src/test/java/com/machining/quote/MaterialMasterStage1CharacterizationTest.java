@@ -129,11 +129,25 @@ class MaterialMasterStage1CharacterizationTest {
                         "private String materialShape;",
                         "private Object materialData;");
         assertThat(ticket)
-                .contains("private String materialName;", "private String engineeringMaterialName;", "private String materialShape;", "private Object materialData;")
-                .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
+                .contains(
+                        "private String materialName;",
+                        "private String engineeringMaterialCode;",
+                        "private String engineeringMaterialName;",
+                        "private String engineeringMaterialTypeCode;",
+                        "private String engineeringMaterialTypeName;",
+                        "private String engineeringMaterialCategory;",
+                        "private String materialShape;",
+                        "private Object materialData;");
         assertThat(allocation)
-                .contains("private String materialName;", "private String engineeringMaterialName;", "private String materialShape;", "private Object materialData;")
-                .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
+                .contains(
+                        "private String materialName;",
+                        "private String engineeringMaterialCode;",
+                        "private String engineeringMaterialName;",
+                        "private String engineeringMaterialTypeCode;",
+                        "private String engineeringMaterialTypeName;",
+                        "private String engineeringMaterialCategory;",
+                        "private String materialShape;",
+                        "private Object materialData;");
         assertThat(engineerService)
                 .contains(
                         "String engineeringMaterialCode = stringValue(materialData.get(\"materialCode\"));",
@@ -181,7 +195,11 @@ class MaterialMasterStage1CharacterizationTest {
                         "fields.put(\"materialSnapshotAvailable\", current.getMaterialData() == null && source.getMaterialData() != null);");
         assertThat(rfqReleaseService)
                 .contains(
+                        "ticket.setEngineeringMaterialCode(MaterialDataResolver.materialCode(item));",
                         "ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));",
+                        "ticket.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(item));",
+                        "ticket.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(item));",
+                        "ticket.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(item));",
                         "ticket.setMaterialShape(MaterialDataResolver.materialShape(item));",
                         "ticket.setMaterialData(item.getMaterialData());",
                         "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
@@ -193,17 +211,23 @@ class MaterialMasterStage1CharacterizationTest {
                         "item.setMaterialData(source.getMaterialData());");
         assertThat(deliveryService)
                 .contains(
+                        "ticket.setEngineeringMaterialCode(resolveSalesOrderEngineeringMaterialCode(item));",
                         "ticket.setEngineeringMaterialName(resolveSalesOrderEngineeringMaterialName(item));",
+                        "ticket.setEngineeringMaterialTypeCode(resolveSalesOrderEngineeringMaterialTypeCode(item));",
+                        "ticket.setEngineeringMaterialTypeName(resolveSalesOrderEngineeringMaterialTypeName(item));",
+                        "ticket.setEngineeringMaterialCategory(resolveSalesOrderEngineeringMaterialCategory(item));",
                         "ticket.setMaterialShape(resolveSalesOrderMaterialShape(item));",
                         "ticket.setMaterialData(item.getMaterialData());",
-                        "sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());")
-                .doesNotContain("setEngineeringMaterialCode", "setEngineeringMaterialTypeCode", "setEngineeringMaterialCategory");
+                        "sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());");
         assertThat(wmsAllocationService)
                 .contains(
+                        "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());",
                         "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());",
+                        "row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());",
+                        "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());",
+                        "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());",
                         "row.setMaterialShape(ticket.getMaterialShape());",
-                        "row.setMaterialData(ticket.getMaterialData());")
-                .doesNotContain("setEngineeringMaterialCode", "setEngineeringMaterialTypeCode", "setEngineeringMaterialCategory");
+                        "row.setMaterialData(ticket.getMaterialData());");
     }
 
     @Test
@@ -227,15 +251,21 @@ class MaterialMasterStage1CharacterizationTest {
     }
 
     @Test
-    void deliveredProductionAndLockedPagesCurrentlyDisplayShapeUnderMaterialTypeLabel() throws IOException {
+    void deliveredProductionAndLockedPagesDisplayMaterialIdentityAndShapeSeparately() throws IOException {
         for (Path page : List.of(DELIVERED_PAGE, PRODUCTION_PAGE, LOCKED_PAGE)) {
             String source = read(page);
             assertThat(source)
                     .contains(
                             "label=\"材料类型\"",
+                            "formatMaterialCode(row)",
+                            "formatMaterialType(row)",
+                            "formatMaterialName(row)",
+                            "formatMaterialShape(row)",
+                            "row?.engineeringMaterialCode",
+                            "row?.engineeringMaterialTypeName")
+                    .doesNotContain(
                             "formatMaterialShape(row.materialData)",
-                            "data.shape || data.materialShape || data.materialType || '-'")
-                    .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeName");
+                            "data.shape || data.materialShape || data.materialType || '-'");
         }
     }
 

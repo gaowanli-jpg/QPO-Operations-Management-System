@@ -174,6 +174,10 @@ class WmsAllocationTest {
                     assertSnapshot(row, "getCustomerOrderNo", "CO-9");
                     assertSnapshot(row, "getCustomerProjectNo", "CP-9");
                     assertSnapshot(row, "getMaterialName", "6061");
+                    assertSnapshot(row, "getEngineeringMaterialCode", "EMC-7075");
+                    assertSnapshot(row, "getEngineeringMaterialTypeCode", "RAW_MATERIAL");
+                    assertSnapshot(row, "getEngineeringMaterialTypeName", "Raw Material");
+                    assertSnapshot(row, "getEngineeringMaterialCategory", "ALUMINUM");
                     assertSnapshot(row, "getEngineeringMaterialName", "7075");
                     assertSnapshot(row, "getMaterialShape", "板材");
                     assertSnapshot(row, "getSurfaceTreatment", "Anodized");
@@ -432,6 +436,10 @@ class WmsAllocationTest {
                         "private String customerOrderNo;",
                         "private String customerProjectNo;",
                         "private String materialName;",
+                        "private String engineeringMaterialCode;",
+                        "private String engineeringMaterialTypeCode;",
+                        "private String engineeringMaterialTypeName;",
+                        "private String engineeringMaterialCategory;",
                         "private String engineeringMaterialName;",
                         "private String materialShape;",
                         "private String surfaceTreatment;",
@@ -460,6 +468,10 @@ class WmsAllocationTest {
                         "row.setRfqNo(resolveRfqNo(ticket, order))",
                         "row.setCustomerProjectNo(ticket.getCustomerProjectNo())",
                         "row.setMaterialName(ticket.getMaterialName())",
+                        "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode())",
+                        "row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode())",
+                        "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName())",
+                        "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory())",
                         "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName())",
                         "row.setMaterialShape(ticket.getMaterialShape())",
                         "row.setSurfaceTreatment(ticket.getSurfaceTreatment())",
@@ -583,6 +595,10 @@ class WmsAllocationTest {
         ticket.setCustomerProjectNo("CP-9");
         ticket.setMaterialName("6061");
         ticket.setEngineeringMaterialName("7075");
+        setSnapshot(ticket, "setEngineeringMaterialCode", "EMC-7075");
+        setSnapshot(ticket, "setEngineeringMaterialTypeCode", "RAW_MATERIAL");
+        setSnapshot(ticket, "setEngineeringMaterialTypeName", "Raw Material");
+        setSnapshot(ticket, "setEngineeringMaterialCategory", "ALUMINUM");
         setSnapshot(ticket, "setMaterialShape", "板材");
         ticket.setSurfaceTreatment("Anodized");
         ticket.setRemark("Rush note");

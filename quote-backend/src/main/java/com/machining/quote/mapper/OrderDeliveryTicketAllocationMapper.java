@@ -40,7 +40,11 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.customer_order_no,
                 alloc.customer_project_no,
                 alloc.material_name,
+                alloc.engineering_material_code,
                 alloc.engineering_material_name,
+                alloc.engineering_material_type_code,
+                alloc.engineering_material_type_name,
+                alloc.engineering_material_category,
                 alloc.material_shape,
                 alloc.surface_treatment,
                 alloc.remark,
@@ -71,6 +75,10 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             """)
     @Results(id = "lockedItemResultMap", value = {
             @Result(column = "id", property = "id", id = true),
+            @Result(column = "engineering_material_code", property = "engineeringMaterialCode"),
+            @Result(column = "engineering_material_type_code", property = "engineeringMaterialTypeCode"),
+            @Result(column = "engineering_material_type_name", property = "engineeringMaterialTypeName"),
+            @Result(column = "engineering_material_category", property = "engineeringMaterialCategory"),
             @Result(column = "process_route", property = "processRoute", typeHandler = JsonbTypeHandler.class),
             @Result(column = "material_data", property = "materialData", typeHandler = JsonbTypeHandler.class),
             @Result(column = "source_payload", property = "sourcePayload", typeHandler = JsonbTypeHandler.class)

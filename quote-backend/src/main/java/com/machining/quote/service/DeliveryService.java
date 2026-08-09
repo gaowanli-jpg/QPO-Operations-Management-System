@@ -539,7 +539,11 @@ public class DeliveryService {
         ticket.setDescription(item.getDescription());
         ticket.setQty(qty);
         ticket.setMaterialName(item.getMaterialName());
+        ticket.setEngineeringMaterialCode(resolveSalesOrderEngineeringMaterialCode(item));
         ticket.setEngineeringMaterialName(resolveSalesOrderEngineeringMaterialName(item));
+        ticket.setEngineeringMaterialTypeCode(resolveSalesOrderEngineeringMaterialTypeCode(item));
+        ticket.setEngineeringMaterialTypeName(resolveSalesOrderEngineeringMaterialTypeName(item));
+        ticket.setEngineeringMaterialCategory(resolveSalesOrderEngineeringMaterialCategory(item));
         ticket.setMaterialShape(resolveSalesOrderMaterialShape(item));
         ticket.setSurfaceTreatment(item.getSurfaceTreatment());
         ticket.setVersion(item.getVersion());
@@ -634,6 +638,34 @@ public class DeliveryService {
 
     private String resolveSalesOrderEngineeringMaterialName(SalesOrderItem item) {
         return MaterialDataResolver.effectiveSalesOrderMaterialName(item);
+    }
+
+    private String resolveSalesOrderEngineeringMaterialCode(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        return firstText(item.getEngineeringMaterialCode(), MaterialDataResolver.materialCode(item.getMaterialData()));
+    }
+
+    private String resolveSalesOrderEngineeringMaterialTypeCode(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        return firstText(item.getEngineeringMaterialTypeCode(), MaterialDataResolver.materialTypeCode(item.getMaterialData()));
+    }
+
+    private String resolveSalesOrderEngineeringMaterialTypeName(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        return firstText(item.getEngineeringMaterialTypeName(), MaterialDataResolver.materialTypeName(item.getMaterialData()));
+    }
+
+    private String resolveSalesOrderEngineeringMaterialCategory(SalesOrderItem item) {
+        if (item == null) {
+            return "";
+        }
+        return firstText(item.getEngineeringMaterialCategory(), MaterialDataResolver.materialCategory(item.getMaterialData()));
     }
 
     private String resolveSalesOrderMaterialShape(SalesOrderItem item) {

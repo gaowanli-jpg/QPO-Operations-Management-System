@@ -356,7 +356,11 @@ public class RfqReleaseSalesOrderService {
         ticket.setDescription(item.getDescription());
         ticket.setQty(line.acceptedQty());
         ticket.setMaterialName(item.getMaterialName());
+        ticket.setEngineeringMaterialCode(MaterialDataResolver.materialCode(item));
         ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));
+        ticket.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(item));
+        ticket.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(item));
+        ticket.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(item));
         ticket.setMaterialShape(MaterialDataResolver.materialShape(item));
         ticket.setSurfaceTreatment(item.getSurfaceTreatment());
         ticket.setVersion(item.getVersion());

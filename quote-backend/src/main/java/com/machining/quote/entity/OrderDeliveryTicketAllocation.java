@@ -37,7 +37,11 @@ public class OrderDeliveryTicketAllocation {
     private String customerOrderNo;
     private String customerProjectNo;
     private String materialName;
+    private String engineeringMaterialCode;
     private String engineeringMaterialName;
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private String materialShape;
     private String surfaceTreatment;
     private String remark;

@@ -44,7 +44,11 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.project_no,
                 ticket.item_type,
                 COALESCE(ticket.material_name, item.material_name) AS material_name,
+                COALESCE(ticket.engineering_material_code, item.engineering_material_code, sales_item.engineering_material_code) AS engineering_material_code,
                 COALESCE(ticket.engineering_material_name, item.engineering_material_name) AS engineering_material_name,
+                COALESCE(ticket.engineering_material_type_code, item.engineering_material_type_code, sales_item.engineering_material_type_code) AS engineering_material_type_code,
+                COALESCE(ticket.engineering_material_type_name, item.engineering_material_type_name, sales_item.engineering_material_type_name) AS engineering_material_type_name,
+                COALESCE(ticket.engineering_material_category, item.engineering_material_category, sales_item.engineering_material_category) AS engineering_material_category,
                 COALESCE(ticket.material_shape, item.material_shape, sales_item.material_shape) AS material_shape,
                 COALESCE(ticket.surface_treatment, item.surface_treatment) AS surface_treatment,
                 COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url,
@@ -79,6 +83,10 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
             """)
     @Results(id = "deliveredItemResultMap", value = {
             @Result(column = "id", property = "id", id = true),
+            @Result(column = "engineering_material_code", property = "engineeringMaterialCode"),
+            @Result(column = "engineering_material_type_code", property = "engineeringMaterialTypeCode"),
+            @Result(column = "engineering_material_type_name", property = "engineeringMaterialTypeName"),
+            @Result(column = "engineering_material_category", property = "engineeringMaterialCategory"),
             @Result(column = "process_route", property = "processRoute", typeHandler = JsonbTypeHandler.class),
             @Result(column = "material_data", property = "materialData", typeHandler = JsonbTypeHandler.class)
     })
@@ -134,7 +142,11 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.project_no,
                 ticket.item_type,
                 COALESCE(ticket.material_name, item.material_name) AS material_name,
+                COALESCE(ticket.engineering_material_code, item.engineering_material_code, sales_item.engineering_material_code) AS engineering_material_code,
                 COALESCE(ticket.engineering_material_name, item.engineering_material_name) AS engineering_material_name,
+                COALESCE(ticket.engineering_material_type_code, item.engineering_material_type_code, sales_item.engineering_material_type_code) AS engineering_material_type_code,
+                COALESCE(ticket.engineering_material_type_name, item.engineering_material_type_name, sales_item.engineering_material_type_name) AS engineering_material_type_name,
+                COALESCE(ticket.engineering_material_category, item.engineering_material_category, sales_item.engineering_material_category) AS engineering_material_category,
                 COALESCE(ticket.material_shape, item.material_shape, sales_item.material_shape) AS material_shape,
                 COALESCE(ticket.surface_treatment, item.surface_treatment) AS surface_treatment,
                 COALESCE(ticket.drawing_url, sales_item.drawing_url, item.drawing_url) AS drawing_url,
