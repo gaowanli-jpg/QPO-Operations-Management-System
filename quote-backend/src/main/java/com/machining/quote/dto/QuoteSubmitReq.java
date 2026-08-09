@@ -10,7 +10,7 @@ public class QuoteSubmitReq {
     private String quoteMode; // NORMAL / ASSEMBLY
     private Double assemblyFee; // 组合件每套组装费
 
-    // 材料填报数据：包含名称、毛坯重量等
+    // 材料填报数据：普通件必须包含 materialCode，后端按材料编码重新读取材料主数据并计算成本
     private Map<String, Object> materialData;
 
     // 图纸标注的零件净重，单位 kg；未填写时按 0 保存

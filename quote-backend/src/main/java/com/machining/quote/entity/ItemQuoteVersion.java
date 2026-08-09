@@ -43,7 +43,11 @@ public class ItemQuoteVersion {
     private Long materialNoSourceTicketId;
     private LocalDateTime materialNoSyncedAt;
     private String materialNoMessage;
+    private String engineeringMaterialCode;
     private String engineeringMaterialName; // 工程核价选择的材料
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private String materialShape;
     private String surfaceTreatment;  // 表面处理
     private String unit;              // 单位

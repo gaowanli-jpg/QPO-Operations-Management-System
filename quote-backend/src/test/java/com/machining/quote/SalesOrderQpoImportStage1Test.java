@@ -2,9 +2,13 @@ package com.machining.quote;
 
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMarkupFee;
+import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
+import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.service.EngineerService;
@@ -143,12 +147,18 @@ class SalesOrderQpoImportStage1Test {
         EngineerService service = new EngineerService();
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         ItemAssemblyRelationMapper assemblyRelationMapper = mock(ItemAssemblyRelationMapper.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
         DictMarkupFeeMapper markupFeeMapper = mock(DictMarkupFeeMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "assemblyRelationMapper", assemblyRelationMapper);
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
         ReflectionTestUtils.setField(service, "markupFeeMapper", markupFeeMapper);
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", extraFeeItemMapper);
+        when(materialMapper.selectList(any())).thenReturn(List.of(material()));
+        when(materialTypeMapper.selectById(1L)).thenReturn(materialType());
         when(markupFeeMapper.selectList(any())).thenReturn(List.of(markup("\u5229\u6da6", 10.0), markup("\u7a0e\u8d39", 13.0)));
         when(extraFeeItemMapper.selectList(any())).thenReturn(List.of());
 
@@ -158,7 +168,9 @@ class SalesOrderQpoImportStage1Test {
         item.setPartNo("P-001");
         item.setQty(2);
         Map<String, Object> materialData = new LinkedHashMap<>();
-        materialData.put("cost", 100.0);
+        materialData.put("materialCode", "MAT-TEST-PRICE");
+        materialData.put("shape", "板材");
+        materialData.put("weight", 1.0);
 
         ReflectionTestUtils.invokeMethod(
                 service,
@@ -203,6 +215,29 @@ class SalesOrderQpoImportStage1Test {
         fee.setRatePercent(ratePercent);
         fee.setEnabled(true);
         return fee;
+    }
+
+    private DictMaterial material() {
+        DictMaterial material = new DictMaterial();
+        material.setId(1L);
+        material.setMaterialCode("MAT-TEST-PRICE");
+        material.setMaterialName("测试钢");
+        material.setMaterialTypeId(1L);
+        material.setMaterialCategory("钢铁");
+        material.setDensity(7850.0);
+        material.setPlateDensity(7850.0);
+        material.setPlatePrice(100.0);
+        material.setEnabled(true);
+        return material;
+    }
+
+    private DictMaterialType materialType() {
+        DictMaterialType type = new DictMaterialType();
+        type.setId(1L);
+        type.setTypeCode("RAW_MATERIAL");
+        type.setTypeName("原材料");
+        type.setEnabled(true);
+        return type;
     }
 
     private String read(Path path) throws IOException {

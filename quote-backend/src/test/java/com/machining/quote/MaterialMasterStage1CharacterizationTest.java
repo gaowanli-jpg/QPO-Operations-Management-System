@@ -60,39 +60,47 @@ class MaterialMasterStage1CharacterizationTest {
     }
 
     @Test
-    void pricingSelectionAndCostResolutionCurrentlyUseMaterialName() throws IOException {
+    void pricingSelectionAndCostResolutionUseMaterialCode() throws IOException {
         String itemPricing = read(ITEM_PRICING);
         String materialPicker = read(MATERIAL_PICKER);
         String engineerService = read(ENGINEER_SERVICE);
 
         assertThat(itemPricing)
                 .contains(
-                        ":selected-key=\"matForm.materialName\"",
-                        "const matForm = reactive({ materialName: '', shape: ''",
+                        ":selected-key=\"matForm.materialCode\"",
+                        "materialCode: '',",
                         "matForm.materialName = material.materialName",
-                        "materialOptions.value.find(item => item.materialName === matForm.materialName)",
+                        "matForm.materialCode = material.materialCode",
+                        "materialOptions.value.find(item => item.materialCode === matForm.materialCode)",
+                        "materialCode: matForm.materialCode",
+                        "materialTypeCode: matForm.materialTypeCode",
                         "name: matForm.materialName")
-                .doesNotContain("matForm.materialCode", "materialCode: matForm.materialCode");
+                .doesNotContain("item.materialName === matForm.materialName");
         assertThat(materialPicker)
                 .contains(
+                        "prop=\"materialCode\" label=\"材料编码\"",
                         "prop=\"materialName\" label=\"材料名称\"",
-                        "prop=\"materialType\" label=\"材料类型\"",
-                        "? (item?.materialName ?? item?.id ?? '')",
+                        "materialTypeCode",
+                        "? (item?.materialCode ?? item?.id ?? '')",
+                        "item?.materialCode",
                         "item?.materialName",
-                        "item?.materialType")
-                .doesNotContain("materialCode", "materialTypeCode");
+                        "item?.materialTypeName");
         assertThat(engineerService)
                 .contains(
-                        "String materialName = stringValue(materialData.get(\"name\"));",
-                        "qw.eq(\"material_name\", materialName);",
+                        "String materialCode = stringValue(materialData.get(\"materialCode\"));",
+                        "requireEnabledMaterialByCode(materialCode)",
+                        "qw.apply(\"UPPER(material_code) = {0}\"",
+                        "qw.eq(\"enabled\", true);",
+                        "materialData.put(\"materialCode\", material.getMaterialCode());",
+                        "materialData.put(\"materialTypeCode\", materialType == null ? null : materialType.getTypeCode());",
                         "materialData.put(\"density\", density);",
                         "materialData.put(\"unitPrice\", unitPrice);",
                         "materialData.put(\"cost\", cost);")
-                .doesNotContain("materialData.get(\"materialCode\")", "qw.eq(\"material_code\"");
+                .doesNotContain("qw.eq(\"material_name\", materialName);");
     }
 
     @Test
-    void quoteSaveCurrentlyPersistsMaterialDataEngineeringMaterialNameAndShape() throws IOException {
+    void quoteSavePersistsMaterialDataAndEngineeringMaterialIdentitySnapshot() throws IOException {
         String item = read(ITEM);
         String salesItem = read(SALES_ITEM);
         String ticket = read(TICKET);
@@ -101,8 +109,15 @@ class MaterialMasterStage1CharacterizationTest {
         String resolver = read(MATERIAL_RESOLVER);
 
         assertThat(item)
-                .contains("private String materialName;", "private String engineeringMaterialName;", "private String materialShape;", "private Object materialData;")
-                .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
+                .contains(
+                        "private String materialName;",
+                        "private String engineeringMaterialCode;",
+                        "private String engineeringMaterialName;",
+                        "private String engineeringMaterialTypeCode;",
+                        "private String engineeringMaterialTypeName;",
+                        "private String engineeringMaterialCategory;",
+                        "private String materialShape;",
+                        "private Object materialData;");
         assertThat(salesItem)
                 .contains("private String materialName;", "private String engineeringMaterialName;", "private String materialShape;", "private Object materialData;")
                 .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
@@ -114,16 +129,28 @@ class MaterialMasterStage1CharacterizationTest {
                 .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
         assertThat(engineerService)
                 .contains(
-                        "String engineeringMaterialName = stringValue(materialData.get(\"name\"));",
+                        "String engineeringMaterialCode = stringValue(materialData.get(\"materialCode\"));",
+                        "String engineeringMaterialName = stringValue(materialData.get(\"materialName\"));",
+                        "String engineeringMaterialTypeCode = stringValue(materialData.get(\"materialTypeCode\"));",
+                        "String engineeringMaterialTypeName = stringValue(materialData.get(\"materialTypeName\"));",
+                        "String engineeringMaterialCategory = stringValue(materialData.get(\"materialCategory\"));",
                         "item.setMaterialData(materialData);",
+                        "item.setEngineeringMaterialCode(engineeringMaterialCode);",
                         "item.setEngineeringMaterialName(engineeringMaterialName);",
+                        "item.setEngineeringMaterialTypeCode(engineeringMaterialTypeCode);",
+                        "item.setEngineeringMaterialTypeName(engineeringMaterialTypeName);",
+                        "item.setEngineeringMaterialCategory(engineeringMaterialCategory);",
                         "item.setMaterialShape(materialShape(materialData));");
         assertThat(resolver)
                 .contains(
+                        "public static String materialCode(ItemQuoteVersion item)",
+                        "public static String materialTypeCode(ItemQuoteVersion item)",
+                        "public static String materialTypeName(ItemQuoteVersion item)",
+                        "public static String materialCategory(ItemQuoteVersion item)",
+                        "normalizeMap(materialData).get(\"materialCode\")",
                         "normalizeMap(item.getMaterialData()).get(\"name\")",
                         "normalizeMap(materialData).get(\"shape\")",
-                        "public static String effectiveSalesOrderMaterialName(SalesOrderItem item)")
-                .doesNotContain("materialCode", "materialTypeCode", "materialCategory");
+                        "public static String effectiveSalesOrderMaterialName(SalesOrderItem item)");
     }
 
     @Test

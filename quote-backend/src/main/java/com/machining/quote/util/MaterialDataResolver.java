@@ -34,6 +34,54 @@ public final class MaterialDataResolver {
         return stringValue(normalizeMap(item.getMaterialData()).get("name"));
     }
 
+    public static String materialCode(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        String savedMaterialCode = stringValue(item.getEngineeringMaterialCode());
+        return savedMaterialCode.isEmpty() ? materialCode(item.getMaterialData()) : savedMaterialCode;
+    }
+
+    public static String materialTypeCode(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        String savedTypeCode = stringValue(item.getEngineeringMaterialTypeCode());
+        return savedTypeCode.isEmpty() ? materialTypeCode(item.getMaterialData()) : savedTypeCode;
+    }
+
+    public static String materialTypeName(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        String savedTypeName = stringValue(item.getEngineeringMaterialTypeName());
+        return savedTypeName.isEmpty() ? materialTypeName(item.getMaterialData()) : savedTypeName;
+    }
+
+    public static String materialCategory(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        String savedCategory = stringValue(item.getEngineeringMaterialCategory());
+        return savedCategory.isEmpty() ? materialCategory(item.getMaterialData()) : savedCategory;
+    }
+
+    public static String materialCode(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("materialCode"));
+    }
+
+    public static String materialTypeCode(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("materialTypeCode"));
+    }
+
+    public static String materialTypeName(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("materialTypeName"));
+    }
+
+    public static String materialCategory(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("materialCategory"));
+    }
+
     public static String effectiveSalesOrderMaterialName(SalesOrderItem item) {
         if (item == null) {
             return "";

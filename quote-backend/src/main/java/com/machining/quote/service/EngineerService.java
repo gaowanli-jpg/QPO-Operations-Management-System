@@ -9,6 +9,7 @@ import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
@@ -16,6 +17,7 @@ import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -48,6 +50,8 @@ public class EngineerService {
     private ProcessRoutePricingService processRoutePricingService;
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
     private DictMarkupFeeMapper markupFeeMapper;
     @Autowired
@@ -168,7 +172,11 @@ public class EngineerService {
         materialData.put("grossWeightUnit", "kg");
         materialData.put("netWeight", normalizedPartNetWeight);
         materialData.put("netWeightUnit", "kg");
-        String engineeringMaterialName = stringValue(materialData.get("name"));
+        String engineeringMaterialCode = stringValue(materialData.get("materialCode"));
+        String engineeringMaterialName = stringValue(materialData.get("materialName"));
+        String engineeringMaterialTypeCode = stringValue(materialData.get("materialTypeCode"));
+        String engineeringMaterialTypeName = stringValue(materialData.get("materialTypeName"));
+        String engineeringMaterialCategory = stringValue(materialData.get("materialCategory"));
 
         double totalProcessCost = 0.0;
         List<Map<String, Object>> pricedProcessRoute = new ArrayList<>();
@@ -203,7 +211,11 @@ public class EngineerService {
         double untaxedTotalPrice = untaxedUnitPrice * qty;
 
         item.setMaterialData(materialData);
+        item.setEngineeringMaterialCode(engineeringMaterialCode);
         item.setEngineeringMaterialName(engineeringMaterialName);
+        item.setEngineeringMaterialTypeCode(engineeringMaterialTypeCode);
+        item.setEngineeringMaterialTypeName(engineeringMaterialTypeName);
+        item.setEngineeringMaterialCategory(engineeringMaterialCategory);
         item.setMaterialShape(materialShape(materialData));
         item.setProcessRoute(pricedProcessRoute);
         item.setFeeData(feeBreakdown);
@@ -300,7 +312,11 @@ public class EngineerService {
         parent.setQuoteMode(QUOTE_MODE_ASSEMBLY);
         parent.setAssemblyFee(safeAssemblyFee);
         parent.setMaterialData(materialData);
+        parent.setEngineeringMaterialCode("");
         parent.setEngineeringMaterialName("");
+        parent.setEngineeringMaterialTypeCode("");
+        parent.setEngineeringMaterialTypeName("");
+        parent.setEngineeringMaterialCategory("");
         parent.setMaterialShape("");
         parent.setProcessRoute(processRoute);
         parent.setFeeData(assemblyFeeBreakdown);
@@ -1408,46 +1424,64 @@ public class EngineerService {
 
     private double calculateMaterialCost(Map<String, Object> materialData) {
         if (materialData == null) {
-            return 0.0;
+            throw new RuntimeException("请重新选择材料：材料编码不能为空");
         }
 
-        String materialName = stringValue(materialData.get("name"));
+        String materialCode = stringValue(materialData.get("materialCode"));
+        if (isBlank(materialCode)) {
+            throw new RuntimeException("请重新选择材料：材料编码不能为空");
+        }
         String shape = stringValue(materialData.get("shape"));
         Double submittedWeight = doubleValue(materialData.get("weight"));
 
-        if (materialName != null) {
-            QueryWrapper<DictMaterial> qw = new QueryWrapper<>();
-            qw.eq("material_name", materialName);
-            List<DictMaterial> materials = materialMapper.selectList(qw);
-            if (!materials.isEmpty()) {
-                DictMaterial material = materials.get(0);
-                double unitPrice = resolveMaterialPrice(material, shape);
-                double density = resolveMaterialDensity(material, shape);
-                Double volume = calculateMetricVolume(materialData, shape);
-                Double weight = volume != null && density > 0
-                        ? volume * density
-                        : submittedWeight;
+        DictMaterial material = requireEnabledMaterialByCode(materialCode);
+        DictMaterialType materialType = material.getMaterialTypeId() == null
+                ? null
+                : materialTypeMapper.selectById(material.getMaterialTypeId());
+        double unitPrice = resolveMaterialPrice(material, shape);
+        double density = resolveMaterialDensity(material, shape);
+        Double volume = calculateMetricVolume(materialData, shape);
+        Double weight = volume != null && density > 0
+                ? volume * density
+                : submittedWeight;
+        double cost = weight != null && weight > 0 ? weight * unitPrice : 0.0;
 
-                materialData.put("density", density);
-                materialData.put("densityUnit", "kg/m3");
-                materialData.put("unitPrice", unitPrice);
-                materialData.put("unitPriceUnit", "元/kg");
-                if (volume != null) {
-                    materialData.put("volume", volume);
-                    materialData.put("volumeUnit", "m3");
-                }
-                if (weight != null && weight > 0) {
-                    double cost = weight * unitPrice;
-                    materialData.put("weight", weight);
-                    materialData.put("weightUnit", "kg");
-                    materialData.put("cost", cost);
-                    return cost;
-                }
-            }
+        materialData.put("materialId", material.getId());
+        materialData.put("materialCode", material.getMaterialCode());
+        materialData.put("materialName", material.getMaterialName());
+        materialData.put("name", material.getMaterialName());
+        materialData.put("materialTypeId", material.getMaterialTypeId());
+        materialData.put("materialTypeCode", materialType == null ? null : materialType.getTypeCode());
+        materialData.put("materialTypeName", materialType == null ? null : materialType.getTypeName());
+        materialData.put("materialCategory", material.getMaterialCategory());
+        materialData.put("density", density);
+        materialData.put("densityUnit", "kg/m3");
+        materialData.put("unitPrice", unitPrice);
+        materialData.put("unitPriceUnit", "元/kg");
+        if (volume != null) {
+            materialData.put("volume", volume);
+            materialData.put("volumeUnit", "m3");
+        } else {
+            materialData.remove("volume");
+            materialData.remove("volumeUnit");
         }
+        if (weight != null && weight > 0) {
+            materialData.put("weight", weight);
+            materialData.put("weightUnit", "kg");
+        }
+        materialData.put("cost", cost);
+        return cost;
+    }
 
-        Double submittedCost = doubleValue(materialData.get("cost"));
-        return submittedCost == null ? 0.0 : submittedCost;
+    private DictMaterial requireEnabledMaterialByCode(String materialCode) {
+        QueryWrapper<DictMaterial> qw = new QueryWrapper<>();
+        qw.apply("UPPER(material_code) = {0}", materialCode.toUpperCase(Locale.ROOT));
+        qw.eq("enabled", true);
+        List<DictMaterial> materials = materialMapper.selectList(qw);
+        if (materials == null || materials.isEmpty()) {
+            throw new RuntimeException("请重新选择材料：材料编码不存在或已禁用");
+        }
+        return materials.get(0);
     }
 
     private Double calculateMetricVolume(Map<String, Object> materialData, String shape) {
