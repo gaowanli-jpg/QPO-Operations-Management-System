@@ -188,7 +188,11 @@ class CoreWorkflowIntegrationTests {
 
         String materialName = "TEST-MAT-" + System.nanoTime();
         DictMaterial material = new DictMaterial();
+        material.setMaterialCode("MAT-TEST-" + System.nanoTime());
         material.setMaterialName(materialName);
+        material.setMaterialTypeId(1L);
+        material.setEnabled(true);
+        material.setSortNo(0);
         material.setRemarks("");
         material.setPlateDensity(7850.0);
         material.setPlatePrice(7.1);
@@ -426,7 +430,11 @@ class CoreWorkflowIntegrationTests {
 
         String engineeringMaterial = "ENG-MATERIAL-" + System.nanoTime();
         DictMaterial material = new DictMaterial();
+        material.setMaterialCode("MAT-ENG-" + System.nanoTime());
         material.setMaterialName(engineeringMaterial);
+        material.setMaterialTypeId(1L);
+        material.setEnabled(true);
+        material.setSortNo(0);
         material.setRemarks("");
         material.setPlateDensity(7850.0);
         material.setPlatePrice(7.1);
@@ -537,7 +545,11 @@ class CoreWorkflowIntegrationTests {
 
         String materialName = "STATUS-MAT-" + System.nanoTime();
         DictMaterial material = new DictMaterial();
+        material.setMaterialCode("MAT-STATUS-" + System.nanoTime());
         material.setMaterialName(materialName);
+        material.setMaterialTypeId(1L);
+        material.setEnabled(true);
+        material.setSortNo(0);
         material.setRemarks("");
         material.setPlateDensity(7850.0);
         material.setPlatePrice(7.1);

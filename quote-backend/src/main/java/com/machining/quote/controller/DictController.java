@@ -2,17 +2,28 @@ package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.MaterialMasterDTO;
+import com.machining.quote.dto.MaterialMasterSaveReq;
+import com.machining.quote.dto.MaterialTypeDTO;
+import com.machining.quote.dto.MaterialTypeSaveReq;
 import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
-import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
-import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.MaterialMasterService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
@@ -21,7 +32,7 @@ import java.util.Map;
 @RequestMapping("/api/dict")
 public class DictController {
     @Autowired
-    private DictMaterialMapper materialMapper;
+    private MaterialMasterService materialMasterService;
     @Autowired
     private DictMarkupFeeMapper markupFeeMapper;
     @Autowired
@@ -33,39 +44,58 @@ public class DictController {
 
     @GetMapping("/materials")
     @RequirePermission("engineer:dict:view")
-    public List<DictMaterial> listMaterials() {
-        QueryWrapper<DictMaterial> qw = new QueryWrapper<>();
-        qw.orderByAsc("material_name");
-        return materialMapper.selectList(qw);
+    public List<MaterialMasterDTO> listMaterials(
+            @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly) {
+        return materialMasterService.listMaterials(enabledOnly);
     }
 
     @PostMapping("/materials")
     @RequirePermission("engineer:dict:material-manage")
-    public Map<String, Object> createMaterial(@RequestBody DictMaterial material) {
-        normalizeMaterial(material);
-        materialMapper.insert(material);
-        auditService.record("DICT_MATERIAL_CREATE", "dict_material", material.getId(), null, material);
-        return Map.of("success", true, "message", "材料已新增", "data", material);
+    public Map<String, Object> createMaterial(@RequestBody MaterialMasterSaveReq material) {
+        MaterialMasterDTO data = materialMasterService.saveMaterial(null, material);
+        return Map.of("success", true, "message", "材料已新增", "data", data);
     }
 
     @PutMapping("/materials/{id}")
     @RequirePermission("engineer:dict:material-manage")
-    public Map<String, Object> updateMaterial(@PathVariable Integer id, @RequestBody DictMaterial material) {
-        DictMaterial before = materialMapper.selectById(id);
-        material.setId(id);
-        normalizeMaterial(material);
-        materialMapper.updateById(material);
-        auditService.record("DICT_MATERIAL_UPDATE", "dict_material", id, before, material);
-        return Map.of("success", true, "message", "材料已更新", "data", material);
+    public Map<String, Object> updateMaterial(@PathVariable Long id, @RequestBody MaterialMasterSaveReq material) {
+        MaterialMasterDTO data = materialMasterService.saveMaterial(id, material);
+        return Map.of("success", true, "message", "材料已更新", "data", data);
     }
 
     @DeleteMapping("/materials/{id}")
     @RequirePermission("engineer:dict:material-manage")
-    public Map<String, Object> deleteMaterial(@PathVariable Integer id) {
-        DictMaterial before = materialMapper.selectById(id);
-        materialMapper.deleteById(id);
-        auditService.record("DICT_MATERIAL_DELETE", "dict_material", id, before, null);
-        return Map.of("success", true, "message", "材料已删除");
+    public Map<String, Object> deleteMaterial(@PathVariable Long id) {
+        materialMasterService.deleteMaterial(id);
+        return Map.of("success", true, "message", "材料已停用");
+    }
+
+    @GetMapping("/material-types")
+    @RequirePermission("engineer:dict:view")
+    public List<MaterialTypeDTO> listMaterialTypes(
+            @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly) {
+        return materialMasterService.listMaterialTypes(enabledOnly);
+    }
+
+    @PostMapping("/material-types")
+    @RequirePermission("engineer:dict:material-manage")
+    public Map<String, Object> createMaterialType(@RequestBody MaterialTypeSaveReq req) {
+        MaterialTypeDTO data = materialMasterService.saveMaterialType(null, req);
+        return Map.of("success", true, "message", "材料类型已新增", "data", data);
+    }
+
+    @PutMapping("/material-types/{id}")
+    @RequirePermission("engineer:dict:material-manage")
+    public Map<String, Object> updateMaterialType(@PathVariable Long id, @RequestBody MaterialTypeSaveReq req) {
+        MaterialTypeDTO data = materialMasterService.saveMaterialType(id, req);
+        return Map.of("success", true, "message", "材料类型已更新", "data", data);
+    }
+
+    @DeleteMapping("/material-types/{id}")
+    @RequirePermission("engineer:dict:material-manage")
+    public Map<String, Object> deleteMaterialType(@PathVariable Long id) {
+        materialMasterService.deleteMaterialType(id);
+        return Map.of("success", true, "message", "材料类型已删除或停用");
     }
 
     @GetMapping("/markup-fees")
@@ -187,28 +217,6 @@ public class DictController {
         return Map.of("success", true, "message", "非工时费用工艺已删除");
     }
 
-    private void normalizeMaterial(DictMaterial material) {
-        if (isBlank(material.getMaterialName())) {
-            throw new RuntimeException("材料名称不能为空");
-        }
-        material.setMaterialName(material.getMaterialName().trim());
-        if (material.getRemarks() == null) {
-            material.setRemarks("");
-        }
-        if (material.getPlateDensity() == null) {
-            material.setPlateDensity(material.getDensity());
-        }
-        if (material.getBarDensity() == null) {
-            material.setBarDensity(material.getDensity());
-        }
-        if (material.getTubeDensity() == null) {
-            material.setTubeDensity(material.getDensity());
-        }
-        if (material.getDensity() == null) {
-            material.setDensity(firstNonNull(material.getPlateDensity(), material.getBarDensity(), material.getTubeDensity()));
-        }
-    }
-
     private void normalizeMarkupFee(DictMarkupFee fee) {
         if (isBlank(fee.getFeeName())) {
             throw new RuntimeException("费用名称不能为空");
@@ -255,15 +263,6 @@ public class DictController {
         if (item.getRemarks() == null) {
             item.setRemarks("");
         }
-    }
-
-    private Double firstNonNull(Double... values) {
-        for (Double value : values) {
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
     }
 
     private boolean isBlank(String value) {

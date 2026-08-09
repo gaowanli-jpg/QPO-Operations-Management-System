@@ -36,14 +36,16 @@ class MaterialMasterStage1CharacterizationTest {
     private static final Path SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
 
     @Test
-    void dictMaterialRuntimeEntityCurrentlyUsesNameAndLegacyTypeWithoutStableCode() throws IOException {
+    void dictMaterialRuntimeEntityUsesCodeTypeAndCategoryIdentityFields() throws IOException {
         String entity = read(DICT_MATERIAL);
 
         assertThat(entity)
                 .contains(
                         "@TableName(\"dict_material\")",
+                        "private String materialCode;",
                         "private String materialName;",
-                        "private String materialType;",
+                        "private Long materialTypeId;",
+                        "private String materialCategory;",
                         "private Double density;",
                         "private Double plateDensity;",
                         "private Double platePrice;",
@@ -51,8 +53,10 @@ class MaterialMasterStage1CharacterizationTest {
                         "private Double barPrice;",
                         "private Double tubeDensity;",
                         "private Double tubePrice;",
-                        "private String remarks;")
-                .doesNotContain("materialCode", "materialTypeId", "materialCategory");
+                        "private String remarks;",
+                        "private Boolean enabled;",
+                        "private Integer sortNo;")
+                .doesNotContain("private String materialType;");
     }
 
     @Test

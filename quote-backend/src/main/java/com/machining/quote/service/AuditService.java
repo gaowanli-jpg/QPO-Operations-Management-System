@@ -301,6 +301,11 @@ public class AuditService {
             case "DICT_MATERIAL_CREATE" -> "新增材料";
             case "DICT_MATERIAL_UPDATE" -> "更新材料";
             case "DICT_MATERIAL_DELETE" -> "删除材料";
+            case "DICT_MATERIAL_DISABLE" -> "停用材料";
+            case "DICT_MATERIAL_TYPE_CREATE" -> "新增材料类型";
+            case "DICT_MATERIAL_TYPE_UPDATE" -> "更新材料类型";
+            case "DICT_MATERIAL_TYPE_DELETE" -> "删除材料类型";
+            case "DICT_MATERIAL_TYPE_DISABLE" -> "停用材料类型";
             case "DICT_PROCESS_CATEGORY_CREATE" -> "新增工艺大类";
             case "DICT_PROCESS_CATEGORY_UPDATE" -> "更新工艺大类";
             case "DICT_PROCESS_DETAIL_CREATE" -> "新增具体工艺";
