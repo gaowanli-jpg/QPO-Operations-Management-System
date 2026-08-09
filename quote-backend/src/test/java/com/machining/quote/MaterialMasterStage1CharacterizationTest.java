@@ -36,10 +36,8 @@ class MaterialMasterStage1CharacterizationTest {
     private static final Path SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
 
     @Test
-    void dictMaterialCurrentlyUsesNameAndLegacyTypeWithoutStableCode() throws IOException {
+    void dictMaterialRuntimeEntityCurrentlyUsesNameAndLegacyTypeWithoutStableCode() throws IOException {
         String entity = read(DICT_MATERIAL);
-        String schema = read(SCHEMA);
-        String seed = read(SEED);
 
         assertThat(entity)
                 .contains(
@@ -55,17 +53,6 @@ class MaterialMasterStage1CharacterizationTest {
                         "private Double tubePrice;",
                         "private String remarks;")
                 .doesNotContain("materialCode", "materialTypeId", "materialCategory");
-        assertThat(schema)
-                .contains(
-                        "CREATE TABLE dict_material (",
-                        "material_name character varying(100) NOT NULL",
-                        "material_type character varying(50)",
-                        "CREATE UNIQUE INDEX idx_dict_material_name_remarks ON dict_material USING btree (material_name, remarks)")
-                .doesNotContain("CREATE TABLE dict_material_type", "material_code", "material_type_id", "material_category");
-        assertThat(seed)
-                .contains("INSERT INTO dict_material (id, material_name, material_type")
-                .containsAnyOf("'钢铁'", "'铝'", "'塑料'")
-                .doesNotContain("RAW_MATERIAL", "material_code", "material_category");
     }
 
     @Test

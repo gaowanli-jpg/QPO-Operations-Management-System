@@ -227,13 +227,51 @@ ALTER SEQUENCE dict_markup_fee_id_seq OWNED BY dict_markup_fee.id;
 
 
 --
+-- Name: dict_material_type; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE dict_material_type (
+    id bigint NOT NULL,
+    type_code character varying(64) NOT NULL,
+    type_name character varying(120) NOT NULL,
+    remarks character varying(500),
+    enabled boolean DEFAULT true NOT NULL,
+    sort_no integer DEFAULT 0 NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: dict_material_type_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE dict_material_type_id_seq
+    AS bigint
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dict_material_type_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE dict_material_type_id_seq OWNED BY dict_material_type.id;
+
+
+--
 -- Name: dict_material; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE dict_material (
     id integer NOT NULL,
+    material_code character varying(80) NOT NULL,
     material_name character varying(100) NOT NULL,
-    material_type character varying(50),
+    material_type_id bigint NOT NULL,
+    material_category character varying(80),
     density numeric(12,4),
     plate_density numeric(12,4),
     plate_price numeric(12,2),
@@ -241,7 +279,11 @@ CREATE TABLE dict_material (
     bar_price numeric(12,2),
     tube_density numeric(12,4),
     tube_price numeric(12,2),
-    remarks text
+    remarks text,
+    enabled boolean DEFAULT true NOT NULL,
+    sort_no integer DEFAULT 0 NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 
@@ -448,6 +490,10 @@ CREATE TABLE item_quote_version (
     quote_mode character varying(20) DEFAULT 'NORMAL'::character varying,
     assembly_fee numeric(12,2) DEFAULT 0,
     engineering_material_name character varying(255),
+    engineering_material_code character varying(80),
+    engineering_material_type_code character varying(64),
+    engineering_material_type_name character varying(120),
+    engineering_material_category character varying(80),
     sales_order_line_no integer,
     customer_order_no character varying(120),
     customer_project_no character varying(120),
@@ -517,6 +563,10 @@ CREATE TABLE order_delivery_ticket (
     internal_project_no character varying(100),
     item_type character varying(20) DEFAULT '普通件'::character varying,
     engineering_material_name character varying(255),
+    engineering_material_code character varying(80),
+    engineering_material_type_code character varying(64),
+    engineering_material_type_name character varying(120),
+    engineering_material_category character varying(80),
     customer_order_no character varying(100),
     customer_project_no character varying(100),
     process_route jsonb DEFAULT '[]'::jsonb,
@@ -576,6 +626,10 @@ CREATE TABLE order_delivery_ticket_allocation (
     customer_project_no character varying(100),
     material_name character varying(100),
     engineering_material_name character varying(255),
+    engineering_material_code character varying(80),
+    engineering_material_type_code character varying(64),
+    engineering_material_type_name character varying(120),
+    engineering_material_category character varying(80),
     surface_treatment character varying(100),
     description text,
     delivery_date date,
@@ -963,6 +1017,10 @@ CREATE TABLE sales_order_item (
     internal_delivery_date date,
     material_name character varying(255),
     engineering_material_name character varying(255),
+    engineering_material_code character varying(80),
+    engineering_material_type_code character varying(64),
+    engineering_material_type_name character varying(120),
+    engineering_material_category character varying(80),
     surface_treatment character varying(255),
     tax_included_unit_price numeric(14,4),
     untaxed_unit_price numeric(14,4),
@@ -1695,6 +1753,13 @@ ALTER TABLE ONLY dict_markup_fee ALTER COLUMN id SET DEFAULT nextval('dict_marku
 
 
 --
+-- Name: dict_material_type id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dict_material_type ALTER COLUMN id SET DEFAULT nextval('dict_material_type_id_seq'::regclass);
+
+
+--
 -- Name: dict_material id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1967,6 +2032,14 @@ ALTER TABLE ONLY dict_markup_fee
 
 ALTER TABLE ONLY dict_markup_fee
     ADD CONSTRAINT dict_markup_fee_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dict_material_type dict_material_type_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dict_material_type
+    ADD CONSTRAINT dict_material_type_pkey PRIMARY KEY (id);
 
 
 --
@@ -2616,10 +2689,52 @@ CREATE INDEX idx_delivery_ticket_mes_master_request ON order_delivery_ticket USI
 
 
 --
--- Name: idx_dict_material_name_remarks; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_dict_material_category; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_dict_material_name_remarks ON dict_material USING btree (material_name, remarks);
+CREATE INDEX idx_dict_material_category ON dict_material USING btree (material_category, id);
+
+
+--
+-- Name: idx_dict_material_material_type_enabled_sort; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dict_material_material_type_enabled_sort ON dict_material USING btree (material_type_id, enabled, sort_no, id);
+
+
+--
+-- Name: idx_dict_material_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dict_material_name ON dict_material USING btree (material_name, id);
+
+
+--
+-- Name: idx_dict_material_type_enabled_sort; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dict_material_type_enabled_sort ON dict_material_type USING btree (enabled, sort_no, id);
+
+
+--
+-- Name: uk_dict_material_code_upper; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_dict_material_code_upper ON dict_material USING btree (upper((material_code)::text));
+
+
+--
+-- Name: uk_dict_material_type_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_dict_material_type_code ON dict_material_type USING btree (type_code);
+
+
+--
+-- Name: uk_dict_material_type_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_dict_material_type_name ON dict_material_type USING btree (type_name);
 
 
 --
@@ -3229,6 +3344,14 @@ CREATE UNIQUE INDEX uk_system_file_object_public_path ON system_file_object USIN
 --
 
 CREATE UNIQUE INDEX uk_system_file_storage_config_active ON system_file_storage_config USING btree (active) WHERE ((active = true) AND (enabled = true));
+
+
+--
+-- Name: dict_material dict_material_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dict_material
+    ADD CONSTRAINT fk_dict_material_type FOREIGN KEY (material_type_id) REFERENCES dict_material_type(id) ON DELETE RESTRICT;
 
 
 --
