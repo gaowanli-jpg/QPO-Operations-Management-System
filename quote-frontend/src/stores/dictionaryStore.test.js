@@ -4,6 +4,7 @@ import {
   listAssemblyMarkupFees,
   listExtraFeeItems,
   listMarkupFees,
+  listMaterialTypes,
   listMaterials,
   listProcessCategories,
   listProcessDetails
@@ -12,6 +13,7 @@ import { useDictionaryStore } from './dictionaryStore'
 
 vi.mock('../services/dictApi', () => ({
   listMaterials: vi.fn(),
+  listMaterialTypes: vi.fn(),
   listProcessCategories: vi.fn(),
   listProcessDetails: vi.fn(),
   listExtraFeeItems: vi.fn(),
@@ -26,7 +28,8 @@ beforeEach(() => {
 
 describe('dictionaryStore', () => {
   test('loadBaseDicts loads materials, processes, extra fees, and markup fees when requested', async () => {
-    listMaterials.mockResolvedValue([{ id: 1, materialName: '45#' }])
+    listMaterialTypes.mockResolvedValue([{ id: 6, typeCode: 'RAW_MATERIAL', typeName: '原材料' }])
+    listMaterials.mockResolvedValue([{ id: 1, materialCode: 'MAT-000001', materialName: '45#', materialTypeId: 6, materialTypeCode: 'RAW_MATERIAL', materialTypeName: '原材料' }])
     listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'PACKAGING', categoryName: '包装', hourlyRate: 10 }])
     listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', hourlyRate: 10 }])
     listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: 'Heat Treat' }])
@@ -36,7 +39,9 @@ describe('dictionaryStore', () => {
 
     await store.loadBaseDicts({ includeMarkupFees: true, force: true })
 
+    expect(store.materialTypes).toHaveLength(1)
     expect(store.materials).toHaveLength(1)
+    expect(store.materials[0]).toEqual(expect.objectContaining({ materialCode: 'MAT-000001', materialTypeName: '原材料' }))
     expect(store.processes).toHaveLength(1)
     expect(store.processCategories).toHaveLength(1)
     expect(store.processDetails).toHaveLength(1)
@@ -45,10 +50,12 @@ describe('dictionaryStore', () => {
     expect(store.markupFees).toHaveLength(1)
     expect(store.assemblyMarkupFees).toHaveLength(1)
     expect(listExtraFeeItems).toHaveBeenCalledWith({ includeDisabled: false })
+    expect(listMaterialTypes).toHaveBeenCalledWith()
     expect(listAssemblyMarkupFees).toHaveBeenCalled()
   })
 
   test('combinedProcessOptions combines process and extra fee records', async () => {
+    listMaterialTypes.mockResolvedValue([])
     listMaterials.mockResolvedValue([])
     listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'PACKAGING', categoryName: '包装', hourlyRate: 10 }])
     listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', hourlyRate: 10 }])
@@ -70,6 +77,8 @@ describe('dictionaryStore', () => {
 
     store.applyPricingFallbackData()
 
+    expect(store.materialTypes[0]).toEqual(expect.objectContaining({ typeCode: 'RAW_MATERIAL', typeName: '原材料' }))
+    expect(store.materials[0]).toEqual(expect.objectContaining({ materialCode: 'MAT-FALLBACK-45', materialTypeCode: 'RAW_MATERIAL', materialTypeName: '原材料', materialCategory: '钢铁' }))
     expect(store.materials[0].materialName).toBe('45#')
     expect(store.markupFees.map(item => item.feeName)).toEqual(['运输费', '管理费', '利润', '税费'])
     expect(store.assemblyMarkupFees.map(item => item.feeName)).toEqual(['组装管理费', '组装利润', '组装税费'])

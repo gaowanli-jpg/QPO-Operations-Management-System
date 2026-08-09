@@ -28,6 +28,29 @@ describe('dictApi', () => {
     })
   })
 
+  test('manages material types with dedicated endpoints', async () => {
+    const payload = { id: 3, typeCode: 'AUXILIARY', typeName: '辅料', enabled: true }
+
+    await dictApi.listMaterialTypes({ enabledOnly: true })
+    await dictApi.saveMaterialType(payload)
+    await dictApi.deleteMaterialType(3)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/material-types?enabledOnly=true')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/dict/material-types/3', {
+      method: 'PUT',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/dict/material-types/3', {
+      method: 'DELETE'
+    })
+  })
+
+  test('loads materials with enabled filter query', async () => {
+    await dictApi.listMaterials({ enabledOnly: false })
+
+    expect(request).toHaveBeenCalledWith('/api/dict/materials?enabledOnly=false')
+  })
+
   test('deletes markup fee by id', async () => {
     await dictApi.deleteMarkupFee(9)
 

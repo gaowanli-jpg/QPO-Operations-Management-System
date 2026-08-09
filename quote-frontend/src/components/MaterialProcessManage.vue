@@ -11,6 +11,7 @@
       <div class="erp-toolbar-group material-toolbar">
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
+        <el-button v-permission="'engineer:dict:material-manage'" v-else-if="activeTab === 'materialTypes'" type="primary" @click="openMaterialTypeDialog()">新增材料类型</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processCategories'" type="primary" @click="openProcessCategoryDialog()">新增工艺大类</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processDetails'" type="primary" @click="openProcessDetailDialog()">新增具体工艺</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
@@ -23,10 +24,21 @@
       <div class="erp-table-body">
         <el-tabs v-model="activeTab">
           <el-tab-pane label="材料费用" name="materials">
-            <el-table :data="materials" border stripe height="560" v-loading="loading">
-              <el-table-column prop="materialName" label="材料" width="120" fixed show-overflow-tooltip />
-              <el-table-column prop="materialType" label="材质" width="110" show-overflow-tooltip />
-              <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
+            <div class="material-filter-bar">
+              <el-input v-model="materialKeyword" clearable placeholder="搜索材料编码、名称、材料类型或材质分类" />
+            </div>
+            <el-table :data="filteredMaterials" border stripe height="560" v-loading="loading">
+              <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
+              <el-table-column prop="materialName" label="材料名称" width="140" fixed show-overflow-tooltip />
+              <el-table-column label="材料类型" width="170" show-overflow-tooltip>
+                <template #default="scope">
+                  <div class="material-type-cell">
+                    <span>{{ scope.row.materialTypeName || '-' }}</span>
+                    <small v-if="scope.row.materialTypeCode">{{ scope.row.materialTypeCode }}</small>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip />
               <el-table-column label="板材密度" width="150" align="right">
                 <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
               </el-table-column>
@@ -45,11 +57,40 @@
               <el-table-column label="管材单价" width="150" align="right">
                 <template #default="scope">{{ formatPrice(scope.row.tubePrice) }}</template>
               </el-table-column>
+              <el-table-column label="状态" width="90" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.enabled !== false ? 'success' : 'info'" size="small">{{ scope.row.enabled !== false ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="sortNo" label="排序" width="90" align="center" />
+              <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
               <el-table-column label="操作" width="150" align="center" fixed="right">
                 <template #default="scope">
                   <div class="erp-table-actions">
                     <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialDeletePending(scope.row)" @click="openMaterialDialog(scope.row)">编辑</el-button>
                     <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialDeletePending(scope.row)" :disabled="isMaterialDeletePending(scope.row)" @click="deleteMaterial(scope.row)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+
+          <el-tab-pane label="材料类型" name="materialTypes">
+            <el-table :data="materialTypes" border stripe height="560" v-loading="loading">
+              <el-table-column prop="sortNo" label="排序" width="80" align="center" fixed />
+              <el-table-column prop="typeCode" label="类型编码" width="180" fixed show-overflow-tooltip />
+              <el-table-column prop="typeName" label="类型名称" min-width="160" show-overflow-tooltip />
+              <el-table-column label="状态" width="90" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.enabled !== false ? 'success' : 'info'" size="small">{{ scope.row.enabled !== false ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
+              <el-table-column label="操作" width="150" align="center" fixed="right">
+                <template #default="scope">
+                  <div class="erp-table-actions">
+                    <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialTypeDeletePending(scope.row)" @click="openMaterialTypeDialog(scope.row)">编辑</el-button>
+                    <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialTypeDeletePending(scope.row)" :disabled="isMaterialTypeDeletePending(scope.row)" @click="deleteMaterialType(scope.row)">删除</el-button>
                   </div>
                 </template>
               </el-table-column>
@@ -184,82 +225,98 @@
       </div>
     </section>
 
-    <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="760px">
-      <el-form :model="materialForm" label-width="140px" class="erp-dialog-form">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="材料" required>
-              <el-input v-model="materialForm.materialName" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="材质">
-              <el-input v-model="materialForm.materialType" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="备注">
-          <el-input v-model="materialForm.remarks" />
+    <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="820px">
+      <el-form :model="materialForm" label-width="120px" class="erp-dialog-form process-dialog-grid material-dialog-grid">
+        <el-form-item label="材料编码" required>
+          <el-input v-model="materialForm.materialCode" placeholder="例如：MAT-000001" />
         </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="板材密度">
-              <div class="unit-input">
-                <el-input-number v-model="materialForm.plateDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
-                <span class="unit-label">kg/m³</span>
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="板材单价">
-              <div class="unit-input">
-                <el-input-number v-model="materialForm.platePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-                <span class="unit-label">元/kg</span>
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="棒材密度">
-              <div class="unit-input">
-                <el-input-number v-model="materialForm.barDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
-                <span class="unit-label">kg/m³</span>
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="棒材单价">
-              <div class="unit-input">
-                <el-input-number v-model="materialForm.barPrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-                <span class="unit-label">元/kg</span>
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="管材密度">
-              <div class="unit-input">
-                <el-input-number v-model="materialForm.tubeDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
-                <span class="unit-label">kg/m³</span>
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="管材单价">
-              <div class="unit-input">
-                <el-input-number v-model="materialForm.tubePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-                <span class="unit-label">元/kg</span>
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="材料名称" required>
+          <el-input v-model="materialForm.materialName" placeholder="例如：45#" />
+        </el-form-item>
+        <el-form-item label="材料类型" required>
+          <el-select v-model="materialForm.materialTypeId" filterable class="dialog-select" placeholder="选择材料类型">
+            <el-option v-for="type in materialTypes" :key="type.id" :label="materialTypeLabel(type)" :value="type.id" :disabled="type.enabled === false" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="材质分类">
+          <el-input v-model="materialForm.materialCategory" placeholder="例如：钢铁、铝、塑料" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="materialForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="materialForm.enabled" />
+        </el-form-item>
+        <el-form-item label="板材密度">
+          <div class="unit-input">
+            <el-input-number v-model="materialForm.plateDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label">kg/m³</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="板材单价">
+          <div class="unit-input">
+            <el-input-number v-model="materialForm.platePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label">元/kg</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="棒材密度">
+          <div class="unit-input">
+            <el-input-number v-model="materialForm.barDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label">kg/m³</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="棒材单价">
+          <div class="unit-input">
+            <el-input-number v-model="materialForm.barPrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label">元/kg</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="管材密度">
+          <div class="unit-input">
+            <el-input-number v-model="materialForm.tubeDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label">kg/m³</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="管材单价">
+          <div class="unit-input">
+            <el-input-number v-model="materialForm.tubePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
+            <span class="unit-label">元/kg</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="备注" class="process-dialog-wide">
+          <el-input v-model="materialForm.remarks" type="textarea" :rows="3" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <div class="erp-dialog-footer">
           <el-button @click="materialDialogVisible = false">取消</el-button>
           <el-button v-permission="'engineer:dict:material-manage'" type="primary" :loading="isPending(dictActionKeys.saveMaterialDialog)" :disabled="isPending(dictActionKeys.saveMaterialDialog)" @click="saveMaterial">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="materialTypeDialogVisible" :title="materialTypeForm.id ? '编辑材料类型' : '新增材料类型'" width="620px">
+      <el-form :model="materialTypeForm" label-width="110px" class="erp-dialog-form">
+        <el-form-item label="类型编码" required>
+          <el-input v-model="materialTypeForm.typeCode" placeholder="例如：RAW_MATERIAL" />
+        </el-form-item>
+        <el-form-item label="类型名称" required>
+          <el-input v-model="materialTypeForm.typeName" placeholder="例如：原材料" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="materialTypeForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="materialTypeForm.enabled" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="materialTypeForm.remarks" type="textarea" :rows="3" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="materialTypeDialogVisible = false">取消</el-button>
+          <el-button v-permission="'engineer:dict:material-manage'" type="primary" :loading="isPending(dictActionKeys.saveMaterialTypeDialog)" :disabled="isPending(dictActionKeys.saveMaterialTypeDialog)" @click="saveMaterialType">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -412,10 +469,12 @@ import {
   deleteExtraFeeItem,
   deleteMarkupFee as deleteMarkupFeeRequest,
   deleteMaterial as deleteMaterialRequest,
+  deleteMaterialType as deleteMaterialTypeRequest,
   saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
   saveExtraFeeItem,
   saveMarkupFee as saveMarkupFeeRequest,
   saveMaterial as saveMaterialRequest,
+  saveMaterialType as saveMaterialTypeRequest,
   saveProcessCategory as saveProcessCategoryRequest,
   saveProcessDetail as saveProcessDetailRequest
 } from '../services/dictApi'
@@ -424,34 +483,52 @@ import { usePendingAction } from '../composables/usePendingAction'
 
 const dictionaryStore = useDictionaryStore()
 const activeTab = ref('materials')
+const materialTypes = computed(() => dictionaryStore.materialTypes)
 const materials = computed(() => dictionaryStore.materials)
 const processCategories = computed(() => dictionaryStore.processCategories)
 const processDetails = computed(() => dictionaryStore.processDetails)
 const markupFees = computed(() => dictionaryStore.markupFees)
 const assemblyMarkupFees = computed(() => dictionaryStore.assemblyMarkupFees)
 const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
+const materialKeyword = ref('')
+const filteredMaterials = computed(() => {
+  const keyword = materialKeyword.value.trim().toLowerCase()
+  if (!keyword) return materials.value
+  return materials.value.filter((item) => [
+    item.materialCode,
+    item.materialName,
+    item.materialTypeCode,
+    item.materialTypeName,
+    item.materialCategory,
+    item.remarks
+  ].some(value => String(value || '').toLowerCase().includes(keyword)))
+})
 const loading = ref(false)
 const { isPending, runAction } = usePendingAction()
 
 const dictActionKeys = {
   saveMaterialDialog: 'engineer:dict:material-save-dialog',
+  saveMaterialTypeDialog: 'engineer:dict:material-type-save-dialog',
   saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
   saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog',
   saveAssemblyMarkupFeeDialog: 'engineer:dict:assembly-markup-fee-save-dialog',
   saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
   deleteMaterial: (materialId) => `engineer:dict:material-delete:${materialId || 'none'}`,
+  deleteMaterialType: (typeId) => `engineer:dict:material-type-delete:${typeId || 'none'}`,
   deleteMarkupFee: (feeId) => `engineer:dict:markup-fee-delete:${feeId || 'none'}`,
   deleteAssemblyMarkupFee: (feeId) => `engineer:dict:assembly-markup-fee-delete:${feeId || 'none'}`,
   deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`
 }
 
 const isMaterialDeletePending = (row) => isPending(dictActionKeys.deleteMaterial(row?.id))
+const isMaterialTypeDeletePending = (row) => isPending(dictActionKeys.deleteMaterialType(row?.id))
 const isMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteMarkupFee(row?.id))
 const isAssemblyMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteAssemblyMarkupFee(row?.id))
 const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
 const materialDialogVisible = ref(false)
+const materialTypeDialogVisible = ref(false)
 const processCategoryDialogVisible = ref(false)
 const processDetailDialogVisible = ref(false)
 const markupFeeDialogVisible = ref(false)
@@ -459,6 +536,7 @@ const assemblyMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
 
 const materialForm = reactive(createEmptyMaterial())
+const materialTypeForm = reactive(createEmptyMaterialType())
 const processCategoryForm = reactive(createEmptyProcessCategory())
 const processDetailForm = reactive(createEmptyProcessDetail())
 const markupFeeForm = reactive(createEmptyMarkupFee())
@@ -482,20 +560,36 @@ const formatHourlyRate = (value) => {
   return text === '-' ? '-' : `${text} 元/小时`
 }
 const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
+const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
 const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
 
 function createEmptyMaterial() {
   return {
     id: null,
+    materialCode: '',
     materialName: '',
-    materialType: '',
+    materialTypeId: null,
+    materialCategory: '',
     remarks: '',
+    enabled: true,
+    sortNo: 0,
     plateDensity: 0,
     platePrice: 0,
     barDensity: 0,
     barPrice: 0,
     tubeDensity: 0,
     tubePrice: 0
+  }
+}
+
+function createEmptyMaterialType() {
+  return {
+    id: null,
+    typeCode: '',
+    typeName: '',
+    remarks: '',
+    enabled: true,
+    sortNo: 0
   }
 }
 
@@ -558,7 +652,14 @@ const loadAll = async () => {
 
 const openMaterialDialog = (row) => {
   Object.assign(materialForm, createEmptyMaterial(), row || {})
+  materialForm.enabled = materialForm.enabled !== false
   materialDialogVisible.value = true
+}
+
+const openMaterialTypeDialog = (row) => {
+  Object.assign(materialTypeForm, createEmptyMaterialType(), row || {})
+  materialTypeForm.enabled = materialTypeForm.enabled !== false
+  materialTypeDialogVisible.value = true
 }
 
 const openProcessCategoryDialog = (row) => {
@@ -590,7 +691,9 @@ const openExtraFeeDialog = (row) => {
 }
 
 const saveMaterial = async () => {
+  if (!materialForm.materialCode) return ElMessage.warning('请填写材料编码。')
   if (!materialForm.materialName) return ElMessage.warning('请填写材料名称。')
+  if (!materialForm.materialTypeId) return ElMessage.warning('请选择材料类型。')
   return runAction(dictActionKeys.saveMaterialDialog, async () => {
     try {
       const payload = { ...materialForm, density: materialForm.plateDensity || materialForm.barDensity || materialForm.tubeDensity || 0 }
@@ -601,6 +704,22 @@ const saveMaterial = async () => {
     } catch (error) {
       console.error(error)
       ElMessage.error('材料保存失败。')
+    }
+  })
+}
+
+const saveMaterialType = async () => {
+  if (!materialTypeForm.typeCode) return ElMessage.warning('请填写材料类型编码。')
+  if (!materialTypeForm.typeName) return ElMessage.warning('请填写材料类型名称。')
+  return runAction(dictActionKeys.saveMaterialTypeDialog, async () => {
+    try {
+      const response = await saveMaterialTypeRequest(materialTypeForm)
+      ElMessage.success(response.message || '保存成功')
+      materialTypeDialogVisible.value = false
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('材料类型保存失败。')
     }
   })
 }
@@ -684,9 +803,18 @@ const saveExtraFee = async () => {
 
 const deleteMaterial = async (row) => {
   return runAction(dictActionKeys.deleteMaterial(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除材料「${row.materialName}」？`, '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除材料「${row.materialCode || '-'} / ${row.materialName}」？`, '删除确认', { type: 'warning' })
     await deleteMaterialRequest(row.id)
     ElMessage.success('材料已删除')
+    await dictionaryStore.reloadAfterMutation()
+  })
+}
+
+const deleteMaterialType = async (row) => {
+  return runAction(dictActionKeys.deleteMaterialType(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除材料类型「${row.typeCode || '-'} / ${row.typeName}」？若已被材料引用，后端会自动收口为停用。`, '删除确认', { type: 'warning' })
+    await deleteMaterialTypeRequest(row.id)
+    ElMessage.success('材料类型已处理')
     await dictionaryStore.reloadAfterMutation()
   })
 }
@@ -729,6 +857,30 @@ onMounted(loadAll)
 
 .material-table-surface {
   overflow: hidden;
+}
+
+.material-filter-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.material-filter-bar .el-input {
+  max-width: 360px;
+  width: 100%;
+}
+
+.material-type-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.material-type-cell small {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .process-master-grid {
@@ -778,6 +930,10 @@ onMounted(loadAll)
 
 @media (max-width: 900px) {
   .material-toolbar {
+    justify-content: flex-start;
+  }
+
+  .material-filter-bar {
     justify-content: flex-start;
   }
 

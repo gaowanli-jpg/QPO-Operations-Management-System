@@ -11,7 +11,25 @@ const buildQuery = (params = {}) => {
   return query ? `?${query}` : ''
 }
 
-export const listMaterials = () => request('/api/dict/materials')
+export const listMaterialTypes = ({ enabledOnly } = {}) => request(
+  `/api/dict/material-types${buildQuery({ enabledOnly })}`
+)
+
+export const saveMaterialType = (payload) => {
+  const id = payload?.id
+  return request(id ? `/api/dict/material-types/${id}` : '/api/dict/material-types', {
+    method: id ? 'PUT' : 'POST',
+    data: payload
+  })
+}
+
+export const deleteMaterialType = (id) => request(`/api/dict/material-types/${id}`, {
+  method: 'DELETE'
+})
+
+export const listMaterials = ({ enabledOnly } = {}) => request(
+  `/api/dict/materials${buildQuery({ enabledOnly })}`
+)
 
 export const saveMaterial = (payload) => {
   const id = payload?.id

@@ -3,6 +3,7 @@ import {
   listAssemblyMarkupFees,
   listExtraFeeItems,
   listMarkupFees,
+  listMaterialTypes,
   listMaterials,
   listProcessCategories,
   listProcessDetails
@@ -20,6 +21,7 @@ const toProcessCompatibilityRow = (item = {}) => ({
 
 export const useDictionaryStore = defineStore('dictionary', {
   state: () => ({
+    materialTypes: [],
     materials: [],
     processes: [],
     processCategories: [],
@@ -67,6 +69,7 @@ export const useDictionaryStore = defineStore('dictionary', {
         && (!includeAllExtraFees || this.lastIncludeAllExtraFees)
       if (hasRequiredCache && !force) {
         return {
+          materialTypes: this.materialTypes,
           materials: this.materials,
           processes: this.processes,
           processCategories: this.processCategories,
@@ -80,6 +83,7 @@ export const useDictionaryStore = defineStore('dictionary', {
       this.loading = true
       try {
         const requests = [
+          listMaterialTypes(),
           listMaterials(),
           listProcessCategories(),
           listProcessDetails(),
@@ -89,7 +93,8 @@ export const useDictionaryStore = defineStore('dictionary', {
           requests.push(listMarkupFees())
           requests.push(listAssemblyMarkupFees())
         }
-        const [materials, processCategories, processDetails, extraFeeItems, markupFees, assemblyMarkupFees] = await Promise.all(requests)
+        const [materialTypes, materials, processCategories, processDetails, extraFeeItems, markupFees, assemblyMarkupFees] = await Promise.all(requests)
+        this.materialTypes = materialTypes || []
         this.materials = materials || []
         this.processCategories = processCategories || []
         this.processDetails = processDetails || []
@@ -103,6 +108,7 @@ export const useDictionaryStore = defineStore('dictionary', {
         this.lastIncludeMarkupFees = this.lastIncludeMarkupFees || includeMarkupFees
         this.lastIncludeAllExtraFees = this.lastIncludeAllExtraFees || includeAllExtraFees
         return {
+          materialTypes: this.materialTypes,
           materials: this.materials,
           processes: this.processes,
           processCategories: this.processCategories,
@@ -125,8 +131,11 @@ export const useDictionaryStore = defineStore('dictionary', {
     },
 
     applyPricingFallbackData() {
+      this.materialTypes = [
+        { id: 'fallback-raw', typeCode: 'RAW_MATERIAL', typeName: '原材料', enabled: true, sortNo: 0 }
+      ]
       this.materials = [
-        { id: 'fallback-45', materialName: '45#', density: 7850, plateDensity: 7850, platePrice: 7.1, barDensity: 7850, barPrice: 10, tubeDensity: 7850, tubePrice: 10 }
+        { id: 'fallback-45', materialCode: 'MAT-FALLBACK-45', materialName: '45#', materialTypeId: 'fallback-raw', materialTypeCode: 'RAW_MATERIAL', materialTypeName: '原材料', materialCategory: '钢铁', density: 7850, plateDensity: 7850, platePrice: 7.1, barDensity: 7850, barPrice: 10, tubeDensity: 7850, tubePrice: 10, enabled: true, sortNo: 0 }
       ]
       this.processes = [
         { id: 'fallback-mill', processDetailId: 'fallback-mill', processName: '铣', detailName: '铣', processCode: 'MILLING', categoryName: '铣削', hourlyRate: 0, calcType: '工时', sourceType: 'process' },
