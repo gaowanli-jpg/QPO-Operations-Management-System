@@ -27,14 +27,17 @@ public class MesProductionDispatchReq {
     private String customerOrderNo;
     private String customerProjectNo;
     private String materialName;
+    private String engineeringMaterialCode;
     private String engineeringMaterialName;
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private String materialShape;
     private String surfaceTreatment;
     private String description;
     private String remark;
     private LocalDate deliveryDate;
     private List<MesProductionProcessRouteDTO> processRoute;
-    private Object materialData;
     private Double materialGrossWeight;
     private Double partNetWeight;
     private List<MesProductionAssemblyRelationDTO> assemblyRelations;

@@ -21,7 +21,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -70,12 +69,16 @@ class LockedItemMesProductionClientTest {
                     .contains("\"ticketQty\":10")
                     .contains("\"orderType\":\"SO01\"")
                     .contains("\"internalProjectNo\":\"IP-9\"")
+                    .contains("\"engineeringMaterialCode\":\"MAT-7075\"")
+                    .contains("\"engineeringMaterialTypeCode\":\"RAW_MATERIAL\"")
+                    .contains("\"engineeringMaterialTypeName\":\"原材料\"")
+                    .contains("\"engineeringMaterialCategory\":\"铝材\"")
                     .contains("\"processCode\":\"PACKAGING\"")
                     .contains("\"categoryName\":\"包装\"")
                     .contains("\"detailName\":\"精细包装\"")
                     .contains("\"unitWorkHours\":1.5")
                     .contains("\"sortNo\":10")
-                    .doesNotContain("lineCost", "hourlyRate")
+                    .doesNotContain("lineCost", "hourlyRate", "materialData")
                     .contains("\"assemblyRelations\":[]");
         } finally {
             server.stop(0);
@@ -265,7 +268,11 @@ class LockedItemMesProductionClientTest {
         req.setCustomerOrderNo("CO-9");
         req.setCustomerProjectNo("CP-9");
         req.setMaterialName("6061");
+        req.setEngineeringMaterialCode("MAT-7075");
         req.setEngineeringMaterialName("7075");
+        req.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        req.setEngineeringMaterialTypeName("原材料");
+        req.setEngineeringMaterialCategory("铝材");
         req.setSurfaceTreatment("Anodized");
         req.setDescription("Bracket");
         req.setRemark("Rush");
@@ -277,7 +284,6 @@ class LockedItemMesProductionClientTest {
         route.setUnitWorkHours(1.5);
         route.setSortNo(10);
         req.setProcessRoute(List.of(route));
-        req.setMaterialData(Map.of("shape", "plate"));
         req.setMaterialGrossWeight(12.3);
         req.setPartNetWeight(10.2);
         req.setAssemblyRelations(List.of());

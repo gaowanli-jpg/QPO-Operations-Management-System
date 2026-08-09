@@ -226,6 +226,8 @@
           </el-table-column>
           <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
           <el-table-column prop="materialName" label="材料" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="engineeringMaterialCode" label="材料编码" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="engineeringMaterialTypeName" label="材料类型" min-width="120" show-overflow-tooltip />
           <el-table-column prop="surfaceTreatment" label="表面处理" min-width="110" show-overflow-tooltip />
           <el-table-column prop="untaxedUnitPrice" label="未税单价(CNY)" width="122" align="right">
             <template #default="{ row }">{{ formatMoney(row.untaxedUnitPrice) }}</template>

@@ -28,7 +28,10 @@
       <el-table-column prop="partNo" label="图号" width="130" show-overflow-tooltip />
       <el-table-column prop="version" label="版本" width="80" align="center" />
       <el-table-column prop="qty" label="数量" width="70" align="center" />
+      <el-table-column prop="engineeringMaterialCode" label="材料编码" width="120" show-overflow-tooltip />
+      <el-table-column prop="engineeringMaterialTypeName" label="材料类型" width="120" show-overflow-tooltip />
       <el-table-column prop="engineeringMaterialName" label="材料" width="110" show-overflow-tooltip />
+      <el-table-column prop="engineeringMaterialCategory" label="材质分类" width="110" show-overflow-tooltip />
       <el-table-column prop="surfaceTreatment" label="表面处理" width="110" show-overflow-tooltip />
       <el-table-column prop="startDate" label="开工日期" width="110" />
       <el-table-column prop="deliveryDate" label="交货日期" width="110" />

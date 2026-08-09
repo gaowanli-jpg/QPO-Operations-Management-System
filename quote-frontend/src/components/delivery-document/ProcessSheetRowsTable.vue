@@ -28,7 +28,10 @@
       <el-table-column prop="version" label="版本" width="80" align="center" />
       <el-table-column prop="description" label="材料描述" min-width="160" show-overflow-tooltip />
       <el-table-column prop="qty" label="数量" width="70" align="center" />
+      <el-table-column prop="engineeringMaterialCode" label="材料编码" width="120" show-overflow-tooltip />
+      <el-table-column prop="engineeringMaterialTypeName" label="材料类型" width="120" show-overflow-tooltip />
       <el-table-column prop="engineeringMaterialName" label="材料" width="120" show-overflow-tooltip />
+      <el-table-column prop="engineeringMaterialCategory" label="材质分类" width="110" show-overflow-tooltip />
       <el-table-column label="毛重(kg)" width="95" align="right">
         <template #default="{ row }">{{ formatWeight(row.materialGrossWeight) }}</template>
       </el-table-column>

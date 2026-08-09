@@ -97,9 +97,9 @@ class QuoteTemplateExportServiceTests {
             assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
             assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
             assertThat(text(sheet, 2, 8)).isEqualTo("RFQ No.");
-            assertThat(hasMergedRegion(sheet, 0, 0, 0, 12)).isTrue();
+            assertThat(hasMergedRegion(sheet, 0, 0, 0, 15)).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
-            assertThat(hasMergedRegion(sheet, DETAIL_START_ROW_INDEX + 11, DETAIL_START_ROW_INDEX + 11, 0, 12)).isTrue();
+            assertThat(hasMergedRegion(sheet, DETAIL_START_ROW_INDEX + 11, DETAIL_START_ROW_INDEX + 11, 0, 15)).isTrue();
 
             Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
             List<String> headers = new ArrayList<>();
@@ -107,12 +107,15 @@ class QuoteTemplateExportServiceTests {
                 headers.add(text(sheet, HEADER_ROW_INDEX, col));
             }
             assertThat(headers).containsExactly(
-                    "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
+                    "序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位",
                     "含税单价", "含税总价", "交货周期", "备注"
             );
             assertThat(headers).doesNotContain("重量(KG)", "材料费", "基础成本", "百分比费用合计");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 11)).isEqualTo("2026-04-01");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 5)).isEqualTo("MAT-45");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 6)).isEqualTo("原材料");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 7)).isEqualTo("钢铁");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("2026-04-01");
         }
     }
 
@@ -131,18 +134,21 @@ class QuoteTemplateExportServiceTests {
 
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
-            assertThat(groupHeaderCol(sheet, "下料")).isEqualTo(11);
-            assertThat(text(sheet, HEADER_ROW_INDEX, 11)).isEqualTo("大类编码");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 12)).isEqualTo("大类名称");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 13)).isEqualTo("具体工艺");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("工时");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 15)).isEqualTo("小时价格");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 16)).isEqualTo("金额");
+            assertThat(groupHeaderCol(sheet, "下料")).isEqualTo(14);
+            assertThat(text(sheet, HEADER_ROW_INDEX, 5)).isEqualTo("材料编码");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 6)).isEqualTo("材料类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 7)).isEqualTo("材质分类");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("大类编码");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 15)).isEqualTo("大类名称");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 16)).isEqualTo("具体工艺");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 17)).isEqualTo("工时");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 18)).isEqualTo("小时价格");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 19)).isEqualTo("金额");
             assertThat(rowContains(sheet, HEADER_ROW_INDEX, "运输费率(%)")).isTrue();
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 13)).isEqualTo("下料");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("1");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 15)).isEqualTo("10");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 16)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 16)).isEqualTo("下料");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 17)).isEqualTo("1");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 18)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 19)).isEqualTo("10");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "基础成本"))).isEqualTo("70");
         }
     }
@@ -235,6 +241,9 @@ class QuoteTemplateExportServiceTests {
             item.setUnit("件");
             item.setDrawingUrl("/uploads/test/P-" + i + ".pdf");
             item.setMaterialName("45#钢");
+            item.setEngineeringMaterialCode("MAT-45");
+            item.setEngineeringMaterialTypeName("原材料");
+            item.setEngineeringMaterialCategory("钢铁");
             item.setSurfaceTreatment("阳极");
             item.setLeadTime("2026-03-20");
             item.setQuoteLeadTime("2026-04-01");
@@ -260,6 +269,9 @@ class QuoteTemplateExportServiceTests {
         item.setUnit("件");
         item.setDrawingUrl("/uploads/test/P-MERGE-TPL.pdf");
         item.setMaterialName("45#钢");
+        item.setEngineeringMaterialCode("MAT-45");
+        item.setEngineeringMaterialTypeName("原材料");
+        item.setEngineeringMaterialCategory("钢铁");
         item.setSurfaceTreatment("阳极");
         item.setLeadTime("2026-03-20");
         item.setQuoteLeadTime("2026-04-01");

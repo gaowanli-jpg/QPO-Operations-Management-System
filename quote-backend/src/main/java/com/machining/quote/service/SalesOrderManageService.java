@@ -602,7 +602,11 @@ public class SalesOrderManageService {
         sheet.setDescription(ticket.getDescription());
         sheet.setQty(ticket.getQty());
         sheet.setMaterialName(ticket.getMaterialName());
+        sheet.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());
         sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());
+        sheet.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());
+        sheet.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());
+        sheet.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());
         sheet.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
         sheet.setPartNetWeight(ticket.getPartNetWeight() == null ? 0.0 : ticket.getPartNetWeight());
         sheet.setSubstituteMaterial("");

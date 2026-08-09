@@ -34,8 +34,9 @@ public class QuoteTemplateExportService {
     private static final int PROCESS_BLOCK_WIDTH = 6;
     private static final int LEGACY_PROCESS_BLOCK_WIDTH = 5;
     private static final int FEE_BLOCK_WIDTH = 2;
+    private static final List<String> MATERIAL_IDENTITY_HEADERS = List.of("材料编码", "材料类型", "材质分类");
     private static final List<String> SIMPLE_HEADERS = List.of(
-            "序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位",
+            "序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位",
             "含税单价", "含税总价", "交货周期", "备注"
     );
     private static final List<String> OLD_PROCESS_HEADERS = List.of("工艺名称", "类型", "工时/金额", "单价", "费用");
@@ -86,6 +87,8 @@ public class QuoteTemplateExportService {
     private void writeTemplateQuote(Workbook workbook, Integer rfqId, boolean simpleMode, QuoteTemplateService.TemplateLayout layout) {
         Sheet sheet = workbook.getSheetAt(0);
         List<ItemQuoteVersion> items = listItems(rfqId);
+
+        ensureMaterialIdentityColumns(sheet, layout);
 
         TemplateColumns columns = simpleMode
                 ? simpleColumns(sheet, layout)
@@ -161,6 +164,9 @@ public class QuoteTemplateExportService {
         setByHeader(row, columns.headers(), "物料描述", item.getDescription());
         setByHeader(row, columns.headers(), "图纸状态", resolveDrawingStatus(item));
         setByHeader(row, columns.headers(), "材料名称", item.getMaterialName());
+        setByHeader(row, columns.headers(), "材料编码", item.getEngineeringMaterialCode());
+        setByHeader(row, columns.headers(), "材料类型", item.getEngineeringMaterialTypeName());
+        setByHeader(row, columns.headers(), "材质分类", item.getEngineeringMaterialCategory());
         setByHeader(row, columns.headers(), "表面处理", item.getSurfaceTreatment());
         setByHeader(row, columns.headers(), "版本", item.getVersion());
         setByHeader(row, columns.headers(), "数量", safeInt(item.getQty()));
@@ -232,8 +238,30 @@ public class QuoteTemplateExportService {
         compactColumns(sheet, keepColumns, newColByOldCol);
         addMergedRegions(sheet, adjustedMergedRegions);
 
-        writeGroupHeader(sheet, 0, 9, "基础信息", layout);
-        writeGroupHeader(sheet, 9, 4, "合计", layout);
+        writeGroupHeader(sheet, 0, SIMPLE_HEADERS.size() - 4, "基础信息", layout);
+        writeGroupHeader(sheet, SIMPLE_HEADERS.size() - 4, 4, "合计", layout);
+    }
+
+    private void ensureMaterialIdentityColumns(Sheet sheet, QuoteTemplateService.TemplateLayout layout) {
+        Row headerRow = getOrCreateRow(sheet, layout.headerRowIndex());
+        int materialNameCol = findHeader(headerRow, "材料名称", 0);
+        if (materialNameCol < 0) {
+            return;
+        }
+        int insertCursor = materialNameCol + 1;
+        for (String header : MATERIAL_IDENTITY_HEADERS) {
+            int existingCol = findHeader(headerRow, header, 0);
+            if (existingCol >= 0) {
+                insertCursor = Math.max(insertCursor, existingCol + 1);
+                continue;
+            }
+            insertColumnsLike(sheet, insertCursor, 1);
+            headerRow = getOrCreateRow(sheet, layout.headerRowIndex());
+            setCell(headerRow, insertCursor, header);
+            Row groupRow = getOrCreateRow(sheet, layout.groupRowIndex());
+            setCell(groupRow, insertCursor, "");
+            insertCursor++;
+        }
     }
 
     private void prepareDetailRows(Sheet sheet, int itemCount, QuoteTemplateService.TemplateLayout layout) {

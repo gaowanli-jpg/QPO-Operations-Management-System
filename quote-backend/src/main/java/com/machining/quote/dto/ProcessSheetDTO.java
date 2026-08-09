@@ -16,7 +16,11 @@ public class ProcessSheetDTO {
     private String description;
     private Integer qty;
     private String materialName;
+    private String engineeringMaterialCode;
     private String engineeringMaterialName;
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private Double materialGrossWeight;
     private Double partNetWeight;
     private String substituteMaterial;

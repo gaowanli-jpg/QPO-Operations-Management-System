@@ -33,7 +33,10 @@ class ExcelExportServiceProcessSheetTests {
         sheet.setVersion("A");
         sheet.setDescription("测试件");
         sheet.setQty(2);
+        sheet.setEngineeringMaterialCode("MAT-45");
+        sheet.setEngineeringMaterialTypeName("原材料");
         sheet.setEngineeringMaterialName("45#钢");
+        sheet.setEngineeringMaterialCategory("钢铁");
         sheet.setMaterialGrossWeight(1.2);
         sheet.setPartNetWeight(1.0);
         sheet.setSurfaceTreatment("阳极");
@@ -45,19 +48,25 @@ class ExcelExportServiceProcessSheetTests {
 
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet result = workbook.getSheetAt(0);
-            assertThat(text(result, 0, 16)).isEqualTo("10");
-            assertThat(text(result, 1, 16)).isEqualTo("大类编码");
-            assertThat(text(result, 1, 17)).isEqualTo("大类名称");
-            assertThat(text(result, 1, 18)).isEqualTo("具体工艺");
-            assertThat(text(result, 1, 19)).isEqualTo("工时");
-            assertThat(text(result, 1, 20)).isEqualTo("小时价格");
-            assertThat(text(result, 1, 21)).isEqualTo("金额");
-            assertThat(text(result, 2, 16)).isEqualTo("PACKAGING");
-            assertThat(text(result, 2, 17)).isEqualTo("包装");
-            assertThat(text(result, 2, 18)).isEqualTo("精细包装");
-            assertThat(text(result, 2, 19)).isEqualTo("1.5");
-            assertThat(text(result, 2, 20)).isEqualTo("10");
-            assertThat(text(result, 2, 21)).isEqualTo("15");
+            assertThat(text(result, 1, 8)).isEqualTo("材料编码");
+            assertThat(text(result, 1, 9)).isEqualTo("材料类型");
+            assertThat(text(result, 1, 11)).isEqualTo("材质分类");
+            assertThat(text(result, 2, 8)).isEqualTo("MAT-45");
+            assertThat(text(result, 2, 9)).isEqualTo("原材料");
+            assertThat(text(result, 2, 11)).isEqualTo("钢铁");
+            assertThat(text(result, 0, 19)).isEqualTo("10");
+            assertThat(text(result, 1, 19)).isEqualTo("大类编码");
+            assertThat(text(result, 1, 20)).isEqualTo("大类名称");
+            assertThat(text(result, 1, 21)).isEqualTo("具体工艺");
+            assertThat(text(result, 1, 22)).isEqualTo("工时");
+            assertThat(text(result, 1, 23)).isEqualTo("小时价格");
+            assertThat(text(result, 1, 24)).isEqualTo("金额");
+            assertThat(text(result, 2, 19)).isEqualTo("PACKAGING");
+            assertThat(text(result, 2, 20)).isEqualTo("包装");
+            assertThat(text(result, 2, 21)).isEqualTo("精细包装");
+            assertThat(text(result, 2, 22)).isEqualTo("1.5");
+            assertThat(text(result, 2, 23)).isEqualTo("10");
+            assertThat(text(result, 2, 24)).isEqualTo("15");
         }
     }
 
@@ -93,6 +102,9 @@ class ExcelExportServiceProcessSheetTests {
                 List.of("基础信息", "物料描述"),
                 List.of("基础信息", "图纸状态"),
                 List.of("基础信息", "材料名称"),
+                List.of("基础信息", "材料编码"),
+                List.of("基础信息", "材料类型"),
+                List.of("基础信息", "材质分类"),
                 List.of("基础信息", "表面处理"),
                 List.of("基础信息", "版本"),
                 List.of("基础信息", "数量"),
@@ -108,6 +120,9 @@ class ExcelExportServiceProcessSheetTests {
         item.setDescription("测试件");
         item.setDrawingUrl("/drawings/P-100.pdf");
         item.setMaterialName("45#");
+        item.setEngineeringMaterialCode("MAT-45");
+        item.setEngineeringMaterialTypeName("原材料");
+        item.setEngineeringMaterialCategory("钢铁");
         item.setSurfaceTreatment("阳极");
         item.setVersion("A");
         item.setQty(2);
@@ -125,6 +140,9 @@ class ExcelExportServiceProcessSheetTests {
                 "测试件",
                 "有图",
                 "45#",
+                "MAT-45",
+                "原材料",
+                "钢铁",
                 "阳极",
                 "A",
                 2,

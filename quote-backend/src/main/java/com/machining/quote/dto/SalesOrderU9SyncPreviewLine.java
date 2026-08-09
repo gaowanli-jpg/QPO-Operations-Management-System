@@ -18,6 +18,10 @@ public class SalesOrderU9SyncPreviewLine {
     private LocalDate internalDeliveryDate;
     private String description;
     private String materialName;
+    private String engineeringMaterialCode;
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private String surfaceTreatment;
     private String materialNo;
     private String materialNoStatus;

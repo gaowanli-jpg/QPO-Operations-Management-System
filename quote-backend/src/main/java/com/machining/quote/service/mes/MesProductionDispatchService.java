@@ -186,14 +186,17 @@ public class MesProductionDispatchService {
         req.setCustomerOrderNo(allocation.getCustomerOrderNo());
         req.setCustomerProjectNo(allocation.getCustomerProjectNo());
         req.setMaterialName(allocation.getMaterialName());
+        req.setEngineeringMaterialCode(allocation.getEngineeringMaterialCode());
         req.setEngineeringMaterialName(allocation.getEngineeringMaterialName());
+        req.setEngineeringMaterialTypeCode(allocation.getEngineeringMaterialTypeCode());
+        req.setEngineeringMaterialTypeName(allocation.getEngineeringMaterialTypeName());
+        req.setEngineeringMaterialCategory(allocation.getEngineeringMaterialCategory());
         req.setMaterialShape(allocation.getMaterialShape());
         req.setSurfaceTreatment(allocation.getSurfaceTreatment());
         req.setDescription(allocation.getDescription());
         req.setRemark(allocation.getRemark());
         req.setDeliveryDate(allocation.getDeliveryDate());
         req.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
-        req.setMaterialData(allocation.getMaterialData());
         req.setMaterialGrossWeight(allocation.getMaterialGrossWeight());
         req.setPartNetWeight(allocation.getPartNetWeight());
         req.setAssemblyRelations(buildAssemblyRelations(allocation));

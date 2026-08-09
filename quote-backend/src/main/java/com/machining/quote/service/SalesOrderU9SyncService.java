@@ -346,6 +346,10 @@ public class SalesOrderU9SyncService {
         line.setInternalDeliveryDate(item.getInternalDeliveryDate());
         line.setDescription(item.getDescription());
         line.setMaterialName(item.getMaterialName());
+        line.setEngineeringMaterialCode(item.getEngineeringMaterialCode());
+        line.setEngineeringMaterialTypeCode(item.getEngineeringMaterialTypeCode());
+        line.setEngineeringMaterialTypeName(item.getEngineeringMaterialTypeName());
+        line.setEngineeringMaterialCategory(item.getEngineeringMaterialCategory());
         line.setSurfaceTreatment(item.getSurfaceTreatment());
         line.setMaterialNo(item.getMaterialNo());
         line.setMaterialNoStatus(item.getMaterialNoStatus());

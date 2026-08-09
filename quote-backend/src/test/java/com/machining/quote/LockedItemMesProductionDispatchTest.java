@@ -163,7 +163,11 @@ class LockedItemMesProductionDispatchTest {
         assertThat(request.getCustomerOrderNo()).isEqualTo("CO-9");
         assertThat(request.getCustomerProjectNo()).isEqualTo("CP-9");
         assertThat(request.getMaterialName()).isEqualTo("6061");
+        assertThat(request.getEngineeringMaterialCode()).isEqualTo("MAT-7075");
         assertThat(request.getEngineeringMaterialName()).isEqualTo("7075");
+        assertThat(request.getEngineeringMaterialTypeCode()).isEqualTo("RAW_MATERIAL");
+        assertThat(request.getEngineeringMaterialTypeName()).isEqualTo("原材料");
+        assertThat(request.getEngineeringMaterialCategory()).isEqualTo("铝材");
         assertThat(request.getMaterialShape()).isEqualTo("板材");
         assertThat(request.getSurfaceTreatment()).isEqualTo("Anodized");
         assertThat(request.getDescription()).isEqualTo("Bracket");
@@ -176,7 +180,6 @@ class LockedItemMesProductionDispatchTest {
             assertThat(route.getUnitWorkHours()).isNull();
             assertThat(route.getSortNo()).isNull();
         });
-        assertThat(request.getMaterialData()).isEqualTo(Map.of("shape", "plate"));
         assertThat(request.getMaterialGrossWeight()).isEqualTo(12.3);
         assertThat(request.getPartNetWeight()).isEqualTo(10.2);
         assertThat(request.getAssemblyRelations()).isEmpty();
@@ -543,7 +546,11 @@ class LockedItemMesProductionDispatchTest {
         row.setCustomerOrderNo("CO-9");
         row.setCustomerProjectNo("CP-9");
         row.setMaterialName("6061");
+        row.setEngineeringMaterialCode("MAT-7075");
         row.setEngineeringMaterialName("7075");
+        row.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        row.setEngineeringMaterialTypeName("原材料");
+        row.setEngineeringMaterialCategory("铝材");
         row.setMaterialShape("板材");
         row.setSurfaceTreatment("Anodized");
         row.setRemark("Rush");

@@ -77,6 +77,9 @@ public class ExcelExportService {
                 List.of("图号"),
                 List.of("数量"),
                 List.of("材料名称"),
+                List.of("材料编码"),
+                List.of("材料类型"),
+                List.of("材质分类"),
                 List.of("表面处理"),
                 List.of("版本"),
                 List.of("开工日期"),
@@ -97,6 +100,9 @@ public class ExcelExportService {
                     safe(ticket.getPartNo()),
                     safeInt(ticket.getQty()),
                     safe(ticket.getEngineeringMaterialName()),
+                    safe(ticket.getEngineeringMaterialCode()),
+                    safe(ticket.getEngineeringMaterialTypeName()),
+                    safe(ticket.getEngineeringMaterialCategory()),
                     safe(ticket.getSurfaceTreatment()),
                     safe(ticket.getVersion()),
                     formatDate(ticket.getStartDate()),
@@ -123,11 +129,9 @@ public class ExcelExportService {
 
     private void exportProcessSheets(Object sourceOrderId, String sourceOrderNo, List<ProcessSheetDTO> sheets, HttpServletResponse response) throws IOException {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "内部项目号", "来源单号", "类型", "图号", "版本", "材料描述", "数量", "材料", "代替材料", "表面处理", "热处理", "交期", "备注")) {
+        for (String title : List.of("序号", "内部项目号", "来源单号", "类型", "图号", "版本", "材料描述", "数量", "材料编码", "材料类型", "材料", "材质分类", "毛重(kg)", "净重(kg)", "代替材料", "表面处理", "热处理", "交期", "备注")) {
             head.add(new ArrayList<>(List.of(title)));
         }
-        head.add(9, new ArrayList<>(List.of("毛重(kg)")));
-        head.add(10, new ArrayList<>(List.of("净重(kg)")));
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
             String stepNo = String.valueOf(i * 10);
             for (String title : QuoteProcessExportSupport.PROCESS_VALUE_HEADERS) {
@@ -147,7 +151,10 @@ public class ExcelExportService {
             row.add(safe(sheet.getVersion()));
             row.add(safe(sheet.getDescription()));
             row.add(safeInt(sheet.getQty()));
+            row.add(safe(sheet.getEngineeringMaterialCode()));
+            row.add(safe(sheet.getEngineeringMaterialTypeName()));
             row.add(safe(sheet.getEngineeringMaterialName()));
+            row.add(safe(sheet.getEngineeringMaterialCategory()));
             row.add(safeNumber(sheet.getMaterialGrossWeight()));
             row.add(safeNumber(sheet.getPartNetWeight()));
             row.add(safe(sheet.getSubstituteMaterial()));
@@ -321,7 +328,7 @@ public class ExcelExportService {
 
     private List<List<String>> buildSimpleQuoteHead() {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位")) {
+        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位")) {
             head.add(List.of("基础信息", title));
         }
         for (String title : List.of("含税单价", "含税总价", "交货周期", "备注")) {
@@ -337,6 +344,9 @@ public class ExcelExportService {
         row.add(safe(item.getDescription()));
         row.add(resolveDrawingStatus(item));
         row.add(safe(item.getMaterialName()));
+        row.add(safe(item.getEngineeringMaterialCode()));
+        row.add(safe(item.getEngineeringMaterialTypeName()));
+        row.add(safe(item.getEngineeringMaterialCategory()));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));
@@ -361,7 +371,7 @@ public class ExcelExportService {
 
     private List<List<String>> buildQuoteHead(List<String> processNames, List<String> feeNames) {
         List<List<String>> head = new ArrayList<>();
-        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "表面处理", "版本", "数量", "单位", "重量(KG)", "材料费")) {
+        for (String title : List.of("序号", "图号", "物料描述", "图纸状态", "材料名称", "材料编码", "材料类型", "材质分类", "表面处理", "版本", "数量", "单位", "重量(KG)", "材料费")) {
             head.add(List.of("基础信息", title));
         }
         for (String processName : processNames) {
@@ -401,6 +411,9 @@ public class ExcelExportService {
         row.add(safe(item.getDescription()));
         row.add(resolveDrawingStatus(item));
         row.add(safe(item.getMaterialName()));
+        row.add(safe(item.getEngineeringMaterialCode()));
+        row.add(safe(item.getEngineeringMaterialTypeName()));
+        row.add(safe(item.getEngineeringMaterialCategory()));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));
@@ -448,6 +461,9 @@ public class ExcelExportService {
         row.add(safe(item.getDescription()));
         row.add("无图");
         row.add(safe(item.getMaterialName()));
+        row.add(safe(item.getEngineeringMaterialCode()));
+        row.add(safe(item.getEngineeringMaterialTypeName()));
+        row.add(safe(item.getEngineeringMaterialCategory()));
         row.add(safe(item.getSurfaceTreatment()));
         row.add(safe(item.getVersion()));
         row.add(safeInt(item.getQty()));
