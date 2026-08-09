@@ -18,8 +18,9 @@ class MaterialMasterStage11RebuildValidationTest {
         String doc = Files.readString(STATUS_DOC, StandardCharsets.UTF_8).replace("\r\n", "\n");
 
         assertThat(doc)
-                .contains("阶段 1-11 已完成")
+                .contains("阶段 1-12 已完成")
                 .contains("阶段 11 完成记录")
+                .contains("阶段 12 完成记录")
                 .contains("qpo_public_before_material_stage11_20260809_141519.sql")
                 .contains("qpo_public_stage11_stale_image_rebuild_20260809_142220.sql")
                 .contains("V1 / V2")

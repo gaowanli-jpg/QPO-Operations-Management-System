@@ -7,6 +7,7 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictMarkupFee;
+import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -17,6 +18,7 @@ import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
+import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -52,6 +54,8 @@ class AssemblyWorkflowIntegrationTests {
     private DictMarkupFeeMapper markupFeeMapper;
     @Autowired
     private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
+    @Autowired
+    private DictMaterialMapper materialMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
@@ -147,7 +151,7 @@ class AssemblyWorkflowIntegrationTests {
         QuoteSubmitReq req = new QuoteSubmitReq();
         req.setItemId(leaf.getId());
         req.setQuoteMode("NORMAL");
-        req.setMaterialData(Map.of("cost", 30));
+        req.setMaterialData(materialDataWithCost(30.0));
         req.setProcessRoute(List.of());
         engineerService.calculateAndSaveQuote(req);
 
@@ -509,11 +513,43 @@ class AssemblyWorkflowIntegrationTests {
         QuoteSubmitReq req = new QuoteSubmitReq();
         req.setItemId(item.getId());
         req.setQuoteMode("NORMAL");
-        Map<String, Object> materialData = new LinkedHashMap<>();
-        materialData.put("cost", baseCost);
-        req.setMaterialData(materialData);
+        req.setMaterialData(materialDataWithCost(baseCost));
         req.setProcessRoute(List.of());
         engineerService.calculateAndSaveQuote(req);
+    }
+
+    private Map<String, Object> materialDataWithCost(double baseCost) {
+        DictMaterial material = ensureFlatPriceMaterial();
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", material.getMaterialCode());
+        materialData.put("shape", "\u677f\u6750");
+        materialData.put("weight", baseCost);
+        return materialData;
+    }
+
+    private DictMaterial ensureFlatPriceMaterial() {
+        DictMaterial existing = materialMapper.selectOne(new QueryWrapper<DictMaterial>()
+                .eq("material_code", "MAT-ASSY-FLAT"));
+        if (existing != null) {
+            return existing;
+        }
+        DictMaterial material = new DictMaterial();
+        material.setMaterialCode("MAT-ASSY-FLAT");
+        material.setMaterialName("Assembly flat test material");
+        material.setMaterialTypeId(1L);
+        material.setMaterialCategory("\u94a2\u94c1");
+        material.setDensity(1.0);
+        material.setPlateDensity(1.0);
+        material.setPlatePrice(1.0);
+        material.setBarDensity(1.0);
+        material.setBarPrice(1.0);
+        material.setTubeDensity(1.0);
+        material.setTubePrice(1.0);
+        material.setEnabled(true);
+        material.setSortNo(0);
+        material.setRemarks("test material");
+        materialMapper.insert(material);
+        return material;
     }
 
     private void resetMarkupFeesForAssemblyTest() {

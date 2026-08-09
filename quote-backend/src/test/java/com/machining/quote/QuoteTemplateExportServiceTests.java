@@ -74,7 +74,7 @@ class QuoteTemplateExportServiceTests {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
-            assertThat(text(sheet, 2, 8)).isEqualTo("RFQ No.");
+            assertThat(rowContains(sheet, 2, "RFQ No.")).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, 1)).isEqualTo("'=P-001");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
             assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
@@ -96,7 +96,7 @@ class QuoteTemplateExportServiceTests {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(text(sheet, 0, 0)).isEqualTo("客户报价单模板");
             assertThat(text(sheet, 2, 0)).isEqualTo("询价日：");
-            assertThat(text(sheet, 2, 8)).isEqualTo("RFQ No.");
+            assertThat(rowContains(sheet, 2, "RFQ No.")).isTrue();
             assertThat(hasMergedRegion(sheet, 0, 0, 0, 15)).isTrue();
             assertThat(text(sheet, DETAIL_START_ROW_INDEX + 11, 0)).isEqualTo("QUOTATION VALIDITY");
             assertThat(hasMergedRegion(sheet, DETAIL_START_ROW_INDEX + 11, DETAIL_START_ROW_INDEX + 11, 0, 15)).isTrue();

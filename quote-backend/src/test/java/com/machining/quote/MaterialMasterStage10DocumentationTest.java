@@ -68,15 +68,16 @@ class MaterialMasterStage10DocumentationTest {
     }
 
     @Test
-    void stage10PlanRecordsCompletedRegressionCoverage() throws IOException {
+    void stagePlanRecordsCompletedRegressionCoverageThroughStage12() throws IOException {
         assertThat(read(STATUS_DOCS.resolve("39-材料主数据编码与类型全链路重构开发文档.md")))
                 .contains(
-                        "文档状态：阶段 1-10 已完成",
+                        "文档状态：阶段 1-12 已完成",
                         "阶段 10 完成记录",
+                        "阶段 12 完成记录",
                         "材料类型维护复用 `engineer:dict:material-manage`",
                         "材料类型 API",
                         "已提/待产/锁库文案")
-                .doesNotContain("文档状态：阶段 1-9 已完成");
+                .doesNotContain("文档状态：阶段 1-9 已完成", "阶段 12 待开发");
     }
 
     private String read(Path path) throws IOException {

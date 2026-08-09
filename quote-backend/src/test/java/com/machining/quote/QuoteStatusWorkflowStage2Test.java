@@ -4,9 +4,11 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SystemTask;
+import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
@@ -36,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class QuoteStatusWorkflowStage2Test {
     @Autowired
     private OrderRfqMapper orderMapper;
+    @Autowired
+    private DictMaterialMapper materialMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
@@ -234,9 +238,38 @@ class QuoteStatusWorkflowStage2Test {
         QuoteSubmitReq req = new QuoteSubmitReq();
         req.setItemId(item.getId());
         req.setPartNetWeight(1.0);
-        req.setMaterialData(Map.of("cost", 10.0, "weight", 1.5));
+        DictMaterial material = ensureStatusMaterial();
+        req.setMaterialData(Map.of(
+                "materialCode", material.getMaterialCode(),
+                "shape", "\u677f\u6750",
+                "weight", 10.0));
         req.setProcessRoute(List.of());
         return req;
+    }
+
+    private DictMaterial ensureStatusMaterial() {
+        DictMaterial existing = materialMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DictMaterial>()
+                .eq("material_code", "MAT-STATUS-WORKFLOW"));
+        if (existing != null) {
+            return existing;
+        }
+        DictMaterial material = new DictMaterial();
+        material.setMaterialCode("MAT-STATUS-WORKFLOW");
+        material.setMaterialName("Status workflow test material");
+        material.setMaterialTypeId(1L);
+        material.setMaterialCategory("\u94a2\u94c1");
+        material.setDensity(1.0);
+        material.setPlateDensity(1.0);
+        material.setPlatePrice(1.0);
+        material.setBarDensity(1.0);
+        material.setBarPrice(1.0);
+        material.setTubeDensity(1.0);
+        material.setTubePrice(1.0);
+        material.setEnabled(true);
+        material.setSortNo(0);
+        material.setRemarks("test material");
+        materialMapper.insert(material);
+        return material;
     }
 
     private ItemQuoteVersion createQuotedItem(OrderRfq order, String partNo, String quoteLeadTime) {

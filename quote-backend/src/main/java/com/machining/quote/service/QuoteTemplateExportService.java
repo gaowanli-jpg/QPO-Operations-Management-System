@@ -73,8 +73,10 @@ public class QuoteTemplateExportService {
         assertOrderDataScope(rfqId);
         try (Workbook workbook = quoteTemplateService.openTemplateWorkbook()) {
             QuoteTemplateService.TemplateLayout layout = quoteTemplateService.templateLayout();
+            ensureMaterialIdentityColumns(workbook.getSheetAt(0), layout);
             simplifyTemplateSheet(workbook.getSheetAt(0), layout);
             writeTemplateQuote(workbook, rfqId, true, layout);
+            mergeSimpleTitleAndFooter(workbook.getSheetAt(0), layout);
             write(response, workbook, buildFileName(rfqId, "客户模板简化报价单"));
         }
     }
@@ -240,6 +242,18 @@ public class QuoteTemplateExportService {
 
         writeGroupHeader(sheet, 0, SIMPLE_HEADERS.size() - 4, "基础信息", layout);
         writeGroupHeader(sheet, SIMPLE_HEADERS.size() - 4, 4, "合计", layout);
+    }
+
+    private void mergeSimpleTitleAndFooter(Sheet sheet, QuoteTemplateService.TemplateLayout layout) {
+        int lastCol = SIMPLE_HEADERS.size() - 1;
+        if (!isBlank(dataFormatter.formatCellValue(getOrCreateRow(sheet, 0).getCell(0)))) {
+            mergeReplacing(sheet, 0, 0, 0, lastCol);
+        }
+        int footerRowIndex = findFooterStartRow(sheet, layout);
+        Row footerRow = sheet.getRow(footerRowIndex);
+        if (footerRow != null && !isBlank(dataFormatter.formatCellValue(footerRow.getCell(0)))) {
+            mergeReplacing(sheet, footerRowIndex, footerRowIndex, 0, lastCol);
+        }
     }
 
     private void ensureMaterialIdentityColumns(Sheet sheet, QuoteTemplateService.TemplateLayout layout) {

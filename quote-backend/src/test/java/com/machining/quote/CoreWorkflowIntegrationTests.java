@@ -191,6 +191,7 @@ class CoreWorkflowIntegrationTests {
         material.setMaterialCode("MAT-TEST-" + System.nanoTime());
         material.setMaterialName(materialName);
         material.setMaterialTypeId(1L);
+        material.setMaterialCategory("\u94a2\u94c1");
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("");
@@ -202,6 +203,7 @@ class CoreWorkflowIntegrationTests {
         req.setItemId(item.getId());
         req.setPartNetWeight(1.23);
         Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", material.getMaterialCode());
         materialData.put("name", materialName);
         materialData.put("shape", "板材");
         materialData.put("dimensionUnit", "m");
@@ -433,6 +435,7 @@ class CoreWorkflowIntegrationTests {
         material.setMaterialCode("MAT-ENG-" + System.nanoTime());
         material.setMaterialName(engineeringMaterial);
         material.setMaterialTypeId(1L);
+        material.setMaterialCategory("\u94a2\u94c1");
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("");
@@ -441,6 +444,7 @@ class CoreWorkflowIntegrationTests {
         materialMapper.insert(material);
 
         Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", material.getMaterialCode());
         materialData.put("name", engineeringMaterial);
         materialData.put("shape", "BAR");
         materialData.put("weight", 2.5);
@@ -548,6 +552,7 @@ class CoreWorkflowIntegrationTests {
         material.setMaterialCode("MAT-STATUS-" + System.nanoTime());
         material.setMaterialName(materialName);
         material.setMaterialTypeId(1L);
+        material.setMaterialCategory("\u94a2\u94c1");
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("");
@@ -559,6 +564,7 @@ class CoreWorkflowIntegrationTests {
         quoteReq.setItemId(item.getId());
         quoteReq.setPartNetWeight(1.0);
         quoteReq.setMaterialData(Map.of(
+                "materialCode", material.getMaterialCode(),
                 "name", materialName,
                 "shape", "板材",
                 "dimensionUnit", "m",
@@ -712,7 +718,7 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setDescription("历史版本A");
         historicalItem.setQty(1);
         historicalItem.setDrawingUrl("/uploads/test/P-200.pdf");
-        historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
+        applyStandardMaterialSnapshot(historicalItem, 10.0);
         historicalItem.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 1.0)));
         historicalItem.setTaxIncludedUnitPrice(20.0);
         historicalItem.setTaxIncludedTotalPrice(20.0);
@@ -1128,8 +1134,7 @@ class CoreWorkflowIntegrationTests {
         historicalItem.setDescription("历史重复件");
         historicalItem.setQty(1);
         historicalItem.setDrawingUrl("/uploads/test/AUTO-100.pdf");
-        historicalItem.setMaterialName("45#钢");
-        historicalItem.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", 10));
+        applyStandardMaterialSnapshot(historicalItem, 10.0);
         historicalItem.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 1.0)));
         historicalItem.setTaxIncludedUnitPrice(20.0);
         historicalItem.setTaxIncludedTotalPrice(20.0);
@@ -1217,14 +1222,64 @@ class CoreWorkflowIntegrationTests {
         item.setDescription(partNo + "历史描述");
         item.setQty(1);
         item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
-        item.setMaterialName("45#钢");
-        item.setMaterialData(Map.of("name", "45#钢", "shape", "板材", "cost", unitPrice));
+        applyStandardMaterialSnapshot(item, unitPrice);
         item.setProcessRoute(List.of(standardProcessRoute("TEST_CNC", "测试数控", "CNC", 10.0, 1.0)));
         item.setTaxIncludedUnitPrice(unitPrice);
         item.setTaxIncludedTotalPrice(unitPrice);
         item.setStatus(status);
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    private void applyStandardMaterialSnapshot(ItemQuoteVersion item, double materialCost) {
+        DictMaterial material = ensureRepeatMaterial();
+        item.setMaterialName(material.getMaterialName());
+        item.setEngineeringMaterialCode(material.getMaterialCode());
+        item.setEngineeringMaterialName(material.getMaterialName());
+        item.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        item.setEngineeringMaterialTypeName("\u539f\u6750\u6599");
+        item.setEngineeringMaterialCategory(material.getMaterialCategory());
+        item.setMaterialShape("\u677f\u6750");
+        item.setMaterialData(standardMaterialData(material, materialCost));
+    }
+
+    private Map<String, Object> standardMaterialData(DictMaterial material, double materialCost) {
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", material.getMaterialCode());
+        materialData.put("materialName", material.getMaterialName());
+        materialData.put("name", material.getMaterialName());
+        materialData.put("materialTypeCode", "RAW_MATERIAL");
+        materialData.put("materialTypeName", "\u539f\u6750\u6599");
+        materialData.put("materialCategory", material.getMaterialCategory());
+        materialData.put("shape", "\u677f\u6750");
+        materialData.put("weight", materialCost);
+        materialData.put("cost", materialCost);
+        return materialData;
+    }
+
+    private DictMaterial ensureRepeatMaterial() {
+        DictMaterial existing = materialMapper.selectOne(new QueryWrapper<DictMaterial>()
+                .eq("material_code", "MAT-CORE-REPEAT"));
+        if (existing != null) {
+            return existing;
+        }
+        DictMaterial material = new DictMaterial();
+        material.setMaterialCode("MAT-CORE-REPEAT");
+        material.setMaterialName("Core repeat test material");
+        material.setMaterialTypeId(1L);
+        material.setMaterialCategory("\u94a2\u94c1");
+        material.setDensity(1.0);
+        material.setPlateDensity(1.0);
+        material.setPlatePrice(1.0);
+        material.setBarDensity(1.0);
+        material.setBarPrice(1.0);
+        material.setTubeDensity(1.0);
+        material.setTubePrice(1.0);
+        material.setEnabled(true);
+        material.setSortNo(0);
+        material.setRemarks("test material");
+        materialMapper.insert(material);
+        return material;
     }
 
     private Map<String, Object> standardProcessRoute(String processCode,
