@@ -702,18 +702,18 @@ SELECT pg_catalog.setval('system_role_id_seq', 855, true);
 -- Default users are retained with hashed passwords only; no external credentials are seeded.
 INSERT INTO erp_user (id, username, password_hash, display_name, role, enabled, force_password_change, failed_login_attempts)
 VALUES
-    (1, 'admin', '$2a$12$P9MqlUawCb1dIaXj.tM06uORCy1CQ6Epq83nd.zOLcT2CaAazTWxa', '管理员', 'ADMIN', TRUE, FALSE, 0),
-    (2, 'market', '$2a$12$94tcggSLtP9a28.phgPNOeODXTqXrV6a4ztn8GCtS1AUbuG1sFXx2', '市场人员', 'MARKET', TRUE, FALSE, 0),
-    (3, 'engineer', '$2a$12$2Fcec/IlBZOsm8fLhCiJSexhfmbiyVVTB.9uvAE.NTCninMEAgZNy', '工程人员', 'ENGINEER', TRUE, TRUE, 0);
+    (1, 'admin', '$2a$12$g3DNmPIxz.Krv.UGXo/IveIWizF3YDJF/TQKPfgUzGRwIPMFk07Oa', '管理员', 'ADMIN', TRUE, FALSE, 0),
+    (2, 'market', '$2a$12$N4luOAukB3cz.gKFs7WicOBlULM8Z0Ik62yOtcllvkMN6J1a77b3C', '市场人员', 'MARKET', TRUE, FALSE, 0),
+    (3, 'engineer', '$2a$12$KbOZcqCA0n1wojKWha1lwOOjD.eNCWGEm4DatYg46qcl3IEn6hzaS', '工程人员', 'ENGINEER', TRUE, TRUE, 0);
 
 INSERT INTO system_user (
     id, legacy_user_id, username, password_hash, display_name, real_name, phone, email,
     dept_id, post_id, legacy_role, enabled, force_password_change, failed_login_attempts, deleted
 )
 VALUES
-    (1, 3, 'engineer', '$2a$12$2Fcec/IlBZOsm8fLhCiJSexhfmbiyVVTB.9uvAE.NTCninMEAgZNy', '工程人员', NULL, NULL, NULL, 3, 3, 'ENGINEER', TRUE, TRUE, 0, FALSE),
-    (2, 2, 'market', '$2a$12$94tcggSLtP9a28.phgPNOeODXTqXrV6a4ztn8GCtS1AUbuG1sFXx2', '市场人员', NULL, NULL, NULL, 2, 1, 'MARKET', TRUE, FALSE, 0, FALSE),
-    (3, 1, 'admin', '$2a$12$P9MqlUawCb1dIaXj.tM06uORCy1CQ6Epq83nd.zOLcT2CaAazTWxa', '管理员', NULL, NULL, NULL, 4, 5, 'ADMIN', TRUE, FALSE, 0, FALSE);
+    (1, 3, 'engineer', '$2a$12$KbOZcqCA0n1wojKWha1lwOOjD.eNCWGEm4DatYg46qcl3IEn6hzaS', '工程人员', NULL, NULL, NULL, 3, 3, 'ENGINEER', TRUE, TRUE, 0, FALSE),
+    (2, 2, 'market', '$2a$12$N4luOAukB3cz.gKFs7WicOBlULM8Z0Ik62yOtcllvkMN6J1a77b3C', '市场人员', NULL, NULL, NULL, 2, 1, 'MARKET', TRUE, FALSE, 0, FALSE),
+    (3, 1, 'admin', '$2a$12$g3DNmPIxz.Krv.UGXo/IveIWizF3YDJF/TQKPfgUzGRwIPMFk07Oa', '管理员', NULL, NULL, NULL, 4, 5, 'ADMIN', TRUE, FALSE, 0, FALSE);
 
 INSERT INTO system_user_role (user_id, role_id)
 VALUES
