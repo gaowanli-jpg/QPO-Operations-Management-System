@@ -406,7 +406,11 @@ public class RfqReleaseSalesOrderService {
         item.setCustomerDeliveryDate(source.getCustomerDeliveryDate());
         item.setInternalDeliveryDate(source.getInternalDeliveryDate());
         item.setMaterialName(source.getMaterialName());
+        item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));
         item.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(source));
+        item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));
+        item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));
+        item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));
         item.setMaterialShape(MaterialDataResolver.materialShape(source));
         item.setSurfaceTreatment(source.getSurfaceTreatment());
         item.setTaxIncludedUnitPrice(decimal(source.getTaxIncludedUnitPrice()));

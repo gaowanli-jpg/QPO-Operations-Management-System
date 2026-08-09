@@ -23,7 +23,11 @@ public class SalesOrderMatchPreviewRow {
     private String sourcePartNo;
     private String sourceVersion;
     private String materialName;
+    private String engineeringMaterialCode;
     private String engineeringMaterialName;
+    private String engineeringMaterialTypeCode;
+    private String engineeringMaterialTypeName;
+    private String engineeringMaterialCategory;
     private String materialShape;
     private String surfaceTreatment;
     private String quoteMode;

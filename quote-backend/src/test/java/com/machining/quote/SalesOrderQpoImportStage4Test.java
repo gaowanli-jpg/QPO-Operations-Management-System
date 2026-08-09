@@ -15,6 +15,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,8 +60,12 @@ class SalesOrderQpoImportStage4Test {
         assertThat(enriched.getFeeData()).isEqualTo(newerSource.getFeeData());
         assertThat(enriched.getDrawingUrl()).isEqualTo("drawings/P-001.pdf");
         assertThat(enriched.getHasDrawing()).isTrue();
-        assertThat(enriched.getMaterialName()).isEqualTo("new-material");
+        assertThat(enriched.getMaterialName()).isEqualTo("imported-material");
+        assertThat(getRequiredField(enriched, "engineeringMaterialCode")).isEqualTo("MAT-NEW-MATERIAL");
         assertThat(enriched.getEngineeringMaterialName()).isEqualTo("ENG-new-material");
+        assertThat(getRequiredField(enriched, "engineeringMaterialTypeCode")).isEqualTo("RAW_MATERIAL");
+        assertThat(getRequiredField(enriched, "engineeringMaterialTypeName")).isEqualTo("原材料");
+        assertThat(getRequiredField(enriched, "engineeringMaterialCategory")).isEqualTo("钢铁");
         assertThat(enriched.getSurfaceTreatment()).isEqualTo("Anodized-new-material");
         assertThat(enriched.getMaterialGrossWeight()).isEqualTo(1.25);
         assertThat(enriched.getPartNetWeight()).isEqualTo(0.80);
@@ -171,9 +176,21 @@ class SalesOrderQpoImportStage4Test {
         source.setVersion(version);
         source.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         source.setMaterialName(materialName);
+        source.setEngineeringMaterialCode("MAT-NEW-MATERIAL");
         source.setEngineeringMaterialName("ENG-" + materialName);
+        source.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        source.setEngineeringMaterialTypeName("原材料");
+        source.setEngineeringMaterialCategory("钢铁");
         source.setSurfaceTreatment("Anodized-" + materialName);
-        source.setMaterialData(Map.of("name", materialName, "cost", 50));
+        source.setMaterialData(Map.of(
+                "materialCode", "MAT-NEW-MATERIAL",
+                "materialName", "ENG-" + materialName,
+                "name", "ENG-" + materialName,
+                "materialTypeCode", "RAW_MATERIAL",
+                "materialTypeName", "原材料",
+                "materialCategory", "钢铁",
+                "shape", "板材",
+                "cost", 50));
         source.setProcessRoute(List.of(Map.of("sortNo", 10, "processName", "CNC", "inputVal", 1.5)));
         source.setFeeData(List.of(Map.of("feeName", "profit", "ratePercent", 10)));
         source.setDrawingUrl("drawings/P-001.pdf");
@@ -187,5 +204,15 @@ class SalesOrderQpoImportStage4Test {
         source.setUntaxedUnitPrice(888.0);
         source.setUntaxedTotalPrice(8880.0);
         return source;
+    }
+
+    private static Object getRequiredField(Object target, String fieldName) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(target);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError("Missing required field: " + fieldName, ex);
+        }
     }
 }

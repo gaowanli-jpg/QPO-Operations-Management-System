@@ -155,6 +155,10 @@ class SalesOrderMatchStage2Test {
         ItemQuoteVersion newer = releasedSource(901, 21, "P-001", "A", "新材料");
         newer.setQuoteMode("NORMAL");
         newer.setMaterialData(Map.of("name", "REAL-MATERIAL", "shape", "PLATE"));
+        newer.setEngineeringMaterialCode("MAT-REAL-001");
+        newer.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        newer.setEngineeringMaterialTypeName("原材料");
+        newer.setEngineeringMaterialCategory("钢铁");
         when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(older, newer));
 
         SalesOrderMatchPreviewReq req = new SalesOrderMatchPreviewReq();
@@ -177,7 +181,11 @@ class SalesOrderMatchStage2Test {
                     assertThat(row.getQuoteMode()).isEqualTo("NORMAL");
                     assertThat(row.getSourceProcessRouteSummary()).contains("PACKAGING", "包装", "精细包装", "¥10", "¥15");
                     assertThat(row.getCurrentProcessRouteSummary()).isNull();
-                    assertThat(row.getChangedFields()).containsKeys("engineeringMaterialName", "quoteMode");
+                    assertThat(row.getChangedFields()).containsKeys(
+                            "engineeringMaterialName",
+                            "engineeringMaterialCode",
+                            "engineeringMaterialTypeName",
+                            "quoteMode");
                     assertThat(row.getProtectedFields()).containsKeys("materialName", "surfaceTreatment", "materialNo");
                 });
 
@@ -192,6 +200,7 @@ class SalesOrderMatchStage2Test {
         verify(fixture.headerMapper, never()).updateById(any());
         String json = new ObjectMapper().writeValueAsString(resp);
         assertThat(json)
+                .contains("engineeringMaterialCode", "MAT-REAL-001", "engineeringMaterialTypeName", "原材料")
                 .doesNotContain("materialData")
                 .doesNotContain("feeData")
                 .doesNotContain("MASSIVE_JSON");
@@ -322,9 +331,19 @@ class SalesOrderMatchStage2Test {
         source.setVersion(version);
         source.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         source.setMaterialName(materialName);
+        source.setEngineeringMaterialCode("MAT-" + id);
         source.setEngineeringMaterialName("ENG-" + materialName);
+        source.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        source.setEngineeringMaterialTypeName("原材料");
+        source.setEngineeringMaterialCategory("钢铁");
         source.setSurfaceTreatment("历史表处-" + materialName);
-        source.setMaterialData(Map.of("large", "MASSIVE_JSON"));
+        source.setMaterialData(Map.of(
+                "materialCode", "MAT-" + id,
+                "materialName", "ENG-" + materialName,
+                "materialTypeCode", "RAW_MATERIAL",
+                "materialTypeName", "原材料",
+                "materialCategory", "钢铁",
+                "large", "MASSIVE_JSON"));
         source.setProcessRoute(List.of(Map.ofEntries(
                 Map.entry("routeType", "PROCESS"),
                 Map.entry("sourceType", "process"),

@@ -1,0 +1,55 @@
+package com.machining.quote;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class MaterialMasterStage7SnapshotTest {
+    private static final Path MAIN = Path.of("src/main/java/com/machining/quote");
+
+    @Test
+    void salesOrderProductionSnapshotCarriesCompleteEngineeringMaterialIdentity() throws IOException {
+        String salesOrderItem = read("entity", "SalesOrderItem.java");
+        String salesMatchService = read("service", "SalesOrderMatchService.java");
+        String enrichmentService = read("service", "SalesOrderRepeatEnrichmentService.java");
+        String rfqReleaseService = read("service", "RfqReleaseSalesOrderService.java");
+
+        assertThat(salesOrderItem)
+                .contains(
+                        "private String engineeringMaterialCode;",
+                        "private String engineeringMaterialName;",
+                        "private String engineeringMaterialTypeCode;",
+                        "private String engineeringMaterialTypeName;",
+                        "private String engineeringMaterialCategory;");
+        assertThat(salesMatchService)
+                .contains(
+                        "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
+                        "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
+                        "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
+                        "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
+                        "putSnapshot(fields, \"engineeringMaterialCode\"",
+                        "putSnapshot(fields, \"engineeringMaterialTypeName\"");
+        assertThat(enrichmentService)
+                .contains(
+                        "current.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
+                        "current.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
+                        "current.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
+                        "current.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));")
+                .doesNotContain("current.setMaterialName(source.getMaterialName())");
+        assertThat(rfqReleaseService)
+                .contains(
+                        "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
+                        "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
+                        "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
+                        "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));");
+    }
+
+    private String read(String folder, String file) throws IOException {
+        return Files.readString(MAIN.resolve(Path.of(folder, file)), StandardCharsets.UTF_8);
+    }
+}

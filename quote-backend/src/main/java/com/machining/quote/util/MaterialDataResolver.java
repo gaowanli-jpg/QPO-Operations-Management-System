@@ -20,10 +20,13 @@ public final class MaterialDataResolver {
         if (item == null) {
             return "";
         }
+        String savedMaterialName = stringValue(item.getEngineeringMaterialName());
+        if (!savedMaterialName.isEmpty()) {
+            return savedMaterialName;
+        }
         if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
             return "";
         }
-        String savedMaterialName = stringValue(item.getEngineeringMaterialName());
         return savedMaterialName.isEmpty() ? stringValue(normalizeMap(item.getMaterialData()).get("name")) : savedMaterialName;
     }
 
@@ -35,34 +38,58 @@ public final class MaterialDataResolver {
     }
 
     public static String materialCode(ItemQuoteVersion item) {
-        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+        if (item == null) {
             return "";
         }
         String savedMaterialCode = stringValue(item.getEngineeringMaterialCode());
+        if (!savedMaterialCode.isEmpty()) {
+            return savedMaterialCode;
+        }
+        if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
         return savedMaterialCode.isEmpty() ? materialCode(item.getMaterialData()) : savedMaterialCode;
     }
 
     public static String materialTypeCode(ItemQuoteVersion item) {
-        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+        if (item == null) {
             return "";
         }
         String savedTypeCode = stringValue(item.getEngineeringMaterialTypeCode());
+        if (!savedTypeCode.isEmpty()) {
+            return savedTypeCode;
+        }
+        if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
         return savedTypeCode.isEmpty() ? materialTypeCode(item.getMaterialData()) : savedTypeCode;
     }
 
     public static String materialTypeName(ItemQuoteVersion item) {
-        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+        if (item == null) {
             return "";
         }
         String savedTypeName = stringValue(item.getEngineeringMaterialTypeName());
+        if (!savedTypeName.isEmpty()) {
+            return savedTypeName;
+        }
+        if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
         return savedTypeName.isEmpty() ? materialTypeName(item.getMaterialData()) : savedTypeName;
     }
 
     public static String materialCategory(ItemQuoteVersion item) {
-        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+        if (item == null) {
             return "";
         }
         String savedCategory = stringValue(item.getEngineeringMaterialCategory());
+        if (!savedCategory.isEmpty()) {
+            return savedCategory;
+        }
+        if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
         return savedCategory.isEmpty() ? materialCategory(item.getMaterialData()) : savedCategory;
     }
 
@@ -102,10 +129,16 @@ public final class MaterialDataResolver {
     }
 
     public static String materialShape(ItemQuoteVersion item) {
-        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+        if (item == null) {
             return "";
         }
         String savedMaterialShape = stringValue(item.getMaterialShape());
+        if (!savedMaterialShape.isEmpty()) {
+            return savedMaterialShape;
+        }
+        if ("ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
         return savedMaterialShape.isEmpty() ? materialShape(item.getMaterialData()) : savedMaterialShape;
     }
 

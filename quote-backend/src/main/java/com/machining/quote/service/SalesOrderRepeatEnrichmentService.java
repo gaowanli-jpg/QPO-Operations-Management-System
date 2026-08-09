@@ -100,8 +100,11 @@ public class SalesOrderRepeatEnrichmentService {
     private void enrichSalesOrderItem(SalesOrderItem current, ItemQuoteVersion source) {
         String uploadedDrawingUrl = current.getDrawingUrl();
         boolean hasUploadedDrawing = !isBlank(uploadedDrawingUrl);
-        current.setMaterialName(source.getMaterialName());
-        current.setEngineeringMaterialName(source.getEngineeringMaterialName());
+        current.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));
+        current.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(source));
+        current.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));
+        current.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));
+        current.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));
         current.setMaterialShape(resolveMaterialShape(source));
         current.setSurfaceTreatment(source.getSurfaceTreatment());
         current.setMaterialGrossWeight(source.getMaterialGrossWeight());

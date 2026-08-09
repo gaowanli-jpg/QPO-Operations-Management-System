@@ -3,6 +3,7 @@ package com.machining.quote;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Constructor;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -154,6 +158,74 @@ class EngineerServiceMaterialCalculationTests {
                 .containsEntry("shape", "板材");
     }
 
+    @Test
+    void repeatQuoteUsesSourceEngineeringMaterialCodeAndRecalculatesFromCurrentDictionary() throws Exception {
+        EngineerService service = repeatQuoteServiceWithMaterial("MAT-000005", "45#-当前字典", "钢铁", 7850.0, 8.0);
+        ItemQuoteVersion source = pricedSourceItem();
+        source.setEngineeringMaterialCode("MAT-000005");
+        source.setEngineeringMaterialName("45#-历史快照");
+        source.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        source.setEngineeringMaterialTypeName("原材料");
+        source.setEngineeringMaterialCategory("旧分类");
+        source.setMaterialShape("板材");
+        source.setMaterialData(Map.of(
+                "name", "45#-历史快照",
+                "shape", "板材",
+                "weight", 2.0,
+                "cost", 9999.0));
+
+        ItemQuoteVersion current = currentRepeatTarget();
+        List<Map<String, Object>> appliedItems = new ArrayList<>();
+
+        String skippedReason = ReflectionTestUtils.invokeMethod(
+                service,
+                "applyRepeatNormalQuote",
+                repeatSource(source),
+                current,
+                new HashSet<Integer>(),
+                appliedItems);
+
+        assertThat(skippedReason).isNull();
+        assertThat(getRequiredField(current, "engineeringMaterialCode")).isEqualTo("MAT-000005");
+        assertThat(current.getEngineeringMaterialName()).isEqualTo("45#-当前字典");
+        assertThat(getRequiredField(current, "engineeringMaterialTypeCode")).isEqualTo("RAW_MATERIAL");
+        assertThat(getRequiredField(current, "engineeringMaterialTypeName")).isEqualTo("原材料");
+        assertThat(getRequiredField(current, "engineeringMaterialCategory")).isEqualTo("钢铁");
+        assertThat(current.getMaterialShape()).isEqualTo("板材");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> savedMaterialData = (Map<String, Object>) current.getMaterialData();
+        assertThat(savedMaterialData)
+                .containsEntry("materialCode", "MAT-000005")
+                .containsEntry("materialName", "45#-当前字典")
+                .containsEntry("materialTypeName", "原材料")
+                .containsEntry("materialCategory", "钢铁")
+                .containsEntry("shape", "板材");
+        assertThat((Double) savedMaterialData.get("cost")).isCloseTo(16.0, within(0.000001));
+        assertThat(current.getTaxIncludedUnitPrice()).isCloseTo(16.0, within(0.000001));
+        assertThat(appliedItems).singleElement()
+                .satisfies(item -> assertThat(item.get("taxIncludedUnitPrice")).isEqualTo(16.0));
+    }
+
+    @Test
+    void repeatQuoteSkipsSourceWithoutEngineeringMaterialCode() throws Exception {
+        EngineerService service = repeatQuoteServiceWithMaterial("MAT-000005", "45#", "钢铁", 7850.0, 8.0);
+        ItemQuoteVersion source = pricedSourceItem();
+        source.setMaterialData(Map.of("name", "45#", "shape", "板材", "weight", 2.0));
+        ItemQuoteVersion current = currentRepeatTarget();
+
+        String skippedReason = ReflectionTestUtils.invokeMethod(
+                service,
+                "applyRepeatNormalQuote",
+                repeatSource(source),
+                current,
+                new HashSet<Integer>(),
+                new ArrayList<Map<String, Object>>());
+
+        assertThat(skippedReason).contains("材料编码").contains("手动");
+        assertThat(current.getTaxIncludedUnitPrice()).isNull();
+        assertThat(current.getMaterialData()).isNull();
+    }
+
     private DictMaterial material(String code, String name, Long typeId, String category, double density, double unitPrice) {
         DictMaterial material = new DictMaterial();
         material.setId(5L);
@@ -166,6 +238,57 @@ class EngineerServiceMaterialCalculationTests {
         material.setPlateDensity(density);
         material.setPlatePrice(unitPrice);
         return material;
+    }
+
+    private EngineerService repeatQuoteServiceWithMaterial(
+            String code,
+            String name,
+            String category,
+            double density,
+            double unitPrice) {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        when(materialMapper.selectList(any()))
+                .thenReturn(List.of(material(code, name, 1L, category, density, unitPrice)));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+        ReflectionTestUtils.setField(service, "markupFeeMapper", emptyMarkupMapper());
+        ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());
+        ReflectionTestUtils.setField(service, "assemblyRelationMapper", mock(ItemAssemblyRelationMapper.class));
+        ReflectionTestUtils.setField(service, "itemMapper", mock(ItemQuoteVersionMapper.class));
+        return service;
+    }
+
+    private ItemQuoteVersion pricedSourceItem() {
+        ItemQuoteVersion source = new ItemQuoteVersion();
+        source.setId(9001);
+        source.setRfqId(7001);
+        source.setPartNo("P-REPEAT");
+        source.setVersion("A");
+        source.setQty(2);
+        source.setTaxIncludedUnitPrice(999.0);
+        source.setPartNetWeight(1.5);
+        return source;
+    }
+
+    private ItemQuoteVersion currentRepeatTarget() {
+        ItemQuoteVersion current = new ItemQuoteVersion();
+        current.setId(1001);
+        current.setRfqId(8001);
+        current.setPartNo("P-REPEAT");
+        current.setVersion("A");
+        current.setQty(2);
+        current.setDrawingUrl("drawings/P-REPEAT.pdf");
+        return current;
+    }
+
+    private Object repeatSource(ItemQuoteVersion source) throws Exception {
+        OrderRfq order = new OrderRfq();
+        order.setId(source.getRfqId());
+        Class<?> repeatSourceClass = Class.forName("com.machining.quote.service.EngineerService$RepeatSource");
+        Constructor<?> constructor = repeatSourceClass.getDeclaredConstructor(OrderRfq.class, ItemQuoteVersion.class);
+        constructor.setAccessible(true);
+        return constructor.newInstance(order, source);
     }
 
     private DictMaterialTypeMapper materialTypeMapper() {

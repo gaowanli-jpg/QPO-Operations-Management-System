@@ -21,6 +21,7 @@ import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -825,7 +826,11 @@ public class EngineerService {
         currentItem.setMaterialName(isBlank(currentItem.getMaterialName()) ? sourceItem.getMaterialName() : currentItem.getMaterialName());
         currentItem.setSurfaceTreatment(isBlank(currentItem.getSurfaceTreatment()) ? sourceItem.getSurfaceTreatment() : currentItem.getSurfaceTreatment());
 
-        Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
+        String materialCode = MaterialDataResolver.materialCode(sourceItem);
+        if (isBlank(materialCode)) {
+            return "历史重复件缺少材料编码，需手动重新选择材料";
+        }
+        Map<String, Object> materialData = repeatQuoteMaterialData(sourceItem, materialCode);
         List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
         String processRouteBlockedReason = validateRepeatProcessRoute(processRoute);
         if (processRouteBlockedReason != null) {
@@ -835,6 +840,16 @@ public class EngineerService {
         saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight());
         addAppliedRepeatItem(currentItem, source, materialNoResult, handledItemIds, appliedItems);
         return null;
+    }
+
+    private Map<String, Object> repeatQuoteMaterialData(ItemQuoteVersion sourceItem, String materialCode) {
+        Map<String, Object> materialData = new LinkedHashMap<>(normalizeMap(sourceItem.getMaterialData()));
+        materialData.put("materialCode", materialCode);
+        String materialShape = MaterialDataResolver.materialShape(sourceItem);
+        if (!isBlank(materialShape)) {
+            materialData.put("shape", materialShape);
+        }
+        return materialData;
     }
 
     private String validateRepeatProcessRoute(List<QuoteSubmitReq.ProcessSubmitDTO> processRoute) {

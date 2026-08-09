@@ -403,6 +403,7 @@ public class SalesOrderMatchService {
             SalesOrderMatchApplyReq req) {
         String engineeringMaterialName = resolveEngineeringMaterialName(source);
         String materialShape = resolveMaterialShape(source);
+        copyEngineeringMaterialIdentityIfMissing(item, source);
         if (isBlank(item.getEngineeringMaterialName()) && !isBlank(engineeringMaterialName)) {
             item.setEngineeringMaterialName(engineeringMaterialName);
         }
@@ -592,7 +593,11 @@ public class SalesOrderMatchService {
         row.setSourcePartNo(source.getPartNo());
         row.setSourceVersion(source.getVersion());
         row.setMaterialName(source.getMaterialName());
+        row.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));
         row.setEngineeringMaterialName(resolveEngineeringMaterialName(source));
+        row.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));
+        row.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));
+        row.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));
         row.setMaterialShape(resolveMaterialShape(source));
         row.setSurfaceTreatment(source.getSurfaceTreatment());
         row.setQuoteMode(source.getQuoteMode());
@@ -606,7 +611,11 @@ public class SalesOrderMatchService {
 
     private Map<String, Object> changedFields(SalesOrderItem current, ItemQuoteVersion source) {
         Map<String, Object> fields = new LinkedHashMap<>();
+        putSnapshot(fields, "engineeringMaterialCode", current.getEngineeringMaterialCode(), MaterialDataResolver.materialCode(source));
         putSnapshot(fields, "engineeringMaterialName", current.getEngineeringMaterialName(), resolveEngineeringMaterialName(source));
+        putSnapshot(fields, "engineeringMaterialTypeCode", current.getEngineeringMaterialTypeCode(), MaterialDataResolver.materialTypeCode(source));
+        putSnapshot(fields, "engineeringMaterialTypeName", current.getEngineeringMaterialTypeName(), MaterialDataResolver.materialTypeName(source));
+        putSnapshot(fields, "engineeringMaterialCategory", current.getEngineeringMaterialCategory(), MaterialDataResolver.materialCategory(source));
         putSnapshot(fields, "materialShape", current.getMaterialShape(), resolveMaterialShape(source));
         putSnapshot(fields, "materialGrossWeight", current.getMaterialGrossWeight(), source.getMaterialGrossWeight());
         putSnapshot(fields, "partNetWeight", current.getPartNetWeight(), source.getPartNetWeight());
@@ -966,5 +975,20 @@ public class SalesOrderMatchService {
 
     private String resolveMaterialShape(ItemQuoteVersion source) {
         return MaterialDataResolver.materialShape(source);
+    }
+
+    private void copyEngineeringMaterialIdentityIfMissing(SalesOrderItem item, ItemQuoteVersion source) {
+        if (isBlank(item.getEngineeringMaterialCode()) && !isBlank(MaterialDataResolver.materialCode(source))) {
+            item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));
+        }
+        if (isBlank(item.getEngineeringMaterialTypeCode()) && !isBlank(MaterialDataResolver.materialTypeCode(source))) {
+            item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));
+        }
+        if (isBlank(item.getEngineeringMaterialTypeName()) && !isBlank(MaterialDataResolver.materialTypeName(source))) {
+            item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));
+        }
+        if (isBlank(item.getEngineeringMaterialCategory()) && !isBlank(MaterialDataResolver.materialCategory(source))) {
+            item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));
+        }
     }
 }

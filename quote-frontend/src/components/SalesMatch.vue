@@ -200,6 +200,12 @@
           <el-table-column prop="engineeringMaterialName" label="真实材料" min-width="130" show-overflow-tooltip>
             <template #default="{ row }">{{ row.engineeringMaterialName || '-' }}</template>
           </el-table-column>
+          <el-table-column prop="engineeringMaterialCode" label="材料编码" min-width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.engineeringMaterialCode || formatSnapshotSource(row.changedFields?.engineeringMaterialCode) }}</template>
+          </el-table-column>
+          <el-table-column prop="engineeringMaterialTypeName" label="材料类型" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.engineeringMaterialTypeName || formatSnapshotSource(row.changedFields?.engineeringMaterialTypeName) }}</template>
+          </el-table-column>
           <el-table-column label="材料形态" min-width="110" show-overflow-tooltip>
             <template #default="{ row }">{{ row.materialShape || formatSnapshotSource(row.changedFields?.materialShape) }}</template>
           </el-table-column>
@@ -254,7 +260,11 @@ const SALES_MATCH_ALLOWED_STATUSES = ['已报价']
 const FIELD_LABELS = {
   materialName: '导入材料',
   surfaceTreatment: '表面处理',
+  engineeringMaterialCode: '材料编码',
   engineeringMaterialName: '真实材料',
+  engineeringMaterialTypeCode: '材料类型编码',
+  engineeringMaterialTypeName: '材料类型',
+  engineeringMaterialCategory: '材质分类',
   materialShape: '材料形态',
   materialGrossWeight: '毛重',
   partNetWeight: '净重',

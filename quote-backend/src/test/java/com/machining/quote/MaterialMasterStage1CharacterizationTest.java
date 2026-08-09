@@ -119,8 +119,15 @@ class MaterialMasterStage1CharacterizationTest {
                         "private String materialShape;",
                         "private Object materialData;");
         assertThat(salesItem)
-                .contains("private String materialName;", "private String engineeringMaterialName;", "private String materialShape;", "private Object materialData;")
-                .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
+                .contains(
+                        "private String materialName;",
+                        "private String engineeringMaterialCode;",
+                        "private String engineeringMaterialName;",
+                        "private String engineeringMaterialTypeCode;",
+                        "private String engineeringMaterialTypeName;",
+                        "private String engineeringMaterialCategory;",
+                        "private String materialShape;",
+                        "private Object materialData;");
         assertThat(ticket)
                 .contains("private String materialName;", "private String engineeringMaterialName;", "private String materialShape;", "private Object materialData;")
                 .doesNotContain("engineeringMaterialCode", "engineeringMaterialTypeCode", "engineeringMaterialCategory");
@@ -164,20 +171,26 @@ class MaterialMasterStage1CharacterizationTest {
                 .contains(
                         "String engineeringMaterialName = resolveEngineeringMaterialName(source);",
                         "String materialShape = resolveMaterialShape(source);",
+                        "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
+                        "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
+                        "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
+                        "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
                         "item.setEngineeringMaterialName(engineeringMaterialName);",
                         "item.setMaterialShape(materialShape);",
                         "item.setMaterialData(source.getMaterialData());",
-                        "fields.put(\"materialSnapshotAvailable\", current.getMaterialData() == null && source.getMaterialData() != null);")
-                .doesNotContain("setEngineeringMaterialCode", "setEngineeringMaterialTypeCode", "setEngineeringMaterialCategory");
+                        "fields.put(\"materialSnapshotAvailable\", current.getMaterialData() == null && source.getMaterialData() != null);");
         assertThat(rfqReleaseService)
                 .contains(
                         "ticket.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(item));",
                         "ticket.setMaterialShape(MaterialDataResolver.materialShape(item));",
                         "ticket.setMaterialData(item.getMaterialData());",
+                        "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
+                        "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
+                        "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
+                        "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
                         "item.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(source));",
                         "item.setMaterialShape(MaterialDataResolver.materialShape(source));",
-                        "item.setMaterialData(source.getMaterialData());")
-                .doesNotContain("setEngineeringMaterialCode", "setEngineeringMaterialTypeCode", "setEngineeringMaterialCategory");
+                        "item.setMaterialData(source.getMaterialData());");
         assertThat(deliveryService)
                 .contains(
                         "ticket.setEngineeringMaterialName(resolveSalesOrderEngineeringMaterialName(item));",
