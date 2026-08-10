@@ -16,6 +16,16 @@ const defaultReleaseItemKey = (row = {}) => {
   return sourceItemId == null || sourceItemId === '' ? '' : `${sourceType}:${sourceItemId}`
 }
 
+const cleanReleaseItemKey = (key) => {
+  const text = String(key || '').trim()
+  return text && !text.endsWith(':') ? text : ''
+}
+
+const resolveReleaseItemKey = (row = {}, rowKey = defaultReleaseItemKey) => (
+  cleanReleaseItemKey(defaultReleaseItemKey(row))
+  || cleanReleaseItemKey(rowKey(row))
+)
+
 const valueForDraft = (value) => value ?? ''
 
 const normalizeDraftValue = (value) => {
@@ -26,7 +36,7 @@ const normalizeDraftValue = (value) => {
 const fieldSetByPreviewRowKey = (previewRows = [], rowKey = defaultReleaseItemKey) => {
   const result = new Map()
   previewRows.forEach(row => {
-    const key = rowKey(row) || defaultReleaseItemKey(row)
+    const key = resolveReleaseItemKey(row, rowKey)
     if (!key) return
     ;(row.changes || []).forEach(change => {
       if (!change?.field || !SOURCE_FIELD_TO_DRAFT_FIELD[change.field]) return
@@ -48,7 +58,7 @@ const replacementRowWithDrafts = (savedRow, selectedRow, changedFields = new Set
   return row
 }
 
-const updateKey = (update = {}) => update.releaseItemKey || defaultReleaseItemKey(update)
+const updateKey = (update = {}) => resolveReleaseItemKey(update)
 
 export const applyReleaseItemDataReplacementResult = ({
   itemList = [],
@@ -63,12 +73,12 @@ export const applyReleaseItemDataReplacementResult = ({
   const affectedRowsByKey = new Map()
 
   affectedRows.forEach(row => {
-    const key = rowKey(row) || defaultReleaseItemKey(row)
+    const key = resolveReleaseItemKey(row, rowKey)
     if (key) affectedRowsByKey.set(key, row)
   })
 
   const nextItemList = (itemList || []).map(row => {
-    const key = rowKey(row) || defaultReleaseItemKey(row)
+    const key = resolveReleaseItemKey(row, rowKey)
     const affectedRow = affectedRowsByKey.get(key)
     if (!affectedRow) return row
     return replacementRowWithDrafts(affectedRow, selectedItemIdMap[key], changedFieldsByKey.get(key))
@@ -83,7 +93,7 @@ export const applyReleaseItemDataReplacementResult = ({
     )
   })
 
-  const itemListByKey = new Map(nextItemList.map(row => [rowKey(row) || defaultReleaseItemKey(row), row]))
+  const itemListByKey = new Map(nextItemList.map(row => [resolveReleaseItemKey(row, rowKey), row]))
   acceptedQtyUpdates.forEach(update => {
     const key = updateKey(update)
     if (!key || update.acceptedQty === null || update.acceptedQty === undefined) return
@@ -120,7 +130,7 @@ export const collectReleaseItemDraftReplacementConflicts = ({
 } = {}) => {
   const conflicts = []
   previewRows.forEach(row => {
-    const key = rowKey(row) || defaultReleaseItemKey(row)
+    const key = resolveReleaseItemKey(row, rowKey)
     const selectedRow = selectedRowsByKey[key]
     if (!key || !selectedRow) return
 

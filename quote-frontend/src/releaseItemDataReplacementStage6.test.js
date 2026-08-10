@@ -16,7 +16,7 @@ const readOptionalSource = (...segments) => {
 const marketReleaseSource = readOptionalSource('components', 'MarketRelease.vue')
 const dialogSource = readOptionalSource('components', 'market-release', 'ReleaseItemDataReplacementDialog.vue')
 
-const rowKey = (row) => row?.releaseItemKey || `${row?.sourceType || 'RFQ'}:${row?.sourceItemId ?? row?.itemId ?? row?.id ?? ''}`
+const rowKey = (row) => row?.releaseItemKey || `${row?.sourceType || 'RFQ'}:${row?.sourceItemId ?? row?.id ?? ''}`
 
 const blockBetween = (source, start, end) => {
   const startIndex = source.indexOf(start)
