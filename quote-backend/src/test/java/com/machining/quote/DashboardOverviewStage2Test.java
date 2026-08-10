@@ -37,8 +37,11 @@ class DashboardOverviewStage2Test {
                 statusRow(QuoteStatusWorkflow.RELEASED, 99)
         ));
         when(mapper.countSalesQuotedByCustomer(any())).thenReturn(List.of(
-                customerRow(1L, "CUS-A", "客户A", "客户A", null, 5),
-                customerRow(2L, "CUS-B", "客户B", "客户B", null, 4)
+                customerRow(1L, "CUS-A", "客户A", "客户A", QuoteStatusWorkflow.QUOTED, 7)
+        ));
+        when(mapper.countU9ReadyByCustomer(any())).thenReturn(List.of(
+                customerRow(1L, "CUS-A", "客户A", "客户A", QuoteStatusWorkflow.RELEASED, 5),
+                customerRow(2L, "CUS-B", "客户B", "客户B", QuoteStatusWorkflow.RELEASED, 4)
         ));
         when(mapper.countRfqByCustomerAndStatus(any())).thenReturn(List.of(
                 customerRow(1L, "CUS-A", "客户A", "客户A", QuoteStatusWorkflow.UNPRICED, 1),
@@ -66,7 +69,7 @@ class DashboardOverviewStage2Test {
         assertThat(overview.getRfqStatusDistribution())
                 .extracting("value")
                 .containsExactly(3L, 2L, 4L);
-        assertThat(overview.getSalesQuotedCustomerDistribution())
+        assertThat(overview.getU9ReadyCustomerDistribution())
                 .extracting("name")
                 .containsExactly("客户A", "客户B");
         assertThat(overview.getCustomerMatrix()).hasSize(2);
@@ -74,7 +77,7 @@ class DashboardOverviewStage2Test {
         assertThat(overview.getCustomerMatrix().get(0).getRfqUnpriced()).isEqualTo(1L);
         assertThat(overview.getCustomerMatrix().get(0).getRfqPriced()).isEqualTo(2L);
         assertThat(overview.getCustomerMatrix().get(0).getRfqQuoted()).isEqualTo(3L);
-        assertThat(overview.getCustomerMatrix().get(0).getSalesQuoted()).isEqualTo(5L);
+        assertThat(overview.getCustomerMatrix().get(0).getU9Ready()).isEqualTo(5L);
         assertThat(overview.getSummaryCards()).extracting("key")
                 .contains("rfqTodo", "salesQuoted", "deliveredActive", "lockedProduction");
         assertThat(overview.getTodoCards()).extracting("key")

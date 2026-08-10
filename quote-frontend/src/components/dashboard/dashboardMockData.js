@@ -51,15 +51,15 @@ export const dashboardMockData = {
     { name: '已核价', value: 8, targetPath: '/quote-process', query: { status: '已核价' } },
     { name: '已报价', value: 16, targetPath: '/release', query: { status: '已报价' } }
   ],
-  salesQuotedCustomerDistribution: [
+  u9ReadyCustomerDistribution: [
     {
       name: '示例客户A',
       customerName: '示例客户A',
       customerCode: 'CUS-DEMO-001',
       customerId: 1001,
       value: 9,
-      targetPath: '/sales-orders',
-      query: { status: '已报价', customerId: 1001 }
+      targetPath: '/u9-sync',
+      query: { materialReadyStatus: 'READY', customerId: 1001 }
     },
     {
       name: '示例客户B',
@@ -67,8 +67,8 @@ export const dashboardMockData = {
       customerCode: 'CUS-DEMO-002',
       customerId: 1002,
       value: 6,
-      targetPath: '/sales-orders',
-      query: { status: '已报价', customerId: 1002 }
+      targetPath: '/u9-sync',
+      query: { materialReadyStatus: 'READY', customerId: 1002 }
     },
     {
       name: '示例客户C',
@@ -76,8 +76,8 @@ export const dashboardMockData = {
       customerCode: 'CUS-DEMO-003',
       customerId: 1003,
       value: 4,
-      targetPath: '/sales-orders',
-      query: { status: '已报价', customerId: 1003 }
+      targetPath: '/u9-sync',
+      query: { materialReadyStatus: 'READY', customerId: 1003 }
     }
   ],
   customerMatrix: [
@@ -88,7 +88,7 @@ export const dashboardMockData = {
       rfqUnpriced: 3,
       rfqPriced: 2,
       rfqQuoted: 4,
-      salesQuoted: 9,
+      u9Ready: 9,
       totalFocus: 18
     },
     {
@@ -98,7 +98,7 @@ export const dashboardMockData = {
       rfqUnpriced: 5,
       rfqPriced: 3,
       rfqQuoted: 2,
-      salesQuoted: 6,
+      u9Ready: 6,
       totalFocus: 16
     },
     {
@@ -108,7 +108,7 @@ export const dashboardMockData = {
       rfqUnpriced: 4,
       rfqPriced: 3,
       rfqQuoted: 10,
-      salesQuoted: 4,
+      u9Ready: 4,
       totalFocus: 21
     }
   ],
@@ -153,7 +153,7 @@ export const dashboardMockData = {
       unit: '单',
       description: '整单物料号就绪后进入 U9 同步',
       path: '/u9-sync',
-      query: { status: '已提单' },
+      query: { materialReadyStatus: 'READY' },
       permission: 'market:u9-sync:view',
       tone: 'success'
     }

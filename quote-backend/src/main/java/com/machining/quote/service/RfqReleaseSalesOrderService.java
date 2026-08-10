@@ -51,7 +51,6 @@ public class RfqReleaseSalesOrderService {
     private static final String SOURCE_RFQ_RELEASE = "RFQ_RELEASE";
     private static final String SOURCE_RFQ = "RFQ";
     private static final String HEADER_RELEASED = "已生成提单";
-    private static final String ITEM_RELEASED = "已提单";
     private static final String MATERIAL_CONFIRMED = "已确认";
     private static final String MATERIAL_UNCONFIRMED = "未确认";
     private static final String MES_SUCCESS = "SUCCESS";
@@ -439,7 +438,7 @@ public class RfqReleaseSalesOrderService {
         item.setFeeData(source.getFeeData());
         item.setRemark(source.getRemark());
         item.setCustomerRequirement(source.getCustomerRequirement());
-        item.setStatus(ITEM_RELEASED);
+        item.setStatus(QuoteStatusWorkflow.RELEASED);
         item.setCreatedAt(now);
         item.setUpdatedAt(now);
         salesItemMapper.insert(item);

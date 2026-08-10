@@ -11,6 +11,6 @@ public class DashboardCustomerMatrixRowDTO {
     private Long rfqUnpriced = 0L;
     private Long rfqPriced = 0L;
     private Long rfqQuoted = 0L;
-    private Long salesQuoted = 0L;
+    private Long u9Ready = 0L;
     private Long totalFocus = 0L;
 }

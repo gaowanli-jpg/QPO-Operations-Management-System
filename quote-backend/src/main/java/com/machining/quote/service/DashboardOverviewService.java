@@ -95,6 +95,9 @@ public class DashboardOverviewService {
         List<DashboardCustomerCountRow> salesQuotedRows = canSeeSales
                 ? safeList(aggregationMapper.countSalesQuotedByCustomer(salesQuotedQuery()))
                 : List.of();
+        List<DashboardCustomerCountRow> u9ReadyRows = canSeeU9
+                ? safeList(aggregationMapper.countU9ReadyByCustomer(u9ReadyQuery()))
+                : List.of();
         List<DashboardCustomerCountRow> rfqCustomerRows = canSeeRfq
                 ? safeList(aggregationMapper.countRfqByCustomerAndStatus(rfqCustomerQuery()))
                 : List.of();
@@ -118,8 +121,8 @@ public class DashboardOverviewService {
         long u9Failed = canSeeU9 ? count(() -> aggregationMapper.countU9Failed(u9FailedQuery())) : 0L;
 
         overview.setRfqStatusDistribution(canSeeRfq ? rfqStatusDistribution(rfqStatusRows) : List.of());
-        overview.setSalesQuotedCustomerDistribution(canSeeSales ? salesCustomerDistribution(salesQuotedRows) : List.of());
-        overview.setCustomerMatrix(customerMatrix(rfqCustomerRows, salesQuotedRows));
+        overview.setU9ReadyCustomerDistribution(canSeeU9 ? u9ReadyCustomerDistribution(u9ReadyRows) : List.of());
+        overview.setCustomerMatrix(customerMatrix(rfqCustomerRows, u9ReadyRows));
         overview.setSummaryCards(filterSummaryCards(
                 summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, salesQuoted, deliveredActive, lockedProductionTodo),
                 permissionGate));
@@ -328,7 +331,7 @@ public class DashboardOverviewService {
         return item;
     }
 
-    private List<DashboardChartItemDTO> salesCustomerDistribution(List<DashboardCustomerCountRow> rows) {
+    private List<DashboardChartItemDTO> u9ReadyCustomerDistribution(List<DashboardCustomerCountRow> rows) {
         List<DashboardCustomerCountRow> ordered = new ArrayList<>(safeList(rows));
         ordered.sort(Comparator.comparingLong((DashboardCustomerCountRow row) -> rowCount(row)).reversed());
         List<DashboardChartItemDTO> result = new ArrayList<>();
@@ -339,21 +342,21 @@ public class DashboardOverviewService {
                 otherCount += rowCount(row);
                 continue;
             }
-            result.add(salesCustomerChartItem(row));
+            result.add(u9ReadyCustomerChartItem(row));
         }
         if (otherCount > 0) {
             DashboardChartItemDTO other = new DashboardChartItemDTO();
             other.setName("其他客户");
             other.setCustomerName("其他客户");
             other.setValue(otherCount);
-            other.setTargetPath("/sales-orders");
-            other.setQuery(query("status", QuoteStatusWorkflow.QUOTED));
+            other.setTargetPath("/u9-sync");
+            other.setQuery(query("materialReadyStatus", "READY"));
             result.add(other);
         }
         return result;
     }
 
-    private DashboardChartItemDTO salesCustomerChartItem(DashboardCustomerCountRow row) {
+    private DashboardChartItemDTO u9ReadyCustomerChartItem(DashboardCustomerCountRow row) {
         DashboardChartItemDTO item = new DashboardChartItemDTO();
         item.setCustomerId(row.getCustomerId());
         item.setCustomerCode(row.getCustomerCode());
@@ -361,14 +364,14 @@ public class DashboardOverviewService {
         item.setCustomerShortName(row.getCustomerShortName());
         item.setName(displayCustomerName(row));
         item.setValue(rowCount(row));
-        item.setTargetPath("/sales-orders");
-        item.setQuery(query("status", QuoteStatusWorkflow.QUOTED, "customerId", row.getCustomerId(), "customerName", customerName(row)));
+        item.setTargetPath("/u9-sync");
+        item.setQuery(query("materialReadyStatus", "READY", "customerId", row.getCustomerId(), "customerName", customerName(row)));
         return item;
     }
 
     private List<DashboardCustomerMatrixRowDTO> customerMatrix(
             List<DashboardCustomerCountRow> rfqRows,
-            List<DashboardCustomerCountRow> salesRows) {
+            List<DashboardCustomerCountRow> u9Rows) {
         Map<String, DashboardCustomerMatrixRowDTO> rows = new LinkedHashMap<>();
         for (DashboardCustomerCountRow row : safeList(rfqRows)) {
             if (!RFQ_DASHBOARD_STATUSES.contains(row.getStatus())) {
@@ -383,12 +386,12 @@ public class DashboardOverviewService {
                 target.setRfqQuoted(target.getRfqQuoted() + rowCount(row));
             }
         }
-        for (DashboardCustomerCountRow row : safeList(salesRows)) {
+        for (DashboardCustomerCountRow row : safeList(u9Rows)) {
             DashboardCustomerMatrixRowDTO target = rows.computeIfAbsent(customerKey(row), ignored -> matrixRow(row));
-            target.setSalesQuoted(target.getSalesQuoted() + rowCount(row));
+            target.setU9Ready(target.getU9Ready() + rowCount(row));
         }
         return rows.values().stream()
-                .peek(row -> row.setTotalFocus(row.getRfqUnpriced() + row.getRfqPriced() + row.getRfqQuoted() + row.getSalesQuoted()))
+                .peek(row -> row.setTotalFocus(row.getRfqUnpriced() + row.getRfqPriced() + row.getRfqQuoted() + row.getU9Ready()))
                 .sorted(Comparator.comparingLong(DashboardCustomerMatrixRowDTO::getTotalFocus).reversed())
                 .limit(CUSTOMER_MATRIX_LIMIT)
                 .toList();

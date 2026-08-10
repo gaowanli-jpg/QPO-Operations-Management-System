@@ -50,7 +50,7 @@ class DashboardOverviewStage3Test {
         DashboardOverviewDTO overview = service.overview();
 
         assertThat(overview.getRfqStatusDistribution()).isEmpty();
-        assertThat(overview.getSalesQuotedCustomerDistribution()).isEmpty();
+        assertThat(overview.getU9ReadyCustomerDistribution()).isEmpty();
         assertThat(overview.getCustomerMatrix()).isEmpty();
         assertThat(overview.getSummaryCards()).extracting("key").containsExactly("deliveredActive");
         assertThat(overview.getTodoCards()).extracting("key").containsExactly("materialTodo", "wmsTodo");
@@ -65,6 +65,7 @@ class DashboardOverviewStage3Test {
         verify(mapper, never()).countRfqByStatus(any());
         verify(mapper, never()).countRfqByCustomerAndStatus(any());
         verify(mapper, never()).countSalesQuotedByCustomer(any());
+        verify(mapper, never()).countU9ReadyByCustomer(any());
         verify(mapper, never()).countSalesMatchTodo(any());
         verify(mapper, never()).countU9Ready(any());
         verify(mapper, never()).countU9Failed(any());
@@ -73,37 +74,37 @@ class DashboardOverviewStage3Test {
     }
 
     @Test
-    void salesCustomerDistributionKeepsTopEightAndMergesOtherCustomersWhenAllowed() {
+    void u9ReadyCustomerDistributionKeepsTopEightAndMergesOtherCustomersWhenAllowed() {
         DashboardAggregationMapper mapper = mock(DashboardAggregationMapper.class);
         DataScopeService dataScopeService = mock(DataScopeService.class);
         PermissionService permissionService = mock(PermissionService.class);
         DashboardOverviewService service = service(mapper, dataScopeService, permissionService,
-                permissions(false, "market:sales-order:view"));
+                permissions(false, "market:u9-sync:view"));
 
-        when(mapper.countSalesQuotedByCustomer(any())).thenReturn(List.of(
-                customerRow(1L, "CUS-01", "Customer 01", "Customer 01", QuoteStatusWorkflow.QUOTED, 20),
-                customerRow(2L, "CUS-02", "Customer 02", "Customer 02", QuoteStatusWorkflow.QUOTED, 19),
-                customerRow(3L, "CUS-03", "Customer 03", "Customer 03", QuoteStatusWorkflow.QUOTED, 18),
-                customerRow(4L, "CUS-04", "Customer 04", "Customer 04", QuoteStatusWorkflow.QUOTED, 17),
-                customerRow(5L, "CUS-05", "Customer 05", "Customer 05", QuoteStatusWorkflow.QUOTED, 16),
-                customerRow(6L, "CUS-06", "Customer 06", "Customer 06", QuoteStatusWorkflow.QUOTED, 15),
-                customerRow(7L, "CUS-07", "Customer 07", "Customer 07", QuoteStatusWorkflow.QUOTED, 14),
-                customerRow(8L, "CUS-08", "Customer 08", "Customer 08", QuoteStatusWorkflow.QUOTED, 13),
-                customerRow(9L, "CUS-09", "Customer 09", "Customer 09", QuoteStatusWorkflow.QUOTED, 12),
-                customerRow(10L, "CUS-10", "Customer 10", "Customer 10", QuoteStatusWorkflow.QUOTED, 11)
+        when(mapper.countU9ReadyByCustomer(any())).thenReturn(List.of(
+                customerRow(1L, "CUS-01", "Customer 01", "Customer 01", QuoteStatusWorkflow.RELEASED, 20),
+                customerRow(2L, "CUS-02", "Customer 02", "Customer 02", QuoteStatusWorkflow.RELEASED, 19),
+                customerRow(3L, "CUS-03", "Customer 03", "Customer 03", QuoteStatusWorkflow.RELEASED, 18),
+                customerRow(4L, "CUS-04", "Customer 04", "Customer 04", QuoteStatusWorkflow.RELEASED, 17),
+                customerRow(5L, "CUS-05", "Customer 05", "Customer 05", QuoteStatusWorkflow.RELEASED, 16),
+                customerRow(6L, "CUS-06", "Customer 06", "Customer 06", QuoteStatusWorkflow.RELEASED, 15),
+                customerRow(7L, "CUS-07", "Customer 07", "Customer 07", QuoteStatusWorkflow.RELEASED, 14),
+                customerRow(8L, "CUS-08", "Customer 08", "Customer 08", QuoteStatusWorkflow.RELEASED, 13),
+                customerRow(9L, "CUS-09", "Customer 09", "Customer 09", QuoteStatusWorkflow.RELEASED, 12),
+                customerRow(10L, "CUS-10", "Customer 10", "Customer 10", QuoteStatusWorkflow.RELEASED, 11)
         ));
 
         DashboardOverviewDTO overview = service.overview();
 
         assertThat(overview.getRfqStatusDistribution()).isEmpty();
-        assertThat(overview.getSalesQuotedCustomerDistribution()).hasSize(9);
-        assertThat(overview.getSalesQuotedCustomerDistribution().get(0).getName()).isEqualTo("Customer 01");
-        assertThat(overview.getSalesQuotedCustomerDistribution().get(8).getCustomerId()).isNull();
-        assertThat(overview.getSalesQuotedCustomerDistribution().get(8).getValue()).isEqualTo(23L);
+        assertThat(overview.getU9ReadyCustomerDistribution()).hasSize(9);
+        assertThat(overview.getU9ReadyCustomerDistribution().get(0).getName()).isEqualTo("Customer 01");
+        assertThat(overview.getU9ReadyCustomerDistribution().get(8).getCustomerId()).isNull();
+        assertThat(overview.getU9ReadyCustomerDistribution().get(8).getValue()).isEqualTo(23L);
         assertThat(overview.getCustomerMatrix()).hasSize(10);
-        assertThat(overview.getSummaryCards()).extracting("key").containsExactly("salesQuoted");
-        assertThat(overview.getTodoCards()).isEmpty();
-        assertThat(overview.getAttentionItems()).isEmpty();
+        assertThat(overview.getSummaryCards()).isEmpty();
+        assertThat(overview.getTodoCards()).extracting("key").containsExactly("u9SyncReady");
+        assertThat(overview.getAttentionItems()).extracting("key").containsExactly("u9Failed");
 
         verify(mapper, never()).countRfqByStatus(any());
         verify(mapper, never()).countRfqByCustomerAndStatus(any());
@@ -169,6 +170,9 @@ class DashboardOverviewStage3Test {
         when(mapper.countSalesQuotedByCustomer(any())).thenReturn(List.of(
                 customerRow(1L, "CUS-A", "Customer A", "Customer A", QuoteStatusWorkflow.QUOTED, 4)
         ));
+        when(mapper.countU9ReadyByCustomer(any())).thenReturn(List.of(
+                customerRow(1L, "CUS-A", "Customer A", "Customer A", QuoteStatusWorkflow.RELEASED, 14)
+        ));
         when(mapper.countDeliveredActive(any())).thenReturn(5L);
         when(mapper.countDeliveredNeedMaterial(any())).thenReturn(6L);
         when(mapper.countDeliveredNeedWms(any())).thenReturn(7L);
@@ -184,7 +188,7 @@ class DashboardOverviewStage3Test {
         DashboardOverviewDTO overview = service.overview();
 
         assertThat(overview.getRfqStatusDistribution()).hasSize(3);
-        assertThat(overview.getSalesQuotedCustomerDistribution()).hasSize(1);
+        assertThat(overview.getU9ReadyCustomerDistribution()).hasSize(1);
         assertThat(overview.getCustomerMatrix()).hasSize(1);
         assertThat(overview.getSummaryCards()).extracting("key")
                 .containsExactly("rfqTodo", "salesQuoted", "deliveredActive", "lockedProduction");

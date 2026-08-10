@@ -3,7 +3,7 @@
     <div class="dashboard-section-header">
       <div>
         <h2>客户状态交叉表</h2>
-        <p class="dashboard-muted">按客户合并展示询价三状态和销售已报价数量，不展示提单后状态。</p>
+        <p class="dashboard-muted">按客户合并展示询价三状态和待同步 U9 数量，不展示提单后状态。</p>
       </div>
       <el-tag size="small" type="info" effect="plain">客户视角</el-tag>
     </div>
@@ -13,7 +13,7 @@
         <span>未核价</span>
         <span>已核价</span>
         <span>已报价</span>
-        <span>销售已报价</span>
+        <span>待同步 U9</span>
         <span>关注合计</span>
       </div>
       <div v-if="rows.length === 0" class="dashboard-matrix-empty">当前权限范围内暂无客户状态统计</div>
@@ -57,13 +57,13 @@
         </button>
         <span v-else class="dashboard-matrix-locked">--</span>
         <button
-          v-if="canOpenSales"
+          v-if="canOpenU9"
           type="button"
           class="dashboard-matrix-value dashboard-matrix-button"
-          :class="{ 'dashboard-number-muted': isZeroValue(row.salesQuoted) }"
-          @click="emit('sales-select', row)"
+          :class="{ 'dashboard-number-muted': isZeroValue(row.u9Ready) }"
+          @click="emit('u9-select', row)"
         >
-          {{ formatDashboardNumber(row.salesQuoted) }}
+          {{ formatDashboardNumber(row.u9Ready) }}
         </button>
         <span v-else class="dashboard-matrix-locked">--</span>
         <span
@@ -92,10 +92,10 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['rfq-select', 'sales-select'])
+const emit = defineEmits(['rfq-select', 'u9-select'])
 
 const canOpenRfq = computed(() => canShowDashboardAction({ permission: 'market:order:view' }, props.authStore))
-const canOpenSales = computed(() => canShowDashboardAction({ permission: 'market:sales-order:view' }, props.authStore))
+const canOpenU9 = computed(() => canShowDashboardAction({ permission: 'market:u9-sync:view' }, props.authStore))
 
 const isZeroValue = (value) => Number(value) === 0
 </script>

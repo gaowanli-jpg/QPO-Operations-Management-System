@@ -21,7 +21,7 @@ class DashboardOverviewStage1Test {
         assertThat(overview.getUpdatedAt()).isNotBlank();
         assertThat(overview.getSummaryCards()).isEmpty();
         assertThat(overview.getRfqStatusDistribution()).isEmpty();
-        assertThat(overview.getSalesQuotedCustomerDistribution()).isEmpty();
+        assertThat(overview.getU9ReadyCustomerDistribution()).isEmpty();
         assertThat(overview.getCustomerMatrix()).isEmpty();
         assertThat(overview.getTodoCards()).isEmpty();
         assertThat(overview.getAttentionItems()).isEmpty();
@@ -41,7 +41,7 @@ class DashboardOverviewStage1Test {
         assertThat(overview.getUpdatedAt()).isNotBlank();
         assertThat(overview.getSummaryCards()).isEmpty();
         assertThat(overview.getRfqStatusDistribution()).isEmpty();
-        assertThat(overview.getSalesQuotedCustomerDistribution()).isEmpty();
+        assertThat(overview.getU9ReadyCustomerDistribution()).isEmpty();
         assertThat(overview.getCustomerMatrix()).isEmpty();
         assertThat(overview.getTodoCards()).isEmpty();
         assertThat(overview.getAttentionItems()).isEmpty();

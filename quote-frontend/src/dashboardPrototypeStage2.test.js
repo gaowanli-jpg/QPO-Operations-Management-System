@@ -18,7 +18,7 @@ describe('Dashboard prototype stage 2 data contract', () => {
     expect(dashboardMockData).toEqual(expect.objectContaining({
       summaryCards: expect.any(Array),
       rfqStatusDistribution: expect.any(Array),
-      salesQuotedCustomerDistribution: expect.any(Array),
+      u9ReadyCustomerDistribution: expect.any(Array),
       customerMatrix: expect.any(Array),
       todoCards: expect.any(Array),
       attentionItems: expect.any(Array)
@@ -30,8 +30,8 @@ describe('Dashboard prototype stage 2 data contract', () => {
 
     const { dashboardMockData } = await importFile(mockPath)
     expect(dashboardMockData.rfqStatusDistribution.map((item) => item.name)).toEqual(['未核价', '已核价', '已报价'])
-    expect(dashboardMockData.salesQuotedCustomerDistribution.every((item) => item.customerName || item.name)).toBe(true)
-    expect(dashboardMockData.salesQuotedCustomerDistribution.some((item) => item.name === '已报价')).toBe(false)
+    expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.customerName || item.name)).toBe(true)
+    expect(dashboardMockData.u9ReadyCustomerDistribution.some((item) => item.name === '已生成提单')).toBe(false)
 
     const matrixSource = JSON.stringify(dashboardMockData.customerMatrix)
     expect(matrixSource).not.toContain('部分已提单')
@@ -103,7 +103,7 @@ describe('Dashboard prototype stage 2 page wiring', () => {
     expect(dashboardSource).toContain("import { goDashboardTarget } from './dashboardNavigation'")
     expect(dashboardSource).toContain('summaryCards')
     expect(dashboardSource).toContain('rfqStatusDistribution')
-    expect(dashboardSource).toContain('salesQuotedCustomerDistribution')
+    expect(dashboardSource).toContain('u9ReadyCustomerDistribution')
     expect(dashboardSource).toContain('customerMatrix')
     expect(dashboardSource).toContain('todoCards')
     expect(dashboardSource).toContain('attentionItems')

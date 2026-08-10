@@ -31,10 +31,10 @@ describe('Dashboard prototype phase 6 acceptance guard', () => {
     const { dashboardMockData } = await importFile(resolve(dashboardDir, 'dashboardMockData.js'))
 
     expect(dashboardMockData.rfqStatusDistribution.map((item) => item.name)).toEqual(['未核价', '已核价', '已报价'])
-    expect(dashboardMockData.salesQuotedCustomerDistribution.every((item) => item.customerId && (item.customerName || item.name))).toBe(true)
-    expect(dashboardMockData.salesQuotedCustomerDistribution.every((item) => item.targetPath === '/sales-orders')).toBe(true)
-    expect(dashboardMockData.salesQuotedCustomerDistribution.every((item) => item.query?.status === '已报价')).toBe(true)
-    expect(dashboardMockData.salesQuotedCustomerDistribution.some((item) => item.name === '已报价')).toBe(false)
+    expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.customerId && (item.customerName || item.name))).toBe(true)
+    expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.targetPath === '/u9-sync')).toBe(true)
+    expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.query?.materialReadyStatus === 'READY')).toBe(true)
+    expect(dashboardMockData.u9ReadyCustomerDistribution.some((item) => item.name === '已生成提单')).toBe(false)
   })
 
   test('routes production dashboard entries to the production item workbench', async () => {

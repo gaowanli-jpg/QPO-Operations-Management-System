@@ -47,7 +47,7 @@ describe('Dashboard backend integration stage 4', () => {
     expect(source).toContain('normalizeDashboardData')
     expect(source).toContain('summaryCards: []')
     expect(source).toContain('rfqStatusDistribution: []')
-    expect(source).toContain('salesQuotedCustomerDistribution: []')
+    expect(source).toContain('u9ReadyCustomerDistribution: []')
     expect(source).toContain('customerMatrix: []')
   })
 

@@ -27,7 +27,7 @@ describe('Dashboard prototype stage 3 visual workbench', () => {
 
     expect(source).toContain('DashboardChartCard')
     expect(source).toContain(':data="rfqStatusDistribution"')
-    expect(source).toContain(':data="salesQuotedCustomerDistribution"')
+    expect(source).toContain(':data="u9ReadyCustomerDistribution"')
     expect(source).toContain('@select="goToItem"')
   })
 

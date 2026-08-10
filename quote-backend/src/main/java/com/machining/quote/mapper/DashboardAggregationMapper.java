@@ -71,6 +71,29 @@ public interface DashboardAggregationMapper {
 
     @Select("""
             <script>
+            SELECT
+                COALESCE(so.customer_id, cm.id) AS customer_id,
+                COALESCE(NULLIF(cm.customer_code, ''), NULLIF(so.customer_code, '')) AS customer_code,
+                COALESCE(NULLIF(cm.customer_name, ''), NULLIF(so.customer_name, ''), '未识别客户') AS customer_name,
+                COALESCE(NULLIF(cm.customer_short_name, ''), NULLIF(so.customer_short_name, ''), NULLIF(so.customer_name, ''), '未识别客户') AS customer_short_name,
+                so.status AS status,
+                COUNT(*) AS count
+            FROM sales_order_header so
+            LEFT JOIN customer_master cm ON cm.id = so.customer_id OR (so.customer_id IS NULL AND cm.customer_name = so.customer_name)
+            ${ew.customSqlSegment}
+            GROUP BY
+                COALESCE(so.customer_id, cm.id),
+                COALESCE(NULLIF(cm.customer_code, ''), NULLIF(so.customer_code, '')),
+                COALESCE(NULLIF(cm.customer_name, ''), NULLIF(so.customer_name, ''), '未识别客户'),
+                COALESCE(NULLIF(cm.customer_short_name, ''), NULLIF(so.customer_short_name, ''), NULLIF(so.customer_name, ''), '未识别客户'),
+                so.status
+            ORDER BY COUNT(*) DESC
+            </script>
+            """)
+    List<DashboardCustomerCountRow> countU9ReadyByCustomer(@Param(Constants.WRAPPER) Wrapper<?> query);
+
+    @Select("""
+            <script>
             SELECT COUNT(*)
             FROM order_delivery_ticket ticket
             ${ew.customSqlSegment}

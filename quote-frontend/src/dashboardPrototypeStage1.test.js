@@ -43,6 +43,6 @@ describe('Dashboard prototype stage 1 shell', () => {
     expect(dashboardSource).toContain('刷新')
     expect(dashboardSource).toContain('dashboard-placeholder-grid')
     expect(dashboardSource).toContain('询价订单状态分布')
-    expect(dashboardSource).toContain('销售订单已报价客户分布')
+    expect(dashboardSource).toContain('待同步 U9 客户分布')
   })
 })

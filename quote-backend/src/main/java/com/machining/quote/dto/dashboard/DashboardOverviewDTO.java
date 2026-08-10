@@ -14,7 +14,7 @@ public class DashboardOverviewDTO {
     private String updatedAt;
     private List<DashboardSummaryCardDTO> summaryCards = new ArrayList<>();
     private List<DashboardChartItemDTO> rfqStatusDistribution = new ArrayList<>();
-    private List<DashboardChartItemDTO> salesQuotedCustomerDistribution = new ArrayList<>();
+    private List<DashboardChartItemDTO> u9ReadyCustomerDistribution = new ArrayList<>();
     private List<DashboardCustomerMatrixRowDTO> customerMatrix = new ArrayList<>();
     private List<DashboardTodoCardDTO> todoCards = new ArrayList<>();
     private List<DashboardAttentionItemDTO> attentionItems = new ArrayList<>();

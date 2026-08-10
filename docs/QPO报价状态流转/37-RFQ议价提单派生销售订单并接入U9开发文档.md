@@ -254,10 +254,12 @@ ALTER TABLE sales_order_item
 
 ```text
 sales_order_header.status = 已生成提单
-sales_order_item.status = 已提单
+sales_order_item.status = 已生成提单
 sales_order_item.released_qty = qty
 sales_order_item.remaining_qty = 0
 ```
+
+说明：`已提单` 只用于 RFQ 零件主表 `item_quote_version.status`，销售订单体系的订单头和零件行统一使用 `已生成提单`，避免 U9 同步前的整单提单判断出现口径分裂。
 
 `u9_sync_status` 初始为空或现有未同步状态，不能在议价提单事务中标记为已同步。只有 U9 同步成功后才能写 U9 成功状态和外部单号。
 

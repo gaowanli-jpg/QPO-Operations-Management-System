@@ -45,11 +45,11 @@
         @select="goToItem"
       />
       <DashboardChartCard
-        title="销售订单已报价客户分布"
-        description="销售订单饼图只统计已报价订单，分类维度为客户。"
-        :data="salesQuotedCustomerDistribution"
+        title="待同步 U9 客户分布"
+        description="统计整单物料号已确认且尚未同步 U9 的销售订单，按客户划分。"
+        :data="u9ReadyCustomerDistribution"
         :palette="salesPalette"
-        empty-text="当前权限范围内暂无已报价销售订单"
+        empty-text="当前权限范围内暂无待同步 U9 销售订单"
         @select="goToItem"
       />
     </div>
@@ -59,7 +59,7 @@
         :rows="customerMatrix"
         :auth-store="authStore"
         @rfq-select="goToOrders"
-        @sales-select="goToSalesOrders"
+        @u9-select="goToU9Sync"
       />
 
       <aside class="dashboard-side-stack">
@@ -97,7 +97,7 @@ const emptyDashboardData = () => ({
   updatedAt: '',
   summaryCards: [],
   rfqStatusDistribution: [],
-  salesQuotedCustomerDistribution: [],
+  u9ReadyCustomerDistribution: [],
   customerMatrix: [],
   todoCards: [],
   attentionItems: []
@@ -113,7 +113,7 @@ const salesPalette = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#8
 const updatedAt = computed(() => dashboardData.value.updatedAt || (loading.value ? '加载中' : '--'))
 const summaryCards = computed(() => dashboardData.value.summaryCards)
 const rfqStatusDistribution = computed(() => dashboardData.value.rfqStatusDistribution)
-const salesQuotedCustomerDistribution = computed(() => dashboardData.value.salesQuotedCustomerDistribution)
+const u9ReadyCustomerDistribution = computed(() => dashboardData.value.u9ReadyCustomerDistribution)
 const customerMatrix = computed(() => dashboardData.value.customerMatrix)
 const todoCards = computed(() => dashboardData.value.todoCards)
 const attentionItems = computed(() => dashboardData.value.attentionItems)
@@ -128,7 +128,7 @@ const normalizeDashboardData = (payload = {}) => ({
   updatedAt: payload?.updatedAt || '',
   summaryCards: arrayOrEmpty(payload?.summaryCards),
   rfqStatusDistribution: arrayOrEmpty(payload?.rfqStatusDistribution),
-  salesQuotedCustomerDistribution: arrayOrEmpty(payload?.salesQuotedCustomerDistribution),
+  u9ReadyCustomerDistribution: arrayOrEmpty(payload?.u9ReadyCustomerDistribution),
   customerMatrix: arrayOrEmpty(payload?.customerMatrix),
   todoCards: arrayOrEmpty(payload?.todoCards),
   attentionItems: arrayOrEmpty(payload?.attentionItems)
@@ -166,10 +166,10 @@ const goToOrders = (row, status) => goDashboardTarget(router, {
   })
 })
 
-const goToSalesOrders = (row) => goDashboardTarget(router, {
-  path: '/sales-orders',
+const goToU9Sync = (row) => goDashboardTarget(router, {
+  path: '/u9-sync',
   query: compactQuery({
-    status: '已报价',
+    materialReadyStatus: 'READY',
     customerId: row.customerId,
     customerName: row.customerName
   })

@@ -143,7 +143,7 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
             assertThat(item.getSourceTicketId()).isNotNull();
             assertThat(item.getReleasedQty()).isEqualTo(item.getQty());
             assertThat(item.getRemainingQty()).isZero();
-            assertThat(item.getStatus()).isEqualTo("已提单");
+            assertThat(item.getStatus()).isEqualTo("已生成提单");
         });
 
         Map<Long, SalesOrderItem> salesItemBySource = salesItems.stream()

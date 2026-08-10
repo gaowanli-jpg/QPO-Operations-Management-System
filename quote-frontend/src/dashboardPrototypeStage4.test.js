@@ -84,7 +84,7 @@ describe('Dashboard prototype stage 4 ECharts chart card', () => {
     expect(source).toContain("import DashboardChartCard from './DashboardChartCard.vue'")
     expect(source.match(/<DashboardChartCard/g)?.length).toBe(2)
     expect(source).toContain(':data="rfqStatusDistribution"')
-    expect(source).toContain(':data="salesQuotedCustomerDistribution"')
+    expect(source).toContain(':data="u9ReadyCustomerDistribution"')
     expect(source).toContain(':palette="rfqPalette"')
     expect(source).toContain(':palette="salesPalette"')
     expect(source).toContain("const rfqPalette = ['#F97316', '#22C55E', '#2563EB']")
