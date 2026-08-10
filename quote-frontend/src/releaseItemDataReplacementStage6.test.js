@@ -184,9 +184,76 @@ describe('release item data replacement stage 6 state convergence', () => {
     ])
   })
 
+  test('preserves Excel-unaffected drafts and warns for current visible rows even when they are not selected', () => {
+    const itemList = [
+      {
+        releaseItemKey: 'RFQ:8',
+        id: 8,
+        sourceType: 'RFQ',
+        sourceItemId: 8,
+        description: 'old desc',
+        descriptionDraft: 'visible unsaved desc',
+        remark: 'old remark',
+        remarkDraft: 'visible unsaved remark',
+        remainingQty: 6
+      }
+    ]
+    const selectedItemIdMap = {}
+    const acceptedQtyMap = {}
+
+    const conflicts = collectReleaseItemDraftReplacementConflicts({
+      previewRows: [
+        {
+          itemId: 8,
+          changes: [{ field: 'description', label: '物料描述' }]
+        }
+      ],
+      selectedRowsByKey: Object.fromEntries(itemList.map(row => [rowKey(row), row])),
+      rowKey
+    })
+    const result = applyReleaseItemDataReplacementResult({
+      itemList,
+      selectedItemIdMap,
+      acceptedQtyMap,
+      rowKey,
+      draftRowsByKey: Object.fromEntries(itemList.map(row => [rowKey(row), row])),
+      response: {
+        affectedRows: [
+          {
+            releaseItemKey: 'RFQ:8',
+            id: 8,
+            sourceType: 'RFQ',
+            sourceItemId: 8,
+            description: 'db desc',
+            remark: 'db remark unchanged by Excel',
+            remainingQty: 6
+          }
+        ],
+        acceptedQtyUpdates: [],
+        previewRows: [
+          {
+            itemId: 8,
+            changes: [{ field: 'description', label: '物料描述' }]
+          }
+        ]
+      }
+    })
+
+    expect(conflicts).toEqual([
+      { releaseItemKey: 'RFQ:8', field: 'description', label: '物料描述' }
+    ])
+    expect(result.itemList[0]).toMatchObject({
+      description: 'db desc',
+      descriptionDraft: 'db desc',
+      remark: 'db remark unchanged by Excel',
+      remarkDraft: 'visible unsaved remark'
+    })
+    expect(selectedItemIdMap).toEqual({})
+  })
+
   test('market release wires confirm results without clearing unrelated selection state', () => {
     expect(marketReleaseSource).toContain("import { applyReleaseItemDataReplacementResult")
-    expect(marketReleaseSource).toContain(':selected-rows-by-key="dataReplacementSelectedRowsByKey"')
+    expect(marketReleaseSource).toContain(':selected-rows-by-key="dataReplacementDraftRowsByKey"')
     expect(marketReleaseSource).toContain('@confirmed="handleDataReplacementConfirmed"')
 
     const handlerBlock = blockBetween(
@@ -198,6 +265,7 @@ describe('release item data replacement stage 6 state convergence', () => {
     expect(handlerBlock).toContain('itemList.value = applied.itemList')
     expect(handlerBlock).toContain('selectedItemIdMap')
     expect(handlerBlock).toContain('acceptedQtyMap')
+    expect(handlerBlock).toContain('draftRowsByKey: dataReplacementDraftRowsByKey.value')
     expect(handlerBlock).toContain('await syncReleaseItemTableSelection()')
     expect(handlerBlock).not.toContain('clearSelectedRows()')
   })

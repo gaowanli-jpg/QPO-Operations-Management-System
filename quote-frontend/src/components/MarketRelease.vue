@@ -761,7 +761,7 @@
     <ReleaseItemDataReplacementDialog
       v-model="dataReplacementVisible"
       :sources="selectedOrderSources"
-      :selected-rows-by-key="dataReplacementSelectedRowsByKey"
+      :selected-rows-by-key="dataReplacementDraftRowsByKey"
       :disabled="submitting || selectedOrders.length === 0"
       @busy-change="dataReplacementBusy = $event"
       @confirmed="handleDataReplacementConfirmed"
@@ -873,7 +873,14 @@ const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys
 const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
 const replacingDrawings = computed(() => isPending(releaseActionKeys.replaceDrawings))
 const dataReplacementDisabled = computed(() => selectedOrders.value.length === 0 || dataReplacementBusy.value || submitting.value || selectedSourcesIncludeNonRfq.value)
-const dataReplacementSelectedRowsByKey = computed(() => selectedItemIdMap)
+const dataReplacementDraftRowsByKey = computed(() => {
+  const rowsByKey = {}
+  itemList.value.forEach(row => {
+    rowsByKey[rowKey(row)] = row
+  })
+  Object.assign(rowsByKey, selectedItemIdMap)
+  return rowsByKey
+})
 const isVersionSaving = (row) => isPending(releaseActionKeys.version(row?.id))
 const isFieldSaving = (row) => isPending(releaseActionKeys.fields(rowKey(row)))
 const isInternalLeadTimeSaving = (row) => isPending(releaseActionKeys.internalLeadTime(row?.id))
@@ -1420,6 +1427,7 @@ const handleDataReplacementConfirmed = async (response) => {
     itemList: itemList.value,
     selectedItemIdMap,
     acceptedQtyMap,
+    draftRowsByKey: dataReplacementDraftRowsByKey.value,
     response,
     rowKey
   })

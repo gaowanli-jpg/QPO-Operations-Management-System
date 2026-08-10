@@ -65,6 +65,7 @@ export const applyReleaseItemDataReplacementResult = ({
   selectedItemIdMap = {},
   acceptedQtyMap = {},
   response = {},
+  draftRowsByKey = {},
   rowKey = defaultReleaseItemKey
 } = {}) => {
   const affectedRows = Array.isArray(response?.affectedRows) ? response.affectedRows : []
@@ -81,14 +82,14 @@ export const applyReleaseItemDataReplacementResult = ({
     const key = resolveReleaseItemKey(row, rowKey)
     const affectedRow = affectedRowsByKey.get(key)
     if (!affectedRow) return row
-    return replacementRowWithDrafts(affectedRow, selectedItemIdMap[key], changedFieldsByKey.get(key))
+    return replacementRowWithDrafts(affectedRow, selectedItemIdMap[key] || draftRowsByKey[key] || row, changedFieldsByKey.get(key))
   })
 
   affectedRowsByKey.forEach((affectedRow, key) => {
     if (!selectedItemIdMap[key]) return
     selectedItemIdMap[key] = replacementRowWithDrafts(
       affectedRow,
-      selectedItemIdMap[key],
+      selectedItemIdMap[key] || draftRowsByKey[key],
       changedFieldsByKey.get(key)
     )
   })
@@ -111,7 +112,7 @@ export const applyReleaseItemDataReplacementResult = ({
       }
     selectedItemIdMap[key] = replacementRowWithDrafts(
       row,
-      selectedItemIdMap[key],
+      selectedItemIdMap[key] || draftRowsByKey[key],
       changedFieldsByKey.get(key)
     )
   })
