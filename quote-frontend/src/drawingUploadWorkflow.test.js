@@ -57,6 +57,7 @@ describe('drawing upload workflow parity', () => {
     expect(panel).toContain('min-height: 260px')
     expect(panel).toContain('.import-upload-button-stack {\n  display: flex')
     expect(panel).toContain('margin-top: auto')
+    expect(panel).toContain('.import-upload-button-stack :deep(.el-button) {\n  margin-left: 0;')
     expect(panel).toContain('.import-axis-button {\n  width: 100%')
     expect(marketDashboard).toContain('align-items: stretch')
     expect(marketDashboard).toContain('height: 100%')

@@ -218,6 +218,10 @@ const fileKey = (file, index) => `${file?.name || 'pdf'}|${file?.size ?? ''}|${f
   padding-top: 12px;
 }
 
+.import-upload-button-stack :deep(.el-button) {
+  margin-left: 0;
+}
+
 .import-axis-button {
   width: 100%;
   max-width: 240px;
