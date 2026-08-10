@@ -134,7 +134,7 @@ public class ExcelExportService {
         }
         for (int i = 1; i <= MAX_PROCESS_STEPS; i++) {
             String stepNo = String.valueOf(i * 10);
-            for (String title : QuoteProcessExportSupport.PROCESS_VALUE_HEADERS) {
+            for (String title : QuoteProcessExportSupport.PROCESS_SHEET_VALUE_HEADERS) {
                 head.add(new ArrayList<>(List.of(stepNo, title)));
             }
         }
@@ -174,7 +174,7 @@ public class ExcelExportService {
                     row.add(processSheetHourlyRate(route));
                     row.add(processSheetLineCost(route));
                 } else {
-                    for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_VALUE_HEADERS.size(); blank++) {
+                    for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_SHEET_VALUE_HEADERS.size(); blank++) {
                         row.add("");
                     }
                 }
@@ -375,7 +375,7 @@ public class ExcelExportService {
             head.add(List.of("基础信息", title));
         }
         for (String processName : processNames) {
-            for (String title : QuoteProcessExportSupport.PROCESS_VALUE_HEADERS) {
+            for (String title : QuoteProcessExportSupport.QUOTE_PROCESS_VALUE_HEADERS) {
                 head.add(List.of(processName, title));
             }
         }
@@ -425,14 +425,12 @@ public class ExcelExportService {
         for (String processName : processNames) {
             QuoteProcessExportSupport.MergedProcess process = processMap.get(processName);
             if (process != null) {
-                row.add(process.processCode());
-                row.add(process.categoryName());
-                row.add(process.detailName());
+                row.add(process.calcType());
                 row.add(process.inputVal());
                 row.add(process.weightedUnitRate());
                 row.add(process.lineCost());
             } else {
-                for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_VALUE_HEADERS.size(); blank++) {
+                for (int blank = 0; blank < QuoteProcessExportSupport.QUOTE_PROCESS_VALUE_HEADERS.size(); blank++) {
                     row.add("");
                 }
             }
@@ -472,7 +470,7 @@ public class ExcelExportService {
         row.add("");
 
         for (String ignored : processNames) {
-            for (int blank = 0; blank < QuoteProcessExportSupport.PROCESS_VALUE_HEADERS.size(); blank++) {
+            for (int blank = 0; blank < QuoteProcessExportSupport.QUOTE_PROCESS_VALUE_HEADERS.size(); blank++) {
                 row.add("");
             }
         }

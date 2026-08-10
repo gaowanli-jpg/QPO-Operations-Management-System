@@ -42,7 +42,7 @@ class QuoteExportProcessMergeTests {
     private ExcelExportService excelExportService;
 
     @Test
-    void detailQuoteExportMergesByStableProcessIdentityAndKeepsProcessCode() throws Exception {
+    void detailQuoteExportGroupsHourlyByCategoryAndNonHourlyByName() throws Exception {
         OrderRfq order = createQuotedOrder();
         createQuotedItem(order.getId());
 
@@ -53,28 +53,32 @@ class QuoteExportProcessMergeTests {
             Sheet sheet = workbook.getSheetAt(0);
 
             assertThat(rowContains(sheet, 0, "第1道工艺")).isFalse();
-            int packagingCol = groupHeaderColumn(sheet, "PACKAGING / 精细包装");
-            int surfaceCol = groupHeaderColumn(sheet, "SURFACE / 精细包装");
-            assertThat(text(sheet, 1, packagingCol)).isEqualTo("大类编码");
-            assertThat(text(sheet, 1, packagingCol + 1)).isEqualTo("大类名称");
-            assertThat(text(sheet, 1, packagingCol + 2)).isEqualTo("具体工艺");
-            assertThat(text(sheet, 1, packagingCol + 3)).isEqualTo("工时");
-            assertThat(text(sheet, 1, packagingCol + 4)).isEqualTo("小时价格");
-            assertThat(text(sheet, 1, packagingCol + 5)).isEqualTo("金额");
+            assertThat(rowContains(sheet, 0, "PACKAGING")).isFalse();
+            int packagingCol = groupHeaderColumn(sheet, "包装");
+            int machiningCol = groupHeaderColumn(sheet, "加工");
+            int surfaceCol = groupHeaderColumn(sheet, "表面处理");
+            int assemblyCol = groupHeaderColumn(sheet, "组装费");
+            assertThat(packagingCol).isLessThan(machiningCol);
+            assertThat(machiningCol).isLessThan(surfaceCol);
+            assertThat(surfaceCol).isLessThan(assemblyCol);
+            assertThat(text(sheet, 1, packagingCol)).isEqualTo("类型");
+            assertThat(text(sheet, 1, packagingCol + 1)).isEqualTo("工时/金额");
+            assertThat(text(sheet, 1, packagingCol + 2)).isEqualTo("单价");
+            assertThat(text(sheet, 1, packagingCol + 3)).isEqualTo("费用");
 
-            assertThat(text(sheet, 2, packagingCol)).isEqualTo("PACKAGING");
-            assertThat(text(sheet, 2, packagingCol + 1)).isEqualTo("包装");
-            assertThat(text(sheet, 2, packagingCol + 2)).isEqualTo("精细包装");
-            assertThat(numeric(sheet, 2, packagingCol + 3)).isEqualTo(4.0);
-            assertThat(numeric(sheet, 2, packagingCol + 4)).isEqualTo(77.5);
-            assertThat(numeric(sheet, 2, packagingCol + 5)).isEqualTo(310.0);
+            assertThat(text(sheet, 2, packagingCol)).isEqualTo("工时");
+            assertThat(numeric(sheet, 2, packagingCol + 1)).isEqualTo(4.0);
+            assertThat(numeric(sheet, 2, packagingCol + 2)).isEqualTo(70.0);
+            assertThat(numeric(sheet, 2, packagingCol + 3)).isEqualTo(280.0);
 
-            assertThat(text(sheet, 2, surfaceCol)).isEqualTo("SURFACE");
-            assertThat(text(sheet, 2, surfaceCol + 1)).isEqualTo("表面处理");
-            assertThat(text(sheet, 2, surfaceCol + 2)).isEqualTo("精细包装");
-            assertThat(numeric(sheet, 2, surfaceCol + 3)).isEqualTo(2.0);
-            assertThat(numeric(sheet, 2, surfaceCol + 4)).isEqualTo(50.0);
-            assertThat(numeric(sheet, 2, surfaceCol + 5)).isEqualTo(100.0);
+            assertThat(text(sheet, 2, surfaceCol)).isEqualTo("非工时费用");
+            assertThat(numeric(sheet, 2, surfaceCol + 1)).isEqualTo(25.0);
+            assertThat(text(sheet, 2, surfaceCol + 2)).isEmpty();
+            assertThat(numeric(sheet, 2, surfaceCol + 3)).isEqualTo(25.0);
+            assertThat(text(sheet, 2, assemblyCol)).isEqualTo("非工时费用");
+            assertThat(numeric(sheet, 2, assemblyCol + 1)).isEqualTo(30.0);
+            assertThat(text(sheet, 2, assemblyCol + 2)).isEmpty();
+            assertThat(numeric(sheet, 2, assemblyCol + 3)).isEqualTo(30.0);
         }
     }
 
@@ -104,14 +108,16 @@ class QuoteExportProcessMergeTests {
         item.setMaterialData(Map.of("weight", 1.0, "cost", 20.0));
         item.setProcessRoute(List.of(
                 route(7L, "PACKAGING", "包装", "精细包装", 1.0, 70.0, 70.0, 10),
+                nonHourlyRoute("表面处理", 20.0, 20.0, 15),
                 route(8L, "CNC", "加工", "CNC", 2.0, 100.0, 200.0, 20),
-                route(7L, "PACKAGING", "包装", "精细包装", 3.0, 80.0, 240.0, 30),
-                route(9L, "SURFACE", "表面处理", "精细包装", 2.0, 50.0, 100.0, 40)
+                route(10L, "PACKAGING", "包装", "普通包装", 3.0, 70.0, 210.0, 30),
+                nonHourlyRoute("组装费", 30.0, 30.0, 40),
+                nonHourlyRoute("表面处理", 5.0, 5.0, 50)
         ));
         item.setFeeData(List.of());
-        item.setBaseCost(530.0);
-        item.setTaxIncludedUnitPrice(530.0);
-        item.setTaxIncludedTotalPrice(530.0);
+        item.setBaseCost(555.0);
+        item.setTaxIncludedUnitPrice(555.0);
+        item.setTaxIncludedTotalPrice(555.0);
         itemMapper.insert(item);
     }
 
@@ -125,6 +131,16 @@ class QuoteExportProcessMergeTests {
         route.put("processName", detailName);
         route.put("unitWorkHours", unitWorkHours);
         route.put("hourlyRate", hourlyRate);
+        route.put("lineCost", lineCost);
+        route.put("sortNo", sortNo);
+        return route;
+    }
+
+    private Map<String, Object> nonHourlyRoute(String processName, double inputVal, double lineCost, int sortNo) {
+        Map<String, Object> route = new LinkedHashMap<>();
+        route.put("processName", processName);
+        route.put("calcType", "非工时费用");
+        route.put("inputVal", inputVal);
         route.put("lineCost", lineCost);
         route.put("sortNo", sortNo);
         return route;

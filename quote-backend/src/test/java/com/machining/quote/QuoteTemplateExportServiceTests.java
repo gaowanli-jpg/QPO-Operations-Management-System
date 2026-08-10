@@ -138,29 +138,29 @@ class QuoteTemplateExportServiceTests {
             assertThat(text(sheet, HEADER_ROW_INDEX, 5)).isEqualTo("材料编码");
             assertThat(text(sheet, HEADER_ROW_INDEX, 6)).isEqualTo("材料类型");
             assertThat(text(sheet, HEADER_ROW_INDEX, 7)).isEqualTo("材质分类");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("大类编码");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 15)).isEqualTo("大类名称");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 16)).isEqualTo("具体工艺");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 17)).isEqualTo("工时");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 18)).isEqualTo("小时价格");
-            assertThat(text(sheet, HEADER_ROW_INDEX, 19)).isEqualTo("金额");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 14)).isEqualTo("类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 15)).isEqualTo("工时/金额");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 16)).isEqualTo("单价");
+            assertThat(text(sheet, HEADER_ROW_INDEX, 17)).isEqualTo("费用");
             assertThat(rowContains(sheet, HEADER_ROW_INDEX, "运输费率(%)")).isTrue();
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 16)).isEqualTo("下料");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 17)).isEqualTo("1");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 18)).isEqualTo("10");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 19)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 14)).isEqualTo("工时");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 15)).isEqualTo("1");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 16)).isEqualTo("10");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, 17)).isEqualTo("10");
             assertThat(text(sheet, DETAIL_START_ROW_INDEX, headerCol(sheet, "基础成本"))).isEqualTo("70");
         }
     }
 
     @Test
-    void detailTemplateExportMergesByStableProcessIdentityAndKeepsProcessCode() throws Exception {
+    void detailTemplateExportGroupsHourlyByCategoryAndNonHourlyByName() throws Exception {
         OrderRfq order = createOrder();
         createQuotedItem(order.getId(), List.of(
                 standardRoute(7L, "PACKAGING", "包装", "精细包装", 1.0, 70.0, 70.0, 10),
+                nonHourlyRoute("表面处理", 20.0, 20.0, 15),
                 standardRoute(8L, "CNC", "加工", "CNC", 2.0, 100.0, 200.0, 20),
-                standardRoute(7L, "PACKAGING", "包装", "精细包装", 3.0, 80.0, 240.0, 30),
-                standardRoute(9L, "SURFACE", "表面处理", "精细包装", 2.0, 50.0, 100.0, 40)
+                standardRoute(10L, "PACKAGING", "包装", "普通包装", 3.0, 70.0, 210.0, 30),
+                nonHourlyRoute("组装费", 30.0, 30.0, 40),
+                nonHourlyRoute("表面处理", 5.0, 5.0, 50)
         ));
 
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -169,26 +169,30 @@ class QuoteTemplateExportServiceTests {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(rowContains(sheet, 6, "第1道工艺")).isFalse();
-            int packagingCol = groupHeaderCol(sheet, "PACKAGING / 精细包装");
-            int surfaceCol = groupHeaderCol(sheet, "SURFACE / 精细包装");
-            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol)).isEqualTo("大类编码");
-            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 1)).isEqualTo("大类名称");
-            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 2)).isEqualTo("具体工艺");
-            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 3)).isEqualTo("工时");
-            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 4)).isEqualTo("小时价格");
-            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 5)).isEqualTo("金额");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol)).isEqualTo("PACKAGING");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 1)).isEqualTo("包装");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 2)).isEqualTo("精细包装");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 3)).isEqualTo("4");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 4)).isEqualTo("77.5");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 5)).isEqualTo("310");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol)).isEqualTo("SURFACE");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 1)).isEqualTo("表面处理");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 2)).isEqualTo("精细包装");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 3)).isEqualTo("2");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 4)).isEqualTo("50");
-            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 5)).isEqualTo("100");
+            assertThat(rowContains(sheet, 6, "PACKAGING")).isFalse();
+            int packagingCol = groupHeaderCol(sheet, "包装");
+            int machiningCol = groupHeaderCol(sheet, "加工");
+            int surfaceCol = groupHeaderCol(sheet, "表面处理");
+            int assemblyCol = groupHeaderCol(sheet, "组装费");
+            assertThat(packagingCol).isLessThan(machiningCol);
+            assertThat(machiningCol).isLessThan(surfaceCol);
+            assertThat(surfaceCol).isLessThan(assemblyCol);
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol)).isEqualTo("类型");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 1)).isEqualTo("工时/金额");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 2)).isEqualTo("单价");
+            assertThat(text(sheet, HEADER_ROW_INDEX, packagingCol + 3)).isEqualTo("费用");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol)).isEqualTo("工时");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 1)).isEqualTo("4");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 2)).isEqualTo("70");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, packagingCol + 3)).isEqualTo("280");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol)).isEqualTo("非工时费用");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 1)).isEqualTo("25");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 2)).isEmpty();
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, surfaceCol + 3)).isEqualTo("25");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, assemblyCol)).isEqualTo("非工时费用");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, assemblyCol + 1)).isEqualTo("30");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, assemblyCol + 2)).isEmpty();
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, assemblyCol + 3)).isEqualTo("30");
         }
     }
 
@@ -316,6 +320,16 @@ class QuoteTemplateExportServiceTests {
         route.put("processName", detailName);
         route.put("unitWorkHours", unitWorkHours);
         route.put("hourlyRate", hourlyRate);
+        route.put("lineCost", lineCost);
+        route.put("sortNo", sortNo);
+        return route;
+    }
+
+    private Map<String, Object> nonHourlyRoute(String processName, double inputVal, double lineCost, int sortNo) {
+        Map<String, Object> route = new LinkedHashMap<>();
+        route.put("processName", processName);
+        route.put("calcType", "非工时费用");
+        route.put("inputVal", inputVal);
         route.put("lineCost", lineCost);
         route.put("sortNo", sortNo);
         return route;

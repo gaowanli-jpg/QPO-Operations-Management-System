@@ -31,7 +31,7 @@ import java.util.Set;
 
 @Service
 public class QuoteTemplateExportService {
-    private static final int PROCESS_BLOCK_WIDTH = 6;
+    private static final int PROCESS_BLOCK_WIDTH = 4;
     private static final int LEGACY_PROCESS_BLOCK_WIDTH = 5;
     private static final int FEE_BLOCK_WIDTH = 2;
     private static final List<String> MATERIAL_IDENTITY_HEADERS = List.of("材料编码", "材料类型", "材质分类");
@@ -40,7 +40,7 @@ public class QuoteTemplateExportService {
             "含税单价", "含税总价", "交货周期", "备注"
     );
     private static final List<String> OLD_PROCESS_HEADERS = List.of("工艺名称", "类型", "工时/金额", "单价", "费用");
-    private static final List<String> PROCESS_HEADERS = QuoteProcessExportSupport.PROCESS_VALUE_HEADERS;
+    private static final List<String> PROCESS_HEADERS = QuoteProcessExportSupport.QUOTE_PROCESS_VALUE_HEADERS;
 
     @Autowired
     private QuoteTemplateService quoteTemplateService;
@@ -184,12 +184,10 @@ public class QuoteTemplateExportService {
                 String processName = i < columns.processNames().size() ? columns.processNames().get(i) : "";
                 QuoteProcessExportSupport.MergedProcess process = processMap.get(processName);
                 if (process != null && !missingDrawing) {
-                    setCell(row, startCol, process.processCode());
-                    setCell(row, startCol + 1, process.categoryName());
-                    setCell(row, startCol + 2, process.detailName());
-                    setCell(row, startCol + 3, process.inputVal());
-                    setCell(row, startCol + 4, process.weightedUnitRate());
-                    setCell(row, startCol + 5, process.lineCost());
+                    setCell(row, startCol, process.calcType());
+                    setCell(row, startCol + 1, process.inputVal());
+                    setCell(row, startCol + 2, process.weightedUnitRate());
+                    setCell(row, startCol + 3, process.lineCost());
                     clearCells(row, startCol + PROCESS_HEADERS.size(), columns.processBlockWidth() - PROCESS_HEADERS.size());
                 } else {
                     clearCells(row, startCol, columns.processBlockWidth());
@@ -398,6 +396,27 @@ public class QuoteTemplateExportService {
         }
     }
 
+    private void removeColumns(Sheet sheet, List<Integer> removeColumns) {
+        if (removeColumns == null || removeColumns.isEmpty()) {
+            return;
+        }
+        Set<Integer> removeSet = new HashSet<>(removeColumns);
+        int maxCol = maxColumn(sheet);
+        List<Integer> keepColumns = new ArrayList<>();
+        Map<Integer, Integer> newColByOldCol = new LinkedHashMap<>();
+        for (int col = 0; col <= maxCol; col++) {
+            if (removeSet.contains(col)) {
+                continue;
+            }
+            newColByOldCol.put(col, keepColumns.size());
+            keepColumns.add(col);
+        }
+        List<CellRangeAddress> adjustedMergedRegions = adjustedMergedRegions(sheet, newColByOldCol);
+        removeAllMergedRegions(sheet);
+        compactColumns(sheet, keepColumns, newColByOldCol);
+        addMergedRegions(sheet, adjustedMergedRegions);
+    }
+
     private void insertColumns(Sheet sheet, int insertAt, int count, int sourceStart, int sourceWidth) {
         int lastCol = maxColumn(sheet);
         sheet.shiftColumns(insertAt, lastCol, count);
@@ -422,12 +441,13 @@ public class QuoteTemplateExportService {
 
     private ColumnLayout detectColumnLayout(Sheet sheet, QuoteTemplateService.TemplateLayout layout) {
         Row headerRow = sheet.getRow(layout.headerRowIndex());
-        int processStart = findNewProcessStart(headerRow);
-        int processBlockWidth = PROCESS_BLOCK_WIDTH;
-        if (processStart < 0) {
-            processStart = findHeader(headerRow, "工艺名称", 0);
-            processBlockWidth = processStart >= 0 ? LEGACY_PROCESS_BLOCK_WIDTH : PROCESS_BLOCK_WIDTH;
-        }
+        int legacyProcessStart = findHeader(headerRow, "工艺名称", 0);
+        int processStart = legacyProcessStart >= 0 && matchesOldProcessBlock(headerRow, legacyProcessStart)
+                ? legacyProcessStart
+                : findNewProcessStart(headerRow);
+        int processBlockWidth = processStart == legacyProcessStart && processStart >= 0
+                ? LEGACY_PROCESS_BLOCK_WIDTH
+                : PROCESS_BLOCK_WIDTH;
         int processSlots = countProcessSlots(headerRow, processStart, processBlockWidth);
         int feeStart = findHeaderContaining(headerRow, "费率(%)",
                 processStart < 0 ? 0 : processStart + processSlots * processBlockWidth);
@@ -484,10 +504,11 @@ public class QuoteTemplateExportService {
 
     private void convertLegacyProcessBlocks(Sheet sheet, ColumnLayout layout, QuoteTemplateService.TemplateLayout templateLayout) {
         int slots = Math.max(layout.processSlots(), 1);
-        for (int i = slots - 1; i >= 0; i--) {
-            int insertAt = layout.processStartCol() + i * LEGACY_PROCESS_BLOCK_WIDTH + LEGACY_PROCESS_BLOCK_WIDTH;
-            insertColumns(sheet, insertAt, PROCESS_BLOCK_WIDTH - LEGACY_PROCESS_BLOCK_WIDTH, insertAt - 1, 1);
+        List<Integer> removeColumns = new ArrayList<>();
+        for (int i = 0; i < slots; i++) {
+            removeColumns.add(layout.processStartCol() + i * LEGACY_PROCESS_BLOCK_WIDTH);
         }
+        removeColumns(sheet, removeColumns);
         writeProcessHeaders(sheet, layout.processStartCol(), slots, List.of(), PROCESS_BLOCK_WIDTH, templateLayout);
     }
 
@@ -680,13 +701,16 @@ public class QuoteTemplateExportService {
         if (row == null || startCol < 0) {
             return false;
         }
-        for (int i = 0; i < OLD_PROCESS_HEADERS.size(); i++) {
-            String header = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol + i)));
-            if (!normalizeHeader(OLD_PROCESS_HEADERS.get(i)).equals(header)) {
-                return false;
-            }
-        }
-        return true;
+        String nameHeader = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol)));
+        String typeHeader = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol + 1)));
+        String valueHeader = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol + 2)));
+        String unitHeader = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol + 3)));
+        String costHeader = normalizeHeader(dataFormatter.formatCellValue(row.getCell(startCol + 4)));
+        return normalizeHeader(OLD_PROCESS_HEADERS.get(0)).equals(nameHeader)
+                && typeHeader.contains("类型")
+                && valueHeader.contains("工时")
+                && unitHeader.contains("单价")
+                && costHeader.contains("费用");
     }
 
     private boolean matchesNewProcessBlock(Row row, int startCol) {

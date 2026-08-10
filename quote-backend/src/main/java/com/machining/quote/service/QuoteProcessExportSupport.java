@@ -9,7 +9,8 @@ import java.util.Map;
 import java.util.function.Function;
 
 final class QuoteProcessExportSupport {
-    static final List<String> PROCESS_VALUE_HEADERS = List.of("大类编码", "大类名称", "具体工艺", "工时", "小时价格", "金额");
+    static final List<String> QUOTE_PROCESS_VALUE_HEADERS = List.of("类型", "工时/金额", "单价", "费用");
+    static final List<String> PROCESS_SHEET_VALUE_HEADERS = List.of("大类编码", "大类名称", "具体工艺", "工时", "小时价格", "金额");
 
     private QuoteProcessExportSupport() {
     }
@@ -30,65 +31,64 @@ final class QuoteProcessExportSupport {
     static Map<String, MergedProcess> mergeProcessRoutes(List<Map<String, Object>> routes) {
         Map<String, ProcessAccumulator> accumulators = new LinkedHashMap<>();
         for (Map<String, Object> route : routes) {
-            ProcessIdentity identity = processIdentity(route);
-            if (identity.label().isEmpty()) {
-                continue;
-            }
-            ProcessAccumulator accumulator = accumulators.computeIfAbsent(identity.key(), ignored -> new ProcessAccumulator(identity));
-            String calcType = safe(route.get("calcType")).trim();
-            if (accumulator.calcType.isEmpty() && !calcType.isEmpty()) {
-                accumulator.calcType = calcType;
-            }
-            accumulator.inputVal += processWorkHours(route);
-            accumulator.lineCost += processLineCost(route);
+            accumulateRoute(accumulators, route, false);
+        }
+        for (Map<String, Object> route : routes) {
+            accumulateRoute(accumulators, route, true);
         }
 
         Map<String, MergedProcess> result = new LinkedHashMap<>();
         for (ProcessAccumulator accumulator : accumulators.values()) {
-            String label = uniqueLabel(accumulator.identity.label(), accumulator.identity.key(), result);
-            result.put(label, new MergedProcess(
-                    label,
+            result.put(accumulator.identity.label(), new MergedProcess(
+                    accumulator.identity.label(),
                     accumulator.identity.processCode,
                     accumulator.identity.categoryName,
                     accumulator.identity.detailName,
                     accumulator.calcType,
                     accumulator.inputVal,
-                    accumulator.lineCost
+                    accumulator.lineCost,
+                    accumulator.identity.nonHourly
             ));
         }
         return result;
     }
 
+    private static void accumulateRoute(Map<String, ProcessAccumulator> accumulators, Map<String, Object> route, boolean nonHourlyPass) {
+        boolean nonHourly = isNonHourly(route);
+        if (nonHourly != nonHourlyPass) {
+            return;
+        }
+        ProcessIdentity identity = processIdentity(route);
+        if (identity.label().isEmpty()) {
+            return;
+        }
+        ProcessAccumulator accumulator = accumulators.computeIfAbsent(identity.key(), ignored -> new ProcessAccumulator(identity));
+        String calcType = safe(route.get("calcType")).trim();
+        if (accumulator.calcType.isEmpty() && !calcType.isEmpty()) {
+            accumulator.calcType = calcType;
+        }
+        if (accumulator.calcType.isEmpty()) {
+            accumulator.calcType = nonHourly ? "非工时费用" : "工时";
+        }
+        accumulator.inputVal += processInputValue(route, nonHourly);
+        accumulator.lineCost += processLineCost(route);
+    }
+
     private static ProcessIdentity processIdentity(Map<String, Object> route) {
-        String processDetailId = safe(route.get("processDetailId")).trim();
+        boolean nonHourly = isNonHourly(route);
         String processCode = safe(route.get("processCode")).trim();
         String categoryName = safe(route.get("categoryName")).trim();
         String detailName = firstText(route.get("detailName"), route.get("processName"), route.get("name"));
-        String label = !processCode.isEmpty() && !detailName.isEmpty()
-                ? processCode + " / " + detailName
-                : firstText(detailName, processCode, categoryName);
+        String label = nonHourly ? firstText(detailName, categoryName, processCode) : firstText(categoryName, detailName, processCode);
         String key;
-        if (!processDetailId.isEmpty()) {
-            key = "id:" + processDetailId;
-        } else if (!processCode.isEmpty() && !detailName.isEmpty()) {
-            key = "snapshot:" + processCode + "::" + detailName;
+        if (nonHourly) {
+            key = "non-hourly:" + label;
+        } else if (!processCode.isEmpty()) {
+            key = "hourly:" + processCode;
         } else {
-            key = "legacy:" + label;
+            key = "hourly-legacy:" + label;
         }
-        return new ProcessIdentity(key, label, processCode, categoryName, detailName);
-    }
-
-    private static String uniqueLabel(String label, String key, Map<String, MergedProcess> result) {
-        if (!result.containsKey(label)) {
-            return label;
-        }
-        String suffix = key.startsWith("id:") ? key.substring(3) : key.replace(':', '-');
-        String candidate = label + " #" + suffix;
-        int index = 2;
-        while (result.containsKey(candidate)) {
-            candidate = label + " #" + suffix + "-" + index++;
-        }
-        return candidate;
+        return new ProcessIdentity(key, label, processCode, categoryName, detailName, nonHourly);
     }
 
     private static double processLineCost(Map<String, Object> route) {
@@ -96,7 +96,7 @@ final class QuoteProcessExportSupport {
         if (lineCost != null) {
             return lineCost;
         }
-        double inputVal = processWorkHours(route);
+        double inputVal = processInputValue(route, isNonHourly(route));
         Double unitRate = firstNonNullDoubleValue(route.get("hourlyRate"), route.get("unitRate"));
         if (unitRate != null && unitRate > 0) {
             return inputVal * unitRate;
@@ -104,8 +104,17 @@ final class QuoteProcessExportSupport {
         return inputVal;
     }
 
-    private static double processWorkHours(Map<String, Object> route) {
+    private static double processInputValue(Map<String, Object> route, boolean nonHourly) {
+        if (nonHourly) {
+            return firstNonNullDouble(route.get("inputVal"), route.get("lineCost"));
+        }
         return firstNonNullDouble(route.get("unitWorkHours"), route.get("inputVal"));
+    }
+
+    private static boolean isNonHourly(Map<String, Object> route) {
+        String calcType = safe(route.get("calcType")).trim();
+        String sourceType = safe(route.get("sourceType")).trim();
+        return "非工时费用".equals(calcType) || "extra".equalsIgnoreCase(sourceType);
     }
 
     private static double firstNonNullDouble(Object primary, Object fallback) {
@@ -150,7 +159,8 @@ final class QuoteProcessExportSupport {
         return "";
     }
 
-    private record ProcessIdentity(String key, String label, String processCode, String categoryName, String detailName) {
+    private record ProcessIdentity(String key, String label, String processCode, String categoryName, String detailName,
+                                   boolean nonHourly) {
     }
 
     static final class MergedProcess {
@@ -161,9 +171,10 @@ final class QuoteProcessExportSupport {
         private final String calcType;
         private final double inputVal;
         private final double lineCost;
+        private final boolean nonHourly;
 
         private MergedProcess(String processName, String processCode, String categoryName, String detailName,
-                              String calcType, double inputVal, double lineCost) {
+                              String calcType, double inputVal, double lineCost, boolean nonHourly) {
             this.processName = processName;
             this.processCode = processCode;
             this.categoryName = categoryName;
@@ -171,6 +182,7 @@ final class QuoteProcessExportSupport {
             this.calcType = calcType;
             this.inputVal = inputVal;
             this.lineCost = lineCost;
+            this.nonHourly = nonHourly;
         }
 
         String processName() {
@@ -198,6 +210,9 @@ final class QuoteProcessExportSupport {
         }
 
         Object weightedUnitRate() {
+            if (nonHourly) {
+                return "";
+            }
             return inputVal == 0.0 ? "" : lineCost / inputVal;
         }
 
