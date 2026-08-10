@@ -1,7 +1,6 @@
 package com.machining.quote.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -15,9 +14,18 @@ import java.util.stream.Collectors;
 
 @Service
 public class ProcessRouteSnapshotService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final TypeReference<List<Map<String, Object>>> ROUTE_LIST_TYPE = new TypeReference<>() {
-    };
+    private final JsonSnapshotCopyService jsonSnapshotCopyService;
+
+    public ProcessRouteSnapshotService() {
+        this(new JsonSnapshotCopyService());
+    }
+
+    @Autowired
+    public ProcessRouteSnapshotService(JsonSnapshotCopyService jsonSnapshotCopyService) {
+        this.jsonSnapshotCopyService = jsonSnapshotCopyService == null
+                ? new JsonSnapshotCopyService()
+                : jsonSnapshotCopyService;
+    }
 
     public Object copySnapshot(Object routeObject) {
         if (routeObject == null) {
@@ -48,19 +56,11 @@ public class ProcessRouteSnapshotService {
         if (routeObject == null) {
             return List.of();
         }
-        if (routeObject instanceof String text) {
-            if (text.isBlank()) {
-                return List.of();
-            }
-            try {
-                return OBJECT_MAPPER.readValue(text, ROUTE_LIST_TYPE).stream()
-                        .map(this::copyMap)
-                        .toList();
-            } catch (Exception ignored) {
-                return List.of();
-            }
+        Object copied = jsonSnapshotCopyService.deepCopySnapshot(routeObject);
+        if (jsonSnapshotCopyService.isMissingSnapshot(copied)) {
+            return List.of();
         }
-        if (routeObject instanceof Collection<?> collection) {
+        if (copied instanceof Collection<?> collection) {
             List<Map<String, Object>> rows = new ArrayList<>();
             for (Object item : collection) {
                 Map<String, Object> row = normalizeMap(item);
@@ -70,7 +70,7 @@ public class ProcessRouteSnapshotService {
             }
             return rows;
         }
-        Map<String, Object> row = normalizeMap(routeObject);
+        Map<String, Object> row = normalizeMap(copied);
         return row.isEmpty() ? List.of() : List.of(row);
     }
 
