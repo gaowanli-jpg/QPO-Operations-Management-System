@@ -2,21 +2,28 @@ package com.machining.quote;
 
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.controller.SalesOrderQpoImportController;
+import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderMatchApplyResp;
 import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderImportBatch;
 import com.machining.quote.entity.SalesOrderImportRecord;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.CustomerMasterMapper;
+import com.machining.quote.mapper.ItemAssemblyRelationMapper;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderImportBatchMapper;
 import com.machining.quote.mapper.SalesOrderImportRecordMapper;
+import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
@@ -36,12 +43,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -519,6 +530,172 @@ class SalesOrderQpoImportStage3Test {
     }
 
     @Test
+    void serviceRunsParseAutoMatchAndAutoDeliveryInOneChainWithSnapshotsAndImportedFields() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        ItemQuoteVersionMapper sourceMapper = mock(ItemQuoteVersionMapper.class);
+        ItemAssemblyRelationMapper historyRelationMapper = mock(ItemAssemblyRelationMapper.class);
+        SalesOrderItemAssemblyRelationMapper salesOrderRelationMapper = mock(SalesOrderItemAssemblyRelationMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        SalesOrderMatchService matchService = new SalesOrderMatchService();
+        DeliveryService deliveryService = new DeliveryService();
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                dataScopeService,
+                auditService,
+                matchService,
+                deliveryService
+        );
+        ReflectionTestUtils.setField(service, "businessFileService", salesOrderImportDrawingStorage());
+        wireSalesOrderMatchService(matchService, headerMapper, itemMapper, sourceMapper,
+                historyRelationMapper, salesOrderRelationMapper, auditService);
+        List<OrderDeliveryTicket> insertedTickets = new ArrayList<>();
+        wireImportAutoDeliveryService(deliveryService, headerMapper, itemMapper, ticketMapper, auditService, insertedTickets);
+
+        Map<Long, SalesOrderHeader> headers = new LinkedHashMap<>();
+        Map<Long, SalesOrderItem> items = new LinkedHashMap<>();
+        Map<Long, SalesOrderImportRecord> records = new LinkedHashMap<>();
+        long[] nextHeaderId = {301L};
+        long[] nextItemId = {501L};
+        long[] nextRecordId = {401L};
+
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithMatchedUnmatchedImportFacts());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(nextHeaderId[0]++);
+            headers.put(header.getId(), header);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader update = invocation.getArgument(0);
+            mergeNonNull(headers.get(update.getId()), update);
+            return 1;
+        }).when(headerMapper).updateById(any(SalesOrderHeader.class));
+        when(headerMapper.selectById(any())).thenAnswer(invocation -> headers.get(longValue(invocation.getArgument(0))));
+        when(headerMapper.selectByIdForUpdate(any())).thenAnswer(invocation -> headers.get(longValue(invocation.getArgument(0))));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(nextRecordId[0]++);
+            records.put(record.getId(), record);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord update = invocation.getArgument(0);
+            mergeNonNull(records.get(update.getId()), update);
+            return 1;
+        }).when(recordMapper).updateById(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId(nextItemId[0]++);
+            items.put(item.getId(), item);
+            return 1;
+        }).when(itemMapper).insert(any(SalesOrderItem.class));
+        doAnswer(invocation -> {
+            SalesOrderItem update = invocation.getArgument(0);
+            mergeNonNull(items.get(update.getId()), update);
+            return 1;
+        }).when(itemMapper).updateById(any(SalesOrderItem.class));
+        when(itemMapper.selectByIdForUpdate(any())).thenAnswer(invocation -> items.get(longValue(invocation.getArgument(0))));
+        when(itemMapper.selectList(any())).thenAnswer(invocation -> sortedItems(items));
+        ItemQuoteVersion releasedSource = releasedProductionSnapshotSource();
+        when(sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(releasedSource));
+        when(historyRelationMapper.selectList(any())).thenReturn(List.of());
+
+        SalesOrderQpoImportResp resp = service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01",
+                List.of(new MockMultipartFile("drawings", "P-MATCH.pdf", "application/pdf", "pdf".getBytes(StandardCharsets.UTF_8)))
+        );
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getRows()).singleElement().satisfies(row -> {
+            assertThat(row.getMatchedItemCount()).isEqualTo(1);
+            assertThat(row.getUnmatchedItemCount()).isEqualTo(1);
+            assertThat(row.getMissingPriceCount()).isEqualTo(1);
+            assertThat(row.getAutoDeliveryTicketCount()).isEqualTo(2);
+            assertThat(row.getWarningMessage()).contains("1");
+        });
+        assertThat(insertedTickets).hasSize(2);
+
+        SalesOrderItem matchedItem = items.values().stream()
+                .filter(item -> "P-MATCH".equals(item.getPartNo()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(matchedItem.getMaterialData()).isEqualTo(releasedSource.getMaterialData()).isNotSameAs(releasedSource.getMaterialData());
+        assertThat(matchedItem.getProcessRoute()).isEqualTo(releasedSource.getProcessRoute()).isNotSameAs(releasedSource.getProcessRoute());
+        assertThat(matchedItem.getFeeData()).isEqualTo(releasedSource.getFeeData()).isNotSameAs(releasedSource.getFeeData());
+        assertThat(matchedItem.getMatchStatus()).isEqualTo("已匹配");
+        assertThat(matchedItem.getMaterialNo()).isEqualTo("MAT-HIST-001");
+        assertThat(matchedItem.getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+
+        OrderDeliveryTicket matchedTicket = insertedTickets.stream()
+                .filter(ticket -> Long.valueOf(matchedItem.getId()).equals(ticket.getSourceItemId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(matchedTicket.getSourceType()).isEqualTo(ReleaseSourceType.SALES_ORDER.name());
+        assertThat(matchedTicket.getDescription()).isEqualTo("imported matched description");
+        assertThat(matchedTicket.getMaterialName()).isEqualTo("imported material");
+        assertThat(matchedTicket.getSurfaceTreatment()).isEqualTo("imported surface");
+        assertThat(matchedTicket.getRemark()).isEqualTo("imported matched remark");
+        assertThat(matchedTicket.getDrawingUrl()).isEqualTo("/uploads/ACME/SOQPO/P-MATCH.pdf");
+        assertThat(matchedTicket.getDeliveryDate()).isEqualTo(LocalDate.of(2026, 9, 18));
+        assertThat(matchedTicket.getMaterialData()).isEqualTo(matchedItem.getMaterialData()).isNotSameAs(matchedItem.getMaterialData());
+        assertThat(matchedTicket.getProcessRoute()).isEqualTo(matchedItem.getProcessRoute()).isNotSameAs(matchedItem.getProcessRoute());
+        assertThat(matchedTicket.getMesSyncStatus()).isEqualTo("SUCCESS");
+
+        OrderDeliveryTicket unmatchedTicket = insertedTickets.stream()
+                .filter(ticket -> "P-NO-HISTORY".equals(ticket.getPartNo()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(unmatchedTicket.getDescription()).isEqualTo("unmatched imported description");
+        assertThat(unmatchedTicket.getMesSyncStatus()).isEqualTo("PENDING");
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(
+                eq("SALES_ORDER_IMPORT_QPO"),
+                eq("sales_order_import_batch"),
+                eq(201L),
+                isNull(),
+                afterDataCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                any(String.class),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterDataCaptor.getValue())
+                .containsEntry("matchedItemCount", 1)
+                .containsEntry("unmatchedItemCount", 1)
+                .containsEntry("missingPriceCount", 1)
+                .containsEntry("autoDeliveryTicketCount", 2)
+                .containsEntry("autoMatchTrigger", "IMPORT_AUTO")
+                .containsEntry("autoDeliveryTrigger", "SALES_ORDER_IMPORT_AUTO");
+    }
+
+    @Test
     void serviceAcceptsSalesOrderDrawingsAndBindsMatchedPdfsToIndependentItems() throws Exception {
         SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
         CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
@@ -932,6 +1109,69 @@ class SalesOrderQpoImportStage3Test {
         return service;
     }
 
+    private void wireSalesOrderMatchService(
+            SalesOrderMatchService service,
+            SalesOrderHeaderMapper headerMapper,
+            SalesOrderItemMapper itemMapper,
+            ItemQuoteVersionMapper sourceMapper,
+            ItemAssemblyRelationMapper historyRelationMapper,
+            SalesOrderItemAssemblyRelationMapper salesOrderRelationMapper,
+            AuditService auditService) {
+        ReflectionTestUtils.setField(service, "headerMapper", headerMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "itemQuoteVersionMapper", sourceMapper);
+        ReflectionTestUtils.setField(service, "historyAssemblyRelationMapper", historyRelationMapper);
+        ReflectionTestUtils.setField(service, "salesOrderAssemblyRelationMapper", salesOrderRelationMapper);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+    }
+
+    private void wireImportAutoDeliveryService(
+            DeliveryService service,
+            SalesOrderHeaderMapper headerMapper,
+            SalesOrderItemMapper itemMapper,
+            OrderDeliveryTicketMapper ticketMapper,
+            AuditService auditService,
+            List<OrderDeliveryTicket> insertedTickets) {
+        ReflectionTestUtils.setField(service, "salesOrderHeaderMapper", headerMapper);
+        ReflectionTestUtils.setField(service, "salesOrderItemMapper", itemMapper);
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+        int[] nextTicketId = {9001};
+        doAnswer(invocation -> {
+            OrderDeliveryTicket ticket = invocation.getArgument(0);
+            ticket.setId(nextTicketId[0]++);
+            insertedTickets.add(ticket);
+            return 1;
+        }).when(ticketMapper).insert(any(OrderDeliveryTicket.class));
+    }
+
+    private List<SalesOrderItem> sortedItems(Map<Long, SalesOrderItem> items) {
+        return items.values().stream()
+                .sorted(Comparator.comparing(SalesOrderItem::getId))
+                .toList();
+    }
+
+    private long longValue(Object value) {
+        return ((Number) value).longValue();
+    }
+
+    private <T> void mergeNonNull(T target, T update) {
+        if (target == null || update == null) {
+            return;
+        }
+        for (Field field : update.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
+            try {
+                Object value = field.get(update);
+                if (value != null) {
+                    field.set(target, value);
+                }
+            } catch (IllegalAccessException ex) {
+                throw new AssertionError("Unable to merge test entity field: " + field.getName(), ex);
+            }
+        }
+    }
+
     private SalesOrderMatchApplyResp matchResp(int total, int matched, int unmatched, String warningMessage) {
         SalesOrderMatchApplyResp resp = new SalesOrderMatchApplyResp();
         resp.setSuccess(true);
@@ -1018,6 +1258,99 @@ class SalesOrderQpoImportStage3Test {
         result.setLineCount(2);
         result.setSourceRowCount(2);
         return result;
+    }
+
+    private SalesOrderQpoExcelParseResult parseResultWithMatchedUnmatchedImportFacts() {
+        SalesOrderQpoExcelParseResult result = new SalesOrderQpoExcelParseResult();
+        SalesOrderQpoOrderGroupDTO group = new SalesOrderQpoOrderGroupDTO();
+        group.setGroupKey("PO-001|IP-001");
+        group.setCustomerOrderNo("PO-001");
+        group.setInternalProjectNo("IP-001");
+        group.setSalesOrderDate(LocalDate.of(2026, 7, 1));
+        group.setCustomerProjectNo("CP-001");
+        group.setCustomerOrderTitle("GSQ1");
+        group.setOrderType("正式订单");
+
+        SalesOrderQpoExcelLineDTO matched = blankPriceLine(1, "P-MATCH", "A");
+        matched.setOrderType("正式订单");
+        matched.setDescription("imported matched description");
+        matched.setMaterialName("imported material");
+        matched.setSurfaceTreatment("imported surface");
+        matched.setRemark("imported matched remark");
+        matched.setInternalDeliveryDate(LocalDate.of(2026, 9, 18));
+
+        SalesOrderQpoExcelLineDTO unmatched = line(2, "P-NO-HISTORY", "A", "", 1);
+        unmatched.setOrderType("正式订单");
+        unmatched.setDescription("unmatched imported description");
+        unmatched.setMaterialName("unmatched imported material");
+        unmatched.setSurfaceTreatment("unmatched imported surface");
+        unmatched.setRemark("unmatched imported remark");
+        group.setLines(List.of(matched, unmatched));
+
+        result.setOrders(List.of(group));
+        result.setOrderCount(1);
+        result.setLineCount(2);
+        result.setSourceRowCount(2);
+        return result;
+    }
+
+    private ItemQuoteVersion releasedProductionSnapshotSource() {
+        ItemQuoteVersion source = new ItemQuoteVersion();
+        source.setId(900);
+        source.setRfqId(50);
+        source.setPartNo("P-MATCH");
+        source.setVersion("A");
+        source.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
+        source.setMaterialName("historical imported material");
+        source.setMaterialNo("MAT-HIST-001");
+        source.setMaterialNoStatus("已确认");
+        source.setEngineeringMaterialCode("ENG-MAT-001");
+        source.setEngineeringMaterialName("7075-T651");
+        source.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        source.setEngineeringMaterialTypeName("原材料");
+        source.setEngineeringMaterialCategory("铝材");
+        source.setMaterialShape("板材");
+        source.setSurfaceTreatment("historical surface");
+        source.setMaterialGrossWeight(2.4);
+        source.setPartNetWeight(1.8);
+        source.setQuoteMode("NORMAL");
+        source.setMaterialData(materialSnapshot("7075-T651"));
+        source.setProcessRoute(processRouteSnapshot("CNC"));
+        source.setFeeData(feeSnapshot());
+        return source;
+    }
+
+    private Map<String, Object> materialSnapshot(String name) {
+        Map<String, Object> material = new LinkedHashMap<>();
+        material.put("materialCode", "ENG-MAT-001");
+        material.put("materialName", name);
+        material.put("name", name);
+        material.put("materialTypeCode", "RAW_MATERIAL");
+        material.put("materialTypeName", "原材料");
+        material.put("materialCategory", "铝材");
+        material.put("shape", "板材");
+        return material;
+    }
+
+    private List<Map<String, Object>> processRouteSnapshot(String processCode) {
+        Map<String, Object> route = new LinkedHashMap<>();
+        route.put("routeType", "PROCESS");
+        route.put("sourceType", "process");
+        route.put("sortNo", 10);
+        route.put("processCode", processCode);
+        route.put("categoryName", "machining");
+        route.put("detailName", "cnc");
+        route.put("hourlyRate", 12.0);
+        route.put("unitWorkHours", 1.0);
+        route.put("lineCost", 12.0);
+        return new ArrayList<>(List.of(route));
+    }
+
+    private List<Map<String, Object>> feeSnapshot() {
+        Map<String, Object> fee = new LinkedHashMap<>();
+        fee.put("feeName", "profit");
+        fee.put("ratePercent", 10);
+        return new ArrayList<>(List.of(fee));
     }
 
     private BusinessFileService salesOrderImportDrawingStorage() {

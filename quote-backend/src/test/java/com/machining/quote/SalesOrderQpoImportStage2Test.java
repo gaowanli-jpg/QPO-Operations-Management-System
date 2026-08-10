@@ -60,6 +60,10 @@ class SalesOrderQpoImportStage2Test {
         assertThat(line.getCustomerOrderTitle()).isEqualTo("默认抬头");
         assertThat(line.getOrderType()).isEqualTo("正式订单");
         assertThat(line.getInternalProjectNo()).isEqualTo("IP-001");
+        assertThat(line.getTaxIncludedUnitPrice()).isNull();
+        assertThat(line.getTaxIncludedTotalPrice()).isNull();
+        assertThat(line.getUntaxedUnitPrice()).isNull();
+        assertThat(line.getUntaxedTotalPrice()).isNull();
     }
 
     @Test
@@ -133,6 +137,23 @@ class SalesOrderQpoImportStage2Test {
             assertThat(line.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 3, 8));
             assertThat(line.getInternalDeliveryDate()).isEqualTo(LocalDate.of(2026, 3, 8));
         }
+    }
+
+    @Test
+    void computesDocumentedPriceTotalsFromProvidedUnitPrices() throws Exception {
+        SalesOrderQpoExcelParseResult result = parser.parse(
+                new ByteArrayInputStream(workbookBytes(fullHeaders(), List.of(
+                        row(1, LocalDate.of(2026, 7, 2), "ROW-PO-001", "ROW-CP-001", "ROW-TITLE",
+                                "样品订单", "ROW-IP-001", null, null, "P-PRICE-001", 3, null, null, null,
+                                "A", "12.34", "10.50", null, null)
+                ))),
+                defaults());
+
+        SalesOrderQpoExcelLineDTO line = result.getOrders().get(0).getLines().get(0);
+        assertThat(line.getTaxIncludedUnitPrice()).isEqualByComparingTo("12.34");
+        assertThat(line.getTaxIncludedTotalPrice()).isEqualByComparingTo("37.02");
+        assertThat(line.getUntaxedUnitPrice()).isEqualByComparingTo("10.50");
+        assertThat(line.getUntaxedTotalPrice()).isEqualByComparingTo("31.50");
     }
 
     @Test

@@ -218,6 +218,12 @@ describe('sales order import panel', () => {
     expect(salesOrderPane).toContain('订单级字段以下方“订单默认信息”为准')
     expect(salesOrderPane).toContain('Excel 行内同名字段仅作为零件级覆盖值')
     expect(salesOrderPane).toContain('价格允许为空，但 U9 同步前必须补齐')
+    expect(salesOrderPane).toContain('日期字段（下单日期、客户交期、内部交期）支持具体日期')
+    for (const dateExample of ['2026-03-08', '2026-3-8', '2026.03.08', '2026.3.8', '2026/3/8', '2026年3月8日', '46089']) {
+      expect(salesOrderPane).toContain(dateExample)
+    }
+    expect(salesOrderPane).toContain('订单数量必须为正整数')
+    expect(salesOrderPane).toContain('（未税）金额为空且未税单价存在时按未税单价×订单数量计算')
     expect(salesOrderPane).not.toContain('同一客户订单号+内部项目号')
     expect(salesOrderPane).not.toContain('已出数量')
     expect(salesOrderPane).not.toContain('未出数量')
