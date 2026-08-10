@@ -161,7 +161,6 @@ class MesMaterialSyncTest {
         assertThat(req.getItems().get(0).getDrawingVersion()).isEqualTo("A");
         assertThat(req.getItems().get(0).getDrawingUrls()).containsExactly("http://qpo.local/uploads/drawings/p100.pdf");
         assertThat(req.getItems().get(0).getRemark()).isEqualTo("release remark");
-        assertThat(req.getItems().get(0).getCustomerRequirements()).isEqualTo("customer needs deburring");
         ArgumentCaptor<OrderDeliveryTicketMesRequest> requestCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketMesRequest.class);
         verify(mesRequestMapper).insert(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getMesRequestId()).isEqualTo(req.getMesRequestId());
@@ -565,13 +564,13 @@ class MesMaterialSyncTest {
                         "private String drawingNo;",
                         "private String drawingVersion;",
                         "private java.util.List<String> drawingUrls;",
-                        "private String remark;",
-                        "private String customerRequirements;"
+                        "private String remark;"
                 )
                 .doesNotContain(
                         "private String partNo;",
                         "private String version;",
                         "private String drawingUrl;",
+                        "private String " + "customer" + "Requirements;",
                         "private Integer ticketId;",
                         "private String sourceType;",
                         "private Integer rfqId;",
@@ -662,7 +661,6 @@ class MesMaterialSyncTest {
         ticket.setVersion("A");
         ticket.setInternalProjectNo("IP-9");
         ticket.setRemark("release remark");
-        ticket.setCustomerRequirement("customer needs deburring");
         ticket.setMesSyncStatus("PENDING");
         return ticket;
     }

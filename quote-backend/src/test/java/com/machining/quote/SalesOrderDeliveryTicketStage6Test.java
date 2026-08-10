@@ -42,8 +42,6 @@ class SalesOrderDeliveryTicketStage6Test {
     private static final Path MAIN_JAVA = BACKEND.resolve(Path.of("java", "com", "machining", "quote"));
     private static final Path MIGRATION = BACKEND.resolve(Path.of("resources", "db", "migration",
             "V1__qpo_baseline_schema.sql"));
-    private static final Path CUSTOMER_REQUIREMENT_MIGRATION = BACKEND.resolve(Path.of("resources", "db", "migration",
-            "V1__qpo_baseline_schema.sql"));
 
     @Test
     void migrationAndEntitiesAddSourceIdentityToDeliveryTickets() throws Exception {
@@ -52,7 +50,6 @@ class SalesOrderDeliveryTicketStage6Test {
         String allocation = read(MAIN_JAVA.resolve(Path.of("entity", "OrderDeliveryTicketAllocation.java")));
         String deliveredDto = read(MAIN_JAVA.resolve(Path.of("dto", "DeliveredItemDTO.java")));
         String lockedDto = read(MAIN_JAVA.resolve(Path.of("dto", "LockedItemDTO.java")));
-        String customerRequirementMigration = read(CUSTOMER_REQUIREMENT_MIGRATION);
 
         assertThat(migration)
                 .contains(
@@ -72,38 +69,28 @@ class SalesOrderDeliveryTicketStage6Test {
                         "private String sourceType;",
                         "private Long sourceOrderId;",
                         "private Long sourceItemId;",
-                        "private String drawingUrl;",
-                        "private String customerRequirement;"
+                        "private String drawingUrl;"
                 );
         assertThat(allocation)
                 .contains(
                         "private String sourceType;",
                         "private Long sourceOrderId;",
-                        "private Long sourceItemId;",
-                        "private String customerRequirement;"
+                        "private Long sourceItemId;"
                 );
         assertThat(deliveredDto)
                 .contains(
                         "private String sourceType;",
                         "private Long sourceOrderId;",
-                        "private Long sourceItemId;",
-                        "private String customerRequirement;"
+                        "private Long sourceItemId;"
                 );
         assertThat(lockedDto)
                 .contains(
                         "private String sourceType;",
                         "private Long sourceOrderId;",
-                        "private Long sourceItemId;",
-                        "private String customerRequirement;"
+                        "private Long sourceItemId;"
                 );
-        assertThat(customerRequirementMigration)
-                .contains(
-                        "CREATE TABLE item_quote_version",
-                        "CREATE TABLE sales_order_item",
-                        "CREATE TABLE order_delivery_ticket",
-                        "CREATE TABLE order_delivery_ticket_allocation",
-                        "customer_requirement text"
-                );
+        assertThat(ticket + allocation + deliveredDto + lockedDto + migration)
+                .doesNotContain("customer" + "Requirement", "customer" + "_requirement");
     }
 
     @Test
@@ -172,7 +159,6 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(partialTicket.getProcessRoute()).isNotSameAs(first.getProcessRoute());
         assertThat(partialTicket.getDrawingUrl()).isEqualTo("/drawings/SO-P-1.pdf");
         assertThat(partialTicket.getRemark()).isEqualTo("Sales order remark SO-P-1");
-        assertThat(partialTicket.getCustomerRequirement()).isEqualTo("Customer requirement SO-P-1");
         assertThat(first.getReleasedQty()).isEqualTo(2);
         assertThat(first.getRemainingQty()).isEqualTo(2);
         assertThat(first.getStatus()).isEqualTo(QuoteStatusWorkflow.PARTIALLY_RELEASED);
@@ -565,7 +551,6 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setPartNetWeight(1.8);
         item.setItemType("普通件");
         item.setRemark("Sales order remark " + partNo);
-        item.setCustomerRequirement("Customer requirement " + partNo);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }

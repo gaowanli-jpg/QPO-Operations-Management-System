@@ -176,9 +176,6 @@
           <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ row.remark || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="customerRequirement" label="客户需求" min-width="180" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.customerRequirement || '-' }}</template>
-          </el-table-column>
           <el-table-column label="操作" width="220" align="center" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions delivered-row-actions">
@@ -257,7 +254,6 @@
           <el-descriptions-item label="材料描述">{{ selectedItem.description || '-' }}</el-descriptions-item>
           <el-descriptions-item label="表面处理">{{ selectedItem.surfaceTreatment || '-' }}</el-descriptions-item>
           <el-descriptions-item label="备注">{{ selectedItem.remark || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户需求">{{ selectedItem.customerRequirement || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <el-alert

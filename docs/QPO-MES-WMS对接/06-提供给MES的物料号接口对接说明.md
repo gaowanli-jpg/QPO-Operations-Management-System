@@ -104,8 +104,7 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
       "drawingUrls": [
         "http://192.168.70.21:8088/uploads/drawings/xxx.pdf"
       ],
-      "remark": "备注",
-      "customerRequirements": "客户要求"
+      "remark": "备注"
     }
   ]
 }
@@ -124,7 +123,6 @@ Authorization: Bearer {DATA_CENTER_ACCESS_TOKEN}
 | `items[].drawingVersion` | string | 可能为空字符串 | 版本，QPO 无版本时传空字符串。 |
 | `items[].drawingUrls` | string array | 否 | 图纸绝对 URL 数组；当前每个已提零件通常传 1 个图纸 URL。 |
 | `items[].remark` | string | 可能为空 | 零件备注，来自议价提单 / 已提零件行的备注字段。 |
-| `items[].customerRequirements` | string | 可能为空 | 客户需求，来自议价提单 / 已提零件行的客户需求字段。 |
 
 QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`。这些字段属于 QPO 内部定位或展示字段；外部请求和回调定位只依赖 QPO 生成的请求 ID（出站请求字段名为 `bizId`，QPO 回调字段名为 `mesRequestId`）。QPO 会在内部请求流水中保存 `mesRequestId -> ticketId` 映射，并根据 QPO 内部来源字段自行判断是否需要回写销售订单零件，不需要 MES 或数据中心感知。
 

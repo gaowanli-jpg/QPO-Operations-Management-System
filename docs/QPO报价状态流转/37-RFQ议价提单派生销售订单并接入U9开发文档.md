@@ -680,7 +680,6 @@ POST /api/market/u9-sync/sync
 
 ```text
 ...
-客户需求
 下单日期
 客户订单号
 客户项目号

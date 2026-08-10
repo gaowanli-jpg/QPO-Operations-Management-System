@@ -509,7 +509,6 @@ CREATE TABLE item_quote_version (
     unshipped_qty integer DEFAULT 0,
     sales_order_import_record_id bigint,
     material_shape character varying(30),
-    customer_requirement text,
     material_no character varying(120),
     material_no_status character varying(30) DEFAULT '未确认'::character varying NOT NULL,
     material_no_source character varying(30),
@@ -595,8 +594,7 @@ CREATE TABLE order_delivery_ticket (
     mes_request_role character varying(20),
     mes_master_ticket_id integer,
     mes_master_request_id character varying(80),
-    material_shape character varying(30),
-    customer_requirement text
+    material_shape character varying(30)
 );
 
 
@@ -650,7 +648,6 @@ CREATE TABLE order_delivery_ticket_allocation (
     mes_production_synced_at timestamp without time zone,
     mes_production_message text,
     material_shape character varying(30),
-    customer_requirement text,
     CONSTRAINT chk_order_delivery_ticket_allocation_qty CHECK ((qty > 0)),
     CONSTRAINT chk_order_delivery_ticket_allocation_type CHECK (((allocation_type)::text = ANY ((ARRAY['IN_STOCK_LOCK'::character varying, 'IN_PRODUCTION_LOCK'::character varying, 'PRODUCTION_REQUIRED'::character varying])::text[])))
 );
@@ -1056,7 +1053,6 @@ CREATE TABLE sales_order_item (
     material_no_synced_at timestamp without time zone,
     material_no_message text,
     material_shape character varying(30),
-    customer_requirement text,
     sales_order_date date,
     customer_order_title character varying(255),
     source_type character varying(30) DEFAULT 'DIRECT_IMPORT'::character varying NOT NULL,

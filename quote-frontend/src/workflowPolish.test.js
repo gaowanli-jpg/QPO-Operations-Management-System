@@ -138,18 +138,19 @@ describe('QPO workflow page polish', () => {
     const tableStart = source.indexOf('class="release-selection-table"')
     const tableEnd = source.indexOf('<div v-if="releaseItemTotal"', tableStart)
     const tableTemplate = source.slice(tableStart, tableEnd)
+    const removedCustomerDemandColumn = '<el-table-column prop="' + 'customer' + 'Requirement" label="' + '客' + '户' + '需' + '求' + '"'
 
     expectIncludes(tableTemplate, 'MarketRelease.vue release selection table', [
       '<el-table-column prop="sourceOrderNo" label="来源单号"',
       '<el-table-column prop="partNo" label="图号"',
-      '<el-table-column prop="remark" label="备注"',
-      '<el-table-column prop="customerRequirement" label="客户需求"'
+      '<el-table-column prop="remark" label="备注"'
     ])
     expectExcludes(tableTemplate, 'MarketRelease.vue release selection table', [
       '<el-table-column prop="sourceType" label="来源"',
       '<el-table-column prop="customerName" label="客户"',
       '<el-table-column prop="orderStatus" label="订单状态"',
-      '<el-table-column label="含税单价"'
+      '<el-table-column label="含税单价"',
+      removedCustomerDemandColumn
     ])
 
     const versionIndex = tableTemplate.indexOf('prop="version" label="版本"')

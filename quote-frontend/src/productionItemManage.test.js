@@ -77,8 +77,9 @@ describe('ProductionItemManage split workbench', () => {
     expect(pageSource).toContain('market:delivered-item:view')
   })
 
-  test('shows customer requirement snapshot beside production item remarks', () => {
-    expect(pageSource).toContain('prop="customerRequirement"')
-    expect(pageSource).toContain('selectedTicketDetail.customerRequirement')
+  test('does not expose removed customer demand snapshot beside production item remarks', () => {
+    const removedField = 'customer' + 'Requirement'
+    expect(pageSource).not.toContain(`prop="${removedField}"`)
+    expect(pageSource).not.toContain(`selectedTicketDetail.${removedField}`)
   })
 })

@@ -351,7 +351,6 @@ class MesMaterialClientTest {
         item.setDrawingVersion("A");
         item.setDrawingUrls(List.of("http://qpo.local/drawing.pdf"));
         item.setRemark("remark");
-        item.setCustomerRequirements("customer req");
         req.setItems(List.of(item));
         return req;
     }

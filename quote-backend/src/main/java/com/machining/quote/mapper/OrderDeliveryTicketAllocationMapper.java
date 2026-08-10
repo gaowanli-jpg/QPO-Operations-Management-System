@@ -48,7 +48,6 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.material_shape,
                 alloc.surface_treatment,
                 alloc.remark,
-                alloc.customer_requirement,
                 alloc.description,
                 alloc.delivery_date,
                 alloc.process_route,

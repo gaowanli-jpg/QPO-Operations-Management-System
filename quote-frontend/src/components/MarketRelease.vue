@@ -422,30 +422,6 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="customerRequirement" label="客户需求" width="240" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="row-field-editor">
-                    <el-input
-                      v-model="row.customerRequirementDraft"
-                      size="small"
-                      maxlength="500"
-                      clearable
-                      :disabled="!canSelectItem(row)"
-                      class="row-field-input"
-                    />
-                    <el-button
-                      size="small"
-                      type="primary"
-                      plain
-                      :disabled="!canSelectItem(row) || isFieldSaving(row) || submitting"
-                      :loading="isFieldSaving(row)"
-                      @click.stop="saveReleaseItemFields(row)"
-                    >
-                      保存
-                    </el-button>
-                  </div>
-                </template>
-              </el-table-column>
               <el-table-column label="下单日期" width="150" show-overflow-tooltip>
                 <template #default="{ row }">
                   <el-date-picker
@@ -1135,7 +1111,6 @@ const saveReleaseItemFields = async (row) => {
   row.descriptionDraft = String(row.descriptionDraft ?? '').trim()
   row.surfaceTreatmentDraft = String(row.surfaceTreatmentDraft ?? '').trim()
   row.remarkDraft = String(row.remarkDraft ?? '').trim()
-  row.customerRequirementDraft = String(row.customerRequirementDraft ?? '').trim()
   return runAction(releaseActionKeys.fields(rowKey(row)), async () => {
     try {
       const response = await updateReleaseItemFields(row.id, {
@@ -1144,8 +1119,7 @@ const saveReleaseItemFields = async (row) => {
         rfqId: row.rfqId || selectedRfqId.value,
         description: row.descriptionDraft,
         surfaceTreatment: row.surfaceTreatmentDraft,
-        remark: row.remarkDraft,
-        customerRequirement: row.customerRequirementDraft
+        remark: row.remarkDraft
       })
       const savedData = response?.data || {}
       const saved = {
@@ -1153,8 +1127,7 @@ const saveReleaseItemFields = async (row) => {
         ...savedData,
         descriptionDraft: savedData.description || '',
         surfaceTreatmentDraft: savedData.surfaceTreatment || '',
-        remarkDraft: savedData.remark || '',
-        customerRequirementDraft: savedData.customerRequirement || ''
+        remarkDraft: savedData.remark || ''
       }
       const index = itemList.value.findIndex(item => rowKey(item) === rowKey(row))
       if (index >= 0) {

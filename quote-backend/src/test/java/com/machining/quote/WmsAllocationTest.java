@@ -182,7 +182,6 @@ class WmsAllocationTest {
                     assertSnapshot(row, "getMaterialShape", "板材");
                     assertSnapshot(row, "getSurfaceTreatment", "Anodized");
                     assertSnapshot(row, "getRemark", "Rush note");
-                    assertSnapshot(row, "getCustomerRequirement", "Customer needs burr-free edges");
                     assertSnapshot(row, "getDescription", "Bracket");
                     assertSnapshot(row, "getDeliveryDate", LocalDate.of(2026, 8, 12));
                     assertThat(row.getProcessRoute()).isEqualTo(ticket.getProcessRoute());
@@ -444,7 +443,6 @@ class WmsAllocationTest {
                         "private String materialShape;",
                         "private String surfaceTreatment;",
                         "private String remark;",
-                        "private String customerRequirement;",
                         "private String description;",
                         "private LocalDate deliveryDate;",
                         "private Object processRoute;",
@@ -476,7 +474,6 @@ class WmsAllocationTest {
                         "row.setMaterialShape(ticket.getMaterialShape())",
                         "row.setSurfaceTreatment(ticket.getSurfaceTreatment())",
                         "row.setRemark(ticket.getRemark())",
-                        "row.setCustomerRequirement(ticket.getCustomerRequirement())",
                         "row.setDescription(ticket.getDescription())",
                         "row.setDeliveryDate(ticket.getDeliveryDate())",
                         "row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))",
@@ -602,7 +599,6 @@ class WmsAllocationTest {
         setSnapshot(ticket, "setMaterialShape", "板材");
         ticket.setSurfaceTreatment("Anodized");
         ticket.setRemark("Rush note");
-        ticket.setCustomerRequirement("Customer needs burr-free edges");
         ticket.setDescription("Bracket");
         ticket.setDeliveryDate(LocalDate.of(2026, 8, 12));
         ticket.setProcessRoute(List.of(Map.ofEntries(

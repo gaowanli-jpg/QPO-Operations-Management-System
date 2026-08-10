@@ -367,7 +367,6 @@ public class RfqReleaseSalesOrderService {
         ticket.setDeliveryDate(leadTimeService.resolveDeliveryDate(
                 fields.salesOrderDate(), leadTimeService.effectiveDeliveryLeadTime(item)));
         ticket.setRemark(item.getRemark());
-        ticket.setCustomerRequirement(item.getCustomerRequirement());
         ticket.setArrangeType(context.arrangeType());
         ticket.setDrawingUrl(item.getDrawingUrl());
         ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()));
@@ -437,7 +436,6 @@ public class RfqReleaseSalesOrderService {
         item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()));
         item.setFeeData(source.getFeeData());
         item.setRemark(source.getRemark());
-        item.setCustomerRequirement(source.getCustomerRequirement());
         item.setStatus(QuoteStatusWorkflow.RELEASED);
         item.setCreatedAt(now);
         item.setUpdatedAt(now);

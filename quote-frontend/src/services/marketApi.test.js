@@ -292,8 +292,7 @@ describe('marketApi', () => {
       sourceOrderId: 2001,
       description: 'desc',
       surfaceTreatment: 'anodized',
-      remark: 'note',
-      customerRequirement: 'need'
+      remark: 'note'
     }
 
     await marketApi.updateReleaseItemFields(3001, payload)

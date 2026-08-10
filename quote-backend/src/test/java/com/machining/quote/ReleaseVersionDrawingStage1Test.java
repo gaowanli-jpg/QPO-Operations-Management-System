@@ -133,7 +133,6 @@ class ReleaseVersionDrawingStage1Test {
         item.setDescription("old description");
         item.setSurfaceTreatment("old surface");
         item.setRemark("old remark");
-        item.setCustomerRequirement("old requirement");
         when(orderMapper.selectByIdForUpdate(101)).thenReturn(order);
         when(itemMapper.selectByIdForUpdate(201)).thenReturn(item);
         when(itemMapper.selectById(201)).thenAnswer(invocation -> item);
@@ -145,7 +144,6 @@ class ReleaseVersionDrawingStage1Test {
         req.setDescription(" updated description ");
         req.setSurfaceTreatment(" anodized ");
         req.setRemark(" updated remark ");
-        req.setCustomerRequirement(" pack separately ");
         Map<String, Object> result = service.updateReleaseItemFields(201L, req);
 
         assertThat(result).containsEntry("success", true);
@@ -155,12 +153,10 @@ class ReleaseVersionDrawingStage1Test {
                 .containsEntry("sourceType", ReleaseSourceType.RFQ.name())
                 .containsEntry("description", "updated description")
                 .containsEntry("surfaceTreatment", "anodized")
-                .containsEntry("remark", "updated remark")
-                .containsEntry("customerRequirement", "pack separately");
+                .containsEntry("remark", "updated remark");
         assertThat(item.getDescription()).isEqualTo("updated description");
         assertThat(item.getSurfaceTreatment()).isEqualTo("anodized");
         assertThat(item.getRemark()).isEqualTo("updated remark");
-        assertThat(item.getCustomerRequirement()).isEqualTo("pack separately");
         verify(itemMapper).updateById(item);
         verify(auditService).record(eq("RELEASE_ITEM_FIELD_UPDATE"), eq("item_quote_version"), eq(201), any(Map.class), any(Map.class));
     }
@@ -182,7 +178,6 @@ class ReleaseVersionDrawingStage1Test {
         item.setDescription("old sales description");
         item.setSurfaceTreatment("old sales surface");
         item.setRemark("old sales remark");
-        item.setCustomerRequirement("old sales requirement");
         when(salesOrderHeaderMapper.selectByIdForUpdate(2001L)).thenReturn(order);
         when(salesOrderItemMapper.selectByIdForUpdate(3001L)).thenReturn(item);
         when(salesOrderItemMapper.selectById(3001L)).thenReturn(item);
@@ -193,7 +188,6 @@ class ReleaseVersionDrawingStage1Test {
         req.setDescription(" sales description ");
         req.setSurfaceTreatment(" passivation ");
         req.setRemark(" sales remark ");
-        req.setCustomerRequirement(" customer needs clean packing ");
         Map<String, Object> result = service.updateReleaseItemFields(3001L, req);
 
         assertThat(result).containsEntry("success", true);
@@ -203,12 +197,10 @@ class ReleaseVersionDrawingStage1Test {
                 .containsEntry("sourceType", ReleaseSourceType.SALES_ORDER.name())
                 .containsEntry("description", "sales description")
                 .containsEntry("surfaceTreatment", "passivation")
-                .containsEntry("remark", "sales remark")
-                .containsEntry("customerRequirement", "customer needs clean packing");
+                .containsEntry("remark", "sales remark");
         assertThat(item.getDescription()).isEqualTo("sales description");
         assertThat(item.getSurfaceTreatment()).isEqualTo("passivation");
         assertThat(item.getRemark()).isEqualTo("sales remark");
-        assertThat(item.getCustomerRequirement()).isEqualTo("customer needs clean packing");
         verify(salesOrderItemMapper).updateById(item);
         verify(auditService).record(eq("RELEASE_ITEM_FIELD_UPDATE"), eq("sales_order_item"), eq(3001L), any(Map.class), any(Map.class));
     }

@@ -32,7 +32,7 @@ class DashboardOverviewStage5DocumentationTest {
         assertThat(requirementDoc)
                 .contains("GET /api/dashboard/overview")
                 .contains("RFQ 饼图只统计 `未核价 / 已核价 / 已报价`")
-                .contains("销售订单饼图只统计 `已报价`")
+                .contains("待同步 U9 饼图只统计整单物料号已确认且尚未同步 U9 的销售订单")
                 .contains("客户交叉表不展示 `部分已提单 / 已生成提单 / 废弃`")
                 .contains("功能权限")
                 .contains("数据权限");

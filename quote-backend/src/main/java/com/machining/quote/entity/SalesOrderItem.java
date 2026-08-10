@@ -82,7 +82,6 @@ public class SalesOrderItem {
     private String matchStatus;
     private String matchMessage;
     private String remark;
-    private String customerRequirement;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

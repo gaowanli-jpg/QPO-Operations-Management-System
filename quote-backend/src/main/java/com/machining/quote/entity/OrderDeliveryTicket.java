@@ -44,7 +44,6 @@ public class OrderDeliveryTicket {
     private LocalDate startDate;
     private LocalDate deliveryDate;
     private String remark;
-    private String customerRequirement;
     private String arrangeType;
     private String drawingUrl;
     @TableField(typeHandler = JsonbTypeHandler.class)

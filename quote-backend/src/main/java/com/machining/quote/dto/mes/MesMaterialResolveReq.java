@@ -20,6 +20,5 @@ public class MesMaterialResolveReq {
         private String drawingVersion;
         private java.util.List<String> drawingUrls;
         private String remark;
-        private String customerRequirements;
     }
 }

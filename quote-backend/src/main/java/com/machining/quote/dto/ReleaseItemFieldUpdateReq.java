@@ -10,5 +10,4 @@ public class ReleaseItemFieldUpdateReq {
     private String description;
     private String surfaceTreatment;
     private String remark;
-    private String customerRequirement;
 }

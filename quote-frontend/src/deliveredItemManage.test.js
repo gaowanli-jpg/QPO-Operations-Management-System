@@ -67,9 +67,10 @@ describe('DeliveredItemManage foundation page', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
   })
 
-  test('shows customer requirement snapshot beside delivered item remarks', () => {
-    expect(source).toContain('prop="customerRequirement"')
-    expect(source).toContain('selectedItem.customerRequirement')
+  test('does not expose removed customer demand snapshot beside delivered item remarks', () => {
+    const removedField = 'customer' + 'Requirement'
+    expect(source).not.toContain(`prop="${removedField}"`)
+    expect(source).not.toContain(`selectedItem.${removedField}`)
   })
 
   test('keeps delivered ticket id tooltip enabled for long ids', () => {

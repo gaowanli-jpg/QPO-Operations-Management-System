@@ -45,7 +45,6 @@ public class OrderDeliveryTicketAllocation {
     private String materialShape;
     private String surfaceTreatment;
     private String remark;
-    private String customerRequirement;
     private String description;
     private LocalDate deliveryDate;
     @TableField(typeHandler = JsonbTypeHandler.class)

@@ -16,9 +16,10 @@ describe('release version edit stage 3', () => {
     expect(apiSource).toContain('/api/market/release/items/${itemId}/fields')
   })
 
-  test('market release edits row part description surface remark and customer requirement like version fields', () => {
+  test('market release edits row part description surface and remark like version fields', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const draftSource = readSource('components', 'marketReleaseDrafts.js')
+    const removedField = 'customer' + 'Requirement'
     const fieldSaveBlock = source.slice(
       source.indexOf('const saveReleaseItemFields = async (row) =>'),
       source.indexOf('const handleSelectionChange')
@@ -27,8 +28,7 @@ describe('release version edit stage 3', () => {
     const descriptionDraftIndex = source.indexOf('v-model="row.descriptionDraft"')
     const surfaceTreatmentDraftIndex = source.indexOf('v-model="row.surfaceTreatmentDraft"')
     const remarkDraftIndex = source.indexOf('v-model="row.remarkDraft"')
-    const customerRequirementDraftIndex = source.indexOf('v-model="row.customerRequirementDraft"')
-    const statusIndex = source.indexOf('prop="status"', customerRequirementDraftIndex)
+    const statusIndex = source.indexOf('prop="status"', remarkDraftIndex)
 
     expect(source).toContain('updateReleaseItemFields')
     expect(source).toContain('fields: (releaseItemKey) => `market:release:fields:${releaseItemKey}`')
@@ -36,20 +36,19 @@ describe('release version edit stage 3', () => {
     expect(source).toContain('v-model="row.descriptionDraft"')
     expect(source).toContain('v-model="row.surfaceTreatmentDraft"')
     expect(source).toContain('v-model="row.remarkDraft"')
-    expect(source).toContain('v-model="row.customerRequirementDraft"')
+    expect(source).not.toContain(`v-model="row.${removedField}Draft"`)
     expect(source).toContain(':loading="isFieldSaving(row)"')
     expect(source).toContain('@click.stop="saveReleaseItemFields(row)"')
     expect(source).toContain("import { hydrateReleaseItemDrafts } from './marketReleaseDrafts'")
     expect(draftSource).toContain("descriptionDraft: 'description'")
     expect(draftSource).toContain("surfaceTreatmentDraft: 'surfaceTreatment'")
     expect(draftSource).toContain("remarkDraft: 'remark'")
-    expect(draftSource).toContain("customerRequirementDraft: 'customerRequirement'")
+    expect(draftSource).not.toContain(`${removedField}Draft: '${removedField}'`)
     expect(materialIndex).toBeGreaterThanOrEqual(0)
     expect(descriptionDraftIndex).toBeGreaterThan(materialIndex)
     expect(surfaceTreatmentDraftIndex).toBeGreaterThan(descriptionDraftIndex)
     expect(remarkDraftIndex).toBeGreaterThan(surfaceTreatmentDraftIndex)
-    expect(customerRequirementDraftIndex).toBeGreaterThan(remarkDraftIndex)
-    expect(statusIndex).toBeGreaterThan(customerRequirementDraftIndex)
+    expect(statusIndex).toBeGreaterThan(remarkDraftIndex)
 
     expect(fieldSaveBlock).toContain('return runAction(releaseActionKeys.fields(rowKey(row)), async () =>')
     expect(fieldSaveBlock).toContain('updateReleaseItemFields(row.id, {')
@@ -59,7 +58,7 @@ describe('release version edit stage 3', () => {
     expect(fieldSaveBlock).toContain('description: row.descriptionDraft')
     expect(fieldSaveBlock).toContain('surfaceTreatment: row.surfaceTreatmentDraft')
     expect(fieldSaveBlock).toContain('remark: row.remarkDraft')
-    expect(fieldSaveBlock).toContain('customerRequirement: row.customerRequirementDraft')
+    expect(fieldSaveBlock).not.toContain(`${removedField}: row.${removedField}Draft`)
     expect(fieldSaveBlock).toContain('itemList.value.splice(index, 1, saved)')
     expect(fieldSaveBlock).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
     expect(fieldSaveBlock).not.toContain('clearSelectedRows()')

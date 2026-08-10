@@ -550,7 +550,6 @@ public class DeliveryService {
         ticket.setStartDate(startDate);
         ticket.setDeliveryDate(item.getInternalDeliveryDate() == null ? startDate : item.getInternalDeliveryDate());
         ticket.setRemark(item.getRemark());
-        ticket.setCustomerRequirement(item.getCustomerRequirement());
         ticket.setArrangeType(arrangeType);
         ticket.setDrawingUrl(item.getDrawingUrl());
         ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()));

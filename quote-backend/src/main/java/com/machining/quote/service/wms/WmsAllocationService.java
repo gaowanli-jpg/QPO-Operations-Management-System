@@ -239,7 +239,6 @@ public class WmsAllocationService {
         row.setMaterialShape(ticket.getMaterialShape());
         row.setSurfaceTreatment(ticket.getSurfaceTreatment());
         row.setRemark(ticket.getRemark());
-        row.setCustomerRequirement(ticket.getCustomerRequirement());
         row.setDescription(ticket.getDescription());
         row.setDeliveryDate(ticket.getDeliveryDate());
         row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));

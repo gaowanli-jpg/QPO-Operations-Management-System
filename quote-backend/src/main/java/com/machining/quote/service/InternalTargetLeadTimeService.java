@@ -359,7 +359,6 @@ public class InternalTargetLeadTimeService {
         item.setDescription(trimToNull(req == null ? null : req.getDescription()));
         item.setSurfaceTreatment(trimToNull(req == null ? null : req.getSurfaceTreatment()));
         item.setRemark(trimToNull(req == null ? null : req.getRemark()));
-        item.setCustomerRequirement(trimToNull(req == null ? null : req.getCustomerRequirement()));
         itemMapper.updateById(item);
         ItemQuoteVersion saved = itemMapper.selectById(item.getId());
         Map<String, Object> savedRow = buildItemRow(saved == null ? item : saved);
@@ -392,7 +391,6 @@ public class InternalTargetLeadTimeService {
         item.setDescription(trimToNull(req == null ? null : req.getDescription()));
         item.setSurfaceTreatment(trimToNull(req == null ? null : req.getSurfaceTreatment()));
         item.setRemark(trimToNull(req == null ? null : req.getRemark()));
-        item.setCustomerRequirement(trimToNull(req == null ? null : req.getCustomerRequirement()));
         salesOrderItemMapper.updateById(item);
         SalesOrderItem saved = salesOrderItemMapper.selectById(item.getId());
         Map<String, Object> savedRow = buildSalesOrderItemRow(saved == null ? item : saved, order);
@@ -1491,7 +1489,6 @@ public class InternalTargetLeadTimeService {
         row.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
-        row.put("customerRequirement", item.getCustomerRequirement());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
         boolean canSelect = item.getTaxIncludedUnitPrice() != null
@@ -1550,7 +1547,6 @@ public class InternalTargetLeadTimeService {
         row.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
         row.put("status", item.getStatus());
         row.put("remark", item.getRemark());
-        row.put("customerRequirement", item.getCustomerRequirement());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
         boolean canSelect = item.getTaxIncludedUnitPrice() != null

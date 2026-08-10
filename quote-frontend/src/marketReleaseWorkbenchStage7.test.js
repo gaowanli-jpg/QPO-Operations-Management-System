@@ -33,19 +33,20 @@ describe('market release workbench stage 7', () => {
 
   test('renders six item order-field editors and one save action before status', () => {
     const source = readSource('components', 'MarketRelease.vue')
-    const customerRequirementIndex = source.indexOf('prop="customerRequirement" label="客户需求"')
+    const tableIndex = source.indexOf('class="release-selection-table"')
     const orderFieldIndexes = [
-      source.indexOf('label="下单日期" width="150"', customerRequirementIndex),
-      source.indexOf('label="客户订单号" width="190"', customerRequirementIndex),
-      source.indexOf('label="客户项目号" width="190"', customerRequirementIndex),
-      source.indexOf('label="客户下单抬头" width="210"', customerRequirementIndex),
-      source.indexOf('label="订单类型" width="170"', customerRequirementIndex),
-      source.indexOf('label="内部项目号" width="190"', customerRequirementIndex),
-      source.indexOf('label="订单信息操作" width="136"', customerRequirementIndex)
+      source.indexOf('label="下单日期" width="150"', tableIndex),
+      source.indexOf('label="客户订单号" width="190"', tableIndex),
+      source.indexOf('label="客户项目号" width="190"', tableIndex),
+      source.indexOf('label="客户下单抬头" width="210"', tableIndex),
+      source.indexOf('label="订单类型" width="170"', tableIndex),
+      source.indexOf('label="内部项目号" width="190"', tableIndex),
+      source.indexOf('label="订单信息操作" width="136"', tableIndex)
     ]
-    const statusIndex = source.indexOf('prop="status" label="状态"', customerRequirementIndex)
+    const statusIndex = source.indexOf('prop="status" label="状态"', tableIndex)
 
-    expect(orderFieldIndexes.every(index => index > customerRequirementIndex)).toBe(true)
+    expect(source).not.toContain('prop="' + 'customer' + 'Requirement"')
+    expect(orderFieldIndexes.every(index => index > tableIndex)).toBe(true)
     expect(orderFieldIndexes.every((index, position) => position === 0 || index > orderFieldIndexes[position - 1])).toBe(true)
     expect(statusIndex).toBeGreaterThan(orderFieldIndexes.at(-1))
     expect(source).toContain('v-model="row.salesOrderDateDraft"')

@@ -199,9 +199,10 @@ describe('LockedItemManage guardrails', () => {
     }
   })
 
-  test('shows customer requirement snapshot beside locked item remarks', () => {
-    expect(pageSource).toContain('prop="customerRequirement"')
-    expect(pageSource).toContain('selectedTicketDetail.customerRequirement')
+  test('does not expose removed customer demand snapshot beside locked item remarks', () => {
+    const removedField = 'customer' + 'Requirement'
+    expect(pageSource).not.toContain(`prop="${removedField}"`)
+    expect(pageSource).not.toContain(`selectedTicketDetail.${removedField}`)
   })
 
   test('keeps allocation and delivered ticket id tooltips enabled for long ids', () => {

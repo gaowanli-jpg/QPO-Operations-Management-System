@@ -34,8 +34,7 @@ QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入�
       "drawingUrls": [
         "http://192.168.70.21:8088/uploads/drawings/xxx.pdf"
       ],
-      "remark": "备注",
-      "customerRequirements": "客户要求"
+      "remark": "备注"
     }
   ]
 }
@@ -45,7 +44,7 @@ QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入�
 
 - `mesRequestId` 是 QPO 每次请求生成的唯一 ID，也是回调主定位键，值来自 QPO 出站请求里的 `bizId`。
 - `ticketId` 是 QPO 内部请求流水保存的提单行 ID，QPO 会按 `mesRequestId` 自行查询，不要求 MES 或数据中心回传。
-- `customerCode`、`items[].drawingNo`、`items[].drawingVersion`、`items[].remark`、`items[].customerRequirements` 等字段用于 MES 创建物料号；QPO 回调落库不依赖这些字段定位。
+- `customerCode`、`items[].drawingNo`、`items[].drawingVersion`、`items[].remark` 等字段用于 MES 创建物料号；QPO 回调落库不依赖这些字段定位。
 - QPO 不再向 MES 传 `ticketId`、`sourceType`、`rfqId`、`orderNo`、`rfqNo`、`sourceOrderId`、`sourceItemId`；数据中心回调 QPO 时也不需要回传这些字段。
 - 如果 QPO 同图号版本去重后把其他零件作为 follower 关联到主请求，数据中心和 MES 都不需要知道 follower 明细，也不需要分别回调 follower。
 

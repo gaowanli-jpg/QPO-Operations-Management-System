@@ -4,7 +4,6 @@ const RELEASE_ITEM_DRAFT_SOURCES = {
   descriptionDraft: 'description',
   surfaceTreatmentDraft: 'surfaceTreatment',
   remarkDraft: 'remark',
-  customerRequirementDraft: 'customerRequirement',
   salesOrderDateDraft: 'salesOrderDate',
   customerOrderNoDraft: 'customerOrderNo',
   customerProjectNoDraft: 'customerProjectNo',
