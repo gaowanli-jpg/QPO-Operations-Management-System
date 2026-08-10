@@ -26,6 +26,7 @@ import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.aps.ApsSourceService;
+import com.machining.quote.service.AuditLogRetentionService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
@@ -34,6 +35,8 @@ import com.machining.quote.service.QuoteProcessService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -52,7 +55,8 @@ import static org.assertj.core.api.Assertions.within;
 @SpringBootTest(properties = {
         "erp.auth.enabled=false",
         "erp.upload-dir=${java.io.tmpdir}/quote-test/uploads/",
-        "erp.backup-dir=${java.io.tmpdir}/quote-test/backups/"
+        "erp.backup-dir=${java.io.tmpdir}/quote-test/backups/",
+        "spring.task.scheduling.enabled=false"
 })
 @Transactional
 class CoreWorkflowIntegrationTests {
@@ -76,6 +80,9 @@ class CoreWorkflowIntegrationTests {
     private OrderManagementService orderManagementService;
     @Autowired
     private ApsSourceService apsSourceService;
+
+    @MockBean
+    private AuditLogRetentionService auditLogRetentionService;
     @Autowired
     private CustomerMasterMapper customerMapper;
     @Autowired
@@ -1063,6 +1070,7 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void repeatSourceImplementationUsesReleasedItemLookupWithoutDeliveryTicketCandidatePath() throws Exception {
         String service = source("src/main/java/com/machining/quote/service/EngineerService.java");
         String repeatMethod = methodBody(service, "private Map<String, RepeatSource> findRepeatSources", "private boolean hasReusableQuote");
@@ -1085,9 +1093,18 @@ class CoreWorkflowIntegrationTests {
                 .contains("selectLatestReleasedRepeatSources")
                 .contains("JOIN LATERAL")
                 .contains("VALUES");
+        assertThat(provider)
+                .as("重复件候选必须排除导入默认空 JSON 快照，不能只判断 IS NOT NULL")
+                .contains("h.material_data IS NOT NULL")
+                .contains("h.material_data <> '{}'::jsonb")
+                .contains("h.process_route IS NOT NULL")
+                .contains("h.process_route <> '[]'::jsonb")
+                .doesNotContain("h.fee_data IS NOT NULL")
+                .doesNotContain("h.fee_data <> '[]'::jsonb");
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void repeatReleasedItemLookupUsesPartialIndexWithoutCustomerOrTicketIndex() throws Exception {
         Path migrationPath = Path.of(
                 "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
@@ -1097,7 +1114,21 @@ class CoreWorkflowIntegrationTests {
 
         String migration = Files.readString(migrationPath, StandardCharsets.UTF_8);
         String schema = source("src/main/resources/db/migration/V1__qpo_baseline_schema.sql");
-        String combined = migration + "\n" + schema;
+        String allMigrations;
+        try (var files = Files.list(Path.of("src", "main", "resources", "db", "migration"))) {
+            allMigrations = String.join("\n", files
+                    .filter(path -> path.getFileName().toString().endsWith(".sql"))
+                    .sorted()
+                    .map(path -> {
+                        try {
+                            return Files.readString(path, StandardCharsets.UTF_8);
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    })
+                    .toList());
+        }
+        String combined = migration + "\n" + schema + "\n" + allMigrations;
 
         assertThat(combined)
                 .contains("idx_item_quote_version_repeat_released_key")
@@ -1105,7 +1136,10 @@ class CoreWorkflowIntegrationTests {
                 .contains("'已提单'::text")
                 .contains("tax_included_unit_price IS NOT NULL")
                 .contains("material_data IS NOT NULL")
-                .contains("process_route IS NOT NULL");
+                .contains("material_data <> '{}'::jsonb")
+                .contains("process_route IS NOT NULL")
+                .contains("process_route <> '[]'::jsonb")
+                .contains("DROP INDEX IF EXISTS idx_item_quote_version_repeat_released_key");
         assertThat(combined)
                 .as("重复件匹配不能退回普通全量联合索引")
                 .doesNotContain("item_quote_version(part_no, version, status, id DESC)");
@@ -1114,7 +1148,8 @@ class CoreWorkflowIntegrationTests {
         assertThat(repeatIndex)
                 .as("重复件匹配索引不能新增客户或提单表专用索引")
                 .doesNotContain("customer")
-                .doesNotContain("order_delivery_ticket");
+                .doesNotContain("order_delivery_ticket")
+                .doesNotContain("fee_data");
     }
 
     @Test

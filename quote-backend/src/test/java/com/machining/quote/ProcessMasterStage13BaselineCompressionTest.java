@@ -24,7 +24,7 @@ class ProcessMasterStage13BaselineCompressionTest {
     private static final Path MIGRATION_DIR = RESOURCES.resolve(Path.of("db", "migration"));
 
     @Test
-    void activeMigrationDirectoryContainsOnlyCompressedBaselineFilesAndNoSchemaSql() throws Exception {
+    void activeMigrationDirectoryContainsCompressedBaselineAndCurrentIncrementalFiles() throws Exception {
         List<String> migrationNames;
         try (var files = Files.list(MIGRATION_DIR)) {
             migrationNames = files
@@ -36,7 +36,8 @@ class ProcessMasterStage13BaselineCompressionTest {
 
         assertThat(migrationNames).containsExactly(
                 "V1__qpo_baseline_schema.sql",
-                "V2__qpo_baseline_seed_data.sql");
+                "V2__qpo_baseline_seed_data.sql",
+                "V3__repeat_released_snapshot_candidate_index.sql");
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
     }
 
@@ -56,7 +57,8 @@ class ProcessMasterStage13BaselineCompressionTest {
 
                 assertThat(flywayHistory(connection, schema)).containsExactly(
                         "1|qpo baseline schema|true",
-                        "2|qpo baseline seed data|true");
+                        "2|qpo baseline seed data|true",
+                        "3|repeat released snapshot candidate index|true");
                 assertThat(tableExists(connection, schema, "dict_process_category")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process_detail")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process")).isFalse();

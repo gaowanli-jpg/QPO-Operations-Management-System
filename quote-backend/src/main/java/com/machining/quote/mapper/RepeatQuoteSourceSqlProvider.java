@@ -37,7 +37,9 @@ public class RepeatQuoteSourceSqlProvider {
                       AND h.status = '%s'
                       AND h.tax_included_unit_price IS NOT NULL
                       AND h.material_data IS NOT NULL
+                      AND h.material_data <> '{}'::jsonb
                       AND h.process_route IS NOT NULL
+                      AND h.process_route <> '[]'::jsonb
                     ORDER BY h.id DESC
                     LIMIT 1
                 ) h ON true
