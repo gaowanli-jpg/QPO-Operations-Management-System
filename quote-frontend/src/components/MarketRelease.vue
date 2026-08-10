@@ -84,7 +84,7 @@
             <section class="release-order-default-panel">
               <div class="panel-title compact">订单默认信息</div>
               <p class="release-order-default-hint">一批生成一张销售订单；零件值优先，空值继承订单默认信息。</p>
-              <el-form label-width="80px" class="ticket-form">
+              <el-form label-width="96px" class="ticket-form release-order-default-form">
                 <el-form-item label="单据类型" required>
                   <el-input
                     v-model="releaseForm.documentTypeCode"
@@ -1791,6 +1791,26 @@ const sourceTypeLabel = () => {
 
 .ticket-form {
   margin-top: 0;
+}
+
+.release-order-default-form {
+  --release-default-control-width: 236px;
+}
+
+.release-order-default-form :deep(.el-form-item__label) {
+  white-space: nowrap;
+}
+
+.release-order-default-form :deep(.el-form-item__content) {
+  flex: 0 1 var(--release-default-control-width);
+  max-width: var(--release-default-control-width);
+  min-width: 0;
+}
+
+.release-order-default-form :deep(.el-input),
+.release-order-default-form :deep(.el-select),
+.release-order-default-form :deep(.el-date-editor) {
+  width: 100%;
 }
 
 .release-order-default-panel {

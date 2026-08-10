@@ -62,7 +62,7 @@ describe('release drawing replacement stage 4', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const orderSummaryPanel = source.slice(
       source.indexOf('<el-table\n              class="selected-orders-mini-table"'),
-      source.indexOf('<el-form label-width="80px" class="ticket-form">')
+      source.indexOf('<el-form label-width="96px" class="ticket-form release-order-default-form">')
     )
 
     expect(source).not.toContain('<div class="panel-title">询价单</div>')
