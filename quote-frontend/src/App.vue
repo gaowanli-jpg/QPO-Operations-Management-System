@@ -116,7 +116,7 @@ const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 const menuGroups = [
   { key: 'dashboard', title: '首页', paths: ['/dashboard'] },
-  { key: 'market', title: '市场', paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
+  { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/production-items', '/locked-items'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
@@ -125,7 +125,6 @@ const menuGroups = [
 const menuMetaByPath = {
   '/dashboard': { title: '首页看板', icon: DataBoard },
   '/market': { title: '新单导入', permission: 'market:rfq:view', icon: DataBoard },
-  '/sales-match': { title: '异常治理', permission: 'market:sales-match:view', icon: Files },
   '/quote-process': { title: '报价处理', permission: 'market:quote-process:view', icon: Document },
   '/release': { title: '议价提单', permission: 'market:release:view', icon: Files },
   '/u9-sync': { title: 'U9同步', permission: 'market:u9-sync:view', icon: Document },
@@ -190,10 +189,6 @@ const shellMetaByPath = {
   '/market': {
     title: '新单导入',
     description: '导入客户询价表和图纸，推送工程评估。'
-  },
-  '/sales-match': {
-    title: '异常治理',
-    description: '排查历史销售订单或自动补全异常，不作为新销售订单日常流程入口。'
   },
   '/quote-process': {
     title: '报价处理',

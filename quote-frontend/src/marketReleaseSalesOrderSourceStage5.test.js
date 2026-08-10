@@ -71,7 +71,7 @@ describe('market release RFQ-only source governance stage 5', () => {
     const marketApi = readSource('services', 'marketApi.js')
 
     expect(marketApi).toContain("release: '/api/market/release/orders'")
-    expect(source).toContain("const SALES_ORDER_SCOPES = ['sales-match', 'u9-sync']")
+    expect(source).toContain("const SALES_ORDER_SCOPES = ['u9-sync']")
     expect(source).not.toContain("const SALES_ORDER_SCOPES = ['release'")
     expect(source).toContain('const resolveOrderSourceType = (order) => (')
     expect(source).toContain("order?.sourceType || 'RFQ'")

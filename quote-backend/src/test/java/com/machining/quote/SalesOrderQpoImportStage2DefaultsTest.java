@@ -15,7 +15,7 @@ import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
-import com.machining.quote.service.SalesOrderMatchService;
+import com.machining.quote.service.SalesOrderAutoSnapshotCompletionService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
 import com.machining.quote.service.SalesOrderNumberService;
@@ -188,7 +188,7 @@ class SalesOrderQpoImportStage2DefaultsTest {
                 itemMapper(service),
                 auditService(service),
                 businessFileService(service),
-                salesOrderMatchService(service),
+                autoSnapshotCompletionService(service),
                 deliveryService(service),
                 dataScopeService(service),
                 parser(service));
@@ -275,7 +275,7 @@ class SalesOrderQpoImportStage2DefaultsTest {
         ReflectionTestUtils.setField(service, "dataScopeService", mock(DataScopeService.class));
         ReflectionTestUtils.setField(service, "auditService", mock(AuditService.class));
         ReflectionTestUtils.setField(service, "businessFileService", mock(BusinessFileService.class));
-        ReflectionTestUtils.setField(service, "salesOrderMatchService", mock(SalesOrderMatchService.class));
+        ReflectionTestUtils.setField(service, "autoSnapshotCompletionService", mock(SalesOrderAutoSnapshotCompletionService.class));
         ReflectionTestUtils.setField(service, "deliveryService", mock(DeliveryService.class));
         ReflectionTestUtils.setField(service, "salesOrderNumberService", new SalesOrderNumberService());
         return service;
@@ -381,8 +381,8 @@ class SalesOrderQpoImportStage2DefaultsTest {
         return (BusinessFileService) ReflectionTestUtils.getField(service, "businessFileService");
     }
 
-    private static SalesOrderMatchService salesOrderMatchService(SalesOrderQpoImportService service) {
-        return (SalesOrderMatchService) ReflectionTestUtils.getField(service, "salesOrderMatchService");
+    private static SalesOrderAutoSnapshotCompletionService autoSnapshotCompletionService(SalesOrderQpoImportService service) {
+        return (SalesOrderAutoSnapshotCompletionService) ReflectionTestUtils.getField(service, "autoSnapshotCompletionService");
     }
 
     private static DeliveryService deliveryService(SalesOrderQpoImportService service) {

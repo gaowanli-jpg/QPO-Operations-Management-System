@@ -71,7 +71,7 @@
 
 ```text
 quote-backend/src/main/java/com/machining/quote/service/SalesOrderQpoImportService.java
-quote-backend/src/main/java/com/machining/quote/service/SalesOrderMatchService.java
+quote-backend/src/main/java/com/machining/quote/service/SalesOrderAutoSnapshotCompletionService.java
 ```
 
 ### 2.2 当前 RFQ 重复件核价链路
@@ -195,9 +195,9 @@ material_no_status = 已确认
 
 ## 5. 业务链路设计
 
-### 5.1 销售订单自动异常治理匹配
+### 5.1 销售订单导入自动快照补全
 
-改造 `SalesOrderMatchService.applyProductionSnapshot(...)`：
+改造 `SalesOrderAutoSnapshotCompletionService.applyProductionSnapshot(...)`：
 
 1. 按现有 `part_no + version` 查找已提单 RFQ 历史来源。
 2. 按现有规则补生产和核价快照。
@@ -346,7 +346,7 @@ boolean isConfirmedMaterialNo(ItemQuoteVersion source);
 
 - `market:delivered-item:view`。
 - `market:delivered-item:mes-sync`。
-- `market:sales-match:apply`。
+- 销售订单导入自动补全由 `market:rfq:import-sales-order` 覆盖；手工 `market:sales-match:*` 权限已退役。
 - 现有 RFQ 核价保存权限。
 - 现有提单权限。
 
@@ -400,7 +400,7 @@ boolean isConfirmedMaterialNo(ItemQuoteVersion source);
 
 修改：
 
-- 修改 `SalesOrderMatchService.applyProductionSnapshot(...)`。
+- 修改 `SalesOrderAutoSnapshotCompletionService.applyProductionSnapshot(...)`。
 - 将来源 RFQ 已确认物料号复制到 `sales_order_item`。
 - 匹配结果增加物料号补全、跳过和冲突摘要。
 - 保持销售订单导入事实字段和已有生产快照不被覆盖。

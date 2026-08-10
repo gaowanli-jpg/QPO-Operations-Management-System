@@ -80,11 +80,8 @@ class CanonicalPriceBackendStage2Test {
     }
 
     @Test
-    void salesOrderImportAndPreviewExposeCanonicalPrices() throws IOException {
+    void salesOrderImportAndU9PreviewExposeCanonicalPrices() throws IOException {
         String importService = read(service("SalesOrderQpoImportService.java"));
-        String matchService = read(service("SalesOrderMatchService.java"));
-        String matchRow = read(Path.of(
-                "src", "main", "java", "com", "machining", "quote", "dto", "SalesOrderMatchItemRow.java"));
         String u9Preview = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "dto", "SalesOrderU9SyncPreviewLine.java"));
 
@@ -93,12 +90,6 @@ class CanonicalPriceBackendStage2Test {
                         "setTaxIncludedUnitPrice(line.getTaxIncludedUnitPrice())",
                         "setTaxIncludedTotalPrice(line.getTaxIncludedTotalPrice())")
                 .doesNotContain("setFinalUnitPrice", "setFinalTotalPrice");
-        assertThat(matchService)
-                .contains("taxIncludedUnitPrice")
-                .doesNotContain("finalUnitPrice", "setFinalUnitPrice");
-        assertThat(matchRow)
-                .contains("private BigDecimal taxIncludedUnitPrice;")
-                .doesNotContain("finalUnitPrice");
         assertThat(u9Preview)
                 .contains("private BigDecimal taxIncludedUnitPrice;")
                 .doesNotContain("finalUnitPrice");

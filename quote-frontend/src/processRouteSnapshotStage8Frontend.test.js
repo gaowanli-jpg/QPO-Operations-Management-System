@@ -18,12 +18,10 @@ describe('process route snapshot stage 8 frontend display', () => {
     expect(source).not.toContain('`${item.processName || \'\'}${item.inputVal ? `(${item.inputVal})` : \'\'}`')
   })
 
-  test('SalesMatch preview includes route snapshot summary instead of only availability labels', () => {
-    const source = readComponent('SalesMatch.vue')
+  test('manual SalesMatch route preview is retired from process snapshot surfaces', () => {
+    const routeSource = fs.readFileSync(path.join(root, 'src', 'router', 'index.js'), 'utf8')
 
-    expect(source).toContain('label="工艺路线"')
-    expect(source).toContain('formatRouteSummary(row.currentProcessRouteSummary || row.sourceProcessRouteSummary)')
-    expect(source).toContain('sourceProcessRouteSummary')
-    expect(source).toContain('currentProcessRouteSummary')
+    expect(routeSource).not.toContain('SalesMatch')
+    expect(routeSource).not.toContain('/sales-match')
   })
 })

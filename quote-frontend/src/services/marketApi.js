@@ -25,8 +25,7 @@ const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',
   release: '/api/market/release/orders',
   'delivery-document': '/api/market/delivery-documents/orders',
-  'u9-sync': '/api/market/u9-sync/orders',
-  'sales-match': '/api/market/sales-match/orders'
+  'u9-sync': '/api/market/u9-sync/orders'
 }
 
 export const listMarketOrders = (params = {}, scope) => {
@@ -59,23 +58,6 @@ export const listDeliveryDocumentProcessSheets = (sourceOrderId, params = {}) =>
   `/api/market/delivery-documents/process-sheets/${sourceOrderId}`,
   { params }
 )
-
-export const listSalesMatchCustomers = (params = {}) => request('/api/market/sales-match/customers', { params })
-
-export const listSalesMatchOrders = (params = {}) => request('/api/market/sales-match/orders', { params })
-
-export const listSalesMatchItems = (salesOrderId, params = {}) => request(
-  `/api/market/sales-match/orders/${salesOrderId}/items`,
-  { params }
-)
-
-export const previewSalesOrderMatch = (payload) => postJson('/api/market/sales-match/preview', payload)
-
-export const applySalesOrderMatch = (payload) => postJson('/api/market/sales-match/apply', payload)
-
-export const previewSalesOrderMatchByOrder = (salesOrderId) => request(`/api/market/sales-match/orders/${salesOrderId}/preview`)
-
-export const applySalesOrderMatchByOrder = (salesOrderId) => postJson(`/api/market/sales-match/orders/${salesOrderId}/apply`)
 
 export const listSalesOrderU9SyncOrders = (params = {}) => request('/api/market/u9-sync/orders', { params })
 

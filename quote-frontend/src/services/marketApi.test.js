@@ -91,13 +91,11 @@ describe('marketApi', () => {
     await marketApi.listMarketOrders(params, 'release')
     await marketApi.listMarketOrders(params, 'delivery-document')
     await marketApi.listMarketOrders(params, 'u9-sync')
-    await marketApi.listMarketOrders(params, 'sales-match')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/orders', { params })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/orders', { params })
     expect(request).toHaveBeenNthCalledWith(3, '/api/market/delivery-documents/orders', { params })
     expect(request).toHaveBeenNthCalledWith(4, '/api/market/u9-sync/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-match/orders', { params })
   })
 
   test('delivery document helpers use the independent backend namespace', async () => {
@@ -117,34 +115,15 @@ describe('marketApi', () => {
     )
   })
 
-  test('sales match helpers use independent sales-order endpoints with backend paging', async () => {
-    const params = { customerName: 'ACME', keyword: 'SO-2026', page: 2, pageSize: 50 }
-    const payload = { salesOrderIds: [101], salesOrderItemIds: [9001], onlyUnmatched: true }
-
-    await marketApi.listSalesMatchCustomers({ keyword: 'ACME' })
-    await marketApi.listSalesMatchOrders(params)
-    await marketApi.listSalesMatchItems(101, params)
-    await marketApi.previewSalesOrderMatch(payload)
-    await marketApi.applySalesOrderMatch({ ...payload, applyAllMatchedInSelectedOrders: false })
-    await marketApi.previewSalesOrderMatchByOrder(101)
-    await marketApi.applySalesOrderMatchByOrder(101)
-
-    expect(request).toHaveBeenNthCalledWith(1, '/api/market/sales-match/customers', { params: { keyword: 'ACME' } })
-    expect(request).toHaveBeenNthCalledWith(2, '/api/market/sales-match/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(3, '/api/market/sales-match/orders/101/items', { params })
-    expect(request).toHaveBeenNthCalledWith(4, '/api/market/sales-match/preview', {
-      method: 'POST',
-      data: payload
-    })
-    expect(request).toHaveBeenNthCalledWith(5, '/api/market/sales-match/apply', {
-      method: 'POST',
-      data: { ...payload, applyAllMatchedInSelectedOrders: false }
-    })
-    expect(request).toHaveBeenNthCalledWith(6, '/api/market/sales-match/orders/101/preview')
-    expect(request).toHaveBeenNthCalledWith(7, '/api/market/sales-match/orders/101/apply', {
-      method: 'POST',
-      data: undefined
-    })
+  test('does not expose retired manual sales match helpers', () => {
+    expect('listSalesMatchCustomers' in marketApi).toBe(false)
+    expect('listSalesMatchOrders' in marketApi).toBe(false)
+    expect('listSalesMatchItems' in marketApi).toBe(false)
+    expect('previewSalesOrderMatch' in marketApi).toBe(false)
+    expect('applySalesOrderMatch' in marketApi).toBe(false)
+    expect('previewSalesOrderMatchByOrder' in marketApi).toBe(false)
+    expect('applySalesOrderMatchByOrder' in marketApi).toBe(false)
+    expect(request).not.toHaveBeenCalled()
   })
 
   test('sales order U9 sync helpers use the independent whole-order sync namespace', async () => {

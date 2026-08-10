@@ -15,7 +15,7 @@ class MaterialMasterStage7SnapshotTest {
     @Test
     void salesOrderProductionSnapshotCarriesCompleteEngineeringMaterialIdentity() throws IOException {
         String salesOrderItem = read("entity", "SalesOrderItem.java");
-        String salesMatchService = read("service", "SalesOrderMatchService.java");
+        String autoSnapshotCompletionService = read("service", "SalesOrderAutoSnapshotCompletionService.java");
         String enrichmentService = read("service", "SalesOrderRepeatEnrichmentService.java");
         String rfqReleaseService = read("service", "RfqReleaseSalesOrderService.java");
 
@@ -26,14 +26,13 @@ class MaterialMasterStage7SnapshotTest {
                         "private String engineeringMaterialTypeCode;",
                         "private String engineeringMaterialTypeName;",
                         "private String engineeringMaterialCategory;");
-        assertThat(salesMatchService)
+        assertThat(autoSnapshotCompletionService)
                 .contains(
+                        "copyEngineeringMaterialIdentityIfMissing(item, source);",
                         "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
                         "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
                         "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
-                        "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
-                        "putSnapshot(fields, \"engineeringMaterialCode\"",
-                        "putSnapshot(fields, \"engineeringMaterialTypeName\"");
+                        "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));");
         assertThat(enrichmentService)
                 .contains(
                         "current.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",

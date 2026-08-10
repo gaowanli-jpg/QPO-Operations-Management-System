@@ -17,7 +17,7 @@ describe('sales order U9 sync module', () => {
   test('places U9 sync between release and delivery documents in the market sidebar', () => {
     const app = readSource('App.vue')
 
-    expect(app).toContain("paths: ['/market', '/sales-match', '/quote-process', '/release', '/u9-sync', '/delivery-documents'")
+    expect(app).toContain("paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents'")
 
     const marketGroupIndex = app.indexOf("{ key: 'market'")
     const releaseIndex = app.indexOf("'/release'", marketGroupIndex)

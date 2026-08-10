@@ -3,7 +3,7 @@ package com.machining.quote.dto;
 import lombok.Data;
 
 @Data
-public class SalesOrderMatchApplyRow {
+public class SalesOrderAutoSnapshotCompletionRow {
     private Long salesOrderId;
     private Long salesOrderItemId;
     private String salesOrderNo;

@@ -363,7 +363,7 @@ item.untaxedTotalPrice = line.untaxedTotalPrice
 修改：
 
 ```text
-quote-backend/src/main/java/com/machining/quote/service/SalesOrderMatchService.java
+quote-backend/src/main/java/com/machining/quote/service/SalesOrderAutoSnapshotCompletionService.java
 ```
 
 销售匹配只补生产快照，不覆盖销售订单导入价格事实。预览和保护字段摘要使用 `taxIncludedUnitPrice`，删除 `finalUnitPrice` 字段及旧覆盖语义。
@@ -460,7 +460,6 @@ taxIncludedTotalPrice
 quote-frontend/src/components/MarketRelease.vue
 quote-frontend/src/components/OrderManage.vue
 quote-frontend/src/components/QuoteProcess.vue
-quote-frontend/src/components/SalesMatch.vue
 ```
 
 所有核价完成判断、价格展示和保护字段摘要改用正式字段。销售匹配页面不增加价格覆盖入口，仍只执行生产快照空缺补全。
@@ -724,7 +723,7 @@ rg -n "final_unit_price|final_total_price|finalUnitPrice|finalTotalPrice" `
 
 修改：
 
-- 更新 `ItemPricing.vue`、`MarketRelease.vue`、`OrderManage.vue`、`QuoteProcess.vue`、`SalesMatch.vue` 和 `SalesOrderU9Sync.vue`。
+- 更新 `ItemPricing.vue`、`MarketRelease.vue`、`OrderManage.vue`、`QuoteProcess.vue` 和 `SalesOrderU9Sync.vue`；手工 `SalesMatch.vue` 模块已退役。
 - 将“最终单价 / 最终金额”改为含税价格字段展示。
 - 删除前端 `finalUnitPrice` / `finalTotalPrice` 运行时引用。
 - 更新 `auditLogFormat.js` 和相关源码测试。

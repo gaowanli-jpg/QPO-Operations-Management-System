@@ -359,7 +359,7 @@ const SALES_ORDER_STATUS_ACTIONS = [
     errorMessage: '恢复销售订单失败。',
     confirmTitle: '恢复销售订单',
     confirmButtonText: '确认恢复',
-    confirmMessage: (row) => `确认将废弃销售订单「${row.salesOrderNo || row.id}」恢复为“已报价”吗？恢复后用于异常治理或重新处理，不再进入旧的手工议价提单链路。`
+    confirmMessage: (row) => `确认将废弃销售订单「${row.salesOrderNo || row.id}」恢复为“已报价”吗？恢复后可重新处理或等待后续导入自动链路处理，不再进入旧的手工议价提单链路。`
   }
 ]
 

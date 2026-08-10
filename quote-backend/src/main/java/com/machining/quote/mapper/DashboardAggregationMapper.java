@@ -173,15 +173,6 @@ public interface DashboardAggregationMapper {
             ${ew.customSqlSegment}
             </script>
             """)
-    long countSalesMatchTodo(@Param(Constants.WRAPPER) Wrapper<?> query);
-
-    @Select("""
-            <script>
-            SELECT COUNT(*)
-            FROM sales_order_header so
-            ${ew.customSqlSegment}
-            </script>
-            """)
     long countU9Ready(@Param(Constants.WRAPPER) Wrapper<?> query);
 
     @Select("""

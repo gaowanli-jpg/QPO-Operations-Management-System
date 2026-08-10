@@ -18,7 +18,6 @@ class PermissionSystemStage4Test {
                 .containsExactly(
                         "/market",
                         "/orders",
-                        "/sales-match",
                         "/sales-orders",
                         "/delivered-items",
                         "/production-items",
@@ -51,10 +50,9 @@ class PermissionSystemStage4Test {
                 "market:sales-order:view",
                 "market:sales-order:customer-select",
                 "market:sales-order:file-preview",
-                "market:sales-match:view",
-                "market:sales-match:customer-select",
-                "market:sales-match:order-select",
-                "market:sales-match:apply",
+                "market:sales-order:supplement-drawing",
+                "market:sales-order:discard",
+                "market:sales-order:restore",
                 "market:quote-process:update-lead-time",
                 "market:quote-process:save-quote",
                 "market:quote-process:export",
@@ -92,7 +90,11 @@ class PermissionSystemStage4Test {
         );
         assertThat(info.getPermissions()).doesNotContain(
                 "market:rfq:order-type-select",
-                "market:release:reset"
+                "market:release:reset",
+                "market:sales-match:view",
+                "market:sales-match:customer-select",
+                "market:sales-match:order-select",
+                "market:sales-match:apply"
         );
     }
 }

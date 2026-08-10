@@ -57,7 +57,6 @@ class DashboardOverviewStage2Test {
         when(mapper.countDeliveredWmsFailed(any())).thenReturn(3L);
         when(mapper.countLockedProductionTodo(any())).thenReturn(2L);
         when(mapper.countLockedMesProductionFailed(any())).thenReturn(1L);
-        when(mapper.countSalesMatchTodo(any())).thenReturn(9L);
         when(mapper.countU9Ready(any())).thenReturn(8L);
         when(mapper.countU9Failed(any())).thenReturn(6L);
 
@@ -81,7 +80,8 @@ class DashboardOverviewStage2Test {
         assertThat(overview.getSummaryCards()).extracting("key")
                 .contains("rfqTodo", "salesQuoted", "deliveredActive", "lockedProduction");
         assertThat(overview.getTodoCards()).extracting("key")
-                .contains("salesMatch", "materialTodo", "wmsTodo", "mesProductionTodo", "u9SyncReady");
+                .contains("materialTodo", "wmsTodo", "mesProductionTodo", "u9SyncReady")
+                .doesNotContain("salesMatch");
         assertThat(overview.getAttentionItems()).extracting("key")
                 .contains("mesCallbackPending", "mesFailed", "wmsFailed", "u9Failed", "mesProductionFailed");
 

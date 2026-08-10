@@ -73,7 +73,7 @@ class SalesOrderIndependentStage8Test {
     void salesOrderImportKeepsLegacyRfqTablesOutOfWritePathAndProtectsOldFlowTests() throws IOException {
         String importService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderQpoImportService.java")));
         String enrichmentService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderRepeatEnrichmentService.java")));
-        String salesMatchService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderMatchService.java")));
+        String autoSnapshotCompletionService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderAutoSnapshotCompletionService.java")));
         String importResultRow = read(MAIN_JAVA.resolve(Path.of("dto", "SalesOrderQpoImportResultRow.java")));
         String orderService = read(MAIN_JAVA.resolve(Path.of("service", "OrderManagementService.java")));
         String releaseService = read(MAIN_JAVA.resolve(Path.of("service", "InternalTargetLeadTimeService.java")));
@@ -133,11 +133,12 @@ class SalesOrderIndependentStage8Test {
                 .contains("releasedProductionSnapshotsByKey")
                 .doesNotContain("public SalesOrderRepeatEnrichmentResult enrich(Integer rfqId")
                 .doesNotContain("salesOrderItemMapper.insert");
-        assertThat(salesMatchService)
-                .contains("public SalesOrderMatchPreviewResp preview")
-                .contains("public SalesOrderMatchApplyResp apply")
+        assertThat(autoSnapshotCompletionService)
+                .contains("public SalesOrderAutoSnapshotCompletionResult completeImportedOrder")
                 .contains("selectLatestReleasedRepeatSources")
                 .contains("salesOrderItemMapper.updateById(item)")
+                .doesNotContain("public SalesOrderMatchPreviewResp preview")
+                .doesNotContain("public SalesOrderMatchApplyResp apply")
                 .doesNotContain("orderRfqMapper.insert")
                 .doesNotContain("itemQuoteVersionMapper.insert");
         assertThat(dataScopeService)

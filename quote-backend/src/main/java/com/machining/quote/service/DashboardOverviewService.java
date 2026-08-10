@@ -44,7 +44,6 @@ public class DashboardOverviewService {
     );
     private static final List<String> SALES_DOMAIN_PERMISSIONS = List.of(
             "market:sales-order:view",
-            "market:sales-match:view",
             "market:release:view",
             "market:u9-sync:view"
     );
@@ -114,9 +113,6 @@ public class DashboardOverviewService {
         long mesFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredMesFailed(deliveredMesStatusQuery("FAILED"))) : 0L;
         long wmsFailed = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredWmsFailed(deliveredWmsStatusQuery("FAILED"))) : 0L;
         long lockedProductionFailed = canSeeProduction ? count(() -> aggregationMapper.countLockedMesProductionFailed(lockedProductionFailedQuery())) : 0L;
-        long salesAnomalyTodo = permissionGate.canAccess("market:sales-match:view")
-                ? count(() -> aggregationMapper.countSalesMatchTodo(salesMatchTodoQuery()))
-                : 0L;
         long u9Ready = canSeeU9 ? count(() -> aggregationMapper.countU9Ready(u9ReadyQuery())) : 0L;
         long u9Failed = canSeeU9 ? count(() -> aggregationMapper.countU9Failed(u9FailedQuery())) : 0L;
 
@@ -127,7 +123,7 @@ public class DashboardOverviewService {
                 summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, salesQuoted, deliveredActive, lockedProductionTodo),
                 permissionGate));
         overview.setTodoCards(filterTodoCards(
-                todoCards(rfqUnpriced, rfqPriced, rfqQuoted, salesAnomalyTodo, deliveredNeedMaterial,
+                todoCards(rfqUnpriced, rfqPriced, rfqQuoted, deliveredNeedMaterial,
                         deliveredNeedWms, lockedProductionTodo, u9Ready),
                 permissionGate));
         overview.setAttentionItems(filterAttentionItems(
@@ -193,17 +189,6 @@ public class DashboardOverviewService {
         QueryWrapper<Object> query = new QueryWrapper<>();
         query.eq("so.status", QuoteStatusWorkflow.QUOTED);
         applySalesOrderScope(query);
-        return query;
-    }
-
-    private QueryWrapper<Object> salesMatchTodoQuery() {
-        QueryWrapper<Object> query = salesQuotedQuery();
-        query.and(wrapper -> wrapper
-                .apply("COALESCE(so.total_item_count, 0) = 0")
-                .or()
-                .apply("COALESCE(so.matched_item_count, 0) = 0")
-                .or()
-                .apply("COALESCE(so.unmatched_item_count, 0) > 0"));
         return query;
     }
 
@@ -447,7 +432,6 @@ public class DashboardOverviewService {
             long rfqUnpriced,
             long rfqPriced,
             long rfqQuoted,
-            long salesAnomalyTodo,
             long deliveredNeedMaterial,
             long deliveredNeedWms,
             long lockedProductionTodo,
@@ -459,8 +443,6 @@ public class DashboardOverviewService {
                         "/quote-process", query("status", QuoteStatusWorkflow.PRICED), "market:quote-process:view", "primary"),
                 todoCard("rfqRelease", "可提单询价订单", rfqQuoted, "单", "进入议价提单处理已报价询价订单",
                         "/release", query("sourceType", "RFQ", "status", QuoteStatusWorkflow.QUOTED), "market:release:view", "success"),
-                todoCard("salesMatch", "销售订单异常治理", salesAnomalyTodo, "单", "排查历史订单或自动补全异常",
-                        "/sales-match", query("status", QuoteStatusWorkflow.QUOTED), "market:sales-match:view", "primary"),
                 todoCard("materialTodo", "待物料号已提零件", deliveredNeedMaterial, "行", "进入已提零件获取物料号",
                         "/delivered-items", query("flowStage", "NEED_MATERIAL"), "market:delivered-item:view", "warning"),
                 todoCard("wmsTodo", "待锁库已提零件", deliveredNeedWms, "行", "进入已提零件获取库存信息",

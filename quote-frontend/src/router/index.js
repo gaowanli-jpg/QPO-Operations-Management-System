@@ -4,7 +4,6 @@ import { useAuthStore } from '../stores/authStore'
 
 const DashboardHome = () => import('../components/dashboard/DashboardHome.vue')
 const MarketDashboard = () => import('../components/MarketDashboard.vue')
-const SalesMatch = () => import('../components/SalesMatch.vue')
 const MarketRelease = () => import('../components/MarketRelease.vue')
 const SalesOrderU9Sync = () => import('../components/SalesOrderU9Sync.vue')
 const DeliveryDocumentManage = () => import('../components/DeliveryDocumentManage.vue')
@@ -30,7 +29,6 @@ const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', component: DashboardHome },
   { path: '/market', component: MarketDashboard, meta: { permission: 'market:rfq:view' } },
-  { path: '/sales-match', component: SalesMatch, meta: { permission: 'market:sales-match:view' } },
   { path: '/quote-process', component: QuoteProcess, meta: { permission: 'market:quote-process:view' } },
   { path: '/release', component: MarketRelease, meta: { permission: 'market:release:view' } },
   { path: '/u9-sync', component: SalesOrderU9Sync, meta: { permission: 'market:u9-sync:view' } },

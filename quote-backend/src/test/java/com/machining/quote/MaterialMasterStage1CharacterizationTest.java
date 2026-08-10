@@ -17,7 +17,7 @@ class MaterialMasterStage1CharacterizationTest {
     private static final Path TICKET = main("entity", "OrderDeliveryTicket.java");
     private static final Path ALLOCATION = main("entity", "OrderDeliveryTicketAllocation.java");
     private static final Path ENGINEER_SERVICE = main("service", "EngineerService.java");
-    private static final Path SALES_MATCH_SERVICE = main("service", "SalesOrderMatchService.java");
+    private static final Path AUTO_SNAPSHOT_COMPLETION_SERVICE = main("service", "SalesOrderAutoSnapshotCompletionService.java");
     private static final Path RFQ_RELEASE_SERVICE = main("service", "RfqReleaseSalesOrderService.java");
     private static final Path DELIVERY_SERVICE = main("service", "DeliveryService.java");
     private static final Path MATERIAL_RESOLVER = main("util", "MaterialDataResolver.java");
@@ -176,23 +176,23 @@ class MaterialMasterStage1CharacterizationTest {
 
     @Test
     void materialSnapshotCurrentlyCopiesThroughRepeatSalesReleaseTicketAndWms() throws IOException {
-        String salesMatchService = read(SALES_MATCH_SERVICE);
+        String autoSnapshotCompletionService = read(AUTO_SNAPSHOT_COMPLETION_SERVICE);
         String rfqReleaseService = read(RFQ_RELEASE_SERVICE);
         String deliveryService = read(DELIVERY_SERVICE);
         String wmsAllocationService = read(WMS_ALLOCATION_SERVICE);
 
-        assertThat(salesMatchService)
+        assertThat(autoSnapshotCompletionService)
                 .contains(
                         "String engineeringMaterialName = resolveEngineeringMaterialName(source);",
                         "String materialShape = resolveMaterialShape(source);",
+                        "copyEngineeringMaterialIdentityIfMissing(item, source);",
                         "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
                         "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
                         "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
                         "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
                         "item.setEngineeringMaterialName(engineeringMaterialName);",
                         "item.setMaterialShape(materialShape);",
-                        "item.setMaterialData(deepCopySnapshot(source.getMaterialData()));",
-                        "fields.put(\"materialSnapshotAvailable\", isMissingSnapshot(current.getMaterialData()) && !isMissingSnapshot(source.getMaterialData()));");
+                        "item.setMaterialData(deepCopySnapshot(source.getMaterialData()));");
         assertThat(rfqReleaseService)
                 .contains(
                         "ticket.setEngineeringMaterialCode(MaterialDataResolver.materialCode(item));",
@@ -234,7 +234,7 @@ class MaterialMasterStage1CharacterizationTest {
     void importMaterialAndEngineeringMaterialAreSeparateFields() throws IOException {
         String item = read(ITEM);
         String salesItem = read(SALES_ITEM);
-        String salesMatchService = read(SALES_MATCH_SERVICE);
+        String autoSnapshotCompletionService = read(AUTO_SNAPSHOT_COMPLETION_SERVICE);
 
         assertThat(item)
                 .as("RFQ keeps imported/customer materialName separate from engineeringMaterialName chosen during pricing")
@@ -242,11 +242,10 @@ class MaterialMasterStage1CharacterizationTest {
         assertThat(salesItem)
                 .as("Sales order keeps imported/customer materialName separate from engineeringMaterialName copied from production snapshot")
                 .contains("private String materialName;", "private String engineeringMaterialName;");
-        assertThat(salesMatchService)
+        assertThat(autoSnapshotCompletionService)
                 .contains(
-                        "fields.put(\"materialName\", protectedText(current.getMaterialName(), source.getMaterialName()));",
-                        "row.setMaterialName(source.getMaterialName());",
-                        "row.setEngineeringMaterialName(resolveEngineeringMaterialName(source));")
+                        "String engineeringMaterialName = resolveEngineeringMaterialName(source);",
+                        "item.setEngineeringMaterialName(engineeringMaterialName);")
                 .doesNotContain("item.setMaterialName(source.getMaterialName())");
     }
 

@@ -8,7 +8,7 @@ import com.machining.quote.dto.SalesOrderQpoImportDefaultsDTO;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
-import com.machining.quote.dto.SalesOrderMatchApplyResp;
+import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -70,7 +70,7 @@ public class SalesOrderQpoImportService {
     @Autowired(required = false)
     private BusinessFileService businessFileService;
     @Autowired(required = false)
-    private SalesOrderMatchService salesOrderMatchService;
+    private SalesOrderAutoSnapshotCompletionService autoSnapshotCompletionService;
     @Autowired(required = false)
     private DeliveryService deliveryService;
     @Autowired
@@ -464,10 +464,10 @@ public class SalesOrderQpoImportService {
             SalesOrderImportRecord record,
             int itemCount) {
         AutoMatchSummary fallback = new AutoMatchSummary(0, itemCount, itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "");
-        if (salesOrderMatchService == null || header == null || header.getId() == null) {
+        if (autoSnapshotCompletionService == null || header == null || header.getId() == null) {
             return fallback;
         }
-        SalesOrderMatchApplyResp matchResp = salesOrderMatchService.applyImportedOrder(header.getId());
+        SalesOrderAutoSnapshotCompletionResult matchResp = autoSnapshotCompletionService.completeImportedOrder(header.getId());
         if (matchResp == null) {
             return fallback;
         }
@@ -479,7 +479,7 @@ public class SalesOrderQpoImportService {
         return summary;
     }
 
-    private String autoMatchWarning(SalesOrderMatchApplyResp matchResp, int itemCount) {
+    private String autoMatchWarning(SalesOrderAutoSnapshotCompletionResult matchResp, int itemCount) {
         if (matchResp == null) {
             return itemCount > 0 ? WAITING_SNAPSHOT_MESSAGE : "";
         }

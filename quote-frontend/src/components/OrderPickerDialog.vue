@@ -132,7 +132,6 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
   release: 'market:release:customer-select',
   'delivery-document': 'market:delivery-document:customer-select',
   'u9-sync': 'market:u9-sync:customer-select',
-  'sales-match': 'market:sales-match:customer-select',
   'engineer-setup': 'engineer:setup:customer-select',
   'market-order': 'market:order:customer-select'
 }
@@ -142,16 +141,14 @@ const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分�
 const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
   'u9-sync': ['部分已提单', '已生成提单'],
-  'sales-match': ['已报价'],
   'engineer-setup': ['未核价']
 }
 
 const ORDER_TYPE_LABEL_BY_SCOPE = {
-  'u9-sync': '销售订单',
-  'sales-match': '销售订单'
+  'u9-sync': '销售订单'
 }
 
-const SALES_ORDER_SCOPES = ['sales-match', 'u9-sync']
+const SALES_ORDER_SCOPES = ['u9-sync']
 
 const props = defineProps({
   modelValue: {

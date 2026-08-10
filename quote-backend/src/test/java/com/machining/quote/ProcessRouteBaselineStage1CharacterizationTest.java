@@ -107,7 +107,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
     void currentProcessRouteSnapshotIsCopiedThroughReleaseWmsAndMesDispatch() throws IOException {
         String rfqReleaseService = read(service("RfqReleaseSalesOrderService.java"));
         String deliveryService = read(service("DeliveryService.java"));
-        String salesMatchService = read(service("SalesOrderMatchService.java"));
+        String autoSnapshotCompletionService = read(service("SalesOrderAutoSnapshotCompletionService.java"));
         String wmsAllocationService = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsAllocationService.java"));
         String mesProductionService = read(Path.of(
@@ -123,11 +123,9 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                 .contains(
                         "ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()))",
                         "sheet.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
-        assertThat(salesMatchService)
+        assertThat(autoSnapshotCompletionService)
                 .contains(
-                        "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))",
-                        "row.setSourceProcessRouteSummary(processRouteSnapshotService.formatSnapshot(source.getProcessRoute()))",
-                        "processSnapshotAvailable");
+                        "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))");
         assertThat(wmsAllocationService)
                 .contains("row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
         assertThat(mesProductionService)

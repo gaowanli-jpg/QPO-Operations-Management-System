@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Data
-public class SalesOrderMatchApplyResp {
+public class SalesOrderAutoSnapshotCompletionResult {
     private boolean success;
     private String message;
     private int totalItemCount;
@@ -18,5 +18,5 @@ public class SalesOrderMatchApplyResp {
     private int materialNoSkippedCount;
     private int materialNoConflictCount;
     private String warningMessage;
-    private List<SalesOrderMatchApplyRow> rows = new ArrayList<>();
+    private List<SalesOrderAutoSnapshotCompletionRow> rows = new ArrayList<>();
 }

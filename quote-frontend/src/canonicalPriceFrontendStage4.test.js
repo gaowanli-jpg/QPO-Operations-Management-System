@@ -15,7 +15,6 @@ describe('canonical frontend price fields stage 4', () => {
       'components/MarketRelease.vue',
       'components/OrderManage.vue',
       'components/QuoteProcess.vue',
-      'components/SalesMatch.vue',
       'components/SalesOrderU9Sync.vue'
     ]
 

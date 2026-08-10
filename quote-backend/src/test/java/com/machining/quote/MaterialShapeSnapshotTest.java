@@ -17,7 +17,7 @@ class MaterialShapeSnapshotTest {
     private static final Path ENGINEER_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "EngineerService.java");
     private static final Path DELIVERY_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "DeliveryService.java");
     private static final Path RFQ_RELEASE_SALES_ORDER_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "RfqReleaseSalesOrderService.java");
-    private static final Path SALES_MATCH_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderMatchService.java");
+    private static final Path AUTO_SNAPSHOT_COMPLETION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderAutoSnapshotCompletionService.java");
     private static final Path SALES_REPEAT_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderRepeatEnrichmentService.java");
     private static final Path MES_REQ = Path.of("src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesProductionDispatchReq.java");
     private static final Path MES_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "mes", "MesProductionDispatchService.java");
@@ -32,14 +32,14 @@ class MaterialShapeSnapshotTest {
     }
 
     @Test
-    void materialShapeIsCopiedThroughQuoteTicketAllocationAndSalesMatchFlows() throws IOException {
+    void materialShapeIsCopiedThroughQuoteTicketAllocationAndSalesOrderAutoCompletionFlows() throws IOException {
         assertThat(read(ENGINEER_SERVICE))
                 .contains("item.setMaterialShape(materialShape(materialData))");
         assertThat(read(DELIVERY_SERVICE))
                 .contains("ticket.setMaterialShape(resolveSalesOrderMaterialShape(item))");
         assertThat(read(RFQ_RELEASE_SALES_ORDER_SERVICE))
                 .contains("ticket.setMaterialShape(MaterialDataResolver.materialShape(item))");
-        assertThat(read(SALES_MATCH_SERVICE))
+        assertThat(read(AUTO_SNAPSHOT_COMPLETION_SERVICE))
                 .contains(
                         "String materialShape = resolveMaterialShape(source)",
                         "item.setMaterialShape(materialShape)"

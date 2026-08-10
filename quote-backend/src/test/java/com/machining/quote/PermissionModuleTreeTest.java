@@ -53,7 +53,7 @@ class PermissionModuleTreeTest {
                 .contains(
                         "market:rfq:view",
                         "market:order:view",
-                        "market:sales-match:view",
+                        "market:sales-order:view",
                         "market:delivered-item:view",
                         "market:production-item:view",
                         "market:locked-item:view",
@@ -66,7 +66,8 @@ class PermissionModuleTreeTest {
                         "market:release:reset",
                         "market:locked-item:mes-production-submit",
                         "common:customer:select",
-                        "common:order:select"
+                        "common:order:select",
+                        "market:sales-match:view"
                 );
         assertThat(duplicates)
                 .as("Permission codes must be unique in the fallback catalog")
@@ -108,11 +109,6 @@ class PermissionModuleTreeTest {
         assertChild(rows, "market:production-item:view", "market:production-item:customer-select");
         assertChild(rows, "market:production-item:view", "market:production-item:mes-production-submit");
         assertChild(rows, "market:locked-item:view", "market:locked-item:customer-select");
-
-        assertChild(rows, "market:sales-match:view", "market:sales-match:customer-select");
-        assertChild(rows, "market:sales-match:view", "market:sales-match:order-select");
-        assertChild(rows, "market:sales-match:view", "market:sales-match:apply");
-        assertChild(rows, "market:sales-match:view", "market:sales-match:file-preview");
 
         assertChild(rows, "market:delivery-document:view", "market:delivery-document:customer-select");
         assertChild(rows, "market:delivery-document:view", "market:delivery-document:order-select");
@@ -168,7 +164,7 @@ class PermissionModuleTreeTest {
         Map<String, SeedPermissionRow> seedRows = seedPermissions();
 
         for (String code : List.of(
-                "market:sales-match:view",
+                "market:sales-order:view",
                 "market:order:view",
                 "market:delivered-item:view",
                 "market:production-item:view",

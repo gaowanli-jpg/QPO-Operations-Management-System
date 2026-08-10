@@ -37,7 +37,8 @@ class ProcessMasterStage13BaselineCompressionTest {
         assertThat(migrationNames).containsExactly(
                 "V1__qpo_baseline_schema.sql",
                 "V2__qpo_baseline_seed_data.sql",
-                "V3__repeat_released_snapshot_candidate_index.sql");
+                "V3__repeat_released_snapshot_candidate_index.sql",
+                "V4__retire_sales_match_module.sql");
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
     }
 
@@ -58,12 +59,15 @@ class ProcessMasterStage13BaselineCompressionTest {
                 assertThat(flywayHistory(connection, schema)).containsExactly(
                         "1|qpo baseline schema|true",
                         "2|qpo baseline seed data|true",
-                        "3|repeat released snapshot candidate index|true");
+                        "3|repeat released snapshot candidate index|true",
+                        "4|retire sales match module|true");
                 assertThat(tableExists(connection, schema, "dict_process_category")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process_detail")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process")).isFalse();
                 assertThat(columnExists(connection, schema, "item_quote_version", "final_unit_price")).isFalse();
                 assertThat(columnExists(connection, schema, "sales_order_item", "final_unit_price")).isFalse();
+                assertThat(permissionExists(connection, schema, "market:sales-match:view")).isFalse();
+                assertThat(routePathExists(connection, schema, "/sales-match")).isFalse();
             } finally {
                 dropTestSchema(connection, schema);
             }
@@ -148,6 +152,38 @@ class ProcessMasterStage13BaselineCompressionTest {
             statement.setString(1, schema);
             statement.setString(2, table);
             statement.setString(3, column);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getBoolean(1);
+            }
+        }
+    }
+
+    private static boolean permissionExists(Connection connection, String schema, String permissionCode) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM %s.system_permission
+                    WHERE permission_code = ?
+                )
+                """.formatted(schema))) {
+            statement.setString(1, permissionCode);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getBoolean(1);
+            }
+        }
+    }
+
+    private static boolean routePathExists(Connection connection, String schema, String routePath) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM %s.system_permission
+                    WHERE route_path = ?
+                )
+                """.formatted(schema))) {
+            statement.setString(1, routePath);
             try (ResultSet resultSet = statement.executeQuery()) {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getBoolean(1);

@@ -8,7 +8,6 @@ const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments
 
 describe('sales order single-selection display', () => {
   test.each([
-    ['SalesMatch.vue'],
     ['SalesOrderU9Sync.vue']
   ])('%s uses a quote-process style single order summary', (componentName) => {
     const source = readSource('components', componentName)

@@ -42,7 +42,7 @@ describe('Dashboard prototype stage 2 data contract', () => {
     expect(matrixSource).not.toContain('discarded')
   })
 
-  test('keeps sales order dashboard todos aligned to anomaly governance wording', async () => {
+  test('keeps retired manual sales-match module out of dashboard todos', async () => {
     expect(existsSync(mockPath)).toBe(true)
 
     const { dashboardMockData } = await importFile(mockPath)
@@ -51,11 +51,9 @@ describe('Dashboard prototype stage 2 data contract', () => {
 
     expect(todoSource).not.toContain('待补全销售订单')
     expect(todoSource).not.toContain('按销售订单补全真实材料和生产快照')
-    expect(anomalyTodo).toEqual(expect.objectContaining({
-      title: '销售订单异常治理',
-      description: '排查历史订单或自动补全异常',
-      permission: 'market:sales-match:view'
-    }))
+    expect(todoSource).not.toContain('销售订单异常治理')
+    expect(todoSource).not.toContain('market:sales-match')
+    expect(anomalyTodo).toBeUndefined()
   })
 
   test('does not embed secrets, real endpoints, or sensitive customer data in mock data', () => {

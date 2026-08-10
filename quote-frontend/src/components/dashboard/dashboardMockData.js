@@ -125,17 +125,6 @@ export const dashboardMockData = {
       tone: 'info'
     },
     {
-      key: 'salesMatch',
-      title: '销售订单异常治理',
-      value: 19,
-      unit: '单',
-      description: '排查历史订单或自动补全异常',
-      path: '/sales-match',
-      query: { status: '已报价' },
-      permission: 'market:sales-match:view',
-      tone: 'primary'
-    },
-    {
       key: 'mesProductionTodo',
       title: '待下发 MES 生产',
       value: 7,

@@ -36,7 +36,7 @@ class MesMaterialDedupStage6DocumentationTest {
         assertThat(read(RFQ_MATERIAL_DOC))
                 .contains("前置重复件核价", "提单行继承", "material_no_status = 已确认");
         assertThat(read(SALES_IMPORT_DOC))
-                .contains("自动异常治理匹配", "物料号确认元组", "自动提单");
+                .contains("销售订单导入自动快照补全", "物料号确认元组", "自动提单");
 
         for (Path path : List.of(CALLBACK_DOC, DEDUP_DOC, MES_SYNC_DOC, MES_INTERFACE_DOC)) {
             assertThat(read(path))

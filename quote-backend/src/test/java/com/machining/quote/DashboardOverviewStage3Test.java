@@ -66,7 +66,6 @@ class DashboardOverviewStage3Test {
         verify(mapper, never()).countRfqByCustomerAndStatus(any());
         verify(mapper, never()).countSalesQuotedByCustomer(any());
         verify(mapper, never()).countU9ReadyByCustomer(any());
-        verify(mapper, never()).countSalesMatchTodo(any());
         verify(mapper, never()).countU9Ready(any());
         verify(mapper, never()).countU9Failed(any());
         verify(mapper, never()).countLockedProductionTodo(any());
@@ -181,7 +180,6 @@ class DashboardOverviewStage3Test {
         when(mapper.countDeliveredWmsFailed(any())).thenReturn(10L);
         when(mapper.countLockedProductionTodo(any())).thenReturn(11L);
         when(mapper.countLockedMesProductionFailed(any())).thenReturn(12L);
-        when(mapper.countSalesMatchTodo(any())).thenReturn(13L);
         when(mapper.countU9Ready(any())).thenReturn(14L);
         when(mapper.countU9Failed(any())).thenReturn(15L);
 
@@ -193,8 +191,9 @@ class DashboardOverviewStage3Test {
         assertThat(overview.getSummaryCards()).extracting("key")
                 .containsExactly("rfqTodo", "salesQuoted", "deliveredActive", "lockedProduction");
         assertThat(overview.getTodoCards()).extracting("key")
-                .contains("rfqPricing", "rfqQuote", "rfqRelease", "salesMatch", "materialTodo",
-                        "wmsTodo", "mesProductionTodo", "u9SyncReady");
+                .contains("rfqPricing", "rfqQuote", "rfqRelease", "materialTodo",
+                        "wmsTodo", "mesProductionTodo", "u9SyncReady")
+                .doesNotContain("salesMatch");
         assertThat(overview.getAttentionItems()).extracting("key")
                 .contains("mesCallbackPending", "mesFailed", "wmsFailed", "u9Failed", "mesProductionFailed");
     }

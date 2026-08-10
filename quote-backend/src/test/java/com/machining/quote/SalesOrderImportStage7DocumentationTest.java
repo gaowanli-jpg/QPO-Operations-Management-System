@@ -42,8 +42,9 @@ class SalesOrderImportStage7DocumentationTest {
         assertThat(service)
                 .doesNotContain("待补全销售订单")
                 .doesNotContain("按销售订单补全真实材料和生产快照")
-                .contains("销售订单异常治理")
-                .contains("排查历史订单或自动补全异常");
+                .doesNotContain("销售订单异常治理")
+                .doesNotContain("排查历史订单或自动补全异常")
+                .doesNotContain("salesMatch");
     }
 
     @Test
@@ -55,24 +56,27 @@ class SalesOrderImportStage7DocumentationTest {
         String u9Doc = read(U9_DOC);
 
         assertThat(salesOrderDoc)
-                .contains("销售订单导入成功后自动补全历史生产快照并自动生成已提零件")
-                .contains("异常治理只作为历史销售订单或自动补全异常的兜底工具")
+                .contains("销售订单导入成功后仍自动补全历史生产快照并自动生成已提零件")
+                .contains("原手工异常治理入口、预览和确认 API 已删除")
                 .contains("销售订单不再进入议价提单页面手动生成提单")
                 .contains("价格补齐前不可同步 U9")
+                .doesNotContain("market:sales-match")
+                .doesNotContain("/sales-match")
                 .doesNotContain("销售订单导入后状态为 `已报价`")
                 .doesNotContain("销售订单可被议价提单选择");
         assertThat(salesMatchDoc)
-                .contains("异常治理")
-                .contains("不作为新销售订单日常流程入口")
-                .contains("导入事务已经自动执行补全")
-                .contains("权限 code 继续保留 `market:sales-match:*`");
+                .contains("手工模块已删除")
+                .contains("销售订单导入自动快照补全继续保留为导入事务内部能力")
+                .contains("不再提供独立左侧入口")
+                .doesNotContain("market:sales-match")
+                .doesNotContain("/sales-match");
         assertThat(materialRuleDoc)
-                .contains("导入自动补全沿用只补空缺生产快照")
-                .contains("不提供人工覆盖字段确认")
-                .contains("异常治理");
+                .contains("销售订单导入自动快照补全")
+                .contains("不得覆盖")
+                .contains("不再存在材料差异预览");
         assertThat(orderWorkbenchDoc)
-                .contains("订单级工作台已降级为异常治理兜底页面")
-                .contains("新销售订单导入后不需要手动进入该页面");
+                .contains("原订单级销售匹配工作台已删除")
+                .contains("不再提供用户手工选择订单、预览和确认的工作台");
         assertThat(u9Doc)
                 .contains("价格补齐前不可同步 U9")
                 .contains("preview 返回不可同步")
@@ -98,9 +102,11 @@ class SalesOrderImportStage7DocumentationTest {
         String logDocs = read(LOG_OPS_DOC) + "\n" + read(FILE_LOG_DOC);
 
         assertThat(permissionDoc)
-                .contains("阶段 7 不新增权限")
-                .contains("自动补全和自动提单由 `market:rfq:import-sales-order` 覆盖")
-                .contains("异常治理继续复用 `market:sales-match:*`");
+                .contains("销售订单手工异常治理模块退役")
+                .contains("销售订单导入自动快照补全")
+                .contains("`market:rfq:import-sales-order`")
+                .doesNotContain("market:sales-match")
+                .doesNotContain("/sales-match");
         assertThat(logDocs)
                 .contains("autoMatch=true")
                 .contains("autoRelease=true")

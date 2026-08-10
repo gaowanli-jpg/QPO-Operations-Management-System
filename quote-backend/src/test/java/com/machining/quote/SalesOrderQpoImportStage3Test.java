@@ -8,7 +8,7 @@ import com.machining.quote.dto.SalesOrderQpoExcelLineDTO;
 import com.machining.quote.dto.SalesOrderQpoExcelParseResult;
 import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
-import com.machining.quote.dto.SalesOrderMatchApplyResp;
+import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -31,7 +31,7 @@ import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
-import com.machining.quote.service.SalesOrderMatchService;
+import com.machining.quote.service.SalesOrderAutoSnapshotCompletionService;
 import com.machining.quote.service.SalesOrderNumberService;
 import com.machining.quote.storage.StorageType;
 import org.junit.jupiter.api.AfterEach;
@@ -338,14 +338,14 @@ class SalesOrderQpoImportStage3Test {
     }
 
     @Test
-    void serviceRunsImportAutoSalesMatchAfterAllRowsAreInsertedAndReportsCounts() throws Exception {
+    void serviceRunsImportAutoSnapshotCompletionAfterAllRowsAreInsertedAndReportsCounts() throws Exception {
         SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
         CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
         SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
         SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
         SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
-        SalesOrderMatchService matchService = mock(SalesOrderMatchService.class);
+        SalesOrderAutoSnapshotCompletionService matchService = mock(SalesOrderAutoSnapshotCompletionService.class);
         AuditService auditService = mock(AuditService.class);
         SalesOrderQpoImportService service = service(
                 parser,
@@ -381,8 +381,8 @@ class SalesOrderQpoImportStage3Test {
             item.setId(item.getPartNo().equals("P-001") ? 501L : item.getPartNo().equals("P-002") ? 502L : 503L);
             return 1;
         }).when(itemMapper).insert(any(SalesOrderItem.class));
-        when(matchService.applyImportedOrder(301L)).thenReturn(matchResp(2, 1, 1, "auto unmatched 1"));
-        when(matchService.applyImportedOrder(302L)).thenReturn(matchResp(1, 0, 1, "auto unmatched 1"));
+        when(matchService.completeImportedOrder(301L)).thenReturn(matchResp(2, 1, 1, "auto unmatched 1"));
+        when(matchService.completeImportedOrder(302L)).thenReturn(matchResp(1, 0, 1, "auto unmatched 1"));
 
         SalesOrderQpoImportResp resp = service.importQpo(
                 new MockMultipartFile(
@@ -395,8 +395,8 @@ class SalesOrderQpoImportStage3Test {
                 "SO01"
         );
 
-        verify(matchService).applyImportedOrder(301L);
-        verify(matchService).applyImportedOrder(302L);
+        verify(matchService).completeImportedOrder(301L);
+        verify(matchService).completeImportedOrder(302L);
         assertThat(resp.getRows()).hasSize(2);
         assertThat(resp.getRows().get(0).getMatchedItemCount()).isEqualTo(1);
         assertThat(resp.getRows().get(0).getUnmatchedItemCount()).isEqualTo(1);
@@ -448,7 +448,7 @@ class SalesOrderQpoImportStage3Test {
         SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
         SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
-        SalesOrderMatchService matchService = mock(SalesOrderMatchService.class);
+        SalesOrderAutoSnapshotCompletionService matchService = mock(SalesOrderAutoSnapshotCompletionService.class);
         DeliveryService deliveryService = mock(DeliveryService.class);
         AuditService auditService = mock(AuditService.class);
         SalesOrderQpoImportService service = service(
@@ -486,7 +486,7 @@ class SalesOrderQpoImportStage3Test {
             item.setId("P-BLANK".equals(item.getPartNo()) ? 501L : 502L);
             return 1;
         }).when(itemMapper).insert(any(SalesOrderItem.class));
-        when(matchService.applyImportedOrder(301L)).thenReturn(matchResp(2, 1, 1, "auto unmatched 1"));
+        when(matchService.completeImportedOrder(301L)).thenReturn(matchResp(2, 1, 1, "auto unmatched 1"));
         OrderDeliveryTicket ticket = new OrderDeliveryTicket();
         ticket.setId(9001);
         ticket.setSourceOrderId(301L);
@@ -505,7 +505,7 @@ class SalesOrderQpoImportStage3Test {
 
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(itemMapper, matchService, deliveryService);
         inOrder.verify(itemMapper, org.mockito.Mockito.times(2)).insert(any(SalesOrderItem.class));
-        inOrder.verify(matchService).applyImportedOrder(301L);
+        inOrder.verify(matchService).completeImportedOrder(301L);
         inOrder.verify(deliveryService).generateImportedSalesOrderTickets(301L);
         assertThat(resp.isSuccess()).isTrue();
         assertThat(resp.getRows().get(0).getMatchedItemCount()).isEqualTo(1);
@@ -543,7 +543,7 @@ class SalesOrderQpoImportStage3Test {
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         AuditService auditService = mock(AuditService.class);
         DataScopeService dataScopeService = mock(DataScopeService.class);
-        SalesOrderMatchService matchService = new SalesOrderMatchService();
+        SalesOrderAutoSnapshotCompletionService matchService = new SalesOrderAutoSnapshotCompletionService();
         DeliveryService deliveryService = new DeliveryService();
         SalesOrderQpoImportService service = service(
                 parser,
@@ -558,8 +558,8 @@ class SalesOrderQpoImportStage3Test {
                 deliveryService
         );
         ReflectionTestUtils.setField(service, "businessFileService", salesOrderImportDrawingStorage());
-        wireSalesOrderMatchService(matchService, headerMapper, itemMapper, sourceMapper,
-                historyRelationMapper, salesOrderRelationMapper, auditService);
+        wireSalesOrderAutoSnapshotCompletionService(matchService, headerMapper, itemMapper, sourceMapper,
+                historyRelationMapper, salesOrderRelationMapper);
         List<OrderDeliveryTicket> insertedTickets = new ArrayList<>();
         wireImportAutoDeliveryService(deliveryService, headerMapper, itemMapper, ticketMapper, auditService, insertedTickets);
 
@@ -995,14 +995,14 @@ class SalesOrderQpoImportStage3Test {
     }
 
     @Test
-    void serviceSourceRunsSalesMatchServiceForProductionSnapshotInsteadOfLegacyRepeatEnrichment() throws Exception {
+    void serviceSourceRunsAutoSnapshotCompletionServiceForProductionSnapshotInsteadOfLegacyRepeatEnrichment() throws Exception {
         String source = Files.readString(
                 Path.of("src/main/java/com/machining/quote/service/SalesOrderQpoImportService.java"),
                 StandardCharsets.UTF_8);
 
         assertThat(source)
-                .contains("SalesOrderMatchService")
-                .contains("applyImportedOrder")
+                .contains("SalesOrderAutoSnapshotCompletionService")
+                .contains("completeImportedOrder")
                 .contains("WAITING_SNAPSHOT_MESSAGE")
                 .contains("item.setMatchStatus(UNMATCHED)")
                 .contains("item.setMatchMessage(WAITING_SNAPSHOT_MESSAGE)")
@@ -1054,7 +1054,7 @@ class SalesOrderQpoImportStage3Test {
                 itemMapper,
                 dataScopeService,
                 auditService,
-                mock(SalesOrderMatchService.class),
+                mock(SalesOrderAutoSnapshotCompletionService.class),
                 mock(DeliveryService.class)
         );
     }
@@ -1068,7 +1068,7 @@ class SalesOrderQpoImportStage3Test {
             SalesOrderItemMapper itemMapper,
             DataScopeService dataScopeService,
             AuditService auditService,
-            SalesOrderMatchService salesOrderMatchService) {
+            SalesOrderAutoSnapshotCompletionService autoSnapshotCompletionService) {
         return service(
                 parser,
                 customerMapper,
@@ -1078,7 +1078,7 @@ class SalesOrderQpoImportStage3Test {
                 itemMapper,
                 dataScopeService,
                 auditService,
-                salesOrderMatchService,
+                autoSnapshotCompletionService,
                 mock(DeliveryService.class)
         );
     }
@@ -1092,7 +1092,7 @@ class SalesOrderQpoImportStage3Test {
             SalesOrderItemMapper itemMapper,
             DataScopeService dataScopeService,
             AuditService auditService,
-            SalesOrderMatchService salesOrderMatchService,
+            SalesOrderAutoSnapshotCompletionService autoSnapshotCompletionService,
             DeliveryService deliveryService) {
         SalesOrderQpoImportService service = new SalesOrderQpoImportService();
         ReflectionTestUtils.setField(service, "excelParser", parser);
@@ -1103,26 +1103,24 @@ class SalesOrderQpoImportStage3Test {
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
         ReflectionTestUtils.setField(service, "auditService", auditService);
-        ReflectionTestUtils.setField(service, "salesOrderMatchService", salesOrderMatchService);
+        ReflectionTestUtils.setField(service, "autoSnapshotCompletionService", autoSnapshotCompletionService);
         ReflectionTestUtils.setField(service, "deliveryService", deliveryService);
         ReflectionTestUtils.setField(service, "salesOrderNumberService", new SalesOrderNumberService());
         return service;
     }
 
-    private void wireSalesOrderMatchService(
-            SalesOrderMatchService service,
+    private void wireSalesOrderAutoSnapshotCompletionService(
+            SalesOrderAutoSnapshotCompletionService service,
             SalesOrderHeaderMapper headerMapper,
             SalesOrderItemMapper itemMapper,
             ItemQuoteVersionMapper sourceMapper,
             ItemAssemblyRelationMapper historyRelationMapper,
-            SalesOrderItemAssemblyRelationMapper salesOrderRelationMapper,
-            AuditService auditService) {
+            SalesOrderItemAssemblyRelationMapper salesOrderRelationMapper) {
         ReflectionTestUtils.setField(service, "headerMapper", headerMapper);
         ReflectionTestUtils.setField(service, "salesOrderItemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "itemQuoteVersionMapper", sourceMapper);
         ReflectionTestUtils.setField(service, "historyAssemblyRelationMapper", historyRelationMapper);
         ReflectionTestUtils.setField(service, "salesOrderAssemblyRelationMapper", salesOrderRelationMapper);
-        ReflectionTestUtils.setField(service, "auditService", auditService);
     }
 
     private void wireImportAutoDeliveryService(
@@ -1172,8 +1170,8 @@ class SalesOrderQpoImportStage3Test {
         }
     }
 
-    private SalesOrderMatchApplyResp matchResp(int total, int matched, int unmatched, String warningMessage) {
-        SalesOrderMatchApplyResp resp = new SalesOrderMatchApplyResp();
+    private SalesOrderAutoSnapshotCompletionResult matchResp(int total, int matched, int unmatched, String warningMessage) {
+        SalesOrderAutoSnapshotCompletionResult resp = new SalesOrderAutoSnapshotCompletionResult();
         resp.setSuccess(true);
         resp.setTotalItemCount(total);
         resp.setMatchedItemCount(matched);

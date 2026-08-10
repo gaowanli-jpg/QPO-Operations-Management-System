@@ -43,7 +43,7 @@ class SalesOrderQpoImportStage4Test {
         assertThat(matchStep).isGreaterThan(0);
         assertThat(deliveryStep).isGreaterThan(matchStep);
         assertThat(importService)
-                .contains("salesOrderMatchService.applyImportedOrder(header.getId())")
+                .contains("autoSnapshotCompletionService.completeImportedOrder(header.getId())")
                 .contains("deliveryService.generateImportedSalesOrderTickets(header.getId())")
                 .doesNotContain("SalesOrderRepeatEnrichmentService");
     }

@@ -13,7 +13,6 @@ const mappingDoc = () => readDoc('QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb', '02-
 
 const protectedRoutePermissions = {
   '/market': 'market:rfq:view',
-  '/sales-match': 'market:sales-match:view',
   '/quote-process': 'market:quote-process:view',
   '/release': 'market:release:view',
   '/u9-sync': 'market:u9-sync:view',
@@ -37,7 +36,6 @@ const protectedRoutePermissions = {
 
 const visibleMenuPermissions = {
   '/market': 'market:rfq:view',
-  '/sales-match': 'market:sales-match:view',
   '/quote-process': 'market:quote-process:view',
   '/release': 'market:release:view',
   '/u9-sync': 'market:u9-sync:view',
