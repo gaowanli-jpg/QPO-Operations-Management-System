@@ -10,6 +10,8 @@
 >
 > 2026-08-08 两级工艺主数据阶段 15 收口：RFQ 议价提单派生销售订单时，RFQ 零件、派生销售订单零件和 RFQ 提单行共享同一份标准工艺快照；销售订单进入 U9 前仍只校验销售订单字段、已确认物料号和含税单价，工艺路线不发送给 U9。
 
+> 2026-08-10 议价提单表格数据替换阶段 7 收口：正式提单前可通过 `/api/market/release/item-data-replacement/preview` 预览 Excel 替换结果，再通过 `/api/market/release/item-data-replacement/confirm` 确认保存。两个接口均复用 `market:release:create` 和 RFQ 数据权限，后端仍是最终边界；预览不写 `audit_log`，确认仅在业务字段落库时写 `RELEASE_ITEM_DATA_REPLACEMENT` 摘要。确认响应的 `affectedRows` 用于立即刷新议价提单列表，`acceptedQtyUpdates` 只回填本次页面草稿和勾选状态；Excel 的通过数量不写入 RFQ 零件主表，也不改变后续派生销售订单的数据库取值规则。日志不得记录完整 Excel、完整 multipart 请求体、完整业务体、Authorization header、token 或外部系统敏感响应。
+
 ## 1. 文档目的
 
 本文用于规范 RFQ 询价订单在议价提单后进入 U9 的完整方案。
