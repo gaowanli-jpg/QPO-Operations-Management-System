@@ -5,6 +5,8 @@
     width="min(1080px, calc(100vw - 32px))"
     class="release-item-data-replacement-dialog"
     :close-on-click-modal="false"
+    :before-close="handleBeforeClose"
+    @closed="resetDialogState"
   >
     <div class="data-replacement-dialog">
       <el-alert
@@ -88,6 +90,14 @@
         <el-alert
           v-else-if="summary.skippedCount > 0 || summary.unmatchedCount > 0"
           :title="`有 ${summary.unmatchedCount || 0} 行未匹配，${summary.skippedCount || 0} 行跳过；不阻断其他可替换行。`"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <el-alert
+          v-if="draftConflictSummary"
+          :title="draftConflictSummary"
+          description="确认后这些字段以数据库保存结果为准；Excel 未涉及的本地草稿会继续保留。"
           type="warning"
           :closable="false"
           show-icon
@@ -188,6 +198,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePendingAction } from '../../composables/usePendingAction'
+import { collectReleaseItemDraftReplacementConflicts } from '../marketReleaseDataReplacement'
 import {
   confirmReleaseItemDataReplacement,
   previewReleaseItemDataReplacement
@@ -205,6 +216,10 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  selectedRowsByKey: {
+    type: Object,
+    default: () => ({})
   }
 })
 
@@ -217,6 +232,7 @@ const confirmResult = ref(null)
 const previewError = ref('')
 const previewSourceSignature = ref('')
 const confirmedPreviewFingerprint = ref('')
+const replacementStateVersion = ref(0)
 
 const { isPending, runAction } = usePendingAction()
 const dataReplacementActionKeys = {
@@ -246,6 +262,18 @@ const recognizedFields = computed(() => previewResult.value?.recognizedFields ||
 const previewRows = computed(() => previewResult.value?.rows || [])
 const summary = computed(() => previewResult.value?.summary || {})
 const previewFingerprint = computed(() => previewResult.value?.previewFingerprint || '')
+const draftConflicts = computed(() => collectReleaseItemDraftReplacementConflicts({
+  previewRows: previewRows.value,
+  selectedRowsByKey: props.selectedRowsByKey
+}))
+const draftConflictSummary = computed(() => {
+  if (draftConflicts.value.length === 0) return ''
+  const labels = [...new Set(draftConflicts.value.map(item => item.label || item.field))]
+    .slice(0, 4)
+    .join('、')
+  const suffix = draftConflicts.value.length > 4 ? ' 等字段' : ''
+  return `有 ${draftConflicts.value.length} 个已选零件草稿字段将被本次替换覆盖：${labels}${suffix}`
+})
 
 const summaryItems = computed(() => [
   { key: 'imported', label: '导入行', value: summary.value.importedCount || 0 },
@@ -283,7 +311,11 @@ watch(replacementBusy, value => emit('busy-change', value), { immediate: true })
 
 watch(sourceSignature, (next, previous) => {
   if (previous === undefined || next === previous) return
-  clearPreviewState()
+  resetDialogState()
+})
+
+watch(visible, (value) => {
+  if (!value) resetDialogState()
 })
 
 const clearPreviewState = () => {
@@ -292,6 +324,21 @@ const clearPreviewState = () => {
   previewError.value = ''
   previewSourceSignature.value = ''
   confirmedPreviewFingerprint.value = ''
+}
+
+const resetDialogState = () => {
+  replacementStateVersion.value += 1
+  selectedFile.value = null
+  uploadRef.value?.clearFiles()
+  clearPreviewState()
+}
+
+const handleBeforeClose = (done) => {
+  if (replacementBusy.value) {
+    ElMessage.warning('表格数据替换处理中，请稍后关闭。')
+    return
+  }
+  done()
 }
 
 const handleFileChange = (uploadFile) => {
@@ -306,13 +353,12 @@ const handleFileChange = (uploadFile) => {
   }
 
   selectedFile.value = file
+  replacementStateVersion.value += 1
   clearPreviewState()
 }
 
 const resetSelectedFile = () => {
-  selectedFile.value = null
-  uploadRef.value?.clearFiles()
-  clearPreviewState()
+  resetDialogState()
 }
 
 const validateSources = () => {
@@ -339,11 +385,13 @@ const submitPreview = async () => {
   if (!validateSources()) return
 
   const formData = buildReplacementFormData()
+  const requestVersion = replacementStateVersion.value
   return runAction(dataReplacementActionKeys.preview, async () => {
     try {
       previewError.value = ''
       confirmResult.value = null
       const response = await previewReleaseItemDataReplacement(formData)
+      if (requestVersion !== replacementStateVersion.value || !visible.value) return
       previewResult.value = response || null
       previewSourceSignature.value = sourceSignature.value
       confirmedPreviewFingerprint.value = ''
@@ -368,12 +416,22 @@ const submitConfirm = async () => {
 
   const formData = buildReplacementFormData()
   formData.append('previewFingerprint', previewFingerprint.value)
+  const requestVersion = replacementStateVersion.value
+  const confirmedFingerprint = previewFingerprint.value
   return runAction(dataReplacementActionKeys.confirm, async () => {
     try {
       const response = await confirmReleaseItemDataReplacement(formData)
-      confirmResult.value = response || null
-      confirmedPreviewFingerprint.value = previewFingerprint.value
-      emit('confirmed', response)
+      if (requestVersion !== replacementStateVersion.value || !visible.value) return
+      const confirmedPayload = {
+        ...(response || {}),
+        previewRows: previewRows.value,
+        previewFingerprint: confirmedFingerprint
+      }
+      confirmResult.value = confirmedPayload
+      confirmedPreviewFingerprint.value = confirmedFingerprint
+      emit('confirmed', {
+        ...confirmedPayload
+      })
       ElMessage.success('表格数据替换已确认。')
     } catch (error) {
       console.error(error)
