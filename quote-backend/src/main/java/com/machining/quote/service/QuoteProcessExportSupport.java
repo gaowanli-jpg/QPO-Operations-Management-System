@@ -17,15 +17,23 @@ final class QuoteProcessExportSupport {
 
     static List<String> collectProcessNames(List<ItemQuoteVersion> items,
                                             Function<Object, List<Map<String, Object>>> routeNormalizer) {
-        List<String> names = new ArrayList<>();
+        List<String> hourlyNames = new ArrayList<>();
+        List<String> nonHourlyNames = new ArrayList<>();
         for (ItemQuoteVersion item : items) {
-            for (String name : mergeProcessRoutes(routeNormalizer.apply(item.getProcessRoute())).keySet()) {
-                if (!names.contains(name)) {
-                    names.add(name);
+            for (MergedProcess process : mergeProcessRoutes(routeNormalizer.apply(item.getProcessRoute())).values()) {
+                String name = process.processName();
+                if (hourlyNames.contains(name) || nonHourlyNames.contains(name)) {
+                    continue;
+                }
+                if (process.nonHourly()) {
+                    nonHourlyNames.add(name);
+                } else {
+                    hourlyNames.add(name);
                 }
             }
         }
-        return names;
+        hourlyNames.addAll(nonHourlyNames);
+        return hourlyNames;
     }
 
     static Map<String, MergedProcess> mergeProcessRoutes(List<Map<String, Object>> routes) {
@@ -218,6 +226,10 @@ final class QuoteProcessExportSupport {
 
         double lineCost() {
             return lineCost;
+        }
+
+        boolean nonHourly() {
+            return nonHourly;
         }
     }
 

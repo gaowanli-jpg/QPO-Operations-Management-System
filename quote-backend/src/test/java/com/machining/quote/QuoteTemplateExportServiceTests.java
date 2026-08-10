@@ -197,6 +197,33 @@ class QuoteTemplateExportServiceTests {
     }
 
     @Test
+    void detailTemplateExportKeepsAllNonHourlyColumnsAfterHourlyColumnsAcrossItems() throws Exception {
+        OrderRfq order = createOrder();
+        createQuotedItem(order.getId(), "P-ASSEMBLY-FIRST", List.of(
+                nonHourlyRoute("组装费", 200.0, 200.0, 10)
+        ));
+        createQuotedItem(order.getId(), "P-HOURLY-SECOND", List.of(
+                standardRoute(11L, "MILL", "铣", "精铣", 1.5, 80.0, 120.0, 10),
+                nonHourlyRoute("表面处理", 50.0, 50.0, 20)
+        ));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        quoteTemplateExportService.exportTemplateQuoteDetail(order.getId(), response);
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(response.getContentAsByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            int millingCol = groupHeaderCol(sheet, "铣");
+            int assemblyCol = groupHeaderCol(sheet, "组装费");
+            int surfaceCol = groupHeaderCol(sheet, "表面处理");
+
+            assertThat(millingCol).isLessThan(assemblyCol);
+            assertThat(millingCol).isLessThan(surfaceCol);
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX, assemblyCol)).isEqualTo("非工时费用");
+            assertThat(text(sheet, DETAIL_START_ROW_INDEX + 1, millingCol)).isEqualTo("工时");
+        }
+    }
+
+    @Test
     void detailTemplateExportUsesConfiguredHeaderRowNumber() throws Exception {
         QuoteTemplateConfigReq req = new QuoteTemplateConfigReq();
         req.setHeaderRowNumber(10);
@@ -264,9 +291,13 @@ class QuoteTemplateExportServiceTests {
     }
 
     private void createQuotedItem(Integer rfqId, List<Map<String, Object>> processRoutes) {
+        createQuotedItem(rfqId, "P-MERGE-TPL", processRoutes);
+    }
+
+    private void createQuotedItem(Integer rfqId, String partNo, List<Map<String, Object>> processRoutes) {
         ItemQuoteVersion item = new ItemQuoteVersion();
         item.setRfqId(rfqId);
-        item.setPartNo("P-MERGE-TPL");
+        item.setPartNo(partNo);
         item.setVersion("A");
         item.setDescription("模板重复工艺测试件");
         item.setQty(1);
