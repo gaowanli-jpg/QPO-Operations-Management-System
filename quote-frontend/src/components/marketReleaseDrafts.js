@@ -1,4 +1,4 @@
-const RELEASE_ITEM_DRAFT_SOURCES = {
+export const RELEASE_ITEM_DRAFT_SOURCES = {
   internalTargetLeadTimeDraft: 'internalTargetLeadTime',
   versionDraft: 'version',
   descriptionDraft: 'description',
