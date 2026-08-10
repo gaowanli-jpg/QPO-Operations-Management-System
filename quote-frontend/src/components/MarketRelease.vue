@@ -422,101 +422,152 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="下单日期" width="150" show-overflow-tooltip>
+              <el-table-column label="下单日期" width="220" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-date-picker
-                    v-model="row.salesOrderDateDraft"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    size="small"
-                    clearable
-                    :placeholder="orderFieldPlaceholder(row, 'salesOrderDate')"
-                    :disabled="!canEditReleaseItemOrderFields(row)"
-                    class="row-order-date-picker"
-                  />
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-date-picker
+                      v-model="row.salesOrderDateDraft"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      size="small"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, 'salesOrderDate')"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-date-picker"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, 'salesOrderDate') || isOrderFieldSaving(row, 'salesOrderDate') || submitting"
+                      :loading="isOrderFieldSaving(row, 'salesOrderDate')"
+                      @click.stop="saveReleaseItemOrderField(row, 'salesOrderDate')"
+                    >保存</el-button>
+                  </div>
                 </template>
               </el-table-column>
-              <el-table-column label="客户订单号" width="190" show-overflow-tooltip>
+              <el-table-column label="客户订单号" width="220" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-input
-                    v-model="row.customerOrderNoDraft"
-                    size="small"
-                    maxlength="100"
-                    clearable
-                    :placeholder="orderFieldPlaceholder(row, 'customerOrderNo')"
-                    :disabled="!canEditReleaseItemOrderFields(row)"
-                    class="row-order-field-input"
-                  />
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-input
+                      v-model="row.customerOrderNoDraft"
+                      size="small"
+                      maxlength="100"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, 'customerOrderNo')"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-field-input"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, 'customerOrderNo') || isOrderFieldSaving(row, 'customerOrderNo') || submitting"
+                      :loading="isOrderFieldSaving(row, 'customerOrderNo')"
+                      @click.stop="saveReleaseItemOrderField(row, 'customerOrderNo')"
+                    >保存</el-button>
+                  </div>
                 </template>
               </el-table-column>
-              <el-table-column label="客户项目号" width="190" show-overflow-tooltip>
+              <el-table-column label="客户项目号" width="220" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-input
-                    v-model="row.customerProjectNoDraft"
-                    size="small"
-                    maxlength="100"
-                    clearable
-                    :placeholder="orderFieldPlaceholder(row, 'customerProjectNo')"
-                    :disabled="!canEditReleaseItemOrderFields(row)"
-                    class="row-order-field-input"
-                  />
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-input
+                      v-model="row.customerProjectNoDraft"
+                      size="small"
+                      maxlength="100"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, 'customerProjectNo')"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-field-input"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, 'customerProjectNo') || isOrderFieldSaving(row, 'customerProjectNo') || submitting"
+                      :loading="isOrderFieldSaving(row, 'customerProjectNo')"
+                      @click.stop="saveReleaseItemOrderField(row, 'customerProjectNo')"
+                    >保存</el-button>
+                  </div>
                 </template>
               </el-table-column>
-              <el-table-column label="客户下单抬头" width="210" show-overflow-tooltip>
+              <el-table-column label="客户下单抬头" width="240" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-input
-                    v-model="row.customerOrderTitleDraft"
-                    size="small"
-                    maxlength="255"
-                    clearable
-                    :placeholder="orderFieldPlaceholder(row, 'customerOrderTitle')"
-                    :disabled="!canEditReleaseItemOrderFields(row)"
-                    class="row-order-field-input"
-                  />
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-input
+                      v-model="row.customerOrderTitleDraft"
+                      size="small"
+                      maxlength="255"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, 'customerOrderTitle')"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-field-input"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, 'customerOrderTitle') || isOrderFieldSaving(row, 'customerOrderTitle') || submitting"
+                      :loading="isOrderFieldSaving(row, 'customerOrderTitle')"
+                      @click.stop="saveReleaseItemOrderField(row, 'customerOrderTitle')"
+                    >保存</el-button>
+                  </div>
                 </template>
               </el-table-column>
-              <el-table-column label="订单类型" width="170" show-overflow-tooltip>
+              <el-table-column label="订单类型" width="220" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-select
-                    v-model="row.orderTypeDraft"
-                    size="small"
-                    clearable
-                    :placeholder="orderFieldPlaceholder(row, 'orderType')"
-                    :disabled="!canEditReleaseItemOrderFields(row)"
-                    class="row-order-type-select"
-                  >
-                    <el-option label="预测订单" value="预测订单" />
-                    <el-option label="备货订单" value="备货订单" />
-                    <el-option label="正式订单" value="正式订单" />
-                  </el-select>
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-select
+                      v-model="row.orderTypeDraft"
+                      size="small"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, 'orderType')"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-type-select"
+                    >
+                      <el-option label="预测订单" value="预测订单" />
+                      <el-option label="备货订单" value="备货订单" />
+                      <el-option label="正式订单" value="正式订单" />
+                    </el-select>
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, 'orderType') || isOrderFieldSaving(row, 'orderType') || submitting"
+                      :loading="isOrderFieldSaving(row, 'orderType')"
+                      @click.stop="saveReleaseItemOrderField(row, 'orderType')"
+                    >保存</el-button>
+                  </div>
                 </template>
               </el-table-column>
-              <el-table-column label="内部项目号" width="190" show-overflow-tooltip>
+              <el-table-column label="内部项目号" width="220" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-input
-                    v-model="row.internalProjectNoDraft"
-                    size="small"
-                    maxlength="100"
-                    clearable
-                    :placeholder="orderFieldPlaceholder(row, 'internalProjectNo')"
-                    :disabled="!canEditReleaseItemOrderFields(row)"
-                    class="row-order-field-input"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column label="订单信息操作" width="136" align="center">
-                <template #default="{ row }">
-                  <el-button
-                    v-permission="'market:release:create'"
-                    size="small"
-                    type="primary"
-                    plain
-                    :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row) || isOrderFieldsSaving(row) || submitting"
-                    :loading="isOrderFieldsSaving(row)"
-                    @click.stop="saveReleaseItemOrderFields(row)"
-                  >
-                    保存订单信息
-                  </el-button>
+                  <div class="row-field-editor row-order-field-editor">
+                    <el-input
+                      v-model="row.internalProjectNoDraft"
+                      size="small"
+                      maxlength="100"
+                      clearable
+                      :placeholder="orderFieldPlaceholder(row, 'internalProjectNo')"
+                      :disabled="!canEditReleaseItemOrderFields(row)"
+                      class="row-order-field-input"
+                    />
+                    <el-button
+                      v-permission="'market:release:create'"
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="!canEditReleaseItemOrderFields(row) || !hasUnsavedOrderFieldDraft(row, 'internalProjectNo') || isOrderFieldSaving(row, 'internalProjectNo') || submitting"
+                      :loading="isOrderFieldSaving(row, 'internalProjectNo')"
+                      @click.stop="saveReleaseItemOrderField(row, 'internalProjectNo')"
+                    >保存</el-button>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column prop="status" label="状态" width="110" align="center" />
@@ -786,7 +837,7 @@ const releaseActionKeys = {
   shiftInternalLeadTime: 'market:release:shift-internal-lead-time',
   setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
   fields: (releaseItemKey) => `market:release:fields:${releaseItemKey}`,
-  orderFields: (releaseItemKey) => `market:release:order-fields:${releaseItemKey}`,
+  orderField: (releaseItemKey, field) => `market:release:order-fields:${releaseItemKey}:${field}`,
   version: (itemId) => `market:release:version:${itemId}`,
   internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`,
   generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join(',') || 'none'}`
@@ -1061,17 +1112,47 @@ const orderFieldDefaults = {
   internalProjectNo: 'internalProjectNo'
 }
 
+const orderFieldLabels = {
+  salesOrderDate: '下单日期',
+  customerOrderNo: '客户订单号',
+  customerProjectNo: '客户项目号',
+  customerOrderTitle: '客户下单抬头',
+  orderType: '订单类型',
+  internalProjectNo: '内部项目号'
+}
+
 const orderFieldPlaceholder = (row, field) => {
   if (normalizeOrderFieldDraft(row?.[field])) return ''
   const defaultValue = releaseForm[orderFieldDefaults[field]]
   return defaultValue ? `继承 ${defaultValue}` : '继承订单默认'
 }
 
-const hasUnsavedOrderFieldDraft = (row) => Object.entries(orderFieldDefaults).some(([field, draftField]) => (
-  normalizeOrderFieldDraft(row?.[`${draftField}Draft`]) !== normalizeOrderFieldDraft(row?.[field])
-))
+const hasUnsavedOrderFieldDraft = (row, targetField) => Object.entries(orderFieldDefaults).some(([field, draftField]) => {
+  if (targetField && field !== targetField) return false
+  return normalizeOrderFieldDraft(row?.[`${draftField}Draft`]) !== normalizeOrderFieldDraft(row?.[field])
+})
 
-const isOrderFieldsSaving = (row) => isPending(releaseActionKeys.orderFields(rowKey(row)))
+const orderFieldPayloadForSingleSave = (row, field) => {
+  const payload = {}
+  Object.entries(orderFieldDefaults).forEach(([fieldName, draftField]) => {
+    const sourceValue = fieldName === field ? row?.[`${draftField}Draft`] : row?.[fieldName]
+    payload[fieldName] = normalizeOrderFieldDraft(sourceValue)
+  })
+  return payload
+}
+
+const mergeSavedOrderFieldDrafts = (row, savedData, savedField) => {
+  const saved = { ...row, ...savedData }
+  Object.entries(orderFieldDefaults).forEach(([field, draftField]) => {
+    const draftKey = `${draftField}Draft`
+    saved[draftKey] = field === savedField
+      ? (savedData[field] || '')
+      : (row?.[draftKey] ?? '')
+  })
+  return saved
+}
+
+const isOrderFieldSaving = (row, field) => isPending(releaseActionKeys.orderField(rowKey(row), field))
 
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
@@ -1144,32 +1225,19 @@ const saveReleaseItemFields = async (row) => {
   })
 }
 
-const saveReleaseItemOrderFields = async (row) => {
+const saveReleaseItemOrderField = async (row, field) => {
   const rowRfqId = row?.rfqId || row?.sourceOrderId || selectedRfqId.value
-  if (!rowRfqId || !row?.id || !canEditReleaseItemOrderFields(row)) return
+  if (!rowRfqId || !row?.id || !canEditReleaseItemOrderFields(row) || !orderFieldDefaults[field]) return
 
-  return runAction(releaseActionKeys.orderFields(rowKey(row)), async () => {
+  return runAction(releaseActionKeys.orderField(rowKey(row), field), async () => {
     try {
+      const payload = orderFieldPayloadForSingleSave(row, field)
       const response = await updateReleaseItemOrderFields(row.id, {
         rfqId: rowRfqId,
-        salesOrderDate: normalizeOrderFieldDraft(row.salesOrderDateDraft),
-        customerOrderNo: normalizeOrderFieldDraft(row.customerOrderNoDraft),
-        customerProjectNo: normalizeOrderFieldDraft(row.customerProjectNoDraft),
-        customerOrderTitle: normalizeOrderFieldDraft(row.customerOrderTitleDraft),
-        orderType: normalizeOrderFieldDraft(row.orderTypeDraft),
-        internalProjectNo: normalizeOrderFieldDraft(row.internalProjectNoDraft)
+        ...payload
       })
       const savedData = response?.data || {}
-      const saved = {
-        ...row,
-        ...savedData,
-        salesOrderDateDraft: savedData.salesOrderDate || '',
-        customerOrderNoDraft: savedData.customerOrderNo || '',
-        customerProjectNoDraft: savedData.customerProjectNo || '',
-        customerOrderTitleDraft: savedData.customerOrderTitle || '',
-        orderTypeDraft: savedData.orderType || '',
-        internalProjectNoDraft: savedData.internalProjectNo || ''
-      }
+      const saved = mergeSavedOrderFieldDrafts(row, savedData, field)
       const key = rowKey(row)
       const index = itemList.value.findIndex(item => rowKey(item) === key)
       if (index >= 0) {
@@ -1178,7 +1246,7 @@ const saveReleaseItemOrderFields = async (row) => {
       if (selectedItemIdMap[key]) {
         selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...saved }
       }
-      ElMessage.success('零件订单信息已保存。')
+      ElMessage.success(`${orderFieldLabels[field]}已保存。`)
     } catch (error) {
       console.error(error)
       ElMessage.error(requestErrorMessage(error, '零件订单信息保存失败。'))
@@ -1997,8 +2065,18 @@ const sourceTypeLabel = () => {
 .row-order-date-picker,
 .row-order-field-input,
 .row-order-type-select {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
+}
+
+.row-order-field-editor {
+  min-width: 0;
+}
+
+.row-order-field-editor :deep(.el-button) {
+  flex: 0 0 auto;
+  margin-left: 0;
 }
 
 .selection-count {

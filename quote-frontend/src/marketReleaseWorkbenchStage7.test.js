@@ -31,21 +31,22 @@ describe('market release workbench stage 7', () => {
     expect(source).not.toContain('label="开工日期"')
   })
 
-  test('renders six item order-field editors and one save action before status', () => {
+  test('renders six item order-field editors with independent save actions before status', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const tableIndex = source.indexOf('class="release-selection-table"')
     const orderFieldIndexes = [
-      source.indexOf('label="下单日期" width="150"', tableIndex),
-      source.indexOf('label="客户订单号" width="190"', tableIndex),
-      source.indexOf('label="客户项目号" width="190"', tableIndex),
-      source.indexOf('label="客户下单抬头" width="210"', tableIndex),
-      source.indexOf('label="订单类型" width="170"', tableIndex),
-      source.indexOf('label="内部项目号" width="190"', tableIndex),
-      source.indexOf('label="订单信息操作" width="136"', tableIndex)
+      source.indexOf('label="下单日期" width="220"', tableIndex),
+      source.indexOf('label="客户订单号" width="220"', tableIndex),
+      source.indexOf('label="客户项目号" width="220"', tableIndex),
+      source.indexOf('label="客户下单抬头" width="240"', tableIndex),
+      source.indexOf('label="订单类型" width="220"', tableIndex),
+      source.indexOf('label="内部项目号" width="220"', tableIndex)
     ]
     const statusIndex = source.indexOf('prop="status" label="状态"', tableIndex)
 
     expect(source).not.toContain('prop="' + 'customer' + 'Requirement"')
+    expect(source).not.toContain('label="订单信息操作"')
+    expect(source).not.toContain('保存订单信息')
     expect(orderFieldIndexes.every(index => index > tableIndex)).toBe(true)
     expect(orderFieldIndexes.every((index, position) => position === 0 || index > orderFieldIndexes[position - 1])).toBe(true)
     expect(statusIndex).toBeGreaterThan(orderFieldIndexes.at(-1))
@@ -55,34 +56,36 @@ describe('market release workbench stage 7', () => {
     expect(source).toContain('v-model="row.customerOrderTitleDraft"')
     expect(source).toContain('v-model="row.orderTypeDraft"')
     expect(source).toContain('v-model="row.internalProjectNoDraft"')
-    expect(source).toContain('@click.stop="saveReleaseItemOrderFields(row)"')
-    expect(source).toContain('保存订单信息')
+    expect(source).toContain('@click.stop="saveReleaseItemOrderField(row, \'salesOrderDate\')"')
+    expect(source).toContain('@click.stop="saveReleaseItemOrderField(row, \'customerOrderNo\')"')
+    expect(source).toContain('@click.stop="saveReleaseItemOrderField(row, \'customerProjectNo\')"')
+    expect(source).toContain('@click.stop="saveReleaseItemOrderField(row, \'customerOrderTitle\')"')
+    expect(source).toContain('@click.stop="saveReleaseItemOrderField(row, \'orderType\')"')
+    expect(source).toContain('@click.stop="saveReleaseItemOrderField(row, \'internalProjectNo\')"')
     expect(source).toContain('orderFieldPlaceholder(row,')
   })
 
-  test('saves all six item fields once and keeps partial rows editable', () => {
+  test('saves one item order field at a time and preserves unrelated drafts', () => {
     const source = readSource('components', 'MarketRelease.vue')
     const saveBlock = source.slice(
-      source.indexOf('const saveReleaseItemOrderFields = async (row) =>'),
+      source.indexOf('const saveReleaseItemOrderField = async (row, field) =>'),
       source.indexOf('const handleSelectionChange')
     )
 
     expect(source).toContain('updateReleaseItemOrderFields')
     expect(source).toContain('const canEditReleaseItemOrderFields = (row) => !isFullyReleasedReleaseItem(row)')
-    expect(source).toContain('orderFields: (releaseItemKey) =>')
-    expect(source).toContain('const isOrderFieldsSaving = (row) =>')
+    expect(source).toContain('orderField: (releaseItemKey, field) =>')
+    expect(source).toContain('const isOrderFieldSaving = (row, field) =>')
     expect(saveBlock).toContain('const response = await updateReleaseItemOrderFields(row.id, {')
     expect(saveBlock).toContain('const rowRfqId = row?.rfqId || row?.sourceOrderId || selectedRfqId.value')
     expect(saveBlock).toContain('rfqId: rowRfqId')
-    expect(saveBlock).toContain('salesOrderDate: normalizeOrderFieldDraft(row.salesOrderDateDraft)')
-    expect(saveBlock).toContain('customerOrderNo: normalizeOrderFieldDraft(row.customerOrderNoDraft)')
-    expect(saveBlock).toContain('customerProjectNo: normalizeOrderFieldDraft(row.customerProjectNoDraft)')
-    expect(saveBlock).toContain('customerOrderTitle: normalizeOrderFieldDraft(row.customerOrderTitleDraft)')
-    expect(saveBlock).toContain('orderType: normalizeOrderFieldDraft(row.orderTypeDraft)')
-    expect(saveBlock).toContain('internalProjectNo: normalizeOrderFieldDraft(row.internalProjectNoDraft)')
+    expect(saveBlock).toContain('const payload = orderFieldPayloadForSingleSave(row, field)')
+    expect(saveBlock).toContain('const saved = mergeSavedOrderFieldDrafts(row, savedData, field)')
     expect(saveBlock).toContain('if (selectedItemIdMap[key])')
     expect(saveBlock).toContain("requestErrorMessage(error, '零件订单信息保存失败。')")
     expect(saveBlock.match(/updateReleaseItemOrderFields\(/g)).toHaveLength(1)
+    expect(source).toContain('const orderFieldPayloadForSingleSave = (row, field) =>')
+    expect(source).toContain('const mergeSavedOrderFieldDrafts = (row, savedData, savedField) =>')
   })
 
   test('keeps selected row drafts when paged records are reloaded', () => {
@@ -103,7 +106,7 @@ describe('market release workbench stage 7', () => {
       source.indexOf('const resolveDeliveryLeadTime')
     )
 
-    expect(source).toContain('const hasUnsavedOrderFieldDraft = (row) =>')
+    expect(source).toContain('const hasUnsavedOrderFieldDraft = (row, targetField) =>')
     expect(source).toContain('const selectedRowsWithUnsavedOrderFields = computed(() =>')
     expect(source).toContain('selectedRowsWithUnsavedOrderFields.length > 0')
     expect(source).toContain('selectedRowsWithUnsavedOrderFields.value.length > 0')

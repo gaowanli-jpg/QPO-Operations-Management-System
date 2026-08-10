@@ -686,7 +686,6 @@ POST /api/market/u9-sync/sync
 客户下单抬头
 订单类型
 内部项目号
-订单信息操作
 状态
 ```
 
@@ -695,9 +694,9 @@ POST /api/market/u9-sync/sync
 - 下单日期：`el-date-picker`。
 - 客户订单号、客户项目号、客户下单抬头、内部项目号：`el-input`。
 - 订单类型：`el-select`，复用三种订单类型。
-- 订单信息操作：每行一个独立 `保存订单信息` 按钮，一次保存六个字段。
+- 每个订单属性单元格内放置独立 `保存` 按钮，交互与备注、物料描述等行内字段一致。
 
-不在六个字段中分别放六个保存按钮，避免表格重复操作和多请求。交互参考现有版本保存：按钮拥有独立 loading、重复点击保护、成功/失败提示和后端返回值回填。
+前端仍复用后端 `POST /api/market/release/items/{itemId}/order-fields` 原子接口。用户点击某一列保存时，前端只使用当前列草稿值，其余五列使用该行已保存值组包，避免误保存其他未确认草稿。按钮拥有独立 loading、重复点击保护、成功/失败提示和后端返回值回填。
 
 页面草稿字段建议使用：
 
@@ -730,7 +729,7 @@ export const updateReleaseItemOrderFields = (itemId, payload) =>
   postJson(`/api/market/release/items/${itemId}/order-fields`, payload)
 ```
 
-`MarketRelease.vue` 新增 `saveReleaseItemOrderFields(row)`，payload 只包含 `rfqId` 和六个草稿字段。保存成功后同时更新当前分页行和 `selectedItemIdMap` 中的已选行快照，避免生成请求使用旧页面状态；生成接口仍以数据库锁定后的值为最终依据。
+`MarketRelease.vue` 新增 `saveReleaseItemOrderField(row, field)`，payload 包含 `rfqId`、当前列草稿值和其他五列已保存值。保存成功后同时更新当前分页行和 `selectedItemIdMap` 中的已选行快照；未保存的其他列草稿继续保留，避免生成请求使用旧页面状态，也避免单列保存误覆盖其他草稿。生成接口仍以数据库锁定后的值为最终依据。
 
 ### 9.3 提单完成结果
 
@@ -994,7 +993,7 @@ RFQ release sales order completed salesOrderId={} salesOrderNo={} sourceRfqCount
 
 - `MarketRelease.vue` 左侧增加并统一七个订单级字段，旧“开工日期”改为“下单日期”。
 - 右侧表格在状态列前新增六个 RFQ 零件订单属性维护列。
-- 六列后新增一个行级 `保存订单信息` 按钮，一次保存六个字段。
+- 六个订单属性列各自提供行内 `保存` 按钮，不再额外增加“订单信息操作”列。
 - 输入为空时展示继承默认值提示，但不伪装为已保存零件值。
 - 同一客户下支持多 RFQ 选择和零件选择。
 - 提交只发送一次批次请求。
@@ -1008,7 +1007,7 @@ RFQ release sales order completed salesOrderId={} salesOrderNo={} sourceRfqCount
 - 页面不再提示按 RFQ 分别生成提单。
 - 页面明确显示一批生成一张销售订单。
 - 六个维护列位于现有业务列末尾、状态列之前。
-- 每行只有一个订单信息保存按钮，不产生六次请求。
+- 每个订单属性列都可以单独编辑并保存，保存某一列不误保存其他列草稿。
 - 保存后刷新仍能看到 RFQ 零件实际值。
 - 选中行存在未保存草稿时不能生成正式提单。
 - 全部已提单行不能编辑，部分已提单行修改不影响历史 ticket。
@@ -1096,8 +1095,8 @@ RFQ release sales order completed salesOrderId={} salesOrderNo={} sourceRfqCount
 ### 13.5 前端测试
 
 - 左侧包含七个订单级字段，旧“开工日期”不再作为独立输入。
-- 右侧状态列前依次包含六个 RFQ 零件订单属性列和一个订单信息操作列。
-- 每行一个“保存订单信息”按钮，一次提交六个字段。
+- 右侧状态列前依次包含六个 RFQ 零件订单属性列，不再包含独立订单信息操作列。
+- 六个订单属性列各自提供行内保存按钮；保存单列时只提交该列草稿，其余字段沿用已保存值。
 - 无 `market:release:create` 时保存按钮隐藏。
 - 全部已提单行不能编辑订单属性。
 - 选中行存在未保存草稿时不能生成正式提单。
