@@ -105,6 +105,37 @@ class SalesOrderQpoImportStage2Test {
     }
 
     @Test
+    void parsesDocumentedSalesOrderDateFormats() throws Exception {
+        List<Object> dateValues = List.of(
+                "2026-03-08",
+                "2026-3-8",
+                "2026.03.08",
+                "2026.3.8",
+                "2026/3/8",
+                "2026年3月8日",
+                46089,
+                "46089"
+        );
+        List<List<Object>> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < dateValues.size(); i++) {
+            Object dateValue = dateValues.get(i);
+            rows.add(row(i + 1, dateValue, null, null, null, null, null, dateValue, dateValue,
+                    "P-DATE-" + i, 1, null, null, null, "A", null, null, null, null));
+        }
+
+        SalesOrderQpoExcelParseResult result = parser.parse(
+                new ByteArrayInputStream(workbookBytes(fullHeaders(), rows)),
+                defaults());
+
+        assertThat(result.getLineCount()).isEqualTo(dateValues.size());
+        for (SalesOrderQpoExcelLineDTO line : result.getOrders().get(0).getLines()) {
+            assertThat(line.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 3, 8));
+            assertThat(line.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 3, 8));
+            assertThat(line.getInternalDeliveryDate()).isEqualTo(LocalDate.of(2026, 3, 8));
+        }
+    }
+
+    @Test
     void rejectsMissingRequiredHeadersWithClearMessage() {
         assertThatThrownBy(() -> parser.parse(new ByteArrayInputStream(workbookBytes(
                 List.of("订单数量", "版本"),
