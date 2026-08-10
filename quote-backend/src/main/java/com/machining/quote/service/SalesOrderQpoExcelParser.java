@@ -18,9 +18,6 @@ import org.springframework.stereotype.Service;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,13 +50,6 @@ public class SalesOrderQpoExcelParser {
             PART_NO,
             QTY,
             VERSION
-    );
-
-    private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
-            DateTimeFormatter.ISO_LOCAL_DATE,
-            DateTimeFormatter.ofPattern("yyyy/M/d"),
-            DateTimeFormatter.ofPattern("yyyy.MM.dd"),
-            DateTimeFormatter.ofPattern("yyyy\u5e74M\u6708d\u65e5")
     );
 
     public SalesOrderQpoExcelParseResult parse(InputStream inputStream) {
@@ -339,34 +329,11 @@ public class SalesOrderQpoExcelParser {
             FormulaEvaluator evaluator,
             int excelRowNumber) {
         Cell cell = cell(row, headerIndexes, header);
-        if (cell == null) {
-            return null;
+        try {
+            return ExcelDateValueParser.parseOptional(cell, formatter, evaluator);
+        } catch (IllegalArgumentException e) {
+            throw rowError(excelRowNumber, header, "\u4e0d\u662f\u6709\u6548\u65e5\u671f");
         }
-        if (effectiveCellType(cell) == CellType.NUMERIC && DateUtil.isValidExcelDate(cell.getNumericCellValue())) {
-            return DateUtil.getJavaDate(cell.getNumericCellValue())
-                    .toInstant()
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate();
-        }
-        String value = clean(cellText(cell, formatter, evaluator));
-        if (value.isEmpty()) {
-            return null;
-        }
-        if (value.matches("\\d+(\\.0+)?")) {
-            return DateUtil.getJavaDate(new BigDecimal(value).doubleValue())
-                    .toInstant()
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate();
-        }
-        String normalized = value.replace('/', '-').replace('.', '-');
-        for (DateTimeFormatter dateFormatter : DATE_FORMATTERS) {
-            try {
-                return LocalDate.parse(normalized, dateFormatter);
-            } catch (DateTimeParseException ignored) {
-                // Try the next accepted market date format.
-            }
-        }
-        throw rowError(excelRowNumber, header, "\u4e0d\u662f\u6709\u6548\u65e5\u671f");
     }
 
     private String fallbackText(

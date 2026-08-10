@@ -104,7 +104,7 @@ public enum ReleaseItemDataReplacementField {
     }
 
     public static String normalizeHeader(String header) {
-        return header == null ? "" : header.replaceAll("\\s+", "").trim();
+        return header == null ? "" : header.replaceAll("[\\s\\u00A0\\u3000]+", "").trim();
     }
 
     public enum ValueType {
