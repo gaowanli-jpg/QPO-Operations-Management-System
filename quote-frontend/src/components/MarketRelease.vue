@@ -189,7 +189,7 @@
                 size="large"
                 class="workflow-primary-action"
                 :loading="submitting"
-                :disabled="selectedRows.length === 0 || selectedRowsWithUnsavedOrderFields.length > 0 || !releaseForm.orderType || !releaseForm.documentTypeCode.trim() || !releaseForm.salesOrderDate || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting"
+                :disabled="selectedRows.length === 0 || selectedRowsWithUnsavedOrderFields.length > 0 || !releaseForm.orderType || !releaseForm.documentTypeCode.trim() || !releaseForm.salesOrderDate || !releaseForm.internalProjectNo.trim() || !releaseForm.customerOrderNo.trim() || submitting || dataReplacementBusy"
                 @click="submitTicket"
               >
                 生成正式提单
@@ -208,7 +208,18 @@
                   size="small"
                   plain
                   class="workflow-soft-button"
-                  :disabled="selectedOrders.length === 0 || replacingDrawings || submitting"
+                  :disabled="dataReplacementDisabled"
+                  :loading="dataReplacementBusy"
+                  @click="openDataReplacementDialog"
+                >
+                  表格数据替换
+                </el-button>
+                <el-button
+                  v-permission="'market:release:create'"
+                  size="small"
+                  plain
+                  class="workflow-soft-button"
+                  :disabled="selectedOrders.length === 0 || replacingDrawings || submitting || dataReplacementBusy"
                   :loading="replacingDrawings"
                   @click="openDrawingReplaceDialog"
                 >
@@ -747,6 +758,13 @@
       </template>
     </el-dialog>
 
+    <ReleaseItemDataReplacementDialog
+      v-model="dataReplacementVisible"
+      :sources="selectedOrderSources"
+      :disabled="submitting || selectedOrders.length === 0"
+      @busy-change="dataReplacementBusy = $event"
+    />
+
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择市场部议价订单"
@@ -767,6 +785,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import ReleaseItemDataReplacementDialog from './market-release/ReleaseItemDataReplacementDialog.vue'
 import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../utils/drawingUpload'
 import {
   generateTicket,
@@ -805,6 +824,8 @@ const acceptedQtyMap = reactive({})
 const internalShiftDays = ref(0)
 const manualInternalTargetDate = ref('')
 const drawingReplaceVisible = ref(false)
+const dataReplacementVisible = ref(false)
+const dataReplacementBusy = ref(false)
 const replacementDrawingFiles = ref([])
 const replacementVersionDrawingFiles = ref([])
 const replacementDrawingResult = ref(null)
@@ -830,6 +851,7 @@ const selectedRfqIds = computed(() => selectedOrderSources.value
   .filter(source => source.sourceType === 'RFQ')
   .map(source => source.sourceOrderId))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
+const selectedSourcesIncludeNonRfq = computed(() => selectedOrderSources.value.some(source => source.sourceType !== 'RFQ'))
 const { isPending, runAction } = usePendingAction()
 const releaseActionKeys = {
   importSelection: 'market:release:import-selection',
@@ -847,6 +869,7 @@ const adjustingInternalLeadTime = computed(() => isPending(releaseActionKeys.shi
 const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys.setInternalTargetLeadTime))
 const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
 const replacingDrawings = computed(() => isPending(releaseActionKeys.replaceDrawings))
+const dataReplacementDisabled = computed(() => selectedOrders.value.length === 0 || dataReplacementBusy.value || submitting.value || selectedSourcesIncludeNonRfq.value)
 const isVersionSaving = (row) => isPending(releaseActionKeys.version(row?.id))
 const isFieldSaving = (row) => isPending(releaseActionKeys.fields(rowKey(row)))
 const isInternalLeadTimeSaving = (row) => isPending(releaseActionKeys.internalLeadTime(row?.id))
@@ -1374,6 +1397,18 @@ const handleSelectionExcelChange = async (uploadFile) => {
       ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
     }
   })
+}
+
+const openDataReplacementDialog = () => {
+  if (dataReplacementDisabled.value) {
+    if (selectedOrders.value.length === 0) {
+      ElMessage.warning('请先选择订单。')
+    } else if (selectedSourcesIncludeNonRfq.value) {
+      ElMessage.warning('表格数据替换只支持 RFQ 询价订单。')
+    }
+    return
+  }
+  dataReplacementVisible.value = true
 }
 
 const openDrawingReplaceDialog = () => {

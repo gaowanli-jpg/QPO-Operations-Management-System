@@ -91,6 +91,10 @@ export const parsePartSelectionBatch = (formData) => multipartPost('/api/market/
 
 export const replaceReleaseDrawings = (formData) => multipartPost('/api/market/release/drawings/replace', formData)
 
+export const previewReleaseItemDataReplacement = (formData) => multipartPost('/api/market/release/item-data-replacement/preview', formData)
+
+export const confirmReleaseItemDataReplacement = (formData) => multipartPost('/api/market/release/item-data-replacement/confirm', formData)
+
 export const shiftInternalTargetLeadTime = (payload) => postJson('/api/market/internal-target-lead-time/shift', payload)
 
 export const setInternalTargetLeadTime = (payload) => postJson('/api/market/internal-target-lead-time/set', payload)
