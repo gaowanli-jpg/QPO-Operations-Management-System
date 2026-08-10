@@ -19,6 +19,13 @@ public class GlobalExceptionHandler {
     private static final String GENERIC_ERROR_MESSAGE = "服务器处理失败，请联系管理员";
     private static final String DATA_CONFLICT_MESSAGE = "数据已存在或被重复提交，请刷新后重试";
     private static final String DATA_SCOPE_DENIED_MESSAGE = "当前账号无权访问所选询价单";
+    private static final String PREVIEW_FINGERPRINT_CONFLICT_MESSAGE = "数据已发生变化，请重新预览";
+
+    @ExceptionHandler(PreviewFingerprintConflictException.class)
+    public ResponseEntity<Map<String, Object>> handlePreviewFingerprintConflict(
+            PreviewFingerprintConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error(PREVIEW_FINGERPRINT_CONFLICT_MESSAGE));
+    }
 
     @ExceptionHandler(DataScopeAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleDataScopeAccessDenied(DataScopeAccessDeniedException e) {

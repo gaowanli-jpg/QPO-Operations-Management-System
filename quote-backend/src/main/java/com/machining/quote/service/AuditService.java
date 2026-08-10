@@ -332,6 +332,7 @@ public class AuditService {
             case "RELEASE_ITEM_VERSION_UPDATE" -> "议价提单修改零件版本";
             case "RELEASE_ITEM_FIELD_UPDATE" -> "议价提单修改零件信息";
             case "RELEASE_ITEM_ORDER_FIELDS_UPDATE" -> "议价提单修改零件订单属性";
+            case "RELEASE_ITEM_DATA_REPLACEMENT" -> "议价提单表格数据替换";
             case "RELEASE_DRAWING_REPLACE" -> "议价提单替换图纸";
             case "DELIVERY_TICKET_GENERATE" -> "生成提单";
             case "DELIVERY_TICKET_EXPORT" -> "导出提单表";

@@ -2029,6 +2029,17 @@ public class InternalTargetLeadTimeService {
         return row;
     }
 
+    public Map<String, Object> buildReplacementAffectedRow(
+            ItemQuoteVersion item,
+            int ticketedQty,
+            OrderRfq order) {
+        Map<Integer, OrderRfq> orderById = new LinkedHashMap<>();
+        if (order != null && order.getId() != null) {
+            orderById.put(order.getId(), order);
+        }
+        return buildBatchItemRow(item, ticketedQty, orderById);
+    }
+
     private Map<String, Object> sourceAuditRow(ReleaseOrderSource source) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("sourceType", source.getSourceType().name());

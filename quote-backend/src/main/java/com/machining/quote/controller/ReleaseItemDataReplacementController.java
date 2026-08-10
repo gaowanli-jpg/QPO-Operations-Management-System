@@ -3,6 +3,7 @@ package com.machining.quote.controller;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.ReleaseItemDataReplacementConfirmDTO;
 import com.machining.quote.dto.ReleaseItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.service.ReleaseItemDataReplacementService;
@@ -40,6 +41,24 @@ public class ReleaseItemDataReplacementController {
         validateExcelFile(excelFile);
         try (InputStream inputStream = excelFile.getInputStream()) {
             return replacementService.preview(parsedSources, inputStream);
+        } catch (IOException e) {
+            throw new RuntimeException("读取议价提单表格数据替换文件失败", e);
+        }
+    }
+
+    @PostMapping(value = "/confirm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:release:create")
+    public ReleaseItemDataReplacementConfirmDTO confirm(
+            @RequestParam("sources") String sources,
+            @RequestParam("previewFingerprint") String previewFingerprint,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        if (previewFingerprint == null || previewFingerprint.isBlank()) {
+            throw new IllegalArgumentException("预览指纹不能为空");
+        }
+        List<ReleaseOrderSource> parsedSources = parseSources(sources);
+        validateExcelFile(excelFile);
+        try (InputStream inputStream = excelFile.getInputStream()) {
+            return replacementService.confirm(parsedSources, inputStream, previewFingerprint.trim());
         } catch (IOException e) {
             throw new RuntimeException("读取议价提单表格数据替换文件失败", e);
         }
