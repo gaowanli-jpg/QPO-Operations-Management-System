@@ -3,16 +3,23 @@ package com.machining.quote;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.wms.WmsAllocationResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.LeadTimeService;
+import com.machining.quote.service.wms.WmsAllocationClient;
+import com.machining.quote.service.wms.WmsAllocationService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -23,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +42,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -379,6 +388,113 @@ class SalesOrderDeliveryTicketStage6Test {
     }
 
     @Test
+    void importAutoSalesOrderTicketsDeepCopyFinalSalesOrderSnapshotsAndCountRoutes() {
+        DeliveryService service = new DeliveryService();
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        DataScopeService dataScopeService = mock(DataScopeService.class);
+        LeadTimeService leadTimeService = new LeadTimeService();
+        List<OrderDeliveryTicket> insertedTickets = new ArrayList<>();
+        SalesOrderHeader header = salesOrderHeader();
+        SalesOrderItem confirmed = salesOrderItem(4001L, 2, 0, "SO-P-SNAP-1");
+        Map<String, Object> materialSnapshot = mutableMaterialSnapshot("7075-T651");
+        List<Map<String, Object>> routeSnapshot = mutableProcessRouteSnapshot("MILLING");
+        confirmed.setMaterialData(materialSnapshot);
+        confirmed.setProcessRoute(routeSnapshot);
+        SalesOrderItem unconfirmed = salesOrderItem(4002L, 1, 0, "SO-P-SNAP-2");
+        unconfirmed.setMaterialNo("MAT-UNCONFIRMED");
+        unconfirmed.setMaterialNoStatus("未确认");
+        unconfirmed.setMaterialData(mutableMaterialSnapshot("6061-T6"));
+        unconfirmed.setProcessRoute(mutableProcessRouteSnapshot("TURNING"));
+
+        when(headerMapper.selectByIdForUpdate(9001L)).thenReturn(header);
+        when(headerMapper.selectById(9001L)).thenReturn(header);
+        when(itemMapper.selectList(any())).thenReturn(List.of(confirmed, unconfirmed));
+        doAnswer(invocation -> {
+            OrderDeliveryTicket ticket = invocation.getArgument(0);
+            ticket.setId(7300 + insertedTickets.size());
+            insertedTickets.add(ticket);
+            return 1;
+        }).when(ticketMapper).insert(any(OrderDeliveryTicket.class));
+
+        wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
+
+        List<OrderDeliveryTicket> tickets = service.generateImportedSalesOrderTickets(9001L);
+
+        assertThat(tickets).hasSize(2);
+        OrderDeliveryTicket confirmedTicket = insertedTickets.stream()
+                .filter(ticket -> Long.valueOf(4001L).equals(ticket.getSourceItemId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(confirmedTicket.getMaterialData()).isEqualTo(materialSnapshot).isNotSameAs(materialSnapshot);
+        assertThat(confirmedTicket.getProcessRoute()).isEqualTo(routeSnapshot).isNotSameAs(routeSnapshot);
+        assertThat(confirmedTicket.getMesSyncStatus()).isEqualTo("SUCCESS");
+        assertThat(confirmedTicket.getMaterialNo()).isEqualTo("MAT-4001");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> copiedMaterial = (Map<String, Object>) confirmedTicket.getMaterialData();
+        @SuppressWarnings("unchecked")
+        List<String> copiedTags = (List<String>) copiedMaterial.get("tags");
+        copiedTags.add("ticket-only");
+        @SuppressWarnings("unchecked")
+        List<String> sourceTags = (List<String>) materialSnapshot.get("tags");
+        assertThat(sourceTags).containsExactly("source-tag");
+
+        OrderDeliveryTicket pendingTicket = insertedTickets.stream()
+                .filter(ticket -> Long.valueOf(4002L).equals(ticket.getSourceItemId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(pendingTicket.getMesSyncStatus()).isEqualTo("PENDING");
+        assertThat(pendingTicket.getMaterialNo()).isNull();
+        assertThat(pendingTicket.getProcessRoute()).isNotSameAs(unconfirmed.getProcessRoute());
+
+        ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService, atLeastOnce()).record(
+                eq("DELIVERY_TICKET_GENERATE"),
+                eq("sales_order_header"),
+                eq(9001L),
+                isNull(),
+                afterDataCaptor.capture());
+        assertThat(afterDataCaptor.getAllValues()).anySatisfy(afterData -> assertThat((Map<String, Object>) afterData)
+                .containsEntry("trigger", "SALES_ORDER_IMPORT_AUTO")
+                .containsEntry("ticketCount", 2)
+                .containsEntry("processRouteCount", 2));
+    }
+
+    @Test
+    void wmsAllocationRowsDeepCopyTicketMaterialAndProcessSnapshots() {
+        WmsAllocationService service = new WmsAllocationService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        WmsAllocationClient client = mock(WmsAllocationClient.class);
+        AuditService auditService = mock(AuditService.class);
+        OrderDeliveryTicket ticket = wmsTicket();
+        when(ticketMapper.selectOne(any())).thenReturn(ticket);
+        when(orderMapper.selectById(88)).thenReturn(wmsOrder());
+        when(client.allocate(any())).thenReturn(successResponse(2));
+        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
+
+        service.allocate(123, 9101L);
+
+        ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(allocationMapper, times(1)).insert(allocationCaptor.capture());
+        OrderDeliveryTicketAllocation row = allocationCaptor.getValue();
+        assertThat(row.getMaterialData()).isEqualTo(ticket.getMaterialData()).isNotSameAs(ticket.getMaterialData());
+        assertThat(row.getProcessRoute()).isEqualTo(ticket.getProcessRoute()).isNotSameAs(ticket.getProcessRoute());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> copiedMaterial = (Map<String, Object>) row.getMaterialData();
+        @SuppressWarnings("unchecked")
+        List<String> copiedTags = (List<String>) copiedMaterial.get("tags");
+        copiedTags.add("allocation-only");
+        @SuppressWarnings("unchecked")
+        List<String> sourceTags = (List<String>) ((Map<?, ?>) ticket.getMaterialData()).get("tags");
+        assertThat(sourceTags).containsExactly("source-tag");
+    }
+
+    @Test
     void downstreamServicesUseTicketSnapshotsAndSourceAwareDataScope() throws Exception {
         String deliveredService = read(MAIN_JAVA.resolve(Path.of("service", "DeliveredItemService.java")));
         String lockedService = read(MAIN_JAVA.resolve(Path.of("service", "LockedItemService.java")));
@@ -473,6 +589,20 @@ class SalesOrderDeliveryTicketStage6Test {
         ReflectionTestUtils.setField(service, "leadTimeService", leadTimeService);
     }
 
+    private void wireAllocationService(
+            WmsAllocationService service,
+            OrderDeliveryTicketMapper ticketMapper,
+            OrderDeliveryTicketAllocationMapper allocationMapper,
+            OrderRfqMapper orderMapper,
+            WmsAllocationClient client,
+            AuditService auditService) {
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+        ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
+        ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
+        ReflectionTestUtils.setField(service, "wmsAllocationClient", client);
+        ReflectionTestUtils.setField(service, "auditService", auditService);
+    }
+
     private DeliveryGenerateReq salesOrderReq(Long sourceItemId, int acceptedQty) {
         return salesOrderReq(Map.of(sourceItemId, acceptedQty));
     }
@@ -553,6 +683,83 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setRemark("Sales order remark " + partNo);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
+    }
+
+    private OrderDeliveryTicket wmsTicket() {
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setId(123);
+        ticket.setRfqId(88);
+        ticket.setItemId(77);
+        ticket.setSourceType(ReleaseSourceType.SALES_ORDER.name());
+        ticket.setSourceOrderId(9001L);
+        ticket.setSourceItemId(4001L);
+        ticket.setPartNo("SO-P-WMS");
+        ticket.setVersion("A");
+        ticket.setQty(2);
+        ticket.setMaterialNo("MAT-WMS");
+        ticket.setOrderType("正式订单");
+        ticket.setInternalProjectNo("IP-SO-1");
+        ticket.setRfqNo("SO-QPO-001");
+        ticket.setCustomerName("ACME");
+        ticket.setCustomerOrderNo("CO-SO-1");
+        ticket.setCustomerProjectNo("CP-SO-1");
+        ticket.setMaterialName("6061");
+        ticket.setEngineeringMaterialName("7075");
+        ticket.setEngineeringMaterialCode("EMC-WMS");
+        ticket.setEngineeringMaterialTypeCode("RAW_MATERIAL");
+        ticket.setEngineeringMaterialTypeName("Raw Material");
+        ticket.setEngineeringMaterialCategory("ALUMINUM");
+        ticket.setMaterialShape("plate");
+        ticket.setSurfaceTreatment("Anodized");
+        ticket.setDescription("WMS snapshot ticket");
+        ticket.setDeliveryDate(LocalDate.of(2026, 8, 15));
+        ticket.setProcessRoute(mutableProcessRouteSnapshot("MILLING"));
+        ticket.setMaterialData(mutableMaterialSnapshot("7075-T651"));
+        ticket.setMaterialGrossWeight(2.4);
+        ticket.setPartNetWeight(1.8);
+        ticket.setWmsAllocateStatus("PENDING");
+        return ticket;
+    }
+
+    private OrderRfq wmsOrder() {
+        OrderRfq order = new OrderRfq();
+        order.setId(88);
+        order.setRfqNo("SO-QPO-001");
+        order.setCustomerName("ACME");
+        return order;
+    }
+
+    private WmsAllocationResp successResponse(Integer inStockQty) {
+        WmsAllocationResp resp = new WmsAllocationResp();
+        resp.setSuccess(true);
+        resp.setMaterialNo("MAT-WMS");
+        resp.setInStockLockedQty(inStockQty);
+        resp.setInProductionLocks(List.of());
+        resp.setMessage("allocated");
+        resp.setExternalTraceId("WMS-SNAPSHOT-1");
+        return resp;
+    }
+
+    private Map<String, Object> mutableMaterialSnapshot(String name) {
+        Map<String, Object> material = new LinkedHashMap<>();
+        material.put("name", name);
+        material.put("shape", "plate");
+        material.put("tags", new ArrayList<>(List.of("source-tag")));
+        return material;
+    }
+
+    private List<Map<String, Object>> mutableProcessRouteSnapshot(String processCode) {
+        Map<String, Object> route = new LinkedHashMap<>();
+        route.put("routeType", "PROCESS");
+        route.put("sourceType", "process");
+        route.put("sortNo", 10);
+        route.put("processCode", processCode);
+        route.put("categoryName", "machining");
+        route.put("detailName", "cnc");
+        route.put("hourlyRate", 12.0);
+        route.put("unitWorkHours", 1.0);
+        route.put("lineCost", 12.0);
+        return new ArrayList<>(List.of(route));
     }
 
     private void assertSnapshot(Object row, String getterName, Object expectedValue) {

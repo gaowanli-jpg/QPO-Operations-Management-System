@@ -11,6 +11,7 @@ import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.JsonSnapshotCopyService;
 import com.machining.quote.service.ProcessRouteSnapshotService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,8 @@ public class WmsAllocationService {
     private TransactionTemplate transactionTemplate;
     @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
+    @Autowired(required = false)
+    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
 
     public Map<String, Object> allocate(Integer ticketId, Long taskId) {
         long startedAt = System.currentTimeMillis();
@@ -242,7 +245,7 @@ public class WmsAllocationService {
         row.setDescription(ticket.getDescription());
         row.setDeliveryDate(ticket.getDeliveryDate());
         row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()));
-        row.setMaterialData(ticket.getMaterialData());
+        row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));
         row.setMaterialGrossWeight(ticket.getMaterialGrossWeight());
         row.setPartNetWeight(ticket.getPartNetWeight());
         row.setWmsProductionOrderNo(productionOrderNo);
@@ -401,6 +404,13 @@ public class WmsAllocationService {
                 || !isBlank(ticket.getEngineeringMaterialName())
                 || !isBlank(ticket.getMaterialShape())
                 || ticket.getMaterialData() != null);
+    }
+
+    private Object deepCopySnapshot(Object value) {
+        if (jsonSnapshotCopyService == null) {
+            jsonSnapshotCopyService = new JsonSnapshotCopyService();
+        }
+        return jsonSnapshotCopyService.deepCopySnapshot(value);
     }
 
     private boolean isBlank(String value) {

@@ -201,14 +201,14 @@ class MaterialMasterStage1CharacterizationTest {
                         "ticket.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(item));",
                         "ticket.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(item));",
                         "ticket.setMaterialShape(MaterialDataResolver.materialShape(item));",
-                        "ticket.setMaterialData(item.getMaterialData());",
+                        "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));",
                         "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
                         "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
                         "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
                         "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
                         "item.setEngineeringMaterialName(MaterialDataResolver.engineeringMaterialName(source));",
                         "item.setMaterialShape(MaterialDataResolver.materialShape(source));",
-                        "item.setMaterialData(source.getMaterialData());");
+                        "item.setMaterialData(deepCopySnapshot(source.getMaterialData()));");
         assertThat(deliveryService)
                 .contains(
                         "ticket.setEngineeringMaterialCode(resolveSalesOrderEngineeringMaterialCode(item));",
@@ -217,7 +217,7 @@ class MaterialMasterStage1CharacterizationTest {
                         "ticket.setEngineeringMaterialTypeName(resolveSalesOrderEngineeringMaterialTypeName(item));",
                         "ticket.setEngineeringMaterialCategory(resolveSalesOrderEngineeringMaterialCategory(item));",
                         "ticket.setMaterialShape(resolveSalesOrderMaterialShape(item));",
-                        "ticket.setMaterialData(item.getMaterialData());",
+                        "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));",
                         "sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());");
         assertThat(wmsAllocationService)
                 .contains(
@@ -227,7 +227,7 @@ class MaterialMasterStage1CharacterizationTest {
                         "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());",
                         "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());",
                         "row.setMaterialShape(ticket.getMaterialShape());",
-                        "row.setMaterialData(ticket.getMaterialData());");
+                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));");
     }
 
     @Test

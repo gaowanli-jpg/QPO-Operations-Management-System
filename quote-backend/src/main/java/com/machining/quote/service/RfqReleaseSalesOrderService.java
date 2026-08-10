@@ -93,6 +93,8 @@ public class RfqReleaseSalesOrderService {
     private DataScopeService dataScopeService;
     @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
+    @Autowired(required = false)
+    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
 
     @Transactional
     public DeliveryBatchResultDTO generate(DeliveryGenerateReq req) {
@@ -370,7 +372,7 @@ public class RfqReleaseSalesOrderService {
         ticket.setArrangeType(context.arrangeType());
         ticket.setDrawingUrl(item.getDrawingUrl());
         ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()));
-        ticket.setMaterialData(item.getMaterialData());
+        ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));
         ticket.setMaterialGrossWeight(item.getMaterialGrossWeight());
         ticket.setPartNetWeight(item.getPartNetWeight());
         initializeTicketMaterial(ticket, item);
@@ -432,9 +434,9 @@ public class RfqReleaseSalesOrderService {
         item.setBaseCost(decimal(source.getBaseCost()));
         item.setItemType(resolveItemType(source));
         item.setAssemblyRelationStatus(resolveAssemblyStatus(source, selectedRelationParents));
-        item.setMaterialData(source.getMaterialData());
+        item.setMaterialData(deepCopySnapshot(source.getMaterialData()));
         item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()));
-        item.setFeeData(source.getFeeData());
+        item.setFeeData(deepCopySnapshot(source.getFeeData()));
         item.setRemark(source.getRemark());
         item.setStatus(QuoteStatusWorkflow.RELEASED);
         item.setCreatedAt(now);
@@ -715,6 +717,13 @@ public class RfqReleaseSalesOrderService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private Object deepCopySnapshot(Object value) {
+        if (jsonSnapshotCopyService == null) {
+            jsonSnapshotCopyService = new JsonSnapshotCopyService();
+        }
+        return jsonSnapshotCopyService.deepCopySnapshot(value);
     }
 
     private record ReleaseLine(

@@ -73,21 +73,21 @@ class MaterialMasterStage8DeliveryWmsSnapshotTest {
                         "ticket.setEngineeringMaterialTypeCode(resolveSalesOrderEngineeringMaterialTypeCode(item));",
                         "ticket.setEngineeringMaterialTypeName(resolveSalesOrderEngineeringMaterialTypeName(item));",
                         "ticket.setEngineeringMaterialCategory(resolveSalesOrderEngineeringMaterialCategory(item));",
-                        "ticket.setMaterialData(item.getMaterialData());");
+                        "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));");
         assertThat(rfqReleaseService)
                 .contains(
                         "ticket.setEngineeringMaterialCode(MaterialDataResolver.materialCode(item));",
                         "ticket.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(item));",
                         "ticket.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(item));",
                         "ticket.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(item));",
-                        "ticket.setMaterialData(item.getMaterialData());");
+                        "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));");
         assertThat(wmsAllocationService)
                 .contains(
                         "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());",
                         "row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());",
                         "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());",
                         "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());",
-                        "row.setMaterialData(ticket.getMaterialData());",
+                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));",
                         "summary.put(\"materialSnapshotAvailable\", hasMaterialSnapshot(ticket));")
                 .doesNotContain(
                         "summary.put(\"materialData\"",

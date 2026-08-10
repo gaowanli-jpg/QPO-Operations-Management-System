@@ -477,7 +477,7 @@ class WmsAllocationTest {
                         "row.setDescription(ticket.getDescription())",
                         "row.setDeliveryDate(ticket.getDeliveryDate())",
                         "row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))",
-                        "row.setMaterialData(ticket.getMaterialData())",
+                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()))",
                         "row.setMaterialGrossWeight(ticket.getMaterialGrossWeight())",
                         "row.setPartNetWeight(ticket.getPartNetWeight())",
                         "row.setTicketQty(ticket.getQty())",

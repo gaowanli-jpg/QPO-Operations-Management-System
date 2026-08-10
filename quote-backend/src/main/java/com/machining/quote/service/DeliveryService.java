@@ -63,6 +63,8 @@ public class DeliveryService {
     private RfqReleaseSalesOrderService rfqReleaseSalesOrderService;
     @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
+    @Autowired(required = false)
+    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
 
     @Transactional
     public List<OrderDeliveryTicket> generateRfqTickets(DeliveryGenerateReq req) {
@@ -553,7 +555,7 @@ public class DeliveryService {
         ticket.setArrangeType(arrangeType);
         ticket.setDrawingUrl(item.getDrawingUrl());
         ticket.setProcessRoute(processRouteSnapshotService.copySnapshot(item.getProcessRoute()));
-        ticket.setMaterialData(item.getMaterialData());
+        ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));
         ticket.setMaterialGrossWeight(item.getMaterialGrossWeight());
         ticket.setPartNetWeight(item.getPartNetWeight());
         initializeMesMaterialState(ticket, item.getMaterialNo(), item.getMaterialNoStatus(), item.getMaterialNoSyncedAt());
@@ -735,6 +737,13 @@ public class DeliveryService {
         return tickets.stream()
                 .mapToInt(ticket -> processRouteSnapshotService.countSnapshotRows(ticket.getProcessRoute()))
                 .sum();
+    }
+
+    private Object deepCopySnapshot(Object value) {
+        if (jsonSnapshotCopyService == null) {
+            jsonSnapshotCopyService = new JsonSnapshotCopyService();
+        }
+        return jsonSnapshotCopyService.deepCopySnapshot(value);
     }
 
     private String normalizePartNo(String partNo) {
