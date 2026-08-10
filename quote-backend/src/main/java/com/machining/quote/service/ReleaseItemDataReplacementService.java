@@ -1,0 +1,594 @@
+package com.machining.quote.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
+import com.machining.quote.config.DataScopeAccessDeniedException;
+import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.ReleaseItemDataReplacementChangeDTO;
+import com.machining.quote.dto.ReleaseItemDataReplacementExcelErrorDTO;
+import com.machining.quote.dto.ReleaseItemDataReplacementExcelParseResult;
+import com.machining.quote.dto.ReleaseItemDataReplacementExcelRowDTO;
+import com.machining.quote.dto.ReleaseItemDataReplacementField;
+import com.machining.quote.dto.ReleaseItemDataReplacementPreviewDTO;
+import com.machining.quote.dto.ReleaseItemDataReplacementRowDTO;
+import com.machining.quote.dto.ReleaseItemDataReplacementRowStatus;
+import com.machining.quote.dto.ReleaseItemDataReplacementSummaryDTO;
+import com.machining.quote.dto.ReleaseOrderSource;
+import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.util.DrawingPartNoResolver;
+import org.springframework.stereotype.Service;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@Service
+public class ReleaseItemDataReplacementService {
+    private static final String DATA_SCOPE_DENIED_MESSAGE = "当前账号无权访问所选询价单";
+
+    private final ReleaseItemDataReplacementExcelParser excelParser;
+    private final OrderRfqMapper orderMapper;
+    private final ItemQuoteVersionMapper itemMapper;
+    private final OrderDeliveryTicketMapper ticketMapper;
+    private final DataScopeService dataScopeService;
+    private final ReleaseItemMutationPolicy mutationPolicy;
+
+    public ReleaseItemDataReplacementService(
+            ReleaseItemDataReplacementExcelParser excelParser,
+            OrderRfqMapper orderMapper,
+            ItemQuoteVersionMapper itemMapper,
+            OrderDeliveryTicketMapper ticketMapper,
+            DataScopeService dataScopeService,
+            ReleaseItemMutationPolicy mutationPolicy) {
+        this.excelParser = excelParser;
+        this.orderMapper = orderMapper;
+        this.itemMapper = itemMapper;
+        this.ticketMapper = ticketMapper;
+        this.dataScopeService = dataScopeService;
+        this.mutationPolicy = mutationPolicy;
+    }
+
+    public ReleaseItemDataReplacementPreviewDTO preview(
+            List<ReleaseOrderSource> sources,
+            InputStream excelInput) {
+        List<Integer> rfqIds = normalizeRfqIds(sources);
+        Map<Integer, OrderRfq> ordersById = loadAndValidateOrders(rfqIds);
+        ReleaseItemDataReplacementExcelParseResult parsed = excelParser.parse(excelInput);
+        List<ItemQuoteVersion> items = listItems(rfqIds);
+        List<OrderDeliveryTicket> tickets = listTickets(rfqIds, items);
+        Map<Integer, Integer> ticketedQtyByItemId = ticketedQuantities(items, tickets);
+        Map<ItemKey, List<ItemQuoteVersion>> candidatesByKey = groupCandidates(items);
+
+        List<ReleaseItemDataReplacementRowDTO> rows = new ArrayList<>();
+        for (ReleaseItemDataReplacementExcelRowDTO excelRow : safeList(parsed.getRows())) {
+            rows.add(previewRow(
+                    excelRow,
+                    candidatesByKey,
+                    ordersById,
+                    ticketedQtyByItemId));
+        }
+
+        ReleaseItemDataReplacementPreviewDTO preview = new ReleaseItemDataReplacementPreviewDTO();
+        preview.setSuccess(true);
+        preview.setRecognizedFields(new ArrayList<>(safeList(parsed.getRecognizedFields())));
+        preview.setRows(rows);
+        preview.setSummary(summarize(rows));
+        preview.setCanConfirm(preview.getSummary().getErrorCount() == 0
+                && (preview.getSummary().getChangedCount() > 0
+                || preview.getSummary().getQuantityOnlyCount() > 0));
+        preview.setPreviewFingerprint(fingerprint(
+                rfqIds,
+                ordersById,
+                parsed,
+                rows,
+                candidatesByKey,
+                ticketedQtyByItemId));
+        return preview;
+    }
+
+    private List<Integer> normalizeRfqIds(List<ReleaseOrderSource> sources) {
+        if (sources == null || sources.isEmpty()) {
+            throw new IllegalArgumentException("至少选择一个 RFQ 询价订单");
+        }
+        Set<Integer> rfqIds = new LinkedHashSet<>();
+        for (ReleaseOrderSource source : sources) {
+            if (source == null || source.getSourceType() != ReleaseSourceType.RFQ) {
+                throw new IllegalArgumentException("表格数据替换只支持 RFQ 询价订单");
+            }
+            Long sourceOrderId = source.getSourceOrderId();
+            if (sourceOrderId == null || sourceOrderId <= 0 || sourceOrderId > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("RFQ 询价订单 ID 不正确");
+            }
+            rfqIds.add(sourceOrderId.intValue());
+        }
+        return rfqIds.stream().sorted().toList();
+    }
+
+    private Map<Integer, OrderRfq> loadAndValidateOrders(List<Integer> rfqIds) {
+        List<OrderRfq> orders = safeList(orderMapper.selectBatchIds(rfqIds));
+        Map<Integer, OrderRfq> ordersById = orders.stream()
+                .filter(Objects::nonNull)
+                .filter(order -> order.getId() != null)
+                .collect(Collectors.toMap(
+                        OrderRfq::getId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        if (ordersById.size() != rfqIds.size() || !ordersById.keySet().containsAll(rfqIds)) {
+            throw new IllegalArgumentException("所选询价单不存在或已删除");
+        }
+
+        for (Integer rfqId : rfqIds) {
+            try {
+                dataScopeService.assertCanAccessOrder(ordersById.get(rfqId));
+            } catch (RuntimeException e) {
+                throw new DataScopeAccessDeniedException(DATA_SCOPE_DENIED_MESSAGE);
+            }
+        }
+
+        String customerName = null;
+        boolean first = true;
+        for (Integer rfqId : rfqIds) {
+            OrderRfq order = ordersById.get(rfqId);
+            if (!QuoteStatusWorkflow.canReadReleaseWorkspace(order.getStatus())) {
+                throw new IllegalArgumentException("所选询价单状态不能进入议价提单");
+            }
+            String currentCustomer = trimToNull(order.getCustomerName());
+            if (first) {
+                customerName = currentCustomer;
+                first = false;
+            } else if (!Objects.equals(customerName, currentCustomer)) {
+                throw new IllegalArgumentException("一次表格数据替换只能选择同一客户的询价单");
+            }
+        }
+        return ordersById;
+    }
+
+    private List<ItemQuoteVersion> listItems(List<Integer> rfqIds) {
+        QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
+        query.in("rfq_id", rfqIds)
+                .orderByAsc("rfq_id")
+                .orderByAsc("id");
+        return safeList(itemMapper.selectList(query));
+    }
+
+    private List<OrderDeliveryTicket> listTickets(
+            List<Integer> rfqIds,
+            List<ItemQuoteVersion> items) {
+        if (items.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> itemIds = items.stream()
+                .map(ItemQuoteVersion::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        List<Long> sourceOrderIds = rfqIds.stream().map(Integer::longValue).toList();
+        QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
+        query.and(wrapper -> {
+            boolean hasClause = false;
+            if (!itemIds.isEmpty()) {
+                wrapper.in("item_id", itemIds);
+                hasClause = true;
+            }
+            if (!rfqIds.isEmpty()) {
+                if (hasClause) {
+                    wrapper.or();
+                }
+                wrapper.in("rfq_id", rfqIds);
+                hasClause = true;
+            }
+            if (!sourceOrderIds.isEmpty()) {
+                if (hasClause) {
+                    wrapper.or();
+                }
+                wrapper.eq("source_type", ReleaseSourceType.RFQ.name())
+                        .in("source_order_id", sourceOrderIds);
+            }
+        });
+        return safeList(ticketMapper.selectList(query));
+    }
+
+    private Map<ItemKey, List<ItemQuoteVersion>> groupCandidates(List<ItemQuoteVersion> items) {
+        Map<ItemKey, List<ItemQuoteVersion>> candidates = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : items) {
+            if (item == null) {
+                continue;
+            }
+            ItemKey key = itemKey(item.getPartNo(), item.getVersion());
+            candidates.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+        }
+        candidates.values().forEach(group -> group.sort(Comparator.comparing(
+                ItemQuoteVersion::getId,
+                Comparator.nullsLast(Integer::compareTo))));
+        return candidates;
+    }
+
+    private Map<Integer, Integer> ticketedQuantities(
+            List<ItemQuoteVersion> items,
+            List<OrderDeliveryTicket> tickets) {
+        Map<Integer, ItemQuoteVersion> itemsById = items.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(
+                        ItemQuoteVersion::getId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        Map<RfqItemKey, List<ItemQuoteVersion>> itemsByRfqKey = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : items) {
+            if (item == null || item.getRfqId() == null) {
+                continue;
+            }
+            itemsByRfqKey.computeIfAbsent(
+                    new RfqItemKey(item.getRfqId(), itemKey(item.getPartNo(), item.getVersion())),
+                    ignored -> new ArrayList<>()).add(item);
+        }
+
+        Map<Integer, Integer> quantities = new LinkedHashMap<>();
+        itemsById.keySet().forEach(itemId -> quantities.put(itemId, 0));
+        for (OrderDeliveryTicket ticket : tickets) {
+            ItemQuoteVersion matched = exactTicketItem(ticket, itemsById);
+            if (matched == null) {
+                matched = historicalTicketItem(ticket, itemsByRfqKey);
+            }
+            if (matched != null && matched.getId() != null) {
+                quantities.merge(matched.getId(), safeInt(ticket.getQty()), Integer::sum);
+            }
+        }
+        return quantities;
+    }
+
+    private ItemQuoteVersion exactTicketItem(
+            OrderDeliveryTicket ticket,
+            Map<Integer, ItemQuoteVersion> itemsById) {
+        if (ticket == null) {
+            return null;
+        }
+        ItemQuoteVersion byItemId = ticket.getItemId() == null ? null : itemsById.get(ticket.getItemId());
+        if (byItemId != null) {
+            return byItemId;
+        }
+        if (!ReleaseSourceType.RFQ.name().equalsIgnoreCase(ticket.getSourceType())
+                || ticket.getSourceItemId() == null
+                || ticket.getSourceItemId() > Integer.MAX_VALUE) {
+            return null;
+        }
+        ItemQuoteVersion bySourceItemId = itemsById.get(ticket.getSourceItemId().intValue());
+        if (bySourceItemId == null || ticket.getSourceOrderId() == null) {
+            return null;
+        }
+        return Objects.equals(ticket.getSourceOrderId(), bySourceItemId.getRfqId().longValue())
+                ? bySourceItemId
+                : null;
+    }
+
+    private ItemQuoteVersion historicalTicketItem(
+            OrderDeliveryTicket ticket,
+            Map<RfqItemKey, List<ItemQuoteVersion>> itemsByRfqKey) {
+        if (ticket == null || ticket.getItemId() != null) {
+            return null;
+        }
+        Integer rfqId = ticket.getRfqId();
+        if (rfqId == null
+                && ReleaseSourceType.RFQ.name().equalsIgnoreCase(ticket.getSourceType())
+                && ticket.getSourceOrderId() != null
+                && ticket.getSourceOrderId() <= Integer.MAX_VALUE) {
+            rfqId = ticket.getSourceOrderId().intValue();
+        }
+        if (rfqId == null) {
+            return null;
+        }
+        List<ItemQuoteVersion> candidates = itemsByRfqKey.getOrDefault(
+                new RfqItemKey(rfqId, itemKey(ticket.getPartNo(), ticket.getVersion())),
+                List.of());
+        return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    private ReleaseItemDataReplacementRowDTO previewRow(
+            ReleaseItemDataReplacementExcelRowDTO excelRow,
+            Map<ItemKey, List<ItemQuoteVersion>> candidatesByKey,
+            Map<Integer, OrderRfq> ordersById,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        ReleaseItemDataReplacementRowDTO row = baseRow(excelRow);
+        Map<String, Object> values = safeMap(excelRow.getValues());
+        row.setAcceptedQty(integerValue(values.get(ReleaseItemDataReplacementField.ACCEPTED_QTY.getPropertyName())));
+
+        if (excelRow.hasErrors()) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.ERROR);
+            row.setReason(excelRow.getErrors().stream()
+                    .map(ReleaseItemDataReplacementExcelErrorDTO::getMessage)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("；")));
+            return row;
+        }
+
+        List<ItemQuoteVersion> candidates = candidatesByKey.getOrDefault(
+                itemKey(excelRow.getNormalizedPartNo(), excelRow.getNormalizedVersion()),
+                List.of());
+        if (candidates.isEmpty()) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.UNMATCHED);
+            row.setReason("当前所选询价单范围内未找到对应零件");
+            return row;
+        }
+        if (candidates.size() > 1) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.ERROR);
+            row.setReason("当前所选询价单范围内存在多个相同图号和版本的零件");
+            return row;
+        }
+
+        ItemQuoteVersion item = candidates.get(0);
+        OrderRfq order = ordersById.get(item.getRfqId());
+        row.setRfqId(item.getRfqId());
+        row.setRfqNo(order == null ? null : order.getRfqNo());
+        row.setItemId(item.getId());
+        int ticketedQty = ticketedQtyByItemId.getOrDefault(item.getId(), 0);
+        ReleaseItemMutationPolicy.Result mutation = mutationPolicy.evaluate(item, ticketedQty);
+        if (!mutation.mutable()) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.SKIPPED);
+            row.setReason(mutation.reason());
+            return row;
+        }
+        if (row.getAcceptedQty() != null && row.getAcceptedQty() > mutation.remainingQty()) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.ERROR);
+            row.setReason("通过数量 " + row.getAcceptedQty()
+                    + " 超过剩余可提数量 " + mutation.remainingQty());
+            return row;
+        }
+
+        row.setChanges(changes(item, values));
+        if (!row.getChanges().isEmpty()) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.CHANGED);
+        } else if (row.getAcceptedQty() != null) {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.QUANTITY_ONLY);
+        } else {
+            row.setStatus(ReleaseItemDataReplacementRowStatus.UNCHANGED);
+        }
+        row.setReason("");
+        return row;
+    }
+
+    private List<ReleaseItemDataReplacementChangeDTO> changes(
+            ItemQuoteVersion item,
+            Map<String, Object> values) {
+        List<ReleaseItemDataReplacementChangeDTO> changes = new ArrayList<>();
+        for (ReleaseItemDataReplacementField field : ReleaseItemDataReplacementField.persistentFields()) {
+            String propertyName = field.getPropertyName();
+            if (!values.containsKey(propertyName)) {
+                continue;
+            }
+            Object beforeValue = currentValue(item, field);
+            Object afterValue = importedValue(field, values.get(propertyName));
+            if (Objects.equals(beforeValue, afterValue)) {
+                continue;
+            }
+            ReleaseItemDataReplacementChangeDTO change = new ReleaseItemDataReplacementChangeDTO();
+            change.setField(propertyName);
+            change.setLabel(field.getHeader());
+            change.setBeforeValue(beforeValue);
+            change.setAfterValue(afterValue);
+            changes.add(change);
+        }
+        return changes;
+    }
+
+    private Object currentValue(ItemQuoteVersion item, ReleaseItemDataReplacementField field) {
+        return switch (field) {
+            case INTERNAL_TARGET_LEAD_TIME -> item.getInternalTargetLeadTime();
+            case DESCRIPTION -> item.getDescription();
+            case SURFACE_TREATMENT -> item.getSurfaceTreatment();
+            case REMARK -> item.getRemark();
+            case SALES_ORDER_DATE -> item.getSalesOrderDate();
+            case CUSTOMER_ORDER_NO -> item.getCustomerOrderNo();
+            case CUSTOMER_PROJECT_NO -> item.getCustomerProjectNo();
+            case CUSTOMER_ORDER_TITLE -> item.getCustomerOrderTitle();
+            case ORDER_TYPE -> item.getOrderType();
+            case INTERNAL_PROJECT_NO -> item.getInternalProjectNo();
+            default -> null;
+        };
+    }
+
+    private Object importedValue(ReleaseItemDataReplacementField field, Object value) {
+        if (field == ReleaseItemDataReplacementField.INTERNAL_TARGET_LEAD_TIME && value instanceof LocalDate date) {
+            return date.toString();
+        }
+        return value;
+    }
+
+    private ReleaseItemDataReplacementRowDTO baseRow(ReleaseItemDataReplacementExcelRowDTO excelRow) {
+        ReleaseItemDataReplacementRowDTO row = new ReleaseItemDataReplacementRowDTO();
+        row.setExcelRowNumber(excelRow.getExcelRowNumber());
+        row.setPartNo(excelRow.getPartNo());
+        row.setVersion(excelRow.getVersion());
+        return row;
+    }
+
+    private ReleaseItemDataReplacementSummaryDTO summarize(List<ReleaseItemDataReplacementRowDTO> rows) {
+        ReleaseItemDataReplacementSummaryDTO summary = new ReleaseItemDataReplacementSummaryDTO();
+        summary.setImportedCount(rows.size());
+        for (ReleaseItemDataReplacementRowDTO row : rows) {
+            if (row.getItemId() != null) {
+                summary.setMatchedCount(summary.getMatchedCount() + 1);
+            }
+            switch (row.getStatus()) {
+                case CHANGED -> summary.setChangedCount(summary.getChangedCount() + 1);
+                case QUANTITY_ONLY -> summary.setQuantityOnlyCount(summary.getQuantityOnlyCount() + 1);
+                case UNCHANGED -> summary.setUnchangedCount(summary.getUnchangedCount() + 1);
+                case UNMATCHED -> summary.setUnmatchedCount(summary.getUnmatchedCount() + 1);
+                case SKIPPED -> summary.setSkippedCount(summary.getSkippedCount() + 1);
+                case ERROR -> summary.setErrorCount(summary.getErrorCount() + 1);
+            }
+        }
+        return summary;
+    }
+
+    private String fingerprint(
+            List<Integer> rfqIds,
+            Map<Integer, OrderRfq> ordersById,
+            ReleaseItemDataReplacementExcelParseResult parsed,
+            List<ReleaseItemDataReplacementRowDTO> previewRows,
+            Map<ItemKey, List<ItemQuoteVersion>> candidatesByKey,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        StringBuilder canonical = new StringBuilder();
+        AuthContext.SessionUser user = AuthContext.get();
+        appendToken(canonical, "user", user == null || user.id() == null ? "anonymous" : user.id());
+        for (Integer rfqId : rfqIds) {
+            OrderRfq order = ordersById.get(rfqId);
+            appendToken(canonical, "rfqId", rfqId);
+            appendToken(canonical, "rfqStatus", order == null ? null : order.getStatus());
+            appendToken(canonical, "rfqCustomer", order == null ? null : trimToNull(order.getCustomerName()));
+        }
+
+        List<String> recognizedFields = new ArrayList<>(safeList(parsed.getRecognizedFields()));
+        recognizedFields.sort(String::compareTo);
+        recognizedFields.forEach(field -> appendToken(canonical, "field", field));
+        Map<Integer, ReleaseItemDataReplacementRowDTO> previewByExcelRow = previewRows.stream()
+                .filter(row -> row.getExcelRowNumber() != null)
+                .collect(Collectors.toMap(
+                        ReleaseItemDataReplacementRowDTO::getExcelRowNumber,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+
+        List<ReleaseItemDataReplacementExcelRowDTO> excelRows = new ArrayList<>(safeList(parsed.getRows()));
+        excelRows.sort(Comparator
+                .comparing((ReleaseItemDataReplacementExcelRowDTO row) -> safeText(row.getNormalizedPartNo()))
+                .thenComparing(row -> safeText(row.getNormalizedVersion()))
+                .thenComparing(row -> canonicalValues(safeMap(row.getValues())))
+                .thenComparing(row -> row.getExcelRowNumber() == null ? Integer.MAX_VALUE : row.getExcelRowNumber()));
+        for (ReleaseItemDataReplacementExcelRowDTO excelRow : excelRows) {
+            ItemKey key = itemKey(excelRow.getNormalizedPartNo(), excelRow.getNormalizedVersion());
+            appendToken(canonical, "partNo", key.partNo());
+            appendToken(canonical, "version", key.version());
+            safeMap(excelRow.getValues()).entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> appendToken(
+                            canonical,
+                            "value:" + entry.getKey(),
+                            canonicalValue(entry.getValue())));
+            safeList(excelRow.getErrors()).stream()
+                    .map(ReleaseItemDataReplacementExcelErrorDTO::getMessage)
+                    .filter(Objects::nonNull)
+                    .sorted()
+                    .forEach(error -> appendToken(canonical, "parseError", error));
+
+            ReleaseItemDataReplacementRowDTO previewRow = previewByExcelRow.get(excelRow.getExcelRowNumber());
+            appendToken(canonical, "result", previewRow == null ? null : previewRow.getStatus());
+            appendToken(canonical, "matchedItemId", previewRow == null ? null : previewRow.getItemId());
+            for (ItemQuoteVersion candidate : candidatesByKey.getOrDefault(key, List.of())) {
+                appendCandidateState(
+                        canonical,
+                        candidate,
+                        recognizedFields,
+                        ticketedQtyByItemId.getOrDefault(candidate.getId(), 0));
+            }
+        }
+        return sha256(canonical.toString());
+    }
+
+    private void appendCandidateState(
+            StringBuilder canonical,
+            ItemQuoteVersion item,
+            List<String> recognizedFields,
+            int ticketedQty) {
+        appendToken(canonical, "candidateId", item.getId());
+        appendToken(canonical, "candidateRfqId", item.getRfqId());
+        appendToken(canonical, "candidateStatus", item.getStatus());
+        appendToken(canonical, "candidateQty", item.getQty());
+        appendToken(canonical, "ticketedQty", ticketedQty);
+        appendToken(canonical, "remainingQty", Math.max(0, safeInt(item.getQty()) - ticketedQty));
+        for (String propertyName : recognizedFields) {
+            ReleaseItemDataReplacementField.replaceableFields().stream()
+                    .filter(field -> field.isPersistent() && field.getPropertyName().equals(propertyName))
+                    .findFirst()
+                    .ifPresent(field -> appendToken(
+                            canonical,
+                            "current:" + propertyName,
+                            canonicalValue(currentValue(item, field))));
+        }
+    }
+
+    private String canonicalValues(Map<String, Object> values) {
+        return values.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + canonicalValue(entry.getValue()))
+                .collect(Collectors.joining("|"));
+    }
+
+    private String canonicalValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private void appendToken(StringBuilder canonical, String key, Object value) {
+        String text = canonicalValue(value);
+        canonical.append(key.length()).append(':').append(key)
+                .append(text.length()).append(':').append(text).append('\n');
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private ItemKey itemKey(String partNo, String version) {
+        return new ItemKey(
+                DrawingPartNoResolver.normalizePartNo(partNo),
+                DrawingPartNoResolver.normalizeVersion(version));
+    }
+
+    private Integer integerValue(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value;
+    }
+
+    private <T> List<T> safeList(Collection<T> values) {
+        return values == null ? List.of() : new ArrayList<>(values);
+    }
+
+    private Map<String, Object> safeMap(Map<String, Object> values) {
+        return values == null ? Map.of() : values;
+    }
+
+    private record ItemKey(String partNo, String version) {
+    }
+
+    private record RfqItemKey(Integer rfqId, ItemKey itemKey) {
+    }
+}
