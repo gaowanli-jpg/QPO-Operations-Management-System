@@ -191,8 +191,8 @@ class MaterialMasterStage1CharacterizationTest {
                         "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));",
                         "item.setEngineeringMaterialName(engineeringMaterialName);",
                         "item.setMaterialShape(materialShape);",
-                        "item.setMaterialData(source.getMaterialData());",
-                        "fields.put(\"materialSnapshotAvailable\", current.getMaterialData() == null && source.getMaterialData() != null);");
+                        "item.setMaterialData(deepCopySnapshot(source.getMaterialData()));",
+                        "fields.put(\"materialSnapshotAvailable\", isMissingSnapshot(current.getMaterialData()) && !isMissingSnapshot(source.getMaterialData()));");
         assertThat(rfqReleaseService)
                 .contains(
                         "ticket.setEngineeringMaterialCode(MaterialDataResolver.materialCode(item));",

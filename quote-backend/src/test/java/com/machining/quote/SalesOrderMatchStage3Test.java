@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.SalesOrderMatchApplyReq;
 import com.machining.quote.dto.SalesOrderMatchApplyResp;
+import com.machining.quote.dto.SalesOrderMatchPreviewReq;
+import com.machining.quote.dto.SalesOrderMatchPreviewResp;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -26,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -191,6 +195,51 @@ class SalesOrderMatchStage3Test {
     }
 
     @Test
+    void previewAndApplyTreatImportedEmptyJsonSnapshotsAsMissingAndDeepCopyHistorySnapshots() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setMaterialData(Map.of());
+        item.setProcessRoute(List.of());
+        item.setFeeData(List.of());
+        fixture.withLockedItems(header, List.of(item));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "HISTORY-MATERIAL", "NORMAL");
+        Map<String, Object> sourceMaterial = mutableMaterialSnapshot("HISTORY-MATERIAL");
+        List<Map<String, Object>> sourceRoute = mutableRouteSnapshot("CUT");
+        List<Map<String, Object>> sourceFee = mutableFeeSnapshot("management");
+        source.setMaterialData(sourceMaterial);
+        source.setProcessRoute(sourceRoute);
+        source.setFeeData(sourceFee);
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchPreviewReq previewReq = new SalesOrderMatchPreviewReq();
+        previewReq.setSalesOrderIds(List.of(header.getId()));
+        SalesOrderMatchPreviewResp preview = fixture.service.preview(previewReq);
+
+        assertThat(preview.getRows()).singleElement().satisfies(row -> assertThat(row.getChangedFields())
+                .containsEntry("materialSnapshotAvailable", true)
+                .containsEntry("processSnapshotAvailable", true)
+                .containsEntry("feeSnapshotAvailable", true));
+
+        fixture.service.apply(applyReq(List.of(item.getId())));
+
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getMaterialData()).isEqualTo(sourceMaterial).isNotSameAs(sourceMaterial);
+        assertThat(updated.getProcessRoute()).isEqualTo(sourceRoute).isNotSameAs(sourceRoute);
+        assertThat(updated.getFeeData()).isEqualTo(sourceFee).isNotSameAs(sourceFee);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> copiedMaterial = (Map<String, Object>) updated.getMaterialData();
+        @SuppressWarnings("unchecked")
+        List<String> copiedTags = (List<String>) copiedMaterial.get("tags");
+        copiedTags.add("target-only");
+        @SuppressWarnings("unchecked")
+        List<String> sourceTags = (List<String>) sourceMaterial.get("tags");
+        assertThat(sourceTags).containsExactly("source-tag");
+    }
+
+    @Test
     void applyCopiesConfirmedMaterialNoToSalesOrderAndReportsMaterialNoCompletion() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
@@ -231,6 +280,9 @@ class SalesOrderMatchStage3Test {
         SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
         SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
         item.setMaterialNo(null);
+        item.setMaterialData(Map.of());
+        item.setProcessRoute(List.of());
+        item.setFeeData(List.of());
         item.setMaterialNoStatus("未确认");
         fixture.withLockedItems(header, List.of(item));
         ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "历史材料", "NORMAL");
@@ -249,6 +301,47 @@ class SalesOrderMatchStage3Test {
         assertThat(updated.getMaterialNo()).isNull();
         assertThat(updated.getMaterialNoStatus()).isEqualTo("未确认");
         assertThat(updated.getEngineeringMaterialName()).isEqualTo("ENG-历史材料");
+        assertThat(updated.getMaterialData()).isEqualTo(source.getMaterialData());
+        assertThat(updated.getProcessRoute()).isEqualTo(source.getProcessRoute());
+        assertThat(updated.getFeeData()).isEqualTo(source.getFeeData());
+    }
+
+    @Test
+    void previewShowsAllPricesAsProtectedAndApplyDoesNotBackfillBlankPrices() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem item = salesOrderItem(501L, header.getId(), "P-001", "A");
+        item.setTaxIncludedUnitPrice(null);
+        item.setTaxIncludedTotalPrice(null);
+        item.setUntaxedUnitPrice(null);
+        item.setUntaxedTotalPrice(null);
+        fixture.withLockedItems(header, List.of(item));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(item));
+        ItemQuoteVersion source = releasedSource(901, 21, "P-001", "A", "HISTORY-MATERIAL", "NORMAL");
+        source.setTaxIncludedUnitPrice(999.0);
+        source.setTaxIncludedTotalPrice(9990.0);
+        source.setUntaxedUnitPrice(900.0);
+        source.setUntaxedTotalPrice(9000.0);
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(source));
+
+        SalesOrderMatchPreviewReq previewReq = new SalesOrderMatchPreviewReq();
+        previewReq.setSalesOrderIds(List.of(header.getId()));
+        SalesOrderMatchPreviewResp preview = fixture.service.preview(previewReq);
+
+        assertThat(preview.getRows()).singleElement().satisfies(row -> {
+            assertBlankProtectedPrice(row.getProtectedFields(), "taxIncludedUnitPrice");
+            assertBlankProtectedPrice(row.getProtectedFields(), "taxIncludedTotalPrice");
+            assertBlankProtectedPrice(row.getProtectedFields(), "untaxedUnitPrice");
+            assertBlankProtectedPrice(row.getProtectedFields(), "untaxedTotalPrice");
+        });
+
+        fixture.service.apply(applyReq(List.of(item.getId())));
+
+        SalesOrderItem updated = fixture.lastItemUpdate();
+        assertThat(updated.getTaxIncludedUnitPrice()).isNull();
+        assertThat(updated.getTaxIncludedTotalPrice()).isNull();
+        assertThat(updated.getUntaxedUnitPrice()).isNull();
+        assertThat(updated.getUntaxedTotalPrice()).isNull();
     }
 
     @Test
@@ -425,6 +518,28 @@ class SalesOrderMatchStage3Test {
     }
 
     @Test
+    void applyReplacesImportedDefaultNormalQuoteModeWhenSourceIsAssemblyAndRebuildsRelations() {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
+        SalesOrderItem parent = salesOrderItem(501L, header.getId(), "ASM-001", "A");
+        parent.setQuoteMode("NORMAL");
+        SalesOrderItem child = salesOrderItem(502L, header.getId(), "CH-001", "A");
+        fixture.withLockedItems(header, List.of(parent));
+        when(fixture.salesOrderItemMapper.selectList(any())).thenReturn(List.of(child));
+        ItemQuoteVersion parentSource = releasedSource(901, 21, "ASM-001", "A", "HISTORY-ASM", "ASSEMBLY");
+        ItemQuoteVersion childSource = releasedSource(902, 21, "CH-001", "A", "HISTORY-CHILD", "NORMAL");
+        when(fixture.sourceMapper.selectLatestReleasedRepeatSources(isNull(), any())).thenReturn(List.of(parentSource));
+        when(fixture.sourceMapper.selectBatchIds(any())).thenReturn(List.of(childSource));
+        when(fixture.historyRelationMapper.selectList(any())).thenReturn(List.of(historyRelation(901, 902, 2.5, 7)));
+
+        fixture.service.apply(applyReq(List.of(parent.getId())));
+
+        SalesOrderItem updatedParent = fixture.lastItemUpdate();
+        assertThat(updatedParent.getQuoteMode()).isEqualTo("ASSEMBLY");
+        verify(fixture.salesOrderAssemblyRelationMapper).insert(any(SalesOrderItemAssemblyRelation.class));
+    }
+
+    @Test
     void incompleteAssemblyMatchDoesNotWritePartialSalesOrderRelations() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(101L, "SOQPO-20260731-001");
@@ -555,6 +670,39 @@ class SalesOrderMatchStage3Test {
         relation.setChildQtyPerParent(qtyPerParent);
         relation.setSortNo(sortNo);
         return relation;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertBlankProtectedPrice(Map<String, Object> fields, String key) {
+        assertThat(fields).containsKey(key);
+        assertThat((Map<String, Object>) fields.get(key))
+                .containsEntry("current", "")
+                .containsEntry("source", "");
+    }
+
+    private Map<String, Object> mutableMaterialSnapshot(String name) {
+        Map<String, Object> material = new LinkedHashMap<>();
+        material.put("name", name);
+        material.put("cost", 50);
+        material.put("tags", new ArrayList<>(List.of("source-tag")));
+        return material;
+    }
+
+    private List<Map<String, Object>> mutableRouteSnapshot(String processCode) {
+        Map<String, Object> route = new LinkedHashMap<>();
+        route.put("routeType", "PROCESS");
+        route.put("processCode", processCode);
+        route.put("categoryName", "cutting");
+        route.put("detailName", "laser");
+        route.put("lineCost", 15.0);
+        return new ArrayList<>(List.of(route));
+    }
+
+    private List<Map<String, Object>> mutableFeeSnapshot(String feeName) {
+        Map<String, Object> fee = new LinkedHashMap<>();
+        fee.put("feeName", feeName);
+        fee.put("ratePercent", 10);
+        return new ArrayList<>(List.of(fee));
     }
 
     private static final class Fixture {

@@ -78,6 +78,8 @@ public class SalesOrderMatchService {
     private ConfirmedMaterialNoReuseService confirmedMaterialNoReuseService = new ConfirmedMaterialNoReuseService();
     @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
+    @Autowired(required = false)
+    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
         if (dataScopeService == null) {
@@ -416,7 +418,7 @@ public class SalesOrderMatchService {
         if (item.getPartNetWeight() == null) {
             item.setPartNetWeight(source.getPartNetWeight());
         }
-        if (isBlank(item.getQuoteMode())) {
+        if (shouldFillQuoteMode(item, source)) {
             item.setQuoteMode(source.getQuoteMode());
         }
         if (item.getAssemblyFee() == null) {
@@ -428,14 +430,14 @@ public class SalesOrderMatchService {
         if (isBlank(item.getItemType())) {
             item.setItemType(QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
         }
-        if (item.getMaterialData() == null) {
-            item.setMaterialData(source.getMaterialData());
+        if (isMissingSnapshot(item.getMaterialData()) && !isMissingSnapshot(source.getMaterialData())) {
+            item.setMaterialData(deepCopySnapshot(source.getMaterialData()));
         }
-        if (item.getProcessRoute() == null) {
+        if (isMissingSnapshot(item.getProcessRoute()) && !isMissingSnapshot(source.getProcessRoute())) {
             item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()));
         }
-        if (item.getFeeData() == null) {
-            item.setFeeData(source.getFeeData());
+        if (isMissingSnapshot(item.getFeeData()) && !isMissingSnapshot(source.getFeeData())) {
+            item.setFeeData(deepCopySnapshot(source.getFeeData()));
         }
         if (!isBlank(item.getDrawingUrl())) {
             item.setHasDrawing(true);
@@ -619,13 +621,13 @@ public class SalesOrderMatchService {
         putSnapshot(fields, "materialShape", current.getMaterialShape(), resolveMaterialShape(source));
         putSnapshot(fields, "materialGrossWeight", current.getMaterialGrossWeight(), source.getMaterialGrossWeight());
         putSnapshot(fields, "partNetWeight", current.getPartNetWeight(), source.getPartNetWeight());
-        putSnapshot(fields, "quoteMode", current.getQuoteMode(), source.getQuoteMode());
+        putSnapshotWhen(fields, "quoteMode", current.getQuoteMode(), source.getQuoteMode(), shouldFillQuoteMode(current, source));
         putSnapshot(fields, "itemType", current.getItemType(), QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode()) ? "组合件" : "普通件");
         putSnapshot(fields, "assemblyFee", current.getAssemblyFee(), toBigDecimal(source.getAssemblyFee()));
         putSnapshot(fields, "baseCost", current.getBaseCost(), toBigDecimal(source.getBaseCost()));
-        fields.put("materialSnapshotAvailable", current.getMaterialData() == null && source.getMaterialData() != null);
-        fields.put("processSnapshotAvailable", current.getProcessRoute() == null && source.getProcessRoute() != null);
-        fields.put("feeSnapshotAvailable", current.getFeeData() == null && source.getFeeData() != null);
+        fields.put("materialSnapshotAvailable", isMissingSnapshot(current.getMaterialData()) && !isMissingSnapshot(source.getMaterialData()));
+        fields.put("processSnapshotAvailable", isMissingSnapshot(current.getProcessRoute()) && !isMissingSnapshot(source.getProcessRoute()));
+        fields.put("feeSnapshotAvailable", isMissingSnapshot(current.getFeeData()) && !isMissingSnapshot(source.getFeeData()));
         return fields;
     }
 
@@ -637,7 +639,10 @@ public class SalesOrderMatchService {
         fields.put("description", protectedText(current.getDescription(), source.getDescription()));
         fields.put("qty", current.getQty());
         fields.put("materialNo", defaultText(current.getMaterialNo(), ""));
-        fields.put("taxIncludedUnitPrice", current.getTaxIncludedUnitPrice());
+        fields.put("taxIncludedUnitPrice", protectedValue(current.getTaxIncludedUnitPrice()));
+        fields.put("taxIncludedTotalPrice", protectedValue(current.getTaxIncludedTotalPrice()));
+        fields.put("untaxedUnitPrice", protectedValue(current.getUntaxedUnitPrice()));
+        fields.put("untaxedTotalPrice", protectedValue(current.getUntaxedTotalPrice()));
         fields.put("customerOrderNo", defaultText(current.getCustomerOrderNo(), ""));
         fields.put("internalProjectNo", defaultText(current.getInternalProjectNo(), ""));
         return fields;
@@ -921,11 +926,43 @@ public class SalesOrderMatchService {
         return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
+    private boolean shouldFillQuoteMode(SalesOrderItem item, ItemQuoteVersion source) {
+        if (source == null || isBlank(source.getQuoteMode())) {
+            return false;
+        }
+        String current = item == null ? null : item.getQuoteMode();
+        return isBlank(current)
+                || ("NORMAL".equalsIgnoreCase(current.trim())
+                && QUOTE_MODE_ASSEMBLY.equalsIgnoreCase(source.getQuoteMode().trim()));
+    }
+
+    private boolean isMissingSnapshot(Object value) {
+        return jsonSnapshotCopyService().isMissingSnapshot(value);
+    }
+
+    private Object deepCopySnapshot(Object value) {
+        return jsonSnapshotCopyService().deepCopySnapshot(value);
+    }
+
+    private JsonSnapshotCopyService jsonSnapshotCopyService() {
+        if (jsonSnapshotCopyService == null) {
+            jsonSnapshotCopyService = new JsonSnapshotCopyService();
+        }
+        return jsonSnapshotCopyService;
+    }
+
     private void putSnapshot(Map<String, Object> target, String field, Object current, Object source) {
         if (source == null || isPresent(current) || isBlankSource(source)) {
             return;
         }
         target.put(field, Map.of("current", "", "source", source));
+    }
+
+    private void putSnapshotWhen(Map<String, Object> target, String field, Object current, Object source, boolean shouldPut) {
+        if (!shouldPut || source == null || isBlankSource(source)) {
+            return;
+        }
+        target.put(field, Map.of("current", current == null ? "" : current, "source", source));
     }
 
     private boolean isPresent(Object value) {
@@ -941,6 +978,13 @@ public class SalesOrderMatchService {
 
     private Map<String, Object> protectedText(String current, String source) {
         return Map.of("current", defaultText(current, ""), "source", defaultText(source, ""));
+    }
+
+    private Map<String, Object> protectedValue(Object current) {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("current", current == null ? "" : current);
+        value.put("source", "");
+        return value;
     }
 
     private BigDecimal toBigDecimal(Double value) {
