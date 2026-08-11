@@ -265,7 +265,7 @@ import {
 
 const U9_SYNC_SUBMIT_PERMISSION = 'market:u9-sync:submit'
 const U9_SYNC_ORDER_SELECT_PERMISSION = 'market:u9-sync:order-select'
-const U9_SYNC_ALLOWED_STATUSES = ['部分已提单', '已生成提单']
+const U9_SYNC_ALLOWED_STATUSES = ['已生成提单']
 
 const u9SyncActionKeys = {
   sync: 'market:u9-sync:submit'

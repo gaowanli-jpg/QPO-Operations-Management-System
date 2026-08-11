@@ -140,7 +140,7 @@ const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分�
 
 const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
-  'u9-sync': ['部分已提单', '已生成提单'],
+  'u9-sync': ['已生成提单'],
   'engineer-setup': ['未核价']
 }
 
