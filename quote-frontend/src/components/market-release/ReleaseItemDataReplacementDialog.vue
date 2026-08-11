@@ -105,7 +105,7 @@
 
         <div class="replacement-preview-table-wrap">
           <el-table
-            :data="previewRows"
+            :data="pagedPreviewRows"
             border
             stripe
             size="small"
@@ -156,6 +156,18 @@
             </el-table-column>
           </el-table>
         </div>
+        <div v-if="previewRowTotal" class="erp-pagination replacement-preview-pagination">
+          <el-pagination
+            v-model:current-page="previewPagination.page"
+            v-model:page-size="previewPagination.pageSize"
+            :page-sizes="CLIENT_PAGE_SIZES"
+            :pager-count="7"
+            :total="previewRowTotal"
+            background
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handlePreviewPageSizeChange"
+          />
+        </div>
       </section>
 
       <section v-if="confirmResult" class="replacement-confirm-result">
@@ -195,10 +207,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePendingAction } from '../../composables/usePendingAction'
 import { collectReleaseItemDraftReplacementConflicts } from '../marketReleaseDataReplacement'
+import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, clampPage, paginateRows } from '../../utils/clientPagination'
 import {
   confirmReleaseItemDataReplacement,
   previewReleaseItemDataReplacement
@@ -233,6 +246,7 @@ const previewError = ref('')
 const previewSourceSignature = ref('')
 const confirmedPreviewFingerprint = ref('')
 const replacementStateVersion = ref(0)
+const previewPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 
 const { isPending, runAction } = usePendingAction()
 const dataReplacementActionKeys = {
@@ -260,6 +274,8 @@ const confirming = computed(() => isPending(dataReplacementActionKeys.confirm))
 const replacementBusy = computed(() => previewing.value || confirming.value)
 const recognizedFields = computed(() => previewResult.value?.recognizedFields || [])
 const previewRows = computed(() => previewResult.value?.rows || [])
+const previewRowTotal = computed(() => previewRows.value.length)
+const pagedPreviewRows = computed(() => paginateRows(previewRows.value, previewPagination))
 const summary = computed(() => previewResult.value?.summary || {})
 const previewFingerprint = computed(() => previewResult.value?.previewFingerprint || '')
 const draftConflicts = computed(() => collectReleaseItemDraftReplacementConflicts({
@@ -318,12 +334,20 @@ watch(visible, (value) => {
   if (!value) resetDialogState()
 })
 
+watch(
+  () => [previewRowTotal.value, previewPagination.pageSize],
+  () => {
+    previewPagination.page = clampPage(previewPagination, previewRowTotal.value)
+  }
+)
+
 const clearPreviewState = () => {
   previewResult.value = null
   confirmResult.value = null
   previewError.value = ''
   previewSourceSignature.value = ''
   confirmedPreviewFingerprint.value = ''
+  previewPagination.page = 1
 }
 
 const resetDialogState = () => {
@@ -393,6 +417,7 @@ const submitPreview = async () => {
       const response = await previewReleaseItemDataReplacement(formData)
       if (requestVersion !== replacementStateVersion.value || !visible.value) return
       previewResult.value = response || null
+      previewPagination.page = 1
       previewSourceSignature.value = sourceSignature.value
       confirmedPreviewFingerprint.value = ''
       if (response?.canConfirm) {
@@ -442,6 +467,10 @@ const submitConfirm = async () => {
 }
 
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
+
+const handlePreviewPageSizeChange = () => {
+  previewPagination.page = 1
+}
 
 const rowHasError = (row) => row.status === 'ERROR'
 
@@ -603,6 +632,13 @@ const formatFileSize = (size) => {
   min-width: 1060px;
 }
 
+.replacement-preview-pagination {
+  max-width: 100%;
+  overflow-x: auto;
+  padding-right: 0;
+  padding-left: 0;
+}
+
 .replacement-part-cell {
   display: flex;
   min-width: 0;
@@ -697,6 +733,10 @@ const formatFileSize = (size) => {
   .replacement-file-state strong,
   .replacement-fingerprint-state strong {
     max-width: 100%;
+  }
+
+  .replacement-preview-pagination {
+    justify-content: flex-start;
   }
 }
 </style>

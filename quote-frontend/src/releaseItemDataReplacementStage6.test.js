@@ -288,6 +288,18 @@ describe('release item data replacement stage 6 state convergence', () => {
     expect(sourceWatcher).not.toContain('clearPreviewState()')
   })
 
+  test('dialog paginates preview rows with the shared client-side pagination helper', () => {
+    expect(dialogSource).toContain("import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, clampPage, paginateRows } from '../../utils/clientPagination'")
+    expect(dialogSource).toContain(':data="pagedPreviewRows"')
+    expect(dialogSource).toContain('const previewPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })')
+    expect(dialogSource).toContain('const previewRowTotal = computed(() => previewRows.value.length)')
+    expect(dialogSource).toContain('const pagedPreviewRows = computed(() => paginateRows(previewRows.value, previewPagination))')
+    expect(dialogSource).toContain('previewPagination.page = clampPage(previewPagination, previewRowTotal.value)')
+    expect(dialogSource).toContain('previewPagination.page = 1')
+    expect(dialogSource).toContain('layout="total, sizes, prev, pager, next, jumper"')
+    expect(dialogSource).toContain(':page-sizes="CLIENT_PAGE_SIZES"')
+  })
+
   test('formal ticket generation keeps the existing final accepted quantity validation', () => {
     const submitBlock = blockBetween(
       marketReleaseSource,
