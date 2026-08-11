@@ -1,9 +1,15 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.SalesOrderU9AssignmentReq;
+import com.machining.quote.dto.SalesOrderU9AssignmentResp;
+import com.machining.quote.dto.SalesOrderU9DepartmentOptionDTO;
+import com.machining.quote.dto.SalesOrderU9SellerOptionDTO;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
+import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewLine;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
@@ -19,6 +25,7 @@ import com.machining.quote.service.u9.U9SalesOrderClient;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator.ValidationResult;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
+import com.machining.quote.service.u9.U9MasterDataService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,8 +46,10 @@ import java.util.stream.Collectors;
 public class SalesOrderU9SyncService {
     private static final Logger log = LoggerFactory.getLogger(SalesOrderU9SyncService.class);
     private static final String ACTION = "SALES_ORDER_U9_SYNC";
+    private static final String ACTION_ASSIGNMENT = "SALES_ORDER_U9_ASSIGNMENT_UPDATE";
     private static final String TARGET_TYPE = "sales_order_header";
     private static final String STATUS_SYNCING = "同步中";
+    private static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
     private static final String STATUS_SYNCED = "已同步";
     private static final String STATUS_FAILED = "同步失败";
     private static final String MATERIAL_CONFIRMED = "已确认";
@@ -64,6 +73,8 @@ public class SalesOrderU9SyncService {
     private U9SalesOrderRequestAssembler requestAssembler = new U9SalesOrderRequestAssembler();
     @Autowired
     private U9SalesOrderContractValidator contractValidator = new U9SalesOrderContractValidator();
+    @Autowired
+    private U9MasterDataService u9MasterDataService;
 
     public PageResult<SalesOrderU9SyncOrderRow> listOrders(
             String customerName,
@@ -113,6 +124,10 @@ public class SalesOrderU9SyncService {
         resp.setOrderType(header.getOrderType());
         resp.setDocumentTypeCode(header.getDocumentTypeCode());
         resp.setStatus(header.getStatus());
+        resp.setSellerCode(header.getU9SellerCode());
+        resp.setSellerName(header.getU9SellerName());
+        resp.setSaleDepartmentCode(header.getU9SaleDepartmentCode());
+        resp.setSaleDepartmentName(header.getU9SaleDepartmentName());
         resp.setU9SyncStatus(header.getU9SyncStatus());
         resp.setU9OrderCode(header.getU9OrderCode());
         resp.setU9SyncMessage(header.getU9SyncMessage());
@@ -128,6 +143,42 @@ public class SalesOrderU9SyncService {
         }
         resp.setLines(items.stream().map(item -> toPreviewLine(header, item)).toList());
         return resp;
+    }
+
+    @Transactional
+    public SalesOrderU9AssignmentResp saveAssignment(Long salesOrderId, SalesOrderU9AssignmentReq req) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        assertAssignmentEditable(header);
+
+        AssignmentSnapshot before = assignmentSnapshot(header);
+        AssignmentSnapshot after = resolveAssignment(req);
+        LocalDateTime updatedAt = LocalDateTime.now();
+        UpdateWrapper<SalesOrderHeader> update = new UpdateWrapper<>();
+        update.eq("id", header.getId())
+                .set("u9_seller_code", after.sellerCode())
+                .set("u9_seller_name", after.sellerName())
+                .set("u9_sale_department_code", after.saleDepartmentCode())
+                .set("u9_sale_department_name", after.saleDepartmentName())
+                .set("updated_at", updatedAt);
+        int updated = headerMapper.update(null, update);
+        if (updated <= 0) {
+            throw new RuntimeException("销售订单销售员和部门保存失败，请刷新后重试");
+        }
+
+        applyAssignment(header, after, updatedAt);
+        SalesOrderHeader saved = headerMapper.selectById(header.getId());
+        if (saved == null) {
+            saved = header;
+        }
+        auditAssignment(header, before, assignmentSnapshot(saved));
+        return toAssignmentResp(saved);
     }
 
     @Transactional
@@ -252,12 +303,96 @@ public class SalesOrderU9SyncService {
         return header;
     }
 
+    private void assertAssignmentEditable(SalesOrderHeader header) {
+        String status = trimToNull(header.getU9SyncStatus());
+        if (STATUS_SYNCING.equals(status) || STATUS_PENDING_CONFIRMATION.equals(status) || STATUS_SYNCED.equals(status)) {
+            throw new RuntimeException("U9 状态为" + status + "，不能修改销售员和销售部门");
+        }
+    }
+
+    private AssignmentSnapshot resolveAssignment(SalesOrderU9AssignmentReq req) {
+        SalesOrderU9AssignmentReq safeReq = req == null ? new SalesOrderU9AssignmentReq() : req;
+        String sellerCode = trimToNull(safeReq.getSellerCode());
+        String departmentCode = trimToNull(safeReq.getSaleDepartmentCode());
+        if (sellerCode == null && departmentCode == null) {
+            return new AssignmentSnapshot(null, null, null, null);
+        }
+
+        SalesOrderU9SyncOptionsResp options = u9MasterDataService.options();
+        Map<String, SalesOrderU9SellerOptionDTO> sellers = safeList(options == null ? null : options.getSellers()).stream()
+                .filter(seller -> trimToNull(seller.getCode()) != null)
+                .collect(Collectors.toMap(
+                        seller -> trimToNull(seller.getCode()),
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        Map<String, SalesOrderU9DepartmentOptionDTO> departments = safeList(options == null ? null : options.getDepartments()).stream()
+                .filter(department -> trimToNull(department.getCode()) != null)
+                .collect(Collectors.toMap(
+                        department -> trimToNull(department.getCode()),
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+
+        String sellerName = null;
+        if (sellerCode != null) {
+            SalesOrderU9SellerOptionDTO seller = sellers.get(sellerCode);
+            if (seller == null) {
+                throw new RuntimeException("U9 销售员编码不存在或不可用：" + sellerCode);
+            }
+            sellerName = trimToNull(seller.getName());
+        }
+
+        String departmentName = null;
+        if (departmentCode != null) {
+            SalesOrderU9DepartmentOptionDTO department = departments.get(departmentCode);
+            if (department == null) {
+                throw new RuntimeException("U9 销售部门编码不存在或不可用：" + departmentCode);
+            }
+            departmentName = trimToNull(department.getName());
+        }
+        return new AssignmentSnapshot(sellerCode, sellerName, departmentCode, departmentName);
+    }
+
+    private AssignmentSnapshot assignmentSnapshot(SalesOrderHeader header) {
+        if (header == null) {
+            return new AssignmentSnapshot(null, null, null, null);
+        }
+        return new AssignmentSnapshot(
+                trimToNull(header.getU9SellerCode()),
+                trimToNull(header.getU9SellerName()),
+                trimToNull(header.getU9SaleDepartmentCode()),
+                trimToNull(header.getU9SaleDepartmentName())
+        );
+    }
+
+    private void applyAssignment(SalesOrderHeader header, AssignmentSnapshot assignment, LocalDateTime updatedAt) {
+        header.setU9SellerCode(assignment.sellerCode());
+        header.setU9SellerName(assignment.sellerName());
+        header.setU9SaleDepartmentCode(assignment.saleDepartmentCode());
+        header.setU9SaleDepartmentName(assignment.saleDepartmentName());
+        header.setUpdatedAt(updatedAt);
+    }
+
+    private SalesOrderU9AssignmentResp toAssignmentResp(SalesOrderHeader header) {
+        SalesOrderU9AssignmentResp resp = new SalesOrderU9AssignmentResp();
+        resp.setSalesOrderId(header.getId());
+        resp.setSalesOrderNo(header.getSalesOrderNo());
+        resp.setSellerCode(header.getU9SellerCode());
+        resp.setSellerName(header.getU9SellerName());
+        resp.setSaleDepartmentCode(header.getU9SaleDepartmentCode());
+        resp.setSaleDepartmentName(header.getU9SaleDepartmentName());
+        resp.setUpdatedAt(header.getUpdatedAt());
+        return resp;
+    }
+
     private SalesOrderU9SyncOrderRow toOrderRow(SalesOrderHeader header) {
         List<SalesOrderItem> items = loadItems(header.getId());
         MaterialStats stats = materialStats(items);
         SalesOrderU9SyncOrderRow row = new SalesOrderU9SyncOrderRow();
         row.setSalesOrderId(header.getId());
         row.setSalesOrderNo(header.getSalesOrderNo());
+        row.setDocumentNo(header.getDocumentNo());
         row.setSourceType(header.getSourceType());
         row.setSourceLabel(sourceLabel(header.getSourceType()));
         row.setCustomerName(header.getCustomerName());
@@ -271,6 +406,10 @@ public class SalesOrderU9SyncService {
         row.setOrderType(header.getOrderType());
         row.setDocumentTypeCode(header.getDocumentTypeCode());
         row.setStatus(header.getStatus());
+        row.setSellerCode(header.getU9SellerCode());
+        row.setSellerName(header.getU9SellerName());
+        row.setSaleDepartmentCode(header.getU9SaleDepartmentCode());
+        row.setSaleDepartmentName(header.getU9SaleDepartmentName());
         row.setU9SyncStatus(header.getU9SyncStatus());
         row.setU9OrderCode(header.getU9OrderCode());
         row.setU9SyncMessage(header.getU9SyncMessage());
@@ -538,6 +677,34 @@ public class SalesOrderU9SyncService {
         );
     }
 
+    private void auditAssignment(SalesOrderHeader header, AssignmentSnapshot before, AssignmentSnapshot after) {
+        if (auditService == null) {
+            return;
+        }
+        auditService.record(
+                ACTION_ASSIGNMENT,
+                TARGET_TYPE,
+                header.getId(),
+                assignmentAuditData(header, before),
+                assignmentAuditData(header, after),
+                "MARKET",
+                "SUCCESS",
+                AuditService.labelForAction(ACTION_ASSIGNMENT),
+                null
+        );
+    }
+
+    private Map<String, Object> assignmentAuditData(SalesOrderHeader header, AssignmentSnapshot snapshot) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("salesOrderId", header.getId());
+        data.put("salesOrderNo", header.getSalesOrderNo());
+        data.put("sellerCode", snapshot.sellerCode());
+        data.put("sellerName", snapshot.sellerName());
+        data.put("saleDepartmentCode", snapshot.saleDepartmentCode());
+        data.put("saleDepartmentName", snapshot.saleDepartmentName());
+        return data;
+    }
+
     private List<Long> normalizeIds(List<Long> rawIds) {
         if (rawIds == null) {
             return List.of();
@@ -602,6 +769,14 @@ public class SalesOrderU9SyncService {
         return "";
     }
 
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -610,5 +785,12 @@ public class SalesOrderU9SyncService {
     }
 
     private record MaterialStats(int total, int confirmed, int missingOrUnconfirmed) {
+    }
+
+    private record AssignmentSnapshot(
+            String sellerCode,
+            String sellerName,
+            String saleDepartmentCode,
+            String saleDepartmentName) {
     }
 }

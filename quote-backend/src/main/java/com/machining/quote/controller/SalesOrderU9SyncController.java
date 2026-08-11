@@ -2,6 +2,8 @@ package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.SalesOrderU9AssignmentReq;
+import com.machining.quote.dto.SalesOrderU9AssignmentResp;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
@@ -13,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,6 +55,14 @@ public class SalesOrderU9SyncController {
     @RequirePermission("market:u9-sync:view")
     public SalesOrderU9SyncPreviewResp preview(@PathVariable Long salesOrderId) {
         return salesOrderU9SyncService.previewSalesOrder(salesOrderId);
+    }
+
+    @PutMapping("/orders/{salesOrderId}/assignment")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9AssignmentResp saveAssignment(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) SalesOrderU9AssignmentReq req) {
+        return salesOrderU9SyncService.saveAssignment(salesOrderId, req);
     }
 
     @PostMapping("/orders/{salesOrderId}/sync")

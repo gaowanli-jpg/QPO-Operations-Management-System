@@ -25,6 +25,10 @@ public class SalesOrderU9SyncPreviewResp {
     private String orderType;
     private String documentTypeCode;
     private String status;
+    private String sellerCode;
+    private String sellerName;
+    private String saleDepartmentCode;
+    private String saleDepartmentName;
     private String u9SyncStatus;
     private String u9OrderCode;
     private String u9SyncMessage;
