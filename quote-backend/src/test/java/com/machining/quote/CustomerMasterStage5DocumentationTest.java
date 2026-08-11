@@ -59,7 +59,7 @@ class CustomerMasterStage5DocumentationTest {
 
         assertThat(doc)
                 .contains(
-                        "设计状态：阶段 1-7 已完成",
+                        "设计状态：整体开发目标已完成并验收。",
                         "### 阶段 4：客户资料只读模块改造",
                         "状态：已完成",
                         "[x] 客户资料页面只能查看、筛选和同步",
