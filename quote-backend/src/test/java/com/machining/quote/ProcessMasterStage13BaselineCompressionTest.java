@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +39,8 @@ class ProcessMasterStage13BaselineCompressionTest {
                 "V1__qpo_baseline_schema.sql",
                 "V2__qpo_baseline_seed_data.sql",
                 "V3__repeat_released_snapshot_candidate_index.sql",
-                "V4__retire_sales_match_module.sql");
+                "V4__retire_sales_match_module.sql",
+                "V5__refactor_sales_order_u9_sync_contract.sql");
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
     }
 
@@ -60,14 +62,58 @@ class ProcessMasterStage13BaselineCompressionTest {
                         "1|qpo baseline schema|true",
                         "2|qpo baseline seed data|true",
                         "3|repeat released snapshot candidate index|true",
-                        "4|retire sales match module|true");
+                        "4|retire sales match module|true",
+                        "5|refactor sales order u9 sync contract|true");
                 assertThat(tableExists(connection, schema, "dict_process_category")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process_detail")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process")).isFalse();
                 assertThat(columnExists(connection, schema, "item_quote_version", "final_unit_price")).isFalse();
                 assertThat(columnExists(connection, schema, "sales_order_item", "final_unit_price")).isFalse();
+                assertThat(columnExists(connection, schema, "sales_order_header", "u9_seller_code")).isTrue();
+                assertThat(columnExists(connection, schema, "sales_order_header", "u9_sale_department_code")).isTrue();
+                assertThat(columnExists(connection, schema, "sales_order_header", "u9_sync_attempt_id")).isTrue();
+                assertThat(columnExists(connection, schema, "sales_order_header", "u9_sync_request_hash")).isTrue();
+                assertThat(indexExists(connection, schema, "uk_sales_order_header_document_no")).isTrue();
+                assertDuplicateDocumentNoRejected(connection, schema);
                 assertThat(permissionExists(connection, schema, "market:sales-match:view")).isFalse();
                 assertThat(routePathExists(connection, schema, "/sales-match")).isFalse();
+            } finally {
+                dropTestSchema(connection, schema);
+            }
+        }
+    }
+
+    @Test
+    void v5BackfillsBlankDocumentNumbersWithoutChangingExistingValues() throws Exception {
+        try (Connection connection = openDatabase()) {
+            String schema = createTestSchema(connection);
+            try {
+                Flyway.configure()
+                        .dataSource(connection.getMetaData().getURL(), System.getenv("DB_USERNAME"), System.getenv("DB_PASSWORD"))
+                        .schemas(schema)
+                        .defaultSchema(schema)
+                        .locations("filesystem:src/main/resources/db/migration")
+                        .target(MigrationVersion.fromVersion("4"))
+                        .baselineOnMigrate(false)
+                        .load()
+                        .migrate();
+                insertHistoricalSalesOrder(connection, schema, "SO-HIST-BLANK", null, null);
+                insertHistoricalSalesOrder(connection, schema, "SO-HIST-RFQ", "DOC-RFQ-HIST", "");
+                connection.commit();
+
+                Flyway.configure()
+                        .dataSource(connection.getMetaData().getURL(), System.getenv("DB_USERNAME"), System.getenv("DB_PASSWORD"))
+                        .schemas(schema)
+                        .defaultSchema(schema)
+                        .locations("filesystem:src/main/resources/db/migration")
+                        .baselineOnMigrate(false)
+                        .load()
+                        .migrate();
+
+                assertThat(salesOrderState(connection, schema, "SO-HIST-BLANK"))
+                        .isEqualTo("SO-HIST-BLANK|未同步");
+                assertThat(salesOrderState(connection, schema, "SO-HIST-RFQ"))
+                        .isEqualTo("DOC-RFQ-HIST|未同步");
             } finally {
                 dropTestSchema(connection, schema);
             }
@@ -155,6 +201,70 @@ class ProcessMasterStage13BaselineCompressionTest {
             try (ResultSet resultSet = statement.executeQuery()) {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getBoolean(1);
+            }
+        }
+    }
+
+    private static boolean indexExists(Connection connection, String schema, String index) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_indexes
+                    WHERE schemaname = ? AND indexname = ?
+                )
+                """)) {
+            statement.setString(1, schema);
+            statement.setString(2, index);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getBoolean(1);
+            }
+        }
+    }
+
+    private static void assertDuplicateDocumentNoRejected(Connection connection, String schema) throws SQLException {
+        var savepoint = connection.setSavepoint();
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        try {
+            insertHistoricalSalesOrder(connection, schema, "SO-UNIQUE-A-" + suffix, "DOC-DUP-" + suffix, "未同步");
+            try {
+                insertHistoricalSalesOrder(connection, schema, "SO-UNIQUE-B-" + suffix, "DOC-DUP-" + suffix, "未同步");
+                throw new AssertionError("duplicate document_no was accepted");
+            } catch (SQLException ex) {
+                assertThat(ex.getSQLState()).isEqualTo("23505");
+            }
+        } finally {
+            connection.rollback(savepoint);
+        }
+    }
+
+    private static void insertHistoricalSalesOrder(
+            Connection connection,
+            String schema,
+            String salesOrderNo,
+            String documentNo,
+            String u9SyncStatus) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO %s.sales_order_header (sales_order_no, document_no, u9_sync_status)
+                VALUES (?, ?, ?)
+                """.formatted(schema))) {
+            statement.setString(1, salesOrderNo);
+            statement.setString(2, documentNo);
+            statement.setString(3, u9SyncStatus);
+            statement.executeUpdate();
+        }
+    }
+
+    private static String salesOrderState(Connection connection, String schema, String salesOrderNo) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT document_no, u9_sync_status
+                FROM %s.sales_order_header
+                WHERE sales_order_no = ?
+                """.formatted(schema))) {
+            statement.setString(1, salesOrderNo);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getString(1) + "|" + resultSet.getString(2);
             }
         }
     }

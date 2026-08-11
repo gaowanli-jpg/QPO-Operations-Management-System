@@ -565,7 +565,6 @@ public class SalesOrderU9SyncService {
     private void markSuccess(SalesOrderHeader header, U9ResultDTO row) {
         SalesOrderHeader update = new SalesOrderHeader();
         update.setId(header.getId());
-        update.setDocumentNo(firstNonBlank(row.getMCode(), header.getDocumentNo()));
         update.setU9SyncStatus(STATUS_SYNCED);
         update.setU9OrderId(row.getMID());
         update.setU9OrderCode(row.getMCode());

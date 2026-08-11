@@ -109,6 +109,7 @@ class SalesOrderU9SyncStage7Test {
 
         U9SalesOrderHeadDTO request = fixture.capturedU9Orders().get(0);
         assertThat(request.getOtherID()).isEqualTo(header.getSalesOrderNo());
+        assertThat(request.getDocNo()).isEqualTo(header.getDocumentNo());
         assertThat(request.getOrderBy()).isEqualTo("CUST-001");
         assertThat(request.getDocumentType()).isEqualTo("SO88");
         assertThat(request.getCustomerOrderNo()).isEqualTo(header.getCustomerOrderNo());
@@ -132,6 +133,7 @@ class SalesOrderU9SyncStage7Test {
         assertThat(successUpdate.getU9OrderId()).isEqualTo("U9-ID-1");
         assertThat(successUpdate.getU9OrderCode()).isEqualTo("U9-SO-001");
         assertThat(successUpdate.getU9SyncMessage()).contains("同步成功");
+        assertThat(successUpdate.getDocumentNo()).isNull();
     }
 
     @Test
@@ -239,6 +241,7 @@ class SalesOrderU9SyncStage7Test {
         SalesOrderHeader header = new SalesOrderHeader();
         header.setId(id);
         header.setSalesOrderNo(salesOrderNo);
+        header.setDocumentNo("DOC-STABLE-" + id);
         header.setDocumentTypeCode("SO01");
         header.setCustomerCode("CUST-001");
         header.setCustomerName("测试客户");

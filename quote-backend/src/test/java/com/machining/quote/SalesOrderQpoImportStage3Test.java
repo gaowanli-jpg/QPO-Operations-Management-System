@@ -175,6 +175,7 @@ class SalesOrderQpoImportStage3Test {
         verify(headerMapper, org.mockito.Mockito.times(2)).insert(headerCaptor.capture());
         SalesOrderHeader firstHeader = headerCaptor.getAllValues().get(0);
         assertThat(firstHeader.getSalesOrderNo()).startsWith("SOQPO");
+        assertThat(firstHeader.getDocumentNo()).isEqualTo(firstHeader.getSalesOrderNo());
         assertThat(firstHeader.getDocumentTypeCode()).isEqualTo("SO01");
         assertThat(firstHeader.getCustomerId()).isEqualTo(7L);
         assertThat(firstHeader.getCustomerCode()).isEqualTo("C001");

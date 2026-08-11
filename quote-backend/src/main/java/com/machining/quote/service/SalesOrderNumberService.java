@@ -19,6 +19,14 @@ public class SalesOrderNumberService {
         return "SOQPO" + value;
     }
 
+    public SalesOrderNumbers forDirectImport(String salesOrderNo) {
+        if (salesOrderNo == null || salesOrderNo.isBlank()) {
+            throw new IllegalArgumentException("销售订单编号不能为空");
+        }
+        String normalized = salesOrderNo.trim();
+        return new SalesOrderNumbers(normalized, normalized);
+    }
+
     public SalesOrderNumbers forRfqRelease(LocalDate salesOrderDate, String releaseBatchKey) {
         if (salesOrderDate == null || releaseBatchKey == null || releaseBatchKey.isBlank()) {
             throw new IllegalArgumentException("生成销售订单编号所需参数不完整");

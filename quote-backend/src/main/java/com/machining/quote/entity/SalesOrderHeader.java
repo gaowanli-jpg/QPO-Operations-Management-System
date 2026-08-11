@@ -31,10 +31,18 @@ public class SalesOrderHeader {
     private String orderType;
     private String internalProjectNo;
     private String status;
+    private String u9SellerCode;
+    private String u9SellerName;
+    private String u9SaleDepartmentCode;
+    private String u9SaleDepartmentName;
     private String u9SyncStatus;
     private String u9OrderId;
     private String u9OrderCode;
     private String u9SyncMessage;
+    private String u9SyncAttemptId;
+    private String u9SyncRequestHash;
+    private LocalDateTime u9SyncStartedAt;
+    private LocalDateTime u9SyncFinishedAt;
     private Long importBatchId;
     private Long importRecordId;
     private Integer totalItemCount;

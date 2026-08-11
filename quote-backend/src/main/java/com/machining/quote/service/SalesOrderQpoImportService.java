@@ -388,10 +388,12 @@ public class SalesOrderQpoImportService {
             int sequence,
             DrawingBindingResult drawingBinding) {
         String salesOrderNo = batchNo + "-" + String.format("%03d", sequence);
+        SalesOrderNumberService.SalesOrderNumbers numbers = salesOrderNumberService.forDirectImport(salesOrderNo);
         LocalDateTime now = LocalDateTime.now();
 
         SalesOrderHeader header = new SalesOrderHeader();
-        header.setSalesOrderNo(salesOrderNo);
+        header.setSalesOrderNo(numbers.salesOrderNo());
+        header.setDocumentNo(numbers.documentNo());
         header.setDocumentTypeCode(documentTypeCode);
         header.setCustomerId(customer.getId());
         header.setCustomerCode(customer.getCustomerCode());
