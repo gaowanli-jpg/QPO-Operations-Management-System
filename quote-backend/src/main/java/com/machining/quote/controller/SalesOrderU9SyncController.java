@@ -73,6 +73,7 @@ public class SalesOrderU9SyncController {
     @GetMapping("/orders")
     @RequirePermission("market:u9-sync:view")
     public PageResult<SalesOrderU9SyncOrderRow> listOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
@@ -81,7 +82,7 @@ public class SalesOrderU9SyncController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return salesOrderU9SyncService.listOrders(
-                customerName, keyword, status, u9SyncStatus, materialReadyStatus, page, pageSize);
+                customerCode, customerName, keyword, status, u9SyncStatus, materialReadyStatus, page, pageSize);
     }
 
     @GetMapping("/orders/{salesOrderId}/preview")

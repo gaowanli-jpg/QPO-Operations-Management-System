@@ -109,7 +109,7 @@ class SalesOrderIndependentStage8Test {
                 .doesNotContain("rfqId")
                 .doesNotContain("rfqNo");
         assertThat(orderService)
-                .contains("listReleaseCandidateOrders(customerName, keyword, status, safePage, safePageSize)")
+                .contains("listReleaseCandidateOrders(customerCode, customerName, keyword, status, safePage, safePageSize)")
                 .contains("row.put(\"sourceType\", \"RFQ\")")
                 .contains("row.put(\"sourceOrderNo\", order.getRfqNo())")
                 .contains("row.put(\"rfqNo\", order.getRfqNo())")
@@ -144,7 +144,7 @@ class SalesOrderIndependentStage8Test {
         assertThat(dataScopeService)
                 .contains("FROM sales_order_header")
                 .contains("FROM order_rfq")
-                .contains("snapshot.customerNames()");
+                .contains("snapshot.customerCodes()");
 
         assertThat(auditActionTests).contains("importRfq");
         assertThat(coreWorkflowTests)

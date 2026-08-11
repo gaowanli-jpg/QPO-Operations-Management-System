@@ -115,12 +115,13 @@ public class MarketController {
     @GetMapping("/quote-process/orders")
     @RequirePermission("market:quote-process:order-select")
     public PageResult<OrderRfq> listQuoteProcessOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listQuoteProcessCandidateOrders(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listQuoteProcessCandidateOrders(customerCode, customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/release/customers")
@@ -134,12 +135,13 @@ public class MarketController {
     @GetMapping("/release/orders")
     @RequirePermission("market:release:order-select")
     public PageResult<Map<String, Object>> listReleaseOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listReleaseOrderSources(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listReleaseOrderSources(customerCode, customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/tickets/{rfqId}")
@@ -406,13 +408,23 @@ public class MarketController {
             @RequestParam("customerName") String customerName,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings) {
-        return importRfq(customerName, excelFile, drawings, null);
+        return importRfq(null, null, customerName, excelFile, drawings, null);
+    }
+
+    public Map<String, Object> importRfq(
+            String customerName,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        return importRfq(null, null, customerName, excelFile, drawings, versionDrawings);
     }
 
     @PostMapping("/import-rfq")
     @RequirePermission("market:rfq:import")
     @Transactional
     public Map<String, Object> importRfq(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerShortName", required = false) String customerShortName,
             @RequestParam("customerName") String customerName,
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
@@ -454,6 +466,8 @@ public class MarketController {
             int versionUploadedDrawingCount = 0;
             if (drawings != null && !drawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
+                pathOrder.setCustomerCode(cleanText(customerCode));
+                pathOrder.setCustomerShortName(cleanText(customerShortName));
                 pathOrder.setCustomerName(customerName);
                 pathOrder.setRfqNo(autoRfqNo);
 
@@ -479,6 +493,8 @@ public class MarketController {
             }
             if (versionDrawings != null && !versionDrawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
+                pathOrder.setCustomerCode(cleanText(customerCode));
+                pathOrder.setCustomerShortName(cleanText(customerShortName));
                 pathOrder.setCustomerName(customerName);
                 pathOrder.setRfqNo(autoRfqNo);
 
@@ -511,6 +527,8 @@ public class MarketController {
 
             OrderRfq newOrder = new OrderRfq();
             newOrder.setRfqNo(autoRfqNo);
+            newOrder.setCustomerCode(cleanText(customerCode));
+            newOrder.setCustomerShortName(cleanText(customerShortName));
             newOrder.setCustomerName(customerName);
             newOrder.setStatus(QuoteStatusWorkflow.UNPRICED);
             if (dataScopeService != null) {
@@ -631,6 +649,10 @@ public class MarketController {
                     customerName, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
             throw new RuntimeException("服务器处理失败：" + e.getMessage(), e);
         }
+    }
+
+    private String cleanText(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
     private String normalizePartNo(String partNo) {

@@ -8,6 +8,7 @@ import java.time.LocalDate;
 public class ProductionItemQueryReq {
     private Integer page;
     private Integer pageSize;
+    private String customerCode;
     private String customerName;
     private String rfqNo;
     private String partNo;

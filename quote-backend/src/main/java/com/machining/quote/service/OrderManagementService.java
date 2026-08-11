@@ -68,11 +68,21 @@ public class OrderManagementService {
             String status,
             Integer page,
             Integer pageSize) {
+        return listOrderSummaries(null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<Map<String, Object>> listOrderSummaries(
+            String customerCode,
+            String customerName,
+            String keyword,
+            String status,
+            Integer page,
+            Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
         applyOrderDataScope(qw);
-        applyOrderFilters(qw, customerName, keyword, status);
+        applyOrderFilters(qw, customerCode, customerName, keyword, status);
         Long total = orderMapper.selectCount(qw);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -84,11 +94,15 @@ public class OrderManagementService {
     }
 
     public PageResult<OrderRfq> listOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
+        return listOrders(null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<OrderRfq> listOrders(String customerCode, String customerName, String keyword, String status, Integer page, Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
         applyOrderDataScope(qw);
-        applyOrderFilters(qw, customerName, keyword, status);
+        applyOrderFilters(qw, customerCode, customerName, keyword, status);
         Long total = orderMapper.selectCount(qw);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -99,6 +113,10 @@ public class OrderManagementService {
     }
 
     public PageResult<OrderRfq> listQuoteProcessCandidateOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
+        return listQuoteProcessCandidateOrders(null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<OrderRfq> listQuoteProcessCandidateOrders(String customerCode, String customerName, String keyword, String status, Integer page, Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         String normalizedStatus = isBlank(status) ? null : status.trim();
@@ -108,7 +126,7 @@ public class OrderManagementService {
 
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
         applyOrderDataScope(qw);
-        applyOrderFilters(qw, customerName, keyword, null);
+        applyOrderFilters(qw, customerCode, customerName, keyword, null);
         if (normalizedStatus == null) {
             qw.in("status", QuoteStatusWorkflow.PRICED, QuoteStatusWorkflow.QUOTED);
         } else {
@@ -124,6 +142,10 @@ public class OrderManagementService {
     }
 
     public PageResult<OrderRfq> listReleaseCandidateOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
+        return listReleaseCandidateOrders(null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<OrderRfq> listReleaseCandidateOrders(String customerCode, String customerName, String keyword, String status, Integer page, Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         String normalizedStatus = isBlank(status) ? null : status.trim();
@@ -133,7 +155,7 @@ public class OrderManagementService {
 
         QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
         applyOrderDataScope(qw);
-        applyOrderFilters(qw, customerName, keyword, null);
+        applyOrderFilters(qw, customerCode, customerName, keyword, null);
         if (normalizedStatus == null) {
             qw.in("status", QuoteStatusWorkflow.QUOTED, QuoteStatusWorkflow.PARTIALLY_RELEASED);
         } else {
@@ -154,9 +176,19 @@ public class OrderManagementService {
             String status,
             Integer page,
             Integer pageSize) {
+        return listReleaseOrderSources(null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<Map<String, Object>> listReleaseOrderSources(
+            String customerCode,
+            String customerName,
+            String keyword,
+            String status,
+            Integer page,
+            Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
-        PageResult<OrderRfq> rfqPage = listReleaseCandidateOrders(customerName, keyword, status, safePage, safePageSize);
+        PageResult<OrderRfq> rfqPage = listReleaseCandidateOrders(customerCode, customerName, keyword, status, safePage, safePageSize);
         List<Map<String, Object>> rows = rfqPage.getRecords().stream()
                 .map(this::buildReleaseRfqSourceRow)
                 .toList();
@@ -539,8 +571,10 @@ public class OrderManagementService {
                 .collect(Collectors.toMap(stats -> stats.rfqId, Function.identity()));
     }
 
-    private void applyOrderFilters(QueryWrapper<OrderRfq> qw, String customerName, String keyword, String status) {
-        if (!isBlank(customerName)) {
+    private void applyOrderFilters(QueryWrapper<OrderRfq> qw, String customerCode, String customerName, String keyword, String status) {
+        if (!isBlank(customerCode)) {
+            qw.eq("customer_code", customerCode.trim());
+        } else if (!isBlank(customerName)) {
             qw.eq("customer_name", customerName.trim());
         }
         if (!isBlank(status)) {

@@ -10,25 +10,28 @@ const roleManage = readSource('components', 'SystemRoleManage.vue')
 
 describe('QPO role management data scope guardrails', () => {
   test('presents the recommended QPO data scope vocabulary', () => {
-    expect(roleManage).toContain('全部数据')
-    expect(roleManage).toContain('指定客户')
-    expect(roleManage).toContain('仅本人')
-    expect(roleManage).toContain('无数据')
-    expect(roleManage).not.toContain('高级/兼容配置')
+    expect(roleManage).toContain("value: 'ALL'")
+    expect(roleManage).toContain("value: 'CUSTOMER'")
+    expect(roleManage).toContain("value: 'SELF'")
+    expect(roleManage).toContain("value: 'NONE'")
     expect(roleManage).not.toContain("value: 'DEPT'")
     expect(roleManage).not.toContain("value: 'DEPT_AND_CHILD'")
     expect(roleManage).not.toContain("value: 'CUSTOM'")
   })
 
-  test('explains self scope as imported or created orders without owner wording', () => {
-    expect(roleManage).toContain('仅查看当前用户导入/创建的订单。')
-    expect(roleManage).not.toContain('负责人')
-  })
-
   test('shows customer configuration only for customer data scope', () => {
     expect(roleManage).toContain('isCustomerDataScope')
     expect(roleManage).toContain('v-if="isCustomerDataScope"')
-    expect(roleManage).toContain('指定客户数据范围只按订单客户名称匹配')
+    expect(roleManage).toContain('customerCodes')
+    expect(roleManage).toContain(':value="customer.customerCode"')
+  })
+
+  test('saves customer data scope by U9 customer code with full option labels', () => {
+    expect(roleManage).toContain('dataScopeForm.customerCodes')
+    expect(roleManage).toContain('response?.customerCodes')
+    expect(roleManage).toContain('customerCodes: [...formState.customerCodes]')
+    expect(roleManage).not.toContain('customerNames: [...formState.customerNames]')
+    expect(roleManage).toContain('formatCustomerOption(customer)')
   })
 
   test('removes department data scope configuration from role management', () => {
@@ -36,15 +39,13 @@ describe('QPO role management data scope guardrails', () => {
     expect(roleManage).not.toContain('isCustomDepartmentScope')
     expect(roleManage).not.toContain('dataScopeDeptTreeRef')
     expect(roleManage).not.toContain('listDataScopeDepartments')
-    expect(roleManage).not.toContain('指定部门')
-    expect(roleManage).not.toContain('本部门及子部门')
   })
 
   test('normalizes hidden data scope fields before saving', () => {
     expect(roleManage).toContain('buildDataScopePayload(dataScopeForm)')
     expect(roleManage).toContain("case 'CUSTOMER'")
     expect(roleManage).toContain('deptIds: []')
-    expect(roleManage).toContain('customerNames: []')
+    expect(roleManage).toContain('customerCodes: []')
     expect(roleManage).toContain('default:')
   })
 })

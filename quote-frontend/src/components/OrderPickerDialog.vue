@@ -106,6 +106,7 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="selectedCustomer"
+      :current-customer-code="selectedCustomerCode"
       :customer-scope="customerScope"
       @select="handleCustomerSelected"
     />
@@ -197,6 +198,7 @@ const visible = computed({
 })
 
 const selectedCustomer = ref('')
+const selectedCustomerCode = ref('')
 const selectedStatus = ref('')
 const selectedOrderId = ref(null)
 const keyword = ref('')
@@ -294,6 +296,7 @@ const submitOrder = () => {
 
 const resetPicker = () => {
   selectedCustomer.value = ''
+  selectedCustomerCode.value = ''
   selectedStatus.value = ''
   selectedOrderId.value = null
   selectedOrder.value = null
@@ -328,9 +331,11 @@ const resetPageAndRows = () => {
 }
 
 const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+const resolveCustomerCode = (customer) => typeof customer === 'string' ? customer : (customer?.customerCode || '')
 
 const handleCustomerSelected = (customer) => {
   selectedCustomer.value = resolveCustomerName(customer)
+  selectedCustomerCode.value = resolveCustomerCode(customer)
 }
 
 const loadOrders = async () => {
@@ -342,6 +347,7 @@ const loadOrders = async () => {
   loadingOrders.value = true
   try {
     const params = {
+      customerCode: selectedCustomerCode.value || undefined,
       customerName: selectedCustomer.value,
       status: selectedStatus.value,
       keyword: keyword.value.trim() || undefined,

@@ -50,7 +50,7 @@ class SalesOrderReleaseSourceStage5Test {
                 .contains("orderManagementService.listReleaseOrderSources");
         assertThat(orderService)
                 .contains("public PageResult<Map<String, Object>> listReleaseOrderSources")
-                .contains("listReleaseCandidateOrders(customerName, keyword, status, safePage, safePageSize)")
+                .contains("listReleaseCandidateOrders(customerCode, customerName, keyword, status, safePage, safePageSize)")
                 .contains("\"sourceType\", \"RFQ\"")
                 .contains("\"sourceOrderId\"")
                 .doesNotContain("salesOrderHeaderMapper")

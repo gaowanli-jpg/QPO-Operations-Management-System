@@ -63,8 +63,7 @@ class ProductionItemModuleSplitStage2Test {
                 )
                 .doesNotContain(
                         "applyEquals(query, \"alloc.allocation_type\", normalizeUpper(req.getAllocationType()))",
-                        "applyEquals(query, \"alloc.mes_production_status\", normalizeUpper(req.getMesProductionStatus()))",
-                        "customerMasterService.listCustomerOptions(field, keyword)"
+                        "applyEquals(query, \"alloc.mes_production_status\", normalizeUpper(req.getMesProductionStatus()))"
                 );
     }
 
@@ -77,6 +76,7 @@ class ProductionItemModuleSplitStage2Test {
                 .contains(
                         "private Integer page;",
                         "private Integer pageSize;",
+                        "private String customerCode;",
                         "private String customerName;",
                         "private String rfqNo;",
                         "private String partNo;",
@@ -106,16 +106,14 @@ class ProductionItemModuleSplitStage2Test {
     }
 
     @Test
-    void customerPickersQueryEachModuleScopeInsteadOfGlobalCustomerMaster() throws IOException {
+    void customerPickersUseU9CustomerCacheWhileKeepingModuleFallbackScope() throws IOException {
         String lockedService = read(MAIN_JAVA.resolve(Path.of("service", "LockedItemService.java")));
         String productionService = read(MAIN_JAVA.resolve(Path.of("service", "ProductionItemService.java")));
 
         assertThat(lockedService)
-                .contains("applyLockedStockScope(query)", "selectLockedItemCustomers(query)")
-                .doesNotContain("CustomerMasterService", "listCustomerNamesForCurrentScope");
+                .contains("CustomerMasterService", "customerMasterService.listCustomerOptions(field, keyword)", "applyLockedStockScope(query)", "selectLockedItemCustomers(query)");
         assertThat(productionService)
-                .contains("applyProductionActiveScope(query)", "selectLockedItemCustomers(query)")
-                .doesNotContain("CustomerMasterService", "listCustomerNamesForCurrentScope");
+                .contains("CustomerMasterService", "customerMasterService.listCustomerOptions(field, keyword)", "applyProductionActiveScope(query)", "selectLockedItemCustomers(query)");
     }
 
     @Test

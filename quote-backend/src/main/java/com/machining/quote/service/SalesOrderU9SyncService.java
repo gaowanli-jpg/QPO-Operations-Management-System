@@ -95,11 +95,23 @@ public class SalesOrderU9SyncService {
             String materialReadyStatus,
             Integer page,
             Integer pageSize) {
+        return listOrders(null, customerName, keyword, status, u9SyncStatus, materialReadyStatus, page, pageSize);
+    }
+
+    public PageResult<SalesOrderU9SyncOrderRow> listOrders(
+            String customerCode,
+            String customerName,
+            String keyword,
+            String status,
+            String u9SyncStatus,
+            String materialReadyStatus,
+            Integer page,
+            Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
         applySalesOrderScope(query);
-        applyListFilters(query, customerName, keyword, status, u9SyncStatus, materialReadyStatus);
+        applyListFilters(query, customerCode, customerName, keyword, status, u9SyncStatus, materialReadyStatus);
         Long total = headerMapper.selectCount(query);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -531,12 +543,15 @@ public class SalesOrderU9SyncService {
 
     private void applyListFilters(
             QueryWrapper<SalesOrderHeader> query,
+            String customerCode,
             String customerName,
             String keyword,
             String status,
             String u9SyncStatus,
             String materialReadyStatus) {
-        if (!isBlank(customerName)) {
+        if (!isBlank(customerCode)) {
+            query.eq("customer_code", customerCode.trim());
+        } else if (!isBlank(customerName)) {
             query.eq("customer_name", customerName.trim());
         }
         if (!isBlank(status)) {

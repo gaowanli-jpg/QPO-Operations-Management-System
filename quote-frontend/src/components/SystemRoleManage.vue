@@ -164,9 +164,9 @@
             :closable="false"
           />
           <el-form-item v-if="isCustomerDataScope" label="指定客户">
-            <p class="data-scope-help">指定客户数据范围只按订单客户名称匹配。</p>
+            <p class="data-scope-help">指定客户数据范围按 U9 客户编码匹配，客户同名也不会串权限。</p>
             <el-select
-              v-model="dataScopeForm.customerNames"
+              v-model="dataScopeForm.customerCodes"
               multiple
               filterable
               clearable
@@ -175,7 +175,7 @@
               placeholder="请选择客户"
               style="width: 100%"
             >
-              <el-option v-for="customer in customerOptions" :key="customer.customerName" :label="formatCustomerOption(customer)" :value="customer.customerName" />
+              <el-option v-for="customer in customerOptions" :key="customer.customerCode" :label="formatCustomerOption(customer)" :value="customer.customerCode" />
             </el-select>
           </el-form-item>
         </el-form>
@@ -248,7 +248,7 @@ const form = reactive({
 const dataScopeForm = reactive({
   dataScope: 'ALL',
   deptIds: [],
-  customerNames: []
+  customerCodes: []
 })
 
 const dataScopeOptionGroups = [
@@ -451,7 +451,7 @@ const normalizeCustomerOption = (customer) => {
     }
   }
   return {
-    customerCode: customer?.customerCode || customer?.customerName || '',
+    customerCode: customer?.customerCode || customer?.code || customer?.customerName || '',
     customerShortName: customer?.customerShortName || customer?.customerName || '',
     customerName: customer?.customerName || ''
   }
@@ -465,11 +465,11 @@ const formatCustomerOption = (customer) => {
 const loadDataScopeOptions = async () => {
   try {
     const options = await listCustomerOptions({ field: 'all' })
-    customerOptions.value = (options || []).map(normalizeCustomerOption).filter(customer => customer.customerName)
+    customerOptions.value = (options || []).map(normalizeCustomerOption).filter(customer => customer.customerCode)
   } catch (error) {
     console.error(error)
     const names = await listDataScopeCustomers() || []
-    customerOptions.value = names.map(normalizeCustomerOption).filter(customer => customer.customerName)
+    customerOptions.value = names.map(normalizeCustomerOption).filter(customer => customer.customerCode)
   }
 }
 
@@ -481,7 +481,7 @@ const openDataScopeDrawer = async (row) => {
   ])
   dataScopeForm.dataScope = editableDataScope(response?.dataScope || row.dataScope)
   dataScopeForm.deptIds = []
-  dataScopeForm.customerNames = response?.customerNames || []
+  dataScopeForm.customerCodes = response?.customerCodes || []
   dataScopeDrawerVisible.value = true
 }
 
@@ -492,13 +492,13 @@ const buildDataScopePayload = (formState) => {
       return {
         dataScope,
         deptIds: [],
-        customerNames: [...formState.customerNames]
+        customerCodes: [...formState.customerCodes]
       }
     default:
       return {
         dataScope,
         deptIds: [],
-        customerNames: []
+        customerCodes: []
       }
   }
 }

@@ -29,12 +29,13 @@ public class OrderManagementController {
     @GetMapping("/orders")
     @RequirePermission("market:order:view")
     public PageResult<Map<String, Object>> listOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listOrderSummaries(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listOrderSummaries(customerCode, customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/orders/{rfqId}")

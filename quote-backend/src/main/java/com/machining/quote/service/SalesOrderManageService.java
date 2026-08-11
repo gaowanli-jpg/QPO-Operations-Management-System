@@ -76,11 +76,22 @@ public class SalesOrderManageService {
             String status,
             Integer page,
             Integer pageSize) {
+        return listOrderSummaries(customerId, null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<Map<String, Object>> listOrderSummaries(
+            Long customerId,
+            String customerCode,
+            String customerName,
+            String keyword,
+            String status,
+            Integer page,
+            Integer pageSize) {
         int safePage = safePage(page);
         int safePageSize = safePageSize(pageSize);
         QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
         applySalesOrderDataScope(query);
-        applyOrderFilters(query, customerId, customerName, keyword, status);
+        applyOrderFilters(query, customerId, customerCode, customerName, keyword, status);
         Long total = salesOrderHeaderMapper.selectCount(query);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -645,13 +656,16 @@ public class SalesOrderManageService {
     private void applyOrderFilters(
             QueryWrapper<SalesOrderHeader> query,
             Long customerId,
+            String customerCode,
             String customerName,
             String keyword,
             String status) {
         if (customerId != null) {
             query.eq("customer_id", customerId);
         }
-        if (!isBlank(customerName)) {
+        if (!isBlank(customerCode)) {
+            query.eq("customer_code", customerCode.trim());
+        } else if (!isBlank(customerName)) {
             query.eq("customer_name", customerName.trim());
         }
         if (!isBlank(status)) {

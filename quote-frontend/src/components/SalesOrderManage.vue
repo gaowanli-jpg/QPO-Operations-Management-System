@@ -301,6 +301,7 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="selectedCustomer"
+      :current-customer-code="selectedCustomerCode"
       customer-scope="sales-order"
       @select="handleCustomerSelected"
     />
@@ -366,6 +367,7 @@ const SALES_ORDER_STATUS_ACTIONS = [
 
 const orders = ref([])
 const selectedCustomer = ref('')
+const selectedCustomerCode = ref('')
 const keyword = ref('')
 const statusFilter = ref('')
 const page = ref(1)
@@ -441,6 +443,7 @@ const loadOrders = async () => {
   loading.value = true
   try {
     const response = await listSalesOrders({
+      customerCode: selectedCustomerCode.value || undefined,
       customerName: selectedCustomer.value,
       keyword: keyword.value.trim() || undefined,
       status: statusFilter.value || undefined,
@@ -476,14 +479,17 @@ const handleCustomerChange = async () => {
 }
 
 const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+const resolveCustomerCode = (customer) => typeof customer === 'string' ? customer : (customer?.customerCode || '')
 
 const handleCustomerSelected = async (customer) => {
   selectedCustomer.value = resolveCustomerName(customer)
+  selectedCustomerCode.value = resolveCustomerCode(customer)
   await handleCustomerChange()
 }
 
 const handleCustomerClear = () => {
   selectedCustomer.value = ''
+  selectedCustomerCode.value = ''
   keyword.value = ''
   statusFilter.value = ''
   orders.value = []

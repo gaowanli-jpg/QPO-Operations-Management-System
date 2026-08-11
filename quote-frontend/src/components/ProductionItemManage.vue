@@ -241,6 +241,7 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="filters.customerName"
+      :current-customer-code="filters.customerCode"
       customer-scope="production-item"
       @select="handleCustomerSelected"
     />
@@ -276,6 +277,7 @@ const productionActionKeys = {
 
 const filters = reactive({
   customerName: '',
+  customerCode: '',
   rfqNo: '',
   partNo: '',
   version: '',
@@ -364,6 +366,7 @@ const handleSearch = async () => {
 const handleResetFilters = async () => {
   Object.assign(filters, {
     customerName: '',
+    customerCode: '',
     rfqNo: '',
     partNo: '',
     version: '',
@@ -378,14 +381,17 @@ const handleResetFilters = async () => {
 }
 
 const resolveCustomerName = (customer) => typeof customer === 'string' ? customer : (customer?.customerName || '')
+const resolveCustomerCode = (customer) => typeof customer === 'string' ? customer : (customer?.customerCode || '')
 
 const handleCustomerSelected = async (customer) => {
   filters.customerName = resolveCustomerName(customer)
+  filters.customerCode = resolveCustomerCode(customer)
   await handleSearch()
 }
 
 const handleCustomerClear = async () => {
   filters.customerName = ''
+  filters.customerCode = ''
   await handleSearch()
 }
 

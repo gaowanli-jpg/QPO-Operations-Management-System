@@ -31,7 +31,17 @@ describe('QPO customer picker dialog', () => {
     expect(source).toContain(':data="customers"')
     expect(source).toContain('@row-click="selectCustomer"')
     expect(source).toContain("emit('select', customer)")
+    expect(source).toContain('currentCustomerCode')
+    expect(source).toContain('customer.customerCode === props.currentCustomerCode')
     expect(source).not.toContain('搜索按钮')
+  })
+
+  test('selects and highlights customers by customer code instead of duplicate names', () => {
+    const source = readComponent('CustomerPickerDialog.vue')
+
+    expect(source).toContain('customer.customerCode === props.currentCustomerCode')
+    expect(source).not.toContain('customer.customerName === props.currentCustomer')
+    expect(source).toContain('filter(customer => customer.customerCode)')
   })
 
   test('replaces customer dropdowns in existing order selection flows', () => {
@@ -122,18 +132,21 @@ describe('QPO customer picker dialog', () => {
     expect(deliveredManage).toContain('customer-scope="delivered-item"')
     expect(deliveredManage).toContain('v-permission="\'market:delivered-item:customer-select\'"')
     expect(deliveredManage).toContain('@select="handleCustomerSelected"')
+    expect(deliveredManage).toContain('filters.customerCode = resolveCustomerCode(customer)')
     expect(deliveredManage).toContain('filters.customerName = resolveCustomerName(customer)')
 
     expect(productionManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(productionManage).toContain('customer-scope="production-item"')
     expect(productionManage).toContain('v-permission="\'market:production-item:customer-select\'"')
     expect(productionManage).toContain('@select="handleCustomerSelected"')
+    expect(productionManage).toContain('filters.customerCode = resolveCustomerCode(customer)')
     expect(productionManage).toContain('filters.customerName = resolveCustomerName(customer)')
 
     expect(lockedManage).toContain("import CustomerPickerDialog from './CustomerPickerDialog.vue'")
     expect(lockedManage).toContain('customer-scope="locked-item"')
     expect(lockedManage).toContain('v-permission="\'market:locked-item:customer-select\'"')
     expect(lockedManage).toContain('@select="handleCustomerSelected"')
+    expect(lockedManage).toContain('filters.customerCode = resolveCustomerCode(customer)')
     expect(lockedManage).toContain('filters.customerName = resolveCustomerName(customer)')
   })
 

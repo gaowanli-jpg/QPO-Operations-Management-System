@@ -86,7 +86,7 @@ class DeliveryDocumentModuleTest {
                         "@RequirePermission(\"market:delivery-document:view\")",
                         "@RequirePermission(\"market:delivery-document:export\")",
                         "return deliveryDocumentService.listDocumentCustomers(field, keyword)",
-                        "return deliveryDocumentService.listDocumentOrders(customerName, keyword, status, page, pageSize)",
+                        "return deliveryDocumentService.listDocumentOrders(customerCode, customerName, keyword, status, page, pageSize)",
                         "@RequestParam(value = \"sourceType\", required = false) String sourceType",
                         "return deliveryDocumentService.documentSummary(sourceType, sourceOrderId)",
                         "return deliveryDocumentService.pageTickets(sourceType, sourceOrderId, page, pageSize)",

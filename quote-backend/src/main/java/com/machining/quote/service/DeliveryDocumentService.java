@@ -56,6 +56,10 @@ public class DeliveryDocumentService {
     }
 
     public PageResult<Map<String, Object>> listDocumentOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
+        return listDocumentOrders(null, customerName, keyword, status, page, pageSize);
+    }
+
+    public PageResult<Map<String, Object>> listDocumentOrders(String customerCode, String customerName, String keyword, String status, Integer page, Integer pageSize) {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         String normalizedStatus = clean(status);
@@ -64,8 +68,8 @@ public class DeliveryDocumentService {
         }
 
         int fetchLimit = mixedSourceFetchLimit(safePage, safePageSize);
-        SourceOrderBucket<OrderRfq> rfqBucket = listDocumentRfqOrders(customerName, keyword, normalizedStatus, fetchLimit);
-        SourceOrderBucket<SalesOrderHeader> salesOrderBucket = listDocumentSalesOrders(customerName, keyword, normalizedStatus, fetchLimit);
+        SourceOrderBucket<OrderRfq> rfqBucket = listDocumentRfqOrders(customerCode, customerName, keyword, normalizedStatus, fetchLimit);
+        SourceOrderBucket<SalesOrderHeader> salesOrderBucket = listDocumentSalesOrders(customerCode, customerName, keyword, normalizedStatus, fetchLimit);
         long total = rfqBucket.total() + salesOrderBucket.total();
 
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -81,10 +85,10 @@ public class DeliveryDocumentService {
         return PageResult.of(rows.subList(fromIndex, toIndex), total, safePage, safePageSize);
     }
 
-    private SourceOrderBucket<OrderRfq> listDocumentRfqOrders(String customerName, String keyword, String normalizedStatus, int fetchLimit) {
+    private SourceOrderBucket<OrderRfq> listDocumentRfqOrders(String customerCode, String customerName, String keyword, String normalizedStatus, int fetchLimit) {
         QueryWrapper<OrderRfq> query = new QueryWrapper<>();
         applyOrderScope(query);
-        applyTextEquals(query, "customer_name", customerName);
+        applyCustomerFilter(query, customerCode, customerName);
         if (normalizedStatus == null) {
             query.in("status", DOCUMENT_STATUSES);
         } else {
@@ -107,10 +111,10 @@ public class DeliveryDocumentService {
         return new SourceOrderBucket<>(orderRfqMapper.selectList(query), total);
     }
 
-    private SourceOrderBucket<SalesOrderHeader> listDocumentSalesOrders(String customerName, String keyword, String normalizedStatus, int fetchLimit) {
+    private SourceOrderBucket<SalesOrderHeader> listDocumentSalesOrders(String customerCode, String customerName, String keyword, String normalizedStatus, int fetchLimit) {
         QueryWrapper<SalesOrderHeader> query = new QueryWrapper<>();
         applySalesOrderScope(query);
-        applyTextEquals(query, "customer_name", customerName);
+        applyCustomerFilter(query, customerCode, customerName);
         if (normalizedStatus == null) {
             query.in("status", DOCUMENT_STATUSES);
         } else {
@@ -356,6 +360,14 @@ public class DeliveryDocumentService {
     private void applyTextEquals(QueryWrapper<?> query, String column, String value) {
         if (hasText(value)) {
             query.eq(column, value.trim());
+        }
+    }
+
+    private void applyCustomerFilter(QueryWrapper<?> query, String customerCode, String customerName) {
+        if (hasText(customerCode)) {
+            query.eq("customer_code", customerCode.trim());
+        } else {
+            applyTextEquals(query, "customer_name", customerName);
         }
     }
 

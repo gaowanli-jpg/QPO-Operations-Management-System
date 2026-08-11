@@ -412,12 +412,14 @@
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="rfqForm.customerName"
+      :current-customer-code="rfqForm.customerCode"
       customer-scope="market-rfq"
       @select="selectExistingCustomer"
     />
     <CustomerPickerDialog
       v-model="salesOrderCustomerPickerVisible"
       :current-customer="salesOrderForm.customerName"
+      :current-customer-code="salesOrderForm.customerCode"
       customer-scope="market-rfq"
       @select="selectSalesOrderCustomer"
     />
@@ -699,6 +701,8 @@ const submitRfqPackage = async () => {
 
   return runAction(IMPORT_RFQ_ACTION_KEY, async () => {
     const formData = new FormData()
+    formData.append('customerCode', rfqForm.customerCode)
+    formData.append('customerShortName', rfqForm.customerShortName)
     formData.append('customerName', rfqForm.customerName)
     formData.append('excelFile', excelFile.value)
 

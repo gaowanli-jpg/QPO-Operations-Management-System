@@ -78,6 +78,10 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  currentCustomerCode: {
+    type: String,
+    default: ''
+  },
   customerScope: {
     type: String,
     default: 'market-order'
@@ -122,7 +126,7 @@ const loadCustomers = async () => {
   loading.value = true
   try {
     const response = await listCustomers(props.customerScope, customerQueryParams())
-    customers.value = (response || []).map(normalizeCustomer).filter(customer => customer.customerName)
+    customers.value = (response || []).map(normalizeCustomer).filter(customer => customer.customerCode)
   } catch (error) {
     console.error(error)
     ElMessage.error('客户列表加载失败。')
@@ -146,14 +150,14 @@ const resetSearch = () => {
 
 const selectCustomer = (row) => {
   const customer = normalizeCustomer(row)
-  if (!customer.customerName) return
+  if (!customer.customerCode) return
   emit('select', customer)
   visible.value = false
 }
 
 const isCurrentCustomer = (row) => {
   const customer = normalizeCustomer(row)
-  return Boolean(props.currentCustomer) && customer.customerName === props.currentCustomer
+  return Boolean(props.currentCustomerCode) && customer.customerCode === props.currentCustomerCode
 }
 
 const resolveRowClassName = ({ row }) => {

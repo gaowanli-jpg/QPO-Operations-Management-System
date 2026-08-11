@@ -145,6 +145,7 @@ class LockedItemQueryTest {
         assertThat(queryReq)
                 .contains(
                         "private String customerName;",
+                        "private String customerCode;",
                         "private String partNo;",
                         "private String materialNo;",
                         "private String internalProjectNo;",
@@ -159,7 +160,9 @@ class LockedItemQueryTest {
                         "listAllocations",
                         "listTicketAllocations",
                         "dataScopeService.applyDeliveryTicketScope(query, \"ticket\")",
-                        "applyEquals(query, \"alloc.customer_name\", req.getCustomerName())",
+                        "applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName())",
+                        "rfq.customer_code = {0}",
+                        "sales_order_header so WHERE so.customer_code = {1}",
                         "applyLike(query, \"alloc.customer_order_no\", req.getCustomerOrderNo())",
                         "applyLike(query, \"alloc.customer_project_no\", req.getCustomerProjectNo())",
                         "applyEquals(query, \"alloc.item_type\", req.getItemType())",

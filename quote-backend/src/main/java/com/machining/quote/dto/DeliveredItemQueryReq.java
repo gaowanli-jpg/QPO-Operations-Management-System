@@ -10,6 +10,7 @@ public class DeliveredItemQueryReq {
     private Integer pageSize;
     private String flowScope;
     private String flowStage;
+    private String customerCode;
     private String customerName;
     private String rfqNo;
     private String partNo;

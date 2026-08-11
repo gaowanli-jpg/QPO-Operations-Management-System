@@ -9,5 +9,6 @@ import java.util.List;
 public class RoleDataScopeAssignReq {
     private String dataScope;
     private List<Long> deptIds = new ArrayList<>();
+    private List<String> customerCodes = new ArrayList<>();
     private List<String> customerNames = new ArrayList<>();
 }

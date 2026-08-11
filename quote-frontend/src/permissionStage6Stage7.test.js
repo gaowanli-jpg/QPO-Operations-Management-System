@@ -13,7 +13,7 @@ describe('QPO permission stage 6 and 7 data scope cleanup', () => {
     expect(roleManage).toContain('listDataScopeCustomers')
     expect(roleManage).toContain('listCustomerOptions')
     expect(roleManage).toContain('customerOptions')
-    expect(roleManage).toContain('customer.customerName')
+    expect(roleManage).toContain('customer.customerCode')
     expect(roleManage).not.toContain('listDataScopeDepartments')
     expect(roleManage).not.toContain('dataScopeDeptTreeRef')
     expect(roleManage).not.toContain('deptIdsText')

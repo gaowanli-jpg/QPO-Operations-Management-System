@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.service.DataScopeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +18,7 @@ public class DataScopeController {
 
     @GetMapping("/customers")
     @RequirePermission("system:role:view")
-    public List<String> listCustomers() {
-        return dataScopeService.listCustomerOptions();
+    public List<CustomerOptionDTO> listCustomers() {
+        return dataScopeService.listCustomerOptions("all", null);
     }
 }

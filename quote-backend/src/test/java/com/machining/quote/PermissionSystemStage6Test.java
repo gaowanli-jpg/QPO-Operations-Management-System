@@ -4,9 +4,12 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.RoleDataScopeAssignReq;
 import com.machining.quote.entity.AuditLog;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SystemRole;
 import com.machining.quote.entity.SystemUser;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeDeptMapper;
 import com.machining.quote.mapper.SystemRoleMapper;
@@ -75,15 +78,45 @@ class PermissionSystemStage6Test {
     void customerDataScopeFiltersOrdersByConfiguredCustomerNames() {
         DataScopeService service = serviceWithRoles(role(2L, "KEY_ACCOUNT", "CUSTOMER", false));
         SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
-        when(customerMapper.selectCustomerNamesByRoleId(2L)).thenReturn(List.of("ACME", "Globex"));
+        when(customerMapper.selectCustomerCodesByRoleId(2L)).thenReturn(List.of("C001", "C002"));
         ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
         AuthContext.set(new AuthContext.SessionUser(8, "sales", "Sales", "MARKET"));
         QueryWrapper<OrderRfq> query = new QueryWrapper<>();
 
         service.applyOrderScope(query);
 
-        assertThat(query.getCustomSqlSegment().toLowerCase()).contains("customer_name");
-        assertThat(query.getParamNameValuePairs()).containsValue("ACME").containsValue("Globex");
+        assertThat(query.getCustomSqlSegment().toLowerCase()).contains("customer_code");
+        assertThat(query.getParamNameValuePairs()).containsValue("C001").containsValue("C002");
+    }
+
+    @Test
+    void customerDataScopeDoesNotMatchSameNameDifferentCodeOrders() {
+        DataScopeService service = serviceWithRoles(role(23L, "KEY_ACCOUNT", "CUSTOMER", false));
+        SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
+        when(customerMapper.selectCustomerCodesByRoleId(23L)).thenReturn(List.of("C001"));
+        ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
+        AuthContext.set(new AuthContext.SessionUser(8, "sales", "Sales", "MARKET"));
+
+        OrderRfq allowed = new OrderRfq();
+        allowed.setId(1001);
+        allowed.setCustomerCode("C001");
+        allowed.setCustomerName("同名客户");
+        OrderRfq denied = new OrderRfq();
+        denied.setId(1002);
+        denied.setCustomerCode("C002");
+        denied.setCustomerName("同名客户");
+        SalesOrderHeader deniedSalesOrder = new SalesOrderHeader();
+        deniedSalesOrder.setId(2002L);
+        deniedSalesOrder.setCustomerCode("C002");
+        deniedSalesOrder.setCustomerName("同名客户");
+
+        service.assertCanAccessOrder(allowed);
+        assertThatThrownBy(() -> service.assertCanAccessOrder(denied))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("No data permission");
+        assertThatThrownBy(() -> service.assertCanAccessSalesOrder(deniedSalesOrder))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("No data permission");
     }
 
     @Test
@@ -92,7 +125,7 @@ class PermissionSystemStage6Test {
                 role(5L, "SELF_MARKET", "SELF", false),
                 role(6L, "KEY_ACCOUNT", "CUSTOMER", false));
         SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
-        when(customerMapper.selectCustomerNamesByRoleId(6L)).thenReturn(List.of("ACME"));
+        when(customerMapper.selectCustomerCodesByRoleId(6L)).thenReturn(List.of("C001"));
         ReflectionTestUtils.setField(service, "dataScopeCustomerMapper", customerMapper);
         AuthContext.set(new AuthContext.SessionUser(7, "market", "Market", "MARKET"));
         QueryWrapper<OrderRfq> query = new QueryWrapper<>();
@@ -103,9 +136,9 @@ class PermissionSystemStage6Test {
         assertThat(sql)
                 .contains("created_by")
                 .contains("owner_user_id")
-                .contains("customer_name")
+                .contains("customer_code")
                 .contains(" or ");
-        assertThat(query.getParamNameValuePairs()).containsValue(7).containsValue("ACME");
+        assertThat(query.getParamNameValuePairs()).containsValue(7).containsValue("C001");
     }
 
     @Test
@@ -148,19 +181,22 @@ class PermissionSystemStage6Test {
     }
 
     @Test
-    void roleDataScopeAssignmentOnlyPersistsCustomersForCustomerScope() {
+    void roleDataScopeAssignmentOnlyPersistsCustomerCodesForCustomerScope() {
         SystemRoleDataScopeDeptMapper deptMapper = mock(SystemRoleDataScopeDeptMapper.class);
         SystemRoleDataScopeCustomerMapper customerMapper = mock(SystemRoleDataScopeCustomerMapper.class);
-        SystemRoleService service = roleServiceForAssignment(role(20L, "KEY_ACCOUNT", "ALL", false), deptMapper, customerMapper);
-        RoleDataScopeAssignReq req = dataScopeReq("CUSTOMER", List.of(10L, 11L), List.of("ACME", " ACME ", "Globex"));
+        CustomerMasterMapper customerMasterMapper = mock(CustomerMasterMapper.class);
+        when(customerMasterMapper.selectEnabledByCode("C001")).thenReturn(customer("C001", "同名客户"));
+        when(customerMasterMapper.selectEnabledByCode("C002")).thenReturn(customer("C002", "同名客户"));
+        SystemRoleService service = roleServiceForAssignment(role(20L, "KEY_ACCOUNT", "ALL", false), deptMapper, customerMapper, customerMasterMapper);
+        RoleDataScopeAssignReq req = dataScopeReq("CUSTOMER", List.of(10L, 11L), List.of("C001", " C001 ", "C002"));
 
         service.assignDataScope(20L, req);
 
         verify(deptMapper).deleteByRoleId(20L);
         verify(customerMapper).deleteByRoleId(20L);
         verify(deptMapper, never()).insertIgnore(eq(20L), anyLong());
-        verify(customerMapper).insertIgnore(20L, "ACME");
-        verify(customerMapper).insertIgnore(20L, "Globex");
+        verify(customerMapper).insertIgnore(20L, "C001", "同名客户");
+        verify(customerMapper).insertIgnore(20L, "C002", "同名客户");
     }
 
     @Test
@@ -176,7 +212,7 @@ class PermissionSystemStage6Test {
         verify(deptMapper, never()).deleteByRoleId(21L);
         verify(customerMapper, never()).deleteByRoleId(21L);
         verify(deptMapper, never()).insertIgnore(eq(21L), anyLong());
-        verify(customerMapper, never()).insertIgnore(eq(21L), anyString());
+        verify(customerMapper, never()).insertIgnore(eq(21L), anyString(), anyString());
     }
 
     @Test
@@ -191,7 +227,7 @@ class PermissionSystemStage6Test {
         verify(deptMapper).deleteByRoleId(22L);
         verify(customerMapper).deleteByRoleId(22L);
         verify(deptMapper, never()).insertIgnore(eq(22L), anyLong());
-        verify(customerMapper, never()).insertIgnore(eq(22L), anyString());
+        verify(customerMapper, never()).insertIgnore(eq(22L), anyString(), anyString());
     }
 
     private DataScopeService serviceWithRoles(SystemRole... roles) {
@@ -223,7 +259,7 @@ class PermissionSystemStage6Test {
         SystemRoleMapper roleMapper = mock(SystemRoleMapper.class);
         when(roleMapper.selectById(role.getId())).thenReturn(role);
         when(deptMapper.selectDeptIdsByRoleId(role.getId())).thenReturn(List.of());
-        when(customerMapper.selectCustomerNamesByRoleId(role.getId())).thenReturn(List.of());
+        when(customerMapper.selectCustomerOptionsByRoleId(role.getId())).thenReturn(List.of());
 
         SystemRoleService service = new SystemRoleService();
         ReflectionTestUtils.setField(service, "roleMapper", roleMapper);
@@ -233,12 +269,30 @@ class PermissionSystemStage6Test {
         return service;
     }
 
-    private RoleDataScopeAssignReq dataScopeReq(String dataScope, List<Long> deptIds, List<String> customerNames) {
+    private SystemRoleService roleServiceForAssignment(
+            SystemRole role,
+            SystemRoleDataScopeDeptMapper deptMapper,
+            SystemRoleDataScopeCustomerMapper customerMapper,
+            CustomerMasterMapper customerMasterMapper) {
+        SystemRoleService service = roleServiceForAssignment(role, deptMapper, customerMapper);
+        ReflectionTestUtils.setField(service, "customerMasterMapper", customerMasterMapper);
+        return service;
+    }
+
+    private RoleDataScopeAssignReq dataScopeReq(String dataScope, List<Long> deptIds, List<String> customerCodes) {
         RoleDataScopeAssignReq req = new RoleDataScopeAssignReq();
         req.setDataScope(dataScope);
         req.setDeptIds(deptIds);
-        req.setCustomerNames(customerNames);
+        req.setCustomerCodes(customerCodes);
         return req;
+    }
+
+    private CustomerMaster customer(String code, String name) {
+        CustomerMaster customer = new CustomerMaster();
+        customer.setCustomerCode(code);
+        customer.setCustomerShortName(code);
+        customer.setCustomerName(name);
+        return customer;
     }
 
     private SystemRole role(Long id, String code, String dataScope, boolean superAdmin) {

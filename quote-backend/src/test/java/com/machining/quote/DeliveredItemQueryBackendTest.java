@@ -60,6 +60,7 @@ class DeliveredItemQueryBackendTest {
                         "private Integer pageSize;",
                         "private String flowScope;",
                         "private String flowStage;",
+                        "private String customerCode;",
                         "private String customerName;",
                         "private String rfqNo;",
                         "private String partNo;",
@@ -117,7 +118,9 @@ class DeliveredItemQueryBackendTest {
         assertThat(source)
                 .as("Common delivered-item filters must cover customer order/project numbers and delivery date")
                 .contains(
-                        "applyEquals(query, \"ticket.customer_name\", req.getCustomerName())",
+                        "applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName())",
+                        "rfq.customer_code = {0}",
+                        "sales_order_header so WHERE so.customer_code = {1}",
                         "applyLike(query, \"ticket.customer_order_no\", req.getCustomerOrderNo())",
                         "applyLike(query, \"ticket.customer_project_no\", req.getCustomerProjectNo())",
                         "query.ge(\"ticket.delivery_date\", req.getDateFrom())",

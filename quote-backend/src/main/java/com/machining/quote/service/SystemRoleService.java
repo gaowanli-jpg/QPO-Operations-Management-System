@@ -1,14 +1,17 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.PermissionTreeNodeDTO;
 import com.machining.quote.dto.RoleDataScopeAssignReq;
 import com.machining.quote.dto.RolePermissionAssignReq;
 import com.machining.quote.dto.SystemPermissionDTO;
 import com.machining.quote.dto.SystemRoleDTO;
 import com.machining.quote.dto.SystemRoleSaveReq;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SystemPermission;
 import com.machining.quote.entity.SystemRole;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.SystemPermissionMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeCustomerMapper;
 import com.machining.quote.mapper.SystemRoleDataScopeDeptMapper;
@@ -48,6 +51,8 @@ public class SystemRoleService {
     private SystemRoleDataScopeDeptMapper dataScopeDeptMapper;
     @Autowired
     private SystemRoleDataScopeCustomerMapper dataScopeCustomerMapper;
+    @Autowired(required = false)
+    private CustomerMasterMapper customerMasterMapper;
     @Autowired
     private AuditService auditService;
 
@@ -223,7 +228,16 @@ public class SystemRoleService {
         result.put("roleId", roleId);
         result.put("dataScope", role.getDataScope());
         result.put("deptIds", List.of());
-        result.put("customerNames", safeList(dataScopeCustomerMapper.selectCustomerNamesByRoleId(roleId)));
+        List<CustomerOptionDTO> customers = safeList(dataScopeCustomerMapper.selectCustomerOptionsByRoleId(roleId));
+        result.put("customers", customers);
+        result.put("customerCodes", customers.stream()
+                .map(CustomerOptionDTO::getCustomerCode)
+                .filter(value -> !isBlank(value))
+                .toList());
+        result.put("customerNames", customers.stream()
+                .map(CustomerOptionDTO::getCustomerName)
+                .filter(value -> !isBlank(value))
+                .toList());
         return result;
     }
 
@@ -232,11 +246,9 @@ public class SystemRoleService {
         SystemRole role = requireRole(roleId);
         Map<String, Object> before = getDataScope(roleId);
         String dataScope = normalizeDataScope(req == null ? null : req.getDataScope());
-        List<String> customerNames = req == null || req.getCustomerNames() == null
-                ? List.of()
-                : normalizeCodes(req.getCustomerNames());
+        List<String> customerCodes = requestedCustomerCodes(req);
         if (!"CUSTOMER".equals(dataScope)) {
-            customerNames = List.of();
+            customerCodes = List.of();
         }
 
         role.setDataScope(dataScope);
@@ -245,8 +257,10 @@ public class SystemRoleService {
 
         dataScopeDeptMapper.deleteByRoleId(roleId);
         dataScopeCustomerMapper.deleteByRoleId(roleId);
-        for (String customerName : customerNames) {
-            dataScopeCustomerMapper.insertIgnore(roleId, customerName);
+        for (String customerCode : customerCodes) {
+            CustomerMaster customer = resolveCustomerForScope(customerCode);
+            String snapshot = customer == null ? customerCode : firstNonBlank(customer.getCustomerName(), customer.getCustomerShortName(), customerCode);
+            dataScopeCustomerMapper.insertIgnore(roleId, customerCode, snapshot);
         }
 
         Map<String, Object> after = getDataScope(roleId);
@@ -352,6 +366,39 @@ public class SystemRoleService {
             }
         }
         return new ArrayList<>(result);
+    }
+
+    private List<String> requestedCustomerCodes(RoleDataScopeAssignReq req) {
+        if (req == null) {
+            return List.of();
+        }
+        if (req.getCustomerCodes() != null && !req.getCustomerCodes().isEmpty()) {
+            return normalizeCodes(req.getCustomerCodes());
+        }
+        return normalizeCodes(req.getCustomerNames());
+    }
+
+    private CustomerMaster resolveCustomerForScope(String customerCode) {
+        if (isBlank(customerCode)) {
+            throw new RuntimeException("Customer code is required");
+        }
+        if (customerMasterMapper == null) {
+            return null;
+        }
+        CustomerMaster customer = customerMasterMapper.selectEnabledByCode(customerCode);
+        if (customer == null) {
+            throw new RuntimeException("Customer code does not exist or is disabled");
+        }
+        return customer;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values == null ? new String[0] : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private List<String> filterAssignableRequestCodes(List<String> values) {

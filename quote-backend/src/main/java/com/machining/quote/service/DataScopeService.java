@@ -137,8 +137,8 @@ public class DataScopeService {
             return;
         }
         if (!snapshot.noAccess()
-                && !isBlank(customer.getCustomerName())
-                && snapshot.customerNames().contains(customer.getCustomerName())) {
+                && !isBlank(customer.getCustomerCode())
+                && snapshot.customerCodes().contains(customer.getCustomerCode())) {
             return;
         }
         throw new RuntimeException("No data permission for customer " + customer.getCustomerName());
@@ -191,11 +191,6 @@ public class DataScopeService {
         }
         if (ticket.getRfqId() != null) {
             assertCanAccessOrder(ticket.getRfqId(), orderRfqMapper);
-            return;
-        }
-        if (!snapshot.noAccess()
-                && !isBlank(ticket.getCustomerName())
-                && snapshot.customerNames().contains(ticket.getCustomerName())) {
             return;
         }
         throw new RuntimeException("No data permission for delivery ticket " + ticket.getId());
@@ -318,13 +313,13 @@ public class DataScopeService {
         if (snapshot.selfOnly()) {
             int userIndex = params.size();
             params.add(snapshot.legacyUserId());
-            clauses.add("customer_name IN (SELECT DISTINCT customer_name FROM order_rfq WHERE (created_by = {"
+            clauses.add("customer_code IN (SELECT DISTINCT customer_code FROM order_rfq WHERE (created_by = {"
                     + userIndex + "} OR owner_user_id = {" + userIndex + "}))");
-            clauses.add("customer_name IN (SELECT DISTINCT customer_name FROM sales_order_header WHERE (created_by = {"
+            clauses.add("customer_code IN (SELECT DISTINCT customer_code FROM sales_order_header WHERE (created_by = {"
                     + userIndex + "} OR owner_user_id = {" + userIndex + "}))");
         }
-        if (!snapshot.customerNames().isEmpty()) {
-            clauses.add("customer_name IN (" + placeholders(params, snapshot.customerNames()) + ")");
+        if (!snapshot.customerCodes().isEmpty()) {
+            clauses.add("customer_code IN (" + placeholders(params, snapshot.customerCodes()) + ")");
         }
         if (clauses.isEmpty()) {
             query.apply("1 = 0");
@@ -405,8 +400,8 @@ public class DataScopeService {
             params.add(snapshot.legacyUserId());
             clauses.add("(" + column(alias, "created_by") + " = {" + index + "} OR " + column(alias, "owner_user_id") + " = {" + index + "})");
         }
-        if (!snapshot.customerNames().isEmpty()) {
-            clauses.add(column(alias, "customer_name") + " IN (" + placeholders(params, snapshot.customerNames()) + ")");
+        if (!snapshot.customerCodes().isEmpty()) {
+            clauses.add(column(alias, "customer_code") + " IN (" + placeholders(params, snapshot.customerCodes()) + ")");
         }
         if (clauses.isEmpty()) {
             return ScopeSql.none();
@@ -426,7 +421,7 @@ public class DataScopeService {
         boolean superAdmin = false;
         boolean allAccess = false;
         boolean selfOnly = false;
-        Set<String> customerNames = new LinkedHashSet<>();
+        Set<String> customerCodes = new LinkedHashSet<>();
         for (SystemRole role : roles) {
             if (role == null) {
                 continue;
@@ -439,7 +434,7 @@ public class DataScopeService {
             switch (normalize(role.getDataScope())) {
                 case "ALL" -> allAccess = true;
                 case "SELF" -> selfOnly = true;
-                case "CUSTOMER" -> customerNames.addAll(loadConfiguredCustomerNames(role.getId()));
+                case "CUSTOMER" -> customerCodes.addAll(loadConfiguredCustomerCodes(role.getId()));
                 default -> {
                 }
             }
@@ -447,9 +442,9 @@ public class DataScopeService {
         if (allAccess) {
             return DataScopeSnapshot.all(current.id(), current.username(), superAdmin);
         }
-        boolean noAccess = !selfOnly && customerNames.isEmpty();
+        boolean noAccess = !selfOnly && customerCodes.isEmpty();
         return new DataScopeSnapshot(false, current.id(), current.username(), superAdmin, false, noAccess,
-                selfOnly, List.copyOf(customerNames));
+                selfOnly, List.copyOf(customerCodes));
     }
 
     private boolean matchesOrder(DataScopeSnapshot snapshot, OrderRfq order) {
@@ -461,7 +456,7 @@ public class DataScopeService {
                 || Objects.equals(order.getOwnerUserId(), snapshot.legacyUserId()))) {
             return true;
         }
-        return !isBlank(order.getCustomerName()) && snapshot.customerNames().contains(order.getCustomerName());
+        return !isBlank(order.getCustomerCode()) && snapshot.customerCodes().contains(order.getCustomerCode());
     }
 
     private boolean matchesSalesOrder(DataScopeSnapshot snapshot, SalesOrderHeader header) {
@@ -474,7 +469,7 @@ public class DataScopeService {
                 || Objects.equals(header.getOwnerUserId(), snapshot.legacyUserId()))) {
             return true;
         }
-        return !isBlank(header.getCustomerName()) && snapshot.customerNames().contains(header.getCustomerName());
+        return !isBlank(header.getCustomerCode()) && snapshot.customerCodes().contains(header.getCustomerCode());
     }
 
     private String rebaseScopeSql(ScopeSql scopeSql, List<Object> targetParams) {
@@ -509,12 +504,12 @@ public class DataScopeService {
         }
     }
 
-    private List<String> loadConfiguredCustomerNames(Long roleId) {
+    private List<String> loadConfiguredCustomerCodes(Long roleId) {
         if (roleId == null || dataScopeCustomerMapper == null) {
             return List.of();
         }
-        List<String> names = dataScopeCustomerMapper.selectCustomerNamesByRoleId(roleId);
-        return names == null ? List.of() : names.stream().filter(value -> !isBlank(value)).toList();
+        List<String> codes = dataScopeCustomerMapper.selectCustomerCodesByRoleId(roleId);
+        return codes == null ? List.of() : codes.stream().filter(value -> !isBlank(value)).toList();
     }
 
     private String placeholders(List<Object> params, List<?> values) {
@@ -560,7 +555,7 @@ public class DataScopeService {
             boolean allAccess,
             boolean noAccess,
             boolean selfOnly,
-            List<String> customerNames) {
+            List<String> customerCodes) {
         private static DataScopeSnapshot withoutContext() {
             return new DataScopeSnapshot(true, null, null, false, true, false, false, List.of());
         }

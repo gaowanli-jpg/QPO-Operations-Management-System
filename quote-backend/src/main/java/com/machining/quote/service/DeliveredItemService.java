@@ -88,7 +88,7 @@ public class DeliveredItemService {
 
     private QueryWrapper<DeliveredItemDTO> buildQuery(DeliveredItemQueryReq req) {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
-        applyEquals(query, "ticket.customer_name", req.getCustomerName());
+        applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName());
         applyLike(query, "ticket.rfq_no", req.getRfqNo());
         applyLike(query, "ticket.part_no", req.getPartNo());
         applyEquals(query, "ticket.version", req.getVersion());
@@ -108,6 +108,16 @@ public class DeliveredItemService {
         applyFlowScope(query, req.getFlowScope());
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    private void applyCustomerFilter(QueryWrapper<DeliveredItemDTO> query, String customerCode, String customerName) {
+        if (hasText(customerCode)) {
+            String code = customerCode.trim();
+            query.apply("(rfq.customer_code = {0} OR (ticket.source_type = 'SALES_ORDER' AND ticket.source_order_id IN "
+                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {1})))", code, code);
+            return;
+        }
+        applyEquals(query, "ticket.customer_name", customerName);
     }
 
     private void applyFlowStage(QueryWrapper<DeliveredItemDTO> query, String flowStage) {

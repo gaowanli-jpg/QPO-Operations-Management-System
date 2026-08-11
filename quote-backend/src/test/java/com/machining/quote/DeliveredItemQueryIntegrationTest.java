@@ -263,10 +263,10 @@ class DeliveredItemQueryIntegrationTest {
             String mesSyncStatus,
             String wmsAllocateStatus) {
         Integer rfqId = jdbcTemplate.queryForObject("""
-                INSERT INTO order_rfq (rfq_no, customer_name, status)
-                VALUES (?, ?, '已报价')
+                INSERT INTO order_rfq (rfq_no, customer_code, customer_name, status)
+                VALUES (?, ?, ?, '已报价')
                 RETURNING id
-                """, Integer.class, rfqNo, customerName);
+                """, Integer.class, rfqNo, customerName, customerName);
         rfqIds.add(rfqId);
         Integer itemId = jdbcTemplate.queryForObject("""
                 INSERT INTO item_quote_version (rfq_id, part_no, description, qty, version, drawing_url, process_route, material_data)

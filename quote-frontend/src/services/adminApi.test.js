@@ -80,7 +80,7 @@ describe('adminApi', () => {
   test('saves role and role authorization settings', async () => {
     await adminApi.saveRole({ id: 8, roleName: 'Manager' })
     await adminApi.assignRolePermissions(8, ['market:rfq:view'])
-    await adminApi.assignRoleDataScope(8, { dataScope: 'CUSTOMER', customerNames: ['ACME'] })
+    await adminApi.assignRoleDataScope(8, { dataScope: 'CUSTOMER', customerCodes: ['C001'] })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/system/roles/8', {
       method: 'PUT',
@@ -92,7 +92,7 @@ describe('adminApi', () => {
     })
     expect(request).toHaveBeenNthCalledWith(3, '/api/system/roles/8/data-scope', {
       method: 'POST',
-      data: { dataScope: 'CUSTOMER', customerNames: ['ACME'] }
+      data: { dataScope: 'CUSTOMER', customerCodes: ['C001'] }
     })
   })
 

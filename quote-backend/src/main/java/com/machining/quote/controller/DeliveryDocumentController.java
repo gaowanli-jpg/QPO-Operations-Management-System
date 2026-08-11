@@ -35,12 +35,13 @@ public class DeliveryDocumentController {
     @GetMapping("/orders")
     @RequirePermission("market:delivery-document:order-select")
     public PageResult<Map<String, Object>> listDocumentOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return deliveryDocumentService.listDocumentOrders(customerName, keyword, status, page, pageSize);
+        return deliveryDocumentService.listDocumentOrders(customerCode, customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/summary/{sourceOrderId}")

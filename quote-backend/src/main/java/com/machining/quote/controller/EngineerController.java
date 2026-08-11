@@ -65,12 +65,13 @@ public class EngineerController {
     @GetMapping("/setup/orders")
     @RequirePermission("engineer:setup:order-select")
     public PageResult<OrderRfq> listSetupOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.listOrders(customerName, keyword, status, page, pageSize);
+        return orderManagementService.listOrders(customerCode, customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/setup/summary/{rfqId}")

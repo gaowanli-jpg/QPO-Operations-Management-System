@@ -41,12 +41,13 @@ public class SalesOrderManageController {
     @RequirePermission("market:sales-order:view")
     public PageResult<Map<String, Object>> listOrders(
             @RequestParam(value = "customerId", required = false) Long customerId,
+            @RequestParam(value = "customerCode", required = false) String customerCode,
             @RequestParam(value = "customerName", required = false) String customerName,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return salesOrderManageService.listOrderSummaries(customerId, customerName, keyword, status, page, pageSize);
+        return salesOrderManageService.listOrderSummaries(customerId, customerCode, customerName, keyword, status, page, pageSize);
     }
 
     @GetMapping("/orders/{salesOrderId}")

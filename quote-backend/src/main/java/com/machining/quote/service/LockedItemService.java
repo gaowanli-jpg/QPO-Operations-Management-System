@@ -22,6 +22,8 @@ public class LockedItemService {
     private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private CustomerMasterService customerMasterService;
 
     public LockedItemPageDTO listAllocations(LockedItemQueryReq req) {
         LockedItemQueryReq effectiveReq = req == null ? new LockedItemQueryReq() : req;
@@ -49,6 +51,9 @@ public class LockedItemService {
     }
 
     public List<String> listCustomers() {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerNamesForCurrentScope();
+        }
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         applyLockedStockScope(query);
         applyCustomerPresentScope(query);
@@ -59,6 +64,9 @@ public class LockedItemService {
     }
 
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
+        if (customerMasterService != null) {
+            return customerMasterService.listCustomerOptions(field, keyword);
+        }
         return listCustomers().stream()
                 .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
                 .map(this::toCustomerOption)
@@ -68,7 +76,7 @@ public class LockedItemService {
     private QueryWrapper<LockedItemDTO> buildQuery(LockedItemQueryReq req) {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         applyLockedStockScope(query);
-        applyEquals(query, "alloc.customer_name", req.getCustomerName());
+        applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName());
         applyLike(query, "alloc.rfq_no", req.getRfqNo());
         applyLike(query, "alloc.part_no", req.getPartNo());
         applyEquals(query, "alloc.version", req.getVersion());
@@ -87,6 +95,19 @@ public class LockedItemService {
         }
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    private void applyCustomerFilter(QueryWrapper<LockedItemDTO> query, String customerCode, String customerName) {
+        if (hasText(customerCode)) {
+            String code = customerCode.trim();
+            query.apply("(rfq.customer_code = {0} "
+                    + "OR (alloc.source_type = 'SALES_ORDER' AND alloc.source_order_id IN "
+                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {1})) "
+                    + "OR (ticket.source_type = 'SALES_ORDER' AND ticket.source_order_id IN "
+                    + "(SELECT so.id FROM sales_order_header so WHERE so.customer_code = {2})))", code, code, code);
+            return;
+        }
+        applyEquals(query, "alloc.customer_name", customerName);
     }
 
     private void applyLockedStockScope(QueryWrapper<LockedItemDTO> query) {
