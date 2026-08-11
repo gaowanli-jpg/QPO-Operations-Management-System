@@ -322,12 +322,16 @@ public class DataCenterEndpointConfigService {
     }
 
     private int resolveTimeout(SystemDataCenterEndpointConfig endpoint, SystemDataCenterConfig config) {
+        int resolved;
         if (endpoint.getTimeoutMs() != null && endpoint.getTimeoutMs() > 0) {
-            return endpoint.getTimeoutMs();
+            resolved = endpoint.getTimeoutMs();
+        } else {
+            resolved = config == null || config.getReadTimeoutMs() == null || config.getReadTimeoutMs() <= 0
+                    ? 30000
+                    : config.getReadTimeoutMs();
         }
-        return config == null || config.getReadTimeoutMs() == null || config.getReadTimeoutMs() <= 0
-                ? 30000
-                : config.getReadTimeoutMs();
+        Integer minimum = registry.requireDefinition(endpoint.getEndpointCode()).minimumTimeoutMs();
+        return minimum == null || minimum <= 0 ? resolved : Math.max(resolved, minimum);
     }
 
     private String resolveMethod(String value, String fallback) {

@@ -58,13 +58,15 @@ class DataCenterConfigStage2Test {
                         "'MES_MATERIAL_RESOLVE'",
                         "'WMS_INVENTORY_ALLOCATE'",
                         "'U9_SALES_ORDER_SYNC'",
+                        "'U9_COMMON_ENTITY_QUERY'",
                         "'MES_PRODUCTION_DISPATCH'",
                         "'MES_MATERIAL_V1'",
                         "'WMS_ALLOCATION_V1'",
                         "'U9_SALES_ORDER_V1'",
+                        "'U9_COMMON_ENTITY_QUERY_V1'",
                         "'MES_PRODUCTION_DISPATCH_V1'"
                 )
-                .contains("'MES物料号获取'", "'WMS库存锁定'", "'U9销售订单同步'", "'下发MES生产'")
+                .contains("'MES物料号获取'", "'WMS库存锁定'", "'U9销售订单同步'", "'U9通用实体查询'", "'下发MES生产'")
                 .doesNotContain("ON CONFLICT (endpoint_code) DO UPDATE", "access_token=ey", "client_secret=X");
     }
 

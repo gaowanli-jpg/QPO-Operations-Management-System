@@ -129,10 +129,22 @@ public class DataCenterIntegrationClient {
     }
 
     private int resolveReadTimeout(SystemDataCenterConfig config, SystemDataCenterEndpointConfig endpoint) {
+        int resolved;
         if (endpoint != null && endpoint.getTimeoutMs() != null && endpoint.getTimeoutMs() > 0) {
-            return endpoint.getTimeoutMs();
+            resolved = endpoint.getTimeoutMs();
+        } else {
+            resolved = timeout(config == null ? null : config.getReadTimeoutMs(), 30000);
         }
-        return timeout(config == null ? null : config.getReadTimeoutMs(), 30000);
+        return isLongRunningU9Endpoint(endpoint) ? Math.max(resolved, 60000) : resolved;
+    }
+
+    private boolean isLongRunningU9Endpoint(SystemDataCenterEndpointConfig endpoint) {
+        if (endpoint == null || endpoint.getEndpointCode() == null) {
+            return false;
+        }
+        String code = endpoint.getEndpointCode().trim().toUpperCase(Locale.ROOT);
+        return DataCenterEndpointRegistry.U9_SALES_ORDER_SYNC.equals(code)
+                || DataCenterEndpointRegistry.U9_COMMON_ENTITY_QUERY.equals(code);
     }
 
     private String resolvePath(SystemDataCenterEndpointConfig endpoint) {

@@ -774,8 +774,9 @@ INSERT INTO system_data_center_endpoint_config (
 VALUES
     (1, 'MES_MATERIAL_RESOLVE', 'MES物料号获取', 'MES', 'POST', NULL, TRUE, 30000, 'MES_MATERIAL_V1', 'MES_MATERIAL_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'Configure path in system configuration.'),
     (2, 'WMS_INVENTORY_ALLOCATE', 'WMS库存锁定', 'WMS', 'POST', NULL, TRUE, 30000, 'WMS_ALLOCATION_V1', 'WMS_ALLOCATION_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'Configure path in system configuration.'),
-    (3, 'U9_SALES_ORDER_SYNC', 'U9销售订单同步', 'U9', 'POST', NULL, TRUE, 30000, 'U9_SALES_ORDER_V1', 'U9_SALES_ORDER_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'Configure path in system configuration.'),
-    (4, 'MES_PRODUCTION_DISPATCH', '下发MES生产', 'MES', 'POST', NULL, TRUE, 30000, 'MES_PRODUCTION_DISPATCH_V1', 'MES_PRODUCTION_DISPATCH_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'Configure path in system configuration.');
+    (3, 'U9_SALES_ORDER_SYNC', 'U9销售订单同步', 'U9', 'POST', NULL, TRUE, 60000, 'U9_SALES_ORDER_V1', 'U9_SALES_ORDER_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'Configure path in system configuration.'),
+    (4, 'MES_PRODUCTION_DISPATCH', '下发MES生产', 'MES', 'POST', NULL, TRUE, 30000, 'MES_PRODUCTION_DISPATCH_V1', 'MES_PRODUCTION_DISPATCH_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'Configure path in system configuration.'),
+    (5, 'U9_COMMON_ENTITY_QUERY', 'U9通用实体查询', 'U9', 'POST', '/api/v1/u9/CommonEntity/Query', TRUE, 60000, 'U9_COMMON_ENTITY_QUERY_V1', 'U9_COMMON_ENTITY_RESPONSE_V1', '{}'::jsonb, '{}'::jsonb, 'U9销售员、部门和销售订单对账查询。');
 
 -- Keep identity sequences above seeded values for future inserts.
 SELECT pg_catalog.setval('erp_user_id_seq', COALESCE((SELECT MAX(id) FROM erp_user), 1), TRUE);

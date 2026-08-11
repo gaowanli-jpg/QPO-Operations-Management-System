@@ -37,6 +37,7 @@ class DataCenterConfigStage1Test {
                         "ERP_DATA_CENTER_MES_MATERIAL_PATH=",
                         "ERP_DATA_CENTER_WMS_ALLOCATION_PATH=",
                         "ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH=",
+                        "ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH=",
                         "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH="
                 )
                 .contains(
@@ -75,6 +76,7 @@ class DataCenterConfigStage1Test {
                         "mes-material-path: ${ERP_DATA_CENTER_MES_MATERIAL_PATH:}",
                         "wms-allocation-path: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:}",
                         "u9-sales-order-sync-path: ${ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH:}",
+                        "u9-common-entity-query-path: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:}",
                         "mes-production-dispatch-path: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:}"
                 )
                 .doesNotContain(
@@ -98,6 +100,7 @@ class DataCenterConfigStage1Test {
                 .withProperty("erp.data-center.mes-material-path", "/gateway/mes/material")
                 .withProperty("erp.data-center.wms-allocation-path", "/gateway/wms/allocation")
                 .withProperty("erp.data-center.u9-sales-order-sync-path", "/gateway/u9/sales-orders")
+                .withProperty("erp.data-center.u9-common-entity-query-path", "/gateway/u9/common-entity")
                 .withProperty("erp.data-center.mes-production-dispatch-path", "/gateway/mes/production");
 
         DataCenterProperties properties = Binder.get(environment)
@@ -116,6 +119,7 @@ class DataCenterConfigStage1Test {
         assertThat(properties.getMesMaterialPath()).isEqualTo("/gateway/mes/material");
         assertThat(properties.getWmsAllocationPath()).isEqualTo("/gateway/wms/allocation");
         assertThat(properties.getU9SalesOrderSyncPath()).isEqualTo("/gateway/u9/sales-orders");
+        assertThat(properties.getU9CommonEntityQueryPath()).isEqualTo("/gateway/u9/common-entity");
         assertThat(properties.getMesProductionDispatchPath()).isEqualTo("/gateway/mes/production");
     }
 

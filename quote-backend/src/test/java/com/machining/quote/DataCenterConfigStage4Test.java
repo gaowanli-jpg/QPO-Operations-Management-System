@@ -61,11 +61,13 @@ class DataCenterConfigStage4Test {
         Object mes = ReflectionTestUtils.invokeMethod(registry, "requireDefinition", "MES_MATERIAL_RESOLVE");
         Object wms = ReflectionTestUtils.invokeMethod(registry, "requireDefinition", "WMS_INVENTORY_ALLOCATE");
         Object u9 = ReflectionTestUtils.invokeMethod(registry, "requireDefinition", "U9_SALES_ORDER_SYNC");
+        Object u9Common = ReflectionTestUtils.invokeMethod(registry, "requireDefinition", "U9_COMMON_ENTITY_QUERY");
         Object production = ReflectionTestUtils.invokeMethod(registry, "requireDefinition", "MES_PRODUCTION_DISPATCH");
 
         assertThat(String.valueOf(mes)).contains("MES_MATERIAL_RESOLVE", "MES_MATERIAL_V1", "MES_MATERIAL_RESPONSE_V1");
         assertThat(String.valueOf(wms)).contains("WMS_INVENTORY_ALLOCATE", "WMS_ALLOCATION_V1", "WMS_ALLOCATION_RESPONSE_V1");
-        assertThat(String.valueOf(u9)).contains("U9_SALES_ORDER_SYNC", "U9_SALES_ORDER_V1", "U9_SALES_ORDER_RESPONSE_V1");
+        assertThat(String.valueOf(u9)).contains("U9_SALES_ORDER_SYNC", "U9_SALES_ORDER_V1", "U9_SALES_ORDER_RESPONSE_V1", "minimumTimeoutMs=60000");
+        assertThat(String.valueOf(u9Common)).contains("U9_COMMON_ENTITY_QUERY", "U9_COMMON_ENTITY_QUERY_V1", "U9_COMMON_ENTITY_RESPONSE_V1", "minimumTimeoutMs=60000");
         assertThat(String.valueOf(production)).contains(
                 "MES_PRODUCTION_DISPATCH",
                 "MES_PRODUCTION_DISPATCH_V1",
@@ -86,7 +88,8 @@ class DataCenterConfigStage4Test {
 
         assertThat(String.valueOf(result))
                 .contains("MES_MATERIAL_RESOLVE", "/dc/mes/material", "timeoutMs=7000")
-                .contains("U9_SALES_ORDER_SYNC", "/dc/u9/sales-order", "timeoutMs=22000");
+                .contains("U9_SALES_ORDER_SYNC", "/dc/u9/sales-order", "timeoutMs=60000")
+                .contains("U9_COMMON_ENTITY_QUERY", "timeoutMs=60000");
     }
 
     @Test

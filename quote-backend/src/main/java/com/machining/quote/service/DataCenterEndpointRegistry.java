@@ -14,6 +14,7 @@ public class DataCenterEndpointRegistry {
     public static final String MES_MATERIAL_RESOLVE = "MES_MATERIAL_RESOLVE";
     public static final String WMS_INVENTORY_ALLOCATE = "WMS_INVENTORY_ALLOCATE";
     public static final String U9_SALES_ORDER_SYNC = "U9_SALES_ORDER_SYNC";
+    public static final String U9_COMMON_ENTITY_QUERY = "U9_COMMON_ENTITY_QUERY";
     public static final String MES_PRODUCTION_DISPATCH = "MES_PRODUCTION_DISPATCH";
 
     private final Map<String, EndpointDefinition> definitions = Map.of(
@@ -42,7 +43,18 @@ public class DataCenterEndpointRegistry {
                     "U9",
                     "POST",
                     "U9_SALES_ORDER_V1",
-                    "U9_SALES_ORDER_RESPONSE_V1"
+                    "U9_SALES_ORDER_RESPONSE_V1",
+                    60000
+            ),
+            U9_COMMON_ENTITY_QUERY,
+            new EndpointDefinition(
+                    U9_COMMON_ENTITY_QUERY,
+                    "U9通用实体查询",
+                    "U9",
+                    "POST",
+                    "U9_COMMON_ENTITY_QUERY_V1",
+                    "U9_COMMON_ENTITY_RESPONSE_V1",
+                    60000
             ),
             MES_PRODUCTION_DISPATCH,
             new EndpointDefinition(
@@ -60,6 +72,7 @@ public class DataCenterEndpointRegistry {
                 definitions.get(MES_MATERIAL_RESOLVE),
                 definitions.get(WMS_INVENTORY_ALLOCATE),
                 definitions.get(U9_SALES_ORDER_SYNC),
+                definitions.get(U9_COMMON_ENTITY_QUERY),
                 definitions.get(MES_PRODUCTION_DISPATCH)
         );
     }
@@ -80,6 +93,7 @@ public class DataCenterEndpointRegistry {
         endpoint.setTargetSystemCode(definition.targetSystemCode());
         endpoint.setRequestAdapter(definition.requestAdapter());
         endpoint.setResponseAdapter(definition.responseAdapter());
+        applyMinimumTimeout(endpoint, definition);
     }
 
     public SystemDataCenterEndpointConfig newEndpoint(String endpointCode) {
@@ -92,6 +106,7 @@ public class DataCenterEndpointRegistry {
         endpoint.setEnabled(true);
         endpoint.setRequestAdapter(definition.requestAdapter());
         endpoint.setResponseAdapter(definition.responseAdapter());
+        applyMinimumTimeout(endpoint, definition);
         endpoint.setRequestSchemaJson(new LinkedHashMap<>());
         endpoint.setResponseSchemaJson(new LinkedHashMap<>());
         return endpoint;
@@ -105,9 +120,18 @@ public class DataCenterEndpointRegistry {
             case MES_MATERIAL_RESOLVE -> trimToNull(properties.getMesMaterialPath());
             case WMS_INVENTORY_ALLOCATE -> trimToNull(properties.getWmsAllocationPath());
             case U9_SALES_ORDER_SYNC -> trimToNull(properties.getU9SalesOrderSyncPath());
+            case U9_COMMON_ENTITY_QUERY -> trimToNull(properties.getU9CommonEntityQueryPath());
             case MES_PRODUCTION_DISPATCH -> trimToNull(properties.getMesProductionDispatchPath());
             default -> null;
         };
+    }
+
+    private void applyMinimumTimeout(SystemDataCenterEndpointConfig endpoint, EndpointDefinition definition) {
+        Integer minimum = definition.minimumTimeoutMs();
+        if (minimum != null && minimum > 0
+                && (endpoint.getTimeoutMs() == null || endpoint.getTimeoutMs() < minimum)) {
+            endpoint.setTimeoutMs(minimum);
+        }
     }
 
     private String normalize(String value) {
@@ -131,6 +155,16 @@ public class DataCenterEndpointRegistry {
             String targetSystemCode,
             String defaultMethod,
             String requestAdapter,
-            String responseAdapter) {
+            String responseAdapter,
+            Integer minimumTimeoutMs) {
+        public EndpointDefinition(
+                String endpointCode,
+                String displayName,
+                String targetSystemCode,
+                String defaultMethod,
+                String requestAdapter,
+                String responseAdapter) {
+            this(endpointCode, displayName, targetSystemCode, defaultMethod, requestAdapter, responseAdapter, null);
+        }
     }
 }

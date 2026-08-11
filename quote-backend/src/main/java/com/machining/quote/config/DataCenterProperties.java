@@ -18,6 +18,7 @@ public class DataCenterProperties {
     private String mesMaterialPath = "";
     private String wmsAllocationPath = "";
     private String u9SalesOrderSyncPath = "";
+    private String u9CommonEntityQueryPath = "";
     private String mesProductionDispatchPath = "";
 
     public boolean isEnabled() {
@@ -114,6 +115,14 @@ public class DataCenterProperties {
 
     public void setU9SalesOrderSyncPath(String u9SalesOrderSyncPath) {
         this.u9SalesOrderSyncPath = u9SalesOrderSyncPath;
+    }
+
+    public String getU9CommonEntityQueryPath() {
+        return u9CommonEntityQueryPath;
+    }
+
+    public void setU9CommonEntityQueryPath(String u9CommonEntityQueryPath) {
+        this.u9CommonEntityQueryPath = u9CommonEntityQueryPath;
     }
 
     public String getMesProductionDispatchPath() {

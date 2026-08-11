@@ -3,10 +3,12 @@ package com.machining.quote.controller;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
+import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.dto.SalesOrderU9SyncReq;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.service.SalesOrderU9SyncService;
+import com.machining.quote.service.u9.U9MasterDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +25,14 @@ import java.util.List;
 public class SalesOrderU9SyncController {
     @Autowired
     private SalesOrderU9SyncService salesOrderU9SyncService;
+    @Autowired
+    private U9MasterDataService u9MasterDataService;
+
+    @GetMapping("/options")
+    @RequirePermission("market:u9-sync:view")
+    public SalesOrderU9SyncOptionsResp options() {
+        return u9MasterDataService.options();
+    }
 
     @GetMapping("/orders")
     @RequirePermission("market:u9-sync:view")
