@@ -80,6 +80,10 @@ erp:
     connect-timeout-ms: ${ERP_U9_CONNECT_TIMEOUT_MS:5000}
     read-timeout-ms: ${ERP_U9_READ_TIMEOUT_MS:60000}
     reconciliation-grace-seconds: ${ERP_U9_RECONCILIATION_GRACE_SECONDS:120}
+    customer-sync:
+      enabled: ${ERP_U9_CUSTOMER_SYNC_ENABLED:false}
+      startup-delay-ms: ${ERP_U9_CUSTOMER_SYNC_STARTUP_DELAY_MS:30000}
+      fixed-delay-ms: ${ERP_U9_CUSTOMER_SYNC_FIXED_DELAY_MS:1800000}
   mes:
     base-url: ${ERP_MES_BASE_URL:}
     auth-token: ${ERP_MES_AUTH_TOKEN:}
