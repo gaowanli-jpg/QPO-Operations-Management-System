@@ -21,7 +21,8 @@ class SalesOrderU9SyncStage8AcceptanceTest {
 
         assertThat(doc)
                 .contains(
-                        "设计状态：阶段 8 已完成并验收。",
+                        "设计状态：整体开发目标已完成并验收。",
+                        "2026-08-11 整体开发目标确认记录",
                         "2026-08-11 阶段 8 完成记录",
                         ".\\mvnw.cmd test",
                         "npm test",
@@ -45,6 +46,20 @@ class SalesOrderU9SyncStage8AcceptanceTest {
                         "QPO 正式销售订单和 RFQ 派生销售订单都可继续同步",
                         "不新增用户权限",
                         "操作日志和文件日志不包含完整请求、响应、token、Authorization 或凭据");
+    }
+
+    @Test
+    void finalAcceptanceChecklistIsClosedForOverallDevelopmentGoal() throws IOException {
+        String doc = read(DOC_42);
+        String checklist = doc.substring(doc.indexOf("## 14. 最终验收清单"), doc.indexOf("## 15. 已确认决策"));
+
+        assertThat(checklist)
+                .contains("- [x] `IsPriceIncludeTax=false`。")
+                .contains("- [x] 销售员和部门都允许为空。")
+                .contains("- [x] 所有订单拥有稳定、唯一、非空 `DocNo`。")
+                .contains("- [x] 复用 `market:u9-sync:*`，不新增用户权限。")
+                .contains("- [x] 后端全量测试通过。")
+                .doesNotContain("- [ ]");
     }
 
     @Test
