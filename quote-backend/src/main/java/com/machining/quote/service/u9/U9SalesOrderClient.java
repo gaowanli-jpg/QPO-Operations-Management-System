@@ -36,7 +36,7 @@ public class U9SalesOrderClient {
     private String u9SalesOrderCreatePath;
     @Value("${erp.u9.connect-timeout-ms:5000}")
     private Integer connectTimeoutMs;
-    @Value("${erp.u9.read-timeout-ms:30000}")
+    @Value("${erp.u9.read-timeout-ms:60000}")
     private Integer readTimeoutMs;
     @Value("${erp.data-center.enabled:true}")
     private Boolean dataCenterEnabled = true;
@@ -118,7 +118,7 @@ public class U9SalesOrderClient {
                 null,
                 null,
                 timeout(connectTimeoutMs, 5000),
-                timeout(readTimeoutMs, 30000),
+                timeout(readTimeoutMs, 60000),
                 null
         );
     }
@@ -126,7 +126,7 @@ public class U9SalesOrderClient {
     private RestTemplate restTemplate(ExternalIntegrationConfig config) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout(config.connectTimeoutMs(), 5000));
-        requestFactory.setReadTimeout(timeout(config.readTimeoutMs(), 30000));
+        requestFactory.setReadTimeout(Math.max(timeout(config.readTimeoutMs(), 60000), 60000));
         return new RestTemplate(requestFactory);
     }
 
@@ -154,7 +154,7 @@ public class U9SalesOrderClient {
         if (value == null) {
             return "";
         }
-        String text = value.replaceAll("\\s+", " ").trim();
+        String text = U9CommonEntityClient.sanitize(value).replaceAll("\\s+", " ").trim();
         return text.length() <= 200 ? text : text.substring(0, 200) + "...";
     }
 

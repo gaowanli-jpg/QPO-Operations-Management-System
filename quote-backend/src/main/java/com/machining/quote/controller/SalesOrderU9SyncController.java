@@ -4,6 +4,7 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9AssignmentReq;
 import com.machining.quote.dto.SalesOrderU9AssignmentResp;
+import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
@@ -69,6 +70,12 @@ public class SalesOrderU9SyncController {
     @RequirePermission("market:u9-sync:submit")
     public SalesOrderU9SyncResp syncOne(@PathVariable Long salesOrderId) {
         return salesOrderU9SyncService.syncSalesOrders(List.of(salesOrderId));
+    }
+
+    @PostMapping("/orders/{salesOrderId}/reconcile")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9ReconcileResp reconcile(@PathVariable Long salesOrderId) {
+        return salesOrderU9SyncService.reconcileSalesOrder(salesOrderId);
     }
 
     @PostMapping("/sync")

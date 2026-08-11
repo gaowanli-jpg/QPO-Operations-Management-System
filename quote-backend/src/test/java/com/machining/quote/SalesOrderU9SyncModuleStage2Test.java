@@ -14,7 +14,11 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SalesOrderU9SyncService;
+import com.machining.quote.service.SalesOrderU9SyncStateService;
 import com.machining.quote.service.u9.U9SalesOrderClient;
+import com.machining.quote.service.u9.U9SalesOrderContractValidator;
+import com.machining.quote.service.u9.U9SalesOrderReconciliationService;
+import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -29,6 +33,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -284,6 +289,8 @@ class SalesOrderU9SyncModuleStage2Test {
         ReflectionTestUtils.setField(service, "u9SalesOrderClient", fixture.u9Client);
         ReflectionTestUtils.setField(service, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(service, "dataScopeService", fixture.dataScopeService);
+        ReflectionTestUtils.setField(service, "syncStateService", fixture.stateService);
+        ReflectionTestUtils.setField(service, "reconciliationService", fixture.reconciliationService);
         return fixture;
     }
 
@@ -350,9 +357,41 @@ class SalesOrderU9SyncModuleStage2Test {
         private final U9SalesOrderClient u9Client = mock(U9SalesOrderClient.class);
         private final AuditService auditService = mock(AuditService.class);
         private final DataScopeService dataScopeService = mock(DataScopeService.class);
+        private final SalesOrderU9SyncStateService stateService = mock(SalesOrderU9SyncStateService.class);
+        private final U9SalesOrderReconciliationService reconciliationService = mock(U9SalesOrderReconciliationService.class);
+        private final U9SalesOrderRequestAssembler assembler = new U9SalesOrderRequestAssembler();
+        private final U9SalesOrderContractValidator validator = new U9SalesOrderContractValidator();
 
         private Fixture(SalesOrderU9SyncService service) {
             this.service = service;
+            when(reconciliationService.checkExisting(any()))
+                    .thenReturn(U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单"));
+            doAnswer(invocation -> reserve(invocation.getArgument(0)))
+                    .when(stateService).reserve(any());
+        }
+
+        private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId) {
+            SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+            if (header == null) {
+                throw new RuntimeException("销售订单不存在");
+            }
+            List<SalesOrderItem> items = itemMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>());
+            if (items == null) {
+                items = List.of();
+            }
+            U9SalesOrderContractValidator.ValidationResult validation = validator.validate(header, items);
+            if (validation.hasBlockingErrors()) {
+                throw new RuntimeException(validation.firstBlockingError());
+            }
+            com.machining.quote.dto.u9.U9SalesOrderHeadDTO request = assembler.assemble(header, items);
+            return new SalesOrderU9SyncStateService.PreparedOrder(
+                    header,
+                    items,
+                    request,
+                    "ATT-" + salesOrderId,
+                    assembler.fingerprint(request),
+                    LocalDateTime.of(2026, 8, 11, 14, 30)
+            );
         }
     }
 }

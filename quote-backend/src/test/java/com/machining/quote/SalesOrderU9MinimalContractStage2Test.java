@@ -10,6 +10,8 @@ import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.SalesOrderU9SyncService;
+import com.machining.quote.service.SalesOrderU9SyncStateService;
+import com.machining.quote.service.u9.U9SalesOrderReconciliationService;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator.ValidationResult;
@@ -19,6 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,17 +129,32 @@ class SalesOrderU9MinimalContractStage2Test {
         SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         com.machining.quote.service.u9.U9SalesOrderClient u9Client = mock(com.machining.quote.service.u9.U9SalesOrderClient.class);
+        SalesOrderU9SyncStateService stateService = mock(SalesOrderU9SyncStateService.class);
+        U9SalesOrderReconciliationService reconciliationService = mock(U9SalesOrderReconciliationService.class);
         SalesOrderHeader header = header();
         SalesOrderItem item = item(501L, 1, "MAT-100201", 2, "100.00");
+        U9SalesOrderHeadDTO preparedRequest = assembler.assemble(header, List.of(item));
+        String preparedFingerprint = assembler.fingerprint(preparedRequest);
         when(headerMapper.selectById(header.getId())).thenReturn(header);
-        when(headerMapper.selectByIdForUpdate(header.getId())).thenReturn(header);
-        when(itemMapper.selectList(any())).thenReturn(List.of(item), List.of(item));
+        when(itemMapper.selectList(any())).thenReturn(List.of(item));
+        when(stateService.reserve(header.getId())).thenReturn(new SalesOrderU9SyncStateService.PreparedOrder(
+                header,
+                List.of(item),
+                preparedRequest,
+                "ATT-901",
+                preparedFingerprint,
+                LocalDateTime.of(2026, 8, 11, 14, 30)
+        ));
+        when(reconciliationService.checkExisting(any()))
+                .thenReturn(U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单"));
         when(u9Client.create(any())).thenReturn(apiResult(header.getSalesOrderNo()));
         ReflectionTestUtils.setField(service, "headerMapper", headerMapper);
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "u9SalesOrderClient", u9Client);
         ReflectionTestUtils.setField(service, "requestAssembler", assembler);
         ReflectionTestUtils.setField(service, "contractValidator", new U9SalesOrderContractValidator());
+        ReflectionTestUtils.setField(service, "syncStateService", stateService);
+        ReflectionTestUtils.setField(service, "reconciliationService", reconciliationService);
 
         SalesOrderU9SyncPreviewResp preview = service.previewSalesOrder(header.getId());
         service.syncSalesOrders(List.of(header.getId()));
@@ -145,11 +163,7 @@ class SalesOrderU9MinimalContractStage2Test {
         verify(u9Client).create(requestCaptor.capture());
         String submittedFingerprint = assembler.fingerprint(requestCaptor.getValue().get(0));
         assertThat(preview.getRequestFingerprint()).isEqualTo(submittedFingerprint);
-
-        ArgumentCaptor<SalesOrderHeader> updateCaptor = ArgumentCaptor.forClass(SalesOrderHeader.class);
-        verify(headerMapper, org.mockito.Mockito.atLeastOnce()).updateById(updateCaptor.capture());
-        assertThat(updateCaptor.getAllValues())
-                .anySatisfy(update -> assertThat(update.getU9SyncRequestHash()).isEqualTo(submittedFingerprint));
+        verify(stateService).markSuccess(any(), any(), any(), any());
     }
 
     private SalesOrderHeader header() {

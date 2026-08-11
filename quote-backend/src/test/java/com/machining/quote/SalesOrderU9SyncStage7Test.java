@@ -12,18 +12,25 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SalesOrderU9SyncService;
+import com.machining.quote.service.SalesOrderU9SyncStateService;
 import com.machining.quote.service.u9.U9SalesOrderClient;
+import com.machining.quote.service.u9.U9SalesOrderContractValidator;
+import com.machining.quote.service.u9.U9SalesOrderReconciliationService;
+import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -238,6 +245,8 @@ class SalesOrderU9SyncStage7Test {
         ReflectionTestUtils.setField(service, "u9SalesOrderClient", fixture.u9Client);
         ReflectionTestUtils.setField(service, "auditService", fixture.auditService);
         ReflectionTestUtils.setField(service, "dataScopeService", fixture.dataScopeService);
+        ReflectionTestUtils.setField(service, "syncStateService", fixture.stateService);
+        ReflectionTestUtils.setField(service, "reconciliationService", fixture.reconciliationService);
         return fixture;
     }
 
@@ -324,9 +333,84 @@ class SalesOrderU9SyncStage7Test {
         private final U9SalesOrderClient u9Client = mock(U9SalesOrderClient.class);
         private final AuditService auditService = mock(AuditService.class);
         private final DataScopeService dataScopeService = mock(DataScopeService.class);
+        private final SalesOrderU9SyncStateService stateService = mock(SalesOrderU9SyncStateService.class);
+        private final U9SalesOrderReconciliationService reconciliationService = mock(U9SalesOrderReconciliationService.class);
+        private final U9SalesOrderRequestAssembler assembler = new U9SalesOrderRequestAssembler();
+        private final U9SalesOrderContractValidator validator = new U9SalesOrderContractValidator();
 
         private Fixture(SalesOrderU9SyncService service) {
             this.service = service;
+            when(reconciliationService.checkExisting(any()))
+                    .thenReturn(U9SalesOrderReconciliationService.Result.notFoundConfirmed("创建前未找到同 DocNo U9 订单"));
+            doAnswer(invocation -> reserve(invocation.getArgument(0)))
+                    .when(stateService).reserve(any());
+            doAnswer(invocation -> {
+                SalesOrderU9SyncStateService.PreparedOrder prepared = invocation.getArgument(0);
+                String u9OrderId = invocation.getArgument(1);
+                String u9OrderCode = invocation.getArgument(2);
+                SalesOrderHeader update = new SalesOrderHeader();
+                update.setId(prepared.header().getId());
+                update.setU9SyncStatus("已同步");
+                update.setU9OrderId(u9OrderId);
+                update.setU9OrderCode(u9OrderCode);
+                update.setU9SyncMessage(invocation.getArgument(3));
+                headerMapper.updateById(update);
+                return null;
+            }).when(stateService).markSuccess(any(), any(), any(), any());
+            doAnswer(invocation -> {
+                SalesOrderU9SyncStateService.PreparedOrder prepared = invocation.getArgument(0);
+                SalesOrderHeader update = new SalesOrderHeader();
+                update.setId(prepared.header().getId());
+                update.setU9SyncStatus("同步失败");
+                update.setU9SyncMessage(invocation.getArgument(1));
+                headerMapper.updateById(update);
+                return null;
+            }).when(stateService).markFailed(any(), any());
+            doAnswer(invocation -> {
+                SalesOrderU9SyncStateService.PreparedOrder prepared = invocation.getArgument(0);
+                SalesOrderHeader update = new SalesOrderHeader();
+                update.setId(prepared.header().getId());
+                update.setU9SyncStatus("结果待确认");
+                update.setU9SyncMessage(invocation.getArgument(1));
+                headerMapper.updateById(update);
+                return null;
+            }).when(stateService).markPending(any(), any());
+        }
+
+        private SalesOrderU9SyncStateService.PreparedOrder reserve(Long salesOrderId) {
+            SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+            if (header == null) {
+                throw new RuntimeException("销售订单不存在");
+            }
+            if ("已同步".equals(header.getU9SyncStatus())) {
+                throw new RuntimeException("销售订单已同步，不能重复创建 U9 订单");
+            }
+            List<SalesOrderItem> items = itemMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>());
+            U9SalesOrderContractValidator.ValidationResult validation = validator.validate(header, items);
+            if (validation.hasBlockingErrors()) {
+                SalesOrderHeader update = new SalesOrderHeader();
+                update.setId(header.getId());
+                update.setU9SyncStatus("同步失败");
+                update.setU9SyncMessage(validation.firstBlockingError());
+                headerMapper.updateById(update);
+                throw new RuntimeException(validation.firstBlockingError());
+            }
+            U9SalesOrderHeadDTO request = assembler.assemble(header, items);
+            String hash = assembler.fingerprint(request);
+            SalesOrderHeader update = new SalesOrderHeader();
+            update.setId(header.getId());
+            update.setU9SyncStatus("同步中");
+            update.setU9SyncRequestHash(hash);
+            update.setU9SyncMessage("U9 同步已预约，等待外部创建");
+            headerMapper.updateById(update);
+            return new SalesOrderU9SyncStateService.PreparedOrder(
+                    header,
+                    items,
+                    request,
+                    "ATT-" + salesOrderId,
+                    hash,
+                    LocalDateTime.of(2026, 8, 11, 14, 30)
+            );
         }
 
         private void withOrder(SalesOrderHeader header, List<SalesOrderItem> items) {
@@ -344,8 +428,12 @@ class SalesOrderU9SyncStage7Test {
 
         private List<U9SalesOrderHeadDTO> capturedU9Orders() {
             ArgumentCaptor<List<U9SalesOrderHeadDTO>> captor = ArgumentCaptor.forClass(List.class);
-            verify(u9Client).create(captor.capture());
-            return captor.getValue();
+            verify(u9Client, atLeastOnce()).create(captor.capture());
+            List<U9SalesOrderHeadDTO> orders = new ArrayList<>();
+            for (List<U9SalesOrderHeadDTO> value : captor.getAllValues()) {
+                orders.addAll(value);
+            }
+            return orders;
         }
 
         private SalesOrderHeader lastHeaderUpdate() {

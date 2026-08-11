@@ -7,6 +7,7 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9AssignmentReq;
 import com.machining.quote.dto.SalesOrderU9AssignmentResp;
 import com.machining.quote.dto.SalesOrderU9DepartmentOptionDTO;
+import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SellerOptionDTO;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
@@ -21,9 +22,14 @@ import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.service.SalesOrderU9SyncStateService.PreparedOrder;
+import com.machining.quote.service.u9.U9CommonEntityClient;
 import com.machining.quote.service.u9.U9SalesOrderClient;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator.ValidationResult;
+import com.machining.quote.service.u9.U9SalesOrderReconciliationService;
+import com.machining.quote.service.u9.U9SalesOrderReconciliationService.Result;
+import com.machining.quote.service.u9.U9SalesOrderReconciliationService.ResultCode;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import com.machining.quote.service.u9.U9MasterDataService;
 import org.slf4j.Logger;
@@ -47,6 +53,7 @@ public class SalesOrderU9SyncService {
     private static final Logger log = LoggerFactory.getLogger(SalesOrderU9SyncService.class);
     private static final String ACTION = "SALES_ORDER_U9_SYNC";
     private static final String ACTION_ASSIGNMENT = "SALES_ORDER_U9_ASSIGNMENT_UPDATE";
+    private static final String ACTION_RECONCILE = "SALES_ORDER_U9_RECONCILE";
     private static final String TARGET_TYPE = "sales_order_header";
     private static final String STATUS_SYNCING = "同步中";
     private static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
@@ -75,6 +82,10 @@ public class SalesOrderU9SyncService {
     private U9SalesOrderContractValidator contractValidator = new U9SalesOrderContractValidator();
     @Autowired
     private U9MasterDataService u9MasterDataService;
+    @Autowired
+    private SalesOrderU9SyncStateService syncStateService;
+    @Autowired
+    private U9SalesOrderReconciliationService reconciliationService;
 
     public PageResult<SalesOrderU9SyncOrderRow> listOrders(
             String customerName,
@@ -181,7 +192,6 @@ public class SalesOrderU9SyncService {
         return toAssignmentResp(saved);
     }
 
-    @Transactional
     public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds) {
         long startedAt = System.currentTimeMillis();
         List<Long> ids = normalizeIds(salesOrderIds);
@@ -197,29 +207,8 @@ public class SalesOrderU9SyncService {
         }
 
         log.info("Sales order U9 sync started orderCount={}", ids.size());
-        List<PreparedOrder> preparedOrders = new ArrayList<>();
         for (Long id : ids) {
-            SalesOrderHeader header = headerMapper.selectByIdForUpdate(id);
-            if (header == null) {
-                resp.getRows().add(failedRow(id, null, "销售订单不存在"));
-                continue;
-            }
-            assertDataScope(header);
-            if (alreadySynced(header)) {
-                resp.getRows().add(failedRow(header, "销售订单已同步，不能重复创建 U9 订单"));
-                continue;
-            }
-            try {
-                preparedOrders.add(prepareOrder(header));
-            } catch (RuntimeException error) {
-                String message = safeError(error.getMessage());
-                markFailed(header, message);
-                resp.getRows().add(failedRow(header, message));
-            }
-        }
-
-        if (!preparedOrders.isEmpty()) {
-            syncPreparedOrders(preparedOrders, resp);
+            syncOneSalesOrder(id, resp);
         }
         finalizeResponse(resp);
         audit(resp, startedAt);
@@ -229,59 +218,139 @@ public class SalesOrderU9SyncService {
         return resp;
     }
 
-    private void syncPreparedOrders(List<PreparedOrder> preparedOrders, SalesOrderU9SyncResp resp) {
-        for (PreparedOrder prepared : preparedOrders) {
-            markSyncing(prepared.header(), prepared.requestFingerprint());
-        }
-        Map<String, PreparedOrder> preparedByOtherId = preparedOrders.stream()
-                .collect(Collectors.toMap(order -> order.request().getOtherID(), Function.identity(), (left, right) -> left, LinkedHashMap::new));
+    public SalesOrderU9ReconcileResp reconcileSalesOrder(Long salesOrderId) {
+        long startedAt = System.currentTimeMillis();
+        PreparedOrder prepared = syncStateService.prepareForReconcile(salesOrderId);
+        Result result = reconciliationService.reconcile(prepared);
+        applyReconcileResult(prepared, result, false);
+        auditReconcile(prepared, result, startedAt);
+        return reconcileResp(prepared, result);
+    }
+
+    private void syncOneSalesOrder(Long salesOrderId, SalesOrderU9SyncResp resp) {
+        PreparedOrder prepared;
         try {
-            U9ApiResult<U9ResultDTO> u9Result = u9SalesOrderClient.create(preparedOrders.stream()
-                    .map(PreparedOrder::request)
-                    .toList());
+            prepared = syncStateService.reserve(salesOrderId);
+        } catch (RuntimeException error) {
+            resp.getRows().add(failedRow(salesOrderId, null, safeError(error.getMessage())));
+            return;
+        }
+
+        Result existing = reconciliationService.checkExisting(prepared);
+        if (ResultCode.NOT_FOUND_CONFIRMED.equals(existing.code())) {
+            createPreparedOrder(prepared, resp);
+            return;
+        }
+        if (existing.matched()) {
+            syncStateService.markSuccess(prepared, existing.u9OrderId(), existing.u9OrderCode(), "创建前查重命中已存在 U9 订单");
+            resp.getRows().add(successRow(prepared, existing.u9OrderId(), existing.u9OrderCode()));
+            return;
+        }
+
+        if (ResultCode.QUERY_FAILED.equals(existing.code())) {
+            String message = "创建前查重失败：" + existing.message();
+            syncStateService.markFailed(prepared, message);
+            resp.getRows().add(failedRow(prepared.header(), message));
+            return;
+        }
+        String message = "结果待确认：创建前查重无法确认：" + existing.message();
+        syncStateService.markPending(prepared, message);
+        resp.getRows().add(failedRow(prepared.header(), message));
+    }
+
+    private void createPreparedOrder(PreparedOrder prepared, SalesOrderU9SyncResp resp) {
+        try {
+            U9ApiResult<U9ResultDTO> u9Result = u9SalesOrderClient.create(List.of(prepared.request()));
             if (u9Result == null || u9Result.getResCode() == null || u9Result.getResCode() != 0) {
                 String message = safeError(firstNonBlank(
                         u9Result == null ? null : u9Result.getResMsg(),
                         u9Result == null ? null : u9Result.getException(),
                         "U9 sales order sync failed"
                 ));
-                failPreparedOrders(preparedOrders, resp, message);
+                syncStateService.markFailed(prepared, message);
+                resp.getRows().add(failedRow(prepared.header(), message));
                 return;
             }
-            Map<String, U9ResultDTO> resultByOtherId = (u9Result.getData() == null ? List.<U9ResultDTO>of() : u9Result.getData())
-                    .stream()
-                    .filter(row -> !isBlank(row.getMOtherID()))
-                    .collect(Collectors.toMap(U9ResultDTO::getMOtherID, Function.identity(), (left, right) -> left));
-            for (Map.Entry<String, PreparedOrder> entry : preparedByOtherId.entrySet()) {
-                PreparedOrder prepared = entry.getValue();
-                U9ResultDTO resultRow = resultByOtherId.get(entry.getKey());
-                if (resultRow != null && Boolean.TRUE.equals(resultRow.getMIsSucess())) {
-                    markSuccess(prepared.header(), resultRow);
-                    resp.getRows().add(successRow(prepared.header(), resultRow));
-                } else {
-                    String message = safeError(firstNonBlank(
-                            resultRow == null ? null : resultRow.getMErrorMsg(),
-                            "U9 result missing for otherId=" + entry.getKey()
-                    ));
-                    markFailed(prepared.header(), message);
-                    resp.getRows().add(failedRow(prepared.header(), message));
-                }
+            U9ResultDTO resultRow = safeList(u9Result.getData()).stream()
+                    .filter(row -> prepared.request().getOtherID().equals(row.getMOtherID()))
+                    .findFirst()
+                    .orElse(null);
+            if (resultRow != null && Boolean.TRUE.equals(resultRow.getMIsSucess())) {
+                syncStateService.markSuccess(prepared, resultRow.getMID(), resultRow.getMCode(), "U9 同步成功");
+                resp.getRows().add(successRow(prepared, resultRow.getMID(), resultRow.getMCode()));
+                return;
             }
+            if (resultRow != null && Boolean.FALSE.equals(resultRow.getMIsSucess())) {
+                String message = safeError(firstNonBlank(resultRow.getMErrorMsg(), "U9 明确拒绝创建销售订单"));
+                syncStateService.markFailed(prepared, message);
+                resp.getRows().add(failedRow(prepared.header(), message));
+                return;
+            }
+            reconcileUnclearCreateResult(prepared, resp, "U9 创建返回缺少当前订单结果");
         } catch (RuntimeException error) {
             String message = safeError(error.getMessage());
-            failPreparedOrders(preparedOrders, resp, message);
-            log.error("Sales order U9 sync failed orderCount={} reason={}", preparedOrders.size(), message, sanitizedException(error, message));
+            reconcileUnclearCreateResult(prepared, resp, "U9 创建结果不明", message, error);
         }
     }
 
-    private PreparedOrder prepareOrder(SalesOrderHeader header) {
-        List<SalesOrderItem> items = loadItems(header.getId());
-        ValidationResult validation = contractValidator.validate(header, items);
-        if (validation.hasBlockingErrors()) {
-            throw new RuntimeException(validation.firstBlockingError());
+    private void reconcileUnclearCreateResult(PreparedOrder prepared, SalesOrderU9SyncResp resp, String reason) {
+        reconcileUnclearCreateResult(prepared, resp, reason, null, null);
+    }
+
+    private void reconcileUnclearCreateResult(
+            PreparedOrder prepared,
+            SalesOrderU9SyncResp resp,
+            String reason,
+            String errorMessage,
+            RuntimeException error) {
+        Result result = reconciliationService.reconcile(prepared);
+        if (result.matched()) {
+            syncStateService.markSuccess(prepared, result.u9OrderId(), result.u9OrderCode(), reason + "，核对后确认已同步");
+            resp.getRows().add(successRow(prepared, result.u9OrderId(), result.u9OrderCode()));
+            return;
         }
-        U9SalesOrderHeadDTO request = requestAssembler.assemble(header, items);
-        return new PreparedOrder(header, request, requestAssembler.fingerprint(request));
+        String message = "结果待确认：" + reason + "，核对仍无法确认：" + result.message();
+        syncStateService.markPending(prepared, message);
+        resp.getRows().add(failedRow(prepared.header(), message));
+        if (error != null) {
+            log.error("Sales order U9 create result unclear salesOrderId={} reason={}",
+                    prepared.header().getId(), safeError(firstNonBlank(errorMessage, message)),
+                    sanitizedException(error, safeError(firstNonBlank(errorMessage, message))));
+        }
+    }
+
+    private void applyReconcileResult(PreparedOrder prepared, Result result, boolean afterCreate) {
+        if (result.matched()) {
+            String message = afterCreate ? "U9 创建结果不明，核对后确认已同步" : "核对后确认 U9 已同步";
+            syncStateService.markSuccess(prepared, result.u9OrderId(), result.u9OrderCode(), message);
+        } else if (ResultCode.NOT_FOUND_CONFIRMED.equals(result.code())) {
+            syncStateService.markFailed(prepared, result.message());
+        } else {
+            syncStateService.markPending(prepared, result.message());
+        }
+    }
+
+    private SalesOrderU9ReconcileResp reconcileResp(PreparedOrder prepared, Result result) {
+        SalesOrderU9ReconcileResp resp = new SalesOrderU9ReconcileResp();
+        resp.setSalesOrderId(prepared.header().getId());
+        resp.setSalesOrderNo(prepared.header().getSalesOrderNo());
+        resp.setCode(result.code().name());
+        resp.setMessage(result.message());
+        resp.setU9SyncStatus(statusForReconcileResult(result));
+        resp.setU9OrderId(result.matched() ? result.u9OrderId() : prepared.header().getU9OrderId());
+        resp.setU9OrderCode(result.matched() ? result.u9OrderCode() : prepared.header().getU9OrderCode());
+        resp.setWarnings(result.warnings());
+        return resp;
+    }
+
+    private String statusForReconcileResult(Result result) {
+        if (result.matched()) {
+            return STATUS_SYNCED;
+        }
+        if (ResultCode.NOT_FOUND_CONFIRMED.equals(result.code())) {
+            return STATUS_FAILED;
+        }
+        return STATUS_PENDING_CONFIRMATION;
     }
 
     private List<SalesOrderItem> loadItems(Long salesOrderId) {
@@ -554,43 +623,6 @@ public class SalesOrderU9SyncService {
         return item.getInternalDeliveryDate() == null ? item.getCustomerDeliveryDate() : item.getInternalDeliveryDate();
     }
 
-    private void failPreparedOrders(List<PreparedOrder> preparedOrders, SalesOrderU9SyncResp resp, String message) {
-        for (PreparedOrder prepared : preparedOrders) {
-            markFailed(prepared.header(), message);
-            resp.getRows().add(failedRow(prepared.header(), message));
-        }
-    }
-
-    private void markSyncing(SalesOrderHeader header, String requestFingerprint) {
-        SalesOrderHeader update = new SalesOrderHeader();
-        update.setId(header.getId());
-        update.setU9SyncStatus(STATUS_SYNCING);
-        update.setU9SyncRequestHash(requestFingerprint);
-        update.setU9SyncMessage("U9 同步处理中");
-        update.setUpdatedAt(LocalDateTime.now());
-        headerMapper.updateById(update);
-    }
-
-    private void markSuccess(SalesOrderHeader header, U9ResultDTO row) {
-        SalesOrderHeader update = new SalesOrderHeader();
-        update.setId(header.getId());
-        update.setU9SyncStatus(STATUS_SYNCED);
-        update.setU9OrderId(row.getMID());
-        update.setU9OrderCode(row.getMCode());
-        update.setU9SyncMessage("U9 同步成功");
-        update.setUpdatedAt(LocalDateTime.now());
-        headerMapper.updateById(update);
-    }
-
-    private void markFailed(SalesOrderHeader header, String message) {
-        SalesOrderHeader update = new SalesOrderHeader();
-        update.setId(header.getId());
-        update.setU9SyncStatus(STATUS_FAILED);
-        update.setU9SyncMessage(safeError(message));
-        update.setUpdatedAt(LocalDateTime.now());
-        headerMapper.updateById(update);
-    }
-
     private void finalizeResponse(SalesOrderU9SyncResp resp) {
         int successCount = (int) resp.getRows().stream().filter(SalesOrderU9SyncResultRow::isSuccess).count();
         int failedCount = resp.getRows().size() - successCount;
@@ -619,14 +651,14 @@ public class SalesOrderU9SyncService {
         return RESP_FAILED;
     }
 
-    private SalesOrderU9SyncResultRow successRow(SalesOrderHeader header, U9ResultDTO u9Row) {
+    private SalesOrderU9SyncResultRow successRow(PreparedOrder prepared, String u9OrderId, String u9OrderCode) {
         SalesOrderU9SyncResultRow row = new SalesOrderU9SyncResultRow();
         row.setSuccess(true);
         row.setStatus(RESP_SUCCESS);
-        row.setSalesOrderId(header.getId());
-        row.setSalesOrderNo(header.getSalesOrderNo());
-        row.setU9OrderId(u9Row.getMID());
-        row.setU9OrderCode(u9Row.getMCode());
+        row.setSalesOrderId(prepared.header().getId());
+        row.setSalesOrderNo(prepared.header().getSalesOrderNo());
+        row.setU9OrderId(u9OrderId);
+        row.setU9OrderCode(u9OrderCode);
         return row;
     }
 
@@ -694,6 +726,33 @@ public class SalesOrderU9SyncService {
         );
     }
 
+    private void auditReconcile(PreparedOrder prepared, Result result, long startedAt) {
+        if (auditService == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("salesOrderId", prepared.header().getId());
+        summary.put("salesOrderNo", prepared.header().getSalesOrderNo());
+        summary.put("attemptId", trimToNull(prepared.attemptId()));
+        summary.put("resultCode", result.code().name());
+        summary.put("u9SyncStatus", statusForReconcileResult(result));
+        summary.put("u9OrderId", result.matched() ? result.u9OrderId() : prepared.header().getU9OrderId());
+        summary.put("u9OrderCode", result.matched() ? result.u9OrderCode() : prepared.header().getU9OrderCode());
+        summary.put("message", safeError(result.message()));
+        summary.put("durationMs", System.currentTimeMillis() - startedAt);
+        auditService.record(
+                ACTION_RECONCILE,
+                TARGET_TYPE,
+                prepared.header().getId(),
+                null,
+                summary,
+                "MARKET",
+                result.matched() ? "SUCCESS" : "FAILED",
+                AuditService.labelForAction(ACTION_RECONCILE),
+                result.matched() ? null : safeError(result.message())
+        );
+    }
+
     private Map<String, Object> assignmentAuditData(SalesOrderHeader header, AssignmentSnapshot snapshot) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("salesOrderId", header.getId());
@@ -745,7 +804,7 @@ public class SalesOrderU9SyncService {
         if (isBlank(value)) {
             return "U9 同步失败";
         }
-        String text = value.replaceAll("\\s+", " ").trim();
+        String text = U9CommonEntityClient.sanitize(value).replaceAll("\\s+", " ").trim();
         text = text.replaceAll("(?i)\\b(token|clientsecret|client[-_]?secret|authorization|cookie|password|secret)\\s*[:=]\\s*[^\\s,;]+", "[REDACTED]");
         text = text.replaceAll("(?i)SO(LineDTOList|ShiplineDTOList)\\s*=\\s*\\[[^]]*]", "request=[REDACTED]");
         text = text.replaceAll("(?i)\\[(\\s*\\{.*}\\s*)]", "request=[REDACTED]");
@@ -779,9 +838,6 @@ public class SalesOrderU9SyncService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
-    }
-
-    private record PreparedOrder(SalesOrderHeader header, U9SalesOrderHeadDTO request, String requestFingerprint) {
     }
 
     private record MaterialStats(int total, int confirmed, int missingOrUnconfirmed) {

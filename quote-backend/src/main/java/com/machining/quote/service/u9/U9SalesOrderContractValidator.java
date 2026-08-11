@@ -15,6 +15,7 @@ public class U9SalesOrderContractValidator {
     private static final String MATERIAL_CONFIRMED = "已确认";
     private static final String STATUS_SYNCING = "同步中";
     private static final String STATUS_SYNCED = "已同步";
+    private static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
 
     public ValidationResult validate(SalesOrderHeader header, List<SalesOrderItem> items) {
         List<String> errors = new ArrayList<>();
@@ -80,6 +81,8 @@ public class U9SalesOrderContractValidator {
             errors.add("销售订单已同步，不能重复创建 U9 订单");
         } else if (STATUS_SYNCING.equals(header.getU9SyncStatus())) {
             errors.add("U9 同步处理中，请稍后刷新");
+        } else if (STATUS_PENDING_CONFIRMATION.equals(header.getU9SyncStatus())) {
+            errors.add("U9 创建结果待确认，只能核对，不能直接重新创建");
         }
         if (isBlank(header.getSalesOrderNo())) {
             errors.add("销售订单号不能为空，不能同步 U9");

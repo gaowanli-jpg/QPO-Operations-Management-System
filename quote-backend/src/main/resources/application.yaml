@@ -78,7 +78,8 @@ erp:
     client-id: ${ERP_U9_CLIENT_ID:}
     client-secret: ${ERP_U9_CLIENT_SECRET:}
     connect-timeout-ms: ${ERP_U9_CONNECT_TIMEOUT_MS:5000}
-    read-timeout-ms: ${ERP_U9_READ_TIMEOUT_MS:30000}
+    read-timeout-ms: ${ERP_U9_READ_TIMEOUT_MS:60000}
+    reconciliation-grace-seconds: ${ERP_U9_RECONCILIATION_GRACE_SECONDS:120}
   mes:
     base-url: ${ERP_MES_BASE_URL:}
     auth-token: ${ERP_MES_AUTH_TOKEN:}
