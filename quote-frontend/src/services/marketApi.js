@@ -63,6 +63,8 @@ export const listSalesOrderU9SyncOrders = (params = {}) => request('/api/market/
 
 export const getSalesOrderU9SyncOptions = () => request('/api/market/u9-sync/options')
 
+export const refreshSalesOrderU9SyncOptions = () => postJson('/api/market/u9-sync/options/refresh')
+
 export const previewSalesOrderU9Sync = (salesOrderId) => request(`/api/market/u9-sync/orders/${salesOrderId}/preview`)
 
 export const saveSalesOrderU9Assignment = (salesOrderId, payload) => request(`/api/market/u9-sync/orders/${salesOrderId}/assignment`, {

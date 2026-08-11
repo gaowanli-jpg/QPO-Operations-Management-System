@@ -11,6 +11,7 @@ describe('sales order U9 sync stage 6 frontend', () => {
     const api = readSource('services', 'marketApi.js')
 
     expect(api).toContain("export const getSalesOrderU9SyncOptions = () => request('/api/market/u9-sync/options')")
+    expect(api).toContain("export const refreshSalesOrderU9SyncOptions = () => postJson('/api/market/u9-sync/options/refresh')")
     expect(api).toContain("export const saveSalesOrderU9Assignment = (salesOrderId, payload) => request(`/api/market/u9-sync/orders/${salesOrderId}/assignment`")
     expect(api).toContain("method: 'PUT'")
     expect(api).toContain("export const reconcileSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/reconcile`)")
@@ -23,9 +24,14 @@ describe('sales order U9 sync stage 6 frontend', () => {
     expect(component).toContain('saveSalesOrderU9Assignment')
     expect(component).toContain('const assignmentDraft = ref')
     expect(component).toContain('const optionsLoading = ref(false)')
+    expect(component).toContain('const optionsRefreshing = ref(false)')
     expect(component).toContain('const assignmentSaving = ref(false)')
     expect(component).toContain('u9Options.stale')
     expect(component).toContain('u9Options.warning')
+    expect(component).toContain('refreshSalesOrderU9SyncOptions')
+    expect(component).toContain('handleRefreshU9Options')
+    expect(component).toContain(':loading="optionsRefreshing"')
+    expect(component).toContain(':disabled="optionsLoading || optionsRefreshing"')
     expect(component).toContain('label="Seller"')
     expect(component).toContain('label="SaleDepartment"')
     expect(component).toContain('@change="handleSellerChange"')
@@ -34,6 +40,15 @@ describe('sales order U9 sync stage 6 frontend', () => {
     expect(component).toContain(':loading="assignmentSaving"')
     expect(component).toContain(':disabled="assignmentSaveDisabled"')
     expect(component).toContain('assignmentReadOnly')
+  })
+
+  test('does not introduce an independent U9 sales master menu or CRUD page', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+
+    expect(component).not.toContain('U9SalesMasterManage')
+    expect(component).not.toContain('销售部门管理')
+    expect(component).not.toContain('销售员管理')
+    expect(component).not.toContain('/u9-sales-master')
   })
 
   test('shows untaxed U9 price and private field preview without customer material number', () => {

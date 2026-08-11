@@ -124,80 +124,11 @@ class SalesOrderU9MasterDataStage3Test {
     }
 
     @Test
-    void masterDataOptionsPageFiltersDeduplicatesAndIncludesSellerDepartment() {
-        U9CommonEntityClient client = mock(U9CommonEntityClient.class);
-        U9MasterDataService service = masterDataService(
-                client,
-                Clock.fixed(instant("2026-08-11T04:00:00Z"), ZoneId.of("Asia/Shanghai"))
-        );
-        ArgumentCaptor<U9CommonEntityQueryReq> requestCaptor = ArgumentCaptor.forClass(U9CommonEntityQueryReq.class);
-        when(client.query(requestCaptor.capture())).thenAnswer(invocation -> pageFor(invocation.getArgument(0)));
-
-        SalesOrderU9SyncOptionsResp options = service.options();
-
-        assertThat(options.getOrgCode()).isEqualTo(ORG_101);
-        assertThat(options.getStale()).isFalse();
-        assertThat(options.getRefreshedAt()).isEqualTo(LocalDateTime.of(2026, 8, 11, 12, 0));
-        assertThat(options.getSellers())
-                .extracting("code", "name", "departmentCode", "departmentName")
-                .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("C00150", "周洪", "200201", "订单运维部"),
-                        org.assertj.core.groups.Tuple.tuple("C00999", "树外销售", "900001", "特殊销售部")
-                );
-        assertThat(options.getDepartments())
-                .extracting("code", "name")
-                .contains(
-                        org.assertj.core.groups.Tuple.tuple("2002", "销售部"),
-                        org.assertj.core.groups.Tuple.tuple("200201", "订单运维部"),
-                        org.assertj.core.groups.Tuple.tuple("900001", "特殊销售部")
-                )
-                .doesNotContain(
-                        org.assertj.core.groups.Tuple.tuple("200202", "失效部门"),
-                        org.assertj.core.groups.Tuple.tuple("3001", "非销售部门")
-                );
-
-        U9CommonEntityQueryReq firstSellerReq = requestCaptor.getAllValues().stream()
-                .filter(req -> U9MasterDataService.OPERATOR_ENTITY.equals(req.getEntityFullName()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(firstSellerReq.getPageSize()).isEqualTo(200);
-        assertThat(firstSellerReq.getPageIndex()).isEqualTo(1);
-        assertThat(firstSellerReq.getReturnFields()).contains("Code", "Name", "Org.Code", "Dept.Code", "Dept.Name", "Effective.IsEffective", "OperatorLine.OperatorType");
-        assertThat(firstSellerReq.getFilters()).singleElement().satisfies(filter -> {
-            assertThat(filter.getField()).isEqualTo("Org.Code");
-            assertThat(filter.getOperator()).isEqualTo("eq");
-            assertThat(filter.getValue()).isEqualTo(ORG_101);
-        });
-    }
-
-    @Test
-    void masterDataOptionsReturnsStaleCacheOnTemporaryFailureAndSanitizesErrors() {
-        U9CommonEntityClient client = mock(U9CommonEntityClient.class);
-        MutableClock clock = new MutableClock(instant("2026-08-11T04:00:00Z"));
-        U9MasterDataService service = masterDataService(client, clock);
-        when(client.query(any())).thenAnswer(invocation -> pageFor(invocation.getArgument(0)));
-        SalesOrderU9SyncOptionsResp fresh = service.options();
-        assertThat(fresh.getStale()).isFalse();
-
-        clock.setInstant(instant("2026-08-11T04:06:00Z"));
-        doThrow(new IllegalStateException("boom token=hidden-token Authorization: Bearer hidden-auth"))
-                .when(client).query(any(U9CommonEntityQueryReq.class));
-
-        SalesOrderU9SyncOptionsResp stale = service.options();
-
-        assertThat(stale.getStale()).isTrue();
-        assertThat(stale.getRefreshedAt()).isEqualTo(LocalDateTime.of(2026, 8, 11, 12, 0));
-        assertThat(stale.getWarning()).contains("U9主数据暂时不可用");
-        assertThat(stale.getWarning()).doesNotContain("hidden-token", "hidden-auth", "Authorization");
-        assertThat(stale.getSellers()).extracting("code").contains("C00150");
-
-        U9MasterDataService emptyCacheService = masterDataService(client, clock);
-        assertThatThrownBy(emptyCacheService::options)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("U9主数据暂不可用")
-                .hasMessageNotContaining("hidden-token")
-                .hasMessageNotContaining("hidden-auth")
-                .hasMessageNotContaining("Authorization");
+    void masterDataOptionsAreServedFromPersistentCacheAfterStageFive() throws Exception {
+        assertThat(U9MasterDataService.class.getDeclaredField("sellerOptionMapper")).isNotNull();
+        assertThat(U9MasterDataService.class.getDeclaredField("departmentOptionMapper")).isNotNull();
+        assertThatThrownBy(() -> U9MasterDataService.class.getDeclaredField("commonEntityClient"))
+                .isInstanceOf(NoSuchFieldException.class);
     }
 
     @Test

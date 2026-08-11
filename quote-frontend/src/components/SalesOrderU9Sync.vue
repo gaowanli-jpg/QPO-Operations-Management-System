@@ -57,6 +57,17 @@
               <div class="panel-title compact">U9选择</div>
               <p class="panel-subtitle">Seller 和 SaleDepartment 可为空，保存后用于本订单同步。</p>
             </div>
+            <div class="panel-title-actions">
+              <el-button
+                v-permission="U9_SYNC_SUBMIT_PERMISSION"
+                size="small"
+                :loading="optionsRefreshing"
+                :disabled="optionsLoading || optionsRefreshing"
+                @click="handleRefreshU9Options"
+              >
+                刷新U9选项
+              </el-button>
+            </div>
             <el-tag v-if="assignmentReadOnly" size="small" type="info">只读</el-tag>
           </div>
           <el-alert
@@ -67,7 +78,7 @@
             :closable="false"
             show-icon
           />
-          <div class="assignment-form-grid" v-loading="optionsLoading">
+          <div class="assignment-form-grid" v-loading="optionsLoading || optionsRefreshing">
             <label class="assignment-field">
               <span>Seller</span>
               <el-select
@@ -75,7 +86,7 @@
                 aria-label="Seller"
                 filterable
                 clearable
-                :disabled="assignmentReadOnly || optionsLoading || !selectedOrderId"
+                :disabled="assignmentReadOnly || optionsLoading || optionsRefreshing || !selectedOrderId"
                 placeholder="选择U9销售员"
                 @change="handleSellerChange"
               >
@@ -94,7 +105,7 @@
                 aria-label="SaleDepartment"
                 filterable
                 clearable
-                :disabled="assignmentReadOnly || optionsLoading || !selectedOrderId"
+                :disabled="assignmentReadOnly || optionsLoading || optionsRefreshing || !selectedOrderId"
                 placeholder="选择U9销售部门"
                 @change="handleDepartmentChange"
               >
@@ -378,6 +389,7 @@ import {
   getSalesOrderU9SyncOptions,
   previewSalesOrderU9Sync,
   reconcileSalesOrderU9,
+  refreshSalesOrderU9SyncOptions,
   saveSalesOrderU9Assignment,
   syncSalesOrderU9
 } from '../services/marketApi'
@@ -412,6 +424,7 @@ const reconcileResult = ref(null)
 const orderPickerVisible = ref(false)
 const previewLoading = ref(false)
 const optionsLoading = ref(false)
+const optionsRefreshing = ref(false)
 const assignmentSaving = ref(false)
 const u9Options = reactive({ orgCode: '', stale: false, refreshedAt: '', warning: '', sellers: [], departments: [] })
 const assignmentDraft = ref({ sellerCode: '', saleDepartmentCode: '' })
@@ -478,7 +491,7 @@ const previewMessages = computed(() => {
 const assignmentReadOnly = computed(() => ['已同步', '同步中', '结果待确认'].includes(currentU9Status.value))
 const assignmentDirty = computed(() => assignmentDraft.value.sellerCode !== savedAssignment.value.sellerCode ||
   assignmentDraft.value.saleDepartmentCode !== savedAssignment.value.saleDepartmentCode)
-const assignmentSaveDisabled = computed(() => assignmentSaving.value || optionsLoading.value || !selectedOrderId.value || assignmentReadOnly.value || !assignmentDirty.value)
+const assignmentSaveDisabled = computed(() => assignmentSaving.value || optionsLoading.value || optionsRefreshing.value || !selectedOrderId.value || assignmentReadOnly.value || !assignmentDirty.value)
 const assignmentDisplayText = computed(() => {
   const seller = sellerByCode(assignmentDraft.value.sellerCode)
   const department = departmentByCode(assignmentDraft.value.saleDepartmentCode)
@@ -553,8 +566,8 @@ const refreshCurrentState = async () => {
   ])
 }
 
-const loadU9Options = async ({ silent = false } = {}) => {
-  if (optionsLoading.value) return
+const loadU9Options = async ({ silent = false, force = false } = {}) => {
+  if (optionsLoading.value || (optionsRefreshing.value && !force)) return
   optionsLoading.value = true
   try {
     const response = await getSalesOrderU9SyncOptions()
@@ -573,6 +586,24 @@ const loadU9Options = async ({ silent = false } = {}) => {
     if (!silent) ElMessage.error(requestErrorMessage(error, 'U9销售员和部门选项加载失败。'))
   } finally {
     optionsLoading.value = false
+  }
+}
+
+const handleRefreshU9Options = async () => {
+  if (optionsLoading.value || optionsRefreshing.value) return
+  optionsRefreshing.value = true
+  try {
+    const response = await refreshSalesOrderU9SyncOptions()
+    if (response?.success === false) {
+      ElMessage.error(response.message || response.safeMessage || 'U9选项缓存刷新失败。')
+      return
+    }
+    ElMessage.success(response?.message || 'U9选项缓存已刷新。')
+    await loadU9Options({ silent: true, force: true })
+  } catch (error) {
+    ElMessage.error(requestErrorMessage(error, 'U9选项缓存刷新失败。'))
+  } finally {
+    optionsRefreshing.value = false
   }
 }
 
@@ -874,6 +905,12 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
+.panel-title-actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
 .panel-title-row .panel-title {
   margin-bottom: 4px;
 }
@@ -1089,6 +1126,8 @@ onMounted(() => {
 
   .sales-order-u9-sync-header-actions :deep(.el-button),
   .sales-order-u9-sync-action-wrap,
+  .panel-title-actions,
+  .panel-title-actions :deep(.el-button),
   .assignment-form-grid :deep(.el-button) {
     width: 100%;
     margin-left: 0;

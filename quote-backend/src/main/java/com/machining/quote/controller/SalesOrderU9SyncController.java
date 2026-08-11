@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9AssignmentReq;
 import com.machining.quote.dto.SalesOrderU9AssignmentResp;
@@ -10,8 +11,10 @@ import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
 import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.dto.SalesOrderU9SyncReq;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
+import com.machining.quote.service.AuditService;
 import com.machining.quote.service.SalesOrderU9SyncService;
 import com.machining.quote.service.u9.U9MasterDataService;
+import com.machining.quote.service.u9.U9MasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/market/u9-sync")
@@ -31,11 +36,38 @@ public class SalesOrderU9SyncController {
     private SalesOrderU9SyncService salesOrderU9SyncService;
     @Autowired
     private U9MasterDataService u9MasterDataService;
+    @Autowired
+    private U9MasterDataSyncService u9MasterDataSyncService;
+    @Autowired
+    private AuditService auditService;
 
     @GetMapping("/options")
     @RequirePermission("market:u9-sync:view")
     public SalesOrderU9SyncOptionsResp options() {
         return u9MasterDataService.options();
+    }
+
+    @PostMapping("/options/refresh")
+    @RequirePermission("market:u9-sync:submit")
+    public Map<String, Object> refreshOptions() {
+        U9MasterDataSyncService.SyncResult result = u9MasterDataSyncService.syncOptionsManual(currentUserId());
+        Map<String, Object> summary = syncSummary(result);
+        auditService.record(
+                "U9_SYNC_OPTIONS_REFRESH",
+                "u9_master_data_sync_run",
+                result.syncRunId(),
+                null,
+                summary,
+                "MARKET",
+                result.success() ? "SUCCESS" : "FAILED",
+                "刷新 U9 同步页选项缓存",
+                result.success() ? null : result.message()
+        );
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", result.success());
+        response.put("message", result.success() ? "U9同步页选项缓存已刷新" : result.message());
+        response.putAll(summary);
+        return response;
     }
 
     @GetMapping("/orders")
@@ -82,5 +114,24 @@ public class SalesOrderU9SyncController {
     @RequirePermission("market:u9-sync:submit")
     public SalesOrderU9SyncResp sync(@RequestBody(required = false) SalesOrderU9SyncReq req) {
         return salesOrderU9SyncService.syncSalesOrders(req == null ? List.of() : req.getSalesOrderIds());
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser user = AuthContext.get();
+        return user == null || user.id() == null ? null : user.id().longValue();
+    }
+
+    private Map<String, Object> syncSummary(U9MasterDataSyncService.SyncResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("syncRunId", result.syncRunId());
+        summary.put("syncType", "U9_SYNC_OPTIONS");
+        summary.put("status", result.success() ? "SUCCESS" : "FAILED");
+        summary.put("fetchedCount", result.fetchedCount());
+        summary.put("upsertedCount", result.upsertedCount());
+        summary.put("disabledCount", result.disabledCount());
+        if (result.message() != null && !result.message().isBlank()) {
+            summary.put("safeMessage", result.message());
+        }
+        return summary;
     }
 }
