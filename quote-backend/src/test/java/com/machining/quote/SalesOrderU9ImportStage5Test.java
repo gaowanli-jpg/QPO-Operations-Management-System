@@ -84,7 +84,7 @@ class SalesOrderU9ImportStage5Test {
                         "Sales order U9 sync started orderCount={}",
                         "Sales order U9 sync completed orderCount={} successOrderCount={} failedOrderCount={} durationMs={}",
                         "Sales order U9 sync failed orderCount={} reason={}",
-                        "不记录完整 Excel 内容、U9 token、clientsecret、完整 U9 请求体或完整 U9 响应大对象"
+                        "不得记录完整 U9 请求体、完整 U9 响应体、Authorization header、token、Cookie、clientsecret、完整数据中心请求体、完整数据中心响应体或 U9 `Data.Headers`"
                 )
                 .doesNotContain("销售订单 U9 同步属于市场新单导入下的主流程写操作");
     }
