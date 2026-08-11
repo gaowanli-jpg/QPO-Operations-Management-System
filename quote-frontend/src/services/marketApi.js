@@ -61,9 +61,18 @@ export const listDeliveryDocumentProcessSheets = (sourceOrderId, params = {}) =>
 
 export const listSalesOrderU9SyncOrders = (params = {}) => request('/api/market/u9-sync/orders', { params })
 
+export const getSalesOrderU9SyncOptions = () => request('/api/market/u9-sync/options')
+
 export const previewSalesOrderU9Sync = (salesOrderId) => request(`/api/market/u9-sync/orders/${salesOrderId}/preview`)
 
+export const saveSalesOrderU9Assignment = (salesOrderId, payload) => request(`/api/market/u9-sync/orders/${salesOrderId}/assignment`, {
+  method: 'PUT',
+  data: payload
+})
+
 export const syncSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/sync`)
+
+export const reconcileSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/reconcile`)
 
 export const syncSalesOrdersU9 = (salesOrderIds = []) => postJson('/api/market/u9-sync/sync', { salesOrderIds })
 

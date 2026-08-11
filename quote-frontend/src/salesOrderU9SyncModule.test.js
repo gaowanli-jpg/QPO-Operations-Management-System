@@ -120,11 +120,14 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('prop="u9OrderCode"')
     expect(component).toContain('prop="materialNo" label="物料号"')
     expect(component).toContain('prop="materialNoStatus"')
-    expect(component).toContain('prop="taxIncludedUnitPrice"')
-    expect(component).toContain('含税单价缺失')
-    expect(component).toContain('priceMissingTagType')
+    expect(component).toContain('prop="untaxedUnitPrice"')
+    expect(component).toContain('U9未税单价')
+    expect(component).toContain('未税单价缺失')
+    expect(component).toContain('label="U9私有字段"')
+    expect(component).toContain('PrivateDescSeg9 价格')
     expect(component).toContain('prop="errorMessage"')
     expect(component).not.toContain('prop="salesMaterialNo"')
+    expect(component).not.toContain('priceMissingTagType')
   })
 
   test('keeps order-level sales order fields in order info instead of repeated item columns', () => {
@@ -166,11 +169,11 @@ describe('sales order U9 sync module', () => {
       'label="版本"',
       'label="物料号"',
       'label="物料号状态"',
-      'label="数量"',
+      'label="数量(PCS)"',
       'label="就绪"',
-      'label="阻断原因"',
-      'prop="taxIncludedUnitPrice"',
-      'label="含税金额"',
+      'label="错误/警告"',
+      'prop="untaxedUnitPrice"',
+      'label="未税金额"',
       'label="下单日期"',
       'label="客户下单抬头"',
       'label="客户交期"',
@@ -180,8 +183,6 @@ describe('sales order U9 sync module', () => {
       'label="描述"',
       'label="材料"',
       'label="表面处理"',
-      'label="未税单价(CNY)"',
-      'label="（未税）金额"',
       'label="备注"'
     ]
 

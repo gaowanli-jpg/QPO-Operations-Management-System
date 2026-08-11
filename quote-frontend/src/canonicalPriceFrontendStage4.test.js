@@ -9,7 +9,7 @@ const legacyUnitPrice = ['final', 'Unit', 'Price'].join('')
 const legacyTotalPrice = ['final', 'Total', 'Price'].join('')
 
 describe('canonical frontend price fields stage 4', () => {
-  test('business price surfaces use canonical tax included fields', () => {
+  test('business price surfaces use canonical price fields without legacy final price names', () => {
     const files = [
       'components/ItemPricing.vue',
       'components/MarketRelease.vue',
@@ -26,8 +26,9 @@ describe('canonical frontend price fields stage 4', () => {
 
     expect(readSource('components/ItemPricing.vue')).toContain('taxIncludedTotalPrice')
     expect(readSource('components/SalesOrderU9Sync.vue'))
-      .toContain('prop="taxIncludedUnitPrice"')
-      .toContain('含税单价缺失')
+      .toContain('prop="untaxedUnitPrice"')
+      .toContain('未税单价缺失')
+      .not.toContain('prop="taxIncludedUnitPrice"')
   })
 
   test('audit formatting exposes only canonical price labels', () => {
