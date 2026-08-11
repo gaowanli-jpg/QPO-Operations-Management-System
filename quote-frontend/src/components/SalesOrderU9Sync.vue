@@ -387,8 +387,8 @@ const U9_SYNC_ORDER_SELECT_PERMISSION = 'market:u9-sync:order-select'
 const U9_SYNC_ALLOWED_STATUSES = ['已生成提单']
 
 const u9SyncActionKeys = {
-  sync: 'market:u9-sync:submit',
-  reconcile: 'market:u9-sync:reconcile'
+  sync: 'sales-order-u9-sync',
+  reconcile: 'sales-order-u9-reconcile'
 }
 
 const privateFieldDefinitions = [

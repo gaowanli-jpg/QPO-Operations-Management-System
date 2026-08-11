@@ -222,12 +222,33 @@ class SalesOrderU9SyncStage7Test {
     void auditActionsAndControllerPermissionCloseStageSevenBoundary() {
         assertThat(AuditService.inferModule("SALES_ORDER_U9_SYNC")).isEqualTo("MARKET");
         assertThat(AuditService.labelForAction("SALES_ORDER_U9_SYNC")).contains("销售订单").contains("U9");
+        assertThat(AuditService.inferModule("SALES_ORDER_U9_ASSIGNMENT_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.labelForAction("SALES_ORDER_U9_ASSIGNMENT_UPDATE"))
+                .contains("销售订单").contains("U9").contains("销售员").contains("部门");
+        assertThat(AuditService.inferModule("SALES_ORDER_U9_RECONCILE")).isEqualTo("MARKET");
+        assertThat(AuditService.labelForAction("SALES_ORDER_U9_RECONCILE"))
+                .contains("销售订单").contains("U9").contains("核对");
         assertThat(readSource("service/SalesOrderU9SyncService.java"))
-                .doesNotContain("OrderDeliveryTicketMapper", "loadTickets(", "ticketMapper.selectList", "order_delivery_ticket");
-        assertThat(readSource("controller/SalesOrderU9SyncController.java"))
+                .doesNotContain("OrderDeliveryTicketMapper", "loadTickets(", "ticketMapper.selectList", "order_delivery_ticket")
+                .contains("private static final String ACTION_ASSIGNMENT = \"SALES_ORDER_U9_ASSIGNMENT_UPDATE\"")
+                .contains("private static final String ACTION_RECONCILE = \"SALES_ORDER_U9_RECONCILE\"")
+                .contains("auditAssignment(header, before, assignmentSnapshot(saved))")
+                .contains("auditReconcile(prepared, result, startedAt)")
+                .contains("assertDataScope(header)");
+        String controller = readSource("controller/SalesOrderU9SyncController.java");
+        assertThat(controller)
+                .contains("@GetMapping(\"/options\")")
+                .contains("@GetMapping(\"/orders/{salesOrderId}/preview\")")
+                .contains("@RequirePermission(\"market:u9-sync:view\")")
+                .contains("@PutMapping(\"/orders/{salesOrderId}/assignment\")")
+                .contains("@PostMapping(\"/orders/{salesOrderId}/reconcile\")")
                 .contains("@PostMapping(\"/orders/{salesOrderId}/sync\")")
                 .contains("@PostMapping(\"/sync\")")
                 .contains("@RequirePermission(\"market:u9-sync:submit\")");
+        assertThat(readSource("service/SalesOrderU9SyncStateService.java"))
+                .contains("public PreparedOrder reserve(Long salesOrderId)")
+                .contains("public PreparedOrder prepareForReconcile(Long salesOrderId)")
+                .contains("assertDataScope(header)");
         assertThat(readSource("controller/SalesOrderQpoImportController.java"))
                 .doesNotContain("@PostMapping(\"/u9-sync\")");
         assertThat(readSource("controller/SalesOrderU9SyncCompatibilityController.java"))
@@ -235,6 +256,65 @@ class SalesOrderU9SyncStage7Test {
                 .contains("@RequestMapping(\"/api/market/sales-orders\")")
                 .contains("@PostMapping(\"/u9-sync\")")
                 .contains("@RequirePermission(\"market:u9-sync:submit\")");
+    }
+
+    @Test
+    void stageSevenDocsAndSourceKeepU9SyncSecurityContractCurrent() {
+        String doc16 = readDoc("docs/QPO报价状态流转/16-销售订单U9同步模块开发文档.md");
+        String doc37 = readDoc("docs/QPO报价状态流转/37-RFQ议价提单派生销售订单并接入U9开发文档.md");
+        String permissionList = readDoc("docs/QPO权限用户体系/02-权限点清单与现有角色映射.md");
+        String permissionOps = readDoc("docs/QPO权限用户体系/03-权限体系部署与管理员使用说明.md");
+        String logOps = readDoc("docs/QPO日志模块/03-日志运维说明.md");
+        String fileLogSpec = readDoc("docs/QPO日志模块/04-主流程文件日志规范化开发文档.md");
+        String dataCenterDoc = readDoc("docs/QPO系统配置/05-数据中心统一对接开发文档.md");
+        String frontendU9Sync = readFrontend("components/SalesOrderU9Sync.vue");
+
+        assertThat(doc16)
+                .contains("U9 销售订单使用未税单价")
+                .contains("SALES_ORDER_U9_ASSIGNMENT_UPDATE")
+                .contains("SALES_ORDER_U9_RECONCILE")
+                .contains("预览和选项读取不写操作日志")
+                .doesNotContain("U9 价格只读取 `sales_order_item.tax_included_unit_price`")
+                .doesNotContain("`OrderPriceTC` 和 `FinallyPriceTC` 必须同时等于 `tax_included_unit_price`")
+                .doesNotContain("CustomerItemNo");
+        assertThat(doc37)
+                .contains("U9 同步最终以 42 号文档的最小已验证契约为准")
+                .contains("FinallyPriceTC` 使用 `sales_order_item.untaxed_unit_price`")
+                .doesNotContain("销售订单 U9 继续只使用正式含税价格字段")
+                .doesNotContain("OrderPriceTC` 和 `FinallyPriceTC` 等于含税单价")
+                .doesNotContain("含税单价为空时 U9 不调用外部系统");
+        assertThat(permissionList)
+                .contains("保存 Seller / SaleDepartment 和核对 U9 结果仍复用 `market:u9-sync:submit`")
+                .doesNotContain("| `market:u9-sync:assignment`", "| `market:u9-sync:reconcile`", "| `common:u9`");
+        assertThat(frontendU9Sync)
+                .contains("const U9_SYNC_SUBMIT_PERMISSION = 'market:u9-sync:submit'")
+                .doesNotContain("market:u9-sync:assignment", "market:u9-sync:reconcile", "common:u9");
+        assertThat(permissionOps)
+                .contains("U9同步不新增权限")
+                .contains("后端 `@RequirePermission` 与销售订单数据范围是最终边界");
+        assertThat(logOps)
+                .contains("SALES_ORDER_U9_ASSIGNMENT_UPDATE")
+                .contains("SALES_ORDER_U9_RECONCILE")
+                .contains("预览、选项读取和列表刷新不写操作日志");
+        assertThat(fileLogSpec)
+                .contains("Sales order U9 sync reconcile")
+                .contains("不得记录完整 U9 请求体、完整 U9 响应体、Authorization header、token、Cookie");
+        assertThat(dataCenterDoc)
+                .contains("U9_COMMON_ENTITY_QUERY")
+                .contains("/api/v1/u9/CommonEntity/Query")
+                .contains("U9_SALES_ORDER_SYNC` 和 `U9_COMMON_ENTITY_QUERY` 的 timeout 不低于 `60000ms`");
+
+        String combinedSource = String.join("\n",
+                readSource("service/SalesOrderU9SyncService.java"),
+                readSource("service/SalesOrderU9SyncStateService.java"),
+                readSource("service/u9/U9SalesOrderClient.java"),
+                readSource("service/u9/U9CommonEntityClient.java"));
+        assertThat(combinedSource)
+                .contains("sanitize(error.getMessage())")
+                .contains("safeError(result.message())")
+                .doesNotContain("Data.Headers")
+                .doesNotContain("Authorization: Bearer")
+                .doesNotContain("client_secret=");
     }
 
     private Fixture fixture() {
@@ -320,6 +400,26 @@ class SalesOrderU9SyncStage7Test {
         try {
             return java.nio.file.Files.readString(
                     java.nio.file.Path.of("src/main/java/com/machining/quote", relativePath),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String readDoc(String relativePath) {
+        try {
+            return java.nio.file.Files.readString(
+                    java.nio.file.Path.of("..").resolve(relativePath).normalize(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String readFrontend(String relativePath) {
+        try {
+            return java.nio.file.Files.readString(
+                    java.nio.file.Path.of("..", "quote-frontend", "src").resolve(relativePath).normalize(),
                     java.nio.charset.StandardCharsets.UTF_8);
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);
