@@ -6,9 +6,11 @@ import com.machining.quote.controller.MarketController;
 import com.machining.quote.dto.QuoteTemplateConfigReq;
 import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ErpUser;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SystemTask;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.ErpUserMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -214,20 +216,28 @@ class AuditActionCoverageTests {
         AuditService auditService = mock(AuditService.class);
         OrderRfqMapper orderRfqMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemQuoteVersionMapper = mock(ItemQuoteVersionMapper.class);
+        CustomerMasterMapper customerMasterMapper = mock(CustomerMasterMapper.class);
         RfqNumberService rfqNumberService = mock(RfqNumberService.class);
         MarketController controller = new MarketController();
         ReflectionTestUtils.setField(controller, "auditService", auditService);
         ReflectionTestUtils.setField(controller, "orderRfqMapper", orderRfqMapper);
         ReflectionTestUtils.setField(controller, "itemQuoteVersionMapper", itemQuoteVersionMapper);
+        ReflectionTestUtils.setField(controller, "customerMasterMapper", customerMasterMapper);
         ReflectionTestUtils.setField(controller, "rfqNumberService", rfqNumberService);
         when(rfqNumberService.nextRfqNo()).thenReturn("RFQ-20260717-001");
+        CustomerMaster customer = new CustomerMaster();
+        customer.setCustomerCode("C001");
+        customer.setCustomerShortName("ACME");
+        customer.setCustomerName("ACME");
+        customer.setEnabled(true);
+        when(customerMasterMapper.selectEnabledByCode("C001")).thenReturn(customer);
         doAnswer(invocation -> {
             OrderRfq order = invocation.getArgument(0);
             order.setId(88);
             return 1;
         }).when(orderRfqMapper).insert(any(OrderRfq.class));
 
-        controller.importRfq("ACME", rfqFile(), List.of());
+        controller.importRfq("C001", "ACME", "ACME", rfqFile(), List.of(), null);
 
         ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
@@ -248,6 +258,7 @@ class AuditActionCoverageTests {
                 .contains("RFQ-20260717-001")
                 .doesNotContain("备货订单");
         Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
+        assertThat(afterData).containsEntry("customerCode", "C001");
         assertThat(afterData)
                 .containsEntry("customerName", "ACME")
                 .containsEntry("rfqNo", "RFQ-20260717-001")

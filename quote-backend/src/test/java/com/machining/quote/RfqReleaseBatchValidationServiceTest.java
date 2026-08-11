@@ -142,6 +142,8 @@ class RfqReleaseBatchValidationServiceTest {
         OrderRfq order = new OrderRfq();
         order.setId(id);
         order.setRfqNo("RFQ-" + id);
+        order.setCustomerCode("C-" + customerName);
+        order.setCustomerShortName(customerName);
         order.setCustomerName(customerName);
         order.setStatus(status);
         return order;

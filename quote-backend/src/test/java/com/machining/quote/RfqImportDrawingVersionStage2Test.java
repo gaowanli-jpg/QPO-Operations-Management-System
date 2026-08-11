@@ -3,8 +3,10 @@ package com.machining.quote;
 import com.alibaba.excel.EasyExcel;
 import com.machining.quote.controller.MarketController;
 import com.machining.quote.dto.RfqExcelDTO;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
@@ -39,6 +41,8 @@ class RfqImportDrawingVersionStage2Test {
         MarketController controller = controller();
 
         Map<String, Object> result = controller.importRfq(
+                "C001",
+                "ACME",
                 "ACME",
                 rfqFileWithSamePartDifferentVersions(),
                 List.of(),
@@ -96,6 +100,8 @@ class RfqImportDrawingVersionStage2Test {
         MarketController controller = controller();
 
         controller.importRfq(
+                "C001",
+                "ACME",
                 "ACME",
                 rfqFileWithSamePartDifferentVersions(),
                 List.of(pdf("drawings", "P-100.pdf")),
@@ -115,6 +121,7 @@ class RfqImportDrawingVersionStage2Test {
         AuditService auditService = mock(AuditService.class);
         OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
         RfqNumberService rfqNumberService = mock(RfqNumberService.class);
         BusinessFileService businessFileService = mock(BusinessFileService.class, invocation -> {
             if ("saveDrawing".equals(invocation.getMethod().getName())) {
@@ -137,9 +144,16 @@ class RfqImportDrawingVersionStage2Test {
         ReflectionTestUtils.setField(controller, "auditService", auditService);
         ReflectionTestUtils.setField(controller, "orderRfqMapper", orderMapper);
         ReflectionTestUtils.setField(controller, "itemQuoteVersionMapper", itemMapper);
+        ReflectionTestUtils.setField(controller, "customerMasterMapper", customerMapper);
         ReflectionTestUtils.setField(controller, "rfqNumberService", rfqNumberService);
         ReflectionTestUtils.setField(controller, "businessFileService", businessFileService);
         when(rfqNumberService.nextRfqNo()).thenReturn("RFQ-20260803-001");
+        CustomerMaster customer = new CustomerMaster();
+        customer.setCustomerCode("C001");
+        customer.setCustomerShortName("ACME");
+        customer.setCustomerName("ACME");
+        customer.setEnabled(true);
+        when(customerMapper.selectEnabledByCode("C001")).thenReturn(customer);
         doAnswer(invocation -> {
             OrderRfq order = invocation.getArgument(0);
             order.setId(88);

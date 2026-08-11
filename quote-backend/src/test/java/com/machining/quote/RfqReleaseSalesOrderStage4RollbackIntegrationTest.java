@@ -98,6 +98,8 @@ class RfqReleaseSalesOrderStage4RollbackIntegrationTest {
 
         OrderRfq order = new OrderRfq();
         order.setRfqNo("ROLLBACK-RFQ-" + suffix);
+        order.setCustomerCode(customer.getCustomerCode());
+        order.setCustomerShortName(customer.getCustomerShortName());
         order.setCustomerName(customerName);
         order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);

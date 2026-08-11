@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.InternalTargetLeadTimeSetReq;
@@ -1380,17 +1381,23 @@ class CoreWorkflowIntegrationTests {
     }
 
     private void ensureCustomer(String customerName) {
-        Long count = customerMapper.selectCount(new QueryWrapper<CustomerMaster>()
-                .eq("customer_name", customerName));
-        if (count != null && count > 0) {
-            return;
+        CustomerMaster customer = customerMapper.selectOne(new QueryWrapper<CustomerMaster>()
+                .eq("customer_name", customerName)
+                .last("LIMIT 1"));
+        if (customer == null) {
+            customer = new CustomerMaster();
+            customer.setCustomerCode("TEST-" + System.nanoTime());
+            customer.setCustomerShortName(customerName);
+            customer.setCustomerName(customerName);
+            customer.setEnabled(true);
+            customerMapper.insert(customer);
         }
-        CustomerMaster customer = new CustomerMaster();
-        customer.setCustomerCode("TEST-" + System.nanoTime());
-        customer.setCustomerShortName(customerName);
-        customer.setCustomerName(customerName);
-        customer.setEnabled(true);
-        customerMapper.insert(customer);
+        UpdateWrapper<OrderRfq> update = new UpdateWrapper<>();
+        update.eq("customer_name", customerName)
+                .and(wrapper -> wrapper.isNull("customer_code").or().eq("customer_code", ""))
+                .set("customer_code", customer.getCustomerCode())
+                .set("customer_short_name", customer.getCustomerShortName());
+        orderMapper.update(null, update);
     }
 
     private DeliveryGenerateReq deliveryReq(OrderRfq order, ItemQuoteVersion item, int acceptedQty) {

@@ -115,6 +115,8 @@ class RfqReleaseMesMaterialDualWriteStage5IntegrationTest {
 
         OrderRfq order = new OrderRfq();
         order.setRfqNo("STAGE5-RFQ-" + suffix);
+        order.setCustomerCode(customer.getCustomerCode());
+        order.setCustomerShortName(customer.getCustomerShortName());
         order.setCustomerName(customerName);
         order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);

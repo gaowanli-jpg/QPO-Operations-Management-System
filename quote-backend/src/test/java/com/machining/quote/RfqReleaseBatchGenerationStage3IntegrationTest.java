@@ -45,9 +45,9 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
     @Test
     void generatesOneAtomicTicketBatchForMultipleRfqsAndDoesNotDuplicateCompletedRetry() {
         String customerName = "阶段3同客户-" + System.nanoTime();
-        customer(customerName);
-        OrderRfq firstOrder = order(customerName, "STAGE3-A");
-        OrderRfq secondOrder = order(customerName, "STAGE3-B");
+        CustomerMaster customer = customer(customerName);
+        OrderRfq firstOrder = order(customer, "STAGE3-A");
+        OrderRfq secondOrder = order(customer, "STAGE3-B");
         ItemQuoteVersion firstItem = item(firstOrder, "STAGE3-PART-A", 2);
         ItemQuoteVersion secondItem = item(secondOrder, "STAGE3-PART-B", 1);
         DeliveryGenerateReq req = request(firstOrder, firstItem, secondOrder, secondItem);
@@ -71,22 +71,25 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
         return ticketMapper.selectCount(query);
     }
 
-    private OrderRfq order(String customerName, String suffix) {
+    private OrderRfq order(CustomerMaster customer, String suffix) {
         OrderRfq order = new OrderRfq();
         order.setRfqNo(suffix + "-" + System.nanoTime());
-        order.setCustomerName(customerName);
+        order.setCustomerCode(customer.getCustomerCode());
+        order.setCustomerShortName(customer.getCustomerShortName());
+        order.setCustomerName(customer.getCustomerName());
         order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);
         return order;
     }
 
-    private void customer(String customerName) {
+    private CustomerMaster customer(String customerName) {
         CustomerMaster customer = new CustomerMaster();
         customer.setCustomerCode("STAGE3-" + System.nanoTime());
         customer.setCustomerShortName(customerName);
         customer.setCustomerName(customerName);
         customer.setEnabled(true);
         customerMapper.insert(customer);
+        return customer;
     }
 
     private ItemQuoteVersion item(OrderRfq order, String partNo, int qty) {

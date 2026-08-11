@@ -3,15 +3,22 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.U9SyncDepartmentOptionCache;
+import com.machining.quote.entity.U9SyncSellerOptionCache;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.U9SyncDepartmentOptionCacheMapper;
+import com.machining.quote.mapper.U9SyncSellerOptionCacheMapper;
 import com.machining.quote.service.u9.U9CommonEntityClient;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator.ValidationResult;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,12 +39,20 @@ public class SalesOrderU9SyncStateService {
     private SalesOrderHeaderMapper headerMapper;
     @Autowired
     private SalesOrderItemMapper itemMapper;
+    @Autowired
+    private CustomerMasterMapper customerMapper;
+    @Autowired
+    private U9SyncSellerOptionCacheMapper sellerOptionMapper;
+    @Autowired
+    private U9SyncDepartmentOptionCacheMapper departmentOptionMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired
     private U9SalesOrderRequestAssembler requestAssembler = new U9SalesOrderRequestAssembler();
     @Autowired
     private U9SalesOrderContractValidator contractValidator = new U9SalesOrderContractValidator();
+    @Value("${erp.u9.org-code:101}")
+    private String orgCode = "101";
     private Clock clock = Clock.systemDefaultZone();
 
     @Transactional
@@ -45,6 +60,7 @@ public class SalesOrderU9SyncStateService {
         SalesOrderHeader header = lockedHeader(salesOrderId);
         assertDataScope(header);
         assertCanReserve(header);
+        validateActiveMasterData(header);
         List<SalesOrderItem> items = loadItems(header.getId());
         ValidationResult validation = contractValidator.validate(header, items);
         if (validation.hasBlockingErrors()) {
@@ -148,6 +164,55 @@ public class SalesOrderU9SyncStateService {
         query.eq("sales_order_id", salesOrderId).orderByAsc("id");
         List<SalesOrderItem> items = itemMapper.selectList(query);
         return items == null ? List.of() : items;
+    }
+
+    private void validateActiveMasterData(SalesOrderHeader header) {
+        try {
+            assertActiveMasterData(header);
+        } catch (RuntimeException ex) {
+            markValidationFailed(header, ex.getMessage());
+            throw ex;
+        }
+    }
+
+    private void assertActiveMasterData(SalesOrderHeader header) {
+        String customerCode = trimToNull(header.getCustomerCode());
+        if (customerCode == null) {
+            throw new RuntimeException("Sales order customerCode cannot be blank before U9 sync");
+        }
+        CustomerMaster customer = customerMapper.selectEnabledByCode(customerCode);
+        if (customer == null || Boolean.FALSE.equals(customer.getEnabled())) {
+            throw new RuntimeException("U9 customer is disabled or not found: " + customerCode);
+        }
+
+        String sellerCode = trimToNull(header.getU9SellerCode());
+        if (sellerCode != null) {
+            QueryWrapper<U9SyncSellerOptionCache> query = new QueryWrapper<>();
+            query.eq("u9_org_code", effectiveOrgCode())
+                    .eq("seller_code", sellerCode)
+                    .eq("enabled", true);
+            U9SyncSellerOptionCache seller = sellerOptionMapper.selectOne(query);
+            if (seller == null) {
+                throw new RuntimeException("U9 Seller is disabled or not found: " + sellerCode);
+            }
+        }
+
+        String departmentCode = trimToNull(header.getU9SaleDepartmentCode());
+        if (departmentCode != null) {
+            QueryWrapper<U9SyncDepartmentOptionCache> query = new QueryWrapper<>();
+            query.eq("u9_org_code", effectiveOrgCode())
+                    .eq("department_code", departmentCode)
+                    .eq("enabled", true);
+            U9SyncDepartmentOptionCache department = departmentOptionMapper.selectOne(query);
+            if (department == null) {
+                throw new RuntimeException("U9 SaleDepartment is disabled or not found: " + departmentCode);
+            }
+        }
+    }
+
+    private String effectiveOrgCode() {
+        String normalized = trimToNull(orgCode);
+        return normalized == null ? "101" : normalized;
     }
 
     private void updateFinalState(PreparedOrder prepared, String status, String u9OrderId, String u9OrderCode, String message) {

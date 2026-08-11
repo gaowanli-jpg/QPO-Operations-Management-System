@@ -134,9 +134,9 @@ public class RfqReleaseSalesOrderService {
     private DeliveryBatchResultDTO create(
             DeliveryGenerateReq req,
             RfqReleaseBatchValidationService.BatchContext context) {
-        CustomerMaster customer = customerMapper.selectEnabledByNameForUpdate(context.customerName());
+        CustomerMaster customer = customerMapper.selectEnabledByCodeForUpdate(context.customerCode());
         if (customer == null || isBlank(customer.getCustomerCode()) || isBlank(customer.getCustomerName())) {
-            throw new RuntimeException("询价单客户未配置有效客户主数据");
+            throw new RuntimeException("RFQ customerCode has no enabled U9 customer cache: " + context.customerCode());
         }
         Map<Integer, OrderRfq> lockedOrders = lockOrders(context);
         List<ReleaseLine> releaseLines = lockAndValidateLines(req, context, lockedOrders);
@@ -298,9 +298,9 @@ public class RfqReleaseSalesOrderService {
         header.setDocumentNo(numbers.documentNo());
         header.setDocumentTypeCode(context.documentTypeCode());
         header.setCustomerId(customer.getId());
-        header.setCustomerCode(customer.getCustomerCode());
-        header.setCustomerShortName(customer.getCustomerShortName());
-        header.setCustomerName(customer.getCustomerName());
+        header.setCustomerCode(context.customerCode());
+        header.setCustomerShortName(firstText(context.customerShortName(), customer.getCustomerShortName()));
+        header.setCustomerName(context.customerName());
         header.setSourceType(SOURCE_RFQ_RELEASE);
         header.setSourceReleaseBatchKey(context.releaseBatchKey());
         header.setSourceReleaseRequestHash(context.requestHash());

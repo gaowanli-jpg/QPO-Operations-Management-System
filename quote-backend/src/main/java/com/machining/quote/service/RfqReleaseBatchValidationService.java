@@ -78,6 +78,8 @@ public class RfqReleaseBatchValidationService {
         }
 
         Map<Integer, OrderRfq> orders = loadAccessibleOrders(rfqIds);
+        String customerCode = null;
+        String customerShortName = null;
         String customerName = null;
         for (OrderRfq order : orders.values()) {
             if (!replay && !QuoteStatusWorkflow.canGenerateDeliveryTicket(order.getStatus())) {
@@ -90,21 +92,29 @@ public class RfqReleaseBatchValidationService {
             if (currentCustomer == null) {
                 throw new RuntimeException("询价单客户不能为空");
             }
-            if (customerName == null) {
+            String currentCustomerCode = normalizeOptional(order.getCustomerCode(), "customerCode", MAX_TEXT_LENGTH);
+            if (currentCustomerCode == null) {
+                throw new RuntimeException("RFQ customerCode cannot be blank");
+            }
+            if (customerCode == null) {
+                customerCode = currentCustomerCode;
+                customerShortName = normalizeOptional(order.getCustomerShortName(), "customerShortName", MAX_TITLE_LENGTH);
                 customerName = currentCustomer;
-            } else if (!Objects.equals(customerName, currentCustomer)) {
+            } else if (!Objects.equals(customerCode, currentCustomerCode)) {
                 throw new RuntimeException("一次议价提单只能包含同一客户的询价单");
             }
         }
 
         validateItemReferences(req.getItems(), rfqIds);
         String requestHash = calculateRequestHash(
-                customerName, rfqIds, req, documentTypeCode, salesOrderDate, customerOrderTitle,
+                customerCode, rfqIds, req, documentTypeCode, salesOrderDate, customerOrderTitle,
                 orderType, internalProjectNo, customerOrderNo, customerProjectNo, projectNo, arrangeType);
         String releaseBatchKeySummary = sha256(releaseBatchKey).substring(0, 12);
         return new BatchContext(
                 rfqIds,
                 orders,
+                customerCode,
+                customerShortName,
                 customerName,
                 documentTypeCode,
                 salesOrderDate,
@@ -191,7 +201,7 @@ public class RfqReleaseBatchValidationService {
     }
 
     private String calculateRequestHash(
-            String customerName,
+            String customerCode,
             List<Integer> rfqIds,
             DeliveryGenerateReq req,
             String documentTypeCode,
@@ -211,7 +221,7 @@ public class RfqReleaseBatchValidationService {
                 .sorted()
                 .collect(Collectors.joining("|"));
         String canonical = String.join("|",
-                safe(customerName),
+                safe(customerCode),
                 rfqIds.stream().map(String::valueOf).sorted().collect(Collectors.joining(",")),
                 documentTypeCode,
                 salesOrderDate.toString(),
@@ -283,6 +293,8 @@ public class RfqReleaseBatchValidationService {
     public record BatchContext(
             List<Integer> rfqIds,
             Map<Integer, OrderRfq> orders,
+            String customerCode,
+            String customerShortName,
             String customerName,
             String documentTypeCode,
             LocalDate salesOrderDate,

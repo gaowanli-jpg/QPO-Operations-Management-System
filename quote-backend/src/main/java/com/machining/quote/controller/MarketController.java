@@ -17,9 +17,11 @@ import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.dto.RfqExcelDTO;
+import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.AuditService;
@@ -84,6 +86,9 @@ public class MarketController {
 
     @Autowired
     private ItemQuoteVersionMapper itemQuoteVersionMapper;
+
+    @Autowired
+    private CustomerMasterMapper customerMasterMapper;
 
     @Autowired
     private BusinessFileService businessFileService;
@@ -429,6 +434,10 @@ public class MarketController {
             @RequestParam("excelFile") MultipartFile excelFile,
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
             @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        CustomerMaster customer = requireEnabledU9Customer(customerCode);
+        String resolvedCustomerCode = cleanText(customer.getCustomerCode());
+        String resolvedCustomerShortName = cleanText(customer.getCustomerShortName());
+        String resolvedCustomerName = cleanText(customer.getCustomerName());
         Map<String, Object> result = new HashMap<>();
         long startedAt = System.currentTimeMillis();
         String autoRfqNo = null;
@@ -436,8 +445,9 @@ public class MarketController {
 
         try {
             autoRfqNo = rfqNumberService.nextRfqNo();
-            log.info("RFQ import started customerName={} rfqNo={} excelFileName={} drawingFileCount={}",
-                    customerName,
+            log.info("RFQ import started customerCode={} customerName={} rfqNo={} excelFileName={} drawingFileCount={}",
+                    resolvedCustomerCode,
+                    resolvedCustomerName,
                     autoRfqNo,
                     excelFile == null ? "" : excelFile.getOriginalFilename(),
                     drawings == null ? 0 : drawings.size());
@@ -466,9 +476,9 @@ public class MarketController {
             int versionUploadedDrawingCount = 0;
             if (drawings != null && !drawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
-                pathOrder.setCustomerCode(cleanText(customerCode));
-                pathOrder.setCustomerShortName(cleanText(customerShortName));
-                pathOrder.setCustomerName(customerName);
+                pathOrder.setCustomerCode(resolvedCustomerCode);
+                pathOrder.setCustomerShortName(resolvedCustomerShortName);
+                pathOrder.setCustomerName(resolvedCustomerName);
                 pathOrder.setRfqNo(autoRfqNo);
 
                 for (MultipartFile drawing : drawings) {
@@ -493,9 +503,9 @@ public class MarketController {
             }
             if (versionDrawings != null && !versionDrawings.isEmpty()) {
                 OrderRfq pathOrder = new OrderRfq();
-                pathOrder.setCustomerCode(cleanText(customerCode));
-                pathOrder.setCustomerShortName(cleanText(customerShortName));
-                pathOrder.setCustomerName(customerName);
+                pathOrder.setCustomerCode(resolvedCustomerCode);
+                pathOrder.setCustomerShortName(resolvedCustomerShortName);
+                pathOrder.setCustomerName(resolvedCustomerName);
                 pathOrder.setRfqNo(autoRfqNo);
 
                 for (MultipartFile drawing : versionDrawings) {
@@ -527,17 +537,17 @@ public class MarketController {
 
             OrderRfq newOrder = new OrderRfq();
             newOrder.setRfqNo(autoRfqNo);
-            newOrder.setCustomerCode(cleanText(customerCode));
-            newOrder.setCustomerShortName(cleanText(customerShortName));
-            newOrder.setCustomerName(customerName);
+            newOrder.setCustomerCode(resolvedCustomerCode);
+            newOrder.setCustomerShortName(resolvedCustomerShortName);
+            newOrder.setCustomerName(resolvedCustomerName);
             newOrder.setStatus(QuoteStatusWorkflow.UNPRICED);
             if (dataScopeService != null) {
                 dataScopeService.assignCurrentOwnership(newOrder);
             }
             orderRfqMapper.insert(newOrder);
             generatedRfqId = newOrder.getId();
-            log.info("RFQ import order saved rfqId={} rfqNo={} customerName={}",
-                    generatedRfqId, autoRfqNo, customerName);
+            log.info("RFQ import order saved rfqId={} rfqNo={} customerCode={} customerName={}",
+                    generatedRfqId, autoRfqNo, resolvedCustomerCode, resolvedCustomerName);
 
             Set<String> matchedDrawingPartNos = new HashSet<>();
             Set<String> matchedVersionDrawingKeys = new HashSet<>();
@@ -632,11 +642,12 @@ public class MarketController {
             result.put("success", true);
             result.put("message", "已成功为您生成询价单！<br><b>单号：</b><span style='color:#409EFF'>" + autoRfqNo + "</span>");
             result.put("drawingReport", drawingReport);
-            recordRfqImportAudit(customerName, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
-            log.info("RFQ import completed rfqId={} rfqNo={} customerName={} itemCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
+            recordRfqImportAudit(resolvedCustomerCode, resolvedCustomerName, autoRfqNo, generatedRfqId, excelDataList.size(), drawingReport);
+            log.info("RFQ import completed rfqId={} rfqNo={} customerCode={} customerName={} itemCount={} matchedDrawingCount={} missingDrawingCount={} unmatchedDrawingCount={} durationMs={}",
                     generatedRfqId,
                     autoRfqNo,
-                    customerName,
+                    resolvedCustomerCode,
+                    resolvedCustomerName,
                     excelDataList.size(),
                     matchedDrawingPartNos.size(),
                     missingDrawingItems.size(),
@@ -645,10 +656,25 @@ public class MarketController {
             return result;
 
         } catch (Exception e) {
-            log.error("RFQ import failed customerName={} rfqNo={} rfqId={} durationMs={}",
-                    customerName, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
+            log.error("RFQ import failed customerCode={} customerName={} rfqNo={} rfqId={} durationMs={}",
+                    resolvedCustomerCode, resolvedCustomerName, autoRfqNo, generatedRfqId, System.currentTimeMillis() - startedAt, e);
             throw new RuntimeException("服务器处理失败：" + e.getMessage(), e);
         }
+    }
+
+    private CustomerMaster requireEnabledU9Customer(String customerCode) {
+        String code = cleanText(customerCode);
+        if (code == null) {
+            throw new RuntimeException("customerCode is required for RFQ import");
+        }
+        CustomerMaster customer = customerMasterMapper.selectEnabledByCode(code);
+        if (customer == null || Boolean.FALSE.equals(customer.getEnabled())) {
+            throw new RuntimeException("U9 customer is disabled or not found: " + code);
+        }
+        if (cleanText(customer.getCustomerCode()) == null || cleanText(customer.getCustomerName()) == null) {
+            throw new RuntimeException("U9 customer snapshot is incomplete: " + code);
+        }
+        return customer;
     }
 
     private String cleanText(String value) {
@@ -660,6 +686,7 @@ public class MarketController {
     }
 
     private void recordRfqImportAudit(
+            String customerCode,
             String customerName,
             String rfqNo,
             Integer rfqId,
@@ -669,6 +696,7 @@ public class MarketController {
             return;
         }
         Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("customerCode", customerCode);
         summary.put("customerName", customerName);
         summary.put("rfqNo", rfqNo);
         summary.put("rfqId", rfqId);

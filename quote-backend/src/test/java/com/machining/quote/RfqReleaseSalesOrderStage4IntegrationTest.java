@@ -72,9 +72,9 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
     void atomicallyCreatesOneDerivedSalesOrderWithEffectiveItemValuesAndStableRelations() {
         String suffix = String.valueOf(System.nanoTime());
         String customerName = "阶段4派生客户-" + suffix;
-        customer(customerName, "STAGE4-" + suffix);
-        OrderRfq firstOrder = order(customerName, "STAGE4-A-" + suffix);
-        OrderRfq secondOrder = order(customerName, "STAGE4-B-" + suffix);
+        CustomerMaster customer = customer(customerName, "STAGE4-" + suffix);
+        OrderRfq firstOrder = order(customer, "STAGE4-A-" + suffix);
+        OrderRfq secondOrder = order(customer, "STAGE4-B-" + suffix);
 
         ItemQuoteVersion parent = item(firstOrder, "STAGE4-PARENT-" + suffix, 2, 10);
         parent.setSalesOrderDate(LocalDate.of(2026, 8, 1));
@@ -115,6 +115,8 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
         assertThat(header.getSourceReleaseRequestHash()).hasSize(64);
         assertThat(header.getStatus()).isEqualTo("已生成提单");
         assertThat(header.getDocumentTypeCode()).isEqualTo("SO01");
+        assertThat(header.getCustomerCode()).isEqualTo(customer.getCustomerCode());
+        assertThat(header.getCustomerName()).isEqualTo(customerName);
         assertThat(header.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 8, 7));
         assertThat(header.getCustomerOrderNo()).isEqualTo("DEFAULT-CUSTOMER-ORDER");
         assertThat(header.getCustomerProjectNo()).isEqualTo("DEFAULT-CUSTOMER-PROJECT");
@@ -251,10 +253,12 @@ class RfqReleaseSalesOrderStage4IntegrationTest {
         return customer;
     }
 
-    private OrderRfq order(String customerName, String rfqNo) {
+    private OrderRfq order(CustomerMaster customer, String rfqNo) {
         OrderRfq order = new OrderRfq();
         order.setRfqNo(rfqNo);
-        order.setCustomerName(customerName);
+        order.setCustomerCode(customer.getCustomerCode());
+        order.setCustomerShortName(customer.getCustomerShortName());
+        order.setCustomerName(customer.getCustomerName());
         order.setStatus(QuoteStatusWorkflow.QUOTED);
         orderMapper.insert(order);
         return order;

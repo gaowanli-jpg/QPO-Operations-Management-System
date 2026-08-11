@@ -444,17 +444,23 @@ class AssemblyWorkflowIntegrationTests {
     }
 
     private void ensureCustomer(String customerName) {
-        Long count = customerMapper.selectCount(new QueryWrapper<CustomerMaster>()
-                .eq("customer_name", customerName));
-        if (count != null && count > 0) {
-            return;
+        CustomerMaster customer = customerMapper.selectOne(new QueryWrapper<CustomerMaster>()
+                .eq("customer_name", customerName)
+                .last("LIMIT 1"));
+        if (customer == null) {
+            customer = new CustomerMaster();
+            customer.setCustomerCode("TEST-" + System.nanoTime());
+            customer.setCustomerShortName(customerName);
+            customer.setCustomerName(customerName);
+            customer.setEnabled(true);
+            customerMapper.insert(customer);
         }
-        CustomerMaster customer = new CustomerMaster();
-        customer.setCustomerCode("TEST-" + System.nanoTime());
-        customer.setCustomerShortName(customerName);
-        customer.setCustomerName(customerName);
-        customer.setEnabled(true);
-        customerMapper.insert(customer);
+        UpdateWrapper<OrderRfq> update = new UpdateWrapper<>();
+        update.eq("customer_name", customerName)
+                .and(wrapper -> wrapper.isNull("customer_code").or().eq("customer_code", ""))
+                .set("customer_code", customer.getCustomerCode())
+                .set("customer_short_name", customer.getCustomerShortName());
+        orderMapper.update(null, update);
     }
 
     private ItemQuoteVersion createPendingItem(OrderRfq order, String partNo, int qty) {

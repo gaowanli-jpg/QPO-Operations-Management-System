@@ -621,7 +621,7 @@ const buildDrawingReportHtml = (report) => {
 }
 
 const submitSalesOrderImport = async () => {
-  if (!salesOrderForm.customerId) return ElMessage.warning('请选择销售订单客户！')
+  if (!salesOrderForm.customerId || !salesOrderForm.customerCode) return ElMessage.warning('请选择销售订单客户！')
   const documentTypeCode = salesOrderForm.documentTypeCode.trim()
   const customerOrderNo = salesOrderForm.customerOrderNo.trim()
   const internalProjectNo = salesOrderForm.internalProjectNo.trim()
@@ -696,7 +696,7 @@ const submitSalesOrderImport = async () => {
 
 // 提交询价单和图纸
 const submitRfqPackage = async () => {
-  if (!rfqForm.customerId) return ElMessage.warning('请选择询价单客户！')
+  if (!rfqForm.customerId || !rfqForm.customerCode) return ElMessage.warning('请选择询价单客户！')
   if (!excelFile.value) return ElMessage.warning('请上传客户询价表 Excel！')
 
   return runAction(IMPORT_RFQ_ACTION_KEY, async () => {

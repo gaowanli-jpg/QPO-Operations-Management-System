@@ -54,12 +54,12 @@ class CustomerMasterStage5DocumentationTest {
     }
 
     @Test
-    void u9CustomerDocMarksStage4AsCompletedAndKeepsLaterScopePending() throws IOException {
+    void u9CustomerDocMarksStage4AsCompletedAndTracksCurrentImplementationStatus() throws IOException {
         String doc = read(U9_CUSTOMER_DOC);
 
         assertThat(doc)
                 .contains(
-                        "设计状态：阶段 1-4 已完成",
+                        "设计状态：阶段 1-7 已完成",
                         "### 阶段 4：客户资料只读模块改造",
                         "状态：已完成",
                         "[x] 客户资料页面只能查看、筛选和同步",
