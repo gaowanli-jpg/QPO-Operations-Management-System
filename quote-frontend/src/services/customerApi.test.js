@@ -27,27 +27,14 @@ describe('customerApi', () => {
     expect(request).toHaveBeenCalledWith('/api/system/customers/options', { params })
   })
 
-  test('creates updates and deletes customer master records', async () => {
-    const payload = {
-      customerCode: 'C001',
-      customerShortName: 'ABC',
-      customerName: 'ABC Technology'
-    }
+  test('triggers manual U9 customer cache sync without exposing local write APIs', async () => {
+    await customerApi.syncCustomers()
 
-    await customerApi.createCustomer(payload)
-    await customerApi.updateCustomer(9, payload)
-    await customerApi.deleteCustomer(9)
-
-    expect(request).toHaveBeenNthCalledWith(1, '/api/system/customers', {
-      method: 'POST',
-      data: payload
+    expect(request).toHaveBeenCalledWith('/api/system/customers/sync', {
+      method: 'POST'
     })
-    expect(request).toHaveBeenNthCalledWith(2, '/api/system/customers/9', {
-      method: 'PUT',
-      data: payload
-    })
-    expect(request).toHaveBeenNthCalledWith(3, '/api/system/customers/9', {
-      method: 'DELETE'
-    })
+    expect(customerApi.createCustomer).toBeUndefined()
+    expect(customerApi.updateCustomer).toBeUndefined()
+    expect(customerApi.deleteCustomer).toBeUndefined()
   })
 })

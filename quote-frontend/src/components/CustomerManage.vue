@@ -3,10 +3,18 @@
     <header class="erp-page-header customer-page-header">
       <div>
         <h1 class="erp-page-title">客户资料</h1>
-        <p class="erp-page-description">维护 QPO 全系统客户编码、简称和名称，供客户选择、数据权限和后续 U9 销售订单使用。</p>
+        <p class="erp-page-description">来自 U9 的只读客户主数据，供 QPO 全系统客户选择和数据权限使用。</p>
       </div>
       <div class="erp-page-actions customer-page-actions">
-        <el-button v-permission="'system:customer:create'" type="primary" @click="openCreate">新增客户</el-button>
+        <el-button
+          v-permission="'system:customer:sync'"
+          type="primary"
+          :loading="syncLoading"
+          :disabled="loading || syncLoading"
+          @click="syncU9Customers"
+        >
+          同步 U9 客户
+        </el-button>
       </div>
     </header>
 
@@ -27,50 +35,53 @@
         />
       </div>
       <div class="erp-toolbar-group customer-toolbar-actions">
-        <el-button type="primary" :loading="loading" @click="searchCustomers">查询</el-button>
-        <el-button @click="resetFilters">重置</el-button>
-        <el-button :loading="loading" @click="loadCustomers">刷新</el-button>
+        <el-button type="primary" :loading="loading" :disabled="syncLoading" @click="searchCustomers">查询</el-button>
+        <el-button :disabled="loading || syncLoading" @click="resetFilters">重置</el-button>
+        <el-button :loading="loading" :disabled="syncLoading" @click="loadCustomers">刷新</el-button>
       </div>
     </section>
 
+    <el-alert
+      v-if="syncResult"
+      class="customer-sync-result"
+      :type="syncResult.success === false ? 'error' : 'success'"
+      :closable="true"
+      show-icon
+      @close="syncResult = null"
+    >
+      <template #title>
+        {{ syncResult.success === false ? 'U9 客户同步失败' : 'U9 客户同步完成' }}
+      </template>
+      <template #default>
+        已获取 {{ syncResult.fetchedCount || 0 }} 条，更新 {{ syncResult.upsertedCount || 0 }} 条，停用 {{ syncResult.disabledCount || 0 }} 条。
+        <span v-if="syncResult.safeMessage || syncResult.message">{{ syncResult.safeMessage || syncResult.message }}</span>
+      </template>
+    </el-alert>
+
     <section class="erp-table-surface customer-table-surface">
-      <div class="erp-table-body">
+      <div class="erp-table-body customer-table-body">
         <el-table
           :data="customers"
           border
           v-loading="loading"
-          empty-text="暂无客户资料"
+          empty-text="暂无 U9 客户资料"
         >
-          <el-table-column prop="customerCode" label="客户编码" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="customerShortName" label="客户简称" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="customerCode" label="客户编码" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="customerShortName" label="客户简称" min-width="170" show-overflow-tooltip />
           <el-table-column prop="customerName" label="客户名称" min-width="260" show-overflow-tooltip />
-          <el-table-column label="状态" width="100">
+          <el-table-column label="有效状态" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled === false ? 'info' : 'success'">
                 {{ row.enabled === false ? '停用' : '启用' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="updatedAt" label="更新时间" min-width="180">
-            <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
+          <el-table-column prop="lastSyncedAt" label="最近同步时间" min-width="180">
+            <template #default="{ row }">{{ formatDateTime(row.lastSyncedAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column label="来源" width="110">
             <template #default="{ row }">
-              <div class="erp-table-actions customer-row-actions">
-                <el-button v-permission="'system:customer:update'" size="small" :disabled="isCustomerRowPending(row)" @click="openEdit(row)">编辑</el-button>
-                <el-button
-                  v-permission="'system:customer:delete'"
-                  size="small"
-                  type="danger"
-                  plain
-                  class="erp-danger-action"
-                  :loading="isCustomerDeletePending(row)"
-                  :disabled="isCustomerRowPending(row)"
-                  @click="deleteCustomer(row)"
-                >
-                  删除
-                </el-button>
-              </div>
+              <span class="customer-source-text">U9{{ row.u9OrgCode ? ` / ${row.u9OrgCode}` : '' }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -89,58 +100,18 @@
         />
       </div>
     </section>
-
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑客户' : '新增客户'" width="520px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="96px" class="erp-dialog-form">
-        <el-form-item label="客户编码" prop="customerCode">
-          <el-input v-model.trim="form.customerCode" placeholder="例如 C0001" maxlength="200" show-word-limit />
-        </el-form-item>
-        <el-form-item label="客户简称" prop="customerShortName">
-          <el-input v-model.trim="form.customerShortName" placeholder="例如 ABC" maxlength="200" show-word-limit />
-        </el-form-item>
-        <el-form-item label="客户名称" prop="customerName">
-          <el-input v-model.trim="form.customerName" placeholder="客户完整名称" maxlength="200" show-word-limit />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="erp-dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button
-            v-permission="form.id ? 'system:customer:update' : 'system:customer:create'"
-            type="primary"
-            :loading="isPending(customerActionKeys.saveDialog)"
-            :disabled="isPending(customerActionKeys.saveDialog)"
-            @click="saveCustomer"
-          >
-            保存
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  createCustomer,
-  deleteCustomer as deleteCustomerRequest,
-  listCustomers,
-  updateCustomer
-} from '../services/customerApi'
-import { usePendingAction } from '../composables/usePendingAction'
+import { ElMessage } from 'element-plus'
+import { listCustomers, syncCustomers } from '../services/customerApi'
 
 const customers = ref([])
 const loading = ref(false)
-const dialogVisible = ref(false)
-const formRef = ref()
-const { isPending, runAction } = usePendingAction()
-
-const customerActionKeys = {
-  saveDialog: 'system:customer:save-dialog',
-  delete: (customerId) => `system:customer:delete:${customerId || 'none'}`
-}
+const syncLoading = ref(false)
+const syncResult = ref(null)
 
 const filters = reactive({
   field: 'all',
@@ -152,20 +123,6 @@ const pagination = reactive({
   pageSize: 20,
   total: 0
 })
-
-const form = reactive({
-  id: null,
-  customerCode: '',
-  customerShortName: '',
-  customerName: '',
-  enabled: true
-})
-
-const rules = {
-  customerCode: [{ required: true, message: '请填写客户编码', trigger: 'blur' }],
-  customerShortName: [{ required: true, message: '请填写客户简称', trigger: 'blur' }],
-  customerName: [{ required: true, message: '请填写客户名称', trigger: 'blur' }]
-}
 
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
 
@@ -208,66 +165,24 @@ const handlePageSizeChange = () => {
   loadCustomers()
 }
 
-const resetForm = () => {
-  form.id = null
-  form.customerCode = ''
-  form.customerShortName = ''
-  form.customerName = ''
-  form.enabled = true
-  formRef.value?.clearValidate()
-}
-
-const openCreate = () => {
-  resetForm()
-  dialogVisible.value = true
-}
-
-const openEdit = (row) => {
-  form.id = row.id
-  form.customerCode = row.customerCode || ''
-  form.customerShortName = row.customerShortName || ''
-  form.customerName = row.customerName || ''
-  form.enabled = row.enabled !== false
-  formRef.value?.clearValidate()
-  dialogVisible.value = true
-}
-
-const saveCustomer = async () => {
-  await formRef.value?.validate()
-  return runAction(customerActionKeys.saveDialog, async () => {
-    const payload = {
-      customerCode: form.customerCode,
-      customerShortName: form.customerShortName,
-      customerName: form.customerName,
-      enabled: form.enabled !== false
+const syncU9Customers = async () => {
+  if (syncLoading.value) return
+  syncLoading.value = true
+  try {
+    const response = await syncCustomers()
+    syncResult.value = response || { success: false, message: '同步接口未返回结果' }
+    if (response?.success === false) {
+      ElMessage.error(response.message || response.safeMessage || 'U9 客户同步失败')
+      return
     }
-    const response = form.id
-      ? await updateCustomer(form.id, payload)
-      : await createCustomer(payload)
-    ElMessage.success(response?.message || '客户资料已保存')
-    dialogVisible.value = false
+    ElMessage.success(response?.message || 'U9 客户同步完成')
     await loadCustomers()
-  })
-}
-
-const isCustomerDeletePending = (row) => isPending(customerActionKeys.delete(row?.id))
-const isCustomerRowPending = (row) => isCustomerDeletePending(row)
-
-const deleteCustomer = async (row) => {
-  return runAction(customerActionKeys.delete(row.id), async () => {
-    await ElMessageBox.confirm(
-      `确认删除客户 ${row.customerName || row.customerShortName || row.customerCode}？已被订单或数据权限引用的客户会被后端拒绝删除。`,
-      '删除客户确认',
-      {
-        type: 'warning',
-        confirmButtonText: '删除',
-        cancelButtonText: '取消'
-      }
-    )
-    await deleteCustomerRequest(row.id)
-    ElMessage.success('客户资料已删除')
-    await loadCustomers()
-  })
+  } catch (error) {
+    syncResult.value = null
+    ElMessage.error(requestErrorMessage(error, 'U9 客户同步失败'))
+  } finally {
+    syncLoading.value = false
+  }
 }
 
 const formatDateTime = (value) => {
@@ -300,22 +215,30 @@ onMounted(loadCustomers)
   flex: 0 0 auto;
 }
 
-.customer-table-surface .erp-table-body {
-  padding: var(--erp-space-3);
+.customer-sync-result {
+  margin: 0;
 }
 
-.customer-row-actions {
-  justify-content: flex-start;
+.customer-table-surface .customer-table-body {
+  padding: var(--erp-space-3);
+  overflow-x: auto;
+}
+
+.customer-source-text {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
 }
 
 @media (max-width: 760px) {
   .customer-filter-group,
-  .customer-toolbar-actions {
+  .customer-toolbar-actions,
+  .customer-page-actions {
     width: 100%;
   }
 
   .customer-filter-field,
-  .customer-keyword-input {
+  .customer-keyword-input,
+  .customer-page-actions .el-button {
     width: 100%;
   }
 }

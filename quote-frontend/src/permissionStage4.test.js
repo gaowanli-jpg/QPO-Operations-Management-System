@@ -100,7 +100,7 @@ describe('QPO permission stage 4 menu and button permissions', () => {
       ['UserManage', ['system:user:create', 'system:user:update', 'system:user:disable', 'system:user:reset-password', 'system:user:delete']],
       ['SystemRoleManage', ['system:role:create', 'system:role:update', 'system:role:delete', 'system:role:assign-permission', 'system:role:assign-data-scope']],
       ['SystemOrgManage', ['system:dept:manage', 'system:post:manage']],
-      ['CustomerManage', ['system:customer:create', 'system:customer:update', 'system:customer:delete']],
+      ['CustomerManage', ['system:customer:sync']],
       ['AuditLogManage', ['system:audit:export', 'system:audit:retention']],
       ['SystemConfigManage', [
         'system:config:storage:update',
@@ -121,6 +121,9 @@ describe('QPO permission stage 4 menu and button permissions', () => {
 
     expect(componentSource('MarketRelease')).not.toContain('market:release:reset')
     expect(componentSource('MarketDashboard')).not.toContain('market:rfq:order-type-select')
+    expect(componentSource('CustomerManage')).not.toContain('system:customer:create')
+    expect(componentSource('CustomerManage')).not.toContain('system:customer:update')
+    expect(componentSource('CustomerManage')).not.toContain('system:customer:delete')
     expect(componentSource('OrderManage')).not.toContain('reset-production')
     expect(componentSource('OrderManage')).not.toContain('重置提单/工艺')
   })

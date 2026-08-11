@@ -195,6 +195,7 @@ public class AuditService {
         if (startsWith(action, "SYSTEM_DATA_CENTER_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_DATA_CENTER_ENDPOINT_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INBOUND_CALLBACK_")) return "SYSTEM";
+        if ("U9_CUSTOMER_SYNC".equalsIgnoreCase(action)) return "SYSTEM";
         if ("QUOTE_REFRESH_TASK_SUBMIT".equalsIgnoreCase(action)) return "ENGINEER";
         if ("RFQ_IMPORT".equalsIgnoreCase(action)) return "MARKET";
         if ("SALES_ORDER_IMPORT_QPO".equalsIgnoreCase(action)) return "MARKET";
@@ -262,6 +263,7 @@ public class AuditService {
             case "CUSTOMER_MASTER_CREATE" -> "新增客户资料";
             case "CUSTOMER_MASTER_UPDATE" -> "更新客户资料";
             case "CUSTOMER_MASTER_DELETE" -> "删除客户资料";
+            case "U9_CUSTOMER_SYNC" -> "同步 U9 客户主数据";
             case "SYSTEM_STORAGE_CONFIG_CREATE" -> "新增文件存储配置";
             case "SYSTEM_STORAGE_CONFIG_UPDATE" -> "编辑文件存储配置";
             case "SYSTEM_STORAGE_CONFIG_TEST" -> "测试文件存储配置";

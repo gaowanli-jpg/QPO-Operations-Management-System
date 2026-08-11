@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CustomerMasterStage1Test {
     private static final Path SCHEMA_BASELINE = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SEED_BASELINE = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path READ_ONLY_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V7__customer_master_read_only_u9_sync.sql");
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path LOG_DOC = Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md");
@@ -27,69 +28,63 @@ class CustomerMasterStage1Test {
                 .contains("customer_code character varying(200) NOT NULL")
                 .contains("customer_short_name character varying(200) NOT NULL")
                 .contains("customer_name character varying(200) NOT NULL")
-                .contains("uk_customer_master_code")
-                .contains("uk_customer_master_short_name")
-                .contains("uk_customer_master_name");
+                .contains("uk_customer_master_code");
         assertThat(seed)
                 .doesNotContain("INSERT INTO customer_master")
                 .doesNotContain("FROM order_rfq");
     }
 
     @Test
-    void migrationAddsSystemCustomerPermissionsAndDefaultRoleGrants() throws IOException {
+    void migrationKeepsCustomerViewAddsManualSyncAndRetiresLocalWritePermissions() throws IOException {
         String seed = read(SEED_BASELINE);
+        String migration = read(READ_ONLY_MIGRATION);
 
         assertThat(seed)
                 .contains("'system:customer:view'")
-                .contains("'system:customer:create'")
-                .contains("'system:customer:update'")
-                .contains("'system:customer:delete'")
-                .contains("'客户资料'")
-                .contains("'新增客户'")
-                .contains("'编辑客户'")
-                .contains("'删除客户'")
-                .contains("SUPER_ADMIN")
-                .contains("MARKET_MANAGER")
+                .contains("'system:customer:sync'")
+                .doesNotContain("common:customer");
+        assertThat(migration)
+                .contains("'system:customer:sync'")
+                .contains("permission_code IN ('system:customer:create', 'system:customer:update', 'system:customer:delete')")
+                .contains("assignable = false")
+                .contains("enabled = false")
+                .contains("DELETE FROM system_role_permission")
                 .doesNotContain("common:customer");
     }
 
     @Test
-    void fallbackCatalogContainsCustomerMasterPermissions() throws IOException {
+    void fallbackCatalogContainsReadOnlyCustomerMasterAndSyncPermission() throws IOException {
         String source = read(PERMISSION_SERVICE);
 
         assertThat(source)
                 .contains("\"system:customer:view\"")
-                .contains("\"system:customer:create\"")
-                .contains("\"system:customer:update\"")
-                .contains("\"system:customer:delete\"")
+                .contains("\"system:customer:sync\"")
                 .contains("\"CustomerManage\"")
                 .contains("Map.entry(\"system:customer:view\"")
-                .contains("Map.entry(\"system:customer:create\"")
-                .contains("Map.entry(\"system:customer:update\"")
-                .contains("Map.entry(\"system:customer:delete\"");
+                .contains("Map.entry(\"system:customer:sync\", Set.of())")
+                .doesNotContain("Map.entry(\"system:customer:create\"")
+                .doesNotContain("Map.entry(\"system:customer:update\"")
+                .doesNotContain("Map.entry(\"system:customer:delete\"");
     }
 
     @Test
-    void auditLabelsAndDocsCoverCustomerMasterGovernance() throws IOException {
-        assertThat(AuditService.labelForAction("CUSTOMER_MASTER_CREATE")).isEqualTo("新增客户资料");
-        assertThat(AuditService.labelForAction("CUSTOMER_MASTER_UPDATE")).isEqualTo("更新客户资料");
-        assertThat(AuditService.labelForAction("CUSTOMER_MASTER_DELETE")).isEqualTo("删除客户资料");
-        assertThat(AuditService.inferModule("CUSTOMER_MASTER_CREATE")).isEqualTo("SYSTEM");
+    void auditLabelsAndDocsCoverU9CustomerSyncGovernance() throws IOException {
+        assertThat(AuditService.labelForAction("U9_CUSTOMER_SYNC")).isEqualTo("同步 U9 客户主数据");
+        assertThat(AuditService.inferModule("U9_CUSTOMER_SYNC")).isEqualTo("SYSTEM");
 
         String permissionDoc = read(PERMISSION_DOC);
         String logDoc = read(LOG_DOC);
 
         assertThat(permissionDoc)
                 .contains("`system:customer:view`")
-                .contains("`system:customer:create`")
-                .contains("`system:customer:update`")
-                .contains("`system:customer:delete`")
-                .contains("客户资料");
+                .contains("`system:customer:sync`")
+                .contains("system:customer:create/update/delete` 已下线")
+                .doesNotContain("控制客户资料写操作");
         assertThat(logDoc)
-                .contains("CUSTOMER_MASTER_CREATE")
-                .contains("CUSTOMER_MASTER_UPDATE")
-                .contains("CUSTOMER_MASTER_DELETE")
-                .contains("customer_master");
+                .contains("U9_CUSTOMER_SYNC")
+                .contains("u9_master_data_sync_run")
+                .contains("普通客户资料分页查询不写操作日志")
+                .doesNotContain("CUSTOMER_MASTER_CREATE`、`CUSTOMER_MASTER_UPDATE`、`CUSTOMER_MASTER_DELETE`");
     }
 
     private String read(Path path) throws IOException {

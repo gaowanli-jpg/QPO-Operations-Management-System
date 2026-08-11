@@ -8,12 +8,6 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface CustomerMasterMapper extends BaseMapper<CustomerMaster> {
-    @Select("SELECT COUNT(*) FROM order_rfq WHERE customer_name = #{customerName}")
-    long countOrderReferences(@Param("customerName") String customerName);
-
-    @Select("SELECT COUNT(*) FROM system_role_data_scope_customer WHERE customer_name = #{customerName}")
-    long countDataScopeReferences(@Param("customerName") String customerName);
-
     @Select("SELECT * FROM customer_master WHERE customer_name = #{customerName} AND enabled = TRUE FOR UPDATE")
     CustomerMaster selectEnabledByNameForUpdate(@Param("customerName") String customerName);
 }

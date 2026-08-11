@@ -254,9 +254,10 @@ INSERT INTO system_permission (id, parent_id, permission_type, permission_code, 
 INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (124, 122, 'API', 'market:locked-item:customer-select', '锁库零件选择客户', NULL, NULL, NULL, 128, false, true, '2026-07-22 13:43:18.831924', '2026-07-22 13:43:18.831924', true);
 INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (129, 20, 'BUTTON', 'market:rfq:import-sales-order', '导入销售订单', NULL, NULL, NULL, 117, false, true, '2026-07-24 13:20:42.148611', '2026-07-24 13:20:42.148611', true);
 INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (130, 0, 'MENU', 'system:customer:view', '客户资料', '/customers', 'CustomerManage', 'Users', 845, true, true, '2026-07-30 09:43:27.610615', '2026-07-30 09:43:27.610615', true);
-INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (131, 0, 'BUTTON', 'system:customer:delete', '删除客户', NULL, NULL, NULL, 848, false, true, '2026-07-30 09:43:27.610615', '2026-07-30 09:43:27.610615', true);
-INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (132, 0, 'BUTTON', 'system:customer:update', '编辑客户', NULL, NULL, NULL, 847, false, true, '2026-07-30 09:43:27.610615', '2026-07-30 09:43:27.610615', true);
-INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (133, 0, 'BUTTON', 'system:customer:create', '新增客户', NULL, NULL, NULL, 846, false, true, '2026-07-30 09:43:27.610615', '2026-07-30 09:43:27.610615', true);
+INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (131, 130, 'BUTTON', 'system:customer:delete', '删除客户（已下线）', NULL, NULL, NULL, 849, false, false, '2026-07-30 09:43:27.610615', '2026-08-11 18:00:00', false);
+INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (132, 130, 'BUTTON', 'system:customer:update', '编辑客户（已下线）', NULL, NULL, NULL, 848, false, false, '2026-07-30 09:43:27.610615', '2026-08-11 18:00:00', false);
+INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (133, 130, 'BUTTON', 'system:customer:create', '新增客户（已下线）', NULL, NULL, NULL, 847, false, false, '2026-07-30 09:43:27.610615', '2026-08-11 18:00:00', false);
+INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (162, 130, 'BUTTON', 'system:customer:sync', '同步U9客户', NULL, NULL, NULL, 846, false, true, '2026-08-11 18:00:00', '2026-08-11 18:00:00', true);
 INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (134, 0, 'MENU', 'system:config:view', '系统配置', '/system-config', 'SystemConfigManage', 'Setting', 849, true, true, '2026-07-30 10:58:35.896155', '2026-07-30 10:58:35.896155', true);
 INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (135, 134, 'BUTTON', 'system:config:storage:activate', '激活文件存储配置', NULL, NULL, NULL, 8493, false, true, '2026-07-30 10:58:35.896155', '2026-07-30 10:58:35.896155', true);
 INSERT INTO system_permission (id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable) VALUES (136, 134, 'BUTTON', 'system:config:storage:test', '测试文件存储配置', NULL, NULL, NULL, 8492, false, true, '2026-07-30 10:58:35.896155', '2026-07-30 10:58:35.896155', true);
@@ -375,8 +376,6 @@ INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (1, 129, '2026-07-24 13:20:42.148611');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 130, '2026-07-30 09:43:27.610615');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (1, 130, '2026-07-30 09:43:27.610615');
-INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 131, '2026-07-30 09:43:27.610615');
-INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (1, 131, '2026-07-30 09:43:27.610615');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 20, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 21, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 22, '2026-07-18 14:40:05.361037');
@@ -388,7 +387,6 @@ INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 28, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 29, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 30, '2026-07-18 14:40:05.361037');
-INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 132, '2026-07-30 09:43:27.610615');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (2, 47, '2026-07-20 16:03:12.292792');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 113, '2026-07-21 10:42:31.76266');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 46, '2026-07-18 14:40:05.361037');
@@ -400,7 +398,6 @@ INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (4, 38, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (4, 39, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (4, 40, '2026-07-18 14:40:05.361037');
-INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (1, 132, '2026-07-30 09:43:27.610615');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 114, '2026-07-21 10:42:31.76266');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (4, 46, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (4, 47, '2026-07-18 14:40:05.361037');
@@ -414,7 +411,6 @@ INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (5, 41, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (5, 42, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (5, 43, '2026-07-18 14:40:05.361037');
-INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 133, '2026-07-30 09:43:27.610615');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 115, '2026-07-21 10:42:31.76266');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (5, 46, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (5, 47, '2026-07-18 14:40:05.361037');
@@ -427,7 +423,7 @@ INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (7, 34, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (7, 36, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (7, 40, '2026-07-18 14:40:05.361037');
-INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (1, 133, '2026-07-30 09:43:27.610615');
+INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (1, 162, '2026-08-11 18:00:00');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (3, 116, '2026-07-21 10:42:31.76266');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (7, 46, '2026-07-18 14:40:05.361037');
 INSERT INTO system_role_permission (role_id, permission_id, created_at) VALUES (7, 47, '2026-07-18 14:40:05.361037');
@@ -692,7 +688,7 @@ SELECT pg_catalog.setval('system_dept_id_seq', 4, true);
 -- Name: system_permission_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('system_permission_id_seq', 161, true);
+SELECT pg_catalog.setval('system_permission_id_seq', 162, true);
 
 
 --

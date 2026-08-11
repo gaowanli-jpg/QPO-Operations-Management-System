@@ -82,9 +82,7 @@ class PermissionSystemStage4Test {
                 "system:role:assign-data-scope",
                 "system:dept:manage",
                 "system:post:manage",
-                "system:customer:create",
-                "system:customer:update",
-                "system:customer:delete",
+                "system:customer:sync",
                 "system:audit:export",
                 "system:audit:retention"
         );
@@ -94,7 +92,10 @@ class PermissionSystemStage4Test {
                 "market:sales-match:view",
                 "market:sales-match:customer-select",
                 "market:sales-match:order-select",
-                "market:sales-match:apply"
+                "market:sales-match:apply",
+                "system:customer:create",
+                "system:customer:update",
+                "system:customer:delete"
         );
     }
 }
