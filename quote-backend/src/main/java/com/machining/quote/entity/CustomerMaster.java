@@ -16,7 +16,11 @@ public class CustomerMaster {
     private String customerCode;
     private String customerShortName;
     private String customerName;
+    private String u9OrgCode;
+    private String u9CustomerId;
     private Boolean enabled;
+    private LocalDateTime lastSyncedAt;
+    private String sourceHash;
     private Long createdBy;
     private Long updatedBy;
     private LocalDateTime createdAt;

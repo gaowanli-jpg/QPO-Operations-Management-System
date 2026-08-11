@@ -59,9 +59,7 @@ class DeliveredItemQueryIntegrationTest {
         long roleId = insertRole("CUSTOMER");
         long userId = insertUser(legacyUserId);
         linkUserRole(userId, roleId);
-        jdbcTemplate.update(
-                "INSERT INTO system_role_data_scope_customer (role_id, customer_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
-                roleId, "ACME");
+        insertCustomerScope(roleId, "ACME");
         AuthContext.set(new AuthContext.SessionUser(legacyUserId, "delivered-query", "Delivered Query", "MARKET"));
 
         createTicket("QPO-DI-ACME-" + UUID.randomUUID(), "ACME", "P-100", "V1", "MAT-100", "/uploads/acme/P-100.pdf");
@@ -156,9 +154,7 @@ class DeliveredItemQueryIntegrationTest {
         long roleId = insertRole("CUSTOMER");
         long userId = insertUser(legacyUserId);
         linkUserRole(userId, roleId);
-        jdbcTemplate.update(
-                "INSERT INTO system_role_data_scope_customer (role_id, customer_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
-                roleId, "StageCustomer");
+        insertCustomerScope(roleId, "StageCustomer");
         AuthContext.set(new AuthContext.SessionUser(legacyUserId, "delivered-stage", "Delivered Stage", "MARKET"));
 
         int completed = createTicket("QPO-DI-STAGE-DONE-" + UUID.randomUUID(), "StageCustomer", "STAGE-DONE", "A", "MAT-DONE", "/uploads/stage-done.pdf",
@@ -206,9 +202,7 @@ class DeliveredItemQueryIntegrationTest {
         long roleId = insertRole("CUSTOMER");
         long userId = insertUser(legacyUserId);
         linkUserRole(userId, roleId);
-        jdbcTemplate.update(
-                "INSERT INTO system_role_data_scope_customer (role_id, customer_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
-                roleId, customerName);
+        insertCustomerScope(roleId, customerName);
         AuthContext.set(new AuthContext.SessionUser(legacyUserId, "locked-trace", "Locked Trace", "MARKET"));
 
         int completed = createTicket("QPO-DI-TRACE-" + UUID.randomUUID(), customerName, "TRACE-PART", "A", "MAT-TRACE", "/uploads/trace.pdf",
@@ -339,6 +333,14 @@ class DeliveredItemQueryIntegrationTest {
 
     private void linkUserRole(long userId, long roleId) {
         jdbcTemplate.update("INSERT INTO system_user_role (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING", userId, roleId);
+    }
+
+    private void insertCustomerScope(long roleId, String customerName) {
+        jdbcTemplate.update("""
+                INSERT INTO system_role_data_scope_customer (role_id, customer_code, customer_name, customer_name_snapshot)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (role_id, customer_code) DO NOTHING
+                """, roleId, customerName, customerName, customerName);
     }
 
     private int uniqueLegacyId() {

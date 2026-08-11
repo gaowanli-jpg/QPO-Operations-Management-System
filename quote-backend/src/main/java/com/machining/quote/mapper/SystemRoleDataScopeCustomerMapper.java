@@ -10,16 +10,21 @@ import java.util.List;
 
 @Mapper
 public interface SystemRoleDataScopeCustomerMapper {
-    @Select("SELECT customer_name FROM system_role_data_scope_customer WHERE role_id = #{roleId} ORDER BY customer_name ASC")
+    @Select("""
+            SELECT COALESCE(NULLIF(customer_name_snapshot, ''), customer_name, customer_code) AS customer_name
+            FROM system_role_data_scope_customer
+            WHERE role_id = #{roleId}
+            ORDER BY COALESCE(NULLIF(customer_name_snapshot, ''), customer_name, customer_code) ASC
+            """)
     List<String> selectCustomerNamesByRoleId(@Param("roleId") Long roleId);
 
     @Delete("DELETE FROM system_role_data_scope_customer WHERE role_id = #{roleId}")
     int deleteByRoleId(@Param("roleId") Long roleId);
 
     @Insert("""
-            INSERT INTO system_role_data_scope_customer (role_id, customer_name)
-            VALUES (#{roleId}, #{customerName})
-            ON CONFLICT (role_id, customer_name) DO NOTHING
+            INSERT INTO system_role_data_scope_customer (role_id, customer_code, customer_name, customer_name_snapshot)
+            VALUES (#{roleId}, #{customerName}, #{customerName}, #{customerName})
+            ON CONFLICT (role_id, customer_code) DO NOTHING
             """)
     int insertIgnore(@Param("roleId") Long roleId, @Param("customerName") String customerName);
 }

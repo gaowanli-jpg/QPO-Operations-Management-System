@@ -40,7 +40,8 @@ class ProcessMasterStage13BaselineCompressionTest {
                 "V2__qpo_baseline_seed_data.sql",
                 "V3__repeat_released_snapshot_candidate_index.sql",
                 "V4__retire_sales_match_module.sql",
-                "V5__refactor_sales_order_u9_sync_contract.sql");
+                "V5__refactor_sales_order_u9_sync_contract.sql",
+                "V6__u9_customer_and_sync_option_cache.sql");
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
     }
 
@@ -63,7 +64,8 @@ class ProcessMasterStage13BaselineCompressionTest {
                         "2|qpo baseline seed data|true",
                         "3|repeat released snapshot candidate index|true",
                         "4|retire sales match module|true",
-                        "5|refactor sales order u9 sync contract|true");
+                        "5|refactor sales order u9 sync contract|true",
+                        "6|u9 customer and sync option cache|true");
                 assertThat(tableExists(connection, schema, "dict_process_category")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process_detail")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process")).isFalse();

@@ -31,9 +31,7 @@ public class OrderRfq {
     private String orderType;
     @Deprecated
     private String sourceType;
-    @Deprecated
     private String customerCode;
-    @Deprecated
     private String customerShortName;
     @Deprecated
     private String salesDocumentTypeCode;
