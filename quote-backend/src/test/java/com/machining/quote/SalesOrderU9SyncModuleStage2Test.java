@@ -163,9 +163,11 @@ class SalesOrderU9SyncModuleStage2Test {
                     assertThat(line.getBlockedReason()).isBlank();
                 });
         assertThat(resp.getLines().get(1))
-                .extracting(SalesOrderU9SyncPreviewLine::getReady,
-                        SalesOrderU9SyncPreviewLine::getBlockedReason)
-                .containsExactly(false, "物料号未确认");
+                .satisfies(line -> {
+                    assertThat(line.getReady()).isFalse();
+                    assertThat(line.getBlockedReason()).contains("物料号未确认");
+                    assertThat(line.getBlockingErrors()).anyMatch(message -> message.contains("物料号未确认"));
+                });
         assertThat(Arrays.stream(SalesOrderU9SyncPreviewLine.class.getDeclaredFields())
                 .map(java.lang.reflect.Field::getName))
                 .doesNotContain(
@@ -190,7 +192,7 @@ class SalesOrderU9SyncModuleStage2Test {
     }
 
     @Test
-    void previewBlocksRowsWithOnlyUntaxedPriceBeforeU9Sync() {
+    void previewAllowsRowsWithOnlyUntaxedPriceBeforeU9Sync() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", QuoteStatusWorkflow.RELEASED, "未同步");
         SalesOrderItem missingPrice = item(5001L, header.getId(), "P-001", "MAT-READY-001", "已确认");
@@ -204,16 +206,19 @@ class SalesOrderU9SyncModuleStage2Test {
 
         SalesOrderU9SyncPreviewResp resp = fixture.service.previewSalesOrder(header.getId());
 
-        assertThat(resp.getSyncReady()).isFalse();
-        assertThat(resp.getBlockedReason()).contains("含税单价为空");
+        assertThat(resp.getSyncReady()).isTrue();
+        assertThat(resp.getBlockedReason()).isBlank();
+        assertThat(resp.getBlockingErrors()).isEmpty();
+        assertThat(resp.getRequestFingerprint()).hasSize(64);
         assertThat(resp.getLines()).singleElement()
                 .satisfies(line -> {
                     assertThat(line.getMaterialNo()).isEqualTo("MAT-READY-001");
                     assertThat(line.getTaxIncludedUnitPrice()).isNull();
                     assertThat(line.getTaxIncludedTotalPrice()).isNull();
                     assertThat(line.getUntaxedUnitPrice()).isEqualByComparingTo("10.92");
-                    assertThat(line.getReady()).isFalse();
-                    assertThat(line.getBlockedReason()).isEqualTo("含税单价为空");
+                    assertThat(line.getReady()).isTrue();
+                    assertThat(line.getBlockedReason()).isBlank();
+                    assertThat(line.getBlockingErrors()).isEmpty();
                 });
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());

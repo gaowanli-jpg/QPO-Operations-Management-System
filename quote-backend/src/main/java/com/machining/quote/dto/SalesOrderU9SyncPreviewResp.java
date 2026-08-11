@@ -30,6 +30,9 @@ public class SalesOrderU9SyncPreviewResp {
     private String u9SyncMessage;
     private Boolean syncReady;
     private String blockedReason;
+    private List<String> blockingErrors = new ArrayList<>();
+    private List<String> warnings = new ArrayList<>();
+    private String requestFingerprint;
     private Integer itemCount;
     private Integer materialConfirmedItemCount;
     private Integer missingMaterialItemCount;

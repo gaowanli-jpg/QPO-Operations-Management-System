@@ -4,6 +4,8 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 public class SalesOrderU9SyncPreviewLine {
@@ -36,4 +38,6 @@ public class SalesOrderU9SyncPreviewLine {
     private String remark;
     private Boolean ready;
     private String blockedReason;
+    private List<String> blockingErrors = new ArrayList<>();
+    private List<String> warnings = new ArrayList<>();
 }

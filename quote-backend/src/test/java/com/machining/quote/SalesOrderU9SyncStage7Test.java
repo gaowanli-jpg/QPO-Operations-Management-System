@@ -59,11 +59,11 @@ class SalesOrderU9SyncStage7Test {
     }
 
     @Test
-    void onlyUntaxedPriceFailsBeforeCallingDataCenterOrU9() {
+    void onlyTaxIncludedPriceFailsBeforeCallingDataCenterOrU9() {
         Fixture fixture = fixture();
         SalesOrderHeader header = header(9001L, "SOQPO-001", "未同步");
-        SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", null);
-        item.setUntaxedUnitPrice(new BigDecimal("16.37"));
+        SalesOrderItem item = item(5001L, header.getId(), "SALES-MAT-001", new BigDecimal("18.50"));
+        item.setUntaxedUnitPrice(null);
         markConfirmed(item, "MAT-CONFIRMED-001", 4);
         fixture.withOrder(header, List.of(item));
 
@@ -71,14 +71,14 @@ class SalesOrderU9SyncStage7Test {
 
         assertThat(resp.isSuccess()).isFalse();
         assertThat(resp.getStatus()).isEqualTo("FAILED");
-        assertThat(resp.getMessage()).contains("含税单价为空");
+        assertThat(resp.getMessage()).contains("未税单价为空");
         assertThat(resp.getRows()).singleElement()
-                .satisfies(row -> assertThat(row.getErrorMessage()).contains("含税单价为空"));
+                .satisfies(row -> assertThat(row.getErrorMessage()).contains("未税单价为空"));
         verify(fixture.u9Client, never()).create(any());
 
         SalesOrderHeader failureUpdate = fixture.lastHeaderUpdate();
         assertThat(failureUpdate.getU9SyncStatus()).isEqualTo("同步失败");
-        assertThat(failureUpdate.getU9SyncMessage()).contains("含税单价为空");
+        assertThat(failureUpdate.getU9SyncMessage()).contains("未税单价为空");
     }
 
     @Test
@@ -112,19 +112,22 @@ class SalesOrderU9SyncStage7Test {
         assertThat(request.getDocNo()).isEqualTo(header.getDocumentNo());
         assertThat(request.getOrderBy()).isEqualTo("CUST-001");
         assertThat(request.getDocumentType()).isEqualTo("SO88");
-        assertThat(request.getCustomerOrderNo()).isEqualTo(header.getCustomerOrderNo());
+        assertThat(request.getIsPriceIncludeTax()).isFalse();
         assertThat(request.getSOLineDTOList()).singleElement()
                 .satisfies(line -> {
                     assertThat(line.getItemCode()).isEqualTo("MAT-CONFIRMED-001");
-                    assertThat(line.getCustomerItemNo()).isEqualTo("SALES-MAT-001");
                     assertThat(line.getOrderByQtyTU()).isEqualByComparingTo("4");
-                    assertThat(line.getOrderPriceTC()).isEqualByComparingTo("18.50");
-                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("18.50");
+                    assertThat(line.getFinallyPriceTC()).isEqualByComparingTo("16.37");
+                    assertThat(line.getDescFlexField().getPrivateDescSeg2()).isEqualTo(header.getCustomerOrderNo());
+                    assertThat(line.getDescFlexField().getPrivateDescSeg3()).isEqualTo(header.getInternalProjectNo());
+                    assertThat(line.getDescFlexField().getPrivateDescSeg5()).isEqualTo("2026-08-08");
+                    assertThat(line.getDescFlexField().getPrivateDescSeg9()).isEqualTo("16.37");
                     assertThat(line.getSOShiplineDTOList()).singleElement()
                             .satisfies(shipLine -> {
                                 assertThat(shipLine.getItemCode()).isEqualTo("MAT-CONFIRMED-001");
                                 assertThat(shipLine.getShipPlanQtyTU()).isEqualByComparingTo("4");
-                                assertThat(shipLine.getRequireDate()).isEqualTo("2026-08-08");
+                                assertThat(shipLine.getRequireDate()).isEqualTo("2026-08-09");
+                                assertThat(shipLine.getDeliveryDate()).isEqualTo("2026-08-08");
                             });
                 });
 
@@ -132,6 +135,7 @@ class SalesOrderU9SyncStage7Test {
         assertThat(successUpdate.getU9SyncStatus()).isEqualTo("已同步");
         assertThat(successUpdate.getU9OrderId()).isEqualTo("U9-ID-1");
         assertThat(successUpdate.getU9OrderCode()).isEqualTo("U9-SO-001");
+        assertThat(fixture.headerUpdates()).anySatisfy(update -> assertThat(update.getU9SyncRequestHash()).isNotBlank());
         assertThat(successUpdate.getU9SyncMessage()).contains("同步成功");
         assertThat(successUpdate.getDocumentNo()).isNull();
     }
@@ -263,6 +267,7 @@ class SalesOrderU9SyncStage7Test {
         item.setDescription("零件 " + id);
         item.setSalesMaterialNo(salesMaterialNo);
         item.setTaxIncludedUnitPrice(price);
+        item.setUntaxedUnitPrice(price);
         item.setVersion("A");
         item.setQty(1);
         item.setReleasedQty(1);

@@ -100,9 +100,13 @@ class MaterialMasterStage9ExportExternalFieldsTest {
                         "line.setEngineeringMaterialCode(item.getEngineeringMaterialCode());",
                         "line.setEngineeringMaterialTypeCode(item.getEngineeringMaterialTypeCode());",
                         "line.setEngineeringMaterialTypeName(item.getEngineeringMaterialTypeName());",
-                        "line.setEngineeringMaterialCategory(item.getEngineeringMaterialCategory());",
-                        "line.setItemCode(materialNo);",
-                        "shipLine.setItemCode(materialNo);")
+                        "line.setEngineeringMaterialCategory(item.getEngineeringMaterialCategory());");
+
+        String u9Assembler = read(MAIN.resolve(Path.of("service", "u9", "U9SalesOrderRequestAssembler.java")));
+        assertThat(u9Assembler)
+                .contains(
+                        "line.setItemCode(trimToNull(item.getMaterialNo()));",
+                        "shipLine.setItemCode(trimToNull(item.getMaterialNo()));")
                 .doesNotContain("line.setItemCode(item.getEngineeringMaterialCode())", "shipLine.setItemCode(item.getEngineeringMaterialCode())");
     }
 

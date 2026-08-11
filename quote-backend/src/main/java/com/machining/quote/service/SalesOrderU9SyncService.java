@@ -11,20 +11,20 @@ import com.machining.quote.dto.SalesOrderU9SyncResultRow;
 import com.machining.quote.dto.u9.U9ApiResult;
 import com.machining.quote.dto.u9.U9ResultDTO;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
-import com.machining.quote.dto.u9.U9SalesOrderLineDTO;
-import com.machining.quote.dto.u9.U9SalesOrderShipLineDTO;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.u9.U9SalesOrderClient;
+import com.machining.quote.service.u9.U9SalesOrderContractValidator;
+import com.machining.quote.service.u9.U9SalesOrderContractValidator.ValidationResult;
+import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -60,6 +60,10 @@ public class SalesOrderU9SyncService {
     private AuditService auditService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired
+    private U9SalesOrderRequestAssembler requestAssembler = new U9SalesOrderRequestAssembler();
+    @Autowired
+    private U9SalesOrderContractValidator contractValidator = new U9SalesOrderContractValidator();
 
     public PageResult<SalesOrderU9SyncOrderRow> listOrders(
             String customerName,
@@ -90,6 +94,7 @@ public class SalesOrderU9SyncService {
         SalesOrderHeader header = requireSalesOrder(salesOrderId);
         List<SalesOrderItem> items = loadItems(header.getId());
         MaterialStats stats = materialStats(items);
+        ValidationResult validation = contractValidator.validate(header, items);
         SalesOrderU9SyncPreviewResp resp = new SalesOrderU9SyncPreviewResp();
         resp.setSalesOrderId(header.getId());
         resp.setSalesOrderNo(header.getSalesOrderNo());
@@ -114,9 +119,13 @@ public class SalesOrderU9SyncService {
         resp.setItemCount(stats.total());
         resp.setMaterialConfirmedItemCount(stats.confirmed());
         resp.setMissingMaterialItemCount(stats.missingOrUnconfirmed());
-        String blockedReason = syncBlockedReason(header, items, stats);
-        resp.setBlockedReason(blockedReason);
-        resp.setSyncReady(isBlank(blockedReason));
+        resp.setBlockingErrors(validation.blockingErrors());
+        resp.setWarnings(validation.warnings());
+        resp.setBlockedReason(validation.firstBlockingError());
+        resp.setSyncReady(!validation.hasBlockingErrors());
+        if (!validation.hasBlockingErrors()) {
+            resp.setRequestFingerprint(requestAssembler.fingerprint(requestAssembler.assemble(header, items)));
+        }
         resp.setLines(items.stream().map(item -> toPreviewLine(header, item)).toList());
         return resp;
     }
@@ -171,7 +180,7 @@ public class SalesOrderU9SyncService {
 
     private void syncPreparedOrders(List<PreparedOrder> preparedOrders, SalesOrderU9SyncResp resp) {
         for (PreparedOrder prepared : preparedOrders) {
-            markSyncing(prepared.header());
+            markSyncing(prepared.header(), prepared.requestFingerprint());
         }
         Map<String, PreparedOrder> preparedByOtherId = preparedOrders.stream()
                 .collect(Collectors.toMap(order -> order.request().getOtherID(), Function.identity(), (left, right) -> left, LinkedHashMap::new));
@@ -215,71 +224,13 @@ public class SalesOrderU9SyncService {
     }
 
     private PreparedOrder prepareOrder(SalesOrderHeader header) {
-        String salesOrderNo = required(header.getSalesOrderNo(), "销售订单号不能为空");
-        String customerCode = required(header.getCustomerCode(), "客户编码不能为空，不能同步 U9");
-        String documentTypeCode = required(header.getDocumentTypeCode(), "单据类型编码不能为空，不能同步 U9");
         List<SalesOrderItem> items = loadItems(header.getId());
-        MaterialStats stats = materialStats(items);
-        String blockedReason = syncBlockedReason(header, items, stats);
-        if (!isBlank(blockedReason)) {
-            throw new RuntimeException(firstDetailedBlockedReason(items, blockedReason));
+        ValidationResult validation = contractValidator.validate(header, items);
+        if (validation.hasBlockingErrors()) {
+            throw new RuntimeException(validation.firstBlockingError());
         }
-
-        U9SalesOrderHeadDTO head = new U9SalesOrderHeadDTO();
-        head.setOtherID(salesOrderNo);
-        head.setDocNo(header.getDocumentNo());
-        head.setBusinessDate(formatDate(header.getSalesOrderDate(), LocalDate.now()));
-        head.setOrderBy(customerCode);
-        head.setDocumentType(documentTypeCode);
-        head.setCustomerOrderNo(header.getCustomerOrderNo());
-        head.setIsPriceIncludeTax(true);
-        int lineNo = 1;
-        for (SalesOrderItem item : items) {
-            validateSyncableItem(item);
-            head.getSOLineDTOList().add(toU9Line(header, item, lineNo++));
-        }
-        return new PreparedOrder(header, head);
-    }
-
-    private U9SalesOrderLineDTO toU9Line(SalesOrderHeader header, SalesOrderItem item, int sequence) {
-        String materialNo = required(item.getMaterialNo(), "销售订单零件 " + itemLabel(item) + " 未取得物料号，不能同步 U9");
-        BigDecimal qty = requiredQty(item);
-        BigDecimal price = requiredTaxIncludedPrice(item);
-        String unit = "PCS";
-
-        U9SalesOrderLineDTO line = new U9SalesOrderLineDTO();
-        line.setDocLineNo(item.getLineNo() == null || item.getLineNo() <= 0 ? sequence : item.getLineNo());
-        line.setCustomerItemNo(item.getSalesMaterialNo());
-        line.setCustomerItemName(item.getDescription());
-        line.setItemCode(materialNo);
-        line.setItemVersion(item.getVersion());
-        line.setFreeType(-1);
-        line.setFreeReason(-1);
-        line.setProject(firstNonBlank(item.getInternalProjectNo(), header.getInternalProjectNo()));
-        line.setOrderByQtyTU(qty);
-        line.setOrderByQtyPU(qty);
-        line.setTU(unit);
-        line.setPU(unit);
-        line.setTBUToPBURate(BigDecimal.ONE);
-        line.setOrderPriceTC(price);
-        line.setFinallyPriceTC(price);
-        line.setPriceSource(1);
-        line.setShipTogetherFlag(-1);
-
-        U9SalesOrderShipLineDTO shipLine = new U9SalesOrderShipLineDTO();
-        shipLine.setDocSubLineNo(1);
-        shipLine.setItemCode(materialNo);
-        shipLine.setRequireDate(formatDate(preferredDeliveryDate(item), LocalDate.now()));
-        shipLine.setDeliveryDate(shipLine.getRequireDate());
-        shipLine.setPlanDate(shipLine.getRequireDate());
-        shipLine.setShipPlanQtyTU(qty);
-        shipLine.setShipPlanQtyPU(qty);
-        shipLine.setTU(unit);
-        shipLine.setPU(unit);
-        shipLine.setTUBaseToPUBaseRate(BigDecimal.ONE);
-        shipLine.setMemo(item.getRemark());
-        line.getSOShiplineDTOList().add(shipLine);
-        return line;
+        U9SalesOrderHeadDTO request = requestAssembler.assemble(header, items);
+        return new PreparedOrder(header, request, requestAssembler.fingerprint(request));
     }
 
     private List<SalesOrderItem> loadItems(Long salesOrderId) {
@@ -362,9 +313,11 @@ public class SalesOrderU9SyncService {
         line.setUntaxedTotalPrice(item.getUntaxedTotalPrice());
         line.setDeliveryDate(preferredDeliveryDate(item));
         line.setRemark(item.getRemark());
-        String blockedReason = itemBlockedReason(item);
-        line.setReady(isBlank(blockedReason));
-        line.setBlockedReason(blockedReason);
+        ValidationResult validation = contractValidator.validateItem(item);
+        line.setBlockingErrors(validation.blockingErrors());
+        line.setWarnings(validation.warnings());
+        line.setReady(!validation.hasBlockingErrors());
+        line.setBlockedReason(validation.firstBlockingError());
         return line;
     }
 
@@ -449,97 +402,13 @@ public class SalesOrderU9SyncService {
     }
 
     private String syncBlockedReason(SalesOrderHeader header, List<SalesOrderItem> items, MaterialStats stats) {
-        if (QuoteStatusWorkflow.DISCARDED.equals(header.getStatus())) {
-            return "销售订单已废弃，不能同步 U9";
-        }
-        if (QuoteStatusWorkflow.QUOTED.equals(header.getStatus())) {
-            return "销售订单尚未生成 QPO 提单，不能同步 U9";
-        }
-        if (QuoteStatusWorkflow.PARTIALLY_RELEASED.equals(header.getStatus())) {
-            return "销售订单仍存在未提单数量，需全部生成提单后再同步 U9";
-        }
-        if (!QuoteStatusWorkflow.RELEASED.equals(header.getStatus())) {
-            return "销售订单状态暂不可同步 U9";
-        }
-        if (STATUS_SYNCED.equals(header.getU9SyncStatus())) {
-            return "销售订单已同步，不能重复创建 U9 订单";
-        }
-        if (STATUS_SYNCING.equals(header.getU9SyncStatus())) {
-            return "U9 同步处理中，请稍后刷新";
-        }
-        if (isBlank(header.getCustomerCode())) {
-            return "客户编码不能为空，不能同步 U9";
-        }
-        if (isBlank(header.getDocumentTypeCode())) {
-            return "单据类型编码不能为空，不能同步 U9";
-        }
-        if (stats.total() == 0) {
-            return "销售订单没有可同步零件";
-        }
-        if (hasUnreleasedQty(items)) {
-            return "销售订单仍存在未提单数量，需全部生成提单后再同步 U9";
-        }
-        if (stats.missingOrUnconfirmed() > 0) {
-            return "存在未取得或未确认物料号的销售订单零件：" + stats.missingOrUnconfirmed();
-        }
-        long missingTaxIncludedPriceCount = missingTaxIncludedPriceCount(items);
-        if (missingTaxIncludedPriceCount > 0) {
-            return "存在含税单价为空的销售订单零件：" + missingTaxIncludedPriceCount;
-        }
-        return "";
-    }
-
-    private boolean hasUnreleasedQty(List<SalesOrderItem> items) {
-        return safeList(items).stream().anyMatch(item -> !isFullyReleased(item));
-    }
-
-    private boolean isFullyReleased(SalesOrderItem item) {
-        if (item == null) {
-            return false;
-        }
-        if (item.getRemainingQty() != null && item.getRemainingQty() > 0) {
-            return false;
-        }
-        if (item.getQty() != null && item.getReleasedQty() != null && item.getReleasedQty() < item.getQty()) {
-            return false;
-        }
-        return isBlank(item.getStatus()) || QuoteStatusWorkflow.RELEASED.equals(item.getStatus());
+        return contractValidator.validate(header, items).firstBlockingError();
     }
 
     private boolean isConfirmedMaterialNo(SalesOrderItem item) {
         return item != null
                 && !isBlank(item.getMaterialNo())
                 && MATERIAL_CONFIRMED.equals(item.getMaterialNoStatus());
-    }
-
-    private String materialBlockedReason(SalesOrderItem item) {
-        if (item == null || isBlank(item.getMaterialNo())) {
-            return "缺少物料号";
-        }
-        if (!MATERIAL_CONFIRMED.equals(item.getMaterialNoStatus())) {
-            return "物料号未确认";
-        }
-        return "";
-    }
-
-    private String itemBlockedReason(SalesOrderItem item) {
-        if (!isFullyReleased(item)) {
-            return "尚未全部生成提单";
-        }
-        String materialReason = materialBlockedReason(item);
-        if (!isBlank(materialReason)) {
-            return materialReason;
-        }
-        if (item.getTaxIncludedUnitPrice() == null) {
-            return "含税单价为空";
-        }
-        return "";
-    }
-
-    private long missingTaxIncludedPriceCount(List<SalesOrderItem> items) {
-        return safeList(items).stream()
-                .filter(item -> item.getTaxIncludedUnitPrice() == null)
-                .count();
     }
 
     private LocalDate preferredDeliveryDate(SalesOrderItem item) {
@@ -553,10 +422,11 @@ public class SalesOrderU9SyncService {
         }
     }
 
-    private void markSyncing(SalesOrderHeader header) {
+    private void markSyncing(SalesOrderHeader header, String requestFingerprint) {
         SalesOrderHeader update = new SalesOrderHeader();
         update.setId(header.getId());
         update.setU9SyncStatus(STATUS_SYNCING);
+        update.setU9SyncRequestHash(requestFingerprint);
         update.setU9SyncMessage("U9 同步处理中");
         update.setUpdatedAt(LocalDateTime.now());
         headerMapper.updateById(update);
@@ -704,73 +574,6 @@ public class SalesOrderU9SyncService {
         }
     }
 
-    private BigDecimal requiredQty(SalesOrderItem item) {
-        if (item.getQty() == null || item.getQty() <= 0) {
-            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 数量不能为空，不能同步 U9");
-        }
-        return BigDecimal.valueOf(item.getQty());
-    }
-
-    private BigDecimal requiredTaxIncludedPrice(SalesOrderItem item) {
-        BigDecimal price = item.getTaxIncludedUnitPrice();
-        if (price == null) {
-            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 含税单价为空，不能同步 U9");
-        }
-        return price;
-    }
-
-    private String required(String value, String message) {
-        if (isBlank(value)) {
-            throw new RuntimeException(message);
-        }
-        return value.trim();
-    }
-
-    private void validateSyncableItem(SalesOrderItem item) {
-        if (!isFullyReleased(item)) {
-            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 尚未全部生成提单，不能同步 U9");
-        }
-        if (!isConfirmedMaterialNo(item)) {
-            throw new RuntimeException("销售订单零件 " + itemLabel(item) + " 未取得或未确认物料号，不能同步 U9");
-        }
-    }
-
-    private String firstDetailedBlockedReason(List<SalesOrderItem> items, String fallback) {
-        for (SalesOrderItem item : safeList(items)) {
-            if (!isFullyReleased(item)) {
-                return "销售订单零件 " + itemLabel(item) + " 尚未全部生成提单，不能同步 U9";
-            }
-            if (!isConfirmedMaterialNo(item)) {
-                return "销售订单零件 " + itemLabel(item) + " 未取得或未确认物料号，不能同步 U9";
-            }
-            if (item.getTaxIncludedUnitPrice() == null) {
-                return "销售订单零件 " + itemLabel(item) + " 含税单价为空，不能同步 U9";
-            }
-        }
-        return fallback;
-    }
-
-    private String itemLabel(SalesOrderItem item) {
-        if (item == null) {
-            return "";
-        }
-        List<String> parts = new ArrayList<>();
-        if (item.getId() != null) {
-            parts.add("ID=" + item.getId());
-        }
-        if (!isBlank(item.getPartNo())) {
-            parts.add("图号=" + item.getPartNo());
-        }
-        if (!isBlank(item.getVersion())) {
-            parts.add("版本=" + item.getVersion());
-        }
-        return parts.isEmpty() ? "" : String.join(" ", parts);
-    }
-
-    private String formatDate(LocalDate preferred, LocalDate fallback) {
-        return (preferred == null ? fallback : preferred).toString();
-    }
-
     private String safeError(String value) {
         if (isBlank(value)) {
             return "U9 同步失败";
@@ -803,7 +606,7 @@ public class SalesOrderU9SyncService {
         return value == null || value.trim().isEmpty();
     }
 
-    private record PreparedOrder(SalesOrderHeader header, U9SalesOrderHeadDTO request) {
+    private record PreparedOrder(SalesOrderHeader header, U9SalesOrderHeadDTO request, String requestFingerprint) {
     }
 
     private record MaterialStats(int total, int confirmed, int missingOrUnconfirmed) {
