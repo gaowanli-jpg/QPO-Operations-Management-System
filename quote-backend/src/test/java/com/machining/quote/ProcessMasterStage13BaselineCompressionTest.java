@@ -24,7 +24,7 @@ class ProcessMasterStage13BaselineCompressionTest {
     private static final Path MIGRATION_DIR = RESOURCES.resolve(Path.of("db", "migration"));
 
     @Test
-    void activeMigrationDirectoryContainsOnlyCompressedBaselineFiles() throws Exception {
+    void activeMigrationDirectoryContainsCompressedBaselineAndPostBaselineMigrations() throws Exception {
         List<String> migrationNames;
         try (var files = Files.list(MIGRATION_DIR)) {
             migrationNames = files
@@ -36,7 +36,8 @@ class ProcessMasterStage13BaselineCompressionTest {
 
         assertThat(migrationNames).containsExactly(
                 "V1__qpo_baseline_schema.sql",
-                "V2__qpo_baseline_seed_data.sql");
+                "V2__qpo_baseline_seed_data.sql",
+                "V5__u9_customer_sync_schedule_config.sql");
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
     }
 
@@ -87,9 +88,11 @@ class ProcessMasterStage13BaselineCompressionTest {
 
                 assertThat(flywayHistory(connection, schema)).containsExactly(
                         "1|qpo baseline schema|true",
-                        "2|qpo baseline seed data|true");
+                        "2|qpo baseline seed data|true",
+                        "5|u9 customer sync schedule config|true");
                 assertThat(tableExists(connection, schema, "dict_process_category")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process_detail")).isTrue();
+                assertThat(tableExists(connection, schema, "u9_customer_sync_schedule_config")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process")).isFalse();
                 assertThat(columnExists(connection, schema, "item_quote_version", "final_unit_price")).isFalse();
                 assertThat(columnExists(connection, schema, "sales_order_item", "final_unit_price")).isFalse();

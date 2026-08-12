@@ -179,8 +179,8 @@ class U9CustomerMasterStage3SyncServiceTest {
         Method scheduledMethod = U9MasterDataSyncService.class.getMethod("syncCustomersScheduled");
         Scheduled scheduled = scheduledMethod.getAnnotation(Scheduled.class);
         assertThat(scheduled).isNotNull();
-        assertThat(scheduled.initialDelayString()).contains("erp.u9.customer-sync.startup-delay-ms");
-        assertThat(scheduled.fixedDelayString()).contains("erp.u9.customer-sync.fixed-delay-ms");
+        assertThat(scheduled.initialDelayString()).isEmpty();
+        assertThat(scheduled.fixedDelayString()).contains("erp.u9.customer-sync.check-ms");
     }
 
     private U9MasterDataSyncService service(
@@ -192,7 +192,6 @@ class U9CustomerMasterStage3SyncServiceTest {
         ReflectionTestUtils.setField(service, "customerMapper", customerMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", runMapper);
         ReflectionTestUtils.setField(service, "orgCode", ORG_101);
-        ReflectionTestUtils.setField(service, "syncEnabled", true);
         ReflectionTestUtils.setField(service, "clock", Clock.fixed(Instant.parse("2026-08-11T04:00:00Z"), ZoneId.of("Asia/Shanghai")));
         return service;
     }

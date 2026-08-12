@@ -37,4 +37,17 @@ describe('customerApi', () => {
     expect(customerApi.updateCustomer).toBeUndefined()
     expect(customerApi.deleteCustomer).toBeUndefined()
   })
+
+  test('loads and saves U9 customer timed sync schedule strategy', async () => {
+    const payload = { enabled: true, startupDelayMs: 30_000, fixedDelayMs: 1_800_000 }
+
+    await customerApi.getCustomerSyncSchedule()
+    await customerApi.saveCustomerSyncSchedule(payload)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/system/customers/sync-schedule')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/system/customers/sync-schedule', {
+      method: 'PUT',
+      body: payload
+    })
+  })
 })

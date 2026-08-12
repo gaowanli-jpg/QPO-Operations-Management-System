@@ -97,10 +97,12 @@ class U9CustomerMasterStage2MigrationTest {
 
                 assertThat(flywayHistory(connection, schema)).containsExactly(
                         "1|qpo baseline schema|true",
-                        "2|qpo baseline seed data|true");
+                        "2|qpo baseline seed data|true",
+                        "5|u9 customer sync schedule config|true");
                 assertThat(tableExists(connection, schema, "u9_sync_seller_option_cache")).isTrue();
                 assertThat(tableExists(connection, schema, "u9_sync_department_option_cache")).isTrue();
                 assertThat(tableExists(connection, schema, "u9_master_data_sync_run")).isTrue();
+                assertThat(tableExists(connection, schema, "u9_customer_sync_schedule_config")).isTrue();
                 assertThat(columnExists(connection, schema, "customer_master", "u9_org_code")).isTrue();
                 assertThat(columnExists(connection, schema, "customer_master", "u9_customer_id")).isTrue();
                 assertThat(columnExists(connection, schema, "system_role_data_scope_customer", "customer_code")).isTrue();
@@ -110,6 +112,7 @@ class U9CustomerMasterStage2MigrationTest {
                 assertThat(rowCount(connection, schema, "customer_master")).isZero();
                 assertThat(rowCount(connection, schema, "u9_sync_seller_option_cache")).isZero();
                 assertThat(rowCount(connection, schema, "u9_sync_department_option_cache")).isZero();
+                assertThat(rowCount(connection, schema, "u9_customer_sync_schedule_config")).isEqualTo(1);
 
                 insertCustomer(connection, schema, "C001", "Same Customer");
                 insertCustomer(connection, schema, "C002", "Same Customer");
@@ -134,7 +137,8 @@ class U9CustomerMasterStage2MigrationTest {
 
                 assertThat(flywayHistory(connection, schema)).containsExactly(
                         "1|qpo baseline schema|true",
-                        "2|qpo baseline seed data|true");
+                        "2|qpo baseline seed data|true",
+                        "5|u9 customer sync schedule config|true");
                 assertThat(rowCount(connection, schema, "system_permission")).isPositive();
                 assertThat(rowCount(connection, schema, "system_role")).isPositive();
                 assertThat(rowCount(connection, schema, "dict_material")).isPositive();
@@ -143,6 +147,7 @@ class U9CustomerMasterStage2MigrationTest {
                 assertThat(rowCount(connection, schema, "order_rfq")).isZero();
                 assertThat(rowCount(connection, schema, "sales_order_header")).isZero();
                 assertThat(rowCount(connection, schema, "customer_master")).isZero();
+                assertThat(rowCount(connection, schema, "u9_customer_sync_schedule_config")).isEqualTo(1);
             } finally {
                 dropTestSchema(connection, schema);
             }

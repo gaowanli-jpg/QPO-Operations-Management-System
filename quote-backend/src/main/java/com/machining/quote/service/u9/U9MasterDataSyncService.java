@@ -11,6 +11,7 @@ import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.U9MasterDataSyncRunMapper;
 import com.machining.quote.mapper.U9SyncDepartmentOptionCacheMapper;
 import com.machining.quote.mapper.U9SyncSellerOptionCacheMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
@@ -88,25 +90,44 @@ public class U9MasterDataSyncService {
     private U9SyncDepartmentOptionCacheMapper departmentOptionMapper;
     @Autowired
     private U9MasterDataSyncRunMapper syncRunMapper;
+    @Autowired
+    private U9CustomerSyncScheduleConfigService customerSyncScheduleConfigService;
 
     @Value("${erp.u9.org-code:101}")
     private String orgCode = "101";
-    @Value("${erp.u9.customer-sync.enabled:false}")
-    private boolean syncEnabled;
 
     private Clock clock = Clock.system(DISPLAY_ZONE);
+    private LocalDateTime customerSyncSchedulerStartedAt;
+    private final AtomicBoolean scheduledCustomerSyncRunning = new AtomicBoolean(false);
 
-    @Scheduled(
-            initialDelayString = "${erp.u9.customer-sync.startup-delay-ms:30000}",
-            fixedDelayString = "${erp.u9.customer-sync.fixed-delay-ms:1800000}"
-    )
+    @PostConstruct
+    public void initCustomerSyncSchedulerStartedAt() {
+        customerSyncSchedulerStartedAt = now();
+    }
+
+    @Scheduled(fixedDelayString = "${erp.u9.customer-sync.check-ms:60000}")
     public void syncCustomersScheduled() {
-        if (!syncEnabled) {
+        if (customerSyncScheduleConfigService == null) {
             return;
         }
-        SyncResult result = syncCustomers(null);
-        if (!result.success()) {
-            log.warn("U9 customer scheduled sync failed syncRunId={} message={}", result.syncRunId(), result.message());
+        if (customerSyncSchedulerStartedAt == null) {
+            customerSyncSchedulerStartedAt = now();
+        }
+        if (!customerSyncScheduleConfigService.shouldRun(customerSyncSchedulerStartedAt)) {
+            return;
+        }
+        if (!scheduledCustomerSyncRunning.compareAndSet(false, true)) {
+            log.info("U9 customer scheduled sync skipped because previous run is still active");
+            return;
+        }
+        try {
+            SyncResult result = syncCustomers(null);
+            customerSyncScheduleConfigService.updateScheduledResult(result);
+            if (!result.success()) {
+                log.warn("U9 customer scheduled sync failed syncRunId={} message={}", result.syncRunId(), result.message());
+            }
+        } finally {
+            scheduledCustomerSyncRunning.set(false);
         }
     }
 

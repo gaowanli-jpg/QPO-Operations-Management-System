@@ -84,6 +84,7 @@ erp:
       enabled: ${ERP_U9_CUSTOMER_SYNC_ENABLED:false}
       startup-delay-ms: ${ERP_U9_CUSTOMER_SYNC_STARTUP_DELAY_MS:30000}
       fixed-delay-ms: ${ERP_U9_CUSTOMER_SYNC_FIXED_DELAY_MS:1800000}
+      check-ms: ${ERP_U9_CUSTOMER_SYNC_CHECK_MS:60000}
   mes:
     base-url: ${ERP_MES_BASE_URL:}
     auth-token: ${ERP_MES_AUTH_TOKEN:}

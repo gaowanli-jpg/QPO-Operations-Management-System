@@ -146,6 +146,7 @@ class U9CustomerMasterStage8GovernanceTest {
                 CLEANUP_SCRIPT,
                 Path.of("src", "main", "java", "com", "machining", "quote", "service", "u9", "U9CommonEntityClient.java"),
                 Path.of("src", "main", "java", "com", "machining", "quote", "service", "u9", "U9SalesOrderClient.java"),
+                Path.of("src", "main", "java", "com", "machining", "quote", "service", "u9", "U9CustomerSyncScheduleConfigService.java"),
                 Path.of("src", "main", "java", "com", "machining", "quote", "service", "u9", "U9MasterDataSyncService.java"),
                 Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderU9SyncService.java")
         );
