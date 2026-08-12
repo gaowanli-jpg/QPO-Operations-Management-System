@@ -1491,6 +1491,37 @@ docker compose --env-file erp.env ps
 
 `QPO-MES-E2E-` 是便于跨 QPO、数据中心、MES 和日志检索的统一测试标识前缀，不是 MES 强制字段，也不是把字面量 `*` 写入数据。完整编号必须通过日期、序号或 ULID 保持唯一。每次重新创建 MES 任务必须生成新的销售订单号和 bizId，不复用本文示例值；正式业务数据不使用该测试前缀。
 
+#### 2026-08-12 阶段 8 完成记录
+
+本阶段新增 `scripts/mes-stage8-e2e.ps1` 作为真实 MES 验收和后续复测入口。脚本默认只执行数据中心 token 探测、QPO 可追踪测试数据准备、图纸 URL 可访问性探测、脱敏证据汇总；真实 MES 创建写入必须显式传入 `-ExecuteExternalWrites`，并提供当前 QPO 登录态 Bearer Token，避免误重复创建 MES 物料准备或生产需求任务。
+
+验证命令已按阶段要求执行并保留为本阶段收口口径：
+
+```powershell
+cd D:\QPO-Operations-Management-System\quote-backend
+.\mvnw.cmd test
+
+cd D:\QPO-Operations-Management-System\quote-frontend
+npm test
+npm run build
+
+cd D:\QPO-Operations-Management-System
+docker compose --env-file erp.env up -d --build
+docker compose --env-file erp.env ps
+```
+
+阶段 8 验收口径如下：
+
+- 数据中心 token 获取成功，日志不出现 token；脚本只输出 `success/tokenType/expiresIn` 等摘要，不输出 token 值、client secret、完整请求体或响应体。
+- QPO 图纸 URL 可从 MES 测试服务器访问；脚本保留 `drawingUrl` 探测结果，正式验收时在 MES 测试服务器或同网络位置执行同一 URL 探测。
+- 使用 `QPO-MES-E2E-` 统一测试标识前缀创建直接导入销售订单、至少两条零件、直接导入待产 allocation，以及一条通过 `source_ticket_id` 解析的 RFQ 派生销售订单待产 allocation；完整编号由日期、时间和随机段保持唯一。
+- 物料准备链路按 `QPO -> 数据中心 -> MES` 发起，生产需求链路按同一数据中心出站口径发起；新物料完成后仍以 `MES -> 数据中心 -> QPO` 批量回调作为正常收口路径。
+- 两条 MES 出站 endpoint 固定为 `/api/v1/mes/openapi/material-preparation/create` 和 `/api/v1/mes/openapi/demand/create`，不回退旧平铺契约。
+- 生产需求验收继续要求 `demandQty = makeQty` 且 `buyQty = stockQty = 0`，`requiredDate` 不带时区偏移，BOM 使用子件物料号和每父件用量，工艺路线字段名和工时正确且不包含价格。
+- 重复成功 bizId、`RESULT_UNKNOWN`、回调增量幂等、冲突整次拒绝、并发预约唯一性等矩阵项由阶段 2-6 单元测试和本阶段脚本的真实数据入口共同覆盖；真实写入复测必须每次生成新的销售订单号和 bizId。
+- U9、WMS、待产、锁库、销售订单和 RFQ 后续页面不回退；不新增用户权限，不新增 `common:*`。
+- QPO 与数据中心的操作日志、文件日志、`system_task` 和批次表不包含完整请求、响应、token、Authorization、Cookie、client secret 或服务器凭据。
+
 ## 14. 风险与处理
 
 ### 14.1 新物料没有完成通知
