@@ -54,19 +54,26 @@ class MesMaterialBatchOrchestrationStage3Test {
                 .containsEntry("successCount", 1)
                 .containsEntry("callbackPendingCount", 1)
                 .containsEntry("failedCount", 0)
+                .containsEntry("batchCount", 1)
                 .containsEntry("submittedToMesCount", 2);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
         assertThat(rows).extracting(row -> row.get("status"))
                 .containsExactly("SUCCESS", "CALLBACK_PENDING");
-        assertThat(rows.get(0).get("result")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-                .containsEntry("materialNo", "MAT-EXIST-601");
+        Map<String, Object> firstRowResult = (Map<String, Object>) rows.get(0).get("result");
+        Object bizId = firstRowResult.get("bizId");
+        assertThat(firstRowResult)
+                .containsEntry("materialNo", "MAT-EXIST-601")
+                .containsKey("bizId");
+        assertThat(String.valueOf(bizId)).startsWith("QPO-MAT-");
         assertThat(rows.get(1).get("result")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .containsEntry("status", "CALLBACK_PENDING")
+                .containsEntry("bizId", bizId)
                 .doesNotContainKey("materialNo");
 
         ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
         verify(fixture.client, times(1)).resolveMaterial(reqCaptor.capture());
         MesMaterialResolveReq req = reqCaptor.getValue();
+        assertThat(req.getBizId()).isEqualTo(bizId);
         assertThat(req.getBizId()).startsWith("QPO-MAT-");
         assertThat(req.getItems()).hasSize(2);
         assertThat(req.getItems()).extracting(MesMaterialResolveReq.Item::getDrawingNo)

@@ -32,3 +32,5 @@ export const submitMesProductionDispatchBatch = (allocationIds = []) => request(
   method: 'POST',
   data: { allocationIds }
 })
+
+export const getDeliveryIntegrationTask = (taskId) => request(`/api/tasks/${taskId}`)

@@ -89,4 +89,10 @@ describe('deliveredItemApi', () => {
       data: { allocationIds: [101, 102] }
     })
   })
+
+  test('getDeliveryIntegrationTask loads async batch task result by task id', async () => {
+    await deliveredItemApi.getDeliveryIntegrationTask(9001)
+
+    expect(request).toHaveBeenCalledWith('/api/tasks/9001')
+  })
 })

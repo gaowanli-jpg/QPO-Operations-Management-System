@@ -369,7 +369,7 @@ public class MesProductionDispatchService {
                 String requestId = batchItem == null ? null : batchItem.getLineRequestId();
                 markFailed(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_FAILED, null, message);
-                Map<String, Object> result = resultSummary(plan.allocation(), requestId, null);
+                Map<String, Object> result = withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId());
                 result.put("errorMessage", abbreviate(message));
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_FAILED, message, result));
                 recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
@@ -410,7 +410,8 @@ public class MesProductionDispatchService {
                 String message = "MES production response missing row for productCode " + plan.item().getProductCode();
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, null, message);
-                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message, resultSummary(plan.allocation(), requestId, null)));
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
+                        withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId())));
                 unknownCount++;
                 continue;
             }
@@ -418,7 +419,8 @@ public class MesProductionDispatchService {
                 String message = "MES production response has ambiguous duplicate productCode " + plan.item().getProductCode();
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, null, message);
-                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message, resultSummary(plan.allocation(), requestId, null)));
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
+                        withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId())));
                 unknownCount++;
                 continue;
             }
@@ -427,7 +429,7 @@ public class MesProductionDispatchService {
                 String message = "MES production response row failed for productCode " + plan.item().getProductCode();
                 markFailed(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_FAILED, responseItem, message);
-                Map<String, Object> result = resultSummary(plan.allocation(), requestId, null);
+                Map<String, Object> result = withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId());
                 result.put("errorMessage", abbreviate(message));
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_FAILED, message, result));
                 recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
@@ -439,14 +441,15 @@ public class MesProductionDispatchService {
                 String message = "MES production response missing planNo for productCode " + plan.item().getProductCode();
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, responseItem, message);
-                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message, resultSummary(plan.allocation(), requestId, null)));
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
+                        withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId())));
                 unknownCount++;
                 continue;
             }
             String message = messageOrDefault(response.getMessage(), "MES production dispatch succeeded");
             markSuccess(plan.allocation(), requestId, externalId, message);
             updateProductionBatchItem(batchItem, STATUS_SUCCESS, responseItem, message);
-            Map<String, Object> result = resultSummary(plan.allocation(), requestId, null);
+            Map<String, Object> result = withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId());
             result.put("externalId", externalId);
             rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_SUCCESS, message, result));
             recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", plan.allocation(), taskId, result, null);
@@ -942,8 +945,37 @@ public class MesProductionDispatchService {
         summary.put("failedCount", count(rows, STATUS_FAILED));
         summary.put("unknownCount", count(rows, STATUS_RESULT_UNKNOWN));
         summary.put("skippedCount", count(rows, STATUS_SKIPPED));
+        summary.put("batchCount", countDistinctBizIds(rows));
         summary.put("rows", rows);
         return summary;
+    }
+
+    private Map<String, Object> withBizId(Map<String, Object> result, String bizId) {
+        if (result != null && !isBlank(bizId)) {
+            result.put("bizId", bizId);
+        }
+        return result;
+    }
+
+    private int countDistinctBizIds(List<Map<String, Object>> rows) {
+        return Math.toIntExact(rows.stream()
+                .map(this::bizIdOf)
+                .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .count());
+    }
+
+    private String bizIdOf(Map<String, Object> row) {
+        Object direct = row == null ? null : row.get("bizId");
+        if (direct != null && !String.valueOf(direct).isBlank()) {
+            return String.valueOf(direct).trim();
+        }
+        Object nested = row == null ? null : row.get("result");
+        if (nested instanceof Map<?, ?> nestedMap) {
+            Object value = nestedMap.get("bizId");
+            return value == null ? null : String.valueOf(value).trim();
+        }
+        return null;
     }
 
     private Map<String, Object> row(Integer allocationId, String status, String message, Object result) {

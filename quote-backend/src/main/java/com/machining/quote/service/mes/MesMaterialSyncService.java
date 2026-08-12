@@ -725,23 +725,23 @@ public class MesMaterialSyncService {
             for (MaterialBatchPlan master : masters) {
                 PreparedMaterialPlan prepared = preparedByTicketId.get(master.ticket().getId());
                 if (responseIndex.duplicateKeys().contains(master.itemKey())) {
-                    resultByTicketId.put(master.ticket().getId(), applyBatchFailure(
-                            prepared, taskId, "MES returned duplicate rows for drawing/version", true));
-                    applyFollowerFailures(master, followersByKey, resultByTicketId, taskId,
+                    resultByTicketId.put(master.ticket().getId(), withBizId(applyBatchFailure(
+                            prepared, taskId, "MES returned duplicate rows for drawing/version", true), bizId));
+                    applyFollowerFailures(master, followersByKey, resultByTicketId, taskId, bizId,
                             "MES returned duplicate rows for drawing/version");
                     continue;
                 }
                 MesMaterialResolveResp.Item item = responseIndex.itemsByKey().get(master.itemKey());
                 if (item == null) {
-                    resultByTicketId.put(master.ticket().getId(), applyBatchFailure(
-                            prepared, taskId, "MES response missing row for drawing/version", true));
-                    applyFollowerFailures(master, followersByKey, resultByTicketId, taskId,
+                    resultByTicketId.put(master.ticket().getId(), withBizId(applyBatchFailure(
+                            prepared, taskId, "MES response missing row for drawing/version", true), bizId));
+                    applyFollowerFailures(master, followersByKey, resultByTicketId, taskId, bizId,
                             "MES response missing row for drawing/version");
                     continue;
                 }
-                Map<String, Object> masterResult = applyBatchItem(prepared, item, taskId, true);
+                Map<String, Object> masterResult = withBizId(applyBatchItem(prepared, item, taskId, true), bizId);
                 resultByTicketId.put(master.ticket().getId(), masterResult);
-                applyFollowerResult(prepared, followersByKey, item, resultByTicketId, taskId);
+                applyFollowerResult(prepared, followersByKey, item, resultByTicketId, taskId, bizId);
             }
         } catch (RuntimeException error) {
             String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
@@ -749,15 +749,15 @@ public class MesMaterialSyncService {
                     bizId, taskId, group.size(), message, error);
             for (MaterialBatchPlan plan : group) {
                 PreparedMaterialPlan prepared = preparedByTicketId.get(plan.ticket().getId());
-                resultByTicketId.put(plan.ticket().getId(), prepared == null
+                resultByTicketId.put(plan.ticket().getId(), withBizId(prepared == null
                         ? batchFailureRow(plan.ticket(), taskId, null, message, true)
-                        : applyBatchFailure(prepared, taskId, message, true));
+                        : applyBatchFailure(prepared, taskId, message, true), bizId));
             }
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         for (MaterialBatchPlan plan : group) {
-            rows.add(resultByTicketId.getOrDefault(plan.ticket().getId(),
-                    batchFailureRow(plan.ticket(), taskId, null, "MES batch result was not produced", true)));
+            rows.add(withBizId(resultByTicketId.getOrDefault(plan.ticket().getId(),
+                    batchFailureRow(plan.ticket(), taskId, null, "MES batch result was not produced", true)), bizId));
         }
         return rows;
     }
@@ -889,7 +889,8 @@ public class MesMaterialSyncService {
             Map<String, List<MaterialBatchPlan>> followersByKey,
             MesMaterialResolveResp.Item item,
             Map<Integer, Map<String, Object>> resultByTicketId,
-            Long taskId) {
+            Long taskId,
+            String bizId) {
         List<MaterialBatchPlan> followers = followersByKey.getOrDefault(master.plan().itemKey(), List.of());
         for (MaterialBatchPlan follower : followers) {
             if (dedupService != null && isPendingMaterialItem(item)) {
@@ -910,7 +911,7 @@ public class MesMaterialSyncService {
                 appendDedupSummary(result, dedupResult);
                 result.put("submittedToMes", false);
                 result.put("message", "MES accepted, waiting for material callback");
-                resultByTicketId.put(follower.ticket().getId(), result);
+                resultByTicketId.put(follower.ticket().getId(), withBizId(result, bizId));
                 continue;
             }
             String followerLineId = newMaterialLineRequestId();
@@ -918,7 +919,7 @@ public class MesMaterialSyncService {
             Map<String, Object> result = applyBatchItem(prepared, item, taskId, false);
             result.put("dedupResult", MesMaterialDedupService.RESULT_FOLLOW_EXISTING_ACTIVE);
             result.put("dedupKey", follower.itemKey());
-            resultByTicketId.put(follower.ticket().getId(), result);
+            resultByTicketId.put(follower.ticket().getId(), withBizId(result, bizId));
         }
     }
 
@@ -927,11 +928,19 @@ public class MesMaterialSyncService {
             Map<String, List<MaterialBatchPlan>> followersByKey,
             Map<Integer, Map<String, Object>> resultByTicketId,
             Long taskId,
+            String bizId,
             String message) {
         for (MaterialBatchPlan follower : followersByKey.getOrDefault(master.itemKey(), List.of())) {
             resultByTicketId.put(follower.ticket().getId(),
-                    batchFailureRow(follower.ticket(), taskId, newMaterialLineRequestId(), message, false));
+                    withBizId(batchFailureRow(follower.ticket(), taskId, newMaterialLineRequestId(), message, false), bizId));
         }
+    }
+
+    private Map<String, Object> withBizId(Map<String, Object> result, String bizId) {
+        if (result != null && !isBlank(bizId)) {
+            result.put("bizId", bizId);
+        }
+        return result;
     }
 
     private Map<String, Object> applyBatchFailure(

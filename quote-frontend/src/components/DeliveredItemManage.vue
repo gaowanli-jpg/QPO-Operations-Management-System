@@ -87,11 +87,27 @@
       <div class="erp-table-header mes-batch-result-header">
         <div>
           <h3>MES批量获取结果</h3>
-          <p>已按同图号版本去重，未重复发送 MES 的行会继续等待主请求回调。</p>
+          <p>已按真实 MES 批次返回展示，关闭结果区只清空页面展示，不影响后台批次和回调。</p>
         </div>
-        <div class="mes-batch-result-tags">
-          <el-tag type="warning">关联待回调：{{ formatMesBatchCount(mesBatchResult, 'dedupFollowerCount') }}</el-tag>
-          <el-tag type="primary">实际提交MES：{{ formatMesBatchCount(mesBatchResult, 'submittedToMesCount') }}</el-tag>
+        <div class="mes-batch-result-actions">
+          <el-button text @click="closeMesBatchResult">关闭结果</el-button>
+        </div>
+      </div>
+      <div class="mes-batch-result-stats">
+        <div v-for="stat in mesMaterialBatchStats" :key="stat.label" class="mes-batch-result-stat">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+        </div>
+      </div>
+      <div v-if="mesMaterialBatchRows.length" class="mes-batch-result-details">
+        <div v-for="row in mesMaterialBatchRows" :key="`mes-material-${row.ticketId || row.allocationId || row.result?.mesRequestId || row.result?.requestId || row.message}`" class="mes-batch-result-row">
+          <span class="result-row-id">提单ID：{{ row.ticketId || row.result?.ticketId || '-' }}</span>
+          <span class="result-row-code">bizId：{{ mesMaterialRowBizId(row) }}</span>
+          <span class="result-row-code">taskNo：{{ mesMaterialRowTaskNo(row) }}</span>
+          <el-tag :type="mesMaterialRowTagType(row.status)" size="small">{{ mesMaterialRowStatusText(row.status) }}</el-tag>
+          <el-tooltip :content="row.message || row.result?.message || '-'" placement="top">
+            <span class="result-row-message">{{ row.message || row.result?.message || '-' }}</span>
+          </el-tooltip>
         </div>
       </div>
     </section>
@@ -290,11 +306,11 @@ import { openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
   getDeliveredItem,
+  getDeliveryIntegrationTask,
   listDeliveredItems,
   submitWmsAllocationBatch,
   syncMesMaterialBatch
 } from '../services/deliveredItemApi'
-import { getTask } from '../services/taskApi'
 import { usePendingAction } from '../composables/usePendingAction'
 import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
@@ -330,6 +346,7 @@ const syncStatusOptions = [
   { value: 'PENDING', label: '未处理' },
   { value: 'PROCESSING', label: '处理中' },
   { value: 'CALLBACK_PENDING', label: '待MES回调' },
+  { value: 'RESULT_UNKNOWN', label: '结果待核对' },
   { value: 'SUCCESS', label: '成功' },
   { value: 'FAILED', label: '失败' }
 ]
@@ -538,6 +555,8 @@ const openLockedItems = (row) => {
 
 const formatMaterialNo = (value) => value || '未获取'
 
+const formatDash = (value) => (value === null || value === undefined || value === '') ? '-' : value
+
 const normalizeObject = (value) => {
   if (!value) return {}
   if (typeof value === 'object') return value
@@ -586,6 +605,7 @@ const statusTagType = (value) => ({
   FAILED: 'danger',
   PROCESSING: 'warning',
   CALLBACK_PENDING: 'warning',
+  RESULT_UNKNOWN: 'warning',
   PENDING: 'info'
 }[value] || 'info')
 
@@ -625,6 +645,82 @@ const mesBatchResultOf = (task) => {
   return null
 }
 
+const resultRowsOf = (result, primaryKey = 'results') => {
+  const rows = result?.[primaryKey] || result?.rows || result?.results || []
+  return Array.isArray(rows) ? rows : []
+}
+
+const mesMaterialBatchRows = computed(() => resultRowsOf(mesBatchResult.value, 'results'))
+
+const numberCount = (value) => Number.isFinite(Number(value)) ? Number(value) : 0
+
+const resultObjectOf = (row) => row?.result && typeof row.result === 'object' ? row.result : {}
+
+const rowStatusOf = (row) => String(row?.status || resultObjectOf(row).status || '').toUpperCase()
+
+const countRowsByStatus = (rows, statuses) => {
+  const targets = new Set(statuses)
+  return rows.filter(row => targets.has(rowStatusOf(row))).length
+}
+
+const distinctRowValueCount = (rows, resolver) => new Set(rows
+  .map(resolver)
+  .filter(value => value !== null && value !== undefined && String(value).trim()))
+  .size
+
+const mesMaterialRowBizId = (row) => {
+  const result = resultObjectOf(row)
+  return result.bizId || row?.bizId || result.batchBizId || result.mesRequestBizId || result.mesRequestId || '-'
+}
+
+const mesMaterialRowTaskNo = (row) => {
+  const result = resultObjectOf(row)
+  return result.taskNo || result.externalTraceId || row?.taskNo || row?.externalTraceId || '-'
+}
+
+const mesMaterialBatchStats = computed(() => {
+  const result = mesBatchResult.value || {}
+  const rows = mesMaterialBatchRows.value
+  const batchCount = numberCount(result.batchCount) || distinctRowValueCount(rows, mesMaterialRowBizId)
+  const pendingCreateCount = numberCount(result.pendingCreateCount)
+    || Math.max(0, numberCount(result.callbackPendingCount) - numberCount(result.dedupFollowerCount))
+    || countRowsByStatus(rows, ['CALLBACK_PENDING'])
+  const unknownCount = numberCount(result.unknownCount)
+    || numberCount(result.resultUnknownCount)
+    || countRowsByStatus(rows, ['RESULT_UNKNOWN'])
+  return [
+    { label: 'MES 批次数', value: batchCount },
+    { label: '实际发送', value: numberCount(result.submittedToMesCount) || rows.filter(row => row.submittedToMes === true || resultObjectOf(row).submittedToMes === true).length },
+    { label: '已有物料成功', value: numberCount(result.successCount) || countRowsByStatus(rows, ['SUCCESS']) },
+    { label: '待 MES 创建', value: pendingCreateCount },
+    { label: 'Follower', value: numberCount(result.dedupFollowerCount) || countRowsByStatus(rows, ['DEDUP_FOLLOWING']) },
+    { label: '失败', value: numberCount(result.failedCount) || countRowsByStatus(rows, ['FAILED']) },
+    { label: '结果待核对', value: unknownCount }
+  ]
+})
+
+const closeMesBatchResult = () => {
+  mesBatchResult.value = null
+}
+
+const mesMaterialRowStatusText = (value) => ({
+  SUCCESS: '成功',
+  FAILED: '失败',
+  SKIPPED: '跳过',
+  CALLBACK_PENDING: 'MES 已受理，等待物料创建结果',
+  DEDUP_FOLLOWING: 'Follower 等待主请求结果',
+  RESULT_UNKNOWN: '结果待核对'
+}[String(value || '').toUpperCase()] || formatDash(value))
+
+const mesMaterialRowTagType = (value) => ({
+  SUCCESS: 'success',
+  FAILED: 'danger',
+  SKIPPED: 'info',
+  CALLBACK_PENDING: 'warning',
+  DEDUP_FOLLOWING: 'warning',
+  RESULT_UNKNOWN: 'warning'
+}[String(value || '').toUpperCase()] || 'info')
+
 const waitFor = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
 
 const waitMesBatchTaskResult = async (taskId) => {
@@ -633,7 +729,7 @@ const waitMesBatchTaskResult = async (taskId) => {
   for (const delayMs of delays) {
     await waitFor(delayMs)
     try {
-      const latestTask = await getTask(taskId)
+      const latestTask = await getDeliveryIntegrationTask(taskId)
       const result = mesBatchResultOf(latestTask)
       if (result) return result
       if (['SUCCESS', 'FAILED'].includes(String(latestTask?.status || '').toUpperCase())) {
@@ -815,11 +911,72 @@ onMounted(() => loadItems())
   font-size: 13px;
 }
 
-.mes-batch-result-tags {
+.mes-batch-result-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.mes-batch-result-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  padding: 0 var(--erp-space-3) var(--erp-space-3);
+}
+
+.mes-batch-result-stat {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--erp-border-light);
+  border-radius: var(--erp-radius-sm);
+  background: var(--erp-bg-soft);
+}
+
+.mes-batch-result-stat span {
+  display: block;
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.mes-batch-result-stat strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--erp-text-primary);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.mes-batch-result-details {
+  display: grid;
+  gap: 8px;
+  max-width: 100%;
+  padding: 0 var(--erp-space-3) var(--erp-space-3);
+  overflow-x: auto;
+}
+
+.mes-batch-result-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.8fr) minmax(180px, 1.5fr) minmax(140px, 1fr) auto minmax(220px, 2fr);
+  gap: 8px;
+  min-width: 760px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--erp-border-light);
+  border-radius: var(--erp-radius-sm);
+  background: var(--erp-bg-soft);
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.result-row-id,
+.result-row-code,
+.result-row-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-word;
 }
 
 .mes-status-cell {
@@ -872,7 +1029,7 @@ onMounted(() => loadItems())
   }
 
   .mes-batch-result-header,
-  .mes-batch-result-tags {
+  .mes-batch-result-actions {
     justify-content: flex-start;
   }
 }
@@ -891,6 +1048,18 @@ onMounted(() => loadItems())
   .filter-date-range {
     width: 100%;
     flex: 1 1 100%;
+  }
+
+  .mes-batch-result-row {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .result-row-id,
+  .result-row-code,
+  .result-row-message {
+    white-space: normal;
   }
 }
 </style>

@@ -28,14 +28,15 @@ describe('DeliveredItemManage MES dedup stage 5 display', () => {
 
   test('renders only active follower and actual MES submission counts', () => {
     for (const token of [
-      "import { getTask } from '../services/taskApi'",
+      'getDeliveryIntegrationTask',
       'mesBatchResult',
+      'mesMaterialBatchStats',
       'waitMesBatchTaskResult(taskId)',
-      'getTask(taskId)',
-      'formatMesBatchCount(mesBatchResult, \'dedupFollowerCount\')',
-      'formatMesBatchCount(mesBatchResult, \'submittedToMesCount\')',
+      'getDeliveryIntegrationTask(taskId)',
+      'dedupFollowerCount',
+      'submittedToMesCount',
       '关联待回调',
-      '实际提交MES'
+      '实际发送'
     ]) {
       expect(pageSource).toContain(token)
     }

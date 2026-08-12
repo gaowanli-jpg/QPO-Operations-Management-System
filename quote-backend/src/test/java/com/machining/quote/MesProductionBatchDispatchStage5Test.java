@@ -52,7 +52,16 @@ class MesProductionBatchDispatchStage5Test {
 
         Map<String, Object> result = fixture.service.dispatchBatch(List.of(1, 2), 9901L);
 
-        assertThat(result).containsEntry("successCount", 2).containsEntry("failedCount", 0).containsEntry("unknownCount", 0);
+        assertThat(result)
+                .containsEntry("successCount", 2)
+                .containsEntry("failedCount", 0)
+                .containsEntry("unknownCount", 0)
+                .containsEntry("batchCount", 1);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).get("result")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("bizId", "QPO-DEM-BATCH-1")
+                .containsEntry("externalId", "PLAN-1");
         ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
         verify(fixture.client).dispatch(requestCaptor.capture());
         MesProductionDispatchReq request = requestCaptor.getValue();

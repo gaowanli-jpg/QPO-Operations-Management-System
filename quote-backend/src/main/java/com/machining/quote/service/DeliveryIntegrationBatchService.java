@@ -19,6 +19,7 @@ public class DeliveryIntegrationBatchService {
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final String STATUS_DEDUP_FOLLOWING = "DEDUP_FOLLOWING";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
     private static final String STATUS_SKIPPED = "SKIPPED";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String DEDUP_FOLLOW_EXISTING_ACTIVE = "FOLLOW_EXISTING_ACTIVE";
@@ -220,6 +221,11 @@ public class DeliveryIntegrationBatchService {
             row.put("submittedToMes", submittedToMes(result));
             return row;
         }
+        if (STATUS_RESULT_UNKNOWN.equals(status)) {
+            Map<String, Object> row = row(ticketId, STATUS_RESULT_UNKNOWN, resultMessage(result), result);
+            row.put("submittedToMes", submittedToMes(result));
+            return row;
+        }
         if (isCallbackPendingResult(result)) {
             Map<String, Object> row = row(ticketId, STATUS_CALLBACK_PENDING,
                     "MES 已受理，等待回调", result);
@@ -240,9 +246,11 @@ public class DeliveryIntegrationBatchService {
             summary.put("successCount", count(rows, STATUS_SUCCESS));
             summary.put("callbackPendingCount", countAny(rows, STATUS_CALLBACK_PENDING, STATUS_DEDUP_FOLLOWING));
             summary.put("failedCount", count(rows, STATUS_FAILED));
+            summary.put("unknownCount", count(rows, STATUS_RESULT_UNKNOWN));
             summary.put("skippedCount", count(rows, STATUS_SKIPPED));
             summary.put("dedupFollowerCount", count(rows, STATUS_DEDUP_FOLLOWING));
             summary.put("submittedToMesCount", countSubmittedToMes(rows));
+            summary.put("batchCount", countDistinctBizIds(rows));
         } else {
             summary.put("successCount", count(rows, STATUS_SUCCESS));
             summary.put("callbackPendingCount", count(rows, STATUS_CALLBACK_PENDING));
@@ -273,6 +281,28 @@ public class DeliveryIntegrationBatchService {
         return Math.toIntExact(rows.stream()
                 .filter(row -> Boolean.TRUE.equals(row.get("submittedToMes")))
                 .count());
+    }
+
+    private int countDistinctBizIds(List<Map<String, Object>> rows) {
+        return Math.toIntExact(rows.stream()
+                .map(this::bizIdOf)
+                .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .count());
+    }
+
+    @SuppressWarnings("unchecked")
+    private String bizIdOf(Map<String, Object> row) {
+        Object direct = row == null ? null : row.get("bizId");
+        if (direct != null && !String.valueOf(direct).isBlank()) {
+            return String.valueOf(direct).trim();
+        }
+        Object nested = row == null ? null : row.get("result");
+        if (nested instanceof Map<?, ?> nestedMap) {
+            Object value = nestedMap.get("bizId");
+            return value == null ? null : String.valueOf(value).trim();
+        }
+        return null;
     }
 
     private Integer ticketIdFromResult(Map<String, Object> result) {
