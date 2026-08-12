@@ -13,7 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CustomerMasterStage1Test {
     private static final Path SCHEMA_BASELINE = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SEED_BASELINE = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
-    private static final Path READ_ONLY_MIGRATION = Path.of("src", "main", "resources", "db", "migration", "V7__customer_master_read_only_u9_sync.sql");
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path PERMISSION_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path LOG_DOC = Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md");
@@ -35,20 +34,16 @@ class CustomerMasterStage1Test {
     }
 
     @Test
-    void migrationKeepsCustomerViewAddsManualSyncAndRetiresLocalWritePermissions() throws IOException {
+    void baselineKeepsCustomerViewAddsManualSyncAndRetiresLocalWritePermissions() throws IOException {
         String seed = read(SEED_BASELINE);
-        String migration = read(READ_ONLY_MIGRATION);
 
         assertThat(seed)
                 .contains("'system:customer:view'")
                 .contains("'system:customer:sync'")
-                .doesNotContain("common:customer");
-        assertThat(migration)
-                .contains("'system:customer:sync'")
-                .contains("permission_code IN ('system:customer:create', 'system:customer:update', 'system:customer:delete')")
-                .contains("assignable = false")
-                .contains("enabled = false")
-                .contains("DELETE FROM system_role_permission")
+                .contains("'system:customer:create'")
+                .contains("'system:customer:update'")
+                .contains("'system:customer:delete'")
+                .contains("'system:customer:create',", "false, false")
                 .doesNotContain("common:customer");
     }
 

@@ -69,6 +69,16 @@ public class SalesOrderManageService {
         return List.of();
     }
 
+    public PageResult<CustomerOptionDTO> pageCustomerOptions(String field, String keyword, Integer page, Integer pageSize) {
+        if (customerMasterService != null) {
+            return customerMasterService.pageCustomerOptions(field, keyword, page, pageSize);
+        }
+        if (dataScopeService != null) {
+            return dataScopeService.pageCustomerOptions(field, keyword, page, pageSize);
+        }
+        return PageResult.of(List.of(), 0, normalizePage(page), normalizePageSize(pageSize));
+    }
+
     public PageResult<Map<String, Object>> listOrderSummaries(
             Long customerId,
             String customerName,
@@ -492,6 +502,17 @@ public class SalesOrderManageService {
         return safeInt(item.getReleasedQty()) == 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
                 && !QuoteStatusWorkflow.isReleasedOrderStatus(item.getStatus());
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
     }
 
     private Map<String, Long> statusSummary(List<SalesOrderItem> items) {

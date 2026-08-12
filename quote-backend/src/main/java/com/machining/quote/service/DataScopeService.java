@@ -3,6 +3,7 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.AuditLog;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -299,6 +300,33 @@ public class DataScopeService {
                 .toList();
     }
 
+    public PageResult<CustomerOptionDTO> pageCustomerOptions(String field, String keyword, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        if (customerMasterMapper != null) {
+            QueryWrapper<CustomerMaster> query = new QueryWrapper<>();
+            query.eq("enabled", true);
+            query.isNotNull("customer_name");
+            query.ne("customer_name", "");
+            applyCustomerKeyword(query, field, keyword);
+            applyCustomerMasterScope(query);
+            Long total = customerMasterMapper.selectCount(query);
+            if (total == null || total == 0) {
+                return PageResult.of(List.of(), 0, safePage, safePageSize);
+            }
+            query.orderByAsc("customer_code").orderByAsc("id");
+            query.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+            return PageResult.of(customerMasterMapper.selectList(query).stream()
+                    .map(this::toCustomerOption)
+                    .toList(), total, safePage, safePageSize);
+        }
+        List<CustomerOptionDTO> rows = listCustomerOptions().stream()
+                .filter(name -> matchesCustomerKeyword(name, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+        return pageRows(rows, safePage, safePageSize);
+    }
+
     private void applyCustomerMasterScope(QueryWrapper<CustomerMaster> query) {
         DataScopeSnapshot snapshot = currentSnapshot();
         if (snapshot.noContext() || snapshot.allAccess()) {
@@ -372,6 +400,24 @@ public class DataScopeService {
         dto.setCustomerShortName(customerName);
         dto.setCustomerName(customerName);
         return dto;
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private <T> PageResult<T> pageRows(List<T> rows, int safePage, int safePageSize) {
+        List<T> safeRows = rows == null ? List.of() : rows;
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, safeRows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, safeRows.size());
+        return PageResult.of(safeRows.subList(fromIndex, toIndex), safeRows.size(), safePage, safePageSize);
     }
 
     private void applyScopeSql(QueryWrapper<?> query, ScopeSql scopeSql) {

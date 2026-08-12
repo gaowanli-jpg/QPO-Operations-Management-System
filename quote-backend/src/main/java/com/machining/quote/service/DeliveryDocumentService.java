@@ -55,6 +55,10 @@ public class DeliveryDocumentService {
         return orderManagementService.listCustomerOptions(field, keyword);
     }
 
+    public PageResult<CustomerOptionDTO> pageDocumentCustomers(String field, String keyword, Integer page, Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
+    }
+
     public PageResult<Map<String, Object>> listDocumentOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
         return listDocumentOrders(null, customerName, keyword, status, page, pageSize);
     }

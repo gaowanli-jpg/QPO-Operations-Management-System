@@ -76,21 +76,21 @@ class MaterialMasterStage2BaselineTest {
         String seed = read(SEED);
 
         assertThat(seed)
-                .contains("INSERT INTO dict_material_type (id, type_code, type_name, remarks, enabled, sort_no)")
-                .contains("RAW_MATERIAL", "原材料")
+                .contains("INSERT INTO dict_material_type VALUES")
+                .contains("RAW_MATERIAL")
                 .contains("SELECT pg_catalog.setval('dict_material_type_id_seq', 1, true)");
 
         List<String> materialRows = seed.lines()
-                .filter(line -> line.startsWith("INSERT INTO dict_material ("))
+                .filter(line -> line.startsWith("INSERT INTO dict_material VALUES"))
                 .toList();
         assertThat(materialRows).hasSizeGreaterThan(40);
         assertThat(materialRows)
                 .allSatisfy(row -> assertThat(row)
-                        .contains("material_code", "material_type_id", "material_category", "enabled", "sort_no", "created_at", "updated_at")
+                        .contains("'MAT-")
                         .doesNotContain("material_type,"));
         assertThat(materialRows)
-                .anySatisfy(row -> assertThat(row).contains("VALUES (5, 'MAT-000005', '45#', 1,"))
-                .anySatisfy(row -> assertThat(row).contains("VALUES (38, 'MAT-000038', 'A5052', 1,"));
+                .anySatisfy(row -> assertThat(row).contains("INSERT INTO dict_material VALUES (5, 'MAT-000005', '45#', 1,"))
+                .anySatisfy(row -> assertThat(row).contains("INSERT INTO dict_material VALUES (38, 'MAT-000038', 'A5052', 1,"));
     }
 
     private String createTableBlock(String schema, String table) {

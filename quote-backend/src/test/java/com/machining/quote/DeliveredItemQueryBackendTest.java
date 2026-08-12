@@ -188,7 +188,7 @@ class DeliveredItemQueryBackendTest {
                         "return deliveredItemService.getTicket(ticketId)",
                         "@GetMapping(\"/tickets/customers\")",
                         "@RequirePermission(\"market:delivered-item:customer-select\")",
-                        "return deliveredItemService.listCustomerOptions(field, keyword)"
+                        "return deliveredItemService.pageCustomerOptions(field, keyword, page, pageSize)"
                 )
                 .doesNotContain("ticketMapper.selectPage")
                 .doesNotContain("new QueryWrapper<OrderDeliveryTicket>");

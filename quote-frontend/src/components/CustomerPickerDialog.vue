@@ -20,7 +20,7 @@
         placeholder="输入客户编码 / 简称 / 名称"
         class="customer-picker-search"
       />
-      <span class="customer-picker-count">共 {{ customers.length }} 个客户</span>
+      <span class="customer-picker-count">共 {{ total }} 个客户</span>
     </div>
 
     <el-table
@@ -51,6 +51,21 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="customer-picker-pagination">
+      <el-pagination
+        background
+        small
+        layout="total, sizes, prev, pager, next, jumper"
+        :pager-count="7"
+        :current-page="page"
+        :page-size="pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="total"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
 
     <template #footer>
       <div class="erp-dialog-footer">
@@ -98,12 +113,17 @@ const visible = computed({
 const customers = ref([])
 const field = ref('all')
 const keyword = ref('')
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 const loading = ref(false)
 let searchTimer = null
 
 const customerQueryParams = () => ({
   field: field.value,
-  keyword: keyword.value.trim() || undefined
+  keyword: keyword.value.trim() || undefined,
+  page: page.value,
+  pageSize: pageSize.value
 })
 
 const normalizeCustomer = (customer) => {
@@ -122,11 +142,32 @@ const normalizeCustomer = (customer) => {
   }
 }
 
+const normalizeCustomerPage = (response) => {
+  if (Array.isArray(response)) {
+    return {
+      records: response,
+      total: response.length,
+      page: page.value,
+      pageSize: pageSize.value
+    }
+  }
+  return {
+    records: response?.records || [],
+    total: Number(response?.total || 0),
+    page: Number(response?.page || page.value),
+    pageSize: Number(response?.pageSize || pageSize.value)
+  }
+}
+
 const loadCustomers = async () => {
   loading.value = true
   try {
     const response = await listCustomers(props.customerScope, customerQueryParams())
-    customers.value = (response || []).map(normalizeCustomer).filter(customer => customer.customerCode)
+    const customerPage = normalizeCustomerPage(response)
+    customers.value = customerPage.records.map(normalizeCustomer).filter(customer => customer.customerCode)
+    total.value = customerPage.total
+    page.value = customerPage.page
+    pageSize.value = customerPage.pageSize
   } catch (error) {
     console.error(error)
     ElMessage.error('客户列表加载失败。')
@@ -137,13 +178,28 @@ const loadCustomers = async () => {
 
 watch([field, keyword], () => {
   if (!visible.value) return
+  page.value = 1
   clearTimeout(searchTimer)
   searchTimer = setTimeout(loadCustomers, 250)
 })
 
+const handlePageChange = (nextPage) => {
+  page.value = nextPage
+  loadCustomers()
+}
+
+const handlePageSizeChange = (nextPageSize) => {
+  pageSize.value = nextPageSize
+  page.value = 1
+  loadCustomers()
+}
+
 const resetSearch = () => {
   field.value = 'all'
   keyword.value = ''
+  page.value = 1
+  pageSize.value = 20
+  total.value = 0
   customers.value = []
   clearTimeout(searchTimer)
 }
@@ -202,6 +258,14 @@ const resolveRowClassName = ({ row }) => {
   font-weight: 700;
 }
 
+.customer-picker-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--erp-space-3);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
 @media (max-width: 760px) {
   .customer-picker-toolbar {
     align-items: stretch;
@@ -211,6 +275,10 @@ const resolveRowClassName = ({ row }) => {
   .customer-picker-field,
   .customer-picker-search {
     width: 100%;
+  }
+
+  .customer-picker-pagination {
+    justify-content: flex-start;
   }
 }
 </style>

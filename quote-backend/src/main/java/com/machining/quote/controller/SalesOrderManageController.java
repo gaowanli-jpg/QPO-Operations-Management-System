@@ -31,10 +31,12 @@ public class SalesOrderManageController {
 
     @GetMapping("/customers")
     @RequirePermission("market:sales-order:customer-select")
-    public List<CustomerOptionDTO> listCustomers(
+    public PageResult<CustomerOptionDTO> listCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return salesOrderManageService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return salesOrderManageService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/orders")

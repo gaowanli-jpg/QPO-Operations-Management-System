@@ -26,10 +26,12 @@ public class DeliveryDocumentController {
 
     @GetMapping("/customers")
     @RequirePermission("market:delivery-document:customer-select")
-    public List<CustomerOptionDTO> listDocumentCustomers(
+    public PageResult<CustomerOptionDTO> listDocumentCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return deliveryDocumentService.listDocumentCustomers(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveryDocumentService.pageDocumentCustomers(field, keyword, page, pageSize);
     }
 
     @GetMapping("/orders")

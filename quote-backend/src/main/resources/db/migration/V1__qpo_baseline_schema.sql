@@ -1,5 +1,6 @@
 -- QPO compressed Flyway baseline schema.
--- Generated from the final Stage 12 schema; business data is intentionally excluded.
+-- Generated from the current cleaned PostgreSQL schema after the U9 customer cutover.
+-- Keep this file schema-only; retained master data lives in V2__qpo_baseline_seed_data.sql.
 
 --
 -- PostgreSQL database dump
@@ -20,6 +21,7 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+--
 
 SET default_tablespace = '';
 
@@ -50,7 +52,6 @@ CREATE TABLE audit_log (
     error_message text
 );
 
-
 --
 -- Name: audit_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -63,13 +64,11 @@ CREATE SEQUENCE audit_log_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: audit_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE audit_log_id_seq OWNED BY audit_log.id;
-
 
 --
 -- Name: audit_log_retention_config; Type: TABLE; Schema: public; Owner: -
@@ -90,7 +89,6 @@ CREATE TABLE audit_log_retention_config (
     CONSTRAINT audit_log_retention_config_retention_days_check CHECK (((retention_days >= 1) AND (retention_days <= 3650)))
 );
 
-
 --
 -- Name: customer_master; Type: TABLE; Schema: public; Owner: -
 --
@@ -104,9 +102,12 @@ CREATE TABLE customer_master (
     created_by bigint,
     updated_by bigint,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    u9_org_code character varying(50) DEFAULT '101'::character varying NOT NULL,
+    u9_customer_id character varying(100),
+    last_synced_at timestamp without time zone,
+    source_hash character varying(64)
 );
-
 
 --
 -- Name: customer_master_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -119,13 +120,11 @@ CREATE SEQUENCE customer_master_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: customer_master_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE customer_master_id_seq OWNED BY customer_master.id;
-
 
 --
 -- Name: dict_assembly_markup_fee; Type: TABLE; Schema: public; Owner: -
@@ -139,7 +138,6 @@ CREATE TABLE dict_assembly_markup_fee (
     enabled boolean DEFAULT true
 );
 
-
 --
 -- Name: dict_assembly_markup_fee_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -152,13 +150,11 @@ CREATE SEQUENCE dict_assembly_markup_fee_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: dict_assembly_markup_fee_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dict_assembly_markup_fee_id_seq OWNED BY dict_assembly_markup_fee.id;
-
 
 --
 -- Name: dict_extra_fee_item; Type: TABLE; Schema: public; Owner: -
@@ -172,7 +168,6 @@ CREATE TABLE dict_extra_fee_item (
     remarks text
 );
 
-
 --
 -- Name: dict_extra_fee_item_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -185,13 +180,11 @@ CREATE SEQUENCE dict_extra_fee_item_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: dict_extra_fee_item_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dict_extra_fee_item_id_seq OWNED BY dict_extra_fee_item.id;
-
 
 --
 -- Name: dict_markup_fee; Type: TABLE; Schema: public; Owner: -
@@ -205,7 +198,6 @@ CREATE TABLE dict_markup_fee (
     enabled boolean DEFAULT true
 );
 
-
 --
 -- Name: dict_markup_fee_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -218,49 +210,11 @@ CREATE SEQUENCE dict_markup_fee_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: dict_markup_fee_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dict_markup_fee_id_seq OWNED BY dict_markup_fee.id;
-
-
---
--- Name: dict_material_type; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE dict_material_type (
-    id bigint NOT NULL,
-    type_code character varying(64) NOT NULL,
-    type_name character varying(120) NOT NULL,
-    remarks character varying(500),
-    enabled boolean DEFAULT true NOT NULL,
-    sort_no integer DEFAULT 0 NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
---
--- Name: dict_material_type_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE dict_material_type_id_seq
-    AS bigint
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: dict_material_type_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE dict_material_type_id_seq OWNED BY dict_material_type.id;
-
 
 --
 -- Name: dict_material; Type: TABLE; Schema: public; Owner: -
@@ -286,7 +240,6 @@ CREATE TABLE dict_material (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-
 --
 -- Name: dict_material_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -299,13 +252,43 @@ CREATE SEQUENCE dict_material_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: dict_material_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dict_material_id_seq OWNED BY dict_material.id;
 
+--
+-- Name: dict_material_type; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE dict_material_type (
+    id bigint NOT NULL,
+    type_code character varying(64) NOT NULL,
+    type_name character varying(120) NOT NULL,
+    remarks character varying(500),
+    enabled boolean DEFAULT true NOT NULL,
+    sort_no integer DEFAULT 0 NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+--
+-- Name: dict_material_type_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE dict_material_type_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+--
+-- Name: dict_material_type_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE dict_material_type_id_seq OWNED BY dict_material_type.id;
 
 --
 -- Name: dict_process_category; Type: TABLE; Schema: public; Owner: -
@@ -325,9 +308,8 @@ CREATE TABLE dict_process_category (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT chk_dict_process_category_rate CHECK ((hourly_rate >= (0)::numeric)),
-    CONSTRAINT chk_dict_process_category_source CHECK (((source_type)::text = ANY ((ARRAY['LOCAL'::character varying, 'MES'::character varying])::text[])))
+    CONSTRAINT chk_dict_process_category_source CHECK (((source_type)::text = ANY (ARRAY[('LOCAL'::character varying)::text, ('MES'::character varying)::text])))
 );
-
 
 --
 -- Name: dict_process_category_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -340,13 +322,11 @@ CREATE SEQUENCE dict_process_category_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: dict_process_category_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dict_process_category_id_seq OWNED BY dict_process_category.id;
-
 
 --
 -- Name: dict_process_detail; Type: TABLE; Schema: public; Owner: -
@@ -363,7 +343,6 @@ CREATE TABLE dict_process_detail (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-
 --
 -- Name: dict_process_detail_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -375,13 +354,11 @@ CREATE SEQUENCE dict_process_detail_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: dict_process_detail_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dict_process_detail_id_seq OWNED BY dict_process_detail.id;
-
 
 --
 -- Name: erp_user; Type: TABLE; Schema: public; Owner: -
@@ -402,7 +379,6 @@ CREATE TABLE erp_user (
     password_changed_at timestamp without time zone
 );
 
-
 --
 -- Name: erp_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -415,13 +391,11 @@ CREATE SEQUENCE erp_user_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: erp_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE erp_user_id_seq OWNED BY erp_user.id;
-
 
 --
 -- Name: item_assembly_relation; Type: TABLE; Schema: public; Owner: -
@@ -438,7 +412,6 @@ CREATE TABLE item_assembly_relation (
     CONSTRAINT chk_assembly_distinct_items CHECK ((parent_item_id <> child_item_id))
 );
 
-
 --
 -- Name: item_assembly_relation_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -451,13 +424,11 @@ CREATE SEQUENCE item_assembly_relation_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: item_assembly_relation_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE item_assembly_relation_id_seq OWNED BY item_assembly_relation.id;
-
 
 --
 -- Name: item_quote_version; Type: TABLE; Schema: public; Owner: -
@@ -519,7 +490,6 @@ CREATE TABLE item_quote_version (
     customer_order_title character varying(255)
 );
 
-
 --
 -- Name: item_quote_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -532,13 +502,11 @@ CREATE SEQUENCE item_quote_version_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: item_quote_version_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE item_quote_version_id_seq OWNED BY item_quote_version.id;
-
 
 --
 -- Name: order_delivery_ticket; Type: TABLE; Schema: public; Owner: -
@@ -597,7 +565,6 @@ CREATE TABLE order_delivery_ticket (
     material_shape character varying(30)
 );
 
-
 --
 -- Name: order_delivery_ticket_allocation; Type: TABLE; Schema: public; Owner: -
 --
@@ -649,9 +616,8 @@ CREATE TABLE order_delivery_ticket_allocation (
     mes_production_message text,
     material_shape character varying(30),
     CONSTRAINT chk_order_delivery_ticket_allocation_qty CHECK ((qty > 0)),
-    CONSTRAINT chk_order_delivery_ticket_allocation_type CHECK (((allocation_type)::text = ANY ((ARRAY['IN_STOCK_LOCK'::character varying, 'IN_PRODUCTION_LOCK'::character varying, 'PRODUCTION_REQUIRED'::character varying])::text[])))
+    CONSTRAINT chk_order_delivery_ticket_allocation_type CHECK (((allocation_type)::text = ANY (ARRAY[('IN_STOCK_LOCK'::character varying)::text, ('IN_PRODUCTION_LOCK'::character varying)::text, ('PRODUCTION_REQUIRED'::character varying)::text])))
 );
-
 
 --
 -- Name: order_delivery_ticket_allocation_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -665,13 +631,11 @@ CREATE SEQUENCE order_delivery_ticket_allocation_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: order_delivery_ticket_allocation_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE order_delivery_ticket_allocation_id_seq OWNED BY order_delivery_ticket_allocation.id;
-
 
 --
 -- Name: order_delivery_ticket_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -685,13 +649,11 @@ CREATE SEQUENCE order_delivery_ticket_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: order_delivery_ticket_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE order_delivery_ticket_id_seq OWNED BY order_delivery_ticket.id;
-
 
 --
 -- Name: order_delivery_ticket_mes_request; Type: TABLE; Schema: public; Owner: -
@@ -717,9 +679,8 @@ CREATE TABLE order_delivery_ticket_mes_request (
     dedup_key character varying(220),
     request_role character varying(20),
     follower_count integer DEFAULT 0,
-    CONSTRAINT chk_delivery_mes_request_status CHECK (((request_status)::text = ANY ((ARRAY['PROCESSING'::character varying, 'CALLBACK_PENDING'::character varying, 'SUCCESS'::character varying, 'FAILED'::character varying, 'STALE'::character varying, 'IGNORED'::character varying])::text[])))
+    CONSTRAINT chk_delivery_mes_request_status CHECK (((request_status)::text = ANY (ARRAY[('PROCESSING'::character varying)::text, ('CALLBACK_PENDING'::character varying)::text, ('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text, ('STALE'::character varying)::text, ('IGNORED'::character varying)::text])))
 );
-
 
 --
 -- Name: order_delivery_ticket_mes_request_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -732,13 +693,11 @@ CREATE SEQUENCE order_delivery_ticket_mes_request_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: order_delivery_ticket_mes_request_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE order_delivery_ticket_mes_request_id_seq OWNED BY order_delivery_ticket_mes_request.id;
-
 
 --
 -- Name: order_delivery_ticket_mes_waiter; Type: TABLE; Schema: public; Owner: -
@@ -757,9 +716,8 @@ CREATE TABLE order_delivery_ticket_mes_waiter (
     completed_at timestamp without time zone,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT chk_delivery_mes_waiter_distinct_ticket CHECK ((master_ticket_id <> waiter_ticket_id)),
-    CONSTRAINT chk_delivery_mes_waiter_status CHECK (((wait_status)::text = ANY ((ARRAY['WAITING'::character varying, 'CALLBACK_PENDING'::character varying, 'SUCCESS'::character varying, 'FAILED'::character varying, 'STALE'::character varying, 'IGNORED'::character varying])::text[])))
+    CONSTRAINT chk_delivery_mes_waiter_status CHECK (((wait_status)::text = ANY (ARRAY[('WAITING'::character varying)::text, ('CALLBACK_PENDING'::character varying)::text, ('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text, ('STALE'::character varying)::text, ('IGNORED'::character varying)::text])))
 );
-
 
 --
 -- Name: order_delivery_ticket_mes_waiter_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -772,13 +730,11 @@ CREATE SEQUENCE order_delivery_ticket_mes_waiter_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: order_delivery_ticket_mes_waiter_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE order_delivery_ticket_mes_waiter_id_seq OWNED BY order_delivery_ticket_mes_waiter.id;
-
 
 --
 -- Name: order_rfq; Type: TABLE; Schema: public; Owner: -
@@ -809,7 +765,6 @@ CREATE TABLE order_rfq (
     sales_order_import_record_id bigint
 );
 
-
 --
 -- Name: order_rfq_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -822,13 +777,11 @@ CREATE SEQUENCE order_rfq_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: order_rfq_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE order_rfq_id_seq OWNED BY order_rfq.id;
-
 
 --
 -- Name: rfq_no_sequence; Type: TABLE; Schema: public; Owner: -
@@ -840,7 +793,6 @@ CREATE TABLE rfq_no_sequence (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-
 --
 -- Name: sales_order_header; Type: TABLE; Schema: public; Owner: -
 --
@@ -848,7 +800,7 @@ CREATE TABLE rfq_no_sequence (
 CREATE TABLE sales_order_header (
     id bigint NOT NULL,
     sales_order_no character varying(100) NOT NULL,
-    document_no character varying(100),
+    document_no character varying(100) NOT NULL,
     document_type_code character varying(50) DEFAULT 'SO01'::character varying NOT NULL,
     customer_id bigint,
     customer_code character varying(200),
@@ -861,7 +813,7 @@ CREATE TABLE sales_order_header (
     order_type character varying(50),
     internal_project_no character varying(120),
     status character varying(30) DEFAULT '已报价'::character varying NOT NULL,
-    u9_sync_status character varying(30),
+    u9_sync_status character varying(30) DEFAULT '未同步'::character varying NOT NULL,
     u9_order_id character varying(100),
     u9_order_code character varying(100),
     import_batch_id bigint,
@@ -879,9 +831,16 @@ CREATE TABLE sales_order_header (
     source_type character varying(30) DEFAULT 'DIRECT_IMPORT'::character varying NOT NULL,
     source_release_batch_key character varying(100),
     source_release_request_hash character varying(64),
+    u9_seller_code character varying(100),
+    u9_seller_name character varying(200),
+    u9_sale_department_code character varying(100),
+    u9_sale_department_name character varying(200),
+    u9_sync_attempt_id character varying(64),
+    u9_sync_request_hash character varying(64),
+    u9_sync_started_at timestamp without time zone,
+    u9_sync_finished_at timestamp without time zone,
     CONSTRAINT chk_sales_order_header_release_source CHECK ((((source_type)::text <> 'RFQ_RELEASE'::text) OR ((NULLIF(btrim((source_release_batch_key)::text), ''::text) IS NOT NULL) AND (NULLIF(btrim((source_release_request_hash)::text), ''::text) IS NOT NULL))))
 );
-
 
 --
 -- Name: sales_order_header_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -894,13 +853,11 @@ CREATE SEQUENCE sales_order_header_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: sales_order_header_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sales_order_header_id_seq OWNED BY sales_order_header.id;
-
 
 --
 -- Name: sales_order_import_batch; Type: TABLE; Schema: public; Owner: -
@@ -920,7 +877,6 @@ CREATE TABLE sales_order_import_batch (
     import_mode character varying(20) DEFAULT 'U9'::character varying
 );
 
-
 --
 -- Name: sales_order_import_batch_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -932,13 +888,11 @@ CREATE SEQUENCE sales_order_import_batch_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: sales_order_import_batch_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sales_order_import_batch_id_seq OWNED BY sales_order_import_batch.id;
-
 
 --
 -- Name: sales_order_import_record; Type: TABLE; Schema: public; Owner: -
@@ -972,7 +926,6 @@ CREATE TABLE sales_order_import_record (
     item_count integer DEFAULT 0
 );
 
-
 --
 -- Name: sales_order_import_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -984,13 +937,11 @@ CREATE SEQUENCE sales_order_import_record_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: sales_order_import_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sales_order_import_record_id_seq OWNED BY sales_order_import_record.id;
-
 
 --
 -- Name: sales_order_item; Type: TABLE; Schema: public; Owner: -
@@ -1062,7 +1013,6 @@ CREATE TABLE sales_order_item (
     CONSTRAINT chk_sales_order_item_qty CHECK ((qty > 0))
 );
 
-
 --
 -- Name: sales_order_item_assembly_relation; Type: TABLE; Schema: public; Owner: -
 --
@@ -1081,7 +1031,6 @@ CREATE TABLE sales_order_item_assembly_relation (
     CONSTRAINT chk_sales_order_assembly_distinct_items CHECK ((parent_item_id <> child_item_id))
 );
 
-
 --
 -- Name: sales_order_item_assembly_relation_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1093,13 +1042,11 @@ CREATE SEQUENCE sales_order_item_assembly_relation_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: sales_order_item_assembly_relation_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sales_order_item_assembly_relation_id_seq OWNED BY sales_order_item_assembly_relation.id;
-
 
 --
 -- Name: sales_order_item_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1112,13 +1059,11 @@ CREATE SEQUENCE sales_order_item_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: sales_order_item_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sales_order_item_id_seq OWNED BY sales_order_item.id;
-
 
 --
 -- Name: sales_order_source_rfq; Type: TABLE; Schema: public; Owner: -
@@ -1131,7 +1076,6 @@ CREATE TABLE sales_order_source_rfq (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-
 --
 -- Name: sales_order_source_rfq_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1143,13 +1087,11 @@ CREATE SEQUENCE sales_order_source_rfq_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: sales_order_source_rfq_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sales_order_source_rfq_id_seq OWNED BY sales_order_source_rfq.id;
-
 
 --
 -- Name: system_data_center_config; Type: TABLE; Schema: public; Owner: -
@@ -1177,9 +1119,8 @@ CREATE TABLE system_data_center_config (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT ck_system_data_center_grant_type CHECK (((grant_type)::text = 'client_credentials'::text)),
-    CONSTRAINT ck_system_data_center_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY ((ARRAY['SUCCESS'::character varying, 'FAILED'::character varying])::text[]))))
+    CONSTRAINT ck_system_data_center_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY (ARRAY[('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text]))))
 );
-
 
 --
 -- Name: system_data_center_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1192,13 +1133,11 @@ CREATE SEQUENCE system_data_center_config_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_data_center_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_data_center_config_id_seq OWNED BY system_data_center_config.id;
-
 
 --
 -- Name: system_data_center_endpoint_config; Type: TABLE; Schema: public; Owner: -
@@ -1225,11 +1164,10 @@ CREATE TABLE system_data_center_endpoint_config (
     updated_by character varying(100),
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_system_data_center_endpoint_method CHECK (((method)::text = ANY ((ARRAY['GET'::character varying, 'POST'::character varying])::text[]))),
-    CONSTRAINT ck_system_data_center_endpoint_target CHECK (((target_system_code)::text = ANY ((ARRAY['MES'::character varying, 'WMS'::character varying, 'U9'::character varying])::text[]))),
-    CONSTRAINT ck_system_data_center_endpoint_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY ((ARRAY['SUCCESS'::character varying, 'FAILED'::character varying])::text[]))))
+    CONSTRAINT ck_system_data_center_endpoint_method CHECK (((method)::text = ANY (ARRAY[('GET'::character varying)::text, ('POST'::character varying)::text]))),
+    CONSTRAINT ck_system_data_center_endpoint_target CHECK (((target_system_code)::text = ANY (ARRAY[('MES'::character varying)::text, ('WMS'::character varying)::text, ('U9'::character varying)::text]))),
+    CONSTRAINT ck_system_data_center_endpoint_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY (ARRAY[('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text]))))
 );
-
 
 --
 -- Name: system_data_center_endpoint_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1242,13 +1180,11 @@ CREATE SEQUENCE system_data_center_endpoint_config_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_data_center_endpoint_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_data_center_endpoint_config_id_seq OWNED BY system_data_center_endpoint_config.id;
-
 
 --
 -- Name: system_dept; Type: TABLE; Schema: public; Owner: -
@@ -1267,7 +1203,6 @@ CREATE TABLE system_dept (
     deleted boolean DEFAULT false
 );
 
-
 --
 -- Name: system_dept_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1279,13 +1214,11 @@ CREATE SEQUENCE system_dept_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_dept_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_dept_id_seq OWNED BY system_dept.id;
-
 
 --
 -- Name: system_external_integration_config; Type: TABLE; Schema: public; Owner: -
@@ -1307,11 +1240,10 @@ CREATE TABLE system_external_integration_config (
     updated_by character varying(100),
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_system_external_integration_auth CHECK (((auth_type)::text = ANY ((ARRAY['NONE'::character varying, 'BEARER_TOKEN'::character varying, 'U9_AUTH_LOGIN'::character varying])::text[]))),
-    CONSTRAINT ck_system_external_integration_system CHECK (((system_code)::text = ANY ((ARRAY['U9'::character varying, 'MES'::character varying, 'WMS'::character varying])::text[]))),
-    CONSTRAINT ck_system_external_integration_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY ((ARRAY['SUCCESS'::character varying, 'FAILED'::character varying])::text[]))))
+    CONSTRAINT ck_system_external_integration_auth CHECK (((auth_type)::text = ANY (ARRAY[('NONE'::character varying)::text, ('BEARER_TOKEN'::character varying)::text, ('U9_AUTH_LOGIN'::character varying)::text]))),
+    CONSTRAINT ck_system_external_integration_system CHECK (((system_code)::text = ANY (ARRAY[('U9'::character varying)::text, ('MES'::character varying)::text, ('WMS'::character varying)::text]))),
+    CONSTRAINT ck_system_external_integration_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY (ARRAY[('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text]))))
 );
-
 
 --
 -- Name: system_external_integration_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1324,13 +1256,11 @@ CREATE SEQUENCE system_external_integration_config_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_external_integration_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_external_integration_config_id_seq OWNED BY system_external_integration_config.id;
-
 
 --
 -- Name: system_file_object; Type: TABLE; Schema: public; Owner: -
@@ -1352,9 +1282,8 @@ CREATE TABLE system_file_object (
     created_by character varying(100),
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT ck_system_file_object_size_nonnegative CHECK (((size_bytes IS NULL) OR (size_bytes >= 0))),
-    CONSTRAINT ck_system_file_object_storage_type CHECK (((storage_type)::text = ANY ((ARRAY['LOCAL'::character varying, 'MINIO'::character varying])::text[])))
+    CONSTRAINT ck_system_file_object_storage_type CHECK (((storage_type)::text = ANY (ARRAY[('LOCAL'::character varying)::text, ('MINIO'::character varying)::text])))
 );
-
 
 --
 -- Name: system_file_object_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1367,13 +1296,11 @@ CREATE SEQUENCE system_file_object_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_file_object_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_file_object_id_seq OWNED BY system_file_object.id;
-
 
 --
 -- Name: system_file_storage_config; Type: TABLE; Schema: public; Owner: -
@@ -1394,10 +1321,9 @@ CREATE TABLE system_file_storage_config (
     updated_by character varying(100),
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_system_file_storage_config_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY ((ARRAY['SUCCESS'::character varying, 'FAILED'::character varying])::text[])))),
-    CONSTRAINT ck_system_file_storage_config_type CHECK (((storage_type)::text = ANY ((ARRAY['LOCAL'::character varying, 'MINIO'::character varying])::text[])))
+    CONSTRAINT ck_system_file_storage_config_test_status CHECK (((last_test_status IS NULL) OR ((last_test_status)::text = ANY (ARRAY[('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text])))),
+    CONSTRAINT ck_system_file_storage_config_type CHECK (((storage_type)::text = ANY (ARRAY[('LOCAL'::character varying)::text, ('MINIO'::character varying)::text])))
 );
-
 
 --
 -- Name: system_file_storage_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1410,13 +1336,11 @@ CREATE SEQUENCE system_file_storage_config_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_file_storage_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_file_storage_config_id_seq OWNED BY system_file_storage_config.id;
-
 
 --
 -- Name: system_inbound_callback_config; Type: TABLE; Schema: public; Owner: -
@@ -1443,9 +1367,8 @@ CREATE TABLE system_inbound_callback_config (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT ck_system_inbound_callback_source CHECK (((source_system_code)::text = 'MES'::text)),
-    CONSTRAINT ck_system_inbound_callback_validate_status CHECK (((last_validate_status IS NULL) OR ((last_validate_status)::text = ANY ((ARRAY['SUCCESS'::character varying, 'FAILED'::character varying])::text[]))))
+    CONSTRAINT ck_system_inbound_callback_validate_status CHECK (((last_validate_status IS NULL) OR ((last_validate_status)::text = ANY (ARRAY[('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text]))))
 );
-
 
 --
 -- Name: system_inbound_callback_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1458,13 +1381,11 @@ CREATE SEQUENCE system_inbound_callback_config_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_inbound_callback_config_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_inbound_callback_config_id_seq OWNED BY system_inbound_callback_config.id;
-
 
 --
 -- Name: system_permission; Type: TABLE; Schema: public; Owner: -
@@ -1487,7 +1408,6 @@ CREATE TABLE system_permission (
     assignable boolean DEFAULT true
 );
 
-
 --
 -- Name: system_permission_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1499,13 +1419,11 @@ CREATE SEQUENCE system_permission_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_permission_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_permission_id_seq OWNED BY system_permission.id;
-
 
 --
 -- Name: system_post; Type: TABLE; Schema: public; Owner: -
@@ -1522,7 +1440,6 @@ CREATE TABLE system_post (
     deleted boolean DEFAULT false
 );
 
-
 --
 -- Name: system_post_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1534,13 +1451,11 @@ CREATE SEQUENCE system_post_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_post_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_post_id_seq OWNED BY system_post.id;
-
 
 --
 -- Name: system_role; Type: TABLE; Schema: public; Owner: -
@@ -1560,7 +1475,6 @@ CREATE TABLE system_role (
     deleted boolean DEFAULT false
 );
 
-
 --
 -- Name: system_role_data_scope_customer; Type: TABLE; Schema: public; Owner: -
 --
@@ -1568,9 +1482,10 @@ CREATE TABLE system_role (
 CREATE TABLE system_role_data_scope_customer (
     role_id bigint NOT NULL,
     customer_name character varying(200) NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    customer_code character varying(200) NOT NULL,
+    customer_name_snapshot character varying(200)
 );
-
 
 --
 -- Name: system_role_data_scope_dept; Type: TABLE; Schema: public; Owner: -
@@ -1581,7 +1496,6 @@ CREATE TABLE system_role_data_scope_dept (
     dept_id bigint NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
-
 
 --
 -- Name: system_role_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -1594,13 +1508,11 @@ CREATE SEQUENCE system_role_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_role_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_role_id_seq OWNED BY system_role.id;
-
 
 --
 -- Name: system_role_permission; Type: TABLE; Schema: public; Owner: -
@@ -1611,7 +1523,6 @@ CREATE TABLE system_role_permission (
     permission_id bigint NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
-
 
 --
 -- Name: system_task; Type: TABLE; Schema: public; Owner: -
@@ -1633,7 +1544,6 @@ CREATE TABLE system_task (
     finished_at timestamp without time zone
 );
 
-
 --
 -- Name: system_task_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1645,13 +1555,11 @@ CREATE SEQUENCE system_task_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_task_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_task_id_seq OWNED BY system_task.id;
-
 
 --
 -- Name: system_user; Type: TABLE; Schema: public; Owner: -
@@ -1682,7 +1590,6 @@ CREATE TABLE system_user (
     deleted boolean DEFAULT false
 );
 
-
 --
 -- Name: system_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -1694,13 +1601,11 @@ CREATE SEQUENCE system_user_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
 --
 -- Name: system_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE system_user_id_seq OWNED BY system_user.id;
-
 
 --
 -- Name: system_user_role; Type: TABLE; Schema: public; Owner: -
@@ -1712,6 +1617,116 @@ CREATE TABLE system_user_role (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
+--
+-- Name: u9_master_data_sync_run; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE u9_master_data_sync_run (
+    id bigint NOT NULL,
+    sync_type character varying(50) NOT NULL,
+    u9_org_code character varying(50) DEFAULT '101'::character varying NOT NULL,
+    status character varying(30) NOT NULL,
+    started_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    finished_at timestamp without time zone,
+    fetched_count integer DEFAULT 0 NOT NULL,
+    upserted_count integer DEFAULT 0 NOT NULL,
+    disabled_count integer DEFAULT 0 NOT NULL,
+    message text,
+    created_by bigint,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_u9_master_data_sync_run_status CHECK (((status)::text = ANY ((ARRAY['RUNNING'::character varying, 'SUCCESS'::character varying, 'FAILED'::character varying, 'PARTIAL_SUCCESS'::character varying])::text[]))),
+    CONSTRAINT ck_u9_master_data_sync_run_type CHECK (((sync_type)::text = ANY ((ARRAY['CUSTOMER'::character varying, 'U9_SYNC_OPTIONS'::character varying, 'ALL'::character varying])::text[])))
+);
+
+--
+-- Name: u9_master_data_sync_run_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE u9_master_data_sync_run_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+--
+-- Name: u9_master_data_sync_run_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE u9_master_data_sync_run_id_seq OWNED BY u9_master_data_sync_run.id;
+
+--
+-- Name: u9_sync_department_option_cache; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE u9_sync_department_option_cache (
+    id bigint NOT NULL,
+    u9_org_code character varying(50) DEFAULT '101'::character varying NOT NULL,
+    u9_department_id character varying(100),
+    department_code character varying(100) NOT NULL,
+    department_name character varying(200),
+    parent_department_code character varying(100),
+    tree_display_name character varying(500),
+    enabled boolean DEFAULT true NOT NULL,
+    last_synced_at timestamp without time zone,
+    source_hash character varying(64),
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+--
+-- Name: u9_sync_department_option_cache_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE u9_sync_department_option_cache_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+--
+-- Name: u9_sync_department_option_cache_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE u9_sync_department_option_cache_id_seq OWNED BY u9_sync_department_option_cache.id;
+
+--
+-- Name: u9_sync_seller_option_cache; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE u9_sync_seller_option_cache (
+    id bigint NOT NULL,
+    u9_org_code character varying(50) DEFAULT '101'::character varying NOT NULL,
+    u9_seller_id character varying(100),
+    seller_code character varying(100) NOT NULL,
+    seller_name character varying(200),
+    department_code character varying(100),
+    department_name character varying(200),
+    enabled boolean DEFAULT true NOT NULL,
+    operator_type character varying(100),
+    last_synced_at timestamp without time zone,
+    source_hash character varying(64),
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+--
+-- Name: u9_sync_seller_option_cache_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE u9_sync_seller_option_cache_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+--
+-- Name: u9_sync_seller_option_cache_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE u9_sync_seller_option_cache_id_seq OWNED BY u9_sync_seller_option_cache.id;
 
 --
 -- Name: audit_log id; Type: DEFAULT; Schema: public; Owner: -
@@ -1719,13 +1734,11 @@ CREATE TABLE system_user_role (
 
 ALTER TABLE ONLY audit_log ALTER COLUMN id SET DEFAULT nextval('audit_log_id_seq'::regclass);
 
-
 --
 -- Name: customer_master id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY customer_master ALTER COLUMN id SET DEFAULT nextval('customer_master_id_seq'::regclass);
-
 
 --
 -- Name: dict_assembly_markup_fee id; Type: DEFAULT; Schema: public; Owner: -
@@ -1733,13 +1746,11 @@ ALTER TABLE ONLY customer_master ALTER COLUMN id SET DEFAULT nextval('customer_m
 
 ALTER TABLE ONLY dict_assembly_markup_fee ALTER COLUMN id SET DEFAULT nextval('dict_assembly_markup_fee_id_seq'::regclass);
 
-
 --
 -- Name: dict_extra_fee_item id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_extra_fee_item ALTER COLUMN id SET DEFAULT nextval('dict_extra_fee_item_id_seq'::regclass);
-
 
 --
 -- Name: dict_markup_fee id; Type: DEFAULT; Schema: public; Owner: -
@@ -1747,6 +1758,11 @@ ALTER TABLE ONLY dict_extra_fee_item ALTER COLUMN id SET DEFAULT nextval('dict_e
 
 ALTER TABLE ONLY dict_markup_fee ALTER COLUMN id SET DEFAULT nextval('dict_markup_fee_id_seq'::regclass);
 
+--
+-- Name: dict_material id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dict_material ALTER COLUMN id SET DEFAULT nextval('dict_material_id_seq'::regclass);
 
 --
 -- Name: dict_material_type id; Type: DEFAULT; Schema: public; Owner: -
@@ -1754,20 +1770,11 @@ ALTER TABLE ONLY dict_markup_fee ALTER COLUMN id SET DEFAULT nextval('dict_marku
 
 ALTER TABLE ONLY dict_material_type ALTER COLUMN id SET DEFAULT nextval('dict_material_type_id_seq'::regclass);
 
-
---
--- Name: dict_material id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY dict_material ALTER COLUMN id SET DEFAULT nextval('dict_material_id_seq'::regclass);
-
-
 --
 -- Name: dict_process_category id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_process_category ALTER COLUMN id SET DEFAULT nextval('dict_process_category_id_seq'::regclass);
-
 
 --
 -- Name: dict_process_detail id; Type: DEFAULT; Schema: public; Owner: -
@@ -1775,13 +1782,11 @@ ALTER TABLE ONLY dict_process_category ALTER COLUMN id SET DEFAULT nextval('dict
 
 ALTER TABLE ONLY dict_process_detail ALTER COLUMN id SET DEFAULT nextval('dict_process_detail_id_seq'::regclass);
 
-
 --
 -- Name: erp_user id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY erp_user ALTER COLUMN id SET DEFAULT nextval('erp_user_id_seq'::regclass);
-
 
 --
 -- Name: item_assembly_relation id; Type: DEFAULT; Schema: public; Owner: -
@@ -1789,13 +1794,11 @@ ALTER TABLE ONLY erp_user ALTER COLUMN id SET DEFAULT nextval('erp_user_id_seq':
 
 ALTER TABLE ONLY item_assembly_relation ALTER COLUMN id SET DEFAULT nextval('item_assembly_relation_id_seq'::regclass);
 
-
 --
 -- Name: item_quote_version id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY item_quote_version ALTER COLUMN id SET DEFAULT nextval('item_quote_version_id_seq'::regclass);
-
 
 --
 -- Name: order_delivery_ticket id; Type: DEFAULT; Schema: public; Owner: -
@@ -1803,13 +1806,11 @@ ALTER TABLE ONLY item_quote_version ALTER COLUMN id SET DEFAULT nextval('item_qu
 
 ALTER TABLE ONLY order_delivery_ticket ALTER COLUMN id SET DEFAULT nextval('order_delivery_ticket_id_seq'::regclass);
 
-
 --
 -- Name: order_delivery_ticket_allocation id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_allocation ALTER COLUMN id SET DEFAULT nextval('order_delivery_ticket_allocation_id_seq'::regclass);
-
 
 --
 -- Name: order_delivery_ticket_mes_request id; Type: DEFAULT; Schema: public; Owner: -
@@ -1817,13 +1818,11 @@ ALTER TABLE ONLY order_delivery_ticket_allocation ALTER COLUMN id SET DEFAULT ne
 
 ALTER TABLE ONLY order_delivery_ticket_mes_request ALTER COLUMN id SET DEFAULT nextval('order_delivery_ticket_mes_request_id_seq'::regclass);
 
-
 --
 -- Name: order_delivery_ticket_mes_waiter id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_mes_waiter ALTER COLUMN id SET DEFAULT nextval('order_delivery_ticket_mes_waiter_id_seq'::regclass);
-
 
 --
 -- Name: order_rfq id; Type: DEFAULT; Schema: public; Owner: -
@@ -1831,13 +1830,11 @@ ALTER TABLE ONLY order_delivery_ticket_mes_waiter ALTER COLUMN id SET DEFAULT ne
 
 ALTER TABLE ONLY order_rfq ALTER COLUMN id SET DEFAULT nextval('order_rfq_id_seq'::regclass);
 
-
 --
 -- Name: sales_order_header id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_header ALTER COLUMN id SET DEFAULT nextval('sales_order_header_id_seq'::regclass);
-
 
 --
 -- Name: sales_order_import_batch id; Type: DEFAULT; Schema: public; Owner: -
@@ -1845,13 +1842,11 @@ ALTER TABLE ONLY sales_order_header ALTER COLUMN id SET DEFAULT nextval('sales_o
 
 ALTER TABLE ONLY sales_order_import_batch ALTER COLUMN id SET DEFAULT nextval('sales_order_import_batch_id_seq'::regclass);
 
-
 --
 -- Name: sales_order_import_record id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_import_record ALTER COLUMN id SET DEFAULT nextval('sales_order_import_record_id_seq'::regclass);
-
 
 --
 -- Name: sales_order_item id; Type: DEFAULT; Schema: public; Owner: -
@@ -1859,13 +1854,11 @@ ALTER TABLE ONLY sales_order_import_record ALTER COLUMN id SET DEFAULT nextval('
 
 ALTER TABLE ONLY sales_order_item ALTER COLUMN id SET DEFAULT nextval('sales_order_item_id_seq'::regclass);
 
-
 --
 -- Name: sales_order_item_assembly_relation id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_item_assembly_relation ALTER COLUMN id SET DEFAULT nextval('sales_order_item_assembly_relation_id_seq'::regclass);
-
 
 --
 -- Name: sales_order_source_rfq id; Type: DEFAULT; Schema: public; Owner: -
@@ -1873,13 +1866,11 @@ ALTER TABLE ONLY sales_order_item_assembly_relation ALTER COLUMN id SET DEFAULT 
 
 ALTER TABLE ONLY sales_order_source_rfq ALTER COLUMN id SET DEFAULT nextval('sales_order_source_rfq_id_seq'::regclass);
 
-
 --
 -- Name: system_data_center_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_data_center_config ALTER COLUMN id SET DEFAULT nextval('system_data_center_config_id_seq'::regclass);
-
 
 --
 -- Name: system_data_center_endpoint_config id; Type: DEFAULT; Schema: public; Owner: -
@@ -1887,13 +1878,11 @@ ALTER TABLE ONLY system_data_center_config ALTER COLUMN id SET DEFAULT nextval('
 
 ALTER TABLE ONLY system_data_center_endpoint_config ALTER COLUMN id SET DEFAULT nextval('system_data_center_endpoint_config_id_seq'::regclass);
 
-
 --
 -- Name: system_dept id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_dept ALTER COLUMN id SET DEFAULT nextval('system_dept_id_seq'::regclass);
-
 
 --
 -- Name: system_external_integration_config id; Type: DEFAULT; Schema: public; Owner: -
@@ -1901,13 +1890,11 @@ ALTER TABLE ONLY system_dept ALTER COLUMN id SET DEFAULT nextval('system_dept_id
 
 ALTER TABLE ONLY system_external_integration_config ALTER COLUMN id SET DEFAULT nextval('system_external_integration_config_id_seq'::regclass);
 
-
 --
 -- Name: system_file_object id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_file_object ALTER COLUMN id SET DEFAULT nextval('system_file_object_id_seq'::regclass);
-
 
 --
 -- Name: system_file_storage_config id; Type: DEFAULT; Schema: public; Owner: -
@@ -1915,13 +1902,11 @@ ALTER TABLE ONLY system_file_object ALTER COLUMN id SET DEFAULT nextval('system_
 
 ALTER TABLE ONLY system_file_storage_config ALTER COLUMN id SET DEFAULT nextval('system_file_storage_config_id_seq'::regclass);
 
-
 --
 -- Name: system_inbound_callback_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_inbound_callback_config ALTER COLUMN id SET DEFAULT nextval('system_inbound_callback_config_id_seq'::regclass);
-
 
 --
 -- Name: system_permission id; Type: DEFAULT; Schema: public; Owner: -
@@ -1929,13 +1914,11 @@ ALTER TABLE ONLY system_inbound_callback_config ALTER COLUMN id SET DEFAULT next
 
 ALTER TABLE ONLY system_permission ALTER COLUMN id SET DEFAULT nextval('system_permission_id_seq'::regclass);
 
-
 --
 -- Name: system_post id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_post ALTER COLUMN id SET DEFAULT nextval('system_post_id_seq'::regclass);
-
 
 --
 -- Name: system_role id; Type: DEFAULT; Schema: public; Owner: -
@@ -1943,13 +1926,11 @@ ALTER TABLE ONLY system_post ALTER COLUMN id SET DEFAULT nextval('system_post_id
 
 ALTER TABLE ONLY system_role ALTER COLUMN id SET DEFAULT nextval('system_role_id_seq'::regclass);
 
-
 --
 -- Name: system_task id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_task ALTER COLUMN id SET DEFAULT nextval('system_task_id_seq'::regclass);
-
 
 --
 -- Name: system_user id; Type: DEFAULT; Schema: public; Owner: -
@@ -1957,6 +1938,23 @@ ALTER TABLE ONLY system_task ALTER COLUMN id SET DEFAULT nextval('system_task_id
 
 ALTER TABLE ONLY system_user ALTER COLUMN id SET DEFAULT nextval('system_user_id_seq'::regclass);
 
+--
+-- Name: u9_master_data_sync_run id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_master_data_sync_run ALTER COLUMN id SET DEFAULT nextval('u9_master_data_sync_run_id_seq'::regclass);
+
+--
+-- Name: u9_sync_department_option_cache id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_sync_department_option_cache ALTER COLUMN id SET DEFAULT nextval('u9_sync_department_option_cache_id_seq'::regclass);
+
+--
+-- Name: u9_sync_seller_option_cache id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_sync_seller_option_cache ALTER COLUMN id SET DEFAULT nextval('u9_sync_seller_option_cache_id_seq'::regclass);
 
 --
 -- Name: audit_log audit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1965,14 +1963,12 @@ ALTER TABLE ONLY system_user ALTER COLUMN id SET DEFAULT nextval('system_user_id
 ALTER TABLE ONLY audit_log
     ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: audit_log_retention_config audit_log_retention_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY audit_log_retention_config
     ADD CONSTRAINT audit_log_retention_config_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: customer_master customer_master_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1981,14 +1977,12 @@ ALTER TABLE ONLY audit_log_retention_config
 ALTER TABLE ONLY customer_master
     ADD CONSTRAINT customer_master_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: dict_assembly_markup_fee dict_assembly_markup_fee_fee_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_assembly_markup_fee
     ADD CONSTRAINT dict_assembly_markup_fee_fee_name_key UNIQUE (fee_name);
-
 
 --
 -- Name: dict_assembly_markup_fee dict_assembly_markup_fee_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1997,14 +1991,12 @@ ALTER TABLE ONLY dict_assembly_markup_fee
 ALTER TABLE ONLY dict_assembly_markup_fee
     ADD CONSTRAINT dict_assembly_markup_fee_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: dict_extra_fee_item dict_extra_fee_item_fee_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_extra_fee_item
     ADD CONSTRAINT dict_extra_fee_item_fee_name_key UNIQUE (fee_name);
-
 
 --
 -- Name: dict_extra_fee_item dict_extra_fee_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2013,14 +2005,12 @@ ALTER TABLE ONLY dict_extra_fee_item
 ALTER TABLE ONLY dict_extra_fee_item
     ADD CONSTRAINT dict_extra_fee_item_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: dict_markup_fee dict_markup_fee_fee_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_markup_fee
     ADD CONSTRAINT dict_markup_fee_fee_name_key UNIQUE (fee_name);
-
 
 --
 -- Name: dict_markup_fee dict_markup_fee_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2029,6 +2019,12 @@ ALTER TABLE ONLY dict_markup_fee
 ALTER TABLE ONLY dict_markup_fee
     ADD CONSTRAINT dict_markup_fee_pkey PRIMARY KEY (id);
 
+--
+-- Name: dict_material dict_material_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dict_material
+    ADD CONSTRAINT dict_material_pkey PRIMARY KEY (id);
 
 --
 -- Name: dict_material_type dict_material_type_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2037,22 +2033,12 @@ ALTER TABLE ONLY dict_markup_fee
 ALTER TABLE ONLY dict_material_type
     ADD CONSTRAINT dict_material_type_pkey PRIMARY KEY (id);
 
-
---
--- Name: dict_material dict_material_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY dict_material
-    ADD CONSTRAINT dict_material_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: dict_process_category dict_process_category_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_process_category
     ADD CONSTRAINT dict_process_category_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: dict_process_detail dict_process_detail_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2061,14 +2047,12 @@ ALTER TABLE ONLY dict_process_category
 ALTER TABLE ONLY dict_process_detail
     ADD CONSTRAINT dict_process_detail_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: erp_user erp_user_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY erp_user
     ADD CONSTRAINT erp_user_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: erp_user erp_user_username_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2077,14 +2061,12 @@ ALTER TABLE ONLY erp_user
 ALTER TABLE ONLY erp_user
     ADD CONSTRAINT erp_user_username_key UNIQUE (username);
 
-
 --
 -- Name: item_assembly_relation item_assembly_relation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY item_assembly_relation
     ADD CONSTRAINT item_assembly_relation_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: item_quote_version item_quote_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2093,14 +2075,12 @@ ALTER TABLE ONLY item_assembly_relation
 ALTER TABLE ONLY item_quote_version
     ADD CONSTRAINT item_quote_version_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: order_delivery_ticket_allocation order_delivery_ticket_allocation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_allocation
     ADD CONSTRAINT order_delivery_ticket_allocation_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: order_delivery_ticket_mes_request order_delivery_ticket_mes_request_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2109,14 +2089,12 @@ ALTER TABLE ONLY order_delivery_ticket_allocation
 ALTER TABLE ONLY order_delivery_ticket_mes_request
     ADD CONSTRAINT order_delivery_ticket_mes_request_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: order_delivery_ticket_mes_waiter order_delivery_ticket_mes_waiter_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_mes_waiter
     ADD CONSTRAINT order_delivery_ticket_mes_waiter_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: order_delivery_ticket order_delivery_ticket_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2125,14 +2103,12 @@ ALTER TABLE ONLY order_delivery_ticket_mes_waiter
 ALTER TABLE ONLY order_delivery_ticket
     ADD CONSTRAINT order_delivery_ticket_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: order_rfq order_rfq_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_rfq
     ADD CONSTRAINT order_rfq_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: order_rfq order_rfq_rfq_no_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2141,14 +2117,12 @@ ALTER TABLE ONLY order_rfq
 ALTER TABLE ONLY order_rfq
     ADD CONSTRAINT order_rfq_rfq_no_key UNIQUE (rfq_no);
 
-
 --
 -- Name: rfq_no_sequence rfq_no_sequence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY rfq_no_sequence
     ADD CONSTRAINT rfq_no_sequence_pkey PRIMARY KEY (rfq_date);
-
 
 --
 -- Name: sales_order_header sales_order_header_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2157,14 +2131,12 @@ ALTER TABLE ONLY rfq_no_sequence
 ALTER TABLE ONLY sales_order_header
     ADD CONSTRAINT sales_order_header_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: sales_order_import_batch sales_order_import_batch_batch_no_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_import_batch
     ADD CONSTRAINT sales_order_import_batch_batch_no_key UNIQUE (batch_no);
-
 
 --
 -- Name: sales_order_import_batch sales_order_import_batch_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2173,14 +2145,12 @@ ALTER TABLE ONLY sales_order_import_batch
 ALTER TABLE ONLY sales_order_import_batch
     ADD CONSTRAINT sales_order_import_batch_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: sales_order_import_record sales_order_import_record_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_import_record
     ADD CONSTRAINT sales_order_import_record_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: sales_order_item_assembly_relation sales_order_item_assembly_relation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2189,14 +2159,12 @@ ALTER TABLE ONLY sales_order_import_record
 ALTER TABLE ONLY sales_order_item_assembly_relation
     ADD CONSTRAINT sales_order_item_assembly_relation_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: sales_order_item sales_order_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_item
     ADD CONSTRAINT sales_order_item_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: sales_order_source_rfq sales_order_source_rfq_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2205,14 +2173,12 @@ ALTER TABLE ONLY sales_order_item
 ALTER TABLE ONLY sales_order_source_rfq
     ADD CONSTRAINT sales_order_source_rfq_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: system_data_center_config system_data_center_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_data_center_config
     ADD CONSTRAINT system_data_center_config_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: system_data_center_endpoint_config system_data_center_endpoint_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2221,14 +2187,12 @@ ALTER TABLE ONLY system_data_center_config
 ALTER TABLE ONLY system_data_center_endpoint_config
     ADD CONSTRAINT system_data_center_endpoint_config_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: system_dept system_dept_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_dept
     ADD CONSTRAINT system_dept_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: system_external_integration_config system_external_integration_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2237,14 +2201,12 @@ ALTER TABLE ONLY system_dept
 ALTER TABLE ONLY system_external_integration_config
     ADD CONSTRAINT system_external_integration_config_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: system_file_object system_file_object_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_file_object
     ADD CONSTRAINT system_file_object_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: system_file_storage_config system_file_storage_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2253,14 +2215,12 @@ ALTER TABLE ONLY system_file_object
 ALTER TABLE ONLY system_file_storage_config
     ADD CONSTRAINT system_file_storage_config_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: system_inbound_callback_config system_inbound_callback_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_inbound_callback_config
     ADD CONSTRAINT system_inbound_callback_config_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: system_permission system_permission_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2269,14 +2229,12 @@ ALTER TABLE ONLY system_inbound_callback_config
 ALTER TABLE ONLY system_permission
     ADD CONSTRAINT system_permission_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: system_post system_post_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_post
     ADD CONSTRAINT system_post_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: system_role system_role_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2285,14 +2243,12 @@ ALTER TABLE ONLY system_post
 ALTER TABLE ONLY system_role
     ADD CONSTRAINT system_role_pkey PRIMARY KEY (id);
 
-
 --
 -- Name: system_task system_task_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_task
     ADD CONSTRAINT system_task_pkey PRIMARY KEY (id);
-
 
 --
 -- Name: system_user system_user_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2301,6 +2257,26 @@ ALTER TABLE ONLY system_task
 ALTER TABLE ONLY system_user
     ADD CONSTRAINT system_user_pkey PRIMARY KEY (id);
 
+--
+-- Name: u9_master_data_sync_run u9_master_data_sync_run_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_master_data_sync_run
+    ADD CONSTRAINT u9_master_data_sync_run_pkey PRIMARY KEY (id);
+
+--
+-- Name: u9_sync_department_option_cache u9_sync_department_option_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_sync_department_option_cache
+    ADD CONSTRAINT u9_sync_department_option_cache_pkey PRIMARY KEY (id);
+
+--
+-- Name: u9_sync_seller_option_cache u9_sync_seller_option_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_sync_seller_option_cache
+    ADD CONSTRAINT u9_sync_seller_option_cache_pkey PRIMARY KEY (id);
 
 --
 -- Name: customer_master uk_customer_master_code; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2309,30 +2285,12 @@ ALTER TABLE ONLY system_user
 ALTER TABLE ONLY customer_master
     ADD CONSTRAINT uk_customer_master_code UNIQUE (customer_code);
 
-
---
--- Name: customer_master uk_customer_master_name; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY customer_master
-    ADD CONSTRAINT uk_customer_master_name UNIQUE (customer_name);
-
-
---
--- Name: customer_master uk_customer_master_short_name; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY customer_master
-    ADD CONSTRAINT uk_customer_master_short_name UNIQUE (customer_short_name);
-
-
 --
 -- Name: dict_process_category uk_dict_process_category_code; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dict_process_category
     ADD CONSTRAINT uk_dict_process_category_code UNIQUE (process_code);
-
 
 --
 -- Name: dict_process_detail uk_dict_process_detail_category_name; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2341,14 +2299,12 @@ ALTER TABLE ONLY dict_process_category
 ALTER TABLE ONLY dict_process_detail
     ADD CONSTRAINT uk_dict_process_detail_category_name UNIQUE (category_id, detail_name);
 
-
 --
 -- Name: sales_order_source_rfq uk_sales_order_source_rfq; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_source_rfq
     ADD CONSTRAINT uk_sales_order_source_rfq UNIQUE (sales_order_id, rfq_id);
-
 
 --
 -- Name: system_data_center_endpoint_config uk_system_data_center_endpoint_code; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2357,14 +2313,12 @@ ALTER TABLE ONLY sales_order_source_rfq
 ALTER TABLE ONLY system_data_center_endpoint_config
     ADD CONSTRAINT uk_system_data_center_endpoint_code UNIQUE (endpoint_code);
 
-
 --
 -- Name: system_dept uk_system_dept_code; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_dept
     ADD CONSTRAINT uk_system_dept_code UNIQUE (dept_code);
-
 
 --
 -- Name: system_inbound_callback_config uk_system_inbound_callback_code; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2373,14 +2327,12 @@ ALTER TABLE ONLY system_dept
 ALTER TABLE ONLY system_inbound_callback_config
     ADD CONSTRAINT uk_system_inbound_callback_code UNIQUE (callback_code);
 
-
 --
 -- Name: system_permission uk_system_permission_code; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_permission
     ADD CONSTRAINT uk_system_permission_code UNIQUE (permission_code);
-
 
 --
 -- Name: system_post uk_system_post_code; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2389,7 +2341,6 @@ ALTER TABLE ONLY system_permission
 ALTER TABLE ONLY system_post
     ADD CONSTRAINT uk_system_post_code UNIQUE (post_code);
 
-
 --
 -- Name: system_role uk_system_role_code; Type: CONSTRAINT; Schema: public; Owner: -
 --
@@ -2397,14 +2348,12 @@ ALTER TABLE ONLY system_post
 ALTER TABLE ONLY system_role
     ADD CONSTRAINT uk_system_role_code UNIQUE (role_code);
 
-
 --
--- Name: system_role_data_scope_customer uk_system_role_data_scope_customer; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_data_scope_customer uk_system_role_data_scope_customer_code; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_role_data_scope_customer
-    ADD CONSTRAINT uk_system_role_data_scope_customer UNIQUE (role_id, customer_name);
-
+    ADD CONSTRAINT uk_system_role_data_scope_customer_code UNIQUE (role_id, customer_code);
 
 --
 -- Name: system_role_data_scope_dept uk_system_role_data_scope_dept; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2413,14 +2362,12 @@ ALTER TABLE ONLY system_role_data_scope_customer
 ALTER TABLE ONLY system_role_data_scope_dept
     ADD CONSTRAINT uk_system_role_data_scope_dept UNIQUE (role_id, dept_id);
 
-
 --
 -- Name: system_role_permission uk_system_role_permission; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_role_permission
     ADD CONSTRAINT uk_system_role_permission UNIQUE (role_id, permission_id);
-
 
 --
 -- Name: system_user uk_system_user_legacy_user_id; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2429,14 +2376,12 @@ ALTER TABLE ONLY system_role_permission
 ALTER TABLE ONLY system_user
     ADD CONSTRAINT uk_system_user_legacy_user_id UNIQUE (legacy_user_id);
 
-
 --
 -- Name: system_user_role uk_system_user_role; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_user_role
     ADD CONSTRAINT uk_system_user_role UNIQUE (user_id, role_id);
-
 
 --
 -- Name: system_user uk_system_user_username; Type: CONSTRAINT; Schema: public; Owner: -
@@ -2445,6 +2390,19 @@ ALTER TABLE ONLY system_user_role
 ALTER TABLE ONLY system_user
     ADD CONSTRAINT uk_system_user_username UNIQUE (username);
 
+--
+-- Name: u9_sync_department_option_cache uk_u9_sync_department_option_cache_code; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_sync_department_option_cache
+    ADD CONSTRAINT uk_u9_sync_department_option_cache_code UNIQUE (u9_org_code, department_code);
+
+--
+-- Name: u9_sync_seller_option_cache uk_u9_sync_seller_option_cache_code; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY u9_sync_seller_option_cache
+    ADD CONSTRAINT uk_u9_sync_seller_option_cache_code UNIQUE (u9_org_code, seller_code);
 
 --
 -- Name: idx_assembly_child; Type: INDEX; Schema: public; Owner: -
@@ -2452,13 +2410,11 @@ ALTER TABLE ONLY system_user
 
 CREATE INDEX idx_assembly_child ON item_assembly_relation USING btree (child_item_id);
 
-
 --
 -- Name: idx_assembly_parent; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_assembly_parent ON item_assembly_relation USING btree (parent_item_id);
-
 
 --
 -- Name: idx_assembly_parent_child; Type: INDEX; Schema: public; Owner: -
@@ -2466,13 +2422,11 @@ CREATE INDEX idx_assembly_parent ON item_assembly_relation USING btree (parent_i
 
 CREATE UNIQUE INDEX idx_assembly_parent_child ON item_assembly_relation USING btree (parent_item_id, child_item_id);
 
-
 --
 -- Name: idx_assembly_rfq; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_assembly_rfq ON item_assembly_relation USING btree (rfq_id);
-
 
 --
 -- Name: idx_audit_log_action; Type: INDEX; Schema: public; Owner: -
@@ -2480,13 +2434,11 @@ CREATE INDEX idx_assembly_rfq ON item_assembly_relation USING btree (rfq_id);
 
 CREATE INDEX idx_audit_log_action ON audit_log USING btree (action);
 
-
 --
 -- Name: idx_audit_log_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_created_at ON audit_log USING btree (created_at);
-
 
 --
 -- Name: idx_audit_log_module; Type: INDEX; Schema: public; Owner: -
@@ -2494,13 +2446,11 @@ CREATE INDEX idx_audit_log_created_at ON audit_log USING btree (created_at);
 
 CREATE INDEX idx_audit_log_module ON audit_log USING btree (module);
 
-
 --
 -- Name: idx_audit_log_request_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_request_id ON audit_log USING btree (request_id);
-
 
 --
 -- Name: idx_audit_log_result; Type: INDEX; Schema: public; Owner: -
@@ -2508,13 +2458,11 @@ CREATE INDEX idx_audit_log_request_id ON audit_log USING btree (request_id);
 
 CREATE INDEX idx_audit_log_result ON audit_log USING btree (result);
 
-
 --
 -- Name: idx_audit_log_target; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_target ON audit_log USING btree (target_type, target_id);
-
 
 --
 -- Name: idx_audit_log_username; Type: INDEX; Schema: public; Owner: -
@@ -2522,6 +2470,11 @@ CREATE INDEX idx_audit_log_target ON audit_log USING btree (target_type, target_
 
 CREATE INDEX idx_audit_log_username ON audit_log USING btree (username);
 
+--
+-- Name: idx_customer_master_customer_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_customer_master_customer_name ON customer_master USING btree (customer_name);
 
 --
 -- Name: idx_customer_master_enabled; Type: INDEX; Schema: public; Owner: -
@@ -2529,6 +2482,17 @@ CREATE INDEX idx_audit_log_username ON audit_log USING btree (username);
 
 CREATE INDEX idx_customer_master_enabled ON customer_master USING btree (enabled);
 
+--
+-- Name: idx_customer_master_last_synced_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_customer_master_last_synced_at ON customer_master USING btree (last_synced_at);
+
+--
+-- Name: idx_customer_master_u9_org_enabled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_customer_master_u9_org_enabled ON customer_master USING btree (u9_org_code, enabled);
 
 --
 -- Name: idx_delivery_allocation_delivery_date; Type: INDEX; Schema: public; Owner: -
@@ -2536,13 +2500,11 @@ CREATE INDEX idx_customer_master_enabled ON customer_master USING btree (enabled
 
 CREATE INDEX idx_delivery_allocation_delivery_date ON order_delivery_ticket_allocation USING btree (delivery_date, id);
 
-
 --
 -- Name: idx_delivery_allocation_internal_project; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_allocation_internal_project ON order_delivery_ticket_allocation USING btree (internal_project_no, id);
-
 
 --
 -- Name: idx_delivery_allocation_item_type; Type: INDEX; Schema: public; Owner: -
@@ -2550,13 +2512,11 @@ CREATE INDEX idx_delivery_allocation_internal_project ON order_delivery_ticket_a
 
 CREATE INDEX idx_delivery_allocation_item_type ON order_delivery_ticket_allocation USING btree (item_type, id);
 
-
 --
 -- Name: idx_delivery_allocation_locked_stock_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_delivery_allocation_locked_stock_id ON order_delivery_ticket_allocation USING btree (allocation_type, id DESC) WHERE ((allocation_type)::text = ANY ((ARRAY['IN_STOCK_LOCK'::character varying, 'IN_PRODUCTION_LOCK'::character varying])::text[]));
-
+CREATE INDEX idx_delivery_allocation_locked_stock_id ON order_delivery_ticket_allocation USING btree (allocation_type, id DESC) WHERE ((allocation_type)::text = ANY (ARRAY[('IN_STOCK_LOCK'::character varying)::text, ('IN_PRODUCTION_LOCK'::character varying)::text]));
 
 --
 -- Name: idx_delivery_allocation_material; Type: INDEX; Schema: public; Owner: -
@@ -2564,13 +2524,11 @@ CREATE INDEX idx_delivery_allocation_locked_stock_id ON order_delivery_ticket_al
 
 CREATE INDEX idx_delivery_allocation_material ON order_delivery_ticket_allocation USING btree (material_no, id);
 
-
 --
 -- Name: idx_delivery_allocation_mes_production_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_allocation_mes_production_status ON order_delivery_ticket_allocation USING btree (mes_production_status, allocation_type, id DESC);
-
 
 --
 -- Name: idx_delivery_allocation_mes_production_status_id; Type: INDEX; Schema: public; Owner: -
@@ -2578,13 +2536,11 @@ CREATE INDEX idx_delivery_allocation_mes_production_status ON order_delivery_tic
 
 CREATE INDEX idx_delivery_allocation_mes_production_status_id ON order_delivery_ticket_allocation USING btree (mes_production_status, id DESC);
 
-
 --
 -- Name: idx_delivery_allocation_part_version; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_allocation_part_version ON order_delivery_ticket_allocation USING btree (part_no, version, id);
-
 
 --
 -- Name: idx_delivery_allocation_production_active_id; Type: INDEX; Schema: public; Owner: -
@@ -2592,13 +2548,11 @@ CREATE INDEX idx_delivery_allocation_part_version ON order_delivery_ticket_alloc
 
 CREATE INDEX idx_delivery_allocation_production_active_id ON order_delivery_ticket_allocation USING btree (id DESC) WHERE (((allocation_type)::text = 'PRODUCTION_REQUIRED'::text) AND ((mes_production_status IS NULL) OR (TRIM(BOTH FROM mes_production_status) = ''::text) OR ((mes_production_status)::text <> 'SUCCESS'::text)));
 
-
 --
 -- Name: idx_delivery_allocation_rfq; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_allocation_rfq ON order_delivery_ticket_allocation USING btree (rfq_id, id);
-
 
 --
 -- Name: idx_delivery_allocation_rfq_no; Type: INDEX; Schema: public; Owner: -
@@ -2606,13 +2560,11 @@ CREATE INDEX idx_delivery_allocation_rfq ON order_delivery_ticket_allocation USI
 
 CREATE INDEX idx_delivery_allocation_rfq_no ON order_delivery_ticket_allocation USING btree (rfq_no, id);
 
-
 --
 -- Name: idx_delivery_allocation_source; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_allocation_source ON order_delivery_ticket_allocation USING btree (source_type, source_order_id, source_item_id);
-
 
 --
 -- Name: idx_delivery_allocation_ticket; Type: INDEX; Schema: public; Owner: -
@@ -2620,13 +2572,11 @@ CREATE INDEX idx_delivery_allocation_source ON order_delivery_ticket_allocation 
 
 CREATE INDEX idx_delivery_allocation_ticket ON order_delivery_ticket_allocation USING btree (ticket_id, id);
 
-
 --
 -- Name: idx_delivery_allocation_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_allocation_type ON order_delivery_ticket_allocation USING btree (allocation_type, id);
-
 
 --
 -- Name: idx_delivery_allocation_wms_order; Type: INDEX; Schema: public; Owner: -
@@ -2634,13 +2584,11 @@ CREATE INDEX idx_delivery_allocation_type ON order_delivery_ticket_allocation US
 
 CREATE INDEX idx_delivery_allocation_wms_order ON order_delivery_ticket_allocation USING btree (wms_production_order_no, id);
 
-
 --
 -- Name: idx_delivery_mes_request_dedup_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_mes_request_dedup_status ON order_delivery_ticket_mes_request USING btree (dedup_key, request_status, id DESC) WHERE ((dedup_key IS NOT NULL) AND (TRIM(BOTH FROM dedup_key) <> ''::text));
-
 
 --
 -- Name: idx_delivery_mes_request_external_task; Type: INDEX; Schema: public; Owner: -
@@ -2648,13 +2596,11 @@ CREATE INDEX idx_delivery_mes_request_dedup_status ON order_delivery_ticket_mes_
 
 CREATE INDEX idx_delivery_mes_request_external_task ON order_delivery_ticket_mes_request USING btree (mes_external_task_id, id) WHERE ((mes_external_task_id IS NOT NULL) AND (TRIM(BOTH FROM mes_external_task_id) <> ''::text));
 
-
 --
 -- Name: idx_delivery_mes_request_ticket; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_mes_request_ticket ON order_delivery_ticket_mes_request USING btree (ticket_id, id DESC);
-
 
 --
 -- Name: idx_delivery_mes_waiter_dedup; Type: INDEX; Schema: public; Owner: -
@@ -2662,13 +2608,11 @@ CREATE INDEX idx_delivery_mes_request_ticket ON order_delivery_ticket_mes_reques
 
 CREATE INDEX idx_delivery_mes_waiter_dedup ON order_delivery_ticket_mes_waiter USING btree (dedup_key, wait_status, id);
 
-
 --
 -- Name: idx_delivery_mes_waiter_master_request; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_mes_waiter_master_request ON order_delivery_ticket_mes_waiter USING btree (master_mes_request_id, wait_status, id);
-
 
 --
 -- Name: idx_delivery_ticket_mes_dedup_key; Type: INDEX; Schema: public; Owner: -
@@ -2676,13 +2620,11 @@ CREATE INDEX idx_delivery_mes_waiter_master_request ON order_delivery_ticket_mes
 
 CREATE INDEX idx_delivery_ticket_mes_dedup_key ON order_delivery_ticket USING btree (mes_dedup_key, mes_sync_status, id) WHERE ((mes_dedup_key IS NOT NULL) AND (TRIM(BOTH FROM mes_dedup_key) <> ''::text));
 
-
 --
 -- Name: idx_delivery_ticket_mes_master_request; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delivery_ticket_mes_master_request ON order_delivery_ticket USING btree (mes_master_request_id, id) WHERE ((mes_master_request_id IS NOT NULL) AND (TRIM(BOTH FROM mes_master_request_id) <> ''::text));
-
 
 --
 -- Name: idx_dict_material_category; Type: INDEX; Schema: public; Owner: -
@@ -2690,13 +2632,11 @@ CREATE INDEX idx_delivery_ticket_mes_master_request ON order_delivery_ticket USI
 
 CREATE INDEX idx_dict_material_category ON dict_material USING btree (material_category, id);
 
-
 --
 -- Name: idx_dict_material_material_type_enabled_sort; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_dict_material_material_type_enabled_sort ON dict_material USING btree (material_type_id, enabled, sort_no, id);
-
 
 --
 -- Name: idx_dict_material_name; Type: INDEX; Schema: public; Owner: -
@@ -2704,34 +2644,11 @@ CREATE INDEX idx_dict_material_material_type_enabled_sort ON dict_material USING
 
 CREATE INDEX idx_dict_material_name ON dict_material USING btree (material_name, id);
 
-
 --
 -- Name: idx_dict_material_type_enabled_sort; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_dict_material_type_enabled_sort ON dict_material_type USING btree (enabled, sort_no, id);
-
-
---
--- Name: uk_dict_material_code_upper; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uk_dict_material_code_upper ON dict_material USING btree (upper((material_code)::text));
-
-
---
--- Name: uk_dict_material_type_code; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uk_dict_material_type_code ON dict_material_type USING btree (type_code);
-
-
---
--- Name: uk_dict_material_type_name; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uk_dict_material_type_name ON dict_material_type USING btree (type_name);
-
 
 --
 -- Name: idx_dict_process_category_enabled_sort; Type: INDEX; Schema: public; Owner: -
@@ -2739,13 +2656,11 @@ CREATE UNIQUE INDEX uk_dict_material_type_name ON dict_material_type USING btree
 
 CREATE INDEX idx_dict_process_category_enabled_sort ON dict_process_category USING btree (enabled, sort_no, id);
 
-
 --
 -- Name: idx_dict_process_category_mes_external; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_dict_process_category_mes_external ON dict_process_category USING btree (mes_external_id) WHERE (mes_external_id IS NOT NULL);
-
 
 --
 -- Name: idx_dict_process_category_name; Type: INDEX; Schema: public; Owner: -
@@ -2753,13 +2668,11 @@ CREATE INDEX idx_dict_process_category_mes_external ON dict_process_category USI
 
 CREATE INDEX idx_dict_process_category_name ON dict_process_category USING btree (category_name, id);
 
-
 --
 -- Name: idx_dict_process_detail_category_enabled_sort; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_dict_process_detail_category_enabled_sort ON dict_process_detail USING btree (category_id, enabled, sort_no, id);
-
 
 --
 -- Name: idx_dict_process_detail_name; Type: INDEX; Schema: public; Owner: -
@@ -2767,13 +2680,11 @@ CREATE INDEX idx_dict_process_detail_category_enabled_sort ON dict_process_detai
 
 CREATE INDEX idx_dict_process_detail_name ON dict_process_detail USING btree (detail_name, id);
 
-
 --
 -- Name: idx_item_quote_version_material_no_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_item_quote_version_material_no_id ON item_quote_version USING btree (material_no, id);
-
 
 --
 -- Name: idx_item_quote_version_material_source_ticket; Type: INDEX; Schema: public; Owner: -
@@ -2781,13 +2692,11 @@ CREATE INDEX idx_item_quote_version_material_no_id ON item_quote_version USING b
 
 CREATE INDEX idx_item_quote_version_material_source_ticket ON item_quote_version USING btree (material_no_source_ticket_id) WHERE (material_no_source_ticket_id IS NOT NULL);
 
-
 --
 -- Name: idx_item_quote_version_material_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_item_quote_version_material_status ON item_quote_version USING btree (material_no_status, rfq_id, id);
-
 
 --
 -- Name: idx_item_quote_version_repeat_released_key; Type: INDEX; Schema: public; Owner: -
@@ -2795,13 +2704,11 @@ CREATE INDEX idx_item_quote_version_material_status ON item_quote_version USING 
 
 CREATE INDEX idx_item_quote_version_repeat_released_key ON item_quote_version USING btree (part_no, version, id DESC) WHERE (((status)::text = '已提单'::text) AND (tax_included_unit_price IS NOT NULL) AND (material_data IS NOT NULL) AND (material_data <> '{}'::jsonb) AND (process_route IS NOT NULL) AND (process_route <> '[]'::jsonb));
 
-
 --
 -- Name: idx_item_quote_version_rfq_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_item_quote_version_rfq_id ON item_quote_version USING btree (rfq_id, id);
-
 
 --
 -- Name: idx_item_quote_version_rfq_id_id; Type: INDEX; Schema: public; Owner: -
@@ -2809,13 +2716,11 @@ CREATE INDEX idx_item_quote_version_rfq_id ON item_quote_version USING btree (rf
 
 CREATE INDEX idx_item_quote_version_rfq_id_id ON item_quote_version USING btree (rfq_id, id);
 
-
 --
 -- Name: idx_item_quote_version_rfq_part_version; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_item_quote_version_rfq_part_version ON item_quote_version USING btree (rfq_id, part_no, version);
-
 
 --
 -- Name: idx_item_quote_version_rfq_part_version_id; Type: INDEX; Schema: public; Owner: -
@@ -2823,13 +2728,11 @@ CREATE INDEX idx_item_quote_version_rfq_part_version ON item_quote_version USING
 
 CREATE INDEX idx_item_quote_version_rfq_part_version_id ON item_quote_version USING btree (rfq_id, part_no, version, id);
 
-
 --
 -- Name: idx_item_quote_version_rfq_status_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_item_quote_version_rfq_status_id ON item_quote_version USING btree (rfq_id, status, id);
-
 
 --
 -- Name: idx_item_quote_version_sales_order_record; Type: INDEX; Schema: public; Owner: -
@@ -2837,13 +2740,11 @@ CREATE INDEX idx_item_quote_version_rfq_status_id ON item_quote_version USING bt
 
 CREATE INDEX idx_item_quote_version_sales_order_record ON item_quote_version USING btree (sales_order_import_record_id);
 
-
 --
 -- Name: idx_order_delivery_ticket_active_flow_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_active_flow_id ON order_delivery_ticket USING btree (id DESC) WHERE ((NULLIF(btrim((material_no)::text), ''::text) IS NULL) OR ((COALESCE(mes_sync_status, 'PENDING'::character varying))::text <> 'SUCCESS'::text) OR ((COALESCE(wms_allocate_status, 'PENDING'::character varying))::text <> 'SUCCESS'::text));
-
 
 --
 -- Name: idx_order_delivery_ticket_completed_flow_id; Type: INDEX; Schema: public; Owner: -
@@ -2851,13 +2752,11 @@ CREATE INDEX idx_order_delivery_ticket_active_flow_id ON order_delivery_ticket U
 
 CREATE INDEX idx_order_delivery_ticket_completed_flow_id ON order_delivery_ticket USING btree (mes_sync_status, wms_allocate_status, id DESC) WHERE (NULLIF(btrim((material_no)::text), ''::text) IS NOT NULL);
 
-
 --
 -- Name: idx_order_delivery_ticket_delivery_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_delivery_date ON order_delivery_ticket USING btree (delivery_date, id);
-
 
 --
 -- Name: idx_order_delivery_ticket_internal_project; Type: INDEX; Schema: public; Owner: -
@@ -2865,13 +2764,11 @@ CREATE INDEX idx_order_delivery_ticket_delivery_date ON order_delivery_ticket US
 
 CREATE INDEX idx_order_delivery_ticket_internal_project ON order_delivery_ticket USING btree (internal_project_no, id);
 
-
 --
 -- Name: idx_order_delivery_ticket_material_no; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_material_no ON order_delivery_ticket USING btree (material_no, id);
-
 
 --
 -- Name: idx_order_delivery_ticket_mes_external_task; Type: INDEX; Schema: public; Owner: -
@@ -2879,13 +2776,11 @@ CREATE INDEX idx_order_delivery_ticket_material_no ON order_delivery_ticket USIN
 
 CREATE INDEX idx_order_delivery_ticket_mes_external_task ON order_delivery_ticket USING btree (mes_external_task_id, id) WHERE ((mes_external_task_id IS NOT NULL) AND (TRIM(BOTH FROM mes_external_task_id) <> ''::text));
 
-
 --
 -- Name: idx_order_delivery_ticket_mes_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_mes_status ON order_delivery_ticket USING btree (mes_sync_status, id);
-
 
 --
 -- Name: idx_order_delivery_ticket_part_version; Type: INDEX; Schema: public; Owner: -
@@ -2893,13 +2788,11 @@ CREATE INDEX idx_order_delivery_ticket_mes_status ON order_delivery_ticket USING
 
 CREATE INDEX idx_order_delivery_ticket_part_version ON order_delivery_ticket USING btree (part_no, version, id);
 
-
 --
 -- Name: idx_order_delivery_ticket_rfq_id_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_rfq_id_id ON order_delivery_ticket USING btree (rfq_id, id);
-
 
 --
 -- Name: idx_order_delivery_ticket_rfq_item_id; Type: INDEX; Schema: public; Owner: -
@@ -2907,13 +2800,11 @@ CREATE INDEX idx_order_delivery_ticket_rfq_id_id ON order_delivery_ticket USING 
 
 CREATE INDEX idx_order_delivery_ticket_rfq_item_id ON order_delivery_ticket USING btree (rfq_id, item_id);
 
-
 --
 -- Name: idx_order_delivery_ticket_rfq_no; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_rfq_no ON order_delivery_ticket USING btree (rfq_no, id);
-
 
 --
 -- Name: idx_order_delivery_ticket_rfq_part_version; Type: INDEX; Schema: public; Owner: -
@@ -2921,13 +2812,11 @@ CREATE INDEX idx_order_delivery_ticket_rfq_no ON order_delivery_ticket USING btr
 
 CREATE INDEX idx_order_delivery_ticket_rfq_part_version ON order_delivery_ticket USING btree (rfq_id, part_no, version);
 
-
 --
 -- Name: idx_order_delivery_ticket_source; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_delivery_ticket_source ON order_delivery_ticket USING btree (source_type, source_order_id, source_item_id);
-
 
 --
 -- Name: idx_order_delivery_ticket_wms_status; Type: INDEX; Schema: public; Owner: -
@@ -2935,13 +2824,17 @@ CREATE INDEX idx_order_delivery_ticket_source ON order_delivery_ticket USING btr
 
 CREATE INDEX idx_order_delivery_ticket_wms_status ON order_delivery_ticket USING btree (wms_allocate_status, id);
 
-
 --
 -- Name: idx_order_rfq_customer; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_rfq_customer ON order_rfq USING btree (customer_name);
 
+--
+-- Name: idx_order_rfq_customer_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_order_rfq_customer_code ON order_rfq USING btree (customer_code);
 
 --
 -- Name: idx_order_rfq_customer_id; Type: INDEX; Schema: public; Owner: -
@@ -2949,13 +2842,17 @@ CREATE INDEX idx_order_rfq_customer ON order_rfq USING btree (customer_name);
 
 CREATE INDEX idx_order_rfq_customer_id ON order_rfq USING btree (customer_name, id DESC);
 
-
 --
 -- Name: idx_order_rfq_customer_order_no; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_rfq_customer_order_no ON order_rfq USING btree (customer_order_no);
 
+--
+-- Name: idx_order_rfq_customer_short_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_order_rfq_customer_short_name ON order_rfq USING btree (customer_short_name);
 
 --
 -- Name: idx_order_rfq_customer_status_id; Type: INDEX; Schema: public; Owner: -
@@ -2963,13 +2860,11 @@ CREATE INDEX idx_order_rfq_customer_order_no ON order_rfq USING btree (customer_
 
 CREATE INDEX idx_order_rfq_customer_status_id ON order_rfq USING btree (customer_name, status, id DESC);
 
-
 --
 -- Name: idx_order_rfq_owner_dept; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_rfq_owner_dept ON order_rfq USING btree (owner_dept_id);
-
 
 --
 -- Name: idx_order_rfq_owner_user; Type: INDEX; Schema: public; Owner: -
@@ -2977,13 +2872,11 @@ CREATE INDEX idx_order_rfq_owner_dept ON order_rfq USING btree (owner_dept_id);
 
 CREATE INDEX idx_order_rfq_owner_user ON order_rfq USING btree (owner_user_id);
 
-
 --
 -- Name: idx_order_rfq_source_status_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_order_rfq_source_status_created ON order_rfq USING btree (source_type, status, created_at);
-
 
 --
 -- Name: idx_order_rfq_status_id; Type: INDEX; Schema: public; Owner: -
@@ -2991,13 +2884,11 @@ CREATE INDEX idx_order_rfq_source_status_created ON order_rfq USING btree (sourc
 
 CREATE INDEX idx_order_rfq_status_id ON order_rfq USING btree (status, id DESC);
 
-
 --
 -- Name: idx_sales_order_header_customer; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_header_customer ON sales_order_header USING btree (customer_name, id);
-
 
 --
 -- Name: idx_sales_order_header_customer_order_no; Type: INDEX; Schema: public; Owner: -
@@ -3005,13 +2896,11 @@ CREATE INDEX idx_sales_order_header_customer ON sales_order_header USING btree (
 
 CREATE INDEX idx_sales_order_header_customer_order_no ON sales_order_header USING btree (customer_order_no);
 
-
 --
 -- Name: idx_sales_order_header_source_type_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_header_source_type_created ON sales_order_header USING btree (source_type, created_at DESC);
-
 
 --
 -- Name: idx_sales_order_header_status_created; Type: INDEX; Schema: public; Owner: -
@@ -3019,13 +2908,11 @@ CREATE INDEX idx_sales_order_header_source_type_created ON sales_order_header US
 
 CREATE INDEX idx_sales_order_header_status_created ON sales_order_header USING btree (status, created_at DESC);
 
-
 --
 -- Name: idx_sales_order_import_record_batch_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_import_record_batch_id ON sales_order_import_record USING btree (batch_id);
-
 
 --
 -- Name: idx_sales_order_import_record_customer_order_no; Type: INDEX; Schema: public; Owner: -
@@ -3033,13 +2920,11 @@ CREATE INDEX idx_sales_order_import_record_batch_id ON sales_order_import_record
 
 CREATE INDEX idx_sales_order_import_record_customer_order_no ON sales_order_import_record USING btree (customer_order_no);
 
-
 --
 -- Name: idx_sales_order_import_record_sales_order_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_import_record_sales_order_id ON sales_order_import_record USING btree (sales_order_id);
-
 
 --
 -- Name: idx_sales_order_import_record_u9_code; Type: INDEX; Schema: public; Owner: -
@@ -3047,13 +2932,11 @@ CREATE INDEX idx_sales_order_import_record_sales_order_id ON sales_order_import_
 
 CREATE INDEX idx_sales_order_import_record_u9_code ON sales_order_import_record USING btree (u9_code);
 
-
 --
 -- Name: idx_sales_order_item_assembly_child; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_item_assembly_child ON sales_order_item_assembly_relation USING btree (child_item_id);
-
 
 --
 -- Name: idx_sales_order_item_assembly_sales_order; Type: INDEX; Schema: public; Owner: -
@@ -3061,13 +2944,11 @@ CREATE INDEX idx_sales_order_item_assembly_child ON sales_order_item_assembly_re
 
 CREATE INDEX idx_sales_order_item_assembly_sales_order ON sales_order_item_assembly_relation USING btree (sales_order_id, parent_item_id, sort_no, id);
 
-
 --
 -- Name: idx_sales_order_item_material_no_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_item_material_no_id ON sales_order_item USING btree (material_no, id);
-
 
 --
 -- Name: idx_sales_order_item_material_source_ticket; Type: INDEX; Schema: public; Owner: -
@@ -3075,13 +2956,11 @@ CREATE INDEX idx_sales_order_item_material_no_id ON sales_order_item USING btree
 
 CREATE INDEX idx_sales_order_item_material_source_ticket ON sales_order_item USING btree (material_no_source_ticket_id) WHERE (material_no_source_ticket_id IS NOT NULL);
 
-
 --
 -- Name: idx_sales_order_item_material_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_item_material_status ON sales_order_item USING btree (material_no_status, sales_order_id, id);
-
 
 --
 -- Name: idx_sales_order_item_order_id_id; Type: INDEX; Schema: public; Owner: -
@@ -3089,13 +2968,11 @@ CREATE INDEX idx_sales_order_item_material_status ON sales_order_item USING btre
 
 CREATE INDEX idx_sales_order_item_order_id_id ON sales_order_item USING btree (sales_order_id, id);
 
-
 --
 -- Name: idx_sales_order_item_part_version_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_item_part_version_id ON sales_order_item USING btree (part_no, version, id);
-
 
 --
 -- Name: idx_sales_order_item_source_order_item; Type: INDEX; Schema: public; Owner: -
@@ -3103,13 +2980,11 @@ CREATE INDEX idx_sales_order_item_part_version_id ON sales_order_item USING btre
 
 CREATE INDEX idx_sales_order_item_source_order_item ON sales_order_item USING btree (source_type, source_order_id, source_item_id, id);
 
-
 --
 -- Name: idx_sales_order_item_status_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_item_status_id ON sales_order_item USING btree (status, id);
-
 
 --
 -- Name: idx_sales_order_source_rfq_rfq; Type: INDEX; Schema: public; Owner: -
@@ -3117,13 +2992,11 @@ CREATE INDEX idx_sales_order_item_status_id ON sales_order_item USING btree (sta
 
 CREATE INDEX idx_sales_order_source_rfq_rfq ON sales_order_source_rfq USING btree (rfq_id, sales_order_id);
 
-
 --
 -- Name: idx_sales_order_source_rfq_sales_order; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sales_order_source_rfq_sales_order ON sales_order_source_rfq USING btree (sales_order_id, rfq_id);
-
 
 --
 -- Name: idx_system_data_center_enabled; Type: INDEX; Schema: public; Owner: -
@@ -3131,13 +3004,11 @@ CREATE INDEX idx_sales_order_source_rfq_sales_order ON sales_order_source_rfq US
 
 CREATE INDEX idx_system_data_center_enabled ON system_data_center_config USING btree (enabled);
 
-
 --
 -- Name: idx_system_data_center_endpoint_target; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_data_center_endpoint_target ON system_data_center_endpoint_config USING btree (target_system_code);
-
 
 --
 -- Name: idx_system_external_integration_enabled; Type: INDEX; Schema: public; Owner: -
@@ -3145,13 +3016,11 @@ CREATE INDEX idx_system_data_center_endpoint_target ON system_data_center_endpoi
 
 CREATE INDEX idx_system_external_integration_enabled ON system_external_integration_config USING btree (enabled);
 
-
 --
 -- Name: idx_system_external_integration_system; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_external_integration_system ON system_external_integration_config USING btree (system_code);
-
 
 --
 -- Name: idx_system_file_object_biz; Type: INDEX; Schema: public; Owner: -
@@ -3159,13 +3028,11 @@ CREATE INDEX idx_system_external_integration_system ON system_external_integrati
 
 CREATE INDEX idx_system_file_object_biz ON system_file_object USING btree (biz_type, biz_id);
 
-
 --
 -- Name: idx_system_file_object_object_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_file_object_object_key ON system_file_object USING btree (object_key);
-
 
 --
 -- Name: idx_system_file_object_storage; Type: INDEX; Schema: public; Owner: -
@@ -3173,13 +3040,11 @@ CREATE INDEX idx_system_file_object_object_key ON system_file_object USING btree
 
 CREATE INDEX idx_system_file_object_storage ON system_file_object USING btree (storage_type, storage_config_id);
 
-
 --
 -- Name: idx_system_file_storage_config_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_file_storage_config_enabled ON system_file_storage_config USING btree (enabled);
-
 
 --
 -- Name: idx_system_file_storage_config_type; Type: INDEX; Schema: public; Owner: -
@@ -3187,13 +3052,11 @@ CREATE INDEX idx_system_file_storage_config_enabled ON system_file_storage_confi
 
 CREATE INDEX idx_system_file_storage_config_type ON system_file_storage_config USING btree (storage_type);
 
-
 --
 -- Name: idx_system_inbound_callback_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_inbound_callback_enabled ON system_inbound_callback_config USING btree (enabled);
-
 
 --
 -- Name: idx_system_inbound_callback_source; Type: INDEX; Schema: public; Owner: -
@@ -3201,13 +3064,11 @@ CREATE INDEX idx_system_inbound_callback_enabled ON system_inbound_callback_conf
 
 CREATE INDEX idx_system_inbound_callback_source ON system_inbound_callback_config USING btree (source_system_code);
 
-
 --
 -- Name: idx_system_permission_parent; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_permission_parent ON system_permission USING btree (parent_id);
-
 
 --
 -- Name: idx_system_permission_type; Type: INDEX; Schema: public; Owner: -
@@ -3215,6 +3076,11 @@ CREATE INDEX idx_system_permission_parent ON system_permission USING btree (pare
 
 CREATE INDEX idx_system_permission_type ON system_permission USING btree (permission_type);
 
+--
+-- Name: idx_system_role_data_scope_customer_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_system_role_data_scope_customer_code ON system_role_data_scope_customer USING btree (customer_code);
 
 --
 -- Name: idx_system_task_status_created; Type: INDEX; Schema: public; Owner: -
@@ -3222,13 +3088,11 @@ CREATE INDEX idx_system_permission_type ON system_permission USING btree (permis
 
 CREATE INDEX idx_system_task_status_created ON system_task USING btree (status, created_at DESC);
 
-
 --
 -- Name: idx_system_task_type_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_task_type_created ON system_task USING btree (task_type, created_at DESC);
-
 
 --
 -- Name: idx_system_user_deleted; Type: INDEX; Schema: public; Owner: -
@@ -3236,13 +3100,11 @@ CREATE INDEX idx_system_task_type_created ON system_task USING btree (task_type,
 
 CREATE INDEX idx_system_user_deleted ON system_user USING btree (deleted);
 
-
 --
 -- Name: idx_system_user_dept; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_user_dept ON system_user USING btree (dept_id);
-
 
 --
 -- Name: idx_system_user_enabled; Type: INDEX; Schema: public; Owner: -
@@ -3250,6 +3112,47 @@ CREATE INDEX idx_system_user_dept ON system_user USING btree (dept_id);
 
 CREATE INDEX idx_system_user_enabled ON system_user USING btree (enabled);
 
+--
+-- Name: idx_u9_master_data_sync_run_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_u9_master_data_sync_run_status ON u9_master_data_sync_run USING btree (status);
+
+--
+-- Name: idx_u9_master_data_sync_run_type_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_u9_master_data_sync_run_type_started ON u9_master_data_sync_run USING btree (sync_type, started_at DESC);
+
+--
+-- Name: idx_u9_sync_department_option_cache_enabled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_u9_sync_department_option_cache_enabled ON u9_sync_department_option_cache USING btree (u9_org_code, enabled);
+
+--
+-- Name: idx_u9_sync_department_option_cache_parent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_u9_sync_department_option_cache_parent ON u9_sync_department_option_cache USING btree (parent_department_code);
+
+--
+-- Name: idx_u9_sync_seller_option_cache_department; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_u9_sync_seller_option_cache_department ON u9_sync_seller_option_cache USING btree (department_code);
+
+--
+-- Name: idx_u9_sync_seller_option_cache_enabled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_u9_sync_seller_option_cache_enabled ON u9_sync_seller_option_cache USING btree (u9_org_code, enabled);
+
+--
+-- Name: uk_customer_master_u9_customer_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_customer_master_u9_customer_id ON customer_master USING btree (u9_org_code, u9_customer_id) WHERE ((u9_customer_id IS NOT NULL) AND (btrim((u9_customer_id)::text) <> ''::text));
 
 --
 -- Name: uk_delivery_allocation_mes_production_request; Type: INDEX; Schema: public; Owner: -
@@ -3257,13 +3160,11 @@ CREATE INDEX idx_system_user_enabled ON system_user USING btree (enabled);
 
 CREATE UNIQUE INDEX uk_delivery_allocation_mes_production_request ON order_delivery_ticket_allocation USING btree (mes_production_request_id) WHERE ((mes_production_request_id IS NOT NULL) AND (TRIM(BOTH FROM mes_production_request_id) <> ''::text));
 
-
 --
 -- Name: uk_delivery_mes_request_active_dedup; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uk_delivery_mes_request_active_dedup ON order_delivery_ticket_mes_request USING btree (dedup_key) WHERE (((request_status)::text = ANY ((ARRAY['PROCESSING'::character varying, 'CALLBACK_PENDING'::character varying])::text[])) AND (dedup_key IS NOT NULL) AND (TRIM(BOTH FROM dedup_key) <> ''::text));
-
+CREATE UNIQUE INDEX uk_delivery_mes_request_active_dedup ON order_delivery_ticket_mes_request USING btree (dedup_key) WHERE (((request_status)::text = ANY (ARRAY[('PROCESSING'::character varying)::text, ('CALLBACK_PENDING'::character varying)::text])) AND (dedup_key IS NOT NULL) AND (TRIM(BOTH FROM dedup_key) <> ''::text));
 
 --
 -- Name: uk_delivery_mes_request_request_id; Type: INDEX; Schema: public; Owner: -
@@ -3271,13 +3172,29 @@ CREATE UNIQUE INDEX uk_delivery_mes_request_active_dedup ON order_delivery_ticke
 
 CREATE UNIQUE INDEX uk_delivery_mes_request_request_id ON order_delivery_ticket_mes_request USING btree (mes_request_id);
 
-
 --
 -- Name: uk_delivery_mes_waiter_active_ticket; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uk_delivery_mes_waiter_active_ticket ON order_delivery_ticket_mes_waiter USING btree (waiter_ticket_id) WHERE ((wait_status)::text = ANY ((ARRAY['WAITING'::character varying, 'CALLBACK_PENDING'::character varying])::text[]));
+CREATE UNIQUE INDEX uk_delivery_mes_waiter_active_ticket ON order_delivery_ticket_mes_waiter USING btree (waiter_ticket_id) WHERE ((wait_status)::text = ANY (ARRAY[('WAITING'::character varying)::text, ('CALLBACK_PENDING'::character varying)::text]));
 
+--
+-- Name: uk_dict_material_code_upper; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_dict_material_code_upper ON dict_material USING btree (upper((material_code)::text));
+
+--
+-- Name: uk_dict_material_type_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_dict_material_type_code ON dict_material_type USING btree (type_code);
+
+--
+-- Name: uk_dict_material_type_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_dict_material_type_name ON dict_material_type USING btree (type_name);
 
 --
 -- Name: uk_order_delivery_ticket_mes_request_id; Type: INDEX; Schema: public; Owner: -
@@ -3285,6 +3202,11 @@ CREATE UNIQUE INDEX uk_delivery_mes_waiter_active_ticket ON order_delivery_ticke
 
 CREATE UNIQUE INDEX uk_order_delivery_ticket_mes_request_id ON order_delivery_ticket USING btree (mes_request_id) WHERE ((mes_request_id IS NOT NULL) AND (TRIM(BOTH FROM mes_request_id) <> ''::text));
 
+--
+-- Name: uk_sales_order_header_document_no; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_sales_order_header_document_no ON sales_order_header USING btree (document_no);
 
 --
 -- Name: uk_sales_order_header_no; Type: INDEX; Schema: public; Owner: -
@@ -3292,13 +3214,11 @@ CREATE UNIQUE INDEX uk_order_delivery_ticket_mes_request_id ON order_delivery_ti
 
 CREATE UNIQUE INDEX uk_sales_order_header_no ON sales_order_header USING btree (sales_order_no);
 
-
 --
 -- Name: uk_sales_order_header_release_batch; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uk_sales_order_header_release_batch ON sales_order_header USING btree (source_release_batch_key) WHERE (source_release_batch_key IS NOT NULL);
-
 
 --
 -- Name: uk_sales_order_item_assembly_parent_child; Type: INDEX; Schema: public; Owner: -
@@ -3306,13 +3226,11 @@ CREATE UNIQUE INDEX uk_sales_order_header_release_batch ON sales_order_header US
 
 CREATE UNIQUE INDEX uk_sales_order_item_assembly_parent_child ON sales_order_item_assembly_relation USING btree (parent_item_id, child_item_id);
 
-
 --
 -- Name: uk_sales_order_item_source_ticket; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uk_sales_order_item_source_ticket ON sales_order_item USING btree (source_ticket_id) WHERE (source_ticket_id IS NOT NULL);
-
 
 --
 -- Name: uk_system_data_center_active; Type: INDEX; Schema: public; Owner: -
@@ -3320,13 +3238,11 @@ CREATE UNIQUE INDEX uk_sales_order_item_source_ticket ON sales_order_item USING 
 
 CREATE UNIQUE INDEX uk_system_data_center_active ON system_data_center_config USING btree (active) WHERE (active = true);
 
-
 --
 -- Name: uk_system_external_integration_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uk_system_external_integration_active ON system_external_integration_config USING btree (system_code, active) WHERE (active = true);
-
 
 --
 -- Name: uk_system_file_object_public_path; Type: INDEX; Schema: public; Owner: -
@@ -3334,21 +3250,11 @@ CREATE UNIQUE INDEX uk_system_external_integration_active ON system_external_int
 
 CREATE UNIQUE INDEX uk_system_file_object_public_path ON system_file_object USING btree (public_path);
 
-
 --
 -- Name: uk_system_file_storage_config_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uk_system_file_storage_config_active ON system_file_storage_config USING btree (active) WHERE ((active = true) AND (enabled = true));
-
-
---
--- Name: dict_material dict_material_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY dict_material
-    ADD CONSTRAINT fk_dict_material_type FOREIGN KEY (material_type_id) REFERENCES dict_material_type(id) ON DELETE RESTRICT;
-
 
 --
 -- Name: dict_process_detail dict_process_detail_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3357,6 +3263,12 @@ ALTER TABLE ONLY dict_material
 ALTER TABLE ONLY dict_process_detail
     ADD CONSTRAINT dict_process_detail_category_id_fkey FOREIGN KEY (category_id) REFERENCES dict_process_category(id) ON DELETE RESTRICT;
 
+--
+-- Name: dict_material fk_dict_material_type; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dict_material
+    ADD CONSTRAINT fk_dict_material_type FOREIGN KEY (material_type_id) REFERENCES dict_material_type(id) ON DELETE RESTRICT;
 
 --
 -- Name: sales_order_item fk_sales_order_item_source_ticket; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3365,14 +3277,12 @@ ALTER TABLE ONLY dict_process_detail
 ALTER TABLE ONLY sales_order_item
     ADD CONSTRAINT fk_sales_order_item_source_ticket FOREIGN KEY (source_ticket_id) REFERENCES order_delivery_ticket(id);
 
-
 --
 -- Name: item_assembly_relation item_assembly_relation_child_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY item_assembly_relation
     ADD CONSTRAINT item_assembly_relation_child_item_id_fkey FOREIGN KEY (child_item_id) REFERENCES item_quote_version(id) ON DELETE CASCADE;
-
 
 --
 -- Name: item_assembly_relation item_assembly_relation_parent_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3381,14 +3291,12 @@ ALTER TABLE ONLY item_assembly_relation
 ALTER TABLE ONLY item_assembly_relation
     ADD CONSTRAINT item_assembly_relation_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES item_quote_version(id) ON DELETE CASCADE;
 
-
 --
 -- Name: item_assembly_relation item_assembly_relation_rfq_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY item_assembly_relation
     ADD CONSTRAINT item_assembly_relation_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES order_rfq(id) ON DELETE CASCADE;
-
 
 --
 -- Name: item_quote_version item_quote_version_rfq_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3397,14 +3305,12 @@ ALTER TABLE ONLY item_assembly_relation
 ALTER TABLE ONLY item_quote_version
     ADD CONSTRAINT item_quote_version_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES order_rfq(id);
 
-
 --
 -- Name: order_delivery_ticket_allocation order_delivery_ticket_allocation_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_allocation
     ADD CONSTRAINT order_delivery_ticket_allocation_item_id_fkey FOREIGN KEY (item_id) REFERENCES item_quote_version(id);
-
 
 --
 -- Name: order_delivery_ticket_allocation order_delivery_ticket_allocation_rfq_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3413,14 +3319,12 @@ ALTER TABLE ONLY order_delivery_ticket_allocation
 ALTER TABLE ONLY order_delivery_ticket_allocation
     ADD CONSTRAINT order_delivery_ticket_allocation_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES order_rfq(id);
 
-
 --
 -- Name: order_delivery_ticket_allocation order_delivery_ticket_allocation_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_allocation
     ADD CONSTRAINT order_delivery_ticket_allocation_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES order_delivery_ticket(id);
-
 
 --
 -- Name: order_delivery_ticket order_delivery_ticket_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3429,14 +3333,12 @@ ALTER TABLE ONLY order_delivery_ticket_allocation
 ALTER TABLE ONLY order_delivery_ticket
     ADD CONSTRAINT order_delivery_ticket_item_id_fkey FOREIGN KEY (item_id) REFERENCES item_quote_version(id);
 
-
 --
 -- Name: order_delivery_ticket_mes_request order_delivery_ticket_mes_request_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_mes_request
     ADD CONSTRAINT order_delivery_ticket_mes_request_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES order_delivery_ticket(id);
-
 
 --
 -- Name: order_delivery_ticket_mes_waiter order_delivery_ticket_mes_waiter_master_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3445,14 +3347,12 @@ ALTER TABLE ONLY order_delivery_ticket_mes_request
 ALTER TABLE ONLY order_delivery_ticket_mes_waiter
     ADD CONSTRAINT order_delivery_ticket_mes_waiter_master_ticket_id_fkey FOREIGN KEY (master_ticket_id) REFERENCES order_delivery_ticket(id);
 
-
 --
 -- Name: order_delivery_ticket_mes_waiter order_delivery_ticket_mes_waiter_waiter_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY order_delivery_ticket_mes_waiter
     ADD CONSTRAINT order_delivery_ticket_mes_waiter_waiter_ticket_id_fkey FOREIGN KEY (waiter_ticket_id) REFERENCES order_delivery_ticket(id);
-
 
 --
 -- Name: order_delivery_ticket order_delivery_ticket_rfq_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3461,14 +3361,12 @@ ALTER TABLE ONLY order_delivery_ticket_mes_waiter
 ALTER TABLE ONLY order_delivery_ticket
     ADD CONSTRAINT order_delivery_ticket_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES order_rfq(id);
 
-
 --
 -- Name: sales_order_import_record sales_order_import_record_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_import_record
     ADD CONSTRAINT sales_order_import_record_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES sales_order_import_batch(id) ON DELETE CASCADE;
-
 
 --
 -- Name: sales_order_item_assembly_relation sales_order_item_assembly_relation_child_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3477,14 +3375,12 @@ ALTER TABLE ONLY sales_order_import_record
 ALTER TABLE ONLY sales_order_item_assembly_relation
     ADD CONSTRAINT sales_order_item_assembly_relation_child_item_id_fkey FOREIGN KEY (child_item_id) REFERENCES sales_order_item(id) ON DELETE CASCADE;
 
-
 --
 -- Name: sales_order_item_assembly_relation sales_order_item_assembly_relation_parent_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_item_assembly_relation
     ADD CONSTRAINT sales_order_item_assembly_relation_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES sales_order_item(id) ON DELETE CASCADE;
-
 
 --
 -- Name: sales_order_item sales_order_item_sales_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3493,14 +3389,12 @@ ALTER TABLE ONLY sales_order_item_assembly_relation
 ALTER TABLE ONLY sales_order_item
     ADD CONSTRAINT sales_order_item_sales_order_id_fkey FOREIGN KEY (sales_order_id) REFERENCES sales_order_header(id) ON DELETE CASCADE;
 
-
 --
 -- Name: sales_order_source_rfq sales_order_source_rfq_rfq_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sales_order_source_rfq
     ADD CONSTRAINT sales_order_source_rfq_rfq_id_fkey FOREIGN KEY (rfq_id) REFERENCES order_rfq(id);
-
 
 --
 -- Name: sales_order_source_rfq sales_order_source_rfq_sales_order_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3509,14 +3403,12 @@ ALTER TABLE ONLY sales_order_source_rfq
 ALTER TABLE ONLY sales_order_source_rfq
     ADD CONSTRAINT sales_order_source_rfq_sales_order_id_fkey FOREIGN KEY (sales_order_id) REFERENCES sales_order_header(id) ON DELETE CASCADE;
 
-
 --
 -- Name: system_file_object system_file_object_storage_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_file_object
     ADD CONSTRAINT system_file_object_storage_config_id_fkey FOREIGN KEY (storage_config_id) REFERENCES system_file_storage_config(id) ON DELETE SET NULL;
-
 
 --
 -- Name: system_role_data_scope_customer system_role_data_scope_customer_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3525,14 +3417,12 @@ ALTER TABLE ONLY system_file_object
 ALTER TABLE ONLY system_role_data_scope_customer
     ADD CONSTRAINT system_role_data_scope_customer_role_id_fkey FOREIGN KEY (role_id) REFERENCES system_role(id) ON DELETE CASCADE;
 
-
 --
 -- Name: system_role_data_scope_dept system_role_data_scope_dept_dept_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_role_data_scope_dept
     ADD CONSTRAINT system_role_data_scope_dept_dept_id_fkey FOREIGN KEY (dept_id) REFERENCES system_dept(id) ON DELETE CASCADE;
-
 
 --
 -- Name: system_role_data_scope_dept system_role_data_scope_dept_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3541,14 +3431,12 @@ ALTER TABLE ONLY system_role_data_scope_dept
 ALTER TABLE ONLY system_role_data_scope_dept
     ADD CONSTRAINT system_role_data_scope_dept_role_id_fkey FOREIGN KEY (role_id) REFERENCES system_role(id) ON DELETE CASCADE;
 
-
 --
 -- Name: system_role_permission system_role_permission_permission_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_role_permission
     ADD CONSTRAINT system_role_permission_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES system_permission(id) ON DELETE CASCADE;
-
 
 --
 -- Name: system_role_permission system_role_permission_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3557,14 +3445,12 @@ ALTER TABLE ONLY system_role_permission
 ALTER TABLE ONLY system_role_permission
     ADD CONSTRAINT system_role_permission_role_id_fkey FOREIGN KEY (role_id) REFERENCES system_role(id) ON DELETE CASCADE;
 
-
 --
 -- Name: system_user system_user_dept_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_user
     ADD CONSTRAINT system_user_dept_id_fkey FOREIGN KEY (dept_id) REFERENCES system_dept(id);
-
 
 --
 -- Name: system_user system_user_post_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -3573,7 +3459,6 @@ ALTER TABLE ONLY system_user
 ALTER TABLE ONLY system_user
     ADD CONSTRAINT system_user_post_id_fkey FOREIGN KEY (post_id) REFERENCES system_post(id);
 
-
 --
 -- Name: system_user_role system_user_role_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
@@ -3581,14 +3466,12 @@ ALTER TABLE ONLY system_user
 ALTER TABLE ONLY system_user_role
     ADD CONSTRAINT system_user_role_role_id_fkey FOREIGN KEY (role_id) REFERENCES system_role(id) ON DELETE CASCADE;
 
-
 --
 -- Name: system_user_role system_user_role_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY system_user_role
     ADD CONSTRAINT system_user_role_user_id_fkey FOREIGN KEY (user_id) REFERENCES system_user(id) ON DELETE CASCADE;
-
 
 --
 -- PostgreSQL database dump complete

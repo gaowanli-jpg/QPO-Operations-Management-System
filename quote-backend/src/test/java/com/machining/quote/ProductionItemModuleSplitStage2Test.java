@@ -26,13 +26,13 @@ class ProductionItemModuleSplitStage2Test {
                         "return lockedItemService.listAllocations(req)",
                         "@GetMapping(\"/locked-items/customers\")",
                         "@RequirePermission(\"market:locked-item:customer-select\")",
-                        "return lockedItemService.listCustomerOptions(field, keyword)",
+                        "return lockedItemService.pageCustomerOptions(field, keyword, page, pageSize)",
                         "@GetMapping(\"/production-items\")",
                         "@RequirePermission(\"market:production-item:view\")",
                         "return productionItemService.listProductionItems(req)",
                         "@GetMapping(\"/production-items/customers\")",
                         "@RequirePermission(\"market:production-item:customer-select\")",
-                        "return productionItemService.listCustomerOptions(field, keyword)"
+                        "return productionItemService.pageCustomerOptions(field, keyword, page, pageSize)"
                 );
     }
 
@@ -111,9 +111,9 @@ class ProductionItemModuleSplitStage2Test {
         String productionService = read(MAIN_JAVA.resolve(Path.of("service", "ProductionItemService.java")));
 
         assertThat(lockedService)
-                .contains("CustomerMasterService", "customerMasterService.listCustomerOptions(field, keyword)", "applyLockedStockScope(query)", "selectLockedItemCustomers(query)");
+                .contains("CustomerMasterService", "customerMasterService.pageCustomerOptions(field, keyword, page, pageSize)", "applyLockedStockScope(query)", "selectLockedItemCustomers(query)");
         assertThat(productionService)
-                .contains("CustomerMasterService", "customerMasterService.listCustomerOptions(field, keyword)", "applyProductionActiveScope(query)", "selectLockedItemCustomers(query)");
+                .contains("CustomerMasterService", "customerMasterService.pageCustomerOptions(field, keyword, page, pageSize)", "applyProductionActiveScope(query)", "selectLockedItemCustomers(query)");
     }
 
     @Test

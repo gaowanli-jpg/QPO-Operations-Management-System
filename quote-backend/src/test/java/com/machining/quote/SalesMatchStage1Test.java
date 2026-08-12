@@ -10,10 +10,10 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SalesMatchStage1Test {
-    private static final Path RETIRE_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V4__retire_sales_match_module.sql");
     private static final Path BASELINE_SCHEMA = Path.of(
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path BASELINE_SEED = Path.of(
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path CONTROLLER_DIR = Path.of(
@@ -26,13 +26,13 @@ class SalesMatchStage1Test {
             "..", "docs", "QPO\u6743\u9650\u7528\u6237\u4f53\u7cfb", "02-\u6743\u9650\u70b9\u6e05\u5355\u4e0e\u73b0\u6709\u89d2\u8272\u6620\u5c04.md");
 
     @Test
-    void migrationRetiresManualSalesMatchPermissionsWithoutTouchingAssemblySchema() throws IOException {
-        String migration = read(RETIRE_MIGRATION);
+    void baselineOmitsManualSalesMatchPermissionsWithoutTouchingAssemblySchema() throws IOException {
         String schema = read(BASELINE_SCHEMA);
+        String seed = read(BASELINE_SEED);
 
-        assertThat(migration)
-                .contains("market:sales-match:%")
-                .contains("/sales-match")
+        assertThat(seed)
+                .doesNotContain("market:sales-match")
+                .doesNotContain("/sales-match")
                 .doesNotContain("common:sales-match");
         assertThat(schema)
                 .contains(

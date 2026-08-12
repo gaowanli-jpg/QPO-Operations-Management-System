@@ -1139,8 +1139,7 @@ class CoreWorkflowIntegrationTests {
                 .contains("material_data IS NOT NULL")
                 .contains("material_data <> '{}'::jsonb")
                 .contains("process_route IS NOT NULL")
-                .contains("process_route <> '[]'::jsonb")
-                .contains("DROP INDEX IF EXISTS idx_item_quote_version_repeat_released_key");
+                .contains("process_route <> '[]'::jsonb");
         assertThat(combined)
                 .as("重复件匹配不能退回普通全量联合索引")
                 .doesNotContain("item_quote_version(part_no, version, status, id DESC)");

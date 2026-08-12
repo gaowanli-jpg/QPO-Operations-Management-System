@@ -86,6 +86,17 @@ public class DeliveredItemService {
                 .toList();
     }
 
+    public PageResult<CustomerOptionDTO> pageCustomerOptions(String field, String keyword, Integer page, Integer pageSize) {
+        if (customerMasterService != null) {
+            return customerMasterService.pageCustomerOptions(field, keyword, page, pageSize);
+        }
+        List<CustomerOptionDTO> rows = listCustomers().stream()
+                .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+        return pageRows(rows, page, pageSize);
+    }
+
     private QueryWrapper<DeliveredItemDTO> buildQuery(DeliveredItemQueryReq req) {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
         applyCustomerFilter(query, req.getCustomerCode(), req.getCustomerName());
@@ -213,6 +224,15 @@ public class DeliveredItemService {
             return 20;
         }
         return Math.min(pageSize, 100);
+    }
+
+    private <T> PageResult<T> pageRows(List<T> allRows, Integer page, Integer pageSize) {
+        List<T> rows = allRows == null ? List.of() : allRows;
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
+        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
     }
 
     private boolean hasText(String value) {

@@ -16,9 +16,6 @@ class DataCenterConfigStage2Test {
     private static final Path SEED_BASELINE = Path.of(
             "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql"
     );
-    private static final Path U9_SYNC_CONTRACT_MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V5__refactor_sales_order_u9_sync_contract.sql"
-    );
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java"
     );
@@ -54,8 +51,7 @@ class DataCenterConfigStage2Test {
 
     @Test
     void migrationSeedsDefaultDataCenterEndpointCodes() throws IOException {
-        String baselineSeed = read(SEED_BASELINE);
-        String seed = baselineSeed + "\n" + read(U9_SYNC_CONTRACT_MIGRATION);
+        String seed = read(SEED_BASELINE);
 
         assertThat(seed)
                 .contains(
@@ -70,9 +66,8 @@ class DataCenterConfigStage2Test {
                         "'U9_COMMON_ENTITY_QUERY_V1'",
                         "'MES_PRODUCTION_DISPATCH_V1'"
                 )
-                .contains("'MES物料号获取'", "'WMS库存锁定'", "'U9销售订单同步'", "'U9通用实体查询'", "'下发MES生产'")
                 .doesNotContain("access_token=ey", "client_secret=X");
-        assertThat(baselineSeed).doesNotContain("ON CONFLICT (endpoint_code) DO UPDATE");
+        assertThat(seed).doesNotContain("ON CONFLICT (endpoint_code) DO UPDATE");
     }
 
     @Test

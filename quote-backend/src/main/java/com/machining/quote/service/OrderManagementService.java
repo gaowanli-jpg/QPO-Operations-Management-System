@@ -221,6 +221,17 @@ public class OrderManagementService {
                 .toList();
     }
 
+    public PageResult<CustomerOptionDTO> pageCustomerOptions(String field, String keyword, Integer page, Integer pageSize) {
+        if (customerMasterService != null) {
+            return customerMasterService.pageCustomerOptions(field, keyword, page, pageSize);
+        }
+        List<CustomerOptionDTO> rows = listCustomers().stream()
+                .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+        return pageRows(rows, page, pageSize);
+    }
+
     public Map<String, Object> getOrderDetail(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
         Map<String, Object> detail = new HashMap<>();

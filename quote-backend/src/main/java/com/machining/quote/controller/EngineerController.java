@@ -56,10 +56,12 @@ public class EngineerController {
 
     @GetMapping("/setup/customers")
     @RequirePermission("engineer:setup:customer-select")
-    public List<CustomerOptionDTO> listSetupCustomers(
+    public PageResult<CustomerOptionDTO> listSetupCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return orderManagementService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/setup/orders")

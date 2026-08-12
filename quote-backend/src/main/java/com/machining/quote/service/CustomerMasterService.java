@@ -41,11 +41,33 @@ public class CustomerMasterService {
         return customerMapper.selectList(query).stream().map(this::toOption).toList();
     }
 
+    public PageResult<CustomerOptionDTO> pageOptions(String field, String keyword, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<CustomerMaster> query = new QueryWrapper<>();
+        query.eq("enabled", true);
+        applyKeyword(query, field, keyword);
+        Long total = customerMapper.selectCount(query);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        query.orderByAsc("customer_code").orderByAsc("id");
+        query.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(customerMapper.selectList(query).stream().map(this::toOption).toList(), total, safePage, safePageSize);
+    }
+
     public List<CustomerOptionDTO> listCustomerOptions(String field, String keyword) {
         if (dataScopeService != null) {
             return dataScopeService.listCustomerOptions(field, keyword);
         }
         return listOptions(field, keyword);
+    }
+
+    public PageResult<CustomerOptionDTO> pageCustomerOptions(String field, String keyword, Integer page, Integer pageSize) {
+        if (dataScopeService != null) {
+            return dataScopeService.pageCustomerOptions(field, keyword, page, pageSize);
+        }
+        return pageOptions(field, keyword, page, pageSize);
     }
 
     public List<String> listCustomerNames() {

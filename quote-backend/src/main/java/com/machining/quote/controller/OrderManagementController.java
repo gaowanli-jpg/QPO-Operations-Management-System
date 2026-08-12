@@ -79,10 +79,12 @@ public class OrderManagementController {
 
     @GetMapping("/customers")
     @RequirePermission("market:order:customer-select")
-    public List<CustomerOptionDTO> listCustomers(
+    public PageResult<CustomerOptionDTO> listCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return orderManagementService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     /**
@@ -91,10 +93,12 @@ public class OrderManagementController {
     @Deprecated
     @GetMapping("/history-orders/customers")
     @RequirePermission("market:history-order:customer-select")
-    public List<CustomerOptionDTO> listHistoryCustomers(
+    public PageResult<CustomerOptionDTO> listHistoryCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return orderManagementService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @PostMapping(value = "/orders/{rfqId}/supplement-drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

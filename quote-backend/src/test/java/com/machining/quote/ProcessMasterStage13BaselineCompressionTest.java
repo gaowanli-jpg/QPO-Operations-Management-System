@@ -1,7 +1,6 @@
 package com.machining.quote;
 
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +24,7 @@ class ProcessMasterStage13BaselineCompressionTest {
     private static final Path MIGRATION_DIR = RESOURCES.resolve(Path.of("db", "migration"));
 
     @Test
-    void activeMigrationDirectoryContainsCompressedBaselineAndCurrentIncrementalFiles() throws Exception {
+    void activeMigrationDirectoryContainsOnlyCompressedBaselineFiles() throws Exception {
         List<String> migrationNames;
         try (var files = Files.list(MIGRATION_DIR)) {
             migrationNames = files
@@ -37,13 +36,39 @@ class ProcessMasterStage13BaselineCompressionTest {
 
         assertThat(migrationNames).containsExactly(
                 "V1__qpo_baseline_schema.sql",
-                "V2__qpo_baseline_seed_data.sql",
-                "V3__repeat_released_snapshot_candidate_index.sql",
-                "V4__retire_sales_match_module.sql",
-                "V5__refactor_sales_order_u9_sync_contract.sql",
-                "V6__u9_customer_and_sync_option_cache.sql",
-                "V7__customer_master_read_only_u9_sync.sql");
+                "V2__qpo_baseline_seed_data.sql");
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
+    }
+
+    @Test
+    void compressedSeedRetainsSystemMaterialAndProcessMasterDataButNoOrderOrU9CacheRows() throws Exception {
+        String seed = Files.readString(MIGRATION_DIR.resolve("V2__qpo_baseline_seed_data.sql"), StandardCharsets.UTF_8);
+
+        assertThat(seed)
+                .contains(
+                        "INSERT INTO system_permission",
+                        "INSERT INTO system_role",
+                        "INSERT INTO erp_user",
+                        "INSERT INTO dict_material_type",
+                        "INSERT INTO dict_material",
+                        "INSERT INTO dict_process_category",
+                        "INSERT INTO dict_process_detail",
+                        "INSERT INTO dict_markup_fee",
+                        "INSERT INTO dict_assembly_markup_fee",
+                        "INSERT INTO dict_extra_fee_item");
+        assertThat(seed)
+                .doesNotContain(
+                        "INSERT INTO order_rfq",
+                        "INSERT INTO item_quote_version",
+                        "INSERT INTO order_delivery_ticket",
+                        "INSERT INTO sales_order_header",
+                        "INSERT INTO sales_order_item",
+                        "INSERT INTO customer_master",
+                        "INSERT INTO u9_sync_seller_option_cache",
+                        "INSERT INTO u9_sync_department_option_cache",
+                        "INSERT INTO u9_master_data_sync_run",
+                        "Authorization",
+                        "client_secret");
     }
 
     @Test
@@ -62,12 +87,7 @@ class ProcessMasterStage13BaselineCompressionTest {
 
                 assertThat(flywayHistory(connection, schema)).containsExactly(
                         "1|qpo baseline schema|true",
-                        "2|qpo baseline seed data|true",
-                        "3|repeat released snapshot candidate index|true",
-                        "4|retire sales match module|true",
-                        "5|refactor sales order u9 sync contract|true",
-                        "6|u9 customer and sync option cache|true",
-                        "7|customer master read only u9 sync|true");
+                        "2|qpo baseline seed data|true");
                 assertThat(tableExists(connection, schema, "dict_process_category")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process_detail")).isTrue();
                 assertThat(tableExists(connection, schema, "dict_process")).isFalse();
@@ -81,43 +101,6 @@ class ProcessMasterStage13BaselineCompressionTest {
                 assertDuplicateDocumentNoRejected(connection, schema);
                 assertThat(permissionExists(connection, schema, "market:sales-match:view")).isFalse();
                 assertThat(routePathExists(connection, schema, "/sales-match")).isFalse();
-            } finally {
-                dropTestSchema(connection, schema);
-            }
-        }
-    }
-
-    @Test
-    void v5BackfillsBlankDocumentNumbersWithoutChangingExistingValues() throws Exception {
-        try (Connection connection = openDatabase()) {
-            String schema = createTestSchema(connection);
-            try {
-                Flyway.configure()
-                        .dataSource(connection.getMetaData().getURL(), System.getenv("DB_USERNAME"), System.getenv("DB_PASSWORD"))
-                        .schemas(schema)
-                        .defaultSchema(schema)
-                        .locations("filesystem:src/main/resources/db/migration")
-                        .target(MigrationVersion.fromVersion("4"))
-                        .baselineOnMigrate(false)
-                        .load()
-                        .migrate();
-                insertHistoricalSalesOrder(connection, schema, "SO-HIST-BLANK", null, null);
-                insertHistoricalSalesOrder(connection, schema, "SO-HIST-RFQ", "DOC-RFQ-HIST", "");
-                connection.commit();
-
-                Flyway.configure()
-                        .dataSource(connection.getMetaData().getURL(), System.getenv("DB_USERNAME"), System.getenv("DB_PASSWORD"))
-                        .schemas(schema)
-                        .defaultSchema(schema)
-                        .locations("filesystem:src/main/resources/db/migration")
-                        .baselineOnMigrate(false)
-                        .load()
-                        .migrate();
-
-                assertThat(salesOrderState(connection, schema, "SO-HIST-BLANK"))
-                        .isEqualTo("SO-HIST-BLANK|未同步");
-                assertThat(salesOrderState(connection, schema, "SO-HIST-RFQ"))
-                        .isEqualTo("DOC-RFQ-HIST|未同步");
             } finally {
                 dropTestSchema(connection, schema);
             }
@@ -256,20 +239,6 @@ class ProcessMasterStage13BaselineCompressionTest {
             statement.setString(2, documentNo);
             statement.setString(3, u9SyncStatus);
             statement.executeUpdate();
-        }
-    }
-
-    private static String salesOrderState(Connection connection, String schema, String salesOrderNo) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT document_no, u9_sync_status
-                FROM %s.sales_order_header
-                WHERE sales_order_no = ?
-                """.formatted(schema))) {
-            statement.setString(1, salesOrderNo);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                assertThat(resultSet.next()).isTrue();
-                return resultSet.getString(1) + "|" + resultSet.getString(2);
-            }
         }
     }
 

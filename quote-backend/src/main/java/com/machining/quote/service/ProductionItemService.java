@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.LockedItemPageDTO;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProductionItemQueryReq;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +64,17 @@ public class ProductionItemService {
                 .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
                 .map(this::toCustomerOption)
                 .toList();
+    }
+
+    public PageResult<CustomerOptionDTO> pageCustomerOptions(String field, String keyword, Integer page, Integer pageSize) {
+        if (customerMasterService != null) {
+            return customerMasterService.pageCustomerOptions(field, keyword, page, pageSize);
+        }
+        List<CustomerOptionDTO> rows = listCustomers().stream()
+                .filter(customerName -> matchesCustomerKeyword(customerName, field, keyword))
+                .map(this::toCustomerOption)
+                .toList();
+        return pageRows(rows, page, pageSize);
     }
 
     private QueryWrapper<LockedItemDTO> buildQuery(ProductionItemQueryReq req) {
@@ -152,6 +164,15 @@ public class ProductionItemService {
             return 20;
         }
         return Math.min(pageSize, 100);
+    }
+
+    private <T> PageResult<T> pageRows(List<T> allRows, Integer page, Integer pageSize) {
+        List<T> rows = allRows == null ? List.of() : allRows;
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        int fromIndex = (int) Math.min((long) (safePage - 1) * safePageSize, rows.size());
+        int toIndex = Math.min(fromIndex + safePageSize, rows.size());
+        return PageResult.of(rows.subList(fromIndex, toIndex), rows.size(), safePage, safePageSize);
     }
 
     private boolean hasText(String value) {

@@ -48,10 +48,12 @@ public class OrderDeliveryController {
 
     @GetMapping("/tickets/customers")
     @RequirePermission("market:delivered-item:customer-select")
-    public List<CustomerOptionDTO> listTicketCustomers(
+    public PageResult<CustomerOptionDTO> listTicketCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return deliveredItemService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return deliveredItemService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/tickets/{ticketId}")
@@ -93,10 +95,12 @@ public class OrderDeliveryController {
 
     @GetMapping("/locked-items/customers")
     @RequirePermission("market:locked-item:customer-select")
-    public List<CustomerOptionDTO> listLockedItemCustomers(
+    public PageResult<CustomerOptionDTO> listLockedItemCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return lockedItemService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return lockedItemService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/production-items")
@@ -107,10 +111,12 @@ public class OrderDeliveryController {
 
     @GetMapping("/production-items/customers")
     @RequirePermission("market:production-item:customer-select")
-    public List<CustomerOptionDTO> listProductionItemCustomers(
+    public PageResult<CustomerOptionDTO> listProductionItemCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return productionItemService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return productionItemService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/tickets/{ticketId}/allocations")

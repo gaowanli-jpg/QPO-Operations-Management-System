@@ -28,7 +28,7 @@ class PermissionModuleTreeTest {
             Pattern.MULTILINE
     );
     private static final Pattern SEED_PERMISSION = Pattern.compile(
-            "INSERT INTO system_permission \\(id, parent_id, permission_type, permission_code, permission_name, route_path, component_key, icon, sort_order, visible, enabled, created_at, updated_at, assignable\\) VALUES " +
+            "INSERT INTO system_permission(?: \\([^)]*\\))? VALUES " +
                     "\\((\\d+),\\s*(NULL|\\d+),\\s*'([^']+)',\\s*'([^']+)',\\s*'([^']*)',\\s*(NULL|'[^']*'),\\s*(NULL|'[^']*'),\\s*(NULL|'[^']*'),\\s*(\\d+),\\s*(true|false),\\s*(true|false),\\s*'[^']*',\\s*'[^']*',\\s*(true|false)\\);",
             Pattern.MULTILINE
     );

@@ -3,7 +3,6 @@ package com.machining.quote;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderRfq;
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -27,34 +26,44 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class U9CustomerMasterStage2MigrationTest {
     private static final String TEST_SCHEMA_PREFIX = "qpo_u9_customer_stage2_";
-    private static final Path MIGRATION = Path.of(
-            "src", "main", "resources", "db", "migration", "V6__u9_customer_and_sync_option_cache.sql");
+    private static final Path SCHEMA_BASELINE = Path.of(
+            "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path SEED_BASELINE = Path.of(
+            "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
     private static final Path CLEAR_SCRIPT = Path.of(
             "..", "docs", "ops", "sql", "clear_order_business_data_before_u9_customer_cutover.sql");
 
     @Test
-    void migrationDefinesU9CustomerCacheAndSyncOptionTables() throws IOException {
-        String migration = read(MIGRATION);
+    void baselineDefinesU9CustomerCacheAndSyncOptionTables() throws IOException {
+        String schema = read(SCHEMA_BASELINE);
+        String seed = read(SEED_BASELINE);
         String clearScript = read(CLEAR_SCRIPT);
 
-        assertThat(migration)
+        assertThat(schema)
                 .contains(
-                        "ALTER TABLE customer_master",
-                        "ADD COLUMN u9_org_code",
-                        "ADD COLUMN u9_customer_id",
-                        "ADD COLUMN last_synced_at",
-                        "ADD COLUMN source_hash",
-                        "DROP CONSTRAINT IF EXISTS uk_customer_master_name",
-                        "DROP CONSTRAINT IF EXISTS uk_customer_master_short_name",
+                        "CREATE TABLE customer_master",
+                        "u9_org_code character varying(50)",
+                        "u9_customer_id character varying(100)",
+                        "last_synced_at timestamp without time zone",
+                        "source_hash character varying(64)",
                         "CREATE TABLE u9_sync_seller_option_cache",
                         "CREATE TABLE u9_sync_department_option_cache",
                         "CREATE TABLE u9_master_data_sync_run",
-                        "customer_code varchar(200)",
-                        "customer_name_snapshot varchar(200)",
+                        "customer_code character varying(200) NOT NULL",
+                        "customer_name_snapshot character varying(200)",
                         "uk_system_role_data_scope_customer_code",
                         "CREATE INDEX idx_order_rfq_customer_code")
-                .doesNotContain("DROP TABLE customer_master");
+                .doesNotContain(
+                        "DROP TABLE customer_master",
+                        "uk_customer_master_name",
+                        "uk_customer_master_short_name");
 
+        assertThat(seed)
+                .doesNotContain(
+                        "INSERT INTO customer_master",
+                        "INSERT INTO u9_sync_seller_option_cache",
+                        "INSERT INTO u9_sync_department_option_cache",
+                        "INSERT INTO u9_master_data_sync_run");
         assertThat(clearScript)
                 .contains(
                         "qpo.confirm_clear_order_business_data",
@@ -84,8 +93,11 @@ class U9CustomerMasterStage2MigrationTest {
         try (Connection connection = openDatabase()) {
             String schema = createTestSchema(connection);
             try {
-                migrate(connection, schema, null);
+                migrate(connection, schema);
 
+                assertThat(flywayHistory(connection, schema)).containsExactly(
+                        "1|qpo baseline schema|true",
+                        "2|qpo baseline seed data|true");
                 assertThat(tableExists(connection, schema, "u9_sync_seller_option_cache")).isTrue();
                 assertThat(tableExists(connection, schema, "u9_sync_department_option_cache")).isTrue();
                 assertThat(tableExists(connection, schema, "u9_master_data_sync_run")).isTrue();
@@ -95,6 +107,9 @@ class U9CustomerMasterStage2MigrationTest {
                 assertThat(columnExists(connection, schema, "system_role_data_scope_customer", "customer_name_snapshot")).isTrue();
                 assertThat(indexExists(connection, schema, "uk_system_role_data_scope_customer_code")).isTrue();
                 assertThat(indexExists(connection, schema, "idx_order_rfq_customer_code")).isTrue();
+                assertThat(rowCount(connection, schema, "customer_master")).isZero();
+                assertThat(rowCount(connection, schema, "u9_sync_seller_option_cache")).isZero();
+                assertThat(rowCount(connection, schema, "u9_sync_department_option_cache")).isZero();
 
                 insertCustomer(connection, schema, "C001", "Same Customer");
                 insertCustomer(connection, schema, "C002", "Same Customer");
@@ -107,21 +122,27 @@ class U9CustomerMasterStage2MigrationTest {
     }
 
     @Test
-    void flywayMigratesAfterManualClearScriptRunsOnVersionFiveSchema() throws Exception {
+    void clearScriptRunsAfterCompressedBaselineAndPreservesSystemAndMasterSeed() throws Exception {
         try (Connection connection = openDatabase()) {
             String schema = createTestSchema(connection);
             try {
-                migrate(connection, schema, MigrationVersion.fromVersion("5"));
+                migrate(connection, schema);
                 execute(connection, "SET search_path TO " + schema);
                 execute(connection, "SET qpo.confirm_clear_order_business_data = 'YES'");
                 execute(connection, read(CLEAR_SCRIPT));
                 connection.commit();
 
-                migrate(connection, schema, null);
-
-                assertThat(flywayHistory(connection, schema)).contains(
-                        "6|u9 customer and sync option cache|true");
-                assertThat(tableExists(connection, schema, "u9_master_data_sync_run")).isTrue();
+                assertThat(flywayHistory(connection, schema)).containsExactly(
+                        "1|qpo baseline schema|true",
+                        "2|qpo baseline seed data|true");
+                assertThat(rowCount(connection, schema, "system_permission")).isPositive();
+                assertThat(rowCount(connection, schema, "system_role")).isPositive();
+                assertThat(rowCount(connection, schema, "dict_material")).isPositive();
+                assertThat(rowCount(connection, schema, "dict_process_category")).isPositive();
+                assertThat(rowCount(connection, schema, "dict_process_detail")).isPositive();
+                assertThat(rowCount(connection, schema, "order_rfq")).isZero();
+                assertThat(rowCount(connection, schema, "sales_order_header")).isZero();
+                assertThat(rowCount(connection, schema, "customer_master")).isZero();
             } finally {
                 dropTestSchema(connection, schema);
             }
@@ -170,17 +191,15 @@ class U9CustomerMasterStage2MigrationTest {
                 """.formatted(schema));
     }
 
-    private static void migrate(Connection connection, String schema, MigrationVersion target) {
-        var configuration = Flyway.configure()
+    private static void migrate(Connection connection, String schema) {
+        Flyway.configure()
                 .dataSource(connectionString(connection), System.getenv("DB_USERNAME"), System.getenv("DB_PASSWORD"))
                 .schemas(schema)
                 .defaultSchema(schema)
                 .locations("filesystem:src/main/resources/db/migration")
-                .baselineOnMigrate(false);
-        if (target != null) {
-            configuration.target(target);
-        }
-        configuration.load().migrate();
+                .baselineOnMigrate(false)
+                .load()
+                .migrate();
     }
 
     private static String connectionString(Connection connection) {
@@ -264,6 +283,14 @@ class U9CustomerMasterStage2MigrationTest {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getBoolean(1);
             }
+        }
+    }
+
+    private static int rowCount(Connection connection, String schema, String table) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("SELECT count(*) FROM " + schema + "." + table)) {
+            assertThat(resultSet.next()).isTrue();
+            return resultSet.getInt(1);
         }
     }
 

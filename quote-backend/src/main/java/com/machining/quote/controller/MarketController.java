@@ -103,18 +103,22 @@ public class MarketController {
 
     @GetMapping("/rfq/customers")
     @RequirePermission("market:rfq:customer-select")
-    public List<CustomerOptionDTO> listRfqCustomers(
+    public PageResult<CustomerOptionDTO> listRfqCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return orderManagementService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/quote-process/customers")
     @RequirePermission("market:quote-process:customer-select")
-    public List<CustomerOptionDTO> listQuoteProcessCustomers(
+    public PageResult<CustomerOptionDTO> listQuoteProcessCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return orderManagementService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/quote-process/orders")
@@ -131,10 +135,12 @@ public class MarketController {
 
     @GetMapping("/release/customers")
     @RequirePermission("market:release:customer-select")
-    public List<CustomerOptionDTO> listReleaseCustomers(
+    public PageResult<CustomerOptionDTO> listReleaseCustomers(
             @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword) {
-        return orderManagementService.listCustomerOptions(field, keyword);
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
     @GetMapping("/release/orders")

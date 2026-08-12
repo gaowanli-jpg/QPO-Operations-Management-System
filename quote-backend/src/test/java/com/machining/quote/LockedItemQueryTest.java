@@ -214,7 +214,7 @@ class LockedItemQueryTest {
                         "@GetMapping(\"/tickets/{ticketId}/allocations\")",
                         "@RequirePermission(\"market:locked-item:view\")",
                         "@RequirePermission(\"market:locked-item:customer-select\")",
-                        "return lockedItemService.listCustomerOptions(field, keyword)"
+                        "return lockedItemService.pageCustomerOptions(field, keyword, page, pageSize)"
                 )
                 .doesNotContain(
                         "@GetMapping(\"/allocations\")",
