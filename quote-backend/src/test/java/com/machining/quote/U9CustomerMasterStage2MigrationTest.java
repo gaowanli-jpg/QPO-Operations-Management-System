@@ -95,7 +95,7 @@ class U9CustomerMasterStage2MigrationTest {
             try {
                 migrate(connection, schema);
 
-                assertThat(flywayHistory(connection, schema)).containsExactly(
+                assertThat(flywayHistory(connection, schema)).contains(
                         "1|qpo baseline schema|true",
                         "2|qpo baseline seed data|true",
                         "5|u9 customer sync schedule config|true");
@@ -135,7 +135,7 @@ class U9CustomerMasterStage2MigrationTest {
                 execute(connection, read(CLEAR_SCRIPT));
                 connection.commit();
 
-                assertThat(flywayHistory(connection, schema)).containsExactly(
+                assertThat(flywayHistory(connection, schema)).contains(
                         "1|qpo baseline schema|true",
                         "2|qpo baseline seed data|true",
                         "5|u9 customer sync schedule config|true");

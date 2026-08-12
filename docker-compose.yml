@@ -1,7 +1,10 @@
 name: quote-system
 
-# QPO uses the existing dedicated ERP environment file for compatibility:
-# docker compose --env-file erp.env up -d --build
+# QPO uses the existing dedicated ERP environment file for compatibility.
+# Development startup should prefer the guarded helper:
+#   powershell -ExecutionPolicy Bypass -File ./scripts/compose-up.ps1
+# Direct compose remains available when the Flyway/database state is already verified:
+#   docker compose --env-file erp.env up -d --build
 
 x-logging: &default-logging
   driver: json-file

@@ -8,8 +8,16 @@ This document only covers the QPO quotation system. APS may appear only as histo
 ## 本地Docker验证
 ```powershell
 cd D:\QPO-Operations-Management-System
-docker compose --env-file erp.env up -d --build
+.\scripts\compose-up.ps1
 ```
+
+开发环境建议使用 `scripts/compose-up.ps1`，不要直接手工选择 Flyway 迁移编号。该脚本会先检查 active 迁移目录，再启动 PostgreSQL 读取 `flyway_schema_history`，确认没有复用压缩历史版本 `V3/V4` 或“数据库版本高于仓库版本”后，才会 build/start 后端和前端。新增迁移文件用：
+
+```powershell
+.\scripts\new-flyway-migration.ps1 -Name your_migration_name
+```
+
+详细规则见 `docs/ops/flyway-migration-policy.md`。
 
 默认本地访问地址：
 - 前端：`http://localhost:8088`
@@ -112,7 +120,7 @@ FRONTEND_PORT=8088
 修改 `erp.env` 后重建容器：
 
 ```powershell
-docker compose --env-file erp.env up -d --build
+.\scripts\compose-up.ps1
 ```
 
 启动后检查健康状态：

@@ -24,7 +24,7 @@ class ProcessMasterStage13BaselineCompressionTest {
     private static final Path MIGRATION_DIR = RESOURCES.resolve(Path.of("db", "migration"));
 
     @Test
-    void activeMigrationDirectoryContainsCompressedBaselineAndPostBaselineMigrations() throws Exception {
+    void activeMigrationDirectoryContainsCompressedBaselineAndDoesNotReuseReservedHistoryVersions() throws Exception {
         List<String> migrationNames;
         try (var files = Files.list(MIGRATION_DIR)) {
             migrationNames = files
@@ -34,10 +34,13 @@ class ProcessMasterStage13BaselineCompressionTest {
                     .toList();
         }
 
-        assertThat(migrationNames).containsExactly(
+        assertThat(migrationNames).contains(
                 "V1__qpo_baseline_schema.sql",
                 "V2__qpo_baseline_seed_data.sql",
                 "V5__u9_customer_sync_schedule_config.sql");
+        assertThat(migrationNames)
+                .filteredOn(name -> name.startsWith("V3__") || name.startsWith("V4__"))
+                .isEmpty();
         assertThat(RESOURCES.resolve("schema.sql")).doesNotExist();
     }
 
@@ -86,7 +89,7 @@ class ProcessMasterStage13BaselineCompressionTest {
                         .load()
                         .migrate();
 
-                assertThat(flywayHistory(connection, schema)).containsExactly(
+                assertThat(flywayHistory(connection, schema)).contains(
                         "1|qpo baseline schema|true",
                         "2|qpo baseline seed data|true",
                         "5|u9 customer sync schedule config|true");
