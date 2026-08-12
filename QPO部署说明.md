@@ -8,14 +8,16 @@ This document only covers the QPO quotation system. APS may appear only as histo
 ## 本地Docker验证
 ```powershell
 cd D:\QPO-Operations-Management-System
-.\scripts\compose-up.ps1
+docker compose --env-file erp.env up -d --build
 ```
 
-开发环境建议使用 `scripts/compose-up.ps1`，不要直接手工选择 Flyway 迁移编号。该脚本会先检查 active 迁移目录，再启动 PostgreSQL 读取 `flyway_schema_history`，确认没有复用压缩历史版本 `V3/V4` 或“数据库版本高于仓库版本”后，才会 build/start 后端和前端。新增迁移文件用：
+开发环境和测试服务器部署默认使用原生 Compose 命令。不要直接手工选择 Flyway 迁移编号；新增迁移文件用：
 
 ```powershell
-.\scripts\new-flyway-migration.ps1 -Name your_migration_name
+.\mig.ps1 your_migration_name
 ```
+
+如果 Compose 因 Flyway 校验失败而中断，再运行 `scripts/compose-up.ps1` 做更早一步的诊断检查。该脚本会先检查 active 迁移目录，再启动 PostgreSQL 读取 `flyway_schema_history`，确认没有复用压缩历史版本 `V3/V4` 或“数据库版本高于仓库版本”后，才会 build/start 后端和前端。
 
 详细规则见 `docs/ops/flyway-migration-policy.md`。
 

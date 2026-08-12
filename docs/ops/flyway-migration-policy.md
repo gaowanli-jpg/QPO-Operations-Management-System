@@ -21,20 +21,32 @@ Some local and test databases may still have old compressed-history records such
 Use the helper instead of manually choosing a number:
 
 ```powershell
-./scripts/new-flyway-migration.ps1 -Name u9_customer_sync_schedule_config
+./mig.ps1 u9_customer_sync_schedule_config
 ```
 
-The script reads `quote-backend/src/main/resources/db/migration` and, when `quote-postgres` is running, reads `flyway_schema_history`. It creates the next safe `Vx__name.sql` above both maxima.
+The shortcut delegates to `scripts/new-flyway-migration.ps1`. The script reads `quote-backend/src/main/resources/db/migration` and, when `quote-postgres` is running, reads `flyway_schema_history`. It creates the next safe `Vx__name.sql` above both maxima.
+
+If you need to call the underlying script directly, the equivalent command is:
+
+```powershell
+./scripts/new-flyway-migration.ps1 u9_customer_sync_schedule_config
+```
 
 ## Starting Docker Compose
 
-Use the guarded startup helper during development:
+Use the normal Compose command during development and deployment:
+
+```powershell
+docker compose --env-file erp.env up -d --build
+```
+
+If Compose fails on Flyway validation, run the guarded diagnostic helper:
 
 ```powershell
 ./scripts/compose-up.ps1
 ```
 
-This helper uses `erp.env`, runs `scripts/check-flyway-migrations.ps1`, starts PostgreSQL first, checks the live Flyway history, and only then builds and starts backend/frontend. If a migration would be skipped because the database is already ahead of the repository, the script stops before the backend becomes unhealthy.
+This helper uses `erp.env`, runs `scripts/check-flyway-migrations.ps1`, starts PostgreSQL first, checks the live Flyway history, and only then builds and starts backend/frontend. It gives an earlier and clearer diagnosis when a migration would be skipped because the database is already ahead of the repository.
 
 ## Direct checks
 

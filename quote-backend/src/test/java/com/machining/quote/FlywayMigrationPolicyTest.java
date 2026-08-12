@@ -35,25 +35,36 @@ class FlywayMigrationPolicyTest {
     @Test
     void migrationPolicyScriptsAndDocsPreventComposeTimeSurprises() throws IOException {
         Path newMigrationScript = ROOT.resolve(Path.of("scripts", "new-flyway-migration.ps1"));
+        Path migrationShortcutScript = ROOT.resolve("mig.ps1");
         Path checkScript = ROOT.resolve(Path.of("scripts", "check-flyway-migrations.ps1"));
         Path composeScript = ROOT.resolve(Path.of("scripts", "compose-up.ps1"));
+        Path composeFile = ROOT.resolve("docker-compose.yml");
         Path policyDoc = ROOT.resolve(Path.of("docs", "ops", "flyway-migration-policy.md"));
 
         assertThat(newMigrationScript).exists();
+        assertThat(migrationShortcutScript).exists();
         assertThat(checkScript).exists();
         assertThat(composeScript).exists();
+        assertThat(composeFile).exists();
         assertThat(policyDoc).exists();
 
         String newMigration = read(newMigrationScript);
+        String migrationShortcut = read(migrationShortcutScript);
         String check = read(checkScript);
         String compose = read(composeScript);
+        String composeYaml = read(composeFile);
         String doc = read(policyDoc);
 
         assertThat(newMigration)
+                .contains("Position = 0")
                 .contains("flyway_schema_history")
                 .contains("quote-postgres")
                 .contains("FIRST_POST_BASELINE_VERSION")
                 .contains("New-Item");
+        assertThat(migrationShortcut)
+                .contains("scripts", "new-flyway-migration.ps1")
+                .contains("-ExecutionPolicy", "Bypass")
+                .contains("DryRun");
         assertThat(check)
                 .contains("compressed-history")
                 .contains("V3/V4")
@@ -63,9 +74,15 @@ class FlywayMigrationPolicyTest {
                 .contains("check-flyway-migrations.ps1")
                 .contains("--env-file")
                 .contains("erp.env");
+        assertThat(composeYaml)
+                .contains("Standard development and deployment startup")
+                .contains("docker compose --env-file erp.env up -d --build")
+                .contains("compose-up.ps1");
         assertThat(doc)
                 .contains("V3/V4")
                 .contains("V5")
+                .contains("docker compose --env-file erp.env up -d --build")
+                .contains("./mig.ps1 u9_customer_sync_schedule_config")
                 .contains("scripts/new-flyway-migration.ps1")
                 .contains("scripts/compose-up.ps1");
     }
