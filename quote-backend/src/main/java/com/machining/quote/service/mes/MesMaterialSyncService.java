@@ -16,6 +16,7 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.MesIntegrationBatchMapper;
 import com.machining.quote.mapper.MesMaterialBatchItemMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
@@ -31,6 +32,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -54,6 +56,9 @@ public class MesMaterialSyncService {
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
+    private static final String BATCH_STATUS_PARTIAL_PENDING = "PARTIAL_PENDING";
+    private static final int MATERIAL_CALLBACK_MAX_ITEMS = 100;
     private static final DateTimeFormatter BIZ_DATE = DateTimeFormatter.BASIC_ISO_DATE;
     private static final char[] CROCKFORD32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -66,6 +71,8 @@ public class MesMaterialSyncService {
     private OrderDeliveryTicketMesRequestMapper mesRequestMapper;
     @Autowired(required = false)
     private MesBatchStateService mesBatchStateService;
+    @Autowired(required = false)
+    private MesIntegrationBatchMapper mesIntegrationBatchMapper;
     @Autowired(required = false)
     private MesMaterialBatchItemMapper mesMaterialBatchItemMapper;
     @Autowired(required = false)
@@ -164,6 +171,376 @@ public class MesMaterialSyncService {
         log.info("MES material callback completed ticketId={} mesRequestId={} materialNo={} durationMs={}",
                 ticketId, mesRequestId, materialNo, System.currentTimeMillis() - startedAt);
         return callbackResponse(true, "QPO已接收物料号回调", mesRequestId, materialNo);
+    }
+
+    @Transactional
+    public MesMaterialCallbackResp handleMaterialBatchCallback(MesMaterialCallbackReq req) {
+        long startedAt = System.currentTimeMillis();
+        MaterialBatchCallbackEnvelope envelope = validateMaterialBatchCallbackRequest(req);
+        if (mesIntegrationBatchMapper == null || mesMaterialBatchItemMapper == null || mesRequestMapper == null) {
+            throw callbackError(HttpStatus.INTERNAL_SERVER_ERROR, "MES material batch callback service is unavailable");
+        }
+        MesIntegrationBatch batch = loadMaterialBatch(envelope.bizId());
+        List<MesMaterialBatchItem> batchItems = loadMaterialBatchItems(batch);
+        Map<String, MesMaterialBatchItem> itemByKey = indexBatchItems(batchItems);
+        List<MaterialBatchCallbackApplication> applications = new ArrayList<>();
+        Map<Long, String> projectedStatuses = projectedStatusMap(batchItems);
+        int duplicateCount = 0;
+
+        for (MaterialBatchCallbackRow row : envelope.rows()) {
+            MesMaterialBatchItem batchItem = itemByKey.get(row.itemKey());
+            if (batchItem == null) {
+                throw callbackError(HttpStatus.CONFLICT,
+                        "MES material callback row does not match current QPO batch item");
+            }
+            OrderDeliveryTicketMesRequest request = loadMesRequest(batchItem.getLineRequestId());
+            OrderDeliveryTicket ticket = loadTicket(batchItem.getTicketId());
+            validateMaterialBatchCallbackAssociation(batch, batchItem, request, ticket, row);
+            BatchCallbackDisposition disposition = disposition(batchItem, row);
+            if (disposition.duplicate()) {
+                duplicateCount++;
+                continue;
+            }
+            applications.add(new MaterialBatchCallbackApplication(row, batchItem, request, ticket));
+            projectedStatuses.put(batchItem.getId(), row.success() ? STATUS_SUCCESS : STATUS_FAILED);
+        }
+
+        SourceSyncAccumulator sourceSync = new SourceSyncAccumulator();
+        for (MaterialBatchCallbackApplication application : applications) {
+            sourceSync.add(applyMaterialBatchCallbackRow(application));
+        }
+        if (!applications.isEmpty()) {
+            updateMaterialBatchAfterCallback(batch, projectedStatuses);
+        }
+        log.info(
+                "MES material batch callback accepted bizId={} receivedCount={} appliedCount={} duplicateCount={} "
+                        + "sourceTargetCount={} sourceUpdatedCount={} durationMs={}",
+                envelope.bizId(), envelope.rows().size(), applications.size(), duplicateCount,
+                sourceSync.targetCount, sourceSync.updatedCount, System.currentTimeMillis() - startedAt);
+        return batchCallbackResponse(
+                true,
+                0,
+                "accepted",
+                envelope.bizId(),
+                envelope.rows().size(),
+                applications.size(),
+                duplicateCount,
+                sourceSync);
+    }
+
+    private MaterialBatchCallbackEnvelope validateMaterialBatchCallbackRequest(MesMaterialCallbackReq req) {
+        String bizId = trimToNull(req == null ? null : req.getMesRequestId());
+        if (bizId == null) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback bizId cannot be blank");
+        }
+        if (bizId.length() > 80) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback bizId is too long");
+        }
+        List<MesMaterialCallbackReq.Item> items = req.getItems();
+        if (items == null || items.isEmpty()) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback items cannot be empty");
+        }
+        if (items.size() > MATERIAL_CALLBACK_MAX_ITEMS) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback items exceed 100 rows");
+        }
+        List<MaterialBatchCallbackRow> rows = new ArrayList<>();
+        Set<String> callbackKeys = new HashSet<>();
+        for (int index = 0; index < items.size(); index++) {
+            MesMaterialCallbackReq.Item item = items.get(index);
+            if (item == null) {
+                throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback item cannot be null");
+            }
+            String taskNo = requireCallbackText(item.getTaskNo(), 120, "items[" + index + "].taskNo");
+            String drawingNo = requireCallbackText(item.getDrawingNo(), 128, "items[" + index + "].drawingNo");
+            String drawingVersion = optionalCallbackText(item.getDrawingVersion(), 64, "items[" + index + "].drawingVersion");
+            String status = requireCallbackStatus(item.getStatus(), index);
+            String productCode = optionalCallbackText(item.getProductCode(), 100, "items[" + index + "].productCode");
+            String productName = optionalCallbackText(item.getProductName(), 255, "items[" + index + "].productName");
+            String message = optionalCallbackText(item.getMessage(), 500, "items[" + index + "].message");
+            if (STATUS_SUCCESS.equals(status) && isBlank(productCode)) {
+                throw callbackError(HttpStatus.BAD_REQUEST, "items[" + index + "].productCode cannot be blank when status is SUCCESS");
+            }
+            if (STATUS_FAILED.equals(status) && !isBlank(productCode)) {
+                throw callbackError(HttpStatus.BAD_REQUEST, "items[" + index + "].productCode must be blank when status is FAILED");
+            }
+            if (STATUS_FAILED.equals(status) && isBlank(message)) {
+                throw callbackError(HttpStatus.BAD_REQUEST, "items[" + index + "].message cannot be blank when status is FAILED");
+            }
+            String itemKey = materialItemKey(drawingNo, drawingVersion);
+            if (!callbackKeys.add(itemKey)) {
+                throw callbackError(HttpStatus.BAD_REQUEST, "MES material callback contains duplicate drawing/version");
+            }
+            rows.add(new MaterialBatchCallbackRow(
+                    index, taskNo, drawingNo, drawingVersion, status, productCode, productName, message, itemKey));
+        }
+        return new MaterialBatchCallbackEnvelope(bizId, List.copyOf(rows));
+    }
+
+    private String requireCallbackText(String value, int maxLength, String field) {
+        String text = trimToNull(value);
+        if (text == null) {
+            throw callbackError(HttpStatus.BAD_REQUEST, field + " cannot be blank");
+        }
+        if (text.length() > maxLength) {
+            throw callbackError(HttpStatus.BAD_REQUEST, field + " is too long");
+        }
+        return text;
+    }
+
+    private String optionalCallbackText(String value, int maxLength, String field) {
+        String text = trimToNull(value);
+        if (text != null && text.length() > maxLength) {
+            throw callbackError(HttpStatus.BAD_REQUEST, field + " is too long");
+        }
+        return text;
+    }
+
+    private String requireCallbackStatus(String value, int index) {
+        String status = trimToNull(value);
+        if (status == null) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "items[" + index + "].status cannot be blank");
+        }
+        status = status.toUpperCase(Locale.ROOT);
+        if (!STATUS_SUCCESS.equals(status) && !STATUS_FAILED.equals(status)) {
+            throw callbackError(HttpStatus.BAD_REQUEST, "items[" + index + "].status must be SUCCESS or FAILED");
+        }
+        return status;
+    }
+
+    private MesIntegrationBatch loadMaterialBatch(String bizId) {
+        QueryWrapper<MesIntegrationBatch> wrapper = new QueryWrapper<>();
+        wrapper.eq("biz_id", bizId)
+                .eq("batch_type", MesBatchStateService.BATCH_TYPE_MATERIAL);
+        MesIntegrationBatch batch = mesIntegrationBatchMapper.selectOne(wrapper);
+        if (batch == null) {
+            throw callbackError(HttpStatus.NOT_FOUND, "MES material batch bizId does not exist");
+        }
+        return batch;
+    }
+
+    private List<MesMaterialBatchItem> loadMaterialBatchItems(MesIntegrationBatch batch) {
+        QueryWrapper<MesMaterialBatchItem> wrapper = new QueryWrapper<>();
+        wrapper.eq("batch_id", batch.getId()).orderByAsc("id");
+        List<MesMaterialBatchItem> items = mesMaterialBatchItemMapper.selectList(wrapper);
+        if (items == null || items.isEmpty()) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material batch has no QPO rows");
+        }
+        return items;
+    }
+
+    private Map<String, MesMaterialBatchItem> indexBatchItems(List<MesMaterialBatchItem> items) {
+        Map<String, MesMaterialBatchItem> result = new LinkedHashMap<>();
+        for (MesMaterialBatchItem item : items) {
+            String key = trimToNull(item.getItemKey());
+            if (key == null) {
+                key = materialItemKey(item.getDrawingNo(), item.getDrawingVersion());
+            }
+            result.put(key, item);
+        }
+        return result;
+    }
+
+    private Map<Long, String> projectedStatusMap(List<MesMaterialBatchItem> items) {
+        Map<Long, String> result = new LinkedHashMap<>();
+        for (MesMaterialBatchItem item : items) {
+            result.put(item.getId(), normalizeCallbackExistingStatus(item.getStatus()));
+        }
+        return result;
+    }
+
+    private void validateMaterialBatchCallbackAssociation(
+            MesIntegrationBatch batch,
+            MesMaterialBatchItem batchItem,
+            OrderDeliveryTicketMesRequest request,
+            OrderDeliveryTicket ticket,
+            MaterialBatchCallbackRow row) {
+        if (batchItem.getBatchId() == null || !batchItem.getBatchId().equals(batch.getId())) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback row belongs to another batch");
+        }
+        if (request.getBatchId() != null && !request.getBatchId().equals(batch.getId())) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback request belongs to another batch");
+        }
+        if (request.getBatchItemId() != null && !request.getBatchItemId().equals(batchItem.getId())) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback request belongs to another batch item");
+        }
+        if (request.getTicketId() == null || !request.getTicketId().equals(batchItem.getTicketId())) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback request ticket mismatch");
+        }
+        String currentLineRequestId = trimToNull(ticket.getMesRequestId());
+        if (!batchItem.getLineRequestId().equals(currentLineRequestId)) {
+            throw callbackError(HttpStatus.CONFLICT, "Stale MES material callback cannot overwrite the current request");
+        }
+        String savedTaskNo = firstNonBlank(batchItem.getMesTaskNo(), request.getMesExternalTaskId());
+        if (!isBlank(savedTaskNo) && !savedTaskNo.equals(row.taskNo())) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback taskNo mismatch");
+        }
+    }
+
+    private BatchCallbackDisposition disposition(MesMaterialBatchItem batchItem, MaterialBatchCallbackRow row) {
+        String currentStatus = normalizeCallbackExistingStatus(batchItem.getStatus());
+        String currentProductCode = normalizeMaterialNo(batchItem.getProductCode());
+        if (STATUS_SUCCESS.equals(currentStatus)) {
+            if (row.success() && row.productCode().equals(currentProductCode)) {
+                return BatchCallbackDisposition.duplicateResult();
+            }
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback productCode conflicts with confirmed result");
+        }
+        if (STATUS_FAILED.equals(currentStatus)) {
+            if (!row.success()) {
+                return BatchCallbackDisposition.duplicateResult();
+            }
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback cannot overwrite a failed terminal result");
+        }
+        if (row.success() && !isBlank(currentProductCode) && !row.productCode().equals(currentProductCode)) {
+            throw callbackError(HttpStatus.CONFLICT, "MES material callback productCode conflicts with existing row value");
+        }
+        return BatchCallbackDisposition.applyResult();
+    }
+
+    private String normalizeCallbackExistingStatus(String status) {
+        String normalized = trimToNull(status);
+        return normalized == null ? STATUS_PROCESSING : normalized.toUpperCase(Locale.ROOT);
+    }
+
+    private SourceItemMaterialNoSyncService.MaterialNoSyncResult applyMaterialBatchCallbackRow(
+            MaterialBatchCallbackApplication application) {
+        MaterialBatchCallbackRow row = application.row();
+        MesMaterialCallbackReq adapter = legacyCallbackAdapter(application.batchItem().getLineRequestId(), row);
+        if (row.success()) {
+            SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult = syncSourceItemMaterialNoForCallback(
+                    application.ticket(), row.productCode(), row.message(), application.request(), adapter);
+            markCallbackSuccess(
+                    application.ticket(), application.batchItem().getLineRequestId(), row.productCode(), row.message(), row.taskNo());
+            updateMesRequestFromCallback(
+                    application.batchItem().getLineRequestId(), STATUS_SUCCESS, row.productCode(), row.taskNo(), row.message(), true);
+            updateMaterialBatchItemFromCallback(application.batchItem(), row, STATUS_SUCCESS, true);
+            if (dedupService != null) {
+                dedupService.completeMasterSuccess(
+                        application.batchItem().getLineRequestId(), row.productCode(), row.message(), row.taskNo());
+            }
+            recordCallbackAudit(
+                    "DELIVERY_MES_MATERIAL_CALLBACK_SUCCESS",
+                    application.ticket(),
+                    application.request(),
+                    adapter,
+                    STATUS_SUCCESS,
+                    null,
+                    sourceSyncResult);
+            return sourceSyncResult;
+        }
+        String failedMessage = isBlank(row.message()) ? "MES material callback failed" : row.message();
+        markFailed(application.ticket(), application.batchItem().getLineRequestId(), failedMessage);
+        updateMesRequestFromCallback(
+                application.batchItem().getLineRequestId(), STATUS_FAILED, null, row.taskNo(), failedMessage, true);
+        updateMaterialBatchItemFromCallback(application.batchItem(), row, STATUS_FAILED, true);
+        if (dedupService != null) {
+            dedupService.completeMasterFailed(application.batchItem().getLineRequestId(), failedMessage);
+        }
+        recordCallbackAudit(
+                "DELIVERY_MES_MATERIAL_CALLBACK_FAILED",
+                application.ticket(),
+                application.request(),
+                adapter,
+                STATUS_FAILED,
+                failedMessage);
+        return SourceItemMaterialNoSyncService.MaterialNoSyncResult.empty();
+    }
+
+    private MesMaterialCallbackReq legacyCallbackAdapter(String lineRequestId, MaterialBatchCallbackRow row) {
+        MesMaterialCallbackReq adapter = new MesMaterialCallbackReq();
+        adapter.setMesRequestId(lineRequestId);
+        adapter.setExternalTraceId(row.taskNo());
+        adapter.setStatus(row.status());
+        adapter.setMaterialNo(row.productCode());
+        adapter.setMessage(row.message());
+        return adapter;
+    }
+
+    private void updateMaterialBatchItemFromCallback(
+            MesMaterialBatchItem source,
+            MaterialBatchCallbackRow row,
+            String status,
+            boolean completed) {
+        MesMaterialBatchItem update = new MesMaterialBatchItem();
+        update.setId(source.getId());
+        update.setStatus(status);
+        update.setMesTaskNo(row.taskNo());
+        update.setProductCode(row.success() ? row.productCode() : null);
+        update.setProductName(row.success() ? row.productName() : null);
+        update.setResponseStatus(row.status());
+        update.setMessage(abbreviate(row.message()));
+        update.setUpdatedAt(LocalDateTime.now());
+        if (completed) {
+            update.setCompletedAt(LocalDateTime.now());
+        }
+        mesMaterialBatchItemMapper.updateById(update);
+    }
+
+    private void updateMaterialBatchAfterCallback(MesIntegrationBatch batch, Map<Long, String> projectedStatuses) {
+        String status = summarizeMaterialBatchStatus(projectedStatuses.values().stream().toList());
+        MesIntegrationBatch update = new MesIntegrationBatch();
+        update.setId(batch.getId());
+        update.setStatus(status);
+        update.setRespondedAt(LocalDateTime.now());
+        update.setResponseCode("0");
+        update.setResponseMessage("MES material callback accepted");
+        update.setUpdatedAt(LocalDateTime.now());
+        if (STATUS_SUCCESS.equals(status) || STATUS_FAILED.equals(status)) {
+            update.setCompletedAt(LocalDateTime.now());
+        }
+        mesIntegrationBatchMapper.updateById(update);
+    }
+
+    private String summarizeMaterialBatchStatus(List<String> statuses) {
+        boolean hasPending = false;
+        boolean hasFailed = false;
+        boolean allSuccess = !statuses.isEmpty();
+        for (String status : statuses) {
+            String normalized = normalizeCallbackExistingStatus(status);
+            if (!STATUS_SUCCESS.equals(normalized)) {
+                allSuccess = false;
+            }
+            if (STATUS_FAILED.equals(normalized)) {
+                hasFailed = true;
+            }
+            if (!STATUS_SUCCESS.equals(normalized) && !STATUS_FAILED.equals(normalized)) {
+                hasPending = true;
+            }
+        }
+        if (allSuccess) {
+            return STATUS_SUCCESS;
+        }
+        if (hasPending) {
+            return BATCH_STATUS_PARTIAL_PENDING;
+        }
+        return hasFailed ? STATUS_FAILED : STATUS_RESULT_UNKNOWN;
+    }
+
+    private MesMaterialCallbackResp batchCallbackResponse(
+            boolean success,
+            int code,
+            String msg,
+            String bizId,
+            int receivedCount,
+            int appliedCount,
+            int duplicateCount,
+            SourceSyncAccumulator sourceSync) {
+        MesMaterialCallbackResp resp = new MesMaterialCallbackResp();
+        resp.setSuccess(success);
+        resp.setCode(code);
+        resp.setMsg(msg);
+        resp.setMessage(msg);
+        resp.setMesRequestId(bizId);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("bizId", bizId);
+        data.put("receivedCount", receivedCount);
+        data.put("appliedCount", appliedCount);
+        data.put("duplicateCount", duplicateCount);
+        data.put("sourceSyncTargetCount", sourceSync == null ? 0 : sourceSync.targetCount);
+        data.put("sourceSyncUpdatedCount", sourceSync == null ? 0 : sourceSync.updatedCount);
+        data.put("sourceSyncIdempotentCount", sourceSync == null ? 0 : sourceSync.idempotentCount);
+        resp.setData(data);
+        return resp;
     }
 
     public Map<String, Object> syncMaterialNo(Integer ticketId, Long taskId) {
@@ -768,6 +1145,58 @@ public class MesMaterialSyncService {
             }
         }
         return null;
+    }
+
+    private record MaterialBatchCallbackEnvelope(
+            String bizId,
+            List<MaterialBatchCallbackRow> rows) {
+    }
+
+    private record MaterialBatchCallbackRow(
+            int index,
+            String taskNo,
+            String drawingNo,
+            String drawingVersion,
+            String status,
+            String productCode,
+            String productName,
+            String message,
+            String itemKey) {
+        private boolean success() {
+            return STATUS_SUCCESS.equals(status);
+        }
+    }
+
+    private record MaterialBatchCallbackApplication(
+            MaterialBatchCallbackRow row,
+            MesMaterialBatchItem batchItem,
+            OrderDeliveryTicketMesRequest request,
+            OrderDeliveryTicket ticket) {
+    }
+
+    private record BatchCallbackDisposition(boolean duplicate) {
+        private static BatchCallbackDisposition applyResult() {
+            return new BatchCallbackDisposition(false);
+        }
+
+        private static BatchCallbackDisposition duplicateResult() {
+            return new BatchCallbackDisposition(true);
+        }
+    }
+
+    private static class SourceSyncAccumulator {
+        private int targetCount;
+        private int updatedCount;
+        private int idempotentCount;
+
+        private void add(SourceItemMaterialNoSyncService.MaterialNoSyncResult result) {
+            if (result == null) {
+                return;
+            }
+            targetCount += result.targetCount();
+            updatedCount += result.updatedCount();
+            idempotentCount += result.idempotentCount();
+        }
     }
 
     private record MaterialBatchPlan(
