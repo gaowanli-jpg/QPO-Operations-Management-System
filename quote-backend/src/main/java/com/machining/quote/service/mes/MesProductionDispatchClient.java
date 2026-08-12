@@ -1,5 +1,8 @@
 package com.machining.quote.service.mes;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
 import com.machining.quote.integration.ExternalAuthType;
@@ -18,6 +21,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -46,12 +51,8 @@ public class MesProductionDispatchClient {
 
     public MesProductionDispatchResp dispatch(MesProductionDispatchReq req) {
         if (useDataCenter()) {
-            log.debug("MES production dispatch data center request allocationId={} ticketId={} requestId={} productionQty={} ticketQty={}",
-                    req == null ? null : req.getAllocationId(),
-                    req == null ? null : req.getTicketId(),
-                    req == null ? null : req.getRequestId(),
-                    req == null ? null : req.getProductionQty(),
-                    req == null ? null : req.getTicketQty());
+            log.debug("MES production dispatch data center request bizId={} itemCount={} productCode={}",
+                    req == null ? null : req.getBizId(), itemCount(req), primaryProductCode(req));
             return dataCenterIntegrationClient.call(
                     DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH,
                     req,
@@ -62,11 +63,11 @@ public class MesProductionDispatchClient {
         if (isBlank(config.baseUrl())) {
             throw new RuntimeException("MES base URL is not configured");
         }
-        int timeout = timeout(config.timeoutMs(), 10000);
+        int timeout = timeout(config.timeoutMs(), 60000);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout);
         requestFactory.setReadTimeout(timeout);
-        RestTemplate restTemplate = new RestTemplate(requestFactory);
+        RestTemplate restTemplate = restTemplate(requestFactory);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -75,12 +76,8 @@ public class MesProductionDispatchClient {
         }
         HttpEntity<MesProductionDispatchReq> entity = new HttpEntity<>(req, headers);
         String url = trimRight(config.baseUrl()) + normalizePath(mesProductionPath);
-        log.debug("MES production dispatch request allocationId={} ticketId={} requestId={} productionQty={} ticketQty={}",
-                req == null ? null : req.getAllocationId(),
-                req == null ? null : req.getTicketId(),
-                req == null ? null : req.getRequestId(),
-                req == null ? null : req.getProductionQty(),
-                req == null ? null : req.getTicketQty());
+        log.debug("MES production dispatch request bizId={} itemCount={} productCode={}",
+                req == null ? null : req.getBizId(), itemCount(req), primaryProductCode(req));
         try {
             ResponseEntity<MesProductionDispatchResp> response = restTemplate.exchange(
                     url,
@@ -101,6 +98,19 @@ public class MesProductionDispatchClient {
         return Boolean.TRUE.equals(dataCenterEnabled) && dataCenterIntegrationClient != null;
     }
 
+    private RestTemplate restTemplate(SimpleClientHttpRequestFactory requestFactory) {
+        RestTemplate restTemplate = new RestTemplate(requestFactory);
+        for (HttpMessageConverter<?> converter : restTemplate.getMessageConverters()) {
+            if (converter instanceof MappingJackson2HttpMessageConverter jsonConverter) {
+                jsonConverter.setObjectMapper(JsonMapper.builder()
+                        .addModule(new JavaTimeModule())
+                        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                        .build());
+            }
+        }
+        return restTemplate;
+    }
+
     private ExternalIntegrationConfig runtimeConfig() {
         if (externalIntegrationConfigService != null) {
             ExternalIntegrationConfig config = externalIntegrationConfigService.activeConfig(ExternalSystemCode.MES);
@@ -115,7 +125,7 @@ public class MesProductionDispatchClient {
                     config.materialPath(),
                     config.allocationPath(),
                     config.authToken(),
-                    timeout(config.timeoutMs(), 10000),
+                    timeout(config.timeoutMs(), 60000),
                     config.authLoginPath(),
                     config.salesOrderCreatePath(),
                     config.userCode(),
@@ -139,7 +149,7 @@ public class MesProductionDispatchClient {
                 null,
                 null,
                 mesAuthToken,
-                timeout(mesTimeoutMs, 10000),
+                timeout(mesTimeoutMs, 60000),
                 null,
                 null,
                 null,
@@ -179,6 +189,17 @@ public class MesProductionDispatchClient {
 
     private int timeout(Integer value, int fallback) {
         return value == null || value <= 0 ? fallback : value;
+    }
+
+    private int itemCount(MesProductionDispatchReq req) {
+        return req == null || req.getItems() == null ? 0 : req.getItems().size();
+    }
+
+    private String primaryProductCode(MesProductionDispatchReq req) {
+        if (req == null || req.getItems() == null || req.getItems().isEmpty() || req.getItems().get(0) == null) {
+            return null;
+        }
+        return req.getItems().get(0).getProductCode();
     }
 
     private boolean isBlank(String value) {

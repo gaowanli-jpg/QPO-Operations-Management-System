@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.dto.mes.MesProductionAssemblyRelationDTO;
+import com.machining.quote.dto.mes.MesProductionBomDTO;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
 import com.machining.quote.dto.mes.MesProductionProcessRouteDTO;
@@ -166,25 +167,22 @@ public class MesProductionDispatchService {
 
     private MesProductionDispatchReq buildRequest(OrderDeliveryTicketAllocation allocation, String requestId) {
         MesProductionDispatchReq req = new MesProductionDispatchReq();
-        req.setRequestId(requestId);
+        req.setBizId(requestId);
         req.setAllocationId(allocation.getId());
         req.setTicketId(allocation.getTicketId());
         req.setSourceType(allocation.getSourceType());
         req.setSourceOrderId(allocation.getSourceOrderId());
         req.setSourceItemId(allocation.getSourceItemId());
-        req.setSourceOrderNo(allocation.getRfqNo());
         req.setCustomerName(allocation.getCustomerName());
-        req.setPartNo(allocation.getPartNo());
-        req.setVersion(allocation.getVersion());
-        req.setMaterialNo(allocation.getMaterialNo());
         req.setItemType(allocation.getItemType());
         req.setAllocationType(allocation.getAllocationType());
-        req.setProductionQty(allocation.getQty());
         req.setTicketQty(allocation.getTicketQty());
         req.setOrderType(allocation.getOrderType());
         req.setInternalProjectNo(allocation.getInternalProjectNo());
         req.setCustomerOrderNo(allocation.getCustomerOrderNo());
         req.setCustomerProjectNo(allocation.getCustomerProjectNo());
+        req.setPartNo(allocation.getPartNo());
+        req.setVersion(allocation.getVersion());
         req.setMaterialName(allocation.getMaterialName());
         req.setEngineeringMaterialCode(allocation.getEngineeringMaterialCode());
         req.setEngineeringMaterialName(allocation.getEngineeringMaterialName());
@@ -194,12 +192,29 @@ public class MesProductionDispatchService {
         req.setMaterialShape(allocation.getMaterialShape());
         req.setSurfaceTreatment(allocation.getSurfaceTreatment());
         req.setDescription(allocation.getDescription());
-        req.setRemark(allocation.getRemark());
-        req.setDeliveryDate(allocation.getDeliveryDate());
-        req.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
         req.setMaterialGrossWeight(allocation.getMaterialGrossWeight());
         req.setPartNetWeight(allocation.getPartNetWeight());
-        req.setAssemblyRelations(buildAssemblyRelations(allocation));
+        List<MesProductionAssemblyRelationDTO> assemblyRelations = buildAssemblyRelations(allocation);
+        req.setAssemblyRelations(assemblyRelations);
+
+        MesProductionDispatchReq.Item item = new MesProductionDispatchReq.Item();
+        item.setSaleOrderNo(trimToNull(allocation.getRfqNo()));
+        item.setSaleOrderItemNo(allocation.getSourceItemId() == null ? null : String.valueOf(allocation.getSourceItemId()));
+        item.setProductCode(trimToNull(allocation.getMaterialNo()));
+        item.setDemandQty(allocation.getQty());
+        item.setMakeQty(allocation.getQty());
+        item.setBuyQty(0);
+        item.setStockQty(0);
+        if (allocation.getDeliveryDate() != null) {
+            item.setRequiredDate(allocation.getDeliveryDate().atTime(23, 59, 59));
+        }
+        item.setRemark(trimToNull(allocation.getRemark()));
+        item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
+                allocation.getDescription(),
+                allocation.getSurfaceTreatment()));
+        item.setBom(buildBom(assemblyRelations));
+        item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
+        req.setItems(List.of(item));
         return req;
     }
 
@@ -214,11 +229,13 @@ public class MesProductionDispatchService {
             String detailName = firstNonBlank(
                     text(row.get("detailName")),
                     text(row.get("processName")),
-                    text(row.get("name")));
+                    text(row.get("name")),
+                    text(row.get("categoryName")));
             Double unitWorkHours = firstNumber(row.get("unitWorkHours"), row.get("inputVal"));
             Integer sortNo = integer(row.get("sortNo"));
+            String processDescription = firstNonBlank(text(row.get("description")), text(row.get("remark")));
             if (isBlank(processCode) && isBlank(categoryName) && isBlank(detailName)
-                    && unitWorkHours == null && sortNo == null) {
+                    && unitWorkHours == null && sortNo == null && isBlank(processDescription)) {
                 continue;
             }
             MesProductionProcessRouteDTO dto = new MesProductionProcessRouteDTO();
@@ -227,6 +244,7 @@ public class MesProductionDispatchService {
             dto.setDetailName(detailName);
             dto.setUnitWorkHours(unitWorkHours);
             dto.setSortNo(sortNo);
+            dto.setProcessDescription(processDescription);
             result.add(dto);
         }
         return result;
@@ -285,6 +303,30 @@ public class MesProductionDispatchService {
         return buildRfqAssemblyRelations(allocation);
     }
 
+    private List<MesProductionBomDTO> buildBom(List<MesProductionAssemblyRelationDTO> assemblyRelations) {
+        if (assemblyRelations == null || assemblyRelations.isEmpty()) {
+            return List.of();
+        }
+        Map<String, BigDecimal> quantityByMaterialNo = new LinkedHashMap<>();
+        for (MesProductionAssemblyRelationDTO relation : assemblyRelations) {
+            if (relation == null) {
+                continue;
+            }
+            String childMaterialNo = trimToNull(relation.getChildMaterialNo());
+            if (childMaterialNo == null) {
+                throw new RuntimeException("Child MES material number is required before MES production dispatch");
+            }
+            BigDecimal quantity = relation.getQtyPerParent();
+            if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("BOM quantity must be greater than 0 before MES production dispatch");
+            }
+            quantityByMaterialNo.merge(childMaterialNo, quantity, BigDecimal::add);
+        }
+        List<MesProductionBomDTO> result = new ArrayList<>();
+        quantityByMaterialNo.forEach((itemCode, quantity) -> result.add(new MesProductionBomDTO(itemCode, quantity)));
+        return result;
+    }
+
     private List<MesProductionAssemblyRelationDTO> buildRfqAssemblyRelations(OrderDeliveryTicketAllocation allocation) {
         Integer parentItemId = toInteger(allocation.getSourceItemId());
         if (parentItemId == null || itemAssemblyRelationMapper == null || itemQuoteVersionMapper == null) {
@@ -312,6 +354,7 @@ public class MesProductionDispatchService {
             dto.setParentVersion(firstNonBlank(parent == null ? null : parent.getVersion(), allocation.getVersion()));
             dto.setChildPartNo(child == null ? null : child.getPartNo());
             dto.setChildVersion(child == null ? null : child.getVersion());
+            dto.setChildMaterialNo(child == null ? null : child.getMaterialNo());
             dto.setQtyPerParent(relation.getChildQtyPerParent() == null
                     ? null
                     : BigDecimal.valueOf(relation.getChildQtyPerParent()));
@@ -348,6 +391,7 @@ public class MesProductionDispatchService {
             dto.setParentVersion(firstNonBlank(parent == null ? null : parent.getVersion(), allocation.getVersion()));
             dto.setChildPartNo(child == null ? null : child.getPartNo());
             dto.setChildVersion(child == null ? null : child.getVersion());
+            dto.setChildMaterialNo(child == null ? null : child.getMaterialNo());
             dto.setQtyPerParent(relation.getQtyPerParent());
             dto.setSortNo(relation.getSortNo());
             dto.setSourceParentItemId(relation.getSourceParentItemId());
@@ -552,6 +596,14 @@ public class MesProductionDispatchService {
 
     private String text(Object value) {
         return value == null ? null : String.valueOf(value).trim();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private Double firstNumber(Object... values) {

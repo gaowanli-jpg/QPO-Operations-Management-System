@@ -1,5 +1,7 @@
 package com.machining.quote;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -33,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -51,16 +54,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MesMaterialSyncTest {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Path ORDER_DELIVERY_CONTROLLER = Path.of(
             "src", "main", "java", "com", "machining", "quote", "controller", "OrderDeliveryController.java");
     private static final Path SYSTEM_TASK_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
     private static final Path MES_SYNC_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialSyncService.java");
-    private static final Path MES_REQ = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesMaterialResolveReq.java");
-    private static final Path MES_RESP = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesMaterialResolveResp.java");
 
     @Test
     void submitMesMaterialSyncTaskCreatesSystemTaskAndDispatchesAsyncWork() {
@@ -372,9 +372,10 @@ class MesMaterialSyncTest {
         assertThat(reqCaptor.getValue().getItems().get(0).getDrawingUrls())
                 .containsExactly("http://minio-public/qpo-drawings/drawings/p100.pdf");
         verify(businessFileService).externalReadableUrl("/uploads/drawings/p100.pdf");
-        assertThat(readQuietly(MES_REQ))
-                .contains("private java.util.List<String> drawingUrls;")
-                .doesNotContain("private String drawingUrl;");
+        JsonNode payload = serialize(reqCaptor.getValue());
+        assertThat(payload.path("items").get(0).path("drawingUrls").get(0).asText())
+                .isEqualTo("http://minio-public/qpo-drawings/drawings/p100.pdf");
+        assertThat(payload.path("items").get(0).has("drawingUrl")).isFalse();
     }
 
     @Test
@@ -551,52 +552,41 @@ class MesMaterialSyncTest {
     }
 
     @Test
-    void mesMaterialDtosCarryTheExternalContractFields() throws IOException {
-        assertThat(read(MES_REQ))
-                .contains(
-                        "class MesMaterialResolveReq",
-                        "@JsonProperty(\"bizId\")",
-                        "private String mesRequestId;",
-                        "private String customerCode;",
-                        "private String customerName;",
-                        "private String internalProjectNo;",
-                        "private java.util.List<Item> items;",
-                        "private String drawingNo;",
-                        "private String drawingVersion;",
-                        "private java.util.List<String> drawingUrls;",
-                        "private String remark;"
-                )
-                .doesNotContain(
-                        "private String partNo;",
-                        "private String version;",
-                        "private String drawingUrl;",
-                        "private String " + "customer" + "Requirements;",
-                        "private Integer ticketId;",
-                        "private String sourceType;",
-                        "private Integer rfqId;",
-                        "private Long sourceOrderId;",
-                        "private Long sourceItemId;",
-                        "private String orderNo;",
-                        "private String rfqNo;"
-                );
-        assertThat(read(MES_RESP))
-                .contains(
-                        "class MesMaterialResolveResp",
-                        "private Integer code;",
-                        "private Boolean success;",
-                        "private String mesRequestId;",
-                        "@JsonAlias(\"msg\")",
-                        "private String status;",
-                        "private Boolean callbackRequired;",
-                        "private String materialNo;",
-                        "private String message;",
-                        "private String externalTraceId;",
-                        "private Data data;",
-                        "private String bizId;",
-                        "private Long taskId;",
-                        "private String taskNo;",
-                        "private String productCode;"
-                );
+    void mesMaterialDtosCarryTheExternalContractFields() {
+        MesMaterialResolveReq req = new MesMaterialResolveReq();
+        req.setMesRequestId("QPO-MAT-1");
+        req.setCustomerCode("GSS1");
+        req.setCustomerName("测试客户");
+        req.setInternalProjectNo("IP-1");
+        MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        item.setDrawingUrls(List.of("http://qpo.local/p100.pdf"));
+        item.setRemark("Rush");
+        item.setCustomerRequirements("物料描述：Bracket\n表面处理：Anodized");
+        req.setItems(List.of(item));
+
+        JsonNode payload = serialize(req);
+        assertThat(payload.path("bizId").asText()).isEqualTo("QPO-MAT-1");
+        assertThat(payload.path("customerCode").asText()).isEqualTo("GSS1");
+        assertThat(payload.path("items")).hasSize(1);
+        assertThat(payload.path("items").get(0).path("drawingNo").asText()).isEqualTo("P-100");
+        assertThat(payload.path("items").get(0).path("drawingVersion").asText()).isEqualTo("A");
+        assertThat(payload.path("items").get(0).path("drawingUrls").get(0).asText())
+                .isEqualTo("http://qpo.local/p100.pdf");
+        assertThat(payload.path("items").get(0).path("remark").asText()).isEqualTo("Rush");
+        assertThat(payload.path("items").get(0).path("customerRequirements").asText())
+                .isEqualTo("物料描述：Bracket\n表面处理：Anodized");
+        assertThat(payload.has("mesRequestId")).isFalse();
+        assertThat(payload.path("items").get(0).has("partNo")).isFalse();
+        assertThat(payload.path("items").get(0).has("drawingUrl")).isFalse();
+
+        MesMaterialResolveResp numericCode = new MesMaterialResolveResp();
+        numericCode.setCode(0);
+        assertThat(numericCode.getSuccess()).isTrue();
+        MesMaterialResolveResp stringCode = new MesMaterialResolveResp();
+        stringCode.setCode("0");
+        assertThat(stringCode.getSuccess()).isTrue();
     }
 
     private String read(Path path) throws IOException {
@@ -604,6 +594,14 @@ class MesMaterialSyncTest {
                 .as("%s should exist", path)
                 .isTrue();
         return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private JsonNode serialize(Object value) {
+        try {
+            return OBJECT_MAPPER.valueToTree(value);
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private MesMaterialSyncService syncService() {
@@ -642,14 +640,6 @@ class MesMaterialSyncTest {
         ReflectionTestUtils.setField(service, "mesMaterialClient", client);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "businessFileService", businessFileService);
-    }
-
-    private String readQuietly(Path path) {
-        try {
-            return read(path);
-        } catch (IOException e) {
-            throw new AssertionError(e);
-        }
     }
 
     private OrderDeliveryTicket ticket() {

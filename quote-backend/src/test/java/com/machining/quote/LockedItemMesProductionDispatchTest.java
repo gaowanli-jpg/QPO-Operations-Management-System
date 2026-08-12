@@ -331,12 +331,11 @@ class LockedItemMesProductionDispatchTest {
         Map<String, Object> serialized = OBJECT_MAPPER.convertValue(route, new TypeReference<>() {
         });
         assertThat(serialized)
-                .containsEntry("processCode", "PACKAGING")
-                .containsEntry("categoryName", "包装")
-                .containsEntry("detailName", "精细包装")
-                .containsEntry("unitWorkHours", 1.5)
-                .containsEntry("sortNo", 10)
-                .doesNotContainKeys("processDetailId", "hourlyRate", "unitRate", "lineCost", "cost", "amount");
+                .containsEntry("processTypeCode", "PACKAGING")
+                .containsEntry("programNum", "10")
+                .doesNotContainKeys("processCode", "categoryName", "detailName", "unitWorkHours", "sortNo",
+                        "processDetailId", "hourlyRate", "unitRate", "lineCost", "cost", "amount");
+        assertThat(serialized.get("workHour").toString()).isEqualTo("1.5");
     }
 
     @Test
@@ -577,6 +576,7 @@ class LockedItemMesProductionDispatchTest {
         item.setId(id);
         item.setPartNo(partNo);
         item.setVersion(version);
+        item.setMaterialNo("MES-" + partNo);
         return item;
     }
 
@@ -585,6 +585,7 @@ class LockedItemMesProductionDispatchTest {
         item.setId(id);
         item.setPartNo(partNo);
         item.setVersion(version);
+        item.setMaterialNo("MES-" + partNo);
         return item;
     }
 }

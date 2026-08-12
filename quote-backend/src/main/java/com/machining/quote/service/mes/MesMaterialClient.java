@@ -26,6 +26,7 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class MesMaterialClient {
     private static final Logger log = LoggerFactory.getLogger(MesMaterialClient.class);
+    private final MesMaterialRequestValidator requestValidator = new MesMaterialRequestValidator();
 
     @Value("${erp.mes.base-url:}")
     private String mesBaseUrl;
@@ -45,8 +46,10 @@ public class MesMaterialClient {
     private ExternalIntegrationConfigService externalIntegrationConfigService;
 
     public MesMaterialResolveResp resolveMaterial(MesMaterialResolveReq req) {
+        requestValidator.validate(req);
         if (useDataCenter()) {
-            log.debug("MES material resolve data center request drawingNo={}", primaryDrawingNo(req));
+            log.debug("MES material resolve data center request bizId={} itemCount={} drawingNo={}",
+                    req.getBizId(), itemCount(req), primaryDrawingNo(req));
             return dataCenterIntegrationClient.call(
                     DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE,
                     req,
@@ -57,7 +60,7 @@ public class MesMaterialClient {
         if (isBlank(config.baseUrl())) {
             throw new RuntimeException("MES base URL is not configured");
         }
-        int timeout = timeout(config.timeoutMs(), 10000);
+        int timeout = timeout(config.timeoutMs(), 60000);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout);
         requestFactory.setReadTimeout(timeout);
@@ -70,7 +73,8 @@ public class MesMaterialClient {
         }
         HttpEntity<MesMaterialResolveReq> entity = new HttpEntity<>(req, headers);
         String url = trimRight(config.baseUrl()) + normalizePath(config.materialPath());
-        log.debug("MES material resolve request drawingNo={}", primaryDrawingNo(req));
+        log.debug("MES material resolve request bizId={} itemCount={} drawingNo={}",
+                req.getBizId(), itemCount(req), primaryDrawingNo(req));
         try {
             ResponseEntity<MesMaterialResolveResp> response = restTemplate.exchange(
                     url,
@@ -106,7 +110,7 @@ public class MesMaterialClient {
                 normalizePath(mesMaterialPath),
                 null,
                 mesAuthToken,
-                timeout(mesTimeoutMs, 10000),
+                timeout(mesTimeoutMs, 60000),
                 null,
                 null,
                 null,
@@ -149,6 +153,10 @@ public class MesMaterialClient {
             return null;
         }
         return req.getItems().get(0).getDrawingNo();
+    }
+
+    private int itemCount(MesMaterialResolveReq req) {
+        return req == null || req.getItems() == null ? 0 : req.getItems().size();
     }
 
     private int timeout(Integer value, int fallback) {

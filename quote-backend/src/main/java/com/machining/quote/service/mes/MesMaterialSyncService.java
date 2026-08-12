@@ -305,6 +305,9 @@ public class MesMaterialSyncService {
         item.setDrawingVersion(ticket.getVersion() == null ? "" : ticket.getVersion());
         item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "图纸不能为空"))));
         item.setRemark(trimToNull(ticket.getRemark()));
+        item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
+                ticket.getDescription(),
+                ticket.getSurfaceTreatment()));
         req.setItems(List.of(item));
         return req;
     }

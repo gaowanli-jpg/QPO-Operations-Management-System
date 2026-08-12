@@ -21,16 +21,17 @@ public class DataCenterEndpointRegistry {
             MES_MATERIAL_RESOLVE,
             new EndpointDefinition(
                     MES_MATERIAL_RESOLVE,
-                    "获取物料号",
+                    "MES物料号获取",
                     "MES",
                     "POST",
                     "MES_MATERIAL_V1",
-                    "MES_MATERIAL_RESPONSE_V1"
+                    "MES_MATERIAL_RESPONSE_V1",
+                    60000
             ),
             WMS_INVENTORY_ALLOCATE,
             new EndpointDefinition(
                     WMS_INVENTORY_ALLOCATE,
-                    "获取库存信息",
+                    "WMS库存锁定",
                     "WMS",
                     "POST",
                     "WMS_ALLOCATION_V1",
@@ -63,7 +64,8 @@ public class DataCenterEndpointRegistry {
                     "MES",
                     "POST",
                     "MES_PRODUCTION_DISPATCH_V1",
-                    "MES_PRODUCTION_DISPATCH_RESPONSE_V1"
+                    "MES_PRODUCTION_DISPATCH_RESPONSE_V1",
+                    60000
             )
     );
 

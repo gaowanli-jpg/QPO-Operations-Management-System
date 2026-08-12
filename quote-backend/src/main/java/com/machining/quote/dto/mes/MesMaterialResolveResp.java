@@ -7,7 +7,7 @@ import java.util.List;
 
 @Data
 public class MesMaterialResolveResp {
-    private Integer code;
+    private Object code;
     private Boolean success;
     @JsonAlias("bizId")
     private String mesRequestId;
@@ -21,7 +21,7 @@ public class MesMaterialResolveResp {
 
     public Boolean getSuccess() {
         if (code != null) {
-            return code == 0;
+            return isSuccessCode(code);
         }
         return success;
     }
@@ -44,6 +44,13 @@ public class MesMaterialResolveResp {
             return externalTraceId;
         }
         return firstNonBlank(externalTraceId, item.getTaskNo(), item.getTaskId() == null ? null : String.valueOf(item.getTaskId()));
+    }
+
+    private boolean isSuccessCode(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue() == 0;
+        }
+        return "0".equals(String.valueOf(value).trim());
     }
 
     private Item firstItem() {

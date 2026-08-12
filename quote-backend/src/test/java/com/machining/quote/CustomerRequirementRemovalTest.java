@@ -6,31 +6,22 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CustomerRequirementRemovalTest {
-    private static final List<String> REMOVED_TOKENS = List.of(
-            "customer" + "Requirement",
-            "customer" + "_requirement",
-            "customer" + "Requirements",
-            "客" + "户" + "需" + "求"
-    );
-
     @Test
-    void backendRuntimeSchemaAndActiveDocsNoLongerExposeCustomerRequirement() throws Exception {
+    void backendRuntimeSchemaAndActiveDocsNoLongerExposeLegacyCustomerRequirementColumn() throws Exception {
         String source = readAll(
                 Path.of("src/main/java"),
                 Path.of("src/main/resources/db/migration"),
-                Path.of("../docs/QPO-MES-WMS对接/06-提供给MES的物料号接口对接说明.md"),
-                Path.of("../docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md"),
-                Path.of("../docs/QPO报价状态流转/37-RFQ议价提单派生销售订单并接入U9开发文档.md")
+                Path.of("../docs")
         );
 
-        for (String token : REMOVED_TOKENS) {
-            assertThat(source).doesNotContain(token);
-        }
+        assertThat(source).doesNotContain("customer_requirement");
+        assertThat(source)
+                .contains("customerRequirements")
+                .contains("MesCustomerRequirementsAssembler");
     }
 
     private String readAll(Path... roots) throws IOException {
@@ -39,7 +30,9 @@ class CustomerRequirementRemovalTest {
             if (Files.isDirectory(root)) {
                 try (var stream = Files.walk(root)) {
                     stream.filter(Files::isRegularFile)
-                            .filter(path -> path.toString().endsWith(".java") || path.toString().endsWith(".sql"))
+                            .filter(path -> path.toString().endsWith(".java")
+                                    || path.toString().endsWith(".sql")
+                                    || path.toString().endsWith(".md"))
                             .sorted()
                             .forEach(path -> append(result, path));
                 }

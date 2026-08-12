@@ -143,7 +143,7 @@ class SalesOrderU9MasterDataStage3Test {
 
         assertThat((Integer) ReflectionTestUtils.invokeMethod(client, "resolveReadTimeout", config, common)).isEqualTo(60000);
         assertThat((Integer) ReflectionTestUtils.invokeMethod(client, "resolveReadTimeout", config, create)).isEqualTo(60000);
-        assertThat((Integer) ReflectionTestUtils.invokeMethod(client, "resolveReadTimeout", config, mes)).isEqualTo(1000);
+        assertThat((Integer) ReflectionTestUtils.invokeMethod(client, "resolveReadTimeout", config, mes)).isEqualTo(60000);
     }
 
     private U9MasterDataService masterDataService(U9CommonEntityClient client, Clock clock) {

@@ -1,6 +1,9 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.machining.quote.config.DataCenterProperties;
 import com.machining.quote.entity.SystemDataCenterConfig;
 import com.machining.quote.entity.SystemDataCenterEndpointConfig;
@@ -14,6 +17,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -125,7 +130,16 @@ public class DataCenterIntegrationClient {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout(config == null ? null : config.getConnectTimeoutMs(), 5000));
         requestFactory.setReadTimeout(resolveReadTimeout(config, endpoint));
-        return new RestTemplate(requestFactory);
+        RestTemplate restTemplate = new RestTemplate(requestFactory);
+        for (HttpMessageConverter<?> converter : restTemplate.getMessageConverters()) {
+            if (converter instanceof MappingJackson2HttpMessageConverter jsonConverter) {
+                jsonConverter.setObjectMapper(JsonMapper.builder()
+                        .addModule(new JavaTimeModule())
+                        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                        .build());
+            }
+        }
+        return restTemplate;
     }
 
     private int resolveReadTimeout(SystemDataCenterConfig config, SystemDataCenterEndpointConfig endpoint) {
@@ -135,16 +149,18 @@ public class DataCenterIntegrationClient {
         } else {
             resolved = timeout(config == null ? null : config.getReadTimeoutMs(), 30000);
         }
-        return isLongRunningU9Endpoint(endpoint) ? Math.max(resolved, 60000) : resolved;
+        return isLongRunningEndpoint(endpoint) ? Math.max(resolved, 60000) : resolved;
     }
 
-    private boolean isLongRunningU9Endpoint(SystemDataCenterEndpointConfig endpoint) {
+    private boolean isLongRunningEndpoint(SystemDataCenterEndpointConfig endpoint) {
         if (endpoint == null || endpoint.getEndpointCode() == null) {
             return false;
         }
         String code = endpoint.getEndpointCode().trim().toUpperCase(Locale.ROOT);
         return DataCenterEndpointRegistry.U9_SALES_ORDER_SYNC.equals(code)
-                || DataCenterEndpointRegistry.U9_COMMON_ENTITY_QUERY.equals(code);
+                || DataCenterEndpointRegistry.U9_COMMON_ENTITY_QUERY.equals(code)
+                || DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE.equals(code)
+                || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equals(code);
     }
 
     private String resolvePath(SystemDataCenterEndpointConfig endpoint) {

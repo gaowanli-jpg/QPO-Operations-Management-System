@@ -87,7 +87,7 @@ class DataCenterConfigStage4Test {
         Object result = ReflectionTestUtils.invokeMethod(service, "listEndpoints");
 
         assertThat(String.valueOf(result))
-                .contains("MES_MATERIAL_RESOLVE", "/dc/mes/material", "timeoutMs=7000")
+                .contains("MES_MATERIAL_RESOLVE", "/dc/mes/material", "timeoutMs=60000")
                 .contains("U9_SALES_ORDER_SYNC", "/dc/u9/sales-order", "timeoutMs=60000")
                 .contains("U9_COMMON_ENTITY_QUERY", "timeoutMs=60000");
     }
@@ -115,7 +115,7 @@ class DataCenterConfigStage4Test {
         Object result = ReflectionTestUtils.invokeMethod(service, "saveEndpoint", "MES_MATERIAL_RESOLVE", req);
 
         assertThat(String.valueOf(result))
-                .contains("MES_MATERIAL_RESOLVE", "/new/mes/material", "timeoutMs=12345")
+                .contains("MES_MATERIAL_RESOLVE", "/new/mes/material", "timeoutMs=60000")
                 .doesNotContain("WMS_INVENTORY_ALLOCATE");
         ArgumentCaptor<SystemDataCenterEndpointConfig> updateCaptor = ArgumentCaptor.forClass(SystemDataCenterEndpointConfig.class);
         verify(mapper).updateById(updateCaptor.capture());
@@ -125,7 +125,7 @@ class DataCenterConfigStage4Test {
         assertThat(updated.getRequestAdapter()).isEqualTo("MES_MATERIAL_V1");
         assertThat(updated.getResponseAdapter()).isEqualTo("MES_MATERIAL_RESPONSE_V1");
         assertThat(updated.getPath()).isEqualTo("/new/mes/material");
-        assertThat(updated.getTimeoutMs()).isEqualTo(12345);
+        assertThat(updated.getTimeoutMs()).isEqualTo(60000);
         assertThat(updated.getLastTestStatus()).isNull();
         verify(mapper, never()).insert(any(SystemDataCenterEndpointConfig.class));
 

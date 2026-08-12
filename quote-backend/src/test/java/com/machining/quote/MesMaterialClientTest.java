@@ -282,7 +282,7 @@ class MesMaterialClientTest {
                 "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialClient.java"), StandardCharsets.UTF_8);
 
         assertThat(source)
-                .contains("log.debug(\"MES material resolve request drawingNo={}")
+                .contains("log.debug(\"MES material resolve request bizId={} itemCount={} drawingNo={}")
                 .doesNotContain(
                         "req.getSourceType()",
                         "sourceType={}",

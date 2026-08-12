@@ -57,29 +57,22 @@ class LockedItemMesProductionClientTest {
             assertThat(captured.authorization.get()).isNull();
             assertThat(captured.contentType.get()).contains("application/json");
             assertThat(captured.body.get())
-                    .contains("\"requestId\":\"REQ-1\"")
-                    .contains("\"allocationId\":1001")
-                    .contains("\"ticketId\":2001")
-                    .contains("\"sourceType\":\"SALES_ORDER\"")
-                    .contains("\"sourceOrderNo\":\"SO-1\"")
+                    .contains("\"bizId\":\"REQ-1\"")
                     .contains("\"customerName\":\"ACME\"")
-                    .contains("\"partNo\":\"P-100\"")
-                    .contains("\"materialNo\":\"MAT-001\"")
-                    .contains("\"productionQty\":4")
-                    .contains("\"ticketQty\":10")
-                    .contains("\"orderType\":\"SO01\"")
                     .contains("\"internalProjectNo\":\"IP-9\"")
-                    .contains("\"engineeringMaterialCode\":\"MAT-7075\"")
-                    .contains("\"engineeringMaterialTypeCode\":\"RAW_MATERIAL\"")
-                    .contains("\"engineeringMaterialTypeName\":\"原材料\"")
-                    .contains("\"engineeringMaterialCategory\":\"铝材\"")
-                    .contains("\"processCode\":\"PACKAGING\"")
-                    .contains("\"categoryName\":\"包装\"")
-                    .contains("\"detailName\":\"精细包装\"")
-                    .contains("\"unitWorkHours\":1.5")
-                    .contains("\"sortNo\":10")
-                    .doesNotContain("lineCost", "hourlyRate", "materialData")
-                    .contains("\"assemblyRelations\":[]");
+                    .contains("\"items\":[")
+                    .contains("\"saleOrderNo\":\"SO-1\"")
+                    .contains("\"saleOrderItemNo\":\"9001\"")
+                    .contains("\"productCode\":\"MAT-001\"")
+                    .contains("\"demandQty\":4")
+                    .contains("\"makeQty\":4")
+                    .contains("\"buyQty\":0")
+                    .contains("\"stockQty\":0")
+                    .contains("\"requiredDate\":\"2026-08-12T23:59:59\"")
+                    .contains("\"processTypeCode\":\"PACKAGING\"")
+                    .contains("\"workHour\":1.5")
+                    .contains("\"programNum\":\"10\"")
+                    .doesNotContain("allocationId", "ticketId", "sourceType", "partNo", "version", "productionQty", "ticketQty", "lineCost", "hourlyRate", "materialData", "assemblyRelations");
         } finally {
             server.stop(0);
         }
@@ -193,7 +186,7 @@ class LockedItemMesProductionClientTest {
                 StandardCharsets.UTF_8);
 
         assertThat(source)
-                .contains("log.debug(\"MES production dispatch request allocationId={}")
+                .contains("log.debug(\"MES production dispatch request bizId={} itemCount={} productCode={}")
                 .doesNotContain(
                         "mesAuthToken={}",
                         "authToken={}",

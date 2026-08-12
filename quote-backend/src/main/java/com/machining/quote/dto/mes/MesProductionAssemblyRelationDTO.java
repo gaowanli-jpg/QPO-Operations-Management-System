@@ -1,5 +1,6 @@
 package com.machining.quote.dto.mes;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -12,6 +13,8 @@ public class MesProductionAssemblyRelationDTO {
     private String parentVersion;
     private String childPartNo;
     private String childVersion;
+    @JsonIgnore
+    private String childMaterialNo;
     private BigDecimal qtyPerParent;
     private Integer sortNo;
     private Integer sourceParentItemId;
