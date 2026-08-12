@@ -12,5 +12,5 @@ export const getCustomerSyncSchedule = () => request('/api/system/customers/sync
 
 export const saveCustomerSyncSchedule = (payload) => request('/api/system/customers/sync-schedule', {
   method: 'PUT',
-  body: payload
+  data: payload
 })

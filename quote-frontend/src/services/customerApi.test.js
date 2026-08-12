@@ -47,7 +47,7 @@ describe('customerApi', () => {
     expect(request).toHaveBeenNthCalledWith(1, '/api/system/customers/sync-schedule')
     expect(request).toHaveBeenNthCalledWith(2, '/api/system/customers/sync-schedule', {
       method: 'PUT',
-      body: payload
+      data: payload
     })
   })
 })
