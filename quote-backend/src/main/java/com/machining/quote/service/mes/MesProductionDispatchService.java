@@ -11,14 +11,20 @@ import com.machining.quote.dto.mes.MesProductionDispatchResp;
 import com.machining.quote.dto.mes.MesProductionProcessRouteDTO;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.MesIntegrationBatch;
+import com.machining.quote.entity.MesProductionBatchItem;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
+import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SalesOrderItemAssemblyRelation;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.MesIntegrationBatchMapper;
+import com.machining.quote.mapper.MesProductionBatchItemMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
@@ -29,13 +35,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -51,7 +60,11 @@ public class MesProductionDispatchService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_SKIPPED = "SKIPPED";
+    private static final String STATUS_RESULT_UNKNOWN = "RESULT_UNKNOWN";
+    private static final String STATUS_SUBMITTING = "SUBMITTING";
+    private static final String SOURCE_SALES_ORDER = "SALES_ORDER";
     private static final DateTimeFormatter REQUEST_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final DateTimeFormatter BIZ_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
 
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
@@ -67,6 +80,16 @@ public class MesProductionDispatchService {
     private SalesOrderItemAssemblyRelationMapper salesOrderItemAssemblyRelationMapper;
     @Autowired(required = false)
     private SalesOrderItemMapper salesOrderItemMapper;
+    @Autowired(required = false)
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
+    @Autowired(required = false)
+    private MesBatchStateService mesBatchStateService;
+    @Autowired(required = false)
+    private MesBatchFingerprintService mesBatchFingerprintService;
+    @Autowired(required = false)
+    private MesProductionBatchItemMapper mesProductionBatchItemMapper;
+    @Autowired(required = false)
+    private MesIntegrationBatchMapper mesIntegrationBatchMapper;
     @Autowired(required = false)
     private AuditService auditService;
     @Autowired(required = false)
@@ -105,11 +128,449 @@ public class MesProductionDispatchService {
     }
 
     public Map<String, Object> dispatchBatch(List<Integer> allocationIds, Long taskId) {
+        List<Integer> normalizedIds = normalizeAllocationIds(allocationIds);
+        if (!batchOrchestrationReady()) {
+            return dispatchBatchLegacy(normalizedIds, taskId);
+        }
+
+        LinkedHashMap<Integer, Map<String, Object>> rowsByAllocationId = new LinkedHashMap<>();
+        List<ProductionDispatchPlan> plans = new ArrayList<>();
+        for (Integer allocationId : normalizedIds) {
+            OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+            if (allocation == null) {
+                rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, "Production item allocation does not exist", null));
+                continue;
+            }
+            String skipReason = skipReason(allocation);
+            if (skipReason != null) {
+                log.info("MES production dispatch skipped allocationId={} reason={}", allocationId, skipReason);
+                rowsByAllocationId.put(allocationId, row(allocationId, STATUS_SKIPPED, skipReason, null));
+                continue;
+            }
+            try {
+                plans.add(buildProductionPlan(allocation));
+            } catch (RuntimeException error) {
+                String message = safeMessage(error);
+                markFailed(allocation, null, message);
+                recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", allocation, taskId, null, message);
+                rowsByAllocationId.put(allocationId, row(allocationId, STATUS_FAILED, message, resultSummary(allocation, null, null)));
+            }
+        }
+
+        for (List<ProductionDispatchPlan> group : splitAmbiguousProductCodeGroups(groupPlans(plans))) {
+            dispatchPlanGroup(group, taskId, rowsByAllocationId);
+        }
+
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Integer allocationId : normalizeAllocationIds(allocationIds)) {
+        for (Integer allocationId : normalizedIds) {
+            Map<String, Object> row = rowsByAllocationId.get(allocationId);
+            if (row != null) {
+                rows.add(row);
+            }
+        }
+        return summary(taskId, rows);
+    }
+
+    private Map<String, Object> dispatchBatchLegacy(List<Integer> allocationIds, Long taskId) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Integer allocationId : allocationIds) {
             rows.add(dispatchOne(allocationId, taskId));
         }
         return summary(taskId, rows);
+    }
+
+    private boolean batchOrchestrationReady() {
+        return mesBatchStateService != null
+                && salesOrderItemMapper != null
+                && salesOrderHeaderMapper != null
+                && mesProductionBatchItemMapper != null
+                && mesIntegrationBatchMapper != null;
+    }
+
+    private ProductionDispatchPlan buildProductionPlan(OrderDeliveryTicketAllocation allocation) {
+        String validationError = productionValidationError(allocation);
+        if (validationError != null) {
+            throw new RuntimeException(validationError);
+        }
+        SalesOrderResolution resolution = resolveSalesOrder(allocation);
+        List<MesProductionAssemblyRelationDTO> assemblyRelations = buildAssemblyRelations(allocation);
+        List<MesProductionBomDTO> bom = buildBom(assemblyRelations);
+
+        MesProductionDispatchReq.Item item = new MesProductionDispatchReq.Item();
+        item.setSaleOrderNo(resolution.saleOrderNo());
+        item.setSaleOrderItemNo(resolution.saleOrderItemNo());
+        item.setProductCode(trimToNull(allocation.getMaterialNo()));
+        item.setDemandQty(allocation.getQty());
+        item.setMakeQty(allocation.getQty());
+        item.setBuyQty(0);
+        item.setStockQty(0);
+        item.setRequiredDate(allocation.getDeliveryDate().atTime(23, 59, 59));
+        item.setRemark(trimToNull(allocation.getRemark()));
+        item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
+                allocation.getDescription(),
+                allocation.getSurfaceTreatment()));
+        item.setBom(bom);
+        item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
+
+        String customerCode = trimToNull(resolution.header().getCustomerCode());
+        String customerName = firstNonBlank(resolution.header().getCustomerName(), allocation.getCustomerName());
+        String internalProjectNo = firstNonBlank(resolution.header().getInternalProjectNo(), allocation.getInternalProjectNo());
+        String groupKey = String.join("|",
+                blankToEmpty(customerCode),
+                blankToEmpty(customerName),
+                blankToEmpty(internalProjectNo),
+                resolution.saleOrderNo());
+        String itemKey = String.join("|",
+                resolution.saleOrderNo(),
+                resolution.saleOrderItemNo(),
+                trimToNull(allocation.getMaterialNo()),
+                String.valueOf(allocation.getId()));
+        return new ProductionDispatchPlan(
+                allocation,
+                resolution.header(),
+                item,
+                groupKey,
+                itemKey,
+                customerCode,
+                customerName,
+                internalProjectNo);
+    }
+
+    private String productionValidationError(OrderDeliveryTicketAllocation allocation) {
+        if (allocation.getQty() == null || allocation.getQty() <= 0) {
+            return "Production quantity must be greater than 0";
+        }
+        if (isBlank(allocation.getMaterialNo())) {
+            return "Material number is required before MES production dispatch";
+        }
+        if (allocation.getDeliveryDate() == null) {
+            return "Delivery date is required before MES production dispatch";
+        }
+        return null;
+    }
+
+    private SalesOrderResolution resolveSalesOrder(OrderDeliveryTicketAllocation allocation) {
+        SalesOrderItem itemByTicket = allocation.getTicketId() == null
+                ? null
+                : salesOrderItemMapper.selectBySourceTicketIdForUpdate(allocation.getTicketId());
+        SalesOrderItem itemByDirectSource = null;
+        if (SOURCE_SALES_ORDER.equalsIgnoreCase(blankToEmpty(allocation.getSourceType()))
+                && allocation.getSourceItemId() != null) {
+            itemByDirectSource = salesOrderItemMapper.selectByIdForUpdate(allocation.getSourceItemId());
+        }
+        if (itemByTicket != null && itemByDirectSource != null
+                && !Objects.equals(itemByTicket.getId(), itemByDirectSource.getId())) {
+            throw new RuntimeException("Official sales order line resolution is ambiguous for MES production dispatch");
+        }
+        SalesOrderItem item = itemByTicket != null ? itemByTicket : itemByDirectSource;
+        if (item == null) {
+            throw new RuntimeException("Official sales order line is required before MES production dispatch");
+        }
+        if (itemByTicket == null && allocation.getSourceOrderId() != null && item.getSalesOrderId() != null
+                && !Objects.equals(allocation.getSourceOrderId(), item.getSalesOrderId())) {
+            throw new RuntimeException("Official sales order source does not match production allocation");
+        }
+        if (item.getLineNo() == null) {
+            throw new RuntimeException("Official sales order line number is required before MES production dispatch");
+        }
+        if (item.getSalesOrderId() == null) {
+            throw new RuntimeException("Official sales order header is required before MES production dispatch");
+        }
+        SalesOrderHeader header = salesOrderHeaderMapper.selectById(item.getSalesOrderId());
+        if (header == null) {
+            throw new RuntimeException("Official sales order header is required before MES production dispatch");
+        }
+        String saleOrderNo = firstNonBlank(header.getDocumentNo(), header.getSalesOrderNo());
+        if (isBlank(saleOrderNo)) {
+            throw new RuntimeException("Official sales order number is required before MES production dispatch");
+        }
+        return new SalesOrderResolution(header, saleOrderNo, String.valueOf(item.getLineNo()));
+    }
+
+    private List<List<ProductionDispatchPlan>> groupPlans(List<ProductionDispatchPlan> plans) {
+        LinkedHashMap<String, List<ProductionDispatchPlan>> grouped = new LinkedHashMap<>();
+        for (ProductionDispatchPlan plan : plans) {
+            grouped.computeIfAbsent(plan.groupKey(), ignored -> new ArrayList<>()).add(plan);
+        }
+        return new ArrayList<>(grouped.values());
+    }
+
+    private List<List<ProductionDispatchPlan>> splitAmbiguousProductCodeGroups(List<List<ProductionDispatchPlan>> groupedPlans) {
+        List<List<ProductionDispatchPlan>> result = new ArrayList<>();
+        for (List<ProductionDispatchPlan> group : groupedPlans) {
+            Map<String, Integer> productCounts = new HashMap<>();
+            for (ProductionDispatchPlan plan : group) {
+                productCounts.merge(plan.item().getProductCode(), 1, Integer::sum);
+            }
+            boolean hasDuplicateProductCode = productCounts.values().stream().anyMatch(count -> count > 1);
+            if (!hasDuplicateProductCode) {
+                result.add(group);
+                continue;
+            }
+            for (ProductionDispatchPlan plan : group) {
+                result.add(List.of(plan));
+            }
+        }
+        return result;
+    }
+
+    private void dispatchPlanGroup(
+            List<ProductionDispatchPlan> plans,
+            Long taskId,
+            Map<Integer, Map<String, Object>> rowsByAllocationId) {
+        if (plans == null || plans.isEmpty()) {
+            return;
+        }
+        String proposedBizId = newProductionBizId();
+        MesProductionDispatchReq request = buildBatchRequest(proposedBizId, plans);
+        MesBatchStateService.ProductionBatchReservation reservation = new MesBatchStateService.ProductionBatchReservation(
+                taskId,
+                null,
+                plans.get(0).groupKey(),
+                fingerprintService().fingerprint(request),
+                plans.stream()
+                        .map(plan -> new MesBatchStateService.ProductionItemReservation(
+                                plan.allocation().getId(),
+                                plan.item().getSaleOrderNo(),
+                                plan.item().getSaleOrderItemNo(),
+                                plan.item().getProductCode(),
+                                plan.itemKey(),
+                                BigDecimal.valueOf(plan.item().getDemandQty())))
+                        .toList());
+        MesBatchStateService.ProductionBatchReservationResult reservationResult =
+                mesBatchStateService.reserveProductionBatch(proposedBizId, reservation);
+        MesIntegrationBatch batch = reservationResult.batch();
+        request.setBizId(batch.getBizId());
+        Map<Integer, MesProductionBatchItem> batchItemByAllocationId = indexProductionBatchItems(reservationResult.items());
+        markBatchSubmitting(batch);
+        reservationResult.items().forEach(item -> updateProductionBatchItem(item, STATUS_SUBMITTING, null, "MES production dispatch submitting"));
+
+        long startedAt = System.currentTimeMillis();
+        log.info("MES production batch dispatch started bizId={} taskId={} itemCount={} allocationIds={}",
+                batch.getBizId(), taskId, plans.size(), allocationIds(plans));
+        try {
+            MesProductionDispatchResp response = mesProductionDispatchClient.dispatch(request);
+            if (response == null || !Boolean.TRUE.equals(response.getSuccess())) {
+                throw new RuntimeException(response == null || isBlank(response.getMessage())
+                        ? "MES production dispatch failed"
+                        : response.getMessage());
+            }
+            String responseBizId = response.getRequestId();
+            if (!isBlank(responseBizId) && !batch.getBizId().equals(responseBizId)) {
+                throw new RuntimeException("MES production dispatch response bizId does not match request bizId");
+            }
+            handleBatchResponse(batch, plans, batchItemByAllocationId, response, taskId, rowsByAllocationId);
+            log.info("MES production batch dispatch responded bizId={} taskId={} itemCount={} durationMs={}",
+                    batch.getBizId(), taskId, plans.size(), System.currentTimeMillis() - startedAt);
+        } catch (RuntimeException error) {
+            String message = safeMessage(error);
+            for (ProductionDispatchPlan plan : plans) {
+                MesProductionBatchItem batchItem = batchItemByAllocationId.get(plan.allocation().getId());
+                String requestId = batchItem == null ? null : batchItem.getLineRequestId();
+                markFailed(plan.allocation(), requestId, message);
+                updateProductionBatchItem(batchItem, STATUS_FAILED, null, message);
+                Map<String, Object> result = resultSummary(plan.allocation(), requestId, null);
+                result.put("errorMessage", abbreviate(message));
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_FAILED, message, result));
+                recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
+            }
+            updateBatch(batch, STATUS_FAILED, null, message, true);
+            log.error("MES production batch dispatch failed bizId={} taskId={} itemCount={} durationMs={}",
+                    batch.getBizId(), taskId, plans.size(), System.currentTimeMillis() - startedAt, error);
+        }
+    }
+
+    private MesProductionDispatchReq buildBatchRequest(String bizId, List<ProductionDispatchPlan> plans) {
+        ProductionDispatchPlan first = plans.get(0);
+        MesProductionDispatchReq req = new MesProductionDispatchReq();
+        req.setBizId(bizId);
+        req.setCustomerCode(first.customerCode());
+        req.setCustomerName(first.customerName());
+        req.setInternalProjectNo(first.internalProjectNo());
+        req.setItems(plans.stream().map(ProductionDispatchPlan::item).toList());
+        return req;
+    }
+
+    private void handleBatchResponse(
+            MesIntegrationBatch batch,
+            List<ProductionDispatchPlan> plans,
+            Map<Integer, MesProductionBatchItem> batchItemByAllocationId,
+            MesProductionDispatchResp response,
+            Long taskId,
+            Map<Integer, Map<String, Object>> rowsByAllocationId) {
+        Map<String, List<MesProductionDispatchResp.Item>> responseItemsByProduct = responseItemsByProduct(response);
+        int successCount = 0;
+        int unknownCount = 0;
+        int failedCount = 0;
+        for (ProductionDispatchPlan plan : plans) {
+            MesProductionBatchItem batchItem = batchItemByAllocationId.get(plan.allocation().getId());
+            String requestId = batchItem == null ? null : batchItem.getLineRequestId();
+            List<MesProductionDispatchResp.Item> matches = responseItemsByProduct.get(plan.item().getProductCode());
+            if (matches == null || matches.isEmpty()) {
+                String message = "MES production response missing row for productCode " + plan.item().getProductCode();
+                markResultUnknown(plan.allocation(), requestId, message);
+                updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, null, message);
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message, resultSummary(plan.allocation(), requestId, null)));
+                unknownCount++;
+                continue;
+            }
+            if (matches.size() > 1) {
+                String message = "MES production response has ambiguous duplicate productCode " + plan.item().getProductCode();
+                markResultUnknown(plan.allocation(), requestId, message);
+                updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, null, message);
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message, resultSummary(plan.allocation(), requestId, null)));
+                unknownCount++;
+                continue;
+            }
+            MesProductionDispatchResp.Item responseItem = matches.get(0);
+            if (!isSuccessStatus(responseItem.getStatus())) {
+                String message = "MES production response row failed for productCode " + plan.item().getProductCode();
+                markFailed(plan.allocation(), requestId, message);
+                updateProductionBatchItem(batchItem, STATUS_FAILED, responseItem, message);
+                Map<String, Object> result = resultSummary(plan.allocation(), requestId, null);
+                result.put("errorMessage", abbreviate(message));
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_FAILED, message, result));
+                recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_FAILED", plan.allocation(), taskId, result, message);
+                failedCount++;
+                continue;
+            }
+            String externalId = responseExternalId(responseItem);
+            if (isBlank(externalId)) {
+                String message = "MES production response missing planNo for productCode " + plan.item().getProductCode();
+                markResultUnknown(plan.allocation(), requestId, message);
+                updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, responseItem, message);
+                rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message, resultSummary(plan.allocation(), requestId, null)));
+                unknownCount++;
+                continue;
+            }
+            String message = messageOrDefault(response.getMessage(), "MES production dispatch succeeded");
+            markSuccess(plan.allocation(), requestId, externalId, message);
+            updateProductionBatchItem(batchItem, STATUS_SUCCESS, responseItem, message);
+            Map<String, Object> result = resultSummary(plan.allocation(), requestId, null);
+            result.put("externalId", externalId);
+            rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_SUCCESS, message, result));
+            recordAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", plan.allocation(), taskId, result, null);
+            successCount++;
+        }
+        String batchStatus = failedCount > 0
+                ? STATUS_FAILED
+                : unknownCount > 0 ? STATUS_RESULT_UNKNOWN : STATUS_SUCCESS;
+        updateBatch(batch, batchStatus, responseCode(response), response.getMessage(), true);
+    }
+
+    private Map<String, List<MesProductionDispatchResp.Item>> responseItemsByProduct(MesProductionDispatchResp response) {
+        Map<String, List<MesProductionDispatchResp.Item>> result = new LinkedHashMap<>();
+        if (response == null || response.getData() == null || response.getData().getItems() == null) {
+            return result;
+        }
+        for (MesProductionDispatchResp.Item item : response.getData().getItems()) {
+            if (item == null || isBlank(item.getProductCode())) {
+                continue;
+            }
+            result.computeIfAbsent(item.getProductCode().trim(), ignored -> new ArrayList<>()).add(item);
+        }
+        return result;
+    }
+
+    private Map<Integer, MesProductionBatchItem> indexProductionBatchItems(List<MesProductionBatchItem> items) {
+        Map<Integer, MesProductionBatchItem> result = new LinkedHashMap<>();
+        if (items == null) {
+            return result;
+        }
+        for (MesProductionBatchItem item : items) {
+            if (item != null && item.getAllocationId() != null) {
+                result.put(item.getAllocationId(), item);
+            }
+        }
+        return result;
+    }
+
+    private void markBatchSubmitting(MesIntegrationBatch batch) {
+        updateBatch(batch, STATUS_SUBMITTING, null, "MES production dispatch submitting", false);
+    }
+
+    private void updateBatch(MesIntegrationBatch source, String status, Object responseCode, String message, boolean completed) {
+        if (source == null || source.getId() == null || mesIntegrationBatchMapper == null) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        MesIntegrationBatch update = new MesIntegrationBatch();
+        update.setId(source.getId());
+        update.setStatus(status);
+        if (STATUS_SUBMITTING.equals(status)) {
+            update.setSubmittedAt(now);
+        } else {
+            update.setRespondedAt(now);
+        }
+        if (completed) {
+            update.setCompletedAt(now);
+        }
+        update.setResponseCode(responseCode == null ? null : abbreviate(String.valueOf(responseCode)));
+        update.setResponseMessage(abbreviate(message));
+        update.setUpdatedAt(now);
+        mesIntegrationBatchMapper.updateById(update);
+    }
+
+    private void updateProductionBatchItem(
+            MesProductionBatchItem source,
+            String status,
+            MesProductionDispatchResp.Item responseItem,
+            String message) {
+        if (source == null || source.getId() == null || mesProductionBatchItemMapper == null) {
+            return;
+        }
+        MesProductionBatchItem update = new MesProductionBatchItem();
+        update.setId(source.getId());
+        update.setStatus(status);
+        if (responseItem != null) {
+            update.setMesPlanNo(trimToNull(responseItem.getPlanNo()));
+            update.setMesRecordId(responseItem.getId() == null ? null : String.valueOf(responseItem.getId()));
+            update.setResponseStatus(responseItem.getStatus() == null ? null : abbreviate(String.valueOf(responseItem.getStatus())));
+        }
+        update.setMessage(abbreviate(message));
+        if (!STATUS_SUBMITTING.equals(status)) {
+            update.setCompletedAt(LocalDateTime.now());
+        }
+        update.setUpdatedAt(LocalDateTime.now());
+        mesProductionBatchItemMapper.updateById(update);
+    }
+
+    private MesBatchFingerprintService fingerprintService() {
+        return mesBatchFingerprintService == null ? new MesBatchFingerprintService() : mesBatchFingerprintService;
+    }
+
+    private boolean isSuccessStatus(Object status) {
+        if (status == null) {
+            return true;
+        }
+        if (status instanceof Number number) {
+            return number.intValue() == 0;
+        }
+        return "0".equals(String.valueOf(status).trim()) || "SUCCESS".equalsIgnoreCase(String.valueOf(status).trim());
+    }
+
+    private String responseExternalId(MesProductionDispatchResp.Item item) {
+        if (item == null) {
+            return null;
+        }
+        return firstNonBlank(item.getPlanNo(), item.getId() == null ? null : String.valueOf(item.getId()));
+    }
+
+    private Object responseCode(MesProductionDispatchResp response) {
+        return response == null ? null : response.getCode();
+    }
+
+    private List<Integer> allocationIds(List<ProductionDispatchPlan> plans) {
+        List<Integer> result = new ArrayList<>();
+        for (ProductionDispatchPlan plan : plans) {
+            result.add(plan.allocation().getId());
+        }
+        return result;
+    }
+
+    private String newProductionBizId() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+        return "QPO-DEM-" + LocalDate.now().format(BIZ_DATE_FORMAT) + "-" + suffix;
     }
 
     private Map<String, Object> dispatchOne(Integer allocationId, Long taskId) {
@@ -423,15 +884,38 @@ public class MesProductionDispatchService {
             OrderDeliveryTicketAllocation allocation,
             String requestId,
             MesProductionDispatchResp response) {
+        markSuccess(
+                allocation,
+                requestId,
+                response == null ? null : response.getExternalId(),
+                response == null ? null : response.getMessage());
+    }
+
+    private void markSuccess(
+            OrderDeliveryTicketAllocation allocation,
+            String requestId,
+            String externalId,
+            String message) {
         OrderDeliveryTicketAllocation update = new OrderDeliveryTicketAllocation();
         update.setId(allocation.getId());
         update.setMesProductionStatus(STATUS_SUCCESS);
         update.setMesProductionRequestId(requestId);
-        update.setMesProductionExternalId(response == null ? null : response.getExternalId());
+        update.setMesProductionExternalId(externalId);
         update.setMesProductionSyncedAt(LocalDateTime.now());
-        update.setMesProductionMessage(abbreviate(messageOrDefault(
-                response == null ? null : response.getMessage(),
-                "MES production dispatch succeeded")));
+        update.setMesProductionMessage(abbreviate(messageOrDefault(message, "MES production dispatch succeeded")));
+        update.setUpdatedAt(LocalDateTime.now());
+        allocationMapper.updateById(update);
+    }
+
+    private void markResultUnknown(OrderDeliveryTicketAllocation allocation, String requestId, String message) {
+        OrderDeliveryTicketAllocation update = new OrderDeliveryTicketAllocation();
+        update.setId(allocation.getId());
+        update.setMesProductionStatus(STATUS_RESULT_UNKNOWN);
+        if (!isBlank(requestId)) {
+            update.setMesProductionRequestId(requestId);
+        }
+        update.setMesProductionSyncedAt(LocalDateTime.now());
+        update.setMesProductionMessage(abbreviate(messageOrDefault(message, "MES production dispatch result is unknown")));
         update.setUpdatedAt(LocalDateTime.now());
         allocationMapper.updateById(update);
     }
@@ -456,6 +940,7 @@ public class MesProductionDispatchService {
         summary.put("totalCount", rows.size());
         summary.put("successCount", count(rows, STATUS_SUCCESS));
         summary.put("failedCount", count(rows, STATUS_FAILED));
+        summary.put("unknownCount", count(rows, STATUS_RESULT_UNKNOWN));
         summary.put("skippedCount", count(rows, STATUS_SKIPPED));
         summary.put("rows", rows);
         return summary;
@@ -501,6 +986,9 @@ public class MesProductionDispatchService {
         }
         if (STATUS_PROCESSING.equalsIgnoreCase(status)) {
             return "MES production dispatch is already processing";
+        }
+        if (STATUS_RESULT_UNKNOWN.equalsIgnoreCase(status)) {
+            return "MES production dispatch result is waiting for reconciliation";
         }
         return null;
     }
@@ -657,5 +1145,22 @@ public class MesProductionDispatchService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private record SalesOrderResolution(
+            SalesOrderHeader header,
+            String saleOrderNo,
+            String saleOrderItemNo) {
+    }
+
+    private record ProductionDispatchPlan(
+            OrderDeliveryTicketAllocation allocation,
+            SalesOrderHeader header,
+            MesProductionDispatchReq.Item item,
+            String groupKey,
+            String itemKey,
+            String customerCode,
+            String customerName,
+            String internalProjectNo) {
     }
 }

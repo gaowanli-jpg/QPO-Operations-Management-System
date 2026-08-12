@@ -102,10 +102,15 @@ public class MesBatchStateService {
 
     @Transactional
     public ProductionBatchReservationResult reserveProductionBatch(ProductionBatchReservation reservation) {
+        return reserveProductionBatch(newProductionBizId(), reservation);
+    }
+
+    @Transactional
+    public ProductionBatchReservationResult reserveProductionBatch(String bizId, ProductionBatchReservation reservation) {
         requireItems(reservation.items(), "production batch items");
         MesIntegrationBatch batch = newBatch(
                 BATCH_TYPE_PRODUCTION,
-                newProductionBizId(),
+                trimToEmpty(bizId),
                 reservation.systemTaskId(),
                 reservation.createdBy(),
                 reservation.groupKey(),
