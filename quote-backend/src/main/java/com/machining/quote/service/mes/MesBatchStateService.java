@@ -62,10 +62,15 @@ public class MesBatchStateService {
 
     @Transactional
     public MaterialBatchReservationResult reserveMaterialBatch(MaterialBatchReservation reservation) {
+        return reserveMaterialBatch(newMaterialBizId(), reservation);
+    }
+
+    @Transactional
+    public MaterialBatchReservationResult reserveMaterialBatch(String bizId, MaterialBatchReservation reservation) {
         requireItems(reservation.items(), "material batch items");
         MesIntegrationBatch batch = newBatch(
                 BATCH_TYPE_MATERIAL,
-                newMaterialBizId(),
+                trimToEmpty(bizId),
                 reservation.systemTaskId(),
                 reservation.createdBy(),
                 reservation.groupKey(),

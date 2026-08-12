@@ -70,6 +70,23 @@ public class MesMaterialDedupService {
         return createFollower(ticket, taskId, dedupKey, activeMaster);
     }
 
+    public DedupResolveResult registerBatchFollower(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            String dedupKey,
+            Integer masterTicketId,
+            String masterMesRequestId,
+            String masterStatus) {
+        if (isBlank(masterMesRequestId)) {
+            throw new RuntimeException("Active MES master request not found for dedup key");
+        }
+        OrderDeliveryTicketMesRequest activeMaster = new OrderDeliveryTicketMesRequest();
+        activeMaster.setTicketId(masterTicketId);
+        activeMaster.setMesRequestId(masterMesRequestId);
+        activeMaster.setRequestStatus(normalizeStatus(masterStatus));
+        return createFollower(ticket, taskId, dedupKey, activeMaster);
+    }
+
     public void markMasterCallbackPending(String masterMesRequestId, String externalTraceId, String message) {
         fanOut(masterMesRequestId, STATUS_CALLBACK_PENDING, null, message, externalTraceId);
     }

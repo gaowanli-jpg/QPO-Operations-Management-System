@@ -7,6 +7,8 @@ import com.machining.quote.dto.mes.MesMaterialCallbackReq;
 import com.machining.quote.dto.mes.MesMaterialCallbackResp;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
+import com.machining.quote.entity.MesIntegrationBatch;
+import com.machining.quote.entity.MesMaterialBatchItem;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
@@ -14,6 +16,7 @@ import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.MesMaterialBatchItemMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -29,10 +32,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -42,11 +54,20 @@ public class MesMaterialSyncService {
     private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    private static final DateTimeFormatter BIZ_DATE = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final char[] CROCKFORD32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private final MesMaterialRequestAssembler batchRequestAssembler = new MesMaterialRequestAssembler();
+    private final MesBatchFingerprintService batchFingerprintService = new MesBatchFingerprintService();
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired(required = false)
     private OrderDeliveryTicketMesRequestMapper mesRequestMapper;
+    @Autowired(required = false)
+    private MesBatchStateService mesBatchStateService;
+    @Autowired(required = false)
+    private MesMaterialBatchItemMapper mesMaterialBatchItemMapper;
     @Autowired(required = false)
     private OrderRfqMapper orderRfqMapper;
     @Autowired(required = false)
@@ -246,6 +267,529 @@ public class MesMaterialSyncService {
                     System.currentTimeMillis() - startedAt, error);
             throw error;
         }
+    }
+
+    public List<Map<String, Object>> syncMaterialBatch(List<OrderDeliveryTicket> tickets, Long taskId) {
+        if (tickets == null || tickets.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, List<MaterialBatchPlan>> groups = new LinkedHashMap<>();
+        for (OrderDeliveryTicket ticket : tickets) {
+            try {
+                OrderDeliveryTicket current = ticket == null ? null : loadTicket(ticket.getId());
+                assertCanStart(current);
+                MaterialBatchPlan plan = buildBatchPlan(current);
+                MesMaterialDedupService.DedupResolveResult dedupResult = dedupService == null
+                        ? null
+                        : dedupService.resolveBeforeMes(current, taskId);
+                if (dedupResult != null && dedupResult.isFollowExistingActive()) {
+                    rows.add(batchDedupFollowRow(current, taskId, dedupResult));
+                    continue;
+                }
+                groups.computeIfAbsent(plan.groupKey(), ignored -> new ArrayList<>()).add(plan);
+            } catch (RuntimeException error) {
+                Integer ticketId = ticket == null ? null : ticket.getId();
+                rows.add(batchFailureRow(ticket, taskId, null, error.getMessage(), false));
+                log.warn("MES material batch row rejected ticketId={} taskId={} reason={}",
+                        ticketId, taskId, error.getMessage());
+            }
+        }
+        for (List<MaterialBatchPlan> group : groups.values()) {
+            rows.addAll(syncMaterialPlanGroup(group, taskId));
+        }
+        return rows;
+    }
+
+    private Map<String, Object> batchDedupFollowRow(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            MesMaterialDedupService.DedupResolveResult dedupResult) {
+        Map<String, Object> result = summary(
+                ticket,
+                taskId,
+                dedupResult.getMasterMesRequestId(),
+                null,
+                dedupResult.getStatus(),
+                null);
+        appendDedupSummary(result, dedupResult);
+        result.put("submittedToMes", false);
+        result.put("message", "Follow active MES material request for same part/version");
+        return result;
+    }
+
+    private List<Map<String, Object>> syncMaterialPlanGroup(List<MaterialBatchPlan> group, Long taskId) {
+        Map<String, MaterialBatchPlan> mastersByKey = new LinkedHashMap<>();
+        Map<String, List<MaterialBatchPlan>> followersByKey = new LinkedHashMap<>();
+        for (MaterialBatchPlan plan : group) {
+            MaterialBatchPlan master = mastersByKey.putIfAbsent(plan.itemKey(), plan);
+            if (master != null) {
+                followersByKey.computeIfAbsent(plan.itemKey(), ignored -> new ArrayList<>()).add(plan);
+            }
+        }
+        List<MaterialBatchPlan> masters = new ArrayList<>(mastersByKey.values());
+        Map<Integer, Map<String, Object>> resultByTicketId = new LinkedHashMap<>();
+        Map<Integer, PreparedMaterialPlan> preparedByTicketId = new LinkedHashMap<>();
+        String bizId = newMaterialBizId();
+        MesMaterialResolveReq req = null;
+        try {
+            MaterialBatchPlan first = masters.get(0);
+            req = batchRequestAssembler.assemble(
+                    bizId,
+                    first.customerCode(),
+                    first.customerName(),
+                    first.internalProjectNo(),
+                    masters.stream().map(MaterialBatchPlan::requestItem).toList());
+            String requestFingerprint = batchFingerprintService.fingerprint(req);
+            preparedByTicketId.putAll(reserveMaterialMasters(bizId, masters, taskId, requestFingerprint));
+            MesMaterialResolveResp resp = mesMaterialClient.resolveMaterial(req);
+            validateBatchResponseSuccess(resp, bizId);
+            ResponseIndex responseIndex = indexMaterialResponse(resp, mastersByKey.keySet());
+            for (MaterialBatchPlan master : masters) {
+                PreparedMaterialPlan prepared = preparedByTicketId.get(master.ticket().getId());
+                if (responseIndex.duplicateKeys().contains(master.itemKey())) {
+                    resultByTicketId.put(master.ticket().getId(), applyBatchFailure(
+                            prepared, taskId, "MES returned duplicate rows for drawing/version", true));
+                    applyFollowerFailures(master, followersByKey, resultByTicketId, taskId,
+                            "MES returned duplicate rows for drawing/version");
+                    continue;
+                }
+                MesMaterialResolveResp.Item item = responseIndex.itemsByKey().get(master.itemKey());
+                if (item == null) {
+                    resultByTicketId.put(master.ticket().getId(), applyBatchFailure(
+                            prepared, taskId, "MES response missing row for drawing/version", true));
+                    applyFollowerFailures(master, followersByKey, resultByTicketId, taskId,
+                            "MES response missing row for drawing/version");
+                    continue;
+                }
+                Map<String, Object> masterResult = applyBatchItem(prepared, item, taskId, true);
+                resultByTicketId.put(master.ticket().getId(), masterResult);
+                applyFollowerResult(prepared, followersByKey, item, resultByTicketId, taskId);
+            }
+        } catch (RuntimeException error) {
+            String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+            log.error("MES material batch group failed bizId={} taskId={} itemCount={} reason={}",
+                    bizId, taskId, group.size(), message, error);
+            for (MaterialBatchPlan plan : group) {
+                PreparedMaterialPlan prepared = preparedByTicketId.get(plan.ticket().getId());
+                resultByTicketId.put(plan.ticket().getId(), prepared == null
+                        ? batchFailureRow(plan.ticket(), taskId, null, message, true)
+                        : applyBatchFailure(prepared, taskId, message, true));
+            }
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (MaterialBatchPlan plan : group) {
+            rows.add(resultByTicketId.getOrDefault(plan.ticket().getId(),
+                    batchFailureRow(plan.ticket(), taskId, null, "MES batch result was not produced", true)));
+        }
+        return rows;
+    }
+
+    private MaterialBatchPlan buildBatchPlan(OrderDeliveryTicket ticket) {
+        String internalProjectNo = required(ticket.getInternalProjectNo(), "Internal project number cannot be blank");
+        OrderRfq order = orderRfqMapper == null || ticket.getRfqId() == null ? null : orderRfqMapper.selectById(ticket.getRfqId());
+        String customerCode = resolveCustomerCode(ticket, order);
+        String customerName = order == null ? ticket.getCustomerName() : order.getCustomerName();
+        String drawingNo = required(ticket.getPartNo(), "Drawing number cannot be blank");
+        String drawingVersion = ticket.getVersion() == null ? "" : ticket.getVersion().trim();
+        String drawingUrl = resolveDrawingUrl(ticket);
+        MesMaterialResolveReq.Item item = new MesMaterialResolveReq.Item();
+        item.setDrawingNo(drawingNo.trim());
+        item.setDrawingVersion(drawingVersion);
+        item.setDrawingUrls(List.of(businessFileService.externalReadableUrl(required(drawingUrl, "Drawing URL cannot be blank"))));
+        item.setRemark(trimToNull(ticket.getRemark()));
+        item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
+                ticket.getDescription(),
+                ticket.getSurfaceTreatment()));
+        String groupKey = normalizeKeyPart(customerCode) + "|" + normalizeKeyPart(customerName) + "|" + normalizeKeyPart(internalProjectNo);
+        return new MaterialBatchPlan(
+                ticket,
+                trimToNull(customerCode),
+                trimToNull(customerName),
+                internalProjectNo.trim(),
+                item,
+                materialItemKey(drawingNo, drawingVersion),
+                groupKey);
+    }
+
+    private Map<Integer, PreparedMaterialPlan> reserveMaterialMasters(
+            String bizId,
+            List<MaterialBatchPlan> masters,
+            Long taskId,
+            String requestFingerprint) {
+        Map<Integer, PreparedMaterialPlan> prepared = new LinkedHashMap<>();
+        if (mesBatchStateService != null) {
+            MesBatchStateService.MaterialBatchReservation reservation = new MesBatchStateService.MaterialBatchReservation(
+                    taskId,
+                    null,
+                    masters.get(0).groupKey(),
+                    requestFingerprint,
+                    masters.stream()
+                            .map(plan -> new MesBatchStateService.MaterialItemReservation(
+                                    plan.ticket().getId(),
+                                    null,
+                                    plan.requestItem().getDrawingNo(),
+                                    plan.requestItem().getDrawingVersion(),
+                                    plan.itemKey()))
+                            .toList());
+            MesBatchStateService.MaterialBatchReservationResult result =
+                    mesBatchStateService.reserveMaterialBatch(bizId, reservation);
+            Map<Integer, MesMaterialBatchItem> itemByTicketId = new HashMap<>();
+            for (MesMaterialBatchItem item : result.items()) {
+                itemByTicketId.put(item.getTicketId(), item);
+            }
+            MesIntegrationBatch batch = result.batch();
+            for (MaterialBatchPlan plan : masters) {
+                MesMaterialBatchItem item = itemByTicketId.get(plan.ticket().getId());
+                if (item == null) {
+                    throw new RuntimeException("MES batch reservation did not return item for ticket " + plan.ticket().getId());
+                }
+                OrderDeliveryTicketMesRequest request = insertBatchMesRequest(
+                        plan.ticket(), taskId, item.getLineRequestId(), plan.itemKey(), batch.getId(), item.getId());
+                linkBatchItemToRequest(item, request);
+                prepared.put(plan.ticket().getId(), new PreparedMaterialPlan(plan, item.getLineRequestId(), item.getId(), batch.getId()));
+            }
+            return prepared;
+        }
+
+        for (MaterialBatchPlan plan : masters) {
+            String lineRequestId = newMaterialLineRequestId();
+            markProcessing(plan.ticket(), lineRequestId, MesMaterialDedupService.DedupResolveResult.master(plan.itemKey()));
+            insertBatchMesRequest(plan.ticket(), taskId, lineRequestId, plan.itemKey(), null, null);
+            prepared.put(plan.ticket().getId(), new PreparedMaterialPlan(plan, lineRequestId, null, null));
+        }
+        return prepared;
+    }
+
+    private Map<String, Object> applyBatchItem(
+            PreparedMaterialPlan prepared,
+            MesMaterialResolveResp.Item item,
+            Long taskId,
+            boolean submittedToMes) {
+        String materialNo = normalizeMaterialNo(item == null ? null : item.getProductCode());
+        String externalTraceId = responseItemTrace(item);
+        String message = "MES material resolved";
+        if (!isBlank(materialNo)) {
+            SourceItemMaterialNoSyncService.MaterialNoSyncResult sourceSyncResult = markSuccess(
+                    prepared.plan().ticket(),
+                    prepared.lineRequestId(),
+                    materialNo,
+                    message,
+                    externalTraceId);
+            updateMesRequest(prepared.lineRequestId(), STATUS_SUCCESS, materialNo, externalTraceId, message, true);
+            updateBatchItem(prepared, STATUS_SUCCESS, item, materialNo, message, true);
+            if (dedupService != null) {
+                dedupService.completeMasterSuccess(prepared.lineRequestId(), materialNo, message, externalTraceId);
+            }
+            Map<String, Object> result = summary(prepared.plan().ticket(), taskId, prepared.lineRequestId(), materialNo, STATUS_SUCCESS, externalTraceId);
+            appendSourceSyncSummary(result, sourceSyncResult);
+            result.put("submittedToMes", submittedToMes);
+            result.put("message", message);
+            recordAudit("DELIVERY_MES_MATERIAL_SYNC_SUCCESS", prepared.plan().ticket(), taskId,
+                    prepared.lineRequestId(), materialNo, STATUS_SUCCESS, externalTraceId, null, sourceSyncResult);
+            return result;
+        }
+        if (isPendingMaterialItem(item)) {
+            String pendingMessage = "MES accepted, waiting for material callback";
+            markCallbackPending(prepared.plan().ticket(), prepared.lineRequestId(), externalTraceId, pendingMessage);
+            updateMesRequest(prepared.lineRequestId(), STATUS_CALLBACK_PENDING, null, externalTraceId, pendingMessage, false);
+            updateBatchItem(prepared, STATUS_CALLBACK_PENDING, item, null, pendingMessage, false);
+            if (dedupService != null) {
+                dedupService.markMasterCallbackPending(prepared.lineRequestId(), externalTraceId, pendingMessage);
+            }
+            Map<String, Object> result = summary(prepared.plan().ticket(), taskId, prepared.lineRequestId(), null, STATUS_CALLBACK_PENDING, externalTraceId);
+            result.put("submittedToMes", submittedToMes);
+            result.put("message", pendingMessage);
+            recordAudit("DELIVERY_MES_MATERIAL_SYNC_ACCEPTED", prepared.plan().ticket(), taskId,
+                    prepared.lineRequestId(), null, STATUS_CALLBACK_PENDING, externalTraceId, null);
+            return result;
+        }
+        return applyBatchFailure(prepared, taskId, "MES returned no material number", submittedToMes);
+    }
+
+    private void applyFollowerResult(
+            PreparedMaterialPlan master,
+            Map<String, List<MaterialBatchPlan>> followersByKey,
+            MesMaterialResolveResp.Item item,
+            Map<Integer, Map<String, Object>> resultByTicketId,
+            Long taskId) {
+        List<MaterialBatchPlan> followers = followersByKey.getOrDefault(master.plan().itemKey(), List.of());
+        for (MaterialBatchPlan follower : followers) {
+            if (dedupService != null && isPendingMaterialItem(item)) {
+                MesMaterialDedupService.DedupResolveResult dedupResult = dedupService.registerBatchFollower(
+                        follower.ticket(),
+                        taskId,
+                        follower.itemKey(),
+                        master.plan().ticket().getId(),
+                        master.lineRequestId(),
+                        STATUS_CALLBACK_PENDING);
+                Map<String, Object> result = summary(
+                        follower.ticket(),
+                        taskId,
+                        master.lineRequestId(),
+                        null,
+                        dedupResult.getStatus(),
+                        responseItemTrace(item));
+                appendDedupSummary(result, dedupResult);
+                result.put("submittedToMes", false);
+                result.put("message", "MES accepted, waiting for material callback");
+                resultByTicketId.put(follower.ticket().getId(), result);
+                continue;
+            }
+            String followerLineId = newMaterialLineRequestId();
+            PreparedMaterialPlan prepared = new PreparedMaterialPlan(follower, followerLineId, null, null);
+            Map<String, Object> result = applyBatchItem(prepared, item, taskId, false);
+            result.put("dedupResult", MesMaterialDedupService.RESULT_FOLLOW_EXISTING_ACTIVE);
+            result.put("dedupKey", follower.itemKey());
+            resultByTicketId.put(follower.ticket().getId(), result);
+        }
+    }
+
+    private void applyFollowerFailures(
+            MaterialBatchPlan master,
+            Map<String, List<MaterialBatchPlan>> followersByKey,
+            Map<Integer, Map<String, Object>> resultByTicketId,
+            Long taskId,
+            String message) {
+        for (MaterialBatchPlan follower : followersByKey.getOrDefault(master.itemKey(), List.of())) {
+            resultByTicketId.put(follower.ticket().getId(),
+                    batchFailureRow(follower.ticket(), taskId, newMaterialLineRequestId(), message, false));
+        }
+    }
+
+    private Map<String, Object> applyBatchFailure(
+            PreparedMaterialPlan prepared,
+            Long taskId,
+            String message,
+            boolean submittedToMes) {
+        markFailed(prepared.plan().ticket(), prepared.lineRequestId(), message);
+        updateMesRequest(prepared.lineRequestId(), STATUS_FAILED, null, null, message, true);
+        updateBatchItem(prepared, STATUS_FAILED, null, null, message, true);
+        if (dedupService != null) {
+            dedupService.completeMasterFailed(prepared.lineRequestId(), message);
+        }
+        Map<String, Object> result = batchFailureRow(prepared.plan().ticket(), taskId, prepared.lineRequestId(), message, submittedToMes);
+        recordAudit("DELIVERY_MES_MATERIAL_SYNC_FAILED", prepared.plan().ticket(), taskId,
+                prepared.lineRequestId(), null, STATUS_FAILED, null, message);
+        return result;
+    }
+
+    private Map<String, Object> batchFailureRow(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            String lineRequestId,
+            String message,
+            boolean submittedToMes) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ticketId", ticket == null ? null : ticket.getId());
+        result.put("taskId", taskId);
+        result.put("status", STATUS_FAILED);
+        result.put("mesRequestId", lineRequestId);
+        result.put("message", abbreviate(message));
+        result.put("submittedToMes", submittedToMes);
+        if (ticket != null) {
+            result.put("rfqId", ticket.getRfqId());
+            result.put("sourceType", ticket.getSourceType());
+            result.put("sourceOrderId", ticket.getSourceOrderId());
+            result.put("sourceItemId", ticket.getSourceItemId());
+            result.put("partNo", ticket.getPartNo());
+            result.put("version", ticket.getVersion());
+            result.put("internalProjectNo", ticket.getInternalProjectNo());
+        }
+        return result;
+    }
+
+    private void validateBatchResponseSuccess(MesMaterialResolveResp resp, String bizId) {
+        if (resp == null || !Boolean.TRUE.equals(resp.getSuccess())) {
+            throw new RuntimeException(resp == null || isBlank(resp.getMessage()) ? "MES returned failure" : resp.getMessage());
+        }
+        if (isBlank(resp.getMesRequestId())) {
+            throw new RuntimeException("MES material bizId cannot be blank");
+        }
+        if (!bizId.equals(resp.getMesRequestId().trim())) {
+            throw new RuntimeException("MES material bizId mismatch");
+        }
+    }
+
+    private ResponseIndex indexMaterialResponse(MesMaterialResolveResp resp, Set<String> expectedKeys) {
+        Map<String, MesMaterialResolveResp.Item> itemsByKey = new LinkedHashMap<>();
+        Set<String> duplicateKeys = new HashSet<>();
+        List<MesMaterialResolveResp.Item> items = resp.getData() == null || resp.getData().getItems() == null
+                ? List.of()
+                : resp.getData().getItems();
+        if (items.isEmpty() && expectedKeys.size() == 1 && (isCallbackPendingResponse(resp) || !isBlank(resp.getMaterialNo()))) {
+            MesMaterialResolveResp.Item synthetic = new MesMaterialResolveResp.Item();
+            synthetic.setStatus(resp.getStatus());
+            synthetic.setProductCode(resp.getMaterialNo());
+            synthetic.setTaskNo(resp.getExternalTraceId());
+            items = List.of(synthetic);
+        }
+        for (MesMaterialResolveResp.Item item : items) {
+            String key = materialItemKey(item == null ? null : item.getDrawingNo(), item == null ? null : item.getDrawingVersion());
+            if (key.equals("|") && expectedKeys.size() == 1) {
+                key = expectedKeys.iterator().next();
+            }
+            if (!expectedKeys.contains(key)) {
+                continue;
+            }
+            if (itemsByKey.putIfAbsent(key, item) != null) {
+                duplicateKeys.add(key);
+            }
+        }
+        return new ResponseIndex(itemsByKey, duplicateKeys);
+    }
+
+    private boolean isPendingMaterialItem(MesMaterialResolveResp.Item item) {
+        if (item == null || isBlank(item.getStatus())) {
+            return false;
+        }
+        String status = item.getStatus().trim().toUpperCase(Locale.ROOT);
+        return STATUS_CALLBACK_PENDING.equals(status)
+                || "PENDING_CREATE".equals(status)
+                || "PENDING".equals(status)
+                || "ACCEPTED".equals(status);
+    }
+
+    private String responseItemTrace(MesMaterialResolveResp.Item item) {
+        if (item == null) {
+            return null;
+        }
+        return firstNonBlank(item.getTaskNo(), item.getTaskId() == null ? null : String.valueOf(item.getTaskId()));
+    }
+
+    private OrderDeliveryTicketMesRequest insertBatchMesRequest(
+            OrderDeliveryTicket ticket,
+            Long taskId,
+            String mesRequestId,
+            String dedupKey,
+            Long batchId,
+            Long batchItemId) {
+        if (mesRequestMapper == null) {
+            return null;
+        }
+        OrderDeliveryTicketMesRequest request = new OrderDeliveryTicketMesRequest();
+        request.setTicketId(ticket.getId());
+        request.setMesRequestId(mesRequestId);
+        request.setSystemTaskId(taskId);
+        request.setBatchId(batchId);
+        request.setBatchItemId(batchItemId);
+        request.setRequestStatus(STATUS_PROCESSING);
+        request.setDedupKey(trimToNull(dedupKey));
+        request.setRequestRole(MesMaterialDedupService.ROLE_MASTER);
+        request.setFollowerCount(0);
+        request.setRequestMessage("MES material batch submitted");
+        request.setRequestedAt(LocalDateTime.now());
+        mesRequestMapper.insert(request);
+        return request;
+    }
+
+    private void linkBatchItemToRequest(MesMaterialBatchItem item, OrderDeliveryTicketMesRequest request) {
+        if (item == null || item.getId() == null || request == null || request.getId() == null || mesMaterialBatchItemMapper == null) {
+            return;
+        }
+        MesMaterialBatchItem update = new MesMaterialBatchItem();
+        update.setId(item.getId());
+        update.setMesRequestRowId(request.getId());
+        update.setUpdatedAt(LocalDateTime.now());
+        mesMaterialBatchItemMapper.updateById(update);
+    }
+
+    private void updateBatchItem(
+            PreparedMaterialPlan prepared,
+            String status,
+            MesMaterialResolveResp.Item responseItem,
+            String materialNo,
+            String message,
+            boolean completed) {
+        if (prepared == null || prepared.batchItemId() == null || mesMaterialBatchItemMapper == null) {
+            return;
+        }
+        MesMaterialBatchItem update = new MesMaterialBatchItem();
+        update.setId(prepared.batchItemId());
+        update.setStatus(status);
+        update.setProductCode(trimToNull(materialNo));
+        update.setMesTaskNo(responseItem == null ? null : trimToNull(responseItem.getTaskNo()));
+        update.setMesTaskId(responseItem == null || responseItem.getTaskId() == null ? null : String.valueOf(responseItem.getTaskId()));
+        update.setProductId(responseItem == null || responseItem.getProductId() == null ? null : String.valueOf(responseItem.getProductId()));
+        update.setProductName(responseItem == null ? null : trimToNull(responseItem.getProductName()));
+        update.setResponseStatus(responseItem == null ? null : trimToNull(responseItem.getStatus()));
+        update.setMessage(abbreviate(message));
+        update.setUpdatedAt(LocalDateTime.now());
+        if (completed) {
+            update.setCompletedAt(LocalDateTime.now());
+        }
+        mesMaterialBatchItemMapper.updateById(update);
+    }
+
+    private String materialItemKey(String drawingNo, String drawingVersion) {
+        return normalizeKeyPart(drawingNo) + "|" + normalizeKeyPart(drawingVersion);
+    }
+
+    private String normalizeKeyPart(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String newMaterialBizId() {
+        return "QPO-MAT-" + LocalDate.now().format(BIZ_DATE) + "-" + ulid();
+    }
+
+    private String newMaterialLineRequestId() {
+        return "QPO-MATL-" + ulid();
+    }
+
+    private String ulid() {
+        byte[] bytes = new byte[16];
+        long timestamp = System.currentTimeMillis();
+        bytes[0] = (byte) (timestamp >>> 40);
+        bytes[1] = (byte) (timestamp >>> 32);
+        bytes[2] = (byte) (timestamp >>> 24);
+        bytes[3] = (byte) (timestamp >>> 16);
+        bytes[4] = (byte) (timestamp >>> 8);
+        bytes[5] = (byte) timestamp;
+        byte[] random = new byte[10];
+        RANDOM.nextBytes(random);
+        System.arraycopy(random, 0, bytes, 6, random.length);
+        BigInteger value = new BigInteger(1, bytes);
+        char[] encoded = new char[26];
+        for (int i = encoded.length - 1; i >= 0; i--) {
+            encoded[i] = CROCKFORD32[value.and(BigInteger.valueOf(31)).intValue()];
+            value = value.shiftRight(5);
+        }
+        return new String(encoded);
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private record MaterialBatchPlan(
+            OrderDeliveryTicket ticket,
+            String customerCode,
+            String customerName,
+            String internalProjectNo,
+            MesMaterialResolveReq.Item requestItem,
+            String itemKey,
+            String groupKey) {
+    }
+
+    private record PreparedMaterialPlan(
+            MaterialBatchPlan plan,
+            String lineRequestId,
+            Long batchItemId,
+            Long batchId) {
+    }
+
+    private record ResponseIndex(
+            Map<String, MesMaterialResolveResp.Item> itemsByKey,
+            Set<String> duplicateKeys) {
     }
 
     private OrderDeliveryTicket loadTicket(Integer ticketId) {

@@ -18,6 +18,7 @@ import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialDedupService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -91,6 +92,48 @@ class MesMaterialDedupStage3Test {
                 .containsEntry("dedupResult", "FOLLOW_EXISTING_ACTIVE")
                 .containsEntry("dedupKey", "P-DUP|A");
         verify(fixture.client, times(1)).resolveMaterial(any());
+        verify(fixture.waiterMapper, times(1)).insert(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mesBatchFollowsExistingActiveMasterWithoutSubmittingThatItemToMes() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicket follower = ticket(311, "P-ACTIVE", "A");
+        OrderDeliveryTicket normal = ticket(312, "P-NORMAL", "A");
+        when(fixture.ticketMapper.selectById(311)).thenReturn(follower);
+        when(fixture.ticketMapper.selectById(312)).thenReturn(normal);
+        OrderDeliveryTicketMesRequest activeMaster = activeMaster(201, "MES-MASTER-201", "CALLBACK_PENDING", "P-ACTIVE|A");
+        when(fixture.mesRequestMapper.selectOne(any())).thenReturn(activeMaster).thenReturn(null);
+        when(fixture.ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
+        when(fixture.ticketMapper.updateById(any(OrderDeliveryTicket.class))).thenReturn(1);
+        when(fixture.waiterMapper.insert(any())).thenReturn(1);
+        when(fixture.mesRequestMapper.insert(any(OrderDeliveryTicketMesRequest.class))).thenReturn(1);
+        MesMaterialResolveResp success = new MesMaterialResolveResp();
+        success.setSuccess(true);
+        success.setMaterialNo("MAT-312");
+        success.setStatus("SUCCESS");
+        success.setMessage("created");
+        when(fixture.client.resolveMaterial(any())).thenAnswer(invocation -> {
+            MesMaterialResolveReq req = invocation.getArgument(0);
+            success.setMesRequestId(req.getMesRequestId());
+            return success;
+        });
+
+        Map<String, Object> result = fixture.batchService.syncMesMaterialBatch(List.of(311, 312), 9203L);
+
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows).extracting(row -> row.get("status"))
+                .containsExactly("DEDUP_FOLLOWING", "SUCCESS");
+        Map<String, Object> followerResult = (Map<String, Object>) rows.get(0).get("result");
+        assertThat(followerResult)
+                .containsEntry("dedupResult", "FOLLOW_EXISTING_ACTIVE")
+                .containsEntry("mesRequestId", "MES-MASTER-201");
+        ArgumentCaptor<MesMaterialResolveReq> reqCaptor = ArgumentCaptor.forClass(MesMaterialResolveReq.class);
+        verify(fixture.client, times(1)).resolveMaterial(reqCaptor.capture());
+        assertThat(reqCaptor.getValue().getItems()).hasSize(1);
+        assertThat(reqCaptor.getValue().getItems().get(0).getDrawingNo()).isEqualTo("P-NORMAL");
+        verify(fixture.waiterMapper, times(1)).insert(any());
     }
 
     @Test
@@ -187,6 +230,16 @@ class MesMaterialDedupStage3Test {
         ticket.setInternalProjectNo("IP-9");
         ticket.setMesSyncStatus("PENDING");
         return ticket;
+    }
+
+    private OrderDeliveryTicketMesRequest activeMaster(Integer ticketId, String mesRequestId, String status, String dedupKey) {
+        OrderDeliveryTicketMesRequest request = new OrderDeliveryTicketMesRequest();
+        request.setTicketId(ticketId);
+        request.setMesRequestId(mesRequestId);
+        request.setRequestStatus(status);
+        request.setDedupKey(dedupKey);
+        request.setRequestRole("MASTER");
+        return request;
     }
 
     private static class Fixture {

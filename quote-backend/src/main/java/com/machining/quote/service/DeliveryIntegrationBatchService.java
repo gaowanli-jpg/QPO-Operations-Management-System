@@ -64,26 +64,54 @@ public class DeliveryIntegrationBatchService {
         if (mesMaterialSyncService == null) {
             throw new RuntimeException("MES 物料号同步服务不可用");
         }
+        List<Integer> normalizedTicketIds = normalizeTicketIds(ticketIds);
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Integer ticketId : normalizeTicketIds(ticketIds)) {
+        Map<Integer, Map<String, Object>> rowByTicketId = new LinkedHashMap<>();
+        List<OrderDeliveryTicket> pendingTickets = new ArrayList<>();
+        for (Integer ticketId : normalizedTicketIds) {
             OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
             if (isMesCallbackPending(ticket)) {
-                rows.add(row(ticketId, STATUS_CALLBACK_PENDING, "MES 物料号等待回调", null));
+                rowByTicketId.put(ticketId, row(ticketId, STATUS_CALLBACK_PENDING, "MES 物料号等待回调", null));
                 continue;
             }
             String skipReason = mesSkipReason(ticket);
             if (skipReason != null) {
-                rows.add(row(ticketId, STATUS_SKIPPED, skipReason, null));
+                rowByTicketId.put(ticketId, row(ticketId, STATUS_SKIPPED, skipReason, null));
                 continue;
             }
+            pendingTickets.add(ticket);
+        }
+
+        List<Map<String, Object>> batchResults = null;
+        boolean batchAttemptFailed = false;
+        if (!pendingTickets.isEmpty()) {
             try {
-                Object result = mesMaterialSyncService.syncMaterialNo(ticketId, taskId);
-                rows.add(mesResultRow(ticketId, result));
+                batchResults = mesMaterialSyncService.syncMaterialBatch(pendingTickets, taskId);
             } catch (RuntimeException error) {
-                Map<String, Object> failed = row(ticketId, STATUS_FAILED, safeMessage(error), null);
-                failed.put("submittedToMes", true);
-                rows.add(failed);
+                batchAttemptFailed = true;
+                for (OrderDeliveryTicket ticket : pendingTickets) {
+                    Map<String, Object> failed = row(ticket.getId(), STATUS_FAILED, safeMessage(error), null);
+                    failed.put("submittedToMes", true);
+                    rowByTicketId.put(ticket.getId(), failed);
+                }
             }
+        }
+
+        if (!batchAttemptFailed && (batchResults == null || batchResults.isEmpty()) && !pendingTickets.isEmpty()) {
+            for (Map<String, Object> result : syncMesMaterialOneByOne(pendingTickets, taskId)) {
+                rowByTicketId.put(ticketIdFromResult(result), result);
+            }
+        } else if (batchResults != null) {
+            for (Map<String, Object> result : batchResults) {
+                Integer resultTicketId = ticketIdFromResult(result);
+                if (resultTicketId != null) {
+                    rowByTicketId.put(resultTicketId, mesResultRow(resultTicketId, result));
+                }
+            }
+        }
+        for (Integer ticketId : normalizedTicketIds) {
+            rows.add(rowByTicketId.getOrDefault(ticketId,
+                    row(ticketId, STATUS_FAILED, "MES 批量结果未生成", null)));
         }
         return summary(TASK_MES_MATERIAL_BATCH_SYNC, taskId, rows);
     }
@@ -108,6 +136,21 @@ public class DeliveryIntegrationBatchService {
             }
         }
         return summary("WMS_ALLOCATION_BATCH", taskId, rows);
+    }
+
+    private List<Map<String, Object>> syncMesMaterialOneByOne(List<OrderDeliveryTicket> tickets, Long taskId) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (OrderDeliveryTicket ticket : tickets) {
+            try {
+                Object result = mesMaterialSyncService.syncMaterialNo(ticket.getId(), taskId);
+                rows.add(mesResultRow(ticket.getId(), result));
+            } catch (RuntimeException error) {
+                Map<String, Object> failed = row(ticket.getId(), STATUS_FAILED, safeMessage(error), null);
+                failed.put("submittedToMes", true);
+                rows.add(failed);
+            }
+        }
+        return rows;
     }
 
     private String mesSkipReason(OrderDeliveryTicket ticket) {
@@ -166,17 +209,25 @@ public class DeliveryIntegrationBatchService {
     private Map<String, Object> mesResultRow(Integer ticketId, Object result) {
         String dedupResult = dedupResult(result);
         if (DEDUP_FOLLOW_EXISTING_ACTIVE.equals(dedupResult)) {
-            Map<String, Object> row = row(ticketId, STATUS_DEDUP_FOLLOWING, "已关联同图号版本 MES 主请求，等待回调", result);
+            Map<String, Object> row = row(ticketId, STATUS_DEDUP_FOLLOWING,
+                    "已关联同图号版本 MES 主请求，等待回调", result);
             row.put("submittedToMes", false);
             return row;
         }
+        String status = resultStatus(result);
+        if (STATUS_FAILED.equals(status)) {
+            Map<String, Object> row = row(ticketId, STATUS_FAILED, resultMessage(result), result);
+            row.put("submittedToMes", submittedToMes(result));
+            return row;
+        }
         if (isCallbackPendingResult(result)) {
-            Map<String, Object> row = row(ticketId, STATUS_CALLBACK_PENDING, "MES 已受理，等待回调", result);
-            row.put("submittedToMes", true);
+            Map<String, Object> row = row(ticketId, STATUS_CALLBACK_PENDING,
+                    "MES 已受理，等待回调", result);
+            row.put("submittedToMes", submittedToMes(result));
             return row;
         }
         Map<String, Object> row = row(ticketId, STATUS_SUCCESS, "MES 物料号同步成功", result);
-        row.put("submittedToMes", true);
+        row.put("submittedToMes", submittedToMes(result));
         return row;
     }
 
@@ -224,6 +275,11 @@ public class DeliveryIntegrationBatchService {
                 .count());
     }
 
+    private Integer ticketIdFromResult(Map<String, Object> result) {
+        Object ticketId = result == null ? null : result.get("ticketId");
+        return ticketId instanceof Number number ? number.intValue() : null;
+    }
+
     private String dedupResult(Object result) {
         if (!(result instanceof Map<?, ?> raw)) {
             return null;
@@ -233,11 +289,32 @@ public class DeliveryIntegrationBatchService {
     }
 
     private boolean isCallbackPendingResult(Object result) {
+        String status = resultStatus(result);
+        return status != null && STATUS_CALLBACK_PENDING.equalsIgnoreCase(status);
+    }
+
+    private String resultStatus(Object result) {
         if (!(result instanceof Map<?, ?> raw)) {
-            return false;
+            return null;
         }
         Object status = raw.get("status");
-        return status != null && "CALLBACK_PENDING".equalsIgnoreCase(String.valueOf(status));
+        return status == null ? null : String.valueOf(status).trim().toUpperCase();
+    }
+
+    private String resultMessage(Object result) {
+        if (!(result instanceof Map<?, ?> raw)) {
+            return null;
+        }
+        Object message = raw.get("message");
+        return message == null ? null : String.valueOf(message);
+    }
+
+    private boolean submittedToMes(Object result) {
+        if (!(result instanceof Map<?, ?> raw)) {
+            return true;
+        }
+        Object submitted = raw.get("submittedToMes");
+        return submitted == null || Boolean.TRUE.equals(submitted);
     }
 
     private boolean isMesCallbackPending(OrderDeliveryTicket ticket) {
