@@ -12,6 +12,7 @@ import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.ResultMap;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -19,6 +20,16 @@ import java.util.List;
 public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicket> {
     @Select("SELECT * FROM order_delivery_ticket WHERE id = #{id} FOR UPDATE")
     OrderDeliveryTicket selectByIdForUpdate(@Param("id") Integer id);
+
+    @Update("""
+            UPDATE order_delivery_ticket
+            SET mes_request_id = #{lineRequestId},
+                mes_sync_status = 'PROCESSING',
+                mes_sync_message = NULL
+            WHERE id = #{ticketId}
+            """)
+    int markMesMaterialLineReserved(@Param("ticketId") Integer ticketId,
+                                    @Param("lineRequestId") String lineRequestId);
 
     @Select("""
             <script>

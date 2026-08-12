@@ -16,6 +16,8 @@ public class OrderDeliveryTicketMesRequest {
     private Integer ticketId;
     private String mesRequestId;
     private Long systemTaskId;
+    private Long batchId;
+    private Long batchItemId;
     private String requestStatus;
     private String dedupKey;
     private String requestRole;

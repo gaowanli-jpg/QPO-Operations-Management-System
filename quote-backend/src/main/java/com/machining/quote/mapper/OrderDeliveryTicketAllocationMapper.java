@@ -11,11 +11,23 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
 @Mapper
 public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDeliveryTicketAllocation> {
+    @Update("""
+            UPDATE order_delivery_ticket_allocation
+            SET mes_production_request_id = #{lineRequestId},
+                mes_production_status = 'PROCESSING',
+                mes_production_message = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{allocationId}
+            """)
+    int markMesProductionLineReserved(@Param("allocationId") Integer allocationId,
+                                      @Param("lineRequestId") String lineRequestId);
+
     @Select("""
             <script>
             SELECT

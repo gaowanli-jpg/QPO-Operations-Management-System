@@ -60,7 +60,8 @@ class FlywayMigrationPolicyTest {
                 .contains("flyway_schema_history")
                 .contains("quote-postgres")
                 .contains("FIRST_POST_BASELINE_VERSION")
-                .contains("New-Item");
+                .contains("[System.IO.File]::WriteAllText")
+                .contains("[System.Text.UTF8Encoding]::new($false)");
         assertThat(migrationShortcut)
                 .contains("scripts", "new-flyway-migration.ps1")
                 .contains("-ExecutionPolicy", "Bypass")

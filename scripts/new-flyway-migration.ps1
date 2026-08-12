@@ -86,5 +86,5 @@ SET search_path TO `"`${flyway:defaultSchema}`";
 -- Add migration SQL here.
 "@
 
-New-Item -Path $target -ItemType File -Value $content -Encoding UTF8 | Out-Null
+[System.IO.File]::WriteAllText($target, $content, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Created $target"
