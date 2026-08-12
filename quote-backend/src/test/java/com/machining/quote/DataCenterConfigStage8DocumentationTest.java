@@ -62,10 +62,10 @@ class DataCenterConfigStage8DocumentationTest {
                         "ERP_DATA_CENTER_TOKEN_URL=http://192.168.70.250:8080/realms/api-platform/protocol/openid-connect/token",
                         "ERP_DATA_CENTER_CLIENT_ID=app_8ed28b2a1faf4a0b",
                         "ERP_DATA_CENTER_CLIENT_SECRET=",
-                        "ERP_DATA_CENTER_MES_MATERIAL_PATH=",
+                        "ERP_DATA_CENTER_MES_MATERIAL_PATH=/api/v1/mes/openapi/material-preparation/create",
                         "ERP_DATA_CENTER_WMS_ALLOCATION_PATH=",
                         "ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH=",
-                        "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH=")
+                        "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH=/api/v1/mes/openapi/demand/create")
                 .contains("deprecated direct-system fallback");
     }
 

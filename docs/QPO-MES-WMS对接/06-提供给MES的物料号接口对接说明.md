@@ -64,7 +64,7 @@ QPO 侧推荐配置为系统配置页 **出站接口 / 数据中心配置**：
 ERP_MES_BASE_URL=http://mes-server:9000
 ERP_MES_AUTH_TOKEN=
 ERP_MES_MATERIAL_PATH=/api/mes/materials/resolve
-ERP_MES_TIMEOUT_MS=10000
+ERP_MES_TIMEOUT_MS=60000
 ERP_PUBLIC_BASE_URL=http://192.168.70.21:8088
 ```
 

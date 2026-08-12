@@ -1,4 +1,5 @@
 # 提供给数据中心的待生产下发接口对接说明
+> MES 真实批量阶段 7 收口：正式和测试部署统一使用数据中心 endpoint，物料批量为 `MES_MATERIAL_RESOLVE` -> `/api/v1/mes/openapi/material-preparation/create`，生产需求批量为 `MES_PRODUCTION_DISPATCH` -> `/api/v1/mes/openapi/demand/create`，最低超时 `60000ms`。出站链路固定为 `QPO -> 数据中心 -> MES`；物料完成回调固定为 `MES -> 数据中心 -> QPO` 的 `POST /api/integrations/mes/material-callback`。权限不新增，继续复用 `market:delivered-item:mes-sync` 和 `market:production-item:mes-production-submit`；批次核对动作标签保留 `MES_INTEGRATION_BATCH_RECONCILE`。数据中心必须透传 QPO 的 4xx/429/5xx 语义，任何操作日志和文件日志都不得记录完整请求、完整响应、完整回调内容、Authorization、Cookie、任一段 Token 或凭据。
 
 > 数据中心统一对接阶段 8 收口：本接口说明交付对象为数据中心。QPO 生产下发底层调用使用 `MES_PRODUCTION_DISPATCH` endpoint，链路为 `QPO -> 数据中心 -> MES`，数据中心负责转发到 MES 生产接口；MES 具体接收 path 由数据中心和 MES 团队在数据中心侧维护。
 
@@ -32,7 +33,7 @@ Authorization: Bearer {ERP_MES_AUTH_TOKEN}
 ERP_MES_BASE_URL=http://mes.example.local
 ERP_MES_AUTH_TOKEN=
 ERP_MES_PRODUCTION_PATH=/api/mes/production/submit
-ERP_MES_TIMEOUT_MS=10000
+ERP_MES_TIMEOUT_MS=60000
 ```
 
 `ERP_MES_PRODUCTION_PATH` 与物料号获取的 `ERP_MES_MATERIAL_PATH` 独立配置，便于 MES 分别维护物料号生成接口和生产流程下发接口。

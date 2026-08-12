@@ -165,7 +165,7 @@ class LockedItemMesProductionClientTest {
                         "ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}",
                         "ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}",
                         "ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}",
-                        "ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}"
+                        "ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-60000}"
                 );
         if (Files.exists(ERP_ENV)) {
             String env = Files.readString(ERP_ENV, StandardCharsets.UTF_8);
@@ -174,7 +174,7 @@ class LockedItemMesProductionClientTest {
                             "ERP_MES_PRODUCTION_PATH=/api/mes/production/submit",
                             "ERP_MES_BASE_URL=",
                             "ERP_MES_AUTH_TOKEN=",
-                            "ERP_MES_TIMEOUT_MS=10000"
+                            "ERP_MES_TIMEOUT_MS=60000"
                     );
         }
     }

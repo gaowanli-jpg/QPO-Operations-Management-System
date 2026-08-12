@@ -1,4 +1,5 @@
 # QPO MES 物料号同步开发文档
+> MES 真实批量阶段 7 收口：正式和测试部署统一使用数据中心 endpoint，物料批量为 `MES_MATERIAL_RESOLVE` -> `/api/v1/mes/openapi/material-preparation/create`，生产需求批量为 `MES_PRODUCTION_DISPATCH` -> `/api/v1/mes/openapi/demand/create`，最低超时 `60000ms`。出站链路固定为 `QPO -> 数据中心 -> MES`；物料完成回调固定为 `MES -> 数据中心 -> QPO` 的 `POST /api/integrations/mes/material-callback`。权限不新增，继续复用 `market:delivered-item:mes-sync` 和 `market:production-item:mes-production-submit`；批次核对动作标签保留 `MES_INTEGRATION_BATCH_RECONCILE`。数据中心必须透传 QPO 的 4xx/429/5xx 语义，任何操作日志和文件日志都不得记录完整请求、完整响应、完整回调内容、Authorization、Cookie、任一段 Token 或凭据。
 
 > 更新说明：本文档记录的是 MES 物料号同步的第一版“同步响应”口径。后续已确认需要同时支持“即时返回物料号”和“受理后回调物料号”两种 MES 结果，详细设计以 `docs/QPO报价状态流转/18-MES物料号异步回调开发文档.md` 为准。实施阶段应保留本文档中已提零件、权限、日志和基础 MES 客户端能力，并按第 18 号文档扩展 `mes_request_id`、`CALLBACK_PENDING` 和回调接口。
 
@@ -148,7 +149,7 @@ ERP_MES_BASE_URL=http://mes.example.local
 ERP_MES_AUTH_TOKEN=
 ERP_MES_MATERIAL_PATH=/api/mes/materials/resolve
 ERP_MES_PRODUCTION_PATH=/api/mes/production/submit
-ERP_MES_TIMEOUT_MS=10000
+ERP_MES_TIMEOUT_MS=60000
 ERP_MES_CALLBACK_TOKEN=
 ERP_MES_CALLBACK_TOKEN_ENABLED=true
 ```
@@ -171,7 +172,7 @@ ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
 ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
 ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
 ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}
-ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
+ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-60000}
 ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
 ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
 ```
@@ -202,7 +203,7 @@ ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
 ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
 ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
 ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}
-ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
+ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-60000}
 ```
 
 Spring Boot 会把 `ERP_MES_BASE_URL` 绑定到 `erp.mes.base-url`。

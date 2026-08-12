@@ -13,13 +13,13 @@ public class DataCenterProperties {
     private String clientSecret = "";
     private String grantType = "client_credentials";
     private int connectTimeoutMs = 5000;
-    private int readTimeoutMs = 30000;
+    private int readTimeoutMs = 60000;
     private int tokenExpireSkewSeconds = 60;
-    private String mesMaterialPath = "";
+    private String mesMaterialPath = "/api/v1/mes/openapi/material-preparation/create";
     private String wmsAllocationPath = "";
     private String u9SalesOrderSyncPath = "";
     private String u9CommonEntityQueryPath = "";
-    private String mesProductionDispatchPath = "";
+    private String mesProductionDispatchPath = "/api/v1/mes/openapi/demand/create";
 
     public boolean isEnabled() {
         return enabled;

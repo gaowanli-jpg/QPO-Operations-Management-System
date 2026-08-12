@@ -1,4 +1,5 @@
 # 锁库待生产 MES 生产下发与筛选区优化开发文档
+> MES 真实批量阶段 7 收口：正式和测试部署统一使用数据中心 endpoint，物料批量为 `MES_MATERIAL_RESOLVE` -> `/api/v1/mes/openapi/material-preparation/create`，生产需求批量为 `MES_PRODUCTION_DISPATCH` -> `/api/v1/mes/openapi/demand/create`，最低超时 `60000ms`。出站链路固定为 `QPO -> 数据中心 -> MES`；物料完成回调固定为 `MES -> 数据中心 -> QPO` 的 `POST /api/integrations/mes/material-callback`。权限不新增，继续复用 `market:delivered-item:mes-sync` 和 `market:production-item:mes-production-submit`；批次核对动作标签保留 `MES_INTEGRATION_BATCH_RECONCILE`。数据中心必须透传 QPO 的 4xx/429/5xx 语义，任何操作日志和文件日志都不得记录完整请求、完整响应、完整回调内容、Authorization、Cookie、任一段 Token 或凭据。
 最后更新：2026-08-02
 
 > 阶段 31 当前口径：本文档保留为历史阶段记录，待生产下发职责已被 `31-待产零件与锁库零件模块解耦开发文档.md` 替代。当前用户入口为待产零件 `/production-items`，后端接口为 `POST /api/order-delivery/production-items/mes-production`，权限为 `market:production-item:mes-production-submit`，操作日志动作使用 `PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT / SUCCESS / FAILED`。锁库零件模块只保留库存锁定结果展示。
@@ -272,7 +273,7 @@ ERP_MES_PRODUCTION_PATH=/api/mes/production/submit
 ```env
 ERP_MES_BASE_URL=
 ERP_MES_AUTH_TOKEN=
-ERP_MES_TIMEOUT_MS=10000
+ERP_MES_TIMEOUT_MS=60000
 ```
 
 说明：

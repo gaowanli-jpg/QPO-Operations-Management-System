@@ -220,6 +220,7 @@ public class AuditService {
         if (startsWith(action, "ORDER_")) return "ORDER";
         if (startsWith(action, "DELIVERY_")
                 || startsWith(action, "LOCKED_ITEM_")
+                || startsWith(action, "MES_INTEGRATION_BATCH_")
                 || startsWith(action, "PRODUCTION_ITEM_")
                 || startsWith(action, "PROCESS_SHEET_")) return "DELIVERY";
         if (startsWith(action, "QUOTE_") || startsWith(action, "INTERNAL_TARGET_") || startsWith(action, "RELEASE_")) return "MARKET";
@@ -357,6 +358,7 @@ public class AuditService {
             case "DELIVERY_MES_MATERIAL_DEDUP_REUSE" -> "复用同图号版本MES物料号";
             case "DELIVERY_MES_MATERIAL_DEDUP_FOLLOW" -> "关联同图号版本MES主请求";
             case "DELIVERY_MES_MATERIAL_DEDUP_FANOUT" -> "分发同图号版本MES物料号";
+            case "MES_INTEGRATION_BATCH_RECONCILE" -> "MES批次结果核对";
             case "DELIVERY_WMS_ALLOCATION_SUBMIT" -> "提交WMS锁库";
             case "DELIVERY_WMS_ALLOCATION_SUCCESS" -> "WMS锁库成功";
             case "DELIVERY_WMS_ALLOCATION_FAILED" -> "WMS锁库失败";

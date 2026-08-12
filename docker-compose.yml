@@ -86,15 +86,30 @@ services:
       # Legacy APS compatibility. Backend uses this only for /api/aps/source token validation.
       # APS_ERP_* stays in env files for old local bridge tools and is not injected here.
       ERP_APS_SOURCE_TOKEN: ${ERP_APS_SOURCE_TOKEN:-}
-      # External integration fallback configuration.
-      # Backend still receives ERP_MES/ERP_WMS/ERP_U9 so local development and emergency fallback
-      # work when System Config > System Integration has no active DB config. Active DB config wins.
+      # Data Center outbound gateway configuration. This is the primary MES/WMS/U9 route.
+      ERP_DATA_CENTER_ENABLED: ${ERP_DATA_CENTER_ENABLED:-true}
+      ERP_DATA_CENTER_BASE_URL: ${ERP_DATA_CENTER_BASE_URL:-http://192.168.70.250:8080}
+      ERP_DATA_CENTER_TOKEN_URL: ${ERP_DATA_CENTER_TOKEN_URL:-http://192.168.70.250:8080/realms/api-platform/protocol/openid-connect/token}
+      ERP_DATA_CENTER_CLIENT_ID: ${ERP_DATA_CENTER_CLIENT_ID:-app_8ed28b2a1faf4a0b}
+      ERP_DATA_CENTER_CLIENT_SECRET: ${ERP_DATA_CENTER_CLIENT_SECRET:-}
+      ERP_DATA_CENTER_GRANT_TYPE: ${ERP_DATA_CENTER_GRANT_TYPE:-client_credentials}
+      ERP_DATA_CENTER_CONNECT_TIMEOUT_MS: ${ERP_DATA_CENTER_CONNECT_TIMEOUT_MS:-5000}
+      ERP_DATA_CENTER_READ_TIMEOUT_MS: ${ERP_DATA_CENTER_READ_TIMEOUT_MS:-60000}
+      ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS: ${ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS:-60}
+      ERP_DATA_CENTER_MES_MATERIAL_PATH: ${ERP_DATA_CENTER_MES_MATERIAL_PATH:-/api/v1/mes/openapi/material-preparation/create}
+      ERP_DATA_CENTER_WMS_ALLOCATION_PATH: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:-}
+      ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH: ${ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH:-}
+      ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:-}
+      ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:-/api/v1/mes/openapi/demand/create}
+      # Deprecated direct integration fallback configuration.
+      # Backend still receives ERP_MES/ERP_WMS/ERP_U9 for local development and emergency fallback
+      # when Data Center is not configured or deliberately disabled. Active DB/Data Center config wins.
       # MES material-number sync fallback configuration.
       ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
       ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
       ERP_MES_MATERIAL_PATH: ${ERP_MES_MATERIAL_PATH:-/api/mes/materials/resolve}
       ERP_MES_PRODUCTION_PATH: ${ERP_MES_PRODUCTION_PATH:-/api/mes/production/submit}
-      ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-10000}
+      ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-60000}
       ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
       ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
       # WMS inventory allocation fallback configuration.

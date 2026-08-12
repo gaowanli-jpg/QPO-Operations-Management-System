@@ -32,13 +32,13 @@ class DataCenterConfigStage1Test {
                         "ERP_DATA_CENTER_CLIENT_SECRET=",
                         "ERP_DATA_CENTER_GRANT_TYPE=client_credentials",
                         "ERP_DATA_CENTER_CONNECT_TIMEOUT_MS=5000",
-                        "ERP_DATA_CENTER_READ_TIMEOUT_MS=30000",
+                        "ERP_DATA_CENTER_READ_TIMEOUT_MS=60000",
                         "ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS=60",
-                        "ERP_DATA_CENTER_MES_MATERIAL_PATH=",
+                        "ERP_DATA_CENTER_MES_MATERIAL_PATH=/api/v1/mes/openapi/material-preparation/create",
                         "ERP_DATA_CENTER_WMS_ALLOCATION_PATH=",
                         "ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH=",
                         "ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH=",
-                        "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH="
+                        "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH=/api/v1/mes/openapi/demand/create"
                 )
                 .contains(
                         "deprecated direct-system fallback",
@@ -71,13 +71,13 @@ class DataCenterConfigStage1Test {
                         "client-secret: ${ERP_DATA_CENTER_CLIENT_SECRET:}",
                         "grant-type: ${ERP_DATA_CENTER_GRANT_TYPE:client_credentials}",
                         "connect-timeout-ms: ${ERP_DATA_CENTER_CONNECT_TIMEOUT_MS:5000}",
-                        "read-timeout-ms: ${ERP_DATA_CENTER_READ_TIMEOUT_MS:30000}",
+                        "read-timeout-ms: ${ERP_DATA_CENTER_READ_TIMEOUT_MS:60000}",
                         "token-expire-skew-seconds: ${ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS:60}",
-                        "mes-material-path: ${ERP_DATA_CENTER_MES_MATERIAL_PATH:}",
+                        "mes-material-path: ${ERP_DATA_CENTER_MES_MATERIAL_PATH:/api/v1/mes/openapi/material-preparation/create}",
                         "wms-allocation-path: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:}",
                         "u9-sales-order-sync-path: ${ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH:}",
                         "u9-common-entity-query-path: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:}",
-                        "mes-production-dispatch-path: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:}"
+                        "mes-production-dispatch-path: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:/api/v1/mes/openapi/demand/create}"
                 )
                 .doesNotContain(
                         "client-secret: ${ERP_DATA_CENTER_CLIENT_SECRET:X",
