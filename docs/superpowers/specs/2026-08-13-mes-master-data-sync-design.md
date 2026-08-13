@@ -1157,6 +1157,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 5：MES 全量材料同步到材料字典
 
+状态：已完成。
+
 目标：MES `MATERIAL / PRODUCT / SEMI` 全量进入 QPO 材料字典，同时保留 QPO 本地价格字段。
 
 修改：
