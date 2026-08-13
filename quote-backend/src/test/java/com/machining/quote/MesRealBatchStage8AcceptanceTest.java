@@ -29,6 +29,11 @@ class MesRealBatchStage8AcceptanceTest {
                         "Invoke-QpoMesMaterialBatch",
                         "Invoke-QpoMesProductionBatch",
                         "Assert-NoSensitiveEvidence",
+                        "PSObject.Properties[\"task\"]",
+                        "PSObject.Properties[\"id\"]",
+                        "\"sortNo\":1",
+                        "\"unitWorkHours\":1.5",
+                        "\"processCode\":\"CNC\"",
                         MATERIAL_PATH,
                         PRODUCTION_PATH,
                         "MES material writes are disabled unless -ExecuteExternalWrites is supplied")

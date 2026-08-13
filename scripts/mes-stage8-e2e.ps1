@@ -215,7 +215,7 @@ WITH existing_customer AS (
         h.internal_project_no, '$material1', CURRENT_DATE + INTERVAL '7 days', CURRENT_DATE + INTERVAL '5 days', 'E2E P001', 'Steel',
         'STEEL', 'Black anodize', 100.0000, 200.00, 0, 2, 2, 0, '$safeDrawingUrl', TRUE, 'NORMAL',
         '{"material":"Steel"}'::jsonb,
-        '[{"processName":"Cutting","processCode":"CUT","workHour":1.5},{"processName":"Deburr","processCode":"DEB","workHour":0.5}]'::jsonb,
+        '[{"sortNo":1,"processName":"Cutting","processCode":"CNC","unitWorkHours":1.5,"workHour":1.5},{"sortNo":2,"processName":"Deburr","processCode":"CNC","unitWorkHours":0.5,"workHour":0.5}]'::jsonb,
         'QPO MES E2E - retain for verification', 'RELEASED', 'CONFIRMED', 'MES_CALLBACK', CURRENT_TIMESTAMP, CURRENT_DATE,
         'DIRECT_IMPORT', h.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     FROM direct_header h
@@ -232,7 +232,7 @@ WITH existing_customer AS (
         h.internal_project_no, '$material2', CURRENT_DATE + INTERVAL '8 days', CURRENT_DATE + INTERVAL '6 days', 'E2E P002', 'Aluminum',
         'AL', 'Clear anodize', 120.0000, 360.00, 0, 3, 3, 0, '$safeDrawingUrl', TRUE, 'NORMAL',
         '{"material":"Aluminum"}'::jsonb,
-        '[{"processName":"Milling","processCode":"MIL","workHour":2.0}]'::jsonb,
+        '[{"sortNo":1,"processName":"Milling","processCode":"CNC","unitWorkHours":2.0,"workHour":2.0}]'::jsonb,
         'QPO MES E2E - retain for verification', 'RELEASED', 'CONFIRMED', 'MES_CALLBACK', CURRENT_TIMESTAMP, CURRENT_DATE,
         'DIRECT_IMPORT', h.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     FROM direct_header h
@@ -251,7 +251,7 @@ WITH existing_customer AS (
     )
     SELECT 'DIRECT', h.internal_project_no, i.part_no, 2, 'E2E P001', 'Black anodize', 'A', CURRENT_DATE + INTERVAL '7 days',
         'QPO MES E2E - retain for verification', 'DIRECT', h.internal_project_no, 'NORMAL', 'Steel', 'STEEL', h.customer_order_no,
-        h.customer_project_no, '[{"processName":"Cutting","processCode":"CUT","workHour":1.5}]'::jsonb, '{"material":"Steel"}'::jsonb,
+        h.customer_project_no, '[{"sortNo":1,"processName":"Cutting","processCode":"CNC","unitWorkHours":1.5,"workHour":1.5}]'::jsonb, '{"material":"Steel"}'::jsonb,
         'E2E material description P001', NULL, 'PENDING', 'PENDING', h.customer_name, 'SALES_ORDER', h.id, i.id, '$safeDrawingUrl', 'SHEET'
     FROM direct_header h CROSS JOIN direct_item_1 i
     RETURNING id, part_no, version
@@ -264,7 +264,7 @@ WITH existing_customer AS (
     )
     SELECT 'DIRECT', h.internal_project_no, i.part_no, 3, 'E2E P002', 'Clear anodize', 'A', CURRENT_DATE + INTERVAL '8 days',
         'QPO MES E2E - retain for verification', 'DIRECT', h.internal_project_no, 'NORMAL', 'Aluminum', 'AL', h.customer_order_no,
-        h.customer_project_no, '[{"processName":"Milling","processCode":"MIL","workHour":2.0}]'::jsonb, '{"material":"Aluminum"}'::jsonb,
+        h.customer_project_no, '[{"sortNo":1,"processName":"Milling","processCode":"CNC","unitWorkHours":2.0,"workHour":2.0}]'::jsonb, '{"material":"Aluminum"}'::jsonb,
         'E2E material description P002', NULL, 'PENDING', 'PENDING', h.customer_name, 'SALES_ORDER', h.id, i.id, '$safeDrawingUrl', 'BLOCK'
     FROM direct_header h CROSS JOIN direct_item_2 i
     RETURNING id, part_no, version
@@ -278,7 +278,7 @@ WITH existing_customer AS (
     SELECT t.id, 'PRODUCTION_REQUIRED', 2, i.material_no, i.part_no, i.version, h.customer_name, h.internal_project_no,
         '{"stage":"MES_PHASE8"}'::jsonb, 'ACTIVE', h.customer_order_no, h.customer_project_no, 'E2E P001', 'Steel',
         'STEEL', 'Black anodize', 'E2E material description P001', CURRENT_DATE + INTERVAL '7 days',
-        '[{"processName":"Cutting","processCode":"CUT","workHour":1.5}]'::jsonb, '{"material":"Steel"}'::jsonb, 'DIRECT',
+        '[{"sortNo":1,"processName":"Cutting","processCode":"CNC","unitWorkHours":1.5,"workHour":1.5}]'::jsonb, '{"material":"Steel"}'::jsonb, 'DIRECT',
         'QPO MES E2E - retain for verification', 'NORMAL', 'SALES_ORDER', h.id, i.id, 2, 'PENDING', 'SHEET'
     FROM ticket_1 t CROSS JOIN direct_item_1 i CROSS JOIN direct_header h
     RETURNING id
@@ -292,7 +292,7 @@ WITH existing_customer AS (
     SELECT t.id, 'PRODUCTION_REQUIRED', 3, i.material_no, i.part_no, i.version, h.customer_name, h.internal_project_no,
         '{"stage":"MES_PHASE8"}'::jsonb, 'ACTIVE', h.customer_order_no, h.customer_project_no, 'E2E P002', 'Aluminum',
         'AL', 'Clear anodize', 'E2E material description P002', CURRENT_DATE + INTERVAL '8 days',
-        '[{"processName":"Milling","processCode":"MIL","workHour":2.0}]'::jsonb, '{"material":"Aluminum"}'::jsonb, 'DIRECT',
+        '[{"sortNo":1,"processName":"Milling","processCode":"CNC","unitWorkHours":2.0,"workHour":2.0}]'::jsonb, '{"material":"Aluminum"}'::jsonb, 'DIRECT',
         'QPO MES E2E - retain for verification', 'NORMAL', 'SALES_ORDER', h.id, i.id, 3, 'PENDING', 'BLOCK'
     FROM ticket_2 t CROSS JOIN direct_item_2 i CROSS JOIN direct_header h
     RETURNING id
@@ -305,7 +305,7 @@ WITH existing_customer AS (
     )
     SELECT 'RFQ_RELEASE', '$internalProjectNo', '$part3', 1, 'E2E RFQ P001', 'Passivation', 'A', CURRENT_DATE + INTERVAL '9 days',
         'QPO MES E2E - retain for verification', 'RFQ_RELEASE', '$internalProjectNo', 'NORMAL', 'Steel', 'STEEL', '$TestPrefix`RFQ-PO-$safeSuffix',
-        '$TestPrefix`RFQ-CP-$safeSuffix', '[{"processName":"Turning","processCode":"TRN","workHour":1.25}]'::jsonb, '{"material":"Steel"}'::jsonb,
+        '$TestPrefix`RFQ-CP-$safeSuffix', '[{"sortNo":1,"processName":"Turning","processCode":"CNC","unitWorkHours":1.25,"workHour":1.25}]'::jsonb, '{"material":"Steel"}'::jsonb,
         'E2E RFQ-derived material description', '$material1', 'SUCCESS', 'PENDING', '$TestPrefix`RFQ-$safeSuffix', c.customer_name,
         'RFQ', '$safeDrawingUrl', 'SHEET'
     FROM c
@@ -334,7 +334,7 @@ WITH existing_customer AS (
     SELECT h.id, 10, t.part_no, 'E2E RFQ-derived material description', 1, t.version, 'RFQ_RELEASE', h.customer_order_no, h.customer_project_no,
         h.internal_project_no, '$material1', CURRENT_DATE + INTERVAL '9 days', CURRENT_DATE + INTERVAL '7 days', 'E2E RFQ P001', 'Steel',
         'STEEL', 'Passivation', 100.0000, 100.00, 0, 1, 1, 0, '$safeDrawingUrl', TRUE, 'NORMAL',
-        '{"material":"Steel"}'::jsonb, '[{"processName":"Turning","processCode":"TRN","workHour":1.25}]'::jsonb,
+        '{"material":"Steel"}'::jsonb, '[{"sortNo":1,"processName":"Turning","processCode":"CNC","unitWorkHours":1.25,"workHour":1.25}]'::jsonb,
         'QPO MES E2E - retain for verification', 'RELEASED', 'CONFIRMED', 'MES_CALLBACK', CURRENT_TIMESTAMP, CURRENT_DATE,
         'RFQ_RELEASE', h.id, t.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     FROM rfq_header h CROSS JOIN rfq_ticket t
@@ -349,7 +349,7 @@ WITH existing_customer AS (
     SELECT t.id, 'PRODUCTION_REQUIRED', 1, i.material_no, i.part_no, i.version, h.customer_name, h.internal_project_no,
         '{"stage":"MES_PHASE8_RFQ"}'::jsonb, 'ACTIVE', '$TestPrefix`RFQ-$safeSuffix', h.customer_order_no, h.customer_project_no,
         'E2E RFQ P001', 'Steel', 'STEEL', 'Passivation', i.description, CURRENT_DATE + INTERVAL '9 days',
-        '[{"processName":"Turning","processCode":"TRN","workHour":1.25}]'::jsonb, '{"material":"Steel"}'::jsonb, 'RFQ_RELEASE',
+        '[{"sortNo":1,"processName":"Turning","processCode":"CNC","unitWorkHours":1.25,"workHour":1.25}]'::jsonb, '{"material":"Steel"}'::jsonb, 'RFQ_RELEASE',
         'QPO MES E2E - retain for verification', 'NORMAL', 'RFQ', h.id, i.id, 1, 'PENDING', 'SHEET'
     FROM rfq_ticket t CROSS JOIN rfq_item i CROSS JOIN rfq_header h
     RETURNING id
@@ -402,10 +402,10 @@ function Wait-QpoTask {
         return $SubmitResult
     }
     $task = $SubmitResult.response
-    if ($null -ne $task.task) {
-        $task = $task.task
+    if ($null -ne $task -and $null -ne $task.PSObject.Properties["task"]) {
+        $task = $task.PSObject.Properties["task"].Value
     }
-    $taskId = $task.id
+    $taskId = if ($null -ne $task -and $null -ne $task.PSObject.Properties["id"]) { $task.PSObject.Properties["id"].Value } else { $null }
     if ($null -eq $taskId) {
         return [ordered]@{ submitted = $true; taskDetected = $false; message = "No task id returned" }
     }
