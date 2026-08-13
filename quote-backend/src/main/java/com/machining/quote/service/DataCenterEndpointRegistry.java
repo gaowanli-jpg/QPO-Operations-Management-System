@@ -16,6 +16,8 @@ public class DataCenterEndpointRegistry {
     public static final String U9_SALES_ORDER_SYNC = "U9_SALES_ORDER_SYNC";
     public static final String U9_COMMON_ENTITY_QUERY = "U9_COMMON_ENTITY_QUERY";
     public static final String MES_PRODUCTION_DISPATCH = "MES_PRODUCTION_DISPATCH";
+    public static final String MES_PROCESS_TYPE_LIST = "MES_PROCESS_TYPE_LIST";
+    public static final String MES_MATERIAL_PAGE = "MES_MATERIAL_PAGE";
 
     private final Map<String, EndpointDefinition> definitions = Map.of(
             MES_MATERIAL_RESOLVE,
@@ -66,6 +68,26 @@ public class DataCenterEndpointRegistry {
                     "MES_PRODUCTION_DISPATCH_V1",
                     "MES_PRODUCTION_DISPATCH_RESPONSE_V1",
                     60000
+            ),
+            MES_PROCESS_TYPE_LIST,
+            new EndpointDefinition(
+                    MES_PROCESS_TYPE_LIST,
+                    "MES工艺列表",
+                    "MES",
+                    "GET",
+                    "MES_PROCESS_TYPE_LIST_V1",
+                    "MES_PROCESS_TYPE_LIST_RESPONSE_V1",
+                    60000
+            ),
+            MES_MATERIAL_PAGE,
+            new EndpointDefinition(
+                    MES_MATERIAL_PAGE,
+                    "MES材料分页",
+                    "MES",
+                    "GET",
+                    "MES_MATERIAL_PAGE_V1",
+                    "MES_MATERIAL_PAGE_RESPONSE_V1",
+                    60000
             )
     );
 
@@ -75,7 +97,9 @@ public class DataCenterEndpointRegistry {
                 definitions.get(WMS_INVENTORY_ALLOCATE),
                 definitions.get(U9_SALES_ORDER_SYNC),
                 definitions.get(U9_COMMON_ENTITY_QUERY),
-                definitions.get(MES_PRODUCTION_DISPATCH)
+                definitions.get(MES_PRODUCTION_DISPATCH),
+                definitions.get(MES_PROCESS_TYPE_LIST),
+                definitions.get(MES_MATERIAL_PAGE)
         );
     }
 
@@ -124,6 +148,8 @@ public class DataCenterEndpointRegistry {
             case U9_SALES_ORDER_SYNC -> trimToNull(properties.getU9SalesOrderSyncPath());
             case U9_COMMON_ENTITY_QUERY -> trimToNull(properties.getU9CommonEntityQueryPath());
             case MES_PRODUCTION_DISPATCH -> trimToNull(properties.getMesProductionDispatchPath());
+            case MES_PROCESS_TYPE_LIST -> trimToNull(properties.getMesProcessTypeListPath());
+            case MES_MATERIAL_PAGE -> trimToNull(properties.getMesMaterialPagePath());
             default -> null;
         };
     }

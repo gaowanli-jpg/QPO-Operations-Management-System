@@ -25,8 +25,11 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 @Service
@@ -48,11 +51,29 @@ public class DataCenterIntegrationClient {
     private DataCenterProperties dataCenterProperties;
 
     public <T> T call(String endpointCode, Object requestPayload, Class<T> responseType) {
+        return exchange(endpointCode, requestPayload, null, responseType, null);
+    }
+
+    public <T> T callGet(String endpointCode, Map<String, ?> queryParams, Class<T> responseType) {
+        return exchange(endpointCode, null, queryParams, responseType, HttpMethod.GET);
+    }
+
+    private <T> T exchange(
+            String endpointCode,
+            Object requestPayload,
+            Map<String, ?> queryParams,
+            Class<T> responseType,
+            HttpMethod forcedMethod) {
         SystemDataCenterConfig config = dataCenterConfigService.activeConfig();
         SystemDataCenterEndpointConfig endpoint = requireRuntimeEndpoint(endpointCode);
         String token = tokenService.fetchAccessToken(config);
+        HttpMethod method = forcedMethod == null
+                ? HttpMethod.valueOf(normalizeMethod(endpoint.getMethod()))
+                : forcedMethod;
         String url = joinUrl(config.getBaseUrl(), endpoint.getPath());
-        HttpMethod method = HttpMethod.valueOf(normalizeMethod(endpoint.getMethod()));
+        if (method == HttpMethod.GET) {
+            url = appendQuery(url, queryParams);
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
@@ -160,7 +181,9 @@ public class DataCenterIntegrationClient {
         return DataCenterEndpointRegistry.U9_SALES_ORDER_SYNC.equals(code)
                 || DataCenterEndpointRegistry.U9_COMMON_ENTITY_QUERY.equals(code)
                 || DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE.equals(code)
-                || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equals(code);
+                || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equals(code)
+                || DataCenterEndpointRegistry.MES_PROCESS_TYPE_LIST.equals(code)
+                || DataCenterEndpointRegistry.MES_MATERIAL_PAGE.equals(code);
     }
 
     private String resolvePath(SystemDataCenterEndpointConfig endpoint) {
@@ -185,6 +208,39 @@ public class DataCenterIntegrationClient {
             return base + "/" + endpointPath;
         }
         return base + endpointPath;
+    }
+
+    private String appendQuery(String url, Map<String, ?> queryParams) {
+        if (queryParams == null || queryParams.isEmpty()) {
+            return url;
+        }
+        StringBuilder query = new StringBuilder();
+        for (Map.Entry<String, ?> entry : queryParams.entrySet()) {
+            String key = trimToNull(entry.getKey());
+            Object rawValue = entry.getValue();
+            if (key == null || rawValue == null) {
+                continue;
+            }
+            String value = trimToNull(String.valueOf(rawValue));
+            if (value == null) {
+                continue;
+            }
+            if (!query.isEmpty()) {
+                query.append('&');
+            }
+            query.append(encodeQueryPart(key)).append('=').append(encodeQueryPart(value));
+        }
+        if (query.isEmpty()) {
+            return url;
+        }
+        String separator = url.contains("?")
+                ? (url.endsWith("?") || url.endsWith("&") ? "" : "&")
+                : "?";
+        return url + separator + query;
+    }
+
+    private String encodeQueryPart(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private String normalizeMethod(String value) {

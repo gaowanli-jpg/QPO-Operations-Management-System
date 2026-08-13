@@ -16,6 +16,8 @@ public class DataCenterProperties {
     private int readTimeoutMs = 60000;
     private int tokenExpireSkewSeconds = 60;
     private String mesMaterialPath = "/api/v1/mes/openapi/material-preparation/create";
+    private String mesProcessTypeListPath = "/api/v1/mes/openapi/process-type/list";
+    private String mesMaterialPagePath = "/api/v1/mes/openapi/material/page";
     private String wmsAllocationPath = "";
     private String u9SalesOrderSyncPath = "";
     private String u9CommonEntityQueryPath = "";
@@ -99,6 +101,22 @@ public class DataCenterProperties {
 
     public void setMesMaterialPath(String mesMaterialPath) {
         this.mesMaterialPath = mesMaterialPath;
+    }
+
+    public String getMesProcessTypeListPath() {
+        return mesProcessTypeListPath;
+    }
+
+    public void setMesProcessTypeListPath(String mesProcessTypeListPath) {
+        this.mesProcessTypeListPath = mesProcessTypeListPath;
+    }
+
+    public String getMesMaterialPagePath() {
+        return mesMaterialPagePath;
+    }
+
+    public void setMesMaterialPagePath(String mesMaterialPagePath) {
+        this.mesMaterialPagePath = mesMaterialPagePath;
     }
 
     public String getWmsAllocationPath() {

@@ -1042,6 +1042,8 @@ Expected: backend and frontend test suites pass, or any unrelated pre-existing f
 
 ### 阶段 1：数据中心 endpoint 与 GET query 能力
 
+状态：已完成。
+
 目标：系统配置里能维护 MES 工艺列表和材料分页两个只读 endpoint，QPO 后端能通过数据中心带 query 参数调用材料分页。
 
 修改：

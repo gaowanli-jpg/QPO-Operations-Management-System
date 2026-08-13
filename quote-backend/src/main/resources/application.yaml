@@ -63,6 +63,8 @@ erp:
     read-timeout-ms: ${ERP_DATA_CENTER_READ_TIMEOUT_MS:60000}
     token-expire-skew-seconds: ${ERP_DATA_CENTER_TOKEN_EXPIRE_SKEW_SECONDS:60}
     mes-material-path: ${ERP_DATA_CENTER_MES_MATERIAL_PATH:/api/v1/mes/openapi/material-preparation/create}
+    mes-process-type-list-path: ${ERP_DATA_CENTER_MES_PROCESS_TYPE_LIST_PATH:/api/v1/mes/openapi/process-type/list}
+    mes-material-page-path: ${ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH:/api/v1/mes/openapi/material/page}
     wms-allocation-path: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:}
     u9-sales-order-sync-path: ${ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH:}
     u9-common-entity-query-path: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:}
