@@ -7,6 +7,8 @@
 
 > 2026-08-09 材料主数据阶段 10 收口：本接口只发送工程材料身份摘要字段 `engineeringMaterialCode / engineeringMaterialTypeCode / engineeringMaterialTypeName / engineeringMaterialCategory / engineeringMaterialName / materialShape`。材料编码和材料类型用于 MES 生产侧识别或追溯材料摘要，材质分类与材料形态分开；完整 `materialData`、完整材料价格矩阵和 QPO 内部材料成本不进入 MES 生产下发请求。
 
+> 2026-08-13 MES 主数据同步阶段 9 收口：MES 工艺/材料主数据同步后，QPO 生产下发 DTO 字段名不变，payload 仍满足 `processRoute[].processTypeCode = QPO processCode = MES code`、`processRoute[].processName = QPO detailName`、`bom[].itemCode = QPO engineeringMaterialCode = MES material code`、`bom[].quantity = QPO materialGrossWeight kg`。同步只保证字典和报价快照使用 MES 编码体系，不把 QPO 单价、完整材料价格矩阵、完整请求/响应或 token 写入 MES 下发 payload。
+
 ## 1. 适用范围
 
 本文档描述 QPO 待产零件模块通过数据中心向 MES 下发待生产零件的接口。该接口只处理 WMS 锁库后仍需生产的待产 allocation 行，不替代 MES 物料号获取接口，也不处理库存锁定结果回传。
@@ -100,6 +102,19 @@ ERP_MES_TIMEOUT_MS=60000
 ```
 
 ## 4. 字段说明
+
+### 4.1 MES 主数据同步后的字段合同
+
+| MES 下发字段 | QPO 来源 | 合同口径 |
+| --- | --- | --- |
+| `processRoute[].processTypeCode` | `processCode` | `processRoute[].processTypeCode = QPO processCode = MES code`。MES 工艺类型同步时把 MES `code` 写入 QPO 工艺大类 `processCode`。 |
+| `processRoute[].processName` | `detailName` | `processRoute[].processName = QPO detailName`。QPO 默认具体工艺由 MES 工艺名称生成，用户也可在该 MES 大类下维护更细的具体工艺。 |
+| `bom[].itemCode` | `engineeringMaterialCode` | `bom[].itemCode = QPO engineeringMaterialCode = MES material code`。报价完成时从材料字典快照材料编码。 |
+| `bom[].quantity` | `materialGrossWeight` | `bom[].quantity = QPO materialGrossWeight kg`。这里是材料毛重 kg，不是件数。 |
+
+真实数据中心读取 MES 工艺/材料可以在普通回归中手动执行同步；真实写 MES 仍使用独立显式开关，不在普通回归中自动执行。
+
+### 4.2 基础字段
 
 | 字段 | 必填 | 来源 / 含义 |
 | --- | --- | --- |

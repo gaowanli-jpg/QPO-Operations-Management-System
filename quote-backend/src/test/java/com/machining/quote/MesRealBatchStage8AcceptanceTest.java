@@ -75,6 +75,33 @@ class MesRealBatchStage8AcceptanceTest {
                 .doesNotContainPattern("(?i)bearer\\s+[A-Za-z0-9._~+/=-]{12,}");
     }
 
+    @Test
+    void stageNineDocumentsSyncedDictionaryFieldsEnteringMesProductionPayloadSafely() throws IOException {
+        String design = read(Path.of("..", "docs", "superpowers", "specs", "2026-08-13-mes-master-data-sync-design.md"));
+        String masterData = read(Path.of("..", "docs", "QPO-MES-WMS对接", "10-MES工艺材料主数据同步说明.md"));
+        String production = read(Path.of("..", "docs", "QPO-MES-WMS对接", "09-提供给MES的待生产下发接口对接说明.md"));
+
+        assertThat(design)
+                .contains(
+                        "阶段 9：文档、回归和真实链路验收",
+                        "processRoute[].processTypeCode = QPO processCode = MES code",
+                        "processRoute[].processName = QPO detailName",
+                        "bom[].itemCode = QPO engineeringMaterialCode = MES material code",
+                        "bom[].quantity = QPO materialGrossWeight kg");
+
+        assertThat(masterData + "\n" + production)
+                .contains(
+                        "MES_PROCESS_TYPE_LIST",
+                        "MES_MATERIAL_PAGE",
+                        "真实数据中心读取 MES 工艺/材料",
+                        "真实写 MES 仍使用独立显式开关",
+                        "processRoute[].processTypeCode = QPO processCode = MES code",
+                        "processRoute[].processName = QPO detailName",
+                        "bom[].itemCode = QPO engineeringMaterialCode = MES material code",
+                        "bom[].quantity = QPO materialGrossWeight kg")
+                .doesNotContain("Authorization: Bearer " + "eyJ", "access_token=" + "eyJ");
+    }
+
     private static Path stage44Doc() throws IOException {
         try (Stream<Path> stream = Files.walk(Path.of("..", "docs"))) {
             return stream

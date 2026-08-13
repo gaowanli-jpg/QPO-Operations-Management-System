@@ -205,6 +205,8 @@ class CoreWorkflowIntegrationTests {
         material.setRemarks("");
         material.setPlateDensity(7850.0);
         material.setPlatePrice(7.1);
+        material.setBarDensity(7850.0);
+        material.setBarPrice(7.1);
         materialMapper.insert(material);
 
         QuoteSubmitReq req = new QuoteSubmitReq();
@@ -449,6 +451,8 @@ class CoreWorkflowIntegrationTests {
         material.setRemarks("");
         material.setPlateDensity(7850.0);
         material.setPlatePrice(7.1);
+        material.setBarDensity(7850.0);
+        material.setBarPrice(7.1);
         materialMapper.insert(material);
 
         Map<String, Object> materialData = new LinkedHashMap<>();

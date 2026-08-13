@@ -347,6 +347,46 @@ class LockedItemMesProductionDispatchTest {
     }
 
     @Test
+    void dispatchBatchUsesMesSyncedDictionarySnapshotForProductionPayload() {
+        MesProductionDispatchService service = new MesProductionDispatchService();
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
+        OrderDeliveryTicketAllocation allocation = allocation(9, "PRODUCTION_REQUIRED", "PENDING");
+        allocation.setEngineeringMaterialCode("MES-MAT-42CRMO");
+        allocation.setEngineeringMaterialName("42CrMo MES 同步材料");
+        allocation.setMaterialGrossWeight(18.75);
+        allocation.setProcessRoute(List.of(Map.ofEntries(
+                Map.entry("routeType", "PROCESS"),
+                Map.entry("sourceType", "MES"),
+                Map.entry("sortNo", 20),
+                Map.entry("processCode", "MES-PT-CNC"),
+                Map.entry("categoryName", "MES 数控加工"),
+                Map.entry("detailName", "工时工艺-CNC精加工"),
+                Map.entry("unitWorkHours", 2.25)
+        )));
+        when(allocationMapper.selectById(9)).thenReturn(allocation);
+        when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
+        when(client.dispatch(any())).thenReturn(success("MES-PROD-SYNCED", "accepted"));
+        wireDispatchService(service, allocationMapper, null, client, null, null);
+
+        Map<String, Object> result = service.dispatchBatch(List.of(9), 9109L);
+
+        assertThat(result).containsEntry("successCount", 1);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(client).dispatch(requestCaptor.capture());
+        MesProductionDispatchReq request = requestCaptor.getValue();
+        assertThat(request.getProcessRoute()).singleElement().satisfies(route -> {
+            assertThat(route.getProcessTypeCode()).isEqualTo("MES-PT-CNC");
+            assertThat(route.getProcessName()).isEqualTo("工时工艺-CNC精加工");
+            assertThat(route.getWorkHour()).isEqualByComparingTo(new BigDecimal("2.25"));
+        });
+        assertThat(request.getBom()).singleElement().satisfies(bom -> {
+            assertThat(bom.getItemCode()).isEqualTo("MES-MAT-42CRMO");
+            assertThat(bom.getQuantity()).isEqualByComparingTo(new BigDecimal("18.75"));
+        });
+    }
+
+    @Test
     void dispatchBatchContinuesWithEmptyAssemblyRelationsWhenSourceHasNoRelations() {
         MesProductionDispatchService service = new MesProductionDispatchService();
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);

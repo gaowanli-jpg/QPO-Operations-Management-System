@@ -287,6 +287,11 @@ class MesProductionBatchDispatchStage5Test {
         allocation.setQty(qty);
         allocation.setTicketQty(10);
         allocation.setMaterialNo(materialNo);
+        if (materialNo != null) {
+            allocation.setEngineeringMaterialCode("RAW-" + materialNo);
+            allocation.setEngineeringMaterialName("Raw material for " + materialNo);
+            allocation.setMaterialGrossWeight(1.25);
+        }
         allocation.setRfqNo("RFQ-NOT-ORDER-NO");
         allocation.setCustomerName("ACME");
         allocation.setInternalProjectNo("IP-9");
