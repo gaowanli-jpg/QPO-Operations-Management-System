@@ -10,6 +10,8 @@
     <section class="erp-toolbar">
       <div class="erp-toolbar-group material-toolbar">
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
+        <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="warning" plain :loading="isPending(dictActionKeys.syncMesMaterials)" :disabled="isPending(dictActionKeys.syncMesMaterials)" @click="syncMesMaterials">从 MES 同步材料</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-else-if="activeTab === 'materialTypes'" type="primary" @click="openMaterialTypeDialog()">新增材料类型</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processCategories'" type="primary" @click="openProcessCategoryDialog()">新增工艺大类</el-button>
@@ -39,6 +41,22 @@
                 </template>
               </el-table-column>
               <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip />
+              <el-table-column label="来源" width="110" align="center">
+                <template #default="scope">
+                  <el-tag :type="scope.row.sourceType === 'MES' ? 'success' : 'info'" size="small">{{ sourceTypeText(scope.row.sourceType) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="MES 类型" width="120" align="center">
+                <template #default="scope">{{ scope.row.mesMaterialType || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="同步时间" width="170" align="center">
+                <template #default="scope">{{ formatSyncTime(scope.row.mesSyncedAt) }}</template>
+              </el-table-column>
+              <el-table-column label="单价状态" width="120" align="center">
+                <template #default="scope">
+                  <el-tag :type="materialPriceStatusType(scope.row)" size="small">{{ materialPriceStatusText(scope.row) }}</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="板材密度" width="150" align="right">
                 <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
               </el-table-column>
@@ -110,6 +128,9 @@
                   <template #default="scope">
                     <el-tag :type="scope.row.sourceType === 'MES' ? 'success' : 'info'" size="small">{{ sourceTypeText(scope.row.sourceType) }}</el-tag>
                   </template>
+                </el-table-column>
+                <el-table-column label="同步时间" width="170" align="center">
+                  <template #default="scope">{{ formatSyncTime(scope.row.mesSyncedAt) }}</template>
                 </el-table-column>
                 <el-table-column label="状态" width="90" align="center">
                   <template #default="scope">
@@ -476,7 +497,9 @@ import {
   saveMaterial as saveMaterialRequest,
   saveMaterialType as saveMaterialTypeRequest,
   saveProcessCategory as saveProcessCategoryRequest,
-  saveProcessDetail as saveProcessDetailRequest
+  saveProcessDetail as saveProcessDetailRequest,
+  syncMesMaterials as syncMesMaterialsRequest,
+  syncMesProcessTypes as syncMesProcessTypesRequest
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
@@ -508,6 +531,8 @@ const { isPending, runAction } = usePendingAction()
 
 const dictActionKeys = {
   saveMaterialDialog: 'engineer:dict:material-save-dialog',
+  syncMesMaterials: 'engineer:dict:material-sync-mes',
+  syncMesProcessTypes: 'engineer:dict:process-sync-mes',
   saveMaterialTypeDialog: 'engineer:dict:material-type-save-dialog',
   saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
@@ -560,6 +585,14 @@ const formatHourlyRate = (value) => {
   return text === '-' ? '-' : `${text} 元/小时`
 }
 const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
+const hasPositivePrice = (value) => Number(value) > 0
+const materialPriceStatusText = (row = {}) => (
+  hasPositivePrice(row.platePrice) || hasPositivePrice(row.barPrice) || hasPositivePrice(row.tubePrice)
+    ? '单价已维护'
+    : '单价未维护'
+)
+const materialPriceStatusType = (row = {}) => (materialPriceStatusText(row) === '单价已维护' ? 'success' : 'danger')
+const formatSyncTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '-')
 const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
 const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
 
@@ -688,6 +721,34 @@ const openAssemblyMarkupFeeDialog = (row) => {
 const openExtraFeeDialog = (row) => {
   Object.assign(extraFeeForm, createEmptyExtraFee(), row || {})
   extraFeeDialogVisible.value = true
+}
+
+const syncMesMaterials = async () => {
+  return runAction(dictActionKeys.syncMesMaterials, async () => {
+    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价。确认从 MES 同步材料主数据？', '同步确认', { type: 'warning' })
+    try {
+      const response = await syncMesMaterialsRequest()
+      ElMessage.success(response.message || 'MES 材料同步完成')
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('MES 材料同步失败。')
+    }
+  })
+}
+
+const syncMesProcessTypes = async () => {
+  return runAction(dictActionKeys.syncMesProcessTypes, async () => {
+    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价。确认从 MES 同步工艺主数据？', '同步确认', { type: 'warning' })
+    try {
+      const response = await syncMesProcessTypesRequest()
+      ElMessage.success(response.message || 'MES 工艺同步完成')
+      await dictionaryStore.reloadAfterMutation()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('MES 工艺同步失败。')
+    }
+  })
 }
 
 const saveMaterial = async () => {

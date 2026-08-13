@@ -1249,6 +1249,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 8：前端材料工艺页同步入口与字段展示
 
+状态：已完成。
+
 目标：用户能在材料工艺模块手动同步 MES 工艺和材料，并能看出哪些字段来自 MES、哪些价格仍需 QPO 维护。
 
 修改：

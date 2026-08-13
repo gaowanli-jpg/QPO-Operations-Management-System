@@ -43,6 +43,10 @@ export const deleteMaterial = (id) => request(`/api/dict/materials/${id}`, {
   method: 'DELETE'
 })
 
+export const syncMesMaterials = () => request('/api/dict/materials/sync-mes', {
+  method: 'POST'
+})
+
 export const listProcessCategories = ({ enabledOnly } = {}) => request(
   `/api/dict/process-categories${buildQuery({ enabledOnly })}`
 )
@@ -54,6 +58,10 @@ export const saveProcessCategory = (payload) => {
     data: payload
   })
 }
+
+export const syncMesProcessTypes = () => request('/api/dict/process-categories/sync-mes', {
+  method: 'POST'
+})
 
 export const listProcessDetails = ({ categoryId, enabledOnly } = {}) => request(
   `/api/dict/process-details${buildQuery({ categoryId, enabledOnly })}`
