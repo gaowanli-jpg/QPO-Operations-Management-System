@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 
 import java.lang.reflect.Method;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +47,17 @@ class MaterialMasterStage3BackendTest {
         DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L, true);
         material.setMaterialCategory("不锈钢");
         material.setSortNo(10);
+        LocalDateTime syncedAt = LocalDateTime.of(2026, 8, 13, 12, 30);
+        material.setSourceType("MES");
+        material.setMesExternalId("mes-mat-10");
+        material.setMesMaterialType("MATERIAL");
+        material.setMesPurchaseType("BUY");
+        material.setMesProductionType("OUTSOURCE");
+        material.setMesDocNum("DOC-10");
+        material.setMesStandard("GB/T 1220");
+        material.setMesWeight("12.34");
+        material.setMesDensityRaw("7.93");
+        material.setMesSyncedAt(syncedAt);
         DictMaterialType type = materialType(1L, "RAW_MATERIAL", "原材料", true);
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(type));
@@ -59,6 +71,16 @@ class MaterialMasterStage3BackendTest {
         assertThat(row.getMaterialTypeCode()).isEqualTo("RAW_MATERIAL");
         assertThat(row.getMaterialTypeName()).isEqualTo("原材料");
         assertThat(row.getMaterialCategory()).isEqualTo("不锈钢");
+        assertThat(row.getSourceType()).isEqualTo("MES");
+        assertThat(row.getMesExternalId()).isEqualTo("mes-mat-10");
+        assertThat(row.getMesMaterialType()).isEqualTo("MATERIAL");
+        assertThat(row.getMesPurchaseType()).isEqualTo("BUY");
+        assertThat(row.getMesProductionType()).isEqualTo("OUTSOURCE");
+        assertThat(row.getMesDocNum()).isEqualTo("DOC-10");
+        assertThat(row.getMesStandard()).isEqualTo("GB/T 1220");
+        assertThat(row.getMesWeight()).isEqualTo("12.34");
+        assertThat(row.getMesDensityRaw()).isEqualTo("7.93");
+        assertThat(row.getMesSyncedAt()).isEqualTo(syncedAt);
         verifyNoInteractions(auditService);
     }
 
@@ -117,6 +139,10 @@ class MaterialMasterStage3BackendTest {
         assertThat(saved.getMaterialName()).isEqualTo("45#");
         assertThat(saved.getMaterialTypeCode()).isEqualTo("RAW_MATERIAL");
         assertThat(saved.getEnabled()).isTrue();
+        assertThat(saved.getSourceType()).isEqualTo("LOCAL");
+        assertThat(saved.getMesExternalId()).isNull();
+        assertThat(saved.getMesMaterialType()).isNull();
+        assertThat(saved.getMesSyncedAt()).isNull();
         verify(materialMapper).insert(any(DictMaterial.class));
         verify(auditService).record(
                 org.mockito.ArgumentMatchers.eq("DICT_MATERIAL_CREATE"),

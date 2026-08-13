@@ -1101,6 +1101,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 3：数据库迁移与本地字典字段扩展
 
+状态：已完成。
+
 目标：材料字典具备 MES 来源追踪字段，主数据同步有独立批次记录；工艺表复用已有 MES 字段。
 
 修改：

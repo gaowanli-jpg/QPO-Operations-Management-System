@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class MaterialMasterService {
+    private static final String SOURCE_LOCAL = "LOCAL";
+
     @Autowired
     private DictMaterialMapper materialMapper;
     @Autowired
@@ -221,9 +223,27 @@ public class MaterialMasterService {
             entity.setDensity(firstNonNull(entity.getPlateDensity(), entity.getBarDensity(), entity.getTubeDensity()));
         }
         entity.setRemarks(optional(req.getRemarks()));
+        copyMesSourceFields(entity, before);
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
         entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : Objects.requireNonNullElse(before.getSortNo(), 0) : req.getSortNo());
         return entity;
+    }
+
+    private void copyMesSourceFields(DictMaterial target, DictMaterial before) {
+        if (before == null) {
+            target.setSourceType(SOURCE_LOCAL);
+            return;
+        }
+        target.setSourceType(isBlank(before.getSourceType()) ? SOURCE_LOCAL : before.getSourceType());
+        target.setMesExternalId(before.getMesExternalId());
+        target.setMesMaterialType(before.getMesMaterialType());
+        target.setMesPurchaseType(before.getMesPurchaseType());
+        target.setMesProductionType(before.getMesProductionType());
+        target.setMesDocNum(before.getMesDocNum());
+        target.setMesStandard(before.getMesStandard());
+        target.setMesWeight(before.getMesWeight());
+        target.setMesDensityRaw(before.getMesDensityRaw());
+        target.setMesSyncedAt(before.getMesSyncedAt());
     }
 
     private DictMaterialType requireMaterialType(Long id) {
@@ -322,6 +342,16 @@ public class MaterialMasterService {
         dto.setTubeDensity(material.getTubeDensity());
         dto.setTubePrice(material.getTubePrice());
         dto.setRemarks(material.getRemarks());
+        dto.setSourceType(material.getSourceType() == null || material.getSourceType().isBlank() ? SOURCE_LOCAL : material.getSourceType());
+        dto.setMesExternalId(material.getMesExternalId());
+        dto.setMesMaterialType(material.getMesMaterialType());
+        dto.setMesPurchaseType(material.getMesPurchaseType());
+        dto.setMesProductionType(material.getMesProductionType());
+        dto.setMesDocNum(material.getMesDocNum());
+        dto.setMesStandard(material.getMesStandard());
+        dto.setMesWeight(material.getMesWeight());
+        dto.setMesDensityRaw(material.getMesDensityRaw());
+        dto.setMesSyncedAt(material.getMesSyncedAt());
         dto.setEnabled(material.getEnabled());
         dto.setSortNo(material.getSortNo());
         dto.setCreatedAt(material.getCreatedAt());
@@ -385,6 +415,16 @@ public class MaterialMasterService {
         target.setTubeDensity(source.getTubeDensity());
         target.setTubePrice(source.getTubePrice());
         target.setRemarks(source.getRemarks());
+        target.setSourceType(source.getSourceType());
+        target.setMesExternalId(source.getMesExternalId());
+        target.setMesMaterialType(source.getMesMaterialType());
+        target.setMesPurchaseType(source.getMesPurchaseType());
+        target.setMesProductionType(source.getMesProductionType());
+        target.setMesDocNum(source.getMesDocNum());
+        target.setMesStandard(source.getMesStandard());
+        target.setMesWeight(source.getMesWeight());
+        target.setMesDensityRaw(source.getMesDensityRaw());
+        target.setMesSyncedAt(source.getMesSyncedAt());
         target.setEnabled(source.getEnabled());
         target.setSortNo(source.getSortNo());
         target.setCreatedAt(source.getCreatedAt());
@@ -402,6 +442,10 @@ public class MaterialMasterService {
 
     private String optional(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private String limit(String value, String label, int maxLength) {

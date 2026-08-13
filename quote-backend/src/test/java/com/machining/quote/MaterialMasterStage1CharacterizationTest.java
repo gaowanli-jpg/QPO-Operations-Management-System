@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MaterialMasterStage1CharacterizationTest {
     private static final Path DICT_MATERIAL = main("entity", "DictMaterial.java");
+    private static final Path MATERIAL_DTO = main("dto", "MaterialMasterDTO.java");
     private static final Path ITEM = main("entity", "ItemQuoteVersion.java");
     private static final Path SALES_ITEM = main("entity", "SalesOrderItem.java");
     private static final Path TICKET = main("entity", "OrderDeliveryTicket.java");
@@ -57,6 +58,35 @@ class MaterialMasterStage1CharacterizationTest {
                         "private Boolean enabled;",
                         "private Integer sortNo;")
                 .doesNotContain("private String materialType;");
+    }
+
+    @Test
+    void dictMaterialAndDtoExposeMesSourceTrackingFields() throws IOException {
+        assertThat(read(DICT_MATERIAL))
+                .contains(
+                        "private String sourceType;",
+                        "private String mesExternalId;",
+                        "private String mesMaterialType;",
+                        "private String mesPurchaseType;",
+                        "private String mesProductionType;",
+                        "private String mesDocNum;",
+                        "private String mesStandard;",
+                        "private String mesWeight;",
+                        "private String mesDensityRaw;",
+                        "private LocalDateTime mesSyncedAt;");
+
+        assertThat(read(MATERIAL_DTO))
+                .contains(
+                        "private String sourceType;",
+                        "private String mesExternalId;",
+                        "private String mesMaterialType;",
+                        "private String mesPurchaseType;",
+                        "private String mesProductionType;",
+                        "private String mesDocNum;",
+                        "private String mesStandard;",
+                        "private String mesWeight;",
+                        "private String mesDensityRaw;",
+                        "private LocalDateTime mesSyncedAt;");
     }
 
     @Test

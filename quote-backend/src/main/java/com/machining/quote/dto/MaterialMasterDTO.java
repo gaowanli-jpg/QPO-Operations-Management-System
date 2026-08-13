@@ -21,6 +21,16 @@ public class MaterialMasterDTO {
     private Double tubeDensity;
     private Double tubePrice;
     private String remarks;
+    private String sourceType;
+    private String mesExternalId;
+    private String mesMaterialType;
+    private String mesPurchaseType;
+    private String mesProductionType;
+    private String mesDocNum;
+    private String mesStandard;
+    private String mesWeight;
+    private String mesDensityRaw;
+    private LocalDateTime mesSyncedAt;
     private Boolean enabled;
     private Integer sortNo;
     private LocalDateTime createdAt;

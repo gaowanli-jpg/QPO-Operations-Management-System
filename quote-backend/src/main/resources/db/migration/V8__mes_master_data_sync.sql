@@ -2,6 +2,42 @@
 
 SET search_path TO "${flyway:defaultSchema}";
 
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'LOCAL';
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_external_id VARCHAR(120);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_material_type VARCHAR(40);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_purchase_type VARCHAR(60);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_production_type VARCHAR(60);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_doc_num VARCHAR(120);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_standard VARCHAR(255);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_weight VARCHAR(80);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_density_raw VARCHAR(80);
+ALTER TABLE dict_material ADD COLUMN IF NOT EXISTS mes_synced_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_dict_material_source_type ON dict_material (source_type);
+CREATE INDEX IF NOT EXISTS idx_dict_material_mes_external_id ON dict_material (mes_external_id) WHERE mes_external_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS mes_master_data_sync_run (
+    id BIGSERIAL PRIMARY KEY,
+    sync_type VARCHAR(40) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP,
+    fetched_count INTEGER NOT NULL DEFAULT 0,
+    valid_count INTEGER NOT NULL DEFAULT 0,
+    invalid_count INTEGER NOT NULL DEFAULT 0,
+    duplicate_count INTEGER NOT NULL DEFAULT 0,
+    upserted_count INTEGER NOT NULL DEFAULT 0,
+    disabled_count INTEGER NOT NULL DEFAULT 0,
+    message TEXT,
+    created_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_mes_master_data_sync_run_type_started
+    ON mes_master_data_sync_run (sync_type, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mes_master_data_sync_run_status
+    ON mes_master_data_sync_run (status);
+
 INSERT INTO system_data_center_endpoint_config (
     endpoint_code,
     display_name,
