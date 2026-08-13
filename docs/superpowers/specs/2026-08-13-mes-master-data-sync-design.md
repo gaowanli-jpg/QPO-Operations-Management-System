@@ -485,11 +485,11 @@ Permission: engineer:dict:view
 
 ## 19. 状态映射
 
-MES `status` 文档未列枚举。第一版使用兼容映射：
+已核对测试服务器 MES 源码和真实库表，主数据状态采用若依公共状态口径：`0 = 开启/启用/正常`，`1 = 关闭/禁用/停用`。
 
-- 启用：`1`、`true`、`TRUE`、`ENABLE`、`ENABLED`、`ACTIVE`、`NORMAL`、`正常`、`启用`。
-- 停用：`0`、`false`、`FALSE`、`DISABLE`、`DISABLED`、`INACTIVE`、`停用`、`禁用`。
-- 未识别：默认启用，同时把原始状态写入 remarks 或 MES 原始字段摘要，便于后续修正。
+- 启用：`0`、`true`、`TRUE`、`Y`、`YES`、`ENABLE`、`ENABLED`、`ACTIVE`、`NORMAL`、`正常`、`启用`、`开启`。
+- 停用：`1`、`false`、`FALSE`、`N`、`NO`、`DISABLE`、`DISABLED`、`INACTIVE`、`STOP`、`STOPPED`、`OFF`、`CLOSE`、`CLOSED`、`关闭`、`停用`、`禁用`。
+- 未识别：默认启用，避免 MES 新增文本状态导致误停全量主数据；同步运行记录保留计数和安全消息，必要时再按 MES 新枚举补测试。
 
 ## 20. 测试策略
 

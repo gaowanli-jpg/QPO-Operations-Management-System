@@ -230,6 +230,29 @@ class MesProcessTypeSyncServiceTest {
     }
 
     @Test
+    void syncMapsMesOneStatusToDisabledCategory() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
+        when(client.listProcessTypes()).thenReturn(List.of(row("mes-one", "P004", "MES disabled process", "80.00", "1")));
+        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(905L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        service.syncProcessTypesManual(12L);
+
+        ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
+        verify(categoryMapper).insert(categoryCaptor.capture());
+        assertThat(categoryCaptor.getValue().getEnabled()).isFalse();
+    }
+
+    @Test
     void auditServiceKnowsMesProcessSyncLabel() {
         assertThat(AuditService.inferModule("DICT_PROCESS_MES_SYNC")).isEqualTo("DICT");
         assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("MES");

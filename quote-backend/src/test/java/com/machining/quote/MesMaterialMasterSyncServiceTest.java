@@ -274,6 +274,30 @@ class MesMaterialMasterSyncServiceTest {
     }
 
     @Test
+    void syncMaterialsMapsMesOneStatusToDisabledMaterial() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        when(client.pageMaterials(1, 200)).thenReturn(page(1,
+                row("mes-one", "MAT-ONE", "MES disabled material", "MATERIAL", null, null, null, null, "1.00", "7.85", "1")));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(materialType(402L, "MATERIAL", "Material")));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(916L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        service.syncMaterialsManual(13L);
+
+        ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
+        verify(materialMapper).insert(materialCaptor.capture());
+        assertThat(materialCaptor.getValue().getEnabled()).isFalse();
+    }
+
+    @Test
     void emptyFirstMaterialPageFailsRunAndDoesNotDisableExistingMesMaterials() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);

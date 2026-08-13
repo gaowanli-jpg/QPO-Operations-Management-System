@@ -562,7 +562,8 @@ public class MesMasterDataSyncService {
             return true;
         }
         String normalized = value.toUpperCase(Locale.ROOT);
-        if (Set.of("FALSE", "N", "NO", "DISABLE", "DISABLED", "INACTIVE", "STOP", "STOPPED", "停用", "禁用")
+        if (Set.of("1", "FALSE", "N", "NO", "DISABLE", "DISABLED", "INACTIVE", "STOP", "STOPPED",
+                        "OFF", "CLOSE", "CLOSED", "关闭", "停用", "禁用")
                 .contains(normalized)) {
             return false;
         }
