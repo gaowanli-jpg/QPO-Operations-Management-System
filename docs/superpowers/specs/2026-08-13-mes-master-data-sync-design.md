@@ -1220,6 +1220,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 7：后端同步 API、权限和审计
 
+状态：已完成。
+
 目标：材料工艺模块可以手动触发 MES 工艺/材料同步，权限和日志符合 QPO 治理要求。
 
 修改：

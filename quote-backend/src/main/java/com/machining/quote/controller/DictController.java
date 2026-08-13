@@ -1,6 +1,7 @@
 package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
@@ -14,6 +15,7 @@ import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.MaterialMasterService;
+import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,6 +44,8 @@ public class DictController {
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private MesMasterDataSyncService mesMasterDataSyncService;
 
     @GetMapping("/materials")
     @RequirePermission("engineer:dict:view")
@@ -54,6 +59,15 @@ public class DictController {
     public Map<String, Object> createMaterial(@RequestBody MaterialMasterSaveReq material) {
         MaterialMasterDTO data = materialMasterService.saveMaterial(null, material);
         return Map.of("success", true, "message", "材料已新增", "data", data);
+    }
+
+    @PostMapping("/materials/sync-mes")
+    @RequirePermission("engineer:dict:material-manage")
+    public Map<String, Object> syncMesMaterials() {
+        MesMasterDataSyncService.SyncResult result = mesMasterDataSyncService.syncMaterialsManual(currentUserId());
+        Map<String, Object> response = syncSummary("MES_MATERIAL", result);
+        response.put("message", result.success() ? "MES material master data sync completed" : result.message());
+        return response;
     }
 
     @PutMapping("/materials/{id}")
@@ -267,5 +281,25 @@ public class DictController {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser user = AuthContext.get();
+        return user == null || user.id() == null ? null : user.id().longValue();
+    }
+
+    private Map<String, Object> syncSummary(String syncType, MesMasterDataSyncService.SyncResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("syncRunId", result.syncRunId());
+        summary.put("syncType", syncType);
+        summary.put("status", result.success() ? "SUCCESS" : "FAILED");
+        summary.put("fetchedCount", result.fetchedCount());
+        summary.put("validCount", result.validCount());
+        summary.put("invalidCount", result.invalidCount());
+        summary.put("duplicateCount", result.duplicateCount());
+        summary.put("upsertedCount", result.upsertedCount());
+        summary.put("disabledCount", result.disabledCount());
+        return summary;
     }
 }

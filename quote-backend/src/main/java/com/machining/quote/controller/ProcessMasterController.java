@@ -1,11 +1,13 @@
 package com.machining.quote.controller;
 
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.ProcessCategoryDTO;
 import com.machining.quote.dto.ProcessCategorySaveReq;
 import com.machining.quote.dto.ProcessDetailDTO;
 import com.machining.quote.dto.ProcessDetailSaveReq;
 import com.machining.quote.service.ProcessMasterService;
+import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +27,8 @@ import java.util.Map;
 public class ProcessMasterController {
     @Autowired
     private ProcessMasterService processMasterService;
+    @Autowired
+    private MesMasterDataSyncService mesMasterDataSyncService;
 
     @GetMapping("/process-categories")
     @RequirePermission("engineer:dict:view")
@@ -37,6 +42,15 @@ public class ProcessMasterController {
     public Map<String, Object> createProcessCategory(@RequestBody ProcessCategorySaveReq req) {
         ProcessCategoryDTO data = processMasterService.saveCategory(null, req);
         return Map.of("success", true, "message", "工艺大类已新增", "data", data);
+    }
+
+    @PostMapping("/process-categories/sync-mes")
+    @RequirePermission("engineer:dict:process-manage")
+    public Map<String, Object> syncMesProcessTypes() {
+        MesMasterDataSyncService.SyncResult result = mesMasterDataSyncService.syncProcessTypesManual(currentUserId());
+        Map<String, Object> response = syncSummary("MES_PROCESS_TYPE", result);
+        response.put("message", result.success() ? "MES process master data sync completed" : result.message());
+        return response;
     }
 
     @PutMapping("/process-categories/{id}")
@@ -70,5 +84,25 @@ public class ProcessMasterController {
             @RequestBody ProcessDetailSaveReq req) {
         ProcessDetailDTO data = processMasterService.saveDetail(id, req);
         return Map.of("success", true, "message", "具体工艺已更新", "data", data);
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser user = AuthContext.get();
+        return user == null || user.id() == null ? null : user.id().longValue();
+    }
+
+    private Map<String, Object> syncSummary(String syncType, MesMasterDataSyncService.SyncResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("syncRunId", result.syncRunId());
+        summary.put("syncType", syncType);
+        summary.put("status", result.success() ? "SUCCESS" : "FAILED");
+        summary.put("fetchedCount", result.fetchedCount());
+        summary.put("validCount", result.validCount());
+        summary.put("invalidCount", result.invalidCount());
+        summary.put("duplicateCount", result.duplicateCount());
+        summary.put("upsertedCount", result.upsertedCount());
+        summary.put("disabledCount", result.disabledCount());
+        return summary;
     }
 }

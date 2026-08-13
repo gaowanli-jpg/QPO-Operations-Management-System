@@ -372,6 +372,8 @@ class AuditActionCoverageTests {
         assertThat(AuditService.inferModule("PRODUCTION_ITEM_MES_PRODUCTION_FAILED")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_TICKET_EXPORT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DICT_PROCESS_MES_SYNC")).isEqualTo("DICT");
+        assertThat(AuditService.inferModule("DICT_MATERIAL_MES_SYNC")).isEqualTo("DICT");
 
         assertThat(AuditService.labelForAction("AUTH_ACCOUNT_LOCKED")).isNotEqualTo("AUTH_ACCOUNT_LOCKED");
         assertThat(AuditService.labelForAction("RFQ_IMPORT")).isNotEqualTo("RFQ_IMPORT");
@@ -395,6 +397,16 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("PRODUCTION_ITEM_MES_PRODUCTION_FAILED")).isNotEqualTo("PRODUCTION_ITEM_MES_PRODUCTION_FAILED");
         assertThat(AuditService.labelForAction("DELIVERY_TICKET_EXPORT")).isNotEqualTo("DELIVERY_TICKET_EXPORT");
         assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isNotEqualTo("DELIVERY_PROCESS_SHEET_EXPORT");
+        assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).isNotEqualTo("DICT_PROCESS_MES_SYNC");
+        assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).isNotEqualTo("DICT_MATERIAL_MES_SYNC");
+    }
+
+    @Test
+    void mesMasterDataAuditActionsExposeStableLabels() {
+        assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("MES");
+        assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("工艺");
+        assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).contains("MES");
+        assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).contains("材料");
     }
 
     @Test
