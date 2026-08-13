@@ -1128,6 +1128,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 4：MES 工艺类型同步到工艺大类
 
+状态：已完成。
+
 目标：MES 工艺类型进入 QPO 工艺大类，并保证报价仍能选择具体工艺。
 
 修改：

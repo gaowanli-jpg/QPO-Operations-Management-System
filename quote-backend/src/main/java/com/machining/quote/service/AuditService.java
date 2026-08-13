@@ -319,6 +319,7 @@ public class AuditService {
             case "DICT_MATERIAL_TYPE_DISABLE" -> "停用材料类型";
             case "DICT_PROCESS_CATEGORY_CREATE" -> "新增工艺大类";
             case "DICT_PROCESS_CATEGORY_UPDATE" -> "更新工艺大类";
+            case "DICT_PROCESS_MES_SYNC" -> "同步 MES 工艺主数据";
             case "DICT_PROCESS_DETAIL_CREATE" -> "新增具体工艺";
             case "DICT_PROCESS_DETAIL_UPDATE" -> "更新具体工艺";
             case "DICT_MARKUP_FEE_CREATE" -> "新增百分比费用";
