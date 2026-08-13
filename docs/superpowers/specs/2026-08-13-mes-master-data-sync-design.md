@@ -207,8 +207,8 @@ MES 材料同步到 `dict_material`，同步键为 MES `code`。
 | `materialType` | `dict_material_type.type_code` | 全量同步 `MATERIAL / PRODUCT / SEMI`，缺少类型时归入 `MES_UNKNOWN`。 |
 | `materialType` | `dict_material_type.type_name` | `MATERIAL=原材料`，`PRODUCT=成品`，`SEMI=半成品`，未知值保存原值。 |
 | `categoryId` / `standard` / `attribute` | `material_category` | 第一版优先 `standard`，其次 `attribute`，再其次 `categoryId`。 |
-| `density` | `density` | 转 Double；单位按 QPO 当前 `kg/m3` 处理，同时保留 MES 原始值字段。 |
-| `density` | `plate_density/bar_density/tube_density` | 仅当对应形态密度为空时初始化为 MES density；已有人工维护值不覆盖。 |
+| `density` | `mes_density_raw` | 保存 MES 原始密度字符串，作为只读同步字段和核价兜底来源。 |
+| `density` | `density/plate_density/bar_density/tube_density` | 不由 MES 同步覆盖；QPO 默认密度和板/棒/管密度由本地维护。 |
 | `id` | `mes_external_id` | 新增字段，保存 MES 主键。 |
 | `materialType` | `mes_material_type` | 新增字段，保存 MES 原始材料类型。 |
 | `purchaseType` | `mes_purchase_type` | 新增字段。 |
@@ -216,7 +216,6 @@ MES 材料同步到 `dict_material`，同步键为 MES `code`。
 | `docNum` | `mes_doc_num` | 新增字段。 |
 | `standard` | `mes_standard` | 新增字段。 |
 | `weight` | `mes_weight` | 新增字段，保存 MES 原始重量字段。 |
-| `density` | `mes_density_raw` | 新增字段，保存 MES 原始密度字符串。 |
 | 固定值 | `source_type` | `MES`。 |
 | 当前时间 | `mes_synced_at` | 同步时间。 |
 | `status` | `enabled` | 采用明确启用映射；无法识别时默认启用但记录原始状态。 |
@@ -238,12 +237,13 @@ MES 材料接口不提供单价。QPO 当前材料核价依赖：
 
 ### 10.3 密度策略
 
-MES 材料接口存在 `density` 字段，但文档未明确单位。第一版处理：
+MES 材料接口存在 `density` 字段，但文档未明确单位。当前处理：
 
-- 按 QPO 当前密度单位 `kg/m3` 存入 `density`。
-- 同时保存 `mes_density_raw`，用于追溯和后续单位换算。
-- 如果 MES 返回空密度，不阻塞同步；报价时若需要体积转重量且密度缺失，应沿用现有缺失数据提示机制。
-- 如果 QPO 已人工维护板/棒/管密度，不被 MES 同步覆盖。
+- MES `density` 只同步到 `mes_density_raw`，作为只读 MES 密度和核价兜底来源。
+- MES 同步不覆盖 QPO `density`、`plate_density`、`bar_density`、`tube_density`。
+- QPO 板材/棒材/管材密度继续由本地人工维护。
+- 零件核价按形态优先读取 QPO 板/棒/管密度；对应形态密度为空或无效时，兜底读取 `mes_density_raw`。
+- 如果 QPO 形态密度和 `mes_density_raw` 均为空或无效，后端禁止完成核价，错误消息包含材料编码、材料名称和形态。
 
 ## 11. 核价完成校验
 
@@ -418,7 +418,7 @@ Permission: engineer:dict:view
 - 按钮权限：
   - 材料：`engineer:dict:material-manage`
   - 工艺：`engineer:dict:process-manage`
-- 点击后展示确认弹窗，说明：MES 会更新基础信息，不覆盖 QPO 材料单价。
+- 点击后展示确认弹窗，说明：MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。
 - 成功后刷新对应列表，并展示 fetched/upserted/disabled/invalid/duplicate 统计。
 - 材料列表增加来源、MES 类型、同步时间、单价状态展示。
 - 工艺大类列表已有来源和同步时间字段时直接展示；若前端未展示，则补列。
@@ -573,7 +573,7 @@ Permission: engineer:dict:view
 - 材料同步范围：全部 MES 材料类型，不过滤 `materialType`。
 - 材料价格来源：QPO 本地维护，MES 不提供、不覆盖。
 - 材料单价缺失：禁止完成核价。
-- MES density：接口存在，第一版按 QPO `kg/m3` 写入，同时保留原始值。
+- MES density：接口存在，第一版只写入 `mes_density_raw`，用于页面展示和核价兜底；不覆盖 QPO 默认密度和板/棒/管密度。
 - 工艺 `processTypeCode` 来源：MES `code` 同步为 QPO `processCode`。
 - 工艺 `processName` 来源：QPO `detailName`，默认同步生成 `detailName = MES name`。
 
@@ -585,7 +585,7 @@ Permission: engineer:dict:view
 
 - MES 工艺类型进入 `dict_process_category`，并保证至少有一个可选 `dict_process_detail`。
 - MES 全部材料类型进入 `dict_material` 和 `dict_material_type`，不按 `materialType` 过滤。
-- MES 材料接口的 `density` 用于 QPO 密度字段初始化和追溯，但 MES 不提供材料单价。
+- MES 材料接口的 `density` 只作为 `mes_density_raw` 只读同步字段和核价兜底来源；QPO 形态密度由本地维护。
 - QPO 材料单价仍由工程字典维护，MES 同步不得覆盖已有单价。
 - 材料单价缺失或为 0 时，后端禁止完成核价。
 - MES 生产下发字段口径不重新设计，只通过同步后的本地字典保证编码来源正确。
@@ -777,7 +777,7 @@ Expected: all selected tests pass.
 
 ### 26.6 阶段 5：MES 材料同步服务
 
-**目标：** MES 全部材料类型分页同步到 QPO 材料字典，保留本地价格，写入密度和 MES 原始元数据。
+**目标：** MES 全部材料类型分页同步到 QPO 材料字典，保留本地价格和 QPO 形态密度，写入 MES 原始密度和元数据。
 
 **文件：**
 
@@ -799,12 +799,12 @@ Expected: all selected tests pass.
 - [ ] Add failing test: `MATERIAL / PRODUCT / SEMI` rows all create enabled material records and material types.
 - [ ] Add failing test: existing material with `platePrice=12,barPrice=13,tubePrice=14` keeps those values after MES sync.
 - [ ] Add failing test: new MES material has price fields null, not 0.
-- [ ] Add failing test: MES `density="7850"` populates `density`, and initializes empty `plateDensity/barDensity/tubeDensity` without overwriting existing values.
+- [ ] Add failing test: MES `density="7850"` only populates `mesDensityRaw`, and does not overwrite `density/plateDensity/barDensity/tubeDensity`.
 - [ ] Add failing test: MES `weight` and raw `density` are preserved in `mesWeight` and `mesDensityRaw`.
 - [ ] Add failing test: duplicate MES material `code` increments duplicateCount and only first row is applied.
 - [ ] Add failing test: empty first page fails and does not disable existing MES materials.
 - [ ] Implement material type ensure/upsert for `MATERIAL=原材料`、`PRODUCT=成品`、`SEMI=半成品`、unknown raw value.
-- [ ] Implement material upsert by `material_code`, only updating MES identity fields, name/category/density/status, never price fields.
+- [ ] Implement material upsert by `material_code`, only updating MES identity fields, name/category/MES raw density/status, never price or QPO shape density fields.
 - [ ] Add audit label/module mapping for `DICT_MATERIAL_MES_SYNC`.
 - [ ] Run:
 
@@ -906,7 +906,7 @@ Expected: all selected tests pass.
 - [ ] Add failing duplicate-click guard test keys: `syncMesMaterials` and `syncMesProcessTypes`.
 - [ ] Add failing display test for material source/MES type/sync time/unit price status.
 - [ ] Implement `dictApi` methods.
-- [ ] Add buttons in `MaterialProcessManage.vue` with confirmation dialog text: “MES 会更新基础信息，不覆盖 QPO 材料单价”。
+- [ ] Add buttons in `MaterialProcessManage.vue` with confirmation dialog text: “MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度”。
 - [ ] Use existing pending action pattern to prevent duplicate clicks.
 - [ ] Refresh current list after sync success and show fetched/upserted/disabled/invalid/duplicate counters.
 - [ ] Add material list columns for source, MES type, sync time, and price status.
@@ -1003,7 +1003,7 @@ Expected: backend and frontend test suites pass, or any unrelated pre-existing f
 
 | 页面 | 对应表 | 是否保留 | 同步后职责 | 人工维护边界 |
 | --- | --- | --- | --- | --- |
-| 材料费用 | `dict_material` | 保留 | 保存 MES 材料编码、名称、类型、密度等基础信息，并继续保存 QPO 板/棒/管单价。报价和 MES BOM 下发都依赖该表。 | MES 来源材料的编码、名称、MES 类型由同步维护；QPO 人工维护单价、必要的本地密度修正、排序和备注。 |
+| 材料费用 | `dict_material` | 保留 | 保存 MES 材料编码、名称、类型、MES 密度等基础信息，并继续保存 QPO 板/棒/管密度和单价。报价和 MES BOM 下发都依赖该表。 | MES 来源材料的编码、名称、MES 类型和 MES 密度由同步维护；QPO 人工维护板/棒/管密度、单价、排序和备注。 |
 | 材料类型 | `dict_material_type` | 保留 | 作为 `dict_material.material_type_id` 外键、列表分组和筛选依据；同步时自动确保 `MATERIAL/PRODUCT/SEMI` 等 MES 类型存在。 | MES 自动生成的类型不建议删除；可维护显示名称、排序和本地补充类型。若类型已被材料引用，仍按现有逻辑禁止硬删除或转停用。 |
 | 工艺大类 | `dict_process_category` | 保留 | 保存 MES 工艺类型编码、名称、小时单价和来源信息；报价快照里的 `processCode` 来自这里，并下发为 MES `processTypeCode`。 | MES 来源大类的 `processCode/categoryName/hourlyRate` 默认由同步维护；本地可保留 `LOCAL` 来源工艺或少量例外配置。 |
 | 具体工艺 | `dict_process_detail` | 保留 | QPO 仍需要具体工艺作为报价路线明细；下发 MES 时 `detailName` 转为 `processName`。MES 当前只提供工艺类型接口，未提供具体工艺接口。 | 同步会为每个 MES 工艺大类生成一个默认具体工艺；用户仍可在 MES 大类下维护更细的具体工艺，不被同步删除。 |
@@ -1171,7 +1171,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
   - `SEMI = 半成品`
   - 未知类型按 MES 原值创建或归入 `MES_UNKNOWN`
 - 按 MES `code` upsert `dict_material`。
-- 同步 `materialName/materialType/density/standard/docNum/weight/status` 等基础信息。
+- 同步 `materialName/materialType/mesDensityRaw/standard/docNum/weight/status` 等基础信息。
 - 不覆盖 `platePrice/barPrice/tubePrice`。
 - 新增材料价格保持 null，不写 0。
 
@@ -1180,7 +1180,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 - 三类 MES 材料都能进入 QPO 材料字典。
 - 已有材料价格同步后保持不变。
 - 新增 MES 材料单价为空。
-- MES `density` 写入 QPO 默认密度，并保留 `mesDensityRaw`。
+- MES `density` 只写入 `mesDensityRaw`，不覆盖 QPO 默认密度和板/棒/管密度。
 - 空第一页不会误停用全部 MES 材料。
 
 验收命令：
@@ -1263,7 +1263,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
   - 工艺大类页签新增“从 MES 同步工艺”。
   - 材料列表展示来源、MES 类型、同步时间、单价状态。
   - 工艺大类列表展示来源和同步时间。
-  - 同步确认弹窗提示“MES 会更新基础信息，不覆盖 QPO 材料单价”。
+  - 同步确认弹窗提示“MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度”。
 - 使用现有 pending action 防重复点击。
 
 验收：
@@ -1335,7 +1335,7 @@ npm run build
 - 新增审计动作 `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE`，归入 `DICT` 模块；保存策略只记录 `syncType/enabled/startupDelayMs/fixedDelayMs/lastScheduledStatus` 等安全摘要。
 - 扩展前端 `dictApi.js`，新增 `getMesMaterialSyncSchedule()`、`saveMesMaterialSyncSchedule()`、`getMesProcessSyncSchedule()`、`saveMesProcessSyncSchedule()`。
 - 扩展 `MaterialProcessManage.vue`：材料费用页签和工艺大类页签的手动同步按钮旁新增“定时同步策略”按钮，并提供复用弹窗配置策略。
-- 更新 MES/WMS 对接、权限和日志文档，说明定时策略默认关闭、权限复用、审计动作和“不覆盖 QPO 材料单价”的边界。
+- 更新 MES/WMS 对接、权限和日志文档，说明定时策略默认关闭、权限复用、审计动作和“不覆盖 QPO 材料单价和板/棒/管密度”的边界。
 
 验收：
 

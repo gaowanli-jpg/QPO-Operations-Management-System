@@ -51,6 +51,9 @@
               <el-table-column label="MES 类型" width="120" align="center">
                 <template #default="scope">{{ scope.row.mesMaterialType || '-' }}</template>
               </el-table-column>
+              <el-table-column label="MES 密度" width="130" align="right">
+                <template #default="scope">{{ formatDensity(scope.row.mesDensityRaw) }}</template>
+              </el-table-column>
               <el-table-column label="同步时间" width="170" align="center">
                 <template #default="scope">{{ formatSyncTime(scope.row.mesSyncedAt) }}</template>
               </el-table-column>
@@ -495,7 +498,7 @@
           type="info"
           :closable="false"
           show-icon
-          title="MES 会更新基础信息，不覆盖 QPO 材料单价；策略默认关闭，保存后作为运行时配置。"
+          title="MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度；策略默认关闭，保存后作为运行时配置。"
         />
         <el-form label-width="150px" class="mes-schedule-form">
           <el-form-item label="开启定时同步">
@@ -833,7 +836,7 @@ const openExtraFeeDialog = (row) => {
 
 const syncMesMaterials = async () => {
   return runAction(dictActionKeys.syncMesMaterials, async () => {
-    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价。确认从 MES 同步材料主数据？', '同步确认', { type: 'warning' })
+    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。确认从 MES 同步材料主数据？', '同步确认', { type: 'warning' })
     try {
       const response = await syncMesMaterialsRequest()
       ElMessage.success(response.message || 'MES 材料同步完成')
@@ -847,7 +850,7 @@ const syncMesMaterials = async () => {
 
 const syncMesProcessTypes = async () => {
   return runAction(dictActionKeys.syncMesProcessTypes, async () => {
-    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价。确认从 MES 同步工艺主数据？', '同步确认', { type: 'warning' })
+    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。确认从 MES 同步工艺主数据？', '同步确认', { type: 'warning' })
     try {
       const response = await syncMesProcessTypesRequest()
       ElMessage.success(response.message || 'MES 工艺同步完成')

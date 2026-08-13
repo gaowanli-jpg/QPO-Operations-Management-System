@@ -138,6 +138,57 @@ class EngineerServiceMaterialCalculationTests {
     }
 
     @Test
+    void fallsBackToMesDensityWhenShapeDensityIsMissing() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterial material = material("MES-MAT-DENSITY", "MES Density Material", 1L, "MES", 0.0, 7.1);
+        material.setDensity(null);
+        material.setPlateDensity(null);
+        material.setMesDensityRaw("7850.0");
+        when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MES-MAT-DENSITY");
+        materialData.put("shape", "PLATE");
+        materialData.put("dimensionUnit", "m");
+        materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
+
+        Double cost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData);
+
+        assertThat((Double) materialData.get("weight")).isCloseTo(1.57, within(0.000001));
+        assertThat(materialData.get("density")).isEqualTo(7850.0);
+        assertThat(cost).isCloseTo(11.147, within(0.000001));
+    }
+
+    @Test
+    void rejectsMaterialWhenShapeAndMesDensitiesAreMissing() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterial material = material("MES-MAT-NO-DENSITY", "MES Material No Density", 1L, "MES", 0.0, 7.1);
+        material.setDensity(null);
+        material.setPlateDensity(null);
+        material.setMesDensityRaw(null);
+        when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MES-MAT-NO-DENSITY");
+        materialData.put("shape", "PLATE");
+        materialData.put("dimensionUnit", "m");
+        materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("density")
+                .hasMessageContaining("MES-MAT-NO-DENSITY")
+                .hasMessageContaining("MES Material No Density")
+                .hasMessageContaining("PLATE");
+    }
+
+    @Test
     void positiveBarAndTubePricesStillCalculateFromShapeSpecificPrice() {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);

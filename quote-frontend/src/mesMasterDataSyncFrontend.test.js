@@ -47,7 +47,7 @@ describe('MES master data sync stage 0 frontend guard', () => {
     expect(materialProcess).toContain(':disabled="isPending(dictActionKeys.syncMesProcessTypes)"')
     expect(materialProcess).toContain('return runAction(dictActionKeys.syncMesMaterials, async () =>')
     expect(materialProcess).toContain('return runAction(dictActionKeys.syncMesProcessTypes, async () =>')
-    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价')
+    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度')
     expect(materialProcess).toContain('await dictionaryStore.reloadAfterMutation()')
   })
 
@@ -71,7 +71,7 @@ describe('MES master data sync stage 0 frontend guard', () => {
     expect(materialProcess).toContain('saveMesScheduleSetting')
     expect(materialProcess).toContain('startupDelayMs: Number(scheduleForm.startupDelaySeconds || 0) * 1000')
     expect(materialProcess).toContain('fixedDelayMs: Number(scheduleForm.fixedDelayMinutes || 1) * 60 * 1000')
-    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价')
+    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度')
   })
 
   test('material and process lists display MES ownership and local price maintenance state', () => {
@@ -100,6 +100,14 @@ describe('MES master data sync stage 0 frontend guard', () => {
     expect(materialProcess).toContain('openMaterialTypeDialog')
     expect(materialProcess).toContain('openProcessCategoryDialog')
     expect(materialProcess).toContain('openProcessDetailDialog')
+  })
+
+  test('material list exposes read-only MES density from synchronized materials', () => {
+    const materialProcess = readSource('components', 'MaterialProcessManage.vue')
+
+    expect(materialProcess).toContain('mesDensityRaw')
+    expect(materialProcess).toContain('scope.row.mesDensityRaw')
+    expect(materialProcess).toContain('formatDensity(scope.row.mesDensityRaw)')
   })
 
   test('documents future MES sync entry points and QPO price ownership', () => {

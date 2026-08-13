@@ -43,7 +43,10 @@ class MesMaterialMasterSyncServiceTest {
         existing.setPlatePrice(11.1);
         existing.setBarPrice(12.2);
         existing.setTubePrice(13.3);
+        existing.setDensity(7.6);
         existing.setPlateDensity(7.7);
+        existing.setBarDensity(7.8);
+        existing.setTubeDensity(7.9);
         when(client.pageMaterials(1, 200)).thenReturn(page(3,
                 row("mes-1", " MAT-001 ", " 45#钢 ", "MATERIAL", "BUY", "MAKE", "GB/T 699", "DOC-1", "12.50", "7.85", "ENABLE"),
                 row("mes-2", "MAT-002", "成品件", "PRODUCT", "BUY", "MAKE", "STD-P", "DOC-2", "2.00", "8.01", "ENABLE"),
@@ -97,8 +100,10 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getMaterialCode()).isEqualTo("MAT-001");
             assertThat(material.getMaterialName()).isEqualTo("45#钢");
             assertThat(material.getMaterialTypeId()).isEqualTo(101L);
-            assertThat(material.getDensity()).isEqualTo(7.85);
+            assertThat(material.getDensity()).isEqualTo(7.6);
             assertThat(material.getPlateDensity()).isEqualTo(7.7);
+            assertThat(material.getBarDensity()).isEqualTo(7.8);
+            assertThat(material.getTubeDensity()).isEqualTo(7.9);
             assertThat(material.getPlatePrice()).isEqualTo(11.1);
             assertThat(material.getBarPrice()).isEqualTo(12.2);
             assertThat(material.getTubePrice()).isEqualTo(13.3);
@@ -125,10 +130,10 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getPlatePrice()).isNull();
             assertThat(material.getBarPrice()).isNull();
             assertThat(material.getTubePrice()).isNull();
-            assertThat(material.getDensity()).isEqualTo(8.01);
-            assertThat(material.getPlateDensity()).isEqualTo(8.01);
-            assertThat(material.getBarDensity()).isEqualTo(8.01);
-            assertThat(material.getTubeDensity()).isEqualTo(8.01);
+            assertThat(material.getDensity()).isNull();
+            assertThat(material.getPlateDensity()).isNull();
+            assertThat(material.getBarDensity()).isNull();
+            assertThat(material.getTubeDensity()).isNull();
             assertThat(material.getMesDensityRaw()).isEqualTo("8.01");
         });
 

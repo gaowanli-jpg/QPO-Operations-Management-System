@@ -1454,11 +1454,16 @@ public class EngineerService {
                 ? null
                 : materialTypeMapper.selectById(material.getMaterialTypeId());
         double unitPrice = resolveMaterialPrice(material, shape);
-        double density = resolveMaterialDensity(material, shape);
         Double volume = calculateMetricVolume(materialData, shape);
-        Double weight = volume != null && density > 0
-                ? volume * density
-                : submittedWeight;
+        Double density;
+        Double weight;
+        if (volume != null) {
+            density = resolveMaterialDensity(material, shape);
+            weight = volume * density;
+        } else {
+            density = resolveMaterialDensityOrNull(material, shape);
+            weight = submittedWeight;
+        }
         double cost = weight != null && weight > 0 ? weight * unitPrice : 0.0;
 
         materialData.put("materialId", material.getId());
@@ -1469,7 +1474,7 @@ public class EngineerService {
         materialData.put("materialTypeCode", materialType == null ? null : materialType.getTypeCode());
         materialData.put("materialTypeName", materialType == null ? null : materialType.getTypeName());
         materialData.put("materialCategory", material.getMaterialCategory());
-        materialData.put("density", density);
+        materialData.put("density", density == null ? 0.0 : density);
         materialData.put("densityUnit", "kg/m3");
         materialData.put("unitPrice", unitPrice);
         materialData.put("unitPriceUnit", "元/kg");
@@ -1574,17 +1579,44 @@ public class EngineerService {
     }
 
     private double resolveMaterialDensity(DictMaterial material, String shape) {
-        if ("棒材".equals(shape)) {
-            return material.getBarDensity() != null ? material.getBarDensity() : fallbackDensity(material);
+        Double density = resolveMaterialDensityOrNull(material, shape);
+        if (density != null && density > 0) {
+            return density;
         }
-        if ("管材".equals(shape)) {
-            return material.getTubeDensity() != null ? material.getTubeDensity() : fallbackDensity(material);
-        }
-        return material.getPlateDensity() != null ? material.getPlateDensity() : fallbackDensity(material);
+        throw new RuntimeException("材料密度未维护(density missing)：materialCode="
+                + safeText(material.getMaterialCode())
+                + ", materialName="
+                + safeText(material.getMaterialName())
+                + ", shape="
+                + safeText(shape));
     }
 
-    private double fallbackDensity(DictMaterial material) {
-        return material.getDensity() != null ? material.getDensity() : 0.0;
+    private Double resolveMaterialDensityOrNull(DictMaterial material, String shape) {
+        Double shapeDensity;
+        if (isBarShape(shape)) {
+            shapeDensity = material.getBarDensity();
+        } else if (isTubeShape(shape)) {
+            shapeDensity = material.getTubeDensity();
+        } else {
+            shapeDensity = material.getPlateDensity();
+        }
+        if (shapeDensity != null && shapeDensity > 0) {
+            return shapeDensity;
+        }
+        return parseMesDensity(material.getMesDensityRaw());
+    }
+
+    private Double parseMesDensity(String value) {
+        String text = stringValue(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            double density = Double.parseDouble(text);
+            return density > 0 ? density : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private String stringValue(Object value) {

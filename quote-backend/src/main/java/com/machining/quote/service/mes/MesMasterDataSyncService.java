@@ -503,18 +503,6 @@ public class MesMasterDataSyncService {
         material.setMaterialName(source.name());
         material.setMaterialTypeId(materialTypeId);
         material.setMaterialCategory(source.materialCategory());
-        material.setDensity(source.density());
-        if (source.density() != null) {
-            if (created || material.getPlateDensity() == null) {
-                material.setPlateDensity(source.density());
-            }
-            if (created || material.getBarDensity() == null) {
-                material.setBarDensity(source.density());
-            }
-            if (created || material.getTubeDensity() == null) {
-                material.setTubeDensity(source.density());
-            }
-        }
         material.setSourceType(SOURCE_MES);
         material.setMesExternalId(source.mesExternalId());
         material.setMesMaterialType(source.materialTypeCode());
