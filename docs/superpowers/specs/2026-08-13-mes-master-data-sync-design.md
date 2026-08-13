@@ -1072,6 +1072,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 2：MES 主数据 DTO 与只读 Client
 
+状态：已完成。
+
 目标：封装 MES 工艺和材料主数据只读调用，让同步服务不直接依赖数据中心客户端细节。
 
 修改：
