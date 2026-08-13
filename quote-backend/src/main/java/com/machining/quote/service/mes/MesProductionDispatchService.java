@@ -194,7 +194,7 @@ public class MesProductionDispatchService {
         }
         SalesOrderResolution resolution = resolveSalesOrder(allocation);
         List<MesProductionAssemblyRelationDTO> assemblyRelations = buildAssemblyRelations(allocation);
-        List<MesProductionBomDTO> bom = buildBom(assemblyRelations);
+        List<MesProductionBomDTO> bom = buildBom(allocation);
 
         MesProductionDispatchReq.Item item = new MesProductionDispatchReq.Item();
         item.setSaleOrderNo(resolution.saleOrderNo());
@@ -676,7 +676,7 @@ public class MesProductionDispatchService {
         item.setCustomerRequirements(MesCustomerRequirementsAssembler.assemble(
                 allocation.getDescription(),
                 allocation.getSurfaceTreatment()));
-        item.setBom(buildBom(assemblyRelations));
+        item.setBom(buildBom(allocation));
         item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()));
         req.setItems(List.of(item));
         return req;
@@ -767,28 +767,19 @@ public class MesProductionDispatchService {
         return buildRfqAssemblyRelations(allocation);
     }
 
-    private List<MesProductionBomDTO> buildBom(List<MesProductionAssemblyRelationDTO> assemblyRelations) {
-        if (assemblyRelations == null || assemblyRelations.isEmpty()) {
+    private List<MesProductionBomDTO> buildBom(OrderDeliveryTicketAllocation allocation) {
+        if (allocation == null) {
             return List.of();
         }
-        Map<String, BigDecimal> quantityByMaterialNo = new LinkedHashMap<>();
-        for (MesProductionAssemblyRelationDTO relation : assemblyRelations) {
-            if (relation == null) {
-                continue;
-            }
-            String childMaterialNo = trimToNull(relation.getChildMaterialNo());
-            if (childMaterialNo == null) {
-                throw new RuntimeException("Child MES material number is required before MES production dispatch");
-            }
-            BigDecimal quantity = relation.getQtyPerParent();
-            if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new RuntimeException("BOM quantity must be greater than 0 before MES production dispatch");
-            }
-            quantityByMaterialNo.merge(childMaterialNo, quantity, BigDecimal::add);
+        String materialCode = trimToNull(allocation.getEngineeringMaterialCode());
+        if (materialCode == null) {
+            throw new RuntimeException("Engineering material code is required before MES production dispatch BOM");
         }
-        List<MesProductionBomDTO> result = new ArrayList<>();
-        quantityByMaterialNo.forEach((itemCode, quantity) -> result.add(new MesProductionBomDTO(itemCode, quantity)));
-        return result;
+        Double grossWeightKg = allocation.getMaterialGrossWeight();
+        if (grossWeightKg == null || grossWeightKg <= 0) {
+            throw new RuntimeException("Material gross weight kg must be greater than 0 before MES production dispatch BOM");
+        }
+        return List.of(new MesProductionBomDTO(materialCode, BigDecimal.valueOf(grossWeightKg)));
     }
 
     private List<MesProductionAssemblyRelationDTO> buildRfqAssemblyRelations(OrderDeliveryTicketAllocation allocation) {

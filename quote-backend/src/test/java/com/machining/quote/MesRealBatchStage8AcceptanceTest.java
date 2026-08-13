@@ -34,6 +34,8 @@ class MesRealBatchStage8AcceptanceTest {
                         "\"sortNo\":1",
                         "\"unitWorkHours\":1.5",
                         "\"processCode\":\"CNC\"",
+                        "material_gross_weight",
+                        "12.3000",
                         MATERIAL_PATH,
                         PRODUCTION_PATH,
                         "MES material writes are disabled unless -ExecuteExternalWrites is supplied")

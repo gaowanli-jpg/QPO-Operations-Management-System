@@ -182,6 +182,10 @@ class LockedItemMesProductionDispatchTest {
         });
         assertThat(request.getMaterialGrossWeight()).isEqualTo(12.3);
         assertThat(request.getPartNetWeight()).isEqualTo(10.2);
+        assertThat(request.getBom()).singleElement().satisfies(bom -> {
+            assertThat(bom.getItemCode()).isEqualTo("MAT-7075");
+            assertThat(bom.getQuantity()).isEqualByComparingTo(new BigDecimal("12.3"));
+        });
         assertThat(request.getAssemblyRelations()).isEmpty();
         ArgumentCaptor<OrderDeliveryTicketAllocation> updateByIdCaptor =
                 ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
@@ -250,6 +254,10 @@ class LockedItemMesProductionDispatchTest {
         assertThat(dto.getSortNo()).isEqualTo(7);
         assertThat(dto.getSourceParentItemId()).isNull();
         assertThat(dto.getSourceChildItemId()).isNull();
+        assertThat(requestCaptor.getValue().getBom()).singleElement().satisfies(bom -> {
+            assertThat(bom.getItemCode()).isEqualTo("MAT-7075");
+            assertThat(bom.getQuantity()).isEqualByComparingTo(new BigDecimal("12.3"));
+        });
     }
 
     @Test

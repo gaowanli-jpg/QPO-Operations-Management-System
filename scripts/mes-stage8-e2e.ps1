@@ -208,12 +208,12 @@ WITH existing_customer AS (
         sales_order_id, line_no, part_no, description, qty, version, order_type, customer_order_no, customer_project_no,
         internal_project_no, material_no, customer_delivery_date, internal_delivery_date, material_name, engineering_material_name,
         engineering_material_code, surface_treatment, untaxed_unit_price, untaxed_total_price, shipped_qty, unshipped_qty,
-        released_qty, remaining_qty, drawing_url, has_drawing, item_type, material_data, process_route, remark, status,
+        released_qty, remaining_qty, drawing_url, has_drawing, item_type, material_gross_weight, part_net_weight, material_data, process_route, remark, status,
         material_no_status, material_no_source, material_no_synced_at, sales_order_date, source_type, source_order_id, created_at, updated_at
     )
     SELECT h.id, 10, '$part1', 'E2E material description P001', 2, 'A', 'DIRECT', h.customer_order_no, h.customer_project_no,
         h.internal_project_no, '$material1', CURRENT_DATE + INTERVAL '7 days', CURRENT_DATE + INTERVAL '5 days', 'E2E P001', 'Steel',
-        'STEEL', 'Black anodize', 100.0000, 200.00, 0, 2, 2, 0, '$safeDrawingUrl', TRUE, 'NORMAL',
+        'STEEL', 'Black anodize', 100.0000, 200.00, 0, 2, 2, 0, '$safeDrawingUrl', TRUE, 'NORMAL', 12.3000, 10.2000,
         '{"material":"Steel"}'::jsonb,
         '[{"sortNo":1,"processName":"Cutting","processCode":"CNC","unitWorkHours":1.5,"workHour":1.5},{"sortNo":2,"processName":"Deburr","processCode":"CNC","unitWorkHours":0.5,"workHour":0.5}]'::jsonb,
         'QPO MES E2E - retain for verification', 'RELEASED', 'CONFIRMED', 'MES_CALLBACK', CURRENT_TIMESTAMP, CURRENT_DATE,
@@ -225,12 +225,12 @@ WITH existing_customer AS (
         sales_order_id, line_no, part_no, description, qty, version, order_type, customer_order_no, customer_project_no,
         internal_project_no, material_no, customer_delivery_date, internal_delivery_date, material_name, engineering_material_name,
         engineering_material_code, surface_treatment, untaxed_unit_price, untaxed_total_price, shipped_qty, unshipped_qty,
-        released_qty, remaining_qty, drawing_url, has_drawing, item_type, material_data, process_route, remark, status,
+        released_qty, remaining_qty, drawing_url, has_drawing, item_type, material_gross_weight, part_net_weight, material_data, process_route, remark, status,
         material_no_status, material_no_source, material_no_synced_at, sales_order_date, source_type, source_order_id, created_at, updated_at
     )
     SELECT h.id, 20, '$part2', 'E2E material description P002', 3, 'A', 'DIRECT', h.customer_order_no, h.customer_project_no,
         h.internal_project_no, '$material2', CURRENT_DATE + INTERVAL '8 days', CURRENT_DATE + INTERVAL '6 days', 'E2E P002', 'Aluminum',
-        'AL', 'Clear anodize', 120.0000, 360.00, 0, 3, 3, 0, '$safeDrawingUrl', TRUE, 'NORMAL',
+        'AL', 'Clear anodize', 120.0000, 360.00, 0, 3, 3, 0, '$safeDrawingUrl', TRUE, 'NORMAL', 7.5000, 6.2000,
         '{"material":"Aluminum"}'::jsonb,
         '[{"sortNo":1,"processName":"Milling","processCode":"CNC","unitWorkHours":2.0,"workHour":2.0}]'::jsonb,
         'QPO MES E2E - retain for verification', 'RELEASED', 'CONFIRMED', 'MES_CALLBACK', CURRENT_TIMESTAMP, CURRENT_DATE,
@@ -247,12 +247,12 @@ WITH existing_customer AS (
         order_type, project_no, part_no, qty, material_name, surface_treatment, version, delivery_date, remark,
         arrange_type, internal_project_no, item_type, engineering_material_name, engineering_material_code, customer_order_no,
         customer_project_no, process_route, material_data, description, material_no, mes_sync_status, wms_allocate_status,
-        customer_name, source_type, source_order_id, source_item_id, drawing_url, material_shape
+        customer_name, source_type, source_order_id, source_item_id, drawing_url, material_shape, material_gross_weight, part_net_weight
     )
     SELECT 'DIRECT', h.internal_project_no, i.part_no, 2, 'E2E P001', 'Black anodize', 'A', CURRENT_DATE + INTERVAL '7 days',
         'QPO MES E2E - retain for verification', 'DIRECT', h.internal_project_no, 'NORMAL', 'Steel', 'STEEL', h.customer_order_no,
         h.customer_project_no, '[{"sortNo":1,"processName":"Cutting","processCode":"CNC","unitWorkHours":1.5,"workHour":1.5}]'::jsonb, '{"material":"Steel"}'::jsonb,
-        'E2E material description P001', NULL, 'PENDING', 'PENDING', h.customer_name, 'SALES_ORDER', h.id, i.id, '$safeDrawingUrl', 'SHEET'
+        'E2E material description P001', NULL, 'PENDING', 'PENDING', h.customer_name, 'SALES_ORDER', h.id, i.id, '$safeDrawingUrl', 'SHEET', 12.3000, 10.2000
     FROM direct_header h CROSS JOIN direct_item_1 i
     RETURNING id, part_no, version
 ), ticket_2 AS (
@@ -260,12 +260,12 @@ WITH existing_customer AS (
         order_type, project_no, part_no, qty, material_name, surface_treatment, version, delivery_date, remark,
         arrange_type, internal_project_no, item_type, engineering_material_name, engineering_material_code, customer_order_no,
         customer_project_no, process_route, material_data, description, material_no, mes_sync_status, wms_allocate_status,
-        customer_name, source_type, source_order_id, source_item_id, drawing_url, material_shape
+        customer_name, source_type, source_order_id, source_item_id, drawing_url, material_shape, material_gross_weight, part_net_weight
     )
     SELECT 'DIRECT', h.internal_project_no, i.part_no, 3, 'E2E P002', 'Clear anodize', 'A', CURRENT_DATE + INTERVAL '8 days',
         'QPO MES E2E - retain for verification', 'DIRECT', h.internal_project_no, 'NORMAL', 'Aluminum', 'AL', h.customer_order_no,
         h.customer_project_no, '[{"sortNo":1,"processName":"Milling","processCode":"CNC","unitWorkHours":2.0,"workHour":2.0}]'::jsonb, '{"material":"Aluminum"}'::jsonb,
-        'E2E material description P002', NULL, 'PENDING', 'PENDING', h.customer_name, 'SALES_ORDER', h.id, i.id, '$safeDrawingUrl', 'BLOCK'
+        'E2E material description P002', NULL, 'PENDING', 'PENDING', h.customer_name, 'SALES_ORDER', h.id, i.id, '$safeDrawingUrl', 'BLOCK', 7.5000, 6.2000
     FROM direct_header h CROSS JOIN direct_item_2 i
     RETURNING id, part_no, version
 ), alloc_1 AS (
@@ -273,13 +273,13 @@ WITH existing_customer AS (
         ticket_id, allocation_type, qty, material_no, part_no, version, customer_name, internal_project_no,
         source_payload, status, customer_order_no, customer_project_no, material_name, engineering_material_name,
         engineering_material_code, surface_treatment, description, delivery_date, process_route, material_data, order_type,
-        remark, item_type, source_type, source_order_id, source_item_id, ticket_qty, mes_production_status, material_shape
+        remark, item_type, source_type, source_order_id, source_item_id, ticket_qty, mes_production_status, material_shape, material_gross_weight, part_net_weight
     )
     SELECT t.id, 'PRODUCTION_REQUIRED', 2, i.material_no, i.part_no, i.version, h.customer_name, h.internal_project_no,
         '{"stage":"MES_PHASE8"}'::jsonb, 'ACTIVE', h.customer_order_no, h.customer_project_no, 'E2E P001', 'Steel',
         'STEEL', 'Black anodize', 'E2E material description P001', CURRENT_DATE + INTERVAL '7 days',
         '[{"sortNo":1,"processName":"Cutting","processCode":"CNC","unitWorkHours":1.5,"workHour":1.5}]'::jsonb, '{"material":"Steel"}'::jsonb, 'DIRECT',
-        'QPO MES E2E - retain for verification', 'NORMAL', 'SALES_ORDER', h.id, i.id, 2, 'PENDING', 'SHEET'
+        'QPO MES E2E - retain for verification', 'NORMAL', 'SALES_ORDER', h.id, i.id, 2, 'PENDING', 'SHEET', 12.3000, 10.2000
     FROM ticket_1 t CROSS JOIN direct_item_1 i CROSS JOIN direct_header h
     RETURNING id
 ), alloc_2 AS (
@@ -287,13 +287,13 @@ WITH existing_customer AS (
         ticket_id, allocation_type, qty, material_no, part_no, version, customer_name, internal_project_no,
         source_payload, status, customer_order_no, customer_project_no, material_name, engineering_material_name,
         engineering_material_code, surface_treatment, description, delivery_date, process_route, material_data, order_type,
-        remark, item_type, source_type, source_order_id, source_item_id, ticket_qty, mes_production_status, material_shape
+        remark, item_type, source_type, source_order_id, source_item_id, ticket_qty, mes_production_status, material_shape, material_gross_weight, part_net_weight
     )
     SELECT t.id, 'PRODUCTION_REQUIRED', 3, i.material_no, i.part_no, i.version, h.customer_name, h.internal_project_no,
         '{"stage":"MES_PHASE8"}'::jsonb, 'ACTIVE', h.customer_order_no, h.customer_project_no, 'E2E P002', 'Aluminum',
         'AL', 'Clear anodize', 'E2E material description P002', CURRENT_DATE + INTERVAL '8 days',
         '[{"sortNo":1,"processName":"Milling","processCode":"CNC","unitWorkHours":2.0,"workHour":2.0}]'::jsonb, '{"material":"Aluminum"}'::jsonb, 'DIRECT',
-        'QPO MES E2E - retain for verification', 'NORMAL', 'SALES_ORDER', h.id, i.id, 3, 'PENDING', 'BLOCK'
+        'QPO MES E2E - retain for verification', 'NORMAL', 'SALES_ORDER', h.id, i.id, 3, 'PENDING', 'BLOCK', 7.5000, 6.2000
     FROM ticket_2 t CROSS JOIN direct_item_2 i CROSS JOIN direct_header h
     RETURNING id
 ), rfq_ticket AS (
@@ -301,13 +301,13 @@ WITH existing_customer AS (
         order_type, project_no, part_no, qty, material_name, surface_treatment, version, delivery_date, remark,
         arrange_type, internal_project_no, item_type, engineering_material_name, engineering_material_code, customer_order_no,
         customer_project_no, process_route, material_data, description, material_no, mes_sync_status, wms_allocate_status,
-        rfq_no, customer_name, source_type, drawing_url, material_shape
+        rfq_no, customer_name, source_type, drawing_url, material_shape, material_gross_weight, part_net_weight
     )
     SELECT 'RFQ_RELEASE', '$internalProjectNo', '$part3', 1, 'E2E RFQ P001', 'Passivation', 'A', CURRENT_DATE + INTERVAL '9 days',
         'QPO MES E2E - retain for verification', 'RFQ_RELEASE', '$internalProjectNo', 'NORMAL', 'Steel', 'STEEL', '$TestPrefix`RFQ-PO-$safeSuffix',
         '$TestPrefix`RFQ-CP-$safeSuffix', '[{"sortNo":1,"processName":"Turning","processCode":"CNC","unitWorkHours":1.25,"workHour":1.25}]'::jsonb, '{"material":"Steel"}'::jsonb,
         'E2E RFQ-derived material description', '$material1', 'SUCCESS', 'PENDING', '$TestPrefix`RFQ-$safeSuffix', c.customer_name,
-        'RFQ', '$safeDrawingUrl', 'SHEET'
+        'RFQ', '$safeDrawingUrl', 'SHEET', 5.5000, 4.6000
     FROM c
     RETURNING id, part_no, version
 ), rfq_header AS (
@@ -327,13 +327,13 @@ WITH existing_customer AS (
         sales_order_id, line_no, part_no, description, qty, version, order_type, customer_order_no, customer_project_no,
         internal_project_no, material_no, customer_delivery_date, internal_delivery_date, material_name, engineering_material_name,
         engineering_material_code, surface_treatment, untaxed_unit_price, untaxed_total_price, shipped_qty, unshipped_qty,
-        released_qty, remaining_qty, drawing_url, has_drawing, item_type, material_data, process_route, remark, status,
+        released_qty, remaining_qty, drawing_url, has_drawing, item_type, material_gross_weight, part_net_weight, material_data, process_route, remark, status,
         material_no_status, material_no_source, material_no_synced_at, sales_order_date, source_type, source_order_id,
         source_ticket_id, created_at, updated_at
     )
     SELECT h.id, 10, t.part_no, 'E2E RFQ-derived material description', 1, t.version, 'RFQ_RELEASE', h.customer_order_no, h.customer_project_no,
         h.internal_project_no, '$material1', CURRENT_DATE + INTERVAL '9 days', CURRENT_DATE + INTERVAL '7 days', 'E2E RFQ P001', 'Steel',
-        'STEEL', 'Passivation', 100.0000, 100.00, 0, 1, 1, 0, '$safeDrawingUrl', TRUE, 'NORMAL',
+        'STEEL', 'Passivation', 100.0000, 100.00, 0, 1, 1, 0, '$safeDrawingUrl', TRUE, 'NORMAL', 5.5000, 4.6000,
         '{"material":"Steel"}'::jsonb, '[{"sortNo":1,"processName":"Turning","processCode":"CNC","unitWorkHours":1.25,"workHour":1.25}]'::jsonb,
         'QPO MES E2E - retain for verification', 'RELEASED', 'CONFIRMED', 'MES_CALLBACK', CURRENT_TIMESTAMP, CURRENT_DATE,
         'RFQ_RELEASE', h.id, t.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -344,13 +344,13 @@ WITH existing_customer AS (
         ticket_id, allocation_type, qty, material_no, part_no, version, customer_name, internal_project_no,
         source_payload, status, rfq_no, customer_order_no, customer_project_no, material_name, engineering_material_name,
         engineering_material_code, surface_treatment, description, delivery_date, process_route, material_data, order_type,
-        remark, item_type, source_type, source_order_id, source_item_id, ticket_qty, mes_production_status, material_shape
+        remark, item_type, source_type, source_order_id, source_item_id, ticket_qty, mes_production_status, material_shape, material_gross_weight, part_net_weight
     )
     SELECT t.id, 'PRODUCTION_REQUIRED', 1, i.material_no, i.part_no, i.version, h.customer_name, h.internal_project_no,
         '{"stage":"MES_PHASE8_RFQ"}'::jsonb, 'ACTIVE', '$TestPrefix`RFQ-$safeSuffix', h.customer_order_no, h.customer_project_no,
         'E2E RFQ P001', 'Steel', 'STEEL', 'Passivation', i.description, CURRENT_DATE + INTERVAL '9 days',
         '[{"sortNo":1,"processName":"Turning","processCode":"CNC","unitWorkHours":1.25,"workHour":1.25}]'::jsonb, '{"material":"Steel"}'::jsonb, 'RFQ_RELEASE',
-        'QPO MES E2E - retain for verification', 'NORMAL', 'RFQ', h.id, i.id, 1, 'PENDING', 'SHEET'
+        'QPO MES E2E - retain for verification', 'NORMAL', 'RFQ', h.id, i.id, 1, 'PENDING', 'SHEET', 5.5000, 4.6000
     FROM rfq_ticket t CROSS JOIN rfq_item i CROSS JOIN rfq_header h
     RETURNING id
 )
