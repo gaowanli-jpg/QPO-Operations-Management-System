@@ -1,6 +1,7 @@
 package com.machining.quote.dto.mes.master;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import lombok.Data;
@@ -54,6 +55,7 @@ public class MesProcessTypeListResp {
     }
 
     @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Row {
         private String id;
         private String code;

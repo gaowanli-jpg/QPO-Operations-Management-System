@@ -71,6 +71,33 @@ class MesMasterDataClientTest {
     }
 
     @Test
+    void listProcessTypesIgnoresUnknownMesFields() throws Exception {
+        MesProcessTypeListResp resp = JSON.readValue("""
+                {
+                  "code": 0,
+                  "msg": "ok",
+                  "data": [
+                    {
+                      "id": "pt-auto",
+                      "code": "AUTO-CNC",
+                      "name": "Auto dispatch CNC",
+                      "hourPrice": 99.25,
+                      "status": "ENABLE",
+                      "autoDispatch": true
+                    }
+                  ]
+                }
+                """, MesProcessTypeListResp.class);
+
+        assertThat(resp.rows()).singleElement().satisfies(row -> {
+            assertThat(row.getId()).isEqualTo("pt-auto");
+            assertThat(row.getCode()).isEqualTo("AUTO-CNC");
+            assertThat(row.getName()).isEqualTo("Auto dispatch CNC");
+            assertThat(row.getHourPrice()).isEqualByComparingTo(new BigDecimal("99.25"));
+        });
+    }
+
+    @Test
     void pageMaterialsParsesTotalListAndSendsOnlyPagingQuery() throws Exception {
         DataCenterIntegrationClient dataCenterClient = mock(DataCenterIntegrationClient.class);
         MesMasterDataClient client = client(dataCenterClient);

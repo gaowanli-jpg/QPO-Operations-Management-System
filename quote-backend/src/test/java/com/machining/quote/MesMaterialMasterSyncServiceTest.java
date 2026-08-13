@@ -202,6 +202,78 @@ class MesMaterialMasterSyncServiceTest {
     }
 
     @Test
+    void syncMaterialsReusesLegacyMaterialTypeByNameWhenMesCodeDiffers() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        DictMaterialType legacyRawMaterial = materialType(301L, "RAW_MATERIAL", "原材料");
+        when(client.pageMaterials(1, 200)).thenReturn(page(1,
+                row("mes-legacy", "MAT-LEGACY", "旧类型兼容材料", "MATERIAL", null, null, null, null, "1.00", "7.85", "ENABLE")));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(legacyRawMaterial));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(914L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+        doAnswer(invocation -> {
+            DictMaterialType type = invocation.getArgument(0);
+            switch (type.getTypeCode()) {
+                case "PRODUCT" -> type.setId(302L);
+                case "SEMI" -> type.setId(303L);
+                default -> type.setId(399L);
+            }
+            return 1;
+        }).when(materialTypeMapper).insert(any(DictMaterialType.class));
+
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(11L);
+
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<DictMaterialType> typeUpdates = ArgumentCaptor.forClass(DictMaterialType.class);
+        verify(materialTypeMapper).updateById(typeUpdates.capture());
+        assertThat(typeUpdates.getValue()).satisfies(type -> {
+            assertThat(type.getId()).isEqualTo(301L);
+            assertThat(type.getTypeCode()).isEqualTo("MATERIAL");
+            assertThat(type.getTypeName()).isEqualTo("原材料");
+        });
+        ArgumentCaptor<DictMaterialType> typeInserts = ArgumentCaptor.forClass(DictMaterialType.class);
+        verify(materialTypeMapper, org.mockito.Mockito.times(2)).insert(typeInserts.capture());
+        assertThat(typeInserts.getAllValues())
+                .extracting(DictMaterialType::getTypeCode)
+                .containsExactlyInAnyOrder("PRODUCT", "SEMI")
+                .doesNotContain("MATERIAL");
+        ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
+        verify(materialMapper).insert(materialCaptor.capture());
+        assertThat(materialCaptor.getValue().getMaterialTypeId()).isEqualTo(301L);
+    }
+
+    @Test
+    void syncMaterialsMapsMesZeroStatusToEnabledMaterial() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        when(client.pageMaterials(1, 200)).thenReturn(page(1,
+                row("mes-zero", "MAT-ZERO", "MES正常材料", "MATERIAL", null, null, null, null, "1.00", "7.85", "0")));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(materialType(401L, "MATERIAL", "原材料")));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(915L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        service.syncMaterialsManual(12L);
+
+        ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
+        verify(materialMapper).insert(materialCaptor.capture());
+        assertThat(materialCaptor.getValue().getEnabled()).isTrue();
+    }
+
+    @Test
     void emptyFirstMaterialPageFailsRunAndDoesNotDisableExistingMesMaterials() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);

@@ -383,6 +383,13 @@ public class MesMasterDataSyncService {
                         row -> row,
                         (first, ignored) -> first,
                         LinkedHashMap::new));
+        Map<String, DictMaterialType> existingByName = (existingRows == null ? List.<DictMaterialType>of() : existingRows).stream()
+                .filter(row -> trimToNull(row.getTypeName()) != null)
+                .collect(Collectors.toMap(
+                        row -> trimToNull(row.getTypeName()),
+                        row -> row,
+                        (first, ignored) -> first,
+                        LinkedHashMap::new));
         Map<String, String> requiredTypes = new LinkedHashMap<>();
         requiredTypes.put("MATERIAL", KNOWN_MATERIAL_TYPE_NAMES.get("MATERIAL"));
         requiredTypes.put("PRODUCT", KNOWN_MATERIAL_TYPE_NAMES.get("PRODUCT"));
@@ -397,6 +404,9 @@ public class MesMasterDataSyncService {
             String name = firstNonBlank(required.getValue(), code);
             DictMaterialType existing = existingByCode.get(code);
             if (existing == null) {
+                existing = existingByName.get(name);
+            }
+            if (existing == null) {
                 DictMaterialType created = new DictMaterialType();
                 created.setTypeCode(code);
                 created.setTypeName(name);
@@ -407,10 +417,14 @@ public class MesMasterDataSyncService {
                 created.setUpdatedAt(syncedAt);
                 materialTypeMapper.insert(created);
                 existingByCode.put(code, created);
+                existingByName.put(name, created);
                 ids.put(code, created.getId());
                 continue;
             }
-            if (!Objects.equals(existing.getTypeName(), name) || !Boolean.TRUE.equals(existing.getEnabled())) {
+            if (!Objects.equals(existing.getTypeCode(), code)
+                    || !Objects.equals(existing.getTypeName(), name)
+                    || !Boolean.TRUE.equals(existing.getEnabled())) {
+                existing.setTypeCode(code);
                 existing.setTypeName(name);
                 existing.setEnabled(true);
                 if (existing.getSortNo() == null) {
@@ -419,6 +433,8 @@ public class MesMasterDataSyncService {
                 existing.setUpdatedAt(syncedAt);
                 materialTypeMapper.updateById(existing);
             }
+            existingByCode.put(code, existing);
+            existingByName.put(name, existing);
             ids.put(code, existing.getId());
         }
         return ids;
@@ -546,7 +562,7 @@ public class MesMasterDataSyncService {
             return true;
         }
         String normalized = value.toUpperCase(Locale.ROOT);
-        if (Set.of("0", "FALSE", "N", "NO", "DISABLE", "DISABLED", "INACTIVE", "STOP", "STOPPED", "停用", "禁用")
+        if (Set.of("FALSE", "N", "NO", "DISABLE", "DISABLED", "INACTIVE", "STOP", "STOPPED", "停用", "禁用")
                 .contains(normalized)) {
             return false;
         }
