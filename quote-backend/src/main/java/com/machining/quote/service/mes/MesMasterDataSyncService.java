@@ -14,9 +14,11 @@ import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.MesMasterDataSyncRunMapper;
 import com.machining.quote.service.AuditService;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -36,8 +39,8 @@ import java.util.stream.Collectors;
 public class MesMasterDataSyncService {
     private static final Logger log = LoggerFactory.getLogger(MesMasterDataSyncService.class);
 
-    private static final String SYNC_TYPE_PROCESS_TYPE = "MES_PROCESS_TYPE";
-    private static final String SYNC_TYPE_MATERIAL = "MES_MATERIAL";
+    public static final String SYNC_TYPE_PROCESS_TYPE = "MES_PROCESS_TYPE";
+    public static final String SYNC_TYPE_MATERIAL = "MES_MATERIAL";
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
@@ -75,6 +78,56 @@ public class MesMasterDataSyncService {
     private MesMasterDataSyncRunMapper syncRunMapper;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private MesMasterDataSyncScheduleConfigService scheduleConfigService;
+
+    private LocalDateTime mesMasterDataSyncSchedulerStartedAt;
+    private final AtomicBoolean scheduledMaterialSyncRunning = new AtomicBoolean(false);
+    private final AtomicBoolean scheduledProcessTypeSyncRunning = new AtomicBoolean(false);
+
+    @PostConstruct
+    public void initMesMasterDataSyncSchedulerStartedAt() {
+        mesMasterDataSyncSchedulerStartedAt = LocalDateTime.now();
+    }
+
+    @Scheduled(fixedDelayString = "${erp.mes.master-data-sync.check-ms:60000}")
+    public void syncMesMasterDataScheduled() {
+        if (scheduleConfigService == null) {
+            return;
+        }
+        if (mesMasterDataSyncSchedulerStartedAt == null) {
+            mesMasterDataSyncSchedulerStartedAt = LocalDateTime.now();
+        }
+        runScheduledSync(SYNC_TYPE_MATERIAL, scheduledMaterialSyncRunning);
+        runScheduledSync(SYNC_TYPE_PROCESS_TYPE, scheduledProcessTypeSyncRunning);
+    }
+
+    private void runScheduledSync(String syncType, AtomicBoolean runningGuard) {
+        if (!scheduleConfigService.shouldRun(syncType, mesMasterDataSyncSchedulerStartedAt)) {
+            return;
+        }
+        if (!runningGuard.compareAndSet(false, true)) {
+            log.info("MES master data scheduled sync skipped because previous run is still active syncType={}", syncType);
+            return;
+        }
+        try {
+            SyncResult result = SYNC_TYPE_MATERIAL.equals(syncType)
+                    ? syncMaterialsManual(null)
+                    : syncProcessTypesManual(null);
+            scheduleConfigService.updateScheduledResult(syncType, result);
+            if (!result.success()) {
+                log.warn("MES master data scheduled sync failed syncType={} syncRunId={} message={}",
+                        syncType, result.syncRunId(), result.message());
+            }
+        } catch (RuntimeException error) {
+            String message = safeMessage(error.getMessage());
+            scheduleConfigService.updateScheduledResult(syncType,
+                    new SyncResult(false, null, 0, 0, 0, 0, 0, 0, message));
+            log.warn("MES master data scheduled sync failed before run record syncType={} message={}", syncType, message, error);
+        } finally {
+            runningGuard.set(false);
+        }
+    }
 
     @Transactional
     public SyncResult syncProcessTypesManual(Long createdBy) {

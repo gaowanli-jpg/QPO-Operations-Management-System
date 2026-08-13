@@ -47,6 +47,13 @@ export const syncMesMaterials = () => request('/api/dict/materials/sync-mes', {
   method: 'POST'
 })
 
+export const getMesMaterialSyncSchedule = () => request('/api/dict/materials/sync-schedule')
+
+export const saveMesMaterialSyncSchedule = (payload) => request('/api/dict/materials/sync-schedule', {
+  method: 'PUT',
+  data: payload
+})
+
 export const listProcessCategories = ({ enabledOnly } = {}) => request(
   `/api/dict/process-categories${buildQuery({ enabledOnly })}`
 )
@@ -61,6 +68,13 @@ export const saveProcessCategory = (payload) => {
 
 export const syncMesProcessTypes = () => request('/api/dict/process-categories/sync-mes', {
   method: 'POST'
+})
+
+export const getMesProcessSyncSchedule = () => request('/api/dict/process-categories/sync-schedule')
+
+export const saveMesProcessSyncSchedule = (payload) => request('/api/dict/process-categories/sync-schedule', {
+  method: 'PUT',
+  data: payload
 })
 
 export const listProcessDetails = ({ categoryId, enabledOnly } = {}) => request(

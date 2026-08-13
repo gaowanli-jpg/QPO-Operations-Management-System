@@ -2,6 +2,8 @@
 
 > 2026-08-13 MES 主数据同步阶段 9 收口：QPO 通过数据中心只读获取 MES 工艺类型和材料分页数据，同步到现有材料工艺字典。QPO 不删除材料费用、材料类型、工艺大类、具体工艺四个页签，也不删除 `dict_material`、`dict_material_type`、`dict_process_category`、`dict_process_detail` 四张字典表。
 
+> 2026-08-13 定时同步策略补充：材料费用页签“从 MES 同步材料”旁新增“定时同步策略”，工艺大类页签“从 MES 同步工艺”旁新增“定时同步策略”。两套策略分别保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE`，默认关闭；后台巡检到点后复用现有同步服务，不覆盖 QPO 材料单价，不改变 MES 生产下发 payload 合同。
+
 ## 1. 总体口径
 
 MES 主数据同步用于让 QPO 报价和后续 MES 下发使用 MES 编码体系，但 QPO 仍然保留本地核价治理能力：
@@ -46,6 +48,25 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 | `POST /api/dict/materials/sync-mes` | `engineer:dict:material-manage` | `DICT_MATERIAL_MES_SYNC` |
 
 同步运行记录写入 `mes_master_data_sync_run`，记录 `syncRunId`、同步类型、状态、抓取数、有效数、无效数、重复数、upsert 数、停用数、执行人和脱敏消息。
+
+## 3.1 QPO 定时同步策略
+
+用户入口同样位于 **工程 > 材料工艺**：
+
+- 材料费用页签：“从 MES 同步材料”旁的“定时同步策略”按钮，维护 `MES_MATERIAL` 定时策略。
+- 工艺大类页签：“从 MES 同步工艺”旁的“定时同步策略”按钮，维护 `MES_PROCESS_TYPE` 定时策略。
+- 策略默认关闭；启动后首次执行默认延迟 30 秒，同步完成后再次执行默认间隔 30 分钟，后台巡检默认每 60 秒检查一次是否到点。
+
+后端 API：
+
+| API | 权限 | 审计动作 |
+| --- | --- | --- |
+| `GET /api/dict/materials/sync-schedule` | `engineer:dict:material-manage` | 无，仅读取策略。 |
+| `PUT /api/dict/materials/sync-schedule` | `engineer:dict:material-manage` | `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE` |
+| `GET /api/dict/process-categories/sync-schedule` | `engineer:dict:process-manage` | 无，仅读取策略。 |
+| `PUT /api/dict/process-categories/sync-schedule` | `engineer:dict:process-manage` | `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE` |
+
+策略保存到 `mes_master_data_sync_schedule_config`。环境变量 `erp.mes.master-data-sync.enabled/startup-delay-ms/fixed-delay-ms/check-ms` 只作为配置缺失时的兜底默认值；运行时以数据库策略为准。定时同步执行时写入 `mes_master_data_sync_run` 批次记录，保存策略只记录启停、间隔和上次状态安全摘要；后台巡检、读取策略和未到点跳过不写操作日志。
 
 ## 4. 字段映射
 

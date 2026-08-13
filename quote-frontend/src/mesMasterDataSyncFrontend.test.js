@@ -19,6 +19,21 @@ describe('MES master data sync stage 0 frontend guard', () => {
     expect(dictApi).toMatch(/syncMesMaterials[\s\S]*method: 'POST'/)
   })
 
+  test('dict API exposes MES timed sync schedule endpoints', () => {
+    const dictApi = readSource('services', 'dictApi.js')
+
+    expect(dictApi).toContain('getMesMaterialSyncSchedule')
+    expect(dictApi).toContain('saveMesMaterialSyncSchedule')
+    expect(dictApi).toContain('getMesProcessSyncSchedule')
+    expect(dictApi).toContain('saveMesProcessSyncSchedule')
+    expect(dictApi).toContain("request('/api/dict/materials/sync-schedule')")
+    expect(dictApi).toContain("request('/api/dict/materials/sync-schedule', {")
+    expect(dictApi).toContain("request('/api/dict/process-categories/sync-schedule')")
+    expect(dictApi).toContain("request('/api/dict/process-categories/sync-schedule', {")
+    expect(dictApi).toMatch(/saveMesMaterialSyncSchedule[\s\S]*method: 'PUT'/)
+    expect(dictApi).toMatch(/saveMesProcessSyncSchedule[\s\S]*method: 'PUT'/)
+  })
+
   test('material process page exposes permission-gated MES sync buttons with pending guards', () => {
     const materialProcess = readSource('components', 'MaterialProcessManage.vue')
 
@@ -34,6 +49,29 @@ describe('MES master data sync stage 0 frontend guard', () => {
     expect(materialProcess).toContain('return runAction(dictActionKeys.syncMesProcessTypes, async () =>')
     expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价')
     expect(materialProcess).toContain('await dictionaryStore.reloadAfterMutation()')
+  })
+
+  test('material process page exposes MES timed sync schedule buttons and dialog', () => {
+    const materialProcess = readSource('components', 'MaterialProcessManage.vue')
+
+    expect(materialProcess).toContain('定时同步策略')
+    expect(materialProcess).toContain('openMesMaterialScheduleDialog')
+    expect(materialProcess).toContain('openMesProcessScheduleDialog')
+    expect(materialProcess).toContain('getMesMaterialSyncSchedule')
+    expect(materialProcess).toContain('saveMesMaterialSyncSchedule')
+    expect(materialProcess).toContain('getMesProcessSyncSchedule')
+    expect(materialProcess).toContain('saveMesProcessSyncSchedule')
+    expect(materialProcess).toContain("v-permission=\"'engineer:dict:material-manage'\"")
+    expect(materialProcess).toContain("v-permission=\"'engineer:dict:process-manage'\"")
+    expect(materialProcess).toContain('scheduleDialogVisible')
+    expect(materialProcess).toContain('scheduleForm.startupDelaySeconds')
+    expect(materialProcess).toContain('scheduleForm.fixedDelayMinutes')
+    expect(materialProcess).toContain('lastScheduledSyncRunId')
+    expect(materialProcess).toContain('scheduleStatusLabel')
+    expect(materialProcess).toContain('saveMesScheduleSetting')
+    expect(materialProcess).toContain('startupDelayMs: Number(scheduleForm.startupDelaySeconds || 0) * 1000')
+    expect(materialProcess).toContain('fixedDelayMs: Number(scheduleForm.fixedDelayMinutes || 1) * 60 * 1000')
+    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价')
   })
 
   test('material and process lists display MES ownership and local price maintenance state', () => {

@@ -1318,3 +1318,40 @@ npm run build
 ```
 
 最终提交应按阶段拆分，至少包含 endpoint/client/schema/sync/price guard/API/frontend/docs 几类提交；不要把真实环境凭据、完整请求响应或 token 写入仓库。
+
+### 阶段 10：MES 主数据定时同步策略
+
+状态：已完成。
+
+目标：材料工艺模块像 U9 客户主数据一样支持页面化定时同步策略，用户可以分别配置 MES 材料和 MES 工艺主数据的自动同步启停、启动后首次执行延迟和同步完成后间隔。
+
+修改：
+
+- 新增 Flyway 迁移 `V9__mes_master_data_sync_schedule_config.sql`，创建 `mes_master_data_sync_schedule_config`，按 `sync_type` 保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE` 两行策略。
+- 新增 `MesMasterDataSyncScheduleConfig`、`MesMasterDataSyncScheduleConfigMapper`、`MesMasterDataSyncScheduleConfigDTO`、`MesMasterDataSyncScheduleConfigReq` 和 `MesMasterDataSyncScheduleConfigService`。
+- 扩展 `MesMasterDataSyncService.syncMesMasterDataScheduled()`，后台固定巡检默认每 60 秒执行一次，到点后分别复用 `syncMaterialsManual(null)` 和 `syncProcessTypesManual(null)`，并使用每类独立运行锁避免重复执行。
+- 扩展 `DictController`：新增 `GET/PUT /api/dict/materials/sync-schedule`，权限复用 `engineer:dict:material-manage`。
+- 扩展 `ProcessMasterController`：新增 `GET/PUT /api/dict/process-categories/sync-schedule`，权限复用 `engineer:dict:process-manage`。
+- 新增审计动作 `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE`，归入 `DICT` 模块；保存策略只记录 `syncType/enabled/startupDelayMs/fixedDelayMs/lastScheduledStatus` 等安全摘要。
+- 扩展前端 `dictApi.js`，新增 `getMesMaterialSyncSchedule()`、`saveMesMaterialSyncSchedule()`、`getMesProcessSyncSchedule()`、`saveMesProcessSyncSchedule()`。
+- 扩展 `MaterialProcessManage.vue`：材料费用页签和工艺大类页签的手动同步按钮旁新增“定时同步策略”按钮，并提供复用弹窗配置策略。
+- 更新 MES/WMS 对接、权限和日志文档，说明定时策略默认关闭、权限复用、审计动作和“不覆盖 QPO 材料单价”的边界。
+
+验收：
+
+- 两类策略默认存在且默认关闭，默认启动后首次执行延迟为 `30000ms`，同步完成后间隔为 `1800000ms`。
+- 配置行缺失时仅回退 `erp.mes.master-data-sync.enabled/startup-delay-ms/fixed-delay-ms`，正常运行以数据库策略为准。
+- 材料策略接口不新增 `common:*` 或专用权限，继续复用 `engineer:dict:material-manage`。
+- 工艺策略接口不新增 `common:*` 或专用权限，继续复用 `engineer:dict:process-manage`。
+- 后台巡检、读取策略和未到点跳过不写操作日志；保存策略写 `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE`；定时实际同步继续写 `mes_master_data_sync_run` 批次记录。
+- 定时同步不改变 MES 生产下发 DTO 字段口径，不覆盖 `platePrice/barPrice/tubePrice`，新增 MES 材料单价仍保持空值并由核价完成拦截。
+
+验收命令：
+
+```powershell
+cd D:\QPO-Operations-Management-System\quote-backend
+.\mvnw.cmd test -Dtest=MesMasterDataSyncScheduleConfigTest,MesMasterDataSyncControllerTest,MesProcessTypeSyncServiceTest,MesMaterialMasterSyncServiceTest
+
+cd D:\QPO-Operations-Management-System\quote-frontend
+npm test -- --run src/mesMasterDataSyncFrontend.test.js src/adminDuplicateClickGuard.test.js
+```

@@ -2,11 +2,14 @@ package com.machining.quote.controller;
 
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.dto.MesMasterDataSyncScheduleConfigDTO;
+import com.machining.quote.dto.MesMasterDataSyncScheduleConfigReq;
 import com.machining.quote.dto.ProcessCategoryDTO;
 import com.machining.quote.dto.ProcessCategorySaveReq;
 import com.machining.quote.dto.ProcessDetailDTO;
 import com.machining.quote.dto.ProcessDetailSaveReq;
 import com.machining.quote.service.ProcessMasterService;
+import com.machining.quote.service.mes.MesMasterDataSyncScheduleConfigService;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +32,8 @@ public class ProcessMasterController {
     private ProcessMasterService processMasterService;
     @Autowired
     private MesMasterDataSyncService mesMasterDataSyncService;
+    @Autowired
+    private MesMasterDataSyncScheduleConfigService mesMasterDataSyncScheduleConfigService;
 
     @GetMapping("/process-categories")
     @RequirePermission("engineer:dict:view")
@@ -51,6 +56,19 @@ public class ProcessMasterController {
         Map<String, Object> response = syncSummary("MES_PROCESS_TYPE", result);
         response.put("message", result.success() ? "MES process master data sync completed" : result.message());
         return response;
+    }
+
+    @GetMapping("/process-categories/sync-schedule")
+    @RequirePermission("engineer:dict:process-manage")
+    public MesMasterDataSyncScheduleConfigDTO mesProcessTypeSyncSchedule() {
+        return mesMasterDataSyncScheduleConfigService.getSetting(MesMasterDataSyncService.SYNC_TYPE_PROCESS_TYPE);
+    }
+
+    @PutMapping("/process-categories/sync-schedule")
+    @RequirePermission("engineer:dict:process-manage")
+    public MesMasterDataSyncScheduleConfigDTO updateMesProcessTypeSyncSchedule(
+            @RequestBody MesMasterDataSyncScheduleConfigReq req) {
+        return mesMasterDataSyncScheduleConfigService.updateSetting(MesMasterDataSyncService.SYNC_TYPE_PROCESS_TYPE, req);
     }
 
     @PutMapping("/process-categories/{id}")

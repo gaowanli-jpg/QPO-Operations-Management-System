@@ -7,6 +7,8 @@ import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
 import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
+import com.machining.quote.dto.MesMasterDataSyncScheduleConfigDTO;
+import com.machining.quote.dto.MesMasterDataSyncScheduleConfigReq;
 import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMarkupFee;
@@ -15,6 +17,7 @@ import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.MaterialMasterService;
+import com.machining.quote.service.mes.MesMasterDataSyncScheduleConfigService;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -46,6 +49,8 @@ public class DictController {
     private AuditService auditService;
     @Autowired
     private MesMasterDataSyncService mesMasterDataSyncService;
+    @Autowired
+    private MesMasterDataSyncScheduleConfigService mesMasterDataSyncScheduleConfigService;
 
     @GetMapping("/materials")
     @RequirePermission("engineer:dict:view")
@@ -68,6 +73,19 @@ public class DictController {
         Map<String, Object> response = syncSummary("MES_MATERIAL", result);
         response.put("message", result.success() ? "MES material master data sync completed" : result.message());
         return response;
+    }
+
+    @GetMapping("/materials/sync-schedule")
+    @RequirePermission("engineer:dict:material-manage")
+    public MesMasterDataSyncScheduleConfigDTO mesMaterialSyncSchedule() {
+        return mesMasterDataSyncScheduleConfigService.getSetting(MesMasterDataSyncService.SYNC_TYPE_MATERIAL);
+    }
+
+    @PutMapping("/materials/sync-schedule")
+    @RequirePermission("engineer:dict:material-manage")
+    public MesMasterDataSyncScheduleConfigDTO updateMesMaterialSyncSchedule(
+            @RequestBody MesMasterDataSyncScheduleConfigReq req) {
+        return mesMasterDataSyncScheduleConfigService.updateSetting(MesMasterDataSyncService.SYNC_TYPE_MATERIAL, req);
     }
 
     @PutMapping("/materials/{id}")

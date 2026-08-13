@@ -11,7 +11,9 @@
       <div class="erp-toolbar-group material-toolbar">
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="warning" plain :loading="isPending(dictActionKeys.syncMesMaterials)" :disabled="isPending(dictActionKeys.syncMesMaterials)" @click="syncMesMaterials">从 MES 同步材料</el-button>
+        <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" plain :loading="scheduleLoading && scheduleTarget === 'MES_MATERIAL'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesMaterialScheduleDialog">定时同步策略</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" plain :loading="scheduleLoading && scheduleTarget === 'MES_PROCESS_TYPE'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesProcessScheduleDialog">定时同步策略</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-else-if="activeTab === 'materialTypes'" type="primary" @click="openMaterialTypeDialog()">新增材料类型</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processCategories'" type="primary" @click="openProcessCategoryDialog()">新增工艺大类</el-button>
@@ -479,6 +481,63 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="scheduleDialogVisible"
+      :title="scheduleDialogTitle"
+      width="min(560px, 92vw)"
+      class="mes-schedule-dialog"
+      destroy-on-close
+    >
+      <div v-loading="scheduleLoading" class="mes-schedule-panel">
+        <el-alert
+          class="mes-schedule-alert"
+          type="info"
+          :closable="false"
+          show-icon
+          title="MES 会更新基础信息，不覆盖 QPO 材料单价；策略默认关闭，保存后作为运行时配置。"
+        />
+        <el-form label-width="150px" class="mes-schedule-form">
+          <el-form-item label="开启定时同步">
+            <el-switch v-model="scheduleForm.enabled" active-text="开启" inactive-text="关闭" />
+          </el-form-item>
+          <el-form-item label="启动后首次执行">
+            <el-input-number
+              v-model="scheduleForm.startupDelaySeconds"
+              :min="0"
+              :max="86400"
+              :step="30"
+              controls-position="right"
+            />
+            <span class="mes-schedule-unit">秒</span>
+          </el-form-item>
+          <el-form-item label="完成后再次执行">
+            <el-input-number
+              v-model="scheduleForm.fixedDelayMinutes"
+              :min="1"
+              :max="10080"
+              :step="5"
+              controls-position="right"
+            />
+            <span class="mes-schedule-unit">分钟</span>
+          </el-form-item>
+        </el-form>
+        <el-descriptions :column="1" size="small" border class="mes-schedule-status">
+          <el-descriptions-item label="同步对象">{{ scheduleTargetLabel }}</el-descriptions-item>
+          <el-descriptions-item label="配置来源">{{ scheduleForm.fallback ? '环境兜底' : '数据库策略' }}</el-descriptions-item>
+          <el-descriptions-item label="上次定时状态">{{ scheduleStatusLabel(scheduleForm.lastScheduledStatus) }}</el-descriptions-item>
+          <el-descriptions-item label="上次定时时间">{{ formatSyncTime(scheduleForm.lastScheduledRunAt) }}</el-descriptions-item>
+          <el-descriptions-item label="同步批次">{{ scheduleForm.lastScheduledSyncRunId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="说明">{{ scheduleForm.lastScheduledMessage || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <div class="mes-schedule-footer">
+          <el-button :disabled="isPending(dictActionKeys.saveMesSchedule)" @click="scheduleDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="isPending(dictActionKeys.saveMesSchedule)" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="saveMesScheduleSetting">保存策略</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -491,11 +550,15 @@ import {
   deleteMarkupFee as deleteMarkupFeeRequest,
   deleteMaterial as deleteMaterialRequest,
   deleteMaterialType as deleteMaterialTypeRequest,
+  getMesMaterialSyncSchedule,
+  getMesProcessSyncSchedule,
   saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
   saveExtraFeeItem,
   saveMarkupFee as saveMarkupFeeRequest,
   saveMaterial as saveMaterialRequest,
   saveMaterialType as saveMaterialTypeRequest,
+  saveMesMaterialSyncSchedule,
+  saveMesProcessSyncSchedule,
   saveProcessCategory as saveProcessCategoryRequest,
   saveProcessDetail as saveProcessDetailRequest,
   syncMesMaterials as syncMesMaterialsRequest,
@@ -533,6 +596,7 @@ const dictActionKeys = {
   saveMaterialDialog: 'engineer:dict:material-save-dialog',
   syncMesMaterials: 'engineer:dict:material-sync-mes',
   syncMesProcessTypes: 'engineer:dict:process-sync-mes',
+  saveMesSchedule: 'engineer:dict:mes-master-data-schedule-save',
   saveMaterialTypeDialog: 'engineer:dict:material-type-save-dialog',
   saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
@@ -559,6 +623,9 @@ const processDetailDialogVisible = ref(false)
 const markupFeeDialogVisible = ref(false)
 const assemblyMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
+const scheduleDialogVisible = ref(false)
+const scheduleLoading = ref(false)
+const scheduleTarget = ref('MES_MATERIAL')
 
 const materialForm = reactive(createEmptyMaterial())
 const materialTypeForm = reactive(createEmptyMaterialType())
@@ -567,6 +634,41 @@ const processDetailForm = reactive(createEmptyProcessDetail())
 const markupFeeForm = reactive(createEmptyMarkupFee())
 const assemblyMarkupFeeForm = reactive(createEmptyMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
+const scheduleForm = reactive({
+  enabled: false,
+  startupDelaySeconds: 30,
+  fixedDelayMinutes: 30,
+  lastScheduledRunAt: '',
+  lastScheduledSyncRunId: null,
+  lastScheduledStatus: 'NEVER',
+  lastScheduledMessage: '',
+  fallback: false
+})
+
+const scheduleConfigs = {
+  MES_MATERIAL: {
+    title: 'MES 材料定时同步策略',
+    label: 'MES 材料',
+    load: getMesMaterialSyncSchedule,
+    save: saveMesMaterialSyncSchedule,
+    loadError: 'MES 材料定时同步策略加载失败',
+    saveSuccess: 'MES 材料定时同步策略已保存',
+    saveError: 'MES 材料定时同步策略保存失败'
+  },
+  MES_PROCESS_TYPE: {
+    title: 'MES 工艺定时同步策略',
+    label: 'MES 工艺',
+    load: getMesProcessSyncSchedule,
+    save: saveMesProcessSyncSchedule,
+    loadError: 'MES 工艺定时同步策略加载失败',
+    saveSuccess: 'MES 工艺定时同步策略已保存',
+    saveError: 'MES 工艺定时同步策略保存失败'
+  }
+}
+
+const activeScheduleConfig = computed(() => scheduleConfigs[scheduleTarget.value] || scheduleConfigs.MES_MATERIAL)
+const scheduleDialogTitle = computed(() => activeScheduleConfig.value.title)
+const scheduleTargetLabel = computed(() => activeScheduleConfig.value.label)
 
 const formatNumber = (value, precision) => {
   const numericValue = Number(value)
@@ -595,6 +697,12 @@ const materialPriceStatusType = (row = {}) => (materialPriceStatusText(row) === 
 const formatSyncTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '-')
 const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
 const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
+const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
+const scheduleStatusLabel = (status) => ({
+  SUCCESS: '成功',
+  FAILED: '失败',
+  NEVER: '未执行'
+}[status] || status || '-')
 
 function createEmptyMaterial() {
   return {
@@ -749,6 +857,55 @@ const syncMesProcessTypes = async () => {
       ElMessage.error('MES 工艺同步失败。')
     }
   })
+}
+
+const openMesMaterialScheduleDialog = () => openMesScheduleDialog('MES_MATERIAL')
+const openMesProcessScheduleDialog = () => openMesScheduleDialog('MES_PROCESS_TYPE')
+
+const openMesScheduleDialog = async (syncType) => {
+  if (scheduleLoading.value) return
+  scheduleTarget.value = syncType
+  scheduleDialogVisible.value = true
+  scheduleLoading.value = true
+  try {
+    const response = await activeScheduleConfig.value.load()
+    applyMesScheduleSetting(response)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(requestErrorMessage(error, activeScheduleConfig.value.loadError))
+  } finally {
+    scheduleLoading.value = false
+  }
+}
+
+const saveMesScheduleSetting = async () => {
+  return runAction(dictActionKeys.saveMesSchedule, async () => {
+    try {
+      const payload = {
+        enabled: !!scheduleForm.enabled,
+        startupDelayMs: Number(scheduleForm.startupDelaySeconds || 0) * 1000,
+        fixedDelayMs: Number(scheduleForm.fixedDelayMinutes || 1) * 60 * 1000
+      }
+      const response = await activeScheduleConfig.value.save(payload)
+      applyMesScheduleSetting(response)
+      ElMessage.success(activeScheduleConfig.value.saveSuccess)
+      scheduleDialogVisible.value = false
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, activeScheduleConfig.value.saveError))
+    }
+  })
+}
+
+const applyMesScheduleSetting = (setting = {}) => {
+  scheduleForm.enabled = !!setting.enabled
+  scheduleForm.startupDelaySeconds = Math.round((setting.startupDelayMs ?? 30000) / 1000)
+  scheduleForm.fixedDelayMinutes = Math.max(1, Math.round((setting.fixedDelayMs ?? 1800000) / 60000))
+  scheduleForm.lastScheduledRunAt = setting.lastScheduledRunAt || ''
+  scheduleForm.lastScheduledSyncRunId = setting.lastScheduledSyncRunId || null
+  scheduleForm.lastScheduledStatus = setting.lastScheduledStatus || 'NEVER'
+  scheduleForm.lastScheduledMessage = setting.lastScheduledMessage || ''
+  scheduleForm.fallback = !!setting.fallback
 }
 
 const saveMaterial = async () => {
@@ -989,6 +1146,40 @@ onMounted(loadAll)
   width: 100%;
 }
 
+.mes-schedule-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-space-4);
+}
+
+.mes-schedule-alert {
+  margin: 0;
+}
+
+.mes-schedule-form {
+  max-width: 100%;
+}
+
+.mes-schedule-form :deep(.el-input-number) {
+  width: 180px;
+  max-width: calc(100vw - 220px);
+}
+
+.mes-schedule-unit {
+  margin-left: var(--erp-space-2);
+  color: var(--erp-text-secondary);
+}
+
+.mes-schedule-status {
+  width: 100%;
+}
+
+.mes-schedule-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--erp-space-2);
+}
+
 @media (max-width: 900px) {
   .material-toolbar {
     justify-content: flex-start;
@@ -1000,6 +1191,33 @@ onMounted(loadAll)
 
   .process-dialog-grid {
     display: block;
+  }
+
+  .mes-schedule-form :deep(.el-form-item) {
+    display: block;
+  }
+
+  .mes-schedule-form :deep(.el-form-item__label) {
+    width: auto !important;
+    justify-content: flex-start;
+  }
+
+  .mes-schedule-form :deep(.el-form-item__content) {
+    margin-left: 0 !important;
+  }
+
+  .mes-schedule-form :deep(.el-input-number) {
+    width: calc(100vw - 120px);
+    max-width: 100%;
+  }
+
+  .mes-schedule-footer {
+    flex-direction: column-reverse;
+  }
+
+  .mes-schedule-footer .el-button {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>
