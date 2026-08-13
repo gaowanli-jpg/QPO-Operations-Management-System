@@ -96,6 +96,75 @@ class EngineerServiceMaterialCalculationTests {
     }
 
     @Test
+    void rejectsSelectedMaterialWhenShapePriceIsMissing() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        when(materialMapper.selectList(any()))
+                .thenReturn(List.of(material("MES-MAT-001", "MES Material No Price", 1L, "MES", 7850.0, null)));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MES-MAT-001");
+        materialData.put("shape", "鏉挎潗");
+        materialData.put("weight", 1.0);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("MES-MAT-001")
+                .hasMessageContaining("MES Material No Price")
+                .hasMessageContaining("鏉挎潗");
+    }
+
+    @Test
+    void rejectsSelectedMaterialWhenShapePriceIsZero() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        when(materialMapper.selectList(any()))
+                .thenReturn(List.of(material("MES-MAT-002", "MES Material Zero Price", 1L, "MES", 7850.0, 0.0)));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MES-MAT-002");
+        materialData.put("shape", "鏉挎潗");
+        materialData.put("weight", 1.0);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("MES-MAT-002")
+                .hasMessageContaining("MES Material Zero Price")
+                .hasMessageContaining("鏉挎潗");
+    }
+
+    @Test
+    void positiveBarAndTubePricesStillCalculateFromShapeSpecificPrice() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterial material = material("MAT-SHAPE", "Shape Price Material", 1L, "Steel", 7850.0, 7.1);
+        material.setBarPrice(8.2);
+        material.setTubePrice(9.3);
+        when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        Map<String, Object> barMaterialData = new LinkedHashMap<>();
+        barMaterialData.put("materialCode", "MAT-SHAPE");
+        barMaterialData.put("shape", "妫掓潗");
+        barMaterialData.put("weight", 2.0);
+        Double barCost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", barMaterialData);
+
+        Map<String, Object> tubeMaterialData = new LinkedHashMap<>();
+        tubeMaterialData.put("materialCode", "MAT-SHAPE");
+        tubeMaterialData.put("shape", "绠℃潗");
+        tubeMaterialData.put("weight", 2.0);
+        Double tubeCost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", tubeMaterialData);
+
+        assertThat(barCost).isCloseTo(16.4, within(0.000001));
+        assertThat(tubeCost).isCloseTo(18.6, within(0.000001));
+    }
+
+    @Test
     void rejectsNormalMaterialDataWithoutMaterialCode() {
         EngineerService service = new EngineerService();
         ReflectionTestUtils.setField(service, "materialMapper", mock(DictMaterialMapper.class));
@@ -226,7 +295,7 @@ class EngineerServiceMaterialCalculationTests {
         assertThat(current.getMaterialData()).isNull();
     }
 
-    private DictMaterial material(String code, String name, Long typeId, String category, double density, double unitPrice) {
+    private DictMaterial material(String code, String name, Long typeId, String category, double density, Double unitPrice) {
         DictMaterial material = new DictMaterial();
         material.setId(5L);
         material.setMaterialCode(code);

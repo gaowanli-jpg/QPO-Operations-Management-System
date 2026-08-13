@@ -1542,13 +1542,35 @@ public class EngineerService {
     }
 
     private double resolveMaterialPrice(DictMaterial material, String shape) {
-        if ("棒材".equals(shape)) {
-            return material.getBarPrice() != null ? material.getBarPrice() : 0.0;
+        Double unitPrice;
+        if (isBarShape(shape)) {
+            unitPrice = material.getBarPrice();
+        } else if (isTubeShape(shape)) {
+            unitPrice = material.getTubePrice();
+        } else {
+            unitPrice = material.getPlatePrice();
         }
-        if ("管材".equals(shape)) {
-            return material.getTubePrice() != null ? material.getTubePrice() : 0.0;
+        if (unitPrice == null || unitPrice <= 0) {
+            throw new RuntimeException("材料单价未维护：materialCode="
+                    + safeText(material.getMaterialCode())
+                    + ", materialName="
+                    + safeText(material.getMaterialName())
+                    + ", shape="
+                    + safeText(shape));
         }
-        return material.getPlatePrice() != null ? material.getPlatePrice() : 0.0;
+        return unitPrice;
+    }
+
+    private boolean isBarShape(String shape) {
+        return "棒材".equals(shape) || "妫掓潗".equals(shape) || "BAR".equalsIgnoreCase(safeText(shape));
+    }
+
+    private boolean isTubeShape(String shape) {
+        return "管材".equals(shape) || "绠℃潗".equals(shape) || "TUBE".equalsIgnoreCase(safeText(shape));
+    }
+
+    private String safeText(String value) {
+        return value == null || value.isBlank() ? "-" : value.trim();
     }
 
     private double resolveMaterialDensity(DictMaterial material, String shape) {

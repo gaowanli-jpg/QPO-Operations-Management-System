@@ -1192,6 +1192,8 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ### 阶段 6：材料单价缺失禁止完成核价
 
+状态：已完成。
+
 目标：MES 同步新增材料如果未维护 QPO 单价，不能按 0 元/kg 完成核价。
 
 修改：
