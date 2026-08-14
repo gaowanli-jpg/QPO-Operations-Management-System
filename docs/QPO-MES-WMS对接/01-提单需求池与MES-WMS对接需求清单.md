@@ -2,6 +2,8 @@
 
 > 2026-08-08 两级工艺主数据阶段 15 收口：`order_delivery_ticket.process_route` 统一保存标准工艺快照，内部字段包含 `processDetailId / processCode / categoryName / detailName / hourlyRate / unitWorkHours / lineCost / sortNo`；WMS allocation 复制该快照用于展示和追溯；MES 生产下发只对外传 `processCode / categoryName / detailName / unitWorkHours / sortNo`，不传 QPO 内部工艺成本字段。
 
+> 2026-08-14 WMS 批量 reserve 收口：WMS 锁库只走 `WMS_ALLOCATION_BATCH`，链路为 `QPO -> 数据中心 -> WMS`，接口为 `/api/v1/wms/admin-api/wms/datacenter/sale-lading/reserve`。`inProductionCount` 归入“在产覆盖”，新口径没有在产单号字段。
+
 ## 1. 背景
 
 QPO 原规划中，`order_delivery_ticket` 作为已提单零件明细表向 APS 提供同步数据。当前需求调整为不再对接 APS，改为对接 MES 和 WMS：
@@ -186,7 +188,7 @@ FAILED      失败
 | `version` | `VARCHAR(20)` | 版本快照。 |
 | `customer_name` | `VARCHAR(255)` | 客户快照。 |
 | `internal_project_no` | `VARCHAR(100)` | 内部项目号快照。 |
-| `wms_production_order_no` | `VARCHAR(100)` | 在产订单号，仅 `IN_PRODUCTION_LOCK` 必填。 |
+| `wms_reservation_ticket_id` | `BIGINT` | WMS 批量 reserve ticket 映射 ID，用于本地幂等重放。 |
 | `source_payload` | `JSONB` | WMS 返回原始摘要，不保存敏感信息。 |
 | `status` | `VARCHAR(30)` | 分配行状态，初期可固定为 `ACTIVE`。 |
 | `created_at` | `TIMESTAMP` | 创建时间。 |
@@ -201,7 +203,7 @@ FAILED      失败
 | `(material_no, id)` | 按物料号查询锁库结果。 |
 | `(part_no, version, id)` | 按图号版本查询。 |
 | `(allocation_type, id)` | 按分配类型筛选。 |
-| `(wms_production_order_no, id)` | 按在产订单号筛选。 |
+| `(wms_reservation_ticket_id, allocation_type)` | 防止 WMS 批量结果本地重放时重复插入同类 allocation。 |
 
 ## 6. 页面需求
 
@@ -264,7 +266,6 @@ FAILED      失败
 - 物料号
 - 分配类型
 - 数量
-- 在产订单号
 - 内部项目号
 - 状态
 - 创建时间
@@ -278,7 +279,6 @@ FAILED      失败
 - 物料号
 - 内部项目号
 - 分配类型
-- 在产订单号
 - 创建时间范围
 
 分配类型中文展示：
@@ -286,7 +286,7 @@ FAILED      失败
 | 值 | 中文 |
 | --- | --- |
 | `IN_STOCK_LOCK` | 已入库库存锁定 |
-| `IN_PRODUCTION_LOCK` | 在产库存锁定 |
+| `IN_PRODUCTION_LOCK` | 在产覆盖 |
 | `PRODUCTION_REQUIRED` | 待生产数量 |
 
 ### 6.3 页面关系
@@ -359,7 +359,7 @@ GET /api/order-delivery/tickets/{ticketId}/allocations
 要求：
 
 - 支持分页。
-- 支持按客户、RFQ、图号、版本、物料号、分配类型、在产订单号筛选。
+- 支持按客户、RFQ、图号、版本、物料号、分配类型筛选。
 - 接入订单数据范围。
 
 ## 8. 权限需求
@@ -397,9 +397,12 @@ GET /api/order-delivery/tickets/{ticketId}/allocations
 | `DELIVERY_MES_MATERIAL_SYNC_SUBMIT` | 提交 MES 物料号批量获取 | taskId、ticketIds、ticketCount。 |
 | `DELIVERY_MES_MATERIAL_SYNC_SUCCESS` | MES 物料号获取成功 | ticketId、materialNo。 |
 | `DELIVERY_MES_MATERIAL_SYNC_FAILED` | MES 物料号获取失败 | ticketId、失败摘要。 |
-| `DELIVERY_WMS_ALLOCATION_SUBMIT` | 提交 WMS 锁库分配 | ticketId、materialNo、qty。 |
-| `DELIVERY_WMS_ALLOCATION_SUCCESS` | WMS 锁库分配成功 | ticketId、allocationCount、inStockQty、inProductionQty、productionRequiredQty。 |
-| `DELIVERY_WMS_ALLOCATION_FAILED` | WMS 锁库分配失败 | ticketId、失败摘要。 |
+| `DELIVERY_WMS_ALLOCATION_SUBMIT` | 提交 WMS 批量锁库 | taskId、ticketCount。 |
+| `DELIVERY_WMS_ALLOCATION_SUCCESS` | WMS 批量锁库成功 | taskId、batchId、externalBizId、saleOrderNo、allocationCount、inStockQty、inProductionQty、productionRequiredQty。 |
+| `DELIVERY_WMS_ALLOCATION_FAILED` | WMS 批量锁库失败 | taskId、batchId、externalBizId、失败摘要。 |
+| `DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN` | WMS 批量锁库结果待核对 | taskId、batchId、externalBizId、失败摘要。 |
+| `DELIVERY_WMS_ALLOCATION_APPLY_FAILED` | WMS 批量锁库本地写入待修复 | taskId、batchId、externalBizId、失败摘要。 |
+| `DELIVERY_WMS_ALLOCATION_RECONCILED` | WMS 批量锁库核对恢复完成 | taskId、batchId、externalBizId、恢复摘要。 |
 
 ### 9.2 文件日志
 
@@ -411,10 +414,11 @@ MES material sync started ticketId={} taskId={}
 MES material sync completed ticketId={} taskId={} materialNo={} durationMs={}
 MES material sync failed ticketId={} taskId={} durationMs={}
 
-WMS allocation submitted ticketId={} taskId={}
-WMS allocation started ticketId={} taskId={} materialNo={} demandQty={}
-WMS allocation completed ticketId={} taskId={} allocationCount={} inStockQty={} inProductionQty={} productionRequiredQty={} durationMs={}
-WMS allocation failed ticketId={} taskId={} durationMs={}
+WMS reservation batch submitted taskId={} selectedTicketCount={}
+WMS reservation batch started taskId={} batchId={} externalBizId={} saleOrderNo={} ticketCount={} itemCount={}
+WMS reservation batch completed taskId={} batchId={} externalBizId={} saleOrderNo={} inStockQty={} inProductionQty={} productionRequiredQty={} durationMs={}
+WMS reservation batch result unknown taskId={} batchId={} externalBizId={} saleOrderNo={} reason={}
+WMS reservation batch failed taskId={} batchId={} externalBizId={} saleOrderNo={} durationMs={}
 ```
 
 要求：
@@ -444,8 +448,8 @@ WMS 接口需要明确：
 - 请求字段名和是否必填。
 - 是否以 QPO 的需求数量作为锁库上限。
 - 已入库库存锁定是否由 WMS 在接口调用时真实锁定。
-- 在产订单数组格式，必须包含每个在产订单号及对应可锁定数量。
-- 重复调用同一 `ticket_id` 时，WMS 是否幂等。
+- `inProductionCount` 归入“在产覆盖”，不再要求在产单号。
+- 同一 `externalBizId` 和相同请求快照重复调用时，WMS 必须返回第一次处理结果且不重复冻结。
 - WMS 返回成功但 QPO 写库失败时的补偿方式。
 
 ## 11. 数据一致性要求
@@ -455,7 +459,7 @@ WMS 接口需要明确：
 - `order_delivery_ticket_allocation.qty` 合计必须等于原始提单行 `qty`。
 - 同一 `ticket_id` 成功分配后，默认不允许再次成功写入另一套 allocation，避免重复锁库。
 - MES 物料号成功后应作为稳定快照保存，后续 WMS 使用 QPO 保存的 `material_no`。
-- WMS 分配成功写库必须在一个事务中完成：清理/创建 allocation、更新 ticket 状态、记录摘要。
+- WMS 分配成功写库必须在一个事务中完成：创建 allocation、更新 ticket 状态、记录摘要；本地重放依靠 `wms_reservation_ticket_id + allocation_type` 幂等键防重复。
 - 外部接口失败不得产生部分 allocation 行。
 
 ## 12. 非目标范围
@@ -478,9 +482,9 @@ WMS 接口需要明确：
 - 提单生成后，已提零件页面能看到对应需求池记录。
 - 对单条已提零件执行 MES 物料号获取，成功后能看到物料号。
 - 无物料号的已提零件不能提交 WMS 锁库。
-- WMS 返回多个在产订单时，QPO 能动态生成多条在产库存锁定行。
+- WMS 返回 `inProductionCount` 时，QPO 能生成“在产覆盖” allocation。
 - WMS 覆盖不足时，QPO 自动生成待生产数量行。
-- 锁库零件页面能按分配类型、图号、物料号、在产订单号查询。
+- 锁库零件页面能按分配类型、图号、物料号查询。
 - 原始提单需求行仍可追溯到订单、零件、工艺快照和图纸。
 - 文档和开发口径明确 `order_delivery_ticket` 是 MES/WMS 需求池，`order_delivery_ticket_allocation` 是 WMS 拆分结果，旧 APS 出口只是历史兼容。
 

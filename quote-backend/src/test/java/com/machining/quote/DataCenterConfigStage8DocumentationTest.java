@@ -16,6 +16,8 @@ class DataCenterConfigStage8DocumentationTest {
             "..", "docs", "ops", "sql", "clear_order_business_data_before_u9_customer_cutover.sql");
     private static final Path WMS_REQUIREMENT_DOC = Path.of(
             "..", "docs", "QPO-MES-WMS对接", "01-提单需求池与MES-WMS对接需求清单.md");
+    private static final Path WMS_BASE_MODEL_DOC = Path.of(
+            "..", "docs", "QPO-MES-WMS对接", "02-基础数据模型与已提零件模块开发文档.md");
     private static final Path WMS_DEV_DOC = Path.of(
             "..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
     private static final Path WMS_PERMISSION_LOG_DOC = Path.of(
@@ -24,12 +26,16 @@ class DataCenterConfigStage8DocumentationTest {
             "..", "docs", "QPO-MES-WMS对接", "07-提供给WMS的库存锁库接口对接说明.md");
     private static final Path DATA_CENTER_DOC = Path.of(
             "..", "docs", "QPO系统配置", "05-数据中心统一对接开发文档.md");
+    private static final Path LEGACY_SYSTEM_CONFIG_DOC = Path.of(
+            "..", "docs", "QPO系统配置", "03-系统对接配置开发文档.md");
     private static final Path PERMISSION_CATALOG_DOC = Path.of(
             "..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path PERMISSION_ADMIN_DOC = Path.of(
             "..", "docs", "QPO权限用户体系", "03-权限体系部署与管理员使用说明.md");
     private static final Path LOG_OPS_DOC = Path.of(
             "..", "docs", "QPO日志模块", "03-日志运维说明.md");
+    private static final Path MAIN_FLOW_LOG_DOC = Path.of(
+            "..", "docs", "QPO日志模块", "04-主流程文件日志规范化开发文档.md");
 
     @Test
     void deploymentDocsRetainDataCenterWmsFallbackAndRemoveLegacyWmsDirectFallback() throws IOException {
@@ -114,6 +120,22 @@ class DataCenterConfigStage8DocumentationTest {
                         "durationMs")
                 .satisfies(DataCenterConfigStage8DocumentationTest::assertNoLegacyWmsDirectConfig)
                 .doesNotContainPattern("\\bWMS_ALLOCATION\\b");
+    }
+
+    @Test
+    void supportingPlanningDocsDoNotDescribeRemovedWmsRuntimeAsCurrent() throws IOException {
+        for (Path path : List.of(WMS_REQUIREMENT_DOC, WMS_BASE_MODEL_DOC, LEGACY_SYSTEM_CONFIG_DOC, MAIN_FLOW_LOG_DOC)) {
+            assertThat(read(path))
+                    .as("supporting planning doc must not reintroduce removed WMS runtime terms: %s", path)
+                    .satisfies(DataCenterConfigStage8DocumentationTest::assertNoLegacyWmsDirectConfig)
+                    .doesNotContain(
+                            "WmsAllocationClient",
+                            "WmsAllocationService",
+                            "wms_production_order_no",
+                            "wmsProductionOrderNo",
+                            "/api/wms/inventory/allocate")
+                    .doesNotContainPattern("\\bWMS_ALLOCATION\\b");
+        }
     }
 
     @Test
