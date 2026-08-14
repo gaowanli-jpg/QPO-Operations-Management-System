@@ -64,24 +64,28 @@ public class DataCenterIntegrationClient {
             Map<String, ?> queryParams,
             Class<T> responseType,
             HttpMethod forcedMethod) {
-        SystemDataCenterConfig config = dataCenterConfigService.activeConfig();
-        SystemDataCenterEndpointConfig endpoint = requireRuntimeEndpoint(endpointCode);
-        String token = tokenService.fetchAccessToken(config);
-        HttpMethod method = forcedMethod == null
-                ? HttpMethod.valueOf(normalizeMethod(endpoint.getMethod()))
-                : forcedMethod;
-        String url = joinUrl(config.getBaseUrl(), endpoint.getPath());
-        if (method == HttpMethod.GET) {
-            url = appendQuery(url, queryParams);
-        }
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<?> entity = method == HttpMethod.GET
-                ? new HttpEntity<>(headers)
-                : new HttpEntity<>(requestPayload, headers);
+        String normalizedEndpointCode = registry.requireDefinition(endpointCode).endpointCode();
+        SystemDataCenterConfig config = null;
+        SystemDataCenterEndpointConfig endpoint = null;
+        String token = null;
         try {
+            config = dataCenterConfigService.activeConfig();
+            endpoint = requireRuntimeEndpoint(normalizedEndpointCode);
+            token = tokenService.fetchAccessToken(config);
+            HttpMethod method = forcedMethod == null
+                    ? HttpMethod.valueOf(normalizeMethod(endpoint.getMethod()))
+                    : forcedMethod;
+            String url = joinUrl(config.getBaseUrl(), endpoint.getPath());
+            if (method == HttpMethod.GET) {
+                url = appendQuery(url, queryParams);
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<?> entity = method == HttpMethod.GET
+                    ? new HttpEntity<>(headers)
+                    : new HttpEntity<>(requestPayload, headers);
             ResponseEntity<T> response = restTemplate(config, endpoint).exchange(url, method, entity, responseType);
             log.info(
                     "Data center call completed endpointCode={} targetSystemCode={} host={} path={} status={}",
@@ -92,37 +96,55 @@ public class DataCenterIntegrationClient {
                     response.getStatusCode().value()
             );
             return response.getBody();
+        } catch (DataCenterCallException e) {
+            throw e;
         } catch (HttpStatusCodeException e) {
             String message = "Data center call failed status=" + e.getStatusCode().value();
             log.warn(
                     "Data center call failed endpointCode={} targetSystemCode={} host={} path={} status={}",
-                    endpoint.getEndpointCode(),
-                    endpoint.getTargetSystemCode(),
-                    host(config.getBaseUrl()),
-                    endpoint.getPath(),
+                    endpointCode(endpoint, normalizedEndpointCode),
+                    targetSystemCode(endpoint),
+                    host(config == null ? null : config.getBaseUrl()),
+                    path(endpoint),
                     e.getStatusCode().value()
             );
-            throw new IllegalStateException(message, e);
-        } catch (ResourceAccessException e) {
-            log.warn(
-                    "Data center call failed endpointCode={} targetSystemCode={} host={} path={} message=network error",
-                    endpoint.getEndpointCode(),
-                    endpoint.getTargetSystemCode(),
-                    host(config.getBaseUrl()),
-                    endpoint.getPath()
+            throw failure(
+                    normalizedEndpointCode,
+                    DataCenterCallException.FailureCertainty.DEFINITE_FAILURE,
+                    e.getStatusCode().value(),
+                    message,
+                    e
             );
-            throw new IllegalStateException("Data center call failed message=network error", e);
+        } catch (ResourceAccessException e) {
+            DataCenterCallException.FailureCertainty certainty = isResultUnknownTransport(e)
+                    ? DataCenterCallException.FailureCertainty.RESULT_UNKNOWN
+                    : DataCenterCallException.FailureCertainty.DEFINITE_FAILURE;
+            log.warn(
+                    "Data center call failed endpointCode={} targetSystemCode={} host={} path={} certainty={} message=network error",
+                    endpointCode(endpoint, normalizedEndpointCode),
+                    targetSystemCode(endpoint),
+                    host(config == null ? null : config.getBaseUrl()),
+                    path(endpoint),
+                    certainty
+            );
+            throw failure(normalizedEndpointCode, certainty, null, "Data center call failed message=network error", e);
         } catch (RuntimeException e) {
             String message = sanitize(e.getMessage(), token, config);
             log.warn(
                     "Data center call failed endpointCode={} targetSystemCode={} host={} path={} message={}",
-                    endpoint.getEndpointCode(),
-                    endpoint.getTargetSystemCode(),
-                    host(config.getBaseUrl()),
-                    endpoint.getPath(),
+                    endpointCode(endpoint, normalizedEndpointCode),
+                    targetSystemCode(endpoint),
+                    host(config == null ? null : config.getBaseUrl()),
+                    path(endpoint),
                     message
             );
-            throw new IllegalStateException("Data center call failed message=" + message, e);
+            throw failure(
+                    normalizedEndpointCode,
+                    DataCenterCallException.FailureCertainty.DEFINITE_FAILURE,
+                    null,
+                    "Data center call failed message=" + message,
+                    e
+            );
         }
     }
 
@@ -181,9 +203,46 @@ public class DataCenterIntegrationClient {
         return DataCenterEndpointRegistry.U9_SALES_ORDER_SYNC.equals(code)
                 || DataCenterEndpointRegistry.U9_COMMON_ENTITY_QUERY.equals(code)
                 || DataCenterEndpointRegistry.MES_MATERIAL_RESOLVE.equals(code)
+                || DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE.equals(code)
                 || DataCenterEndpointRegistry.MES_PRODUCTION_DISPATCH.equals(code)
                 || DataCenterEndpointRegistry.MES_PROCESS_TYPE_LIST.equals(code)
                 || DataCenterEndpointRegistry.MES_MATERIAL_PAGE.equals(code);
+    }
+
+    private DataCenterCallException failure(String endpointCode,
+                                            DataCenterCallException.FailureCertainty certainty,
+                                            Integer httpStatus,
+                                            String message,
+                                            Throwable cause) {
+        return new DataCenterCallException(endpointCode, certainty, httpStatus, message, cause);
+    }
+
+    private boolean isResultUnknownTransport(ResourceAccessException error) {
+        String message = String.valueOf(error.getMessage()).toLowerCase(Locale.ROOT);
+        if (message.contains("connect timed out")
+                || message.contains("connection refused")
+                || message.contains("connectexception")
+                || message.contains("failed to connect")) {
+            return false;
+        }
+        return message.contains("read timed out")
+                || message.contains("unexpected end of file")
+                || message.contains("connection reset")
+                || message.contains("premature")
+                || message.contains("broken pipe")
+                || message.contains("timed out");
+    }
+
+    private String endpointCode(SystemDataCenterEndpointConfig endpoint, String fallback) {
+        return endpoint == null ? fallback : endpoint.getEndpointCode();
+    }
+
+    private String targetSystemCode(SystemDataCenterEndpointConfig endpoint) {
+        return endpoint == null ? null : endpoint.getTargetSystemCode();
+    }
+
+    private String path(SystemDataCenterEndpointConfig endpoint) {
+        return endpoint == null ? null : endpoint.getPath();
     }
 
     private String resolvePath(SystemDataCenterEndpointConfig endpoint) {

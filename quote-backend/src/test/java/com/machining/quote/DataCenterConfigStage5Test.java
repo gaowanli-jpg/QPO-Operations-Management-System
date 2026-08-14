@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
@@ -7,15 +8,21 @@ import com.machining.quote.dto.mes.MesProductionDispatchResp;
 import com.machining.quote.dto.u9.U9ApiResult;
 import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.dto.u9.U9SalesOrderLineDTO;
-import com.machining.quote.dto.wms.WmsAllocationReq;
-import com.machining.quote.dto.wms.WmsAllocationResp;
+import com.machining.quote.dto.wms.WmsSaleLadingReserveReq;
+import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
+import com.machining.quote.entity.SystemDataCenterConfig;
+import com.machining.quote.entity.SystemDataCenterEndpointConfig;
+import com.machining.quote.mapper.SystemDataCenterEndpointConfigMapper;
+import com.machining.quote.service.DataCenterCallException;
+import com.machining.quote.service.DataCenterConfigService;
 import com.machining.quote.service.DataCenterEndpointRegistry;
 import com.machining.quote.service.DataCenterIntegrationClient;
+import com.machining.quote.service.DataCenterTokenService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesProductionDispatchClient;
 import com.machining.quote.service.u9.U9SalesOrderClient;
 import com.machining.quote.service.u9.U9TokenService;
-import com.machining.quote.service.wms.WmsAllocationClient;
+import com.machining.quote.service.wms.WmsReservationClient;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
@@ -27,10 +34,12 @@ import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -60,24 +69,20 @@ class DataCenterConfigStage5Test {
     }
 
     @Test
-    void wmsAllocationClientDefaultsToDataCenterEndpoint() {
+    void wmsReservationClientDefaultsToDataCenterEndpoint() {
         DataCenterIntegrationClient dataCenterClient = mock(DataCenterIntegrationClient.class);
-        WmsAllocationResp expected = new WmsAllocationResp();
-        expected.setSuccess(true);
-        expected.setMaterialNo("MAT-WMS-DC");
-        expected.setInStockLockedQty(3);
-        when(dataCenterClient.call(eq(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE), any(), eq(WmsAllocationResp.class)))
+        WmsSaleLadingReserveResp expected = new WmsSaleLadingReserveResp();
+        expected.setCode(200);
+        when(dataCenterClient.call(eq(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE), any(), eq(WmsSaleLadingReserveResp.class)))
                 .thenReturn(expected);
-        WmsAllocationClient client = new WmsAllocationClient();
+        WmsReservationClient client = new WmsReservationClient();
         ReflectionTestUtils.setField(client, "dataCenterIntegrationClient", dataCenterClient);
-        ReflectionTestUtils.setField(client, "dataCenterEnabled", true);
 
-        WmsAllocationReq request = wmsReq();
-        WmsAllocationResp response = client.allocate(request);
+        WmsSaleLadingReserveReq request = wmsReserveReq();
+        WmsSaleLadingReserveResp response = client.reserve(request);
 
-        assertThat(response.getMaterialNo()).isEqualTo("MAT-WMS-DC");
-        assertThat(response.getInStockLockedQty()).isEqualTo(3);
-        verify(dataCenterClient).call(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE, request, WmsAllocationResp.class);
+        assertThat(response).isSameAs(expected);
+        verify(dataCenterClient).call(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE, request, WmsSaleLadingReserveResp.class);
     }
 
     @Test
@@ -129,6 +134,99 @@ class DataCenterConfigStage5Test {
     }
 
     @Test
+    void dataCenterCallExceptionMarksMissingEndpointPathAsDefiniteFailureBeforeTokenFetch() {
+        SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+        DataCenterConfigService configService = mock(DataCenterConfigService.class);
+        DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+        DataCenterIntegrationClient client = dataCenterClient(mapper, configService, tokenService);
+        when(configService.activeConfig()).thenReturn(dataCenterConfig("http://data-center.local"));
+        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                91L,
+                DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE,
+                "WMS",
+                " ",
+                60000,
+                "POST"
+        ));
+
+        assertThatThrownBy(() -> client.call(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE, Map.of("ping", true), Map.class))
+                .isInstanceOfSatisfying(DataCenterCallException.class, error -> {
+                    assertThat(error.getEndpointCode()).isEqualTo(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE);
+                    assertThat(error.getCertainty()).isEqualTo(DataCenterCallException.FailureCertainty.DEFINITE_FAILURE);
+                    assertThat(error.getHttpStatus()).isNull();
+                    assertThat(error.getMessage()).contains("path");
+                });
+        verify(tokenService, never()).fetchAccessToken(any(SystemDataCenterConfig.class));
+    }
+
+    @Test
+    void dataCenterCallExceptionKeepsHttpStatusAsDefiniteFailureWithoutLeakingToken() throws IOException {
+        HttpServer server = server(exchange -> respond(exchange, 500, "{\"msg\":\"rejected\"}"));
+        try {
+            SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+            DataCenterConfigService configService = mock(DataCenterConfigService.class);
+            DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+            DataCenterIntegrationClient client = dataCenterClient(mapper, configService, tokenService);
+            SystemDataCenterConfig activeConfig = dataCenterConfig(baseUrl(server));
+            when(configService.activeConfig()).thenReturn(activeConfig);
+            when(tokenService.fetchAccessToken(activeConfig)).thenReturn("secret-access-token");
+            when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                    92L,
+                    DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE,
+                    "WMS",
+                    "/wms/reserve",
+                    60000,
+                    "POST"
+            ));
+
+            assertThatThrownBy(() -> client.call(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE, Map.of("ping", true), Map.class))
+                    .isInstanceOfSatisfying(DataCenterCallException.class, error -> {
+                        assertThat(error.getEndpointCode()).isEqualTo(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE);
+                        assertThat(error.getCertainty()).isEqualTo(DataCenterCallException.FailureCertainty.DEFINITE_FAILURE);
+                        assertThat(error.getHttpStatus()).isEqualTo(500);
+                        assertThat(error.getMessage()).contains("status=500").doesNotContain("secret-access-token");
+                    });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void dataCenterCallExceptionTreatsDroppedResponseAfterRequestAsResultUnknown() throws IOException {
+        HttpServer server = server(exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.close();
+        });
+        try {
+            SystemDataCenterEndpointConfigMapper mapper = mock(SystemDataCenterEndpointConfigMapper.class);
+            DataCenterConfigService configService = mock(DataCenterConfigService.class);
+            DataCenterTokenService tokenService = mock(DataCenterTokenService.class);
+            DataCenterIntegrationClient client = dataCenterClient(mapper, configService, tokenService);
+            SystemDataCenterConfig activeConfig = dataCenterConfig(baseUrl(server));
+            when(configService.activeConfig()).thenReturn(activeConfig);
+            when(tokenService.fetchAccessToken(activeConfig)).thenReturn("secret-access-token");
+            when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(endpoint(
+                    93L,
+                    DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE,
+                    "WMS",
+                    "/wms/reserve",
+                    60000,
+                    "POST"
+            ));
+
+            assertThatThrownBy(() -> client.call(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE, Map.of("ping", true), Map.class))
+                    .isInstanceOfSatisfying(DataCenterCallException.class, error -> {
+                        assertThat(error.getEndpointCode()).isEqualTo(DataCenterEndpointRegistry.WMS_INVENTORY_ALLOCATE);
+                        assertThat(error.getCertainty()).isEqualTo(DataCenterCallException.FailureCertainty.RESULT_UNKNOWN);
+                        assertThat(error.getHttpStatus()).isNull();
+                        assertThat(error.getMessage()).doesNotContain("secret-access-token");
+                    });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void mesMaterialClientUsesLegacyDirectCallWhenDataCenterSwitchDisabled() throws IOException {
         DataCenterIntegrationClient dataCenterClient = mock(DataCenterIntegrationClient.class);
         CapturedRequest captured = new CapturedRequest();
@@ -170,18 +268,68 @@ class DataCenterConfigStage5Test {
         return req;
     }
 
-    private WmsAllocationReq wmsReq() {
-        WmsAllocationReq req = new WmsAllocationReq();
-        req.setTicketId(123);
-        req.setRfqId(88);
-        req.setRfqNo("RFQ-1");
-        req.setCustomerName("ACME");
-        req.setMaterialNo("MAT-001");
-        req.setPartNo("P-100");
-        req.setVersion("A");
-        req.setInternalProjectNo("IP-9");
-        req.setDemandQty(10);
+    private WmsSaleLadingReserveReq wmsReserveReq() {
+        WmsSaleLadingReserveReq req = new WmsSaleLadingReserveReq();
+        req.setExternalBizId("QPO-WMS-DC");
+        req.setSaleNo("SO-1");
+        WmsSaleLadingReserveReq.Item item = new WmsSaleLadingReserveReq.Item();
+        item.setProductCode("MAT-001");
+        item.setReserveCount(BigDecimal.TEN);
+        item.setRemark("reserved from delivered item");
+        req.setItems(List.of(item));
         return req;
+    }
+
+    private DataCenterIntegrationClient dataCenterClient(
+            SystemDataCenterEndpointConfigMapper mapper,
+            DataCenterConfigService configService,
+            DataCenterTokenService tokenService) {
+        DataCenterIntegrationClient client = new DataCenterIntegrationClient();
+        ReflectionTestUtils.setField(client, "endpointMapper", mapper);
+        ReflectionTestUtils.setField(client, "registry", new DataCenterEndpointRegistry());
+        ReflectionTestUtils.setField(client, "dataCenterConfigService", configService);
+        ReflectionTestUtils.setField(client, "tokenService", tokenService);
+        return client;
+    }
+
+    private SystemDataCenterEndpointConfig endpoint(
+            Long id,
+            String endpointCode,
+            String targetSystemCode,
+            String path,
+            Integer timeoutMs,
+            String method) {
+        SystemDataCenterEndpointConfig entity = new SystemDataCenterEndpointConfig();
+        entity.setId(id);
+        entity.setEndpointCode(endpointCode);
+        entity.setDisplayName(endpointCode);
+        entity.setTargetSystemCode(targetSystemCode);
+        entity.setMethod(method);
+        entity.setPath(path);
+        entity.setEnabled(true);
+        entity.setTimeoutMs(timeoutMs);
+        entity.setRequestAdapter(endpointCode + "_REQ");
+        entity.setResponseAdapter(endpointCode + "_RESP");
+        entity.setRequestSchemaJson(Map.of());
+        entity.setResponseSchemaJson(Map.of());
+        return entity;
+    }
+
+    private SystemDataCenterConfig dataCenterConfig(String baseUrl) {
+        SystemDataCenterConfig entity = new SystemDataCenterConfig();
+        entity.setId(3L);
+        entity.setName("Data Center");
+        entity.setActive(true);
+        entity.setEnabled(true);
+        entity.setBaseUrl(baseUrl);
+        entity.setTokenUrl(baseUrl + "/token");
+        entity.setClientId("client-a");
+        entity.setClientSecretCipher("secret-value");
+        entity.setGrantType("client_credentials");
+        entity.setConnectTimeoutMs(1000);
+        entity.setReadTimeoutMs(30000);
+        entity.setTokenExpireSkewSeconds(60);
+        return entity;
     }
 
     private U9SalesOrderHeadDTO u9Order(String otherId) {
