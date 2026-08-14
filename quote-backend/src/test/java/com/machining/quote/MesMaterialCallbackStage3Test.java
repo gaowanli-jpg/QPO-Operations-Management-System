@@ -276,8 +276,8 @@ class MesMaterialCallbackStage3Test {
         MesMaterialSyncService service = mock(MesMaterialSyncService.class);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
         MesIntegrationCallbackController controller = controller(service, configService);
-        when(configService.hasValidBearerToken(any(), isNull())).thenReturn(false);
-        when(configService.hasValidBearerToken(any(), eq("Bearer wrong"))).thenReturn(false);
+        when(configService.hasValidOpenApiBearerToken(null)).thenReturn(false);
+        when(configService.hasValidOpenApiBearerToken("Bearer wrong")).thenReturn(false);
 
         ResponseEntity<MesMaterialCallbackResp> missing = controller.materialCallback(null, callback("MAT-NEW"));
         ResponseEntity<MesMaterialCallbackResp> wrong = controller.materialCallback("Bearer wrong", callback("MAT-NEW"));
@@ -301,11 +301,11 @@ class MesMaterialCallbackStage3Test {
         expected.setMesRequestId("QPO-MAT-20260812-01J5ABCDEF");
         when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
-        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
         ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
 
-        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", batchCallback("MAT-NEW"));
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer qpo-open-api-token", batchCallback("MAT-NEW"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isSameAs(expected);
@@ -350,9 +350,9 @@ class MesMaterialCallbackStage3Test {
         MesIntegrationCallbackController controller = controller(service, configService);
         MesMaterialCallbackReq req = callback("MAT-NEW");
         req.setMesRequestId(" ");
-        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
 
-        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", req);
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer qpo-open-api-token", req);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -370,7 +370,7 @@ class MesMaterialCallbackStage3Test {
 
         mockMvc.perform(post("/api/integrations/mes/material-callback")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .header("Authorization", "Bearer callback-token")
+                        .header("Authorization", "Bearer qpo-open-api-token")
                         .content("{not-json"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))

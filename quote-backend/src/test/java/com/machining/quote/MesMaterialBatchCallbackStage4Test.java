@@ -303,12 +303,12 @@ class MesMaterialBatchCallbackStage4Test {
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
         ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
-        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
         when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class)))
                 .thenThrow(new MesMaterialCallbackException(HttpStatus.CONFLICT, "MES material callback conflict"));
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback(
-                "Bearer callback-token", batchCallback(successItem("MAT-NEW")));
+                "Bearer qpo-open-api-token", batchCallback(successItem("MAT-NEW")));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -327,13 +327,13 @@ class MesMaterialBatchCallbackStage4Test {
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
         ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
-        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
         String sensitiveExceptionText = "Author" + "ization: Bearer " + "secret" + "-token full " + "request body";
         when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class)))
                 .thenThrow(new RuntimeException(sensitiveExceptionText));
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback(
-                "Bearer callback-token", batchCallback(successItem("MAT-NEW")));
+                "Bearer qpo-open-api-token", batchCallback(successItem("MAT-NEW")));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -352,7 +352,7 @@ class MesMaterialBatchCallbackStage4Test {
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
         ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
-        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
         when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class)))
                 .thenThrow(new MesMaterialCallbackException(HttpStatus.BAD_REQUEST,
                         "MES material callback items cannot be empty"));
@@ -361,7 +361,7 @@ class MesMaterialBatchCallbackStage4Test {
         req.setStatus("SUCCESS");
         req.setMaterialNo("MAT-NEW");
 
-        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", req);
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer qpo-open-api-token", req);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();

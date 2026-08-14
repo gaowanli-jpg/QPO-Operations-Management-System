@@ -14,7 +14,6 @@ import com.machining.quote.service.SystemInboundCallbackConfigService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -47,7 +46,8 @@ class MesMaterialCallbackConfigStage4Test {
 
         assertThat(source)
                 .contains("SystemInboundCallbackConfigService")
-                .contains("hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)")
+                .contains("hasValidOpenApiBearerToken(authorization)")
+                .doesNotContain("hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)")
                 .contains("handleMaterialBatchCallback(req)")
                 .doesNotContain("handleMaterialCallback(req)")
                 .doesNotContain("${erp.mes.callback-token")
@@ -60,7 +60,7 @@ class MesMaterialCallbackConfigStage4Test {
         MesMaterialSyncService syncService = mock(MesMaterialSyncService.class);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
         MesIntegrationCallbackController controller = controller(syncService, configService);
-        when(configService.hasValidBearerToken(any(), eq("Bearer wrong"))).thenReturn(false);
+        when(configService.hasValidOpenApiBearerToken("Bearer wrong")).thenReturn(false);
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer wrong", callback("MAT-100"));
 
@@ -69,9 +69,7 @@ class MesMaterialCallbackConfigStage4Test {
         assertThat(response.getBody().getSuccess()).isFalse();
         assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         verifyNoInteractions(syncService);
-        ArgumentCaptor<InboundCallbackCode> codeCaptor = ArgumentCaptor.forClass(InboundCallbackCode.class);
-        verify(configService).hasValidBearerToken(codeCaptor.capture(), eq("Bearer wrong"));
-        assertThat(codeCaptor.getValue().name()).isEqualTo("MES_MATERIAL_CALLBACK");
+        verify(configService).hasValidOpenApiBearerToken("Bearer wrong");
     }
 
     @Test
@@ -82,10 +80,10 @@ class MesMaterialCallbackConfigStage4Test {
         MesMaterialCallbackResp expected = new MesMaterialCallbackResp();
         expected.setSuccess(true);
         expected.setMesRequestId("MES-REQ-123");
-        when(configService.hasValidBearerToken(any(), eq("Bearer page-generated-token"))).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
         when(syncService.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
 
-        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer page-generated-token", batchCallback("MAT-100"));
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer qpo-open-api-token", batchCallback("MAT-100"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isSameAs(expected);

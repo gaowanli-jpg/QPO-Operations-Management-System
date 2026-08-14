@@ -56,7 +56,7 @@ class MesMaterialDedupStage6DocumentationTest {
                         "dedupFollowerCount",
                         "submittedToMesCount",
                         "MES 去重只负责活动主请求和 follower",
-                        "不得记录 MES token、回调 token、Authorization header、完整请求体或完整回调体")
+                        "不得记录 MES token、QPO 入站开放接口统一 token、Authorization header、完整请求体或完整回调体")
                 .doesNotContain("DELIVERY_MES_MATERIAL_DEDUP_REUSE", "reusedMaterialCount");
 
         assertThat(read(FILE_LOG_DOC))
