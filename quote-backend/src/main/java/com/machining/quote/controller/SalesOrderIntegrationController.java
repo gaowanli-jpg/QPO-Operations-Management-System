@@ -44,7 +44,12 @@ public class SalesOrderIntegrationController {
             return ResponseEntity.badRequest()
                     .body(SalesOrderSyncResp.error(HttpStatus.BAD_REQUEST.value(), INVALID_PAGE_SIZE_MESSAGE));
         }
-        return ResponseEntity.ok(salesOrderIntegrationSyncService.query(query));
+        try {
+            return ResponseEntity.ok(salesOrderIntegrationSyncService.query(query));
+        } catch (IllegalArgumentException error) {
+            return ResponseEntity.badRequest()
+                    .body(SalesOrderSyncResp.error(HttpStatus.BAD_REQUEST.value(), error.getMessage()));
+        }
     }
 
     @ExceptionHandler({BindException.class, MethodArgumentTypeMismatchException.class})

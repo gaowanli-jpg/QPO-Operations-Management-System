@@ -4,6 +4,7 @@ import com.machining.quote.controller.SalesOrderIntegrationController;
 import com.machining.quote.dto.SalesOrderSyncPageData;
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
 import com.machining.quote.dto.SalesOrderSyncResp;
+import com.machining.quote.mapper.SalesOrderIntegrationMapper;
 import com.machining.quote.service.SalesOrderIntegrationSyncService;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
 import org.junit.jupiter.api.Test;
@@ -146,7 +147,9 @@ class SalesOrderIntegrationStage4Test {
 
     @Test
     void serviceReturnsEmptySkeletonResponse() {
+        SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
         SalesOrderIntegrationSyncService service = new SalesOrderIntegrationSyncService();
+        ReflectionTestUtils.setField(service, "salesOrderIntegrationMapper", mapper);
         SalesOrderSyncQueryReq req = req(100);
 
         SalesOrderSyncResp resp = service.query(req);
