@@ -41,6 +41,7 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.source_order_id,
                 alloc.source_item_id,
                 alloc.allocation_type,
+                alloc.wms_reservation_ticket_id,
                 alloc.qty,
                 alloc.ticket_qty,
                 alloc.material_no,
@@ -109,6 +110,13 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
             </script>
             """)
     long countLockedItems(@Param(Constants.WRAPPER) Wrapper<LockedItemDTO> query);
+
+    @Select("""
+            SELECT * FROM order_delivery_ticket_allocation
+            WHERE wms_reservation_ticket_id = #{reservationTicketId}
+            ORDER BY id ASC
+            """)
+    List<OrderDeliveryTicketAllocation> selectByWmsReservationTicketId(@Param("reservationTicketId") Long reservationTicketId);
 
     @Select("""
             <script>
