@@ -110,7 +110,7 @@ class MesRealBatchStage7GovernanceTest {
                     .as("secret scan: %s", path)
                     .doesNotContain("Authorization: Bearer " + "eyJ", "access_token=" + "eyJ")
                     .doesNotContainPattern("(?i)(client_secret|access_token|qpo_inbound_callback_token|erp_mes_callback_token)=[A-Za-z0-9+/=_-]{12,}")
-                    .doesNotContainPattern("Authorization: Bearer (?!\\{QPO_INBOUND_CALLBACK_TOKEN\\})[A-Za-z0-9._~+/=-]{12,}");
+                    .doesNotContainPattern("Authorization: Bearer (?!\\{QPO_OPEN_API_TOKEN\\})[A-Za-z0-9._~+/=-]{12,}");
         }
     }
 

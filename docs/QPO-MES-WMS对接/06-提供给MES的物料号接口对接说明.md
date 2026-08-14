@@ -8,7 +8,7 @@
 
 > 阶段 6 最终收口说明：QPO 已支持同图号版本活动请求去重。去重键固定为 **图号 + 版本**，不区分客户、订单、图纸文件或内部项目号。相同 `图号 + 版本` 已有活动主请求时，后续行成为 QPO 内部 follower，不再重复请求 MES；没有活动主请求时创建新的主请求。MES 仍只回调主 `mesRequestId`，QPO fan-out 写回所有 follower。历史已确认物料号由 QPO 在 RFQ 重复件核价或销售订单导入自动快照补全阶段复用，不在已提零件调用 MES 时查询。
 
-> 系统配置阶段 6 收口说明：本文档只描述 QPO 通过数据中心获取 MES 物料号的业务接口口径。MES 回调 QPO 的接口详情见 `08-MES物料号回调接口对接说明.md`；回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供给数据中心，真实 token 单独交付数据中心，不写入本文档。
+> 系统配置最终收口说明：本文档只描述 QPO 通过数据中心获取 MES 物料号的业务接口口径。MES 回调 QPO 的接口详情见 `08-MES物料号回调接口对接说明.md`；回调 URL 由入站接口列表提供，`QPO_OPEN_API_TOKEN` 由 QPO 管理员在系统配置页面的入站接口顶部生成或轮换，真实 token 单独交付数据中心，不写入本文档。
 
 > 当前实现收口说明：QPO 后端默认启用数据中心链路，`MesMaterialClient` 会优先调用数据中心 `MES_MATERIAL_RESOLVE` endpoint；只有关闭数据中心或本地运行未接入数据中心 client 时，才使用 MES 激活出站配置，且无 active DB 配置时继续回落到 `ERP_MES_*` 环境变量。
 
@@ -299,7 +299,7 @@ MES 返回待回调后，后续由数据中心调用 QPO 回调接口，把 MES 
 
 - 独立文档：`docs/QPO-MES-WMS对接/08-MES物料号回调接口对接说明.md`。
 - 接口入口：`POST {QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback`；`QPO_PUBLIC_BASE_URL` 由部署后的可访问地址确定。
-- 认证方式：`Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`；回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供给数据中心，真实 token 单独通过受控渠道交付数据中心。回调接口详情见 `08-MES物料号回调接口对接说明.md`。
+- 认证方式：`Authorization: Bearer {QPO_OPEN_API_TOKEN}`；回调 URL 由入站接口列表提供，统一 token 由 QPO 管理员从系统配置页面的入站接口顶部生成或轮换，真实 token 单独通过受控渠道交付数据中心。回调接口详情见 `08-MES物料号回调接口对接说明.md`。
 - 定位方式：数据中心转发时必须原样带回 QPO 请求中的 `bizId` 作为 `mesRequestId`，并在 `items[]` 中原样返回每行 `drawingNo + drawingVersion`；QPO 会根据 `mesRequestId` 定位批次，再根据图号版本定位批次行。
 - 去重口径：同图号版本去重场景下，数据中心只需要转发主 `mesRequestId` 的 MES 结果；关联等待行是 QPO 内部关系，数据中心和 MES 都不需要分别回调每个相同图号版本零件。
 - 写回口径：QPO 收到主请求成功回调后写回 `order_delivery_ticket.material_no`，并 fan-out 写回所有关联等待行；销售订单来源提单行还会同步回写 `sales_order_item.material_no` 与物料号确认字段。
@@ -336,13 +336,13 @@ QPO 正常情况下不会在已成功拿到物料号后重复提交同一行；�
 | MES 内部异常 | HTTP 500 或业务失败 | QPO 状态 `FAILED`。 |
 | 响应超时 | 无响应超过超时时间 | QPO 状态 `FAILED`，用户可重试。 |
 | `productCode` 为空且无待回调标识 | `code=0` 但无物料号、无待回调状态 | QPO 状态 `FAILED`。 |
-| 回调 token 错误 | 未带或带错 `QPO_INBOUND_CALLBACK_TOKEN` | QPO 拒绝。 |
+| 统一 token 错误 | 未带或带错 `QPO_OPEN_API_TOKEN` | QPO 拒绝。 |
 
 ## 9. 双方上线前确认
 
 - QPO 后端服务器能访问 MES 的测试/生产地址。
 - MES 如需下载图纸，MES 服务器能访问 QPO 发出的 `items[].drawingUrls`。
-- QPO 和数据中心确认 QPO 入站回调 URL、`QPO_INBOUND_CALLBACK_TOKEN`、IP 白名单、防火墙策略；QPO 和 MES 确认物料号业务字段与响应口径。
+- QPO 和数据中心确认 QPO 入站回调 URL、`QPO_OPEN_API_TOKEN`、IP 白名单、防火墙策略；QPO 和 MES 确认物料号业务字段与响应口径。
 - 双方确认超时时间、并发上限、是否需要限流。
 - MES 返回 JSON 字段名与本文档一致，尤其是 `code`、`msg`、`data.bizId`、`data.items[].status`、`data.items[].productCode`。
 - 双方约定联调样例数据，并保留 `mesRequestId` / `externalTraceId` 方便查日志；`ticketId` 仅作为 QPO 内部日志和请求流水排查字段，不对 MES / 数据中心开放。

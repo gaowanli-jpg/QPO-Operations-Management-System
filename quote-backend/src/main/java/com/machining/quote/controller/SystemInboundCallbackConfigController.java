@@ -28,6 +28,23 @@ public class SystemInboundCallbackConfigController {
         return inboundCallbackConfigService.listConfigs();
     }
 
+    @GetMapping("/open-api-token")
+    @RequirePermission("system:config:view")
+    public Map<String, Object> getOpenApiTokenStatus() {
+        return Map.of(
+                "success", true,
+                "message", "Inbound open API token status loaded",
+                "data", inboundCallbackConfigService.getOpenApiTokenStatus()
+        );
+    }
+
+    @PostMapping("/open-api-token")
+    @RequirePermission("system:config:inbound:token-rotate")
+    public Map<String, Object> rotateOpenApiToken() {
+        SystemInboundCallbackTokenResp data = inboundCallbackConfigService.rotateOpenApiToken();
+        return Map.of("success", true, "message", "Inbound open API token rotated", "data", data);
+    }
+
     @GetMapping("/mes-material-callback")
     @RequirePermission("system:config:view")
     public SystemInboundCallbackConfigDTO getMesMaterialCallbackConfig() {

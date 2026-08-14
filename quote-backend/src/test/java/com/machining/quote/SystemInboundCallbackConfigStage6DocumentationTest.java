@@ -53,7 +53,7 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
                 .contains(
                         "原 `系统对接` 页面文案改为 `出站接口`",
                         "入站接口",
-                        "MES 回调 token 支持在系统配置中生成、轮换和启停");
+                        "QPO 入站开放接口统一 token 支持在系统配置中生成、轮换和展示状态");
     }
 
     @Test
@@ -70,7 +70,7 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
                 .contains(
                         "系统 > 系统配置 > 出站接口",
                         "系统 > 系统配置 > 入站接口",
-                        "MES 物料号回调接口的真实 token 由入站接口配置生成后通过受控渠道交付给数据中心")
+                        "`QPO_OPEN_API_TOKEN` 由入站接口页顶部生成后通过受控渠道交付给数据中心或外部调用方")
                 .doesNotContain("系统 > 系统配置 > 系统对接");
 
         assertThat(read(LOG_OPS_DOC))
@@ -85,9 +85,9 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
         assertThat(read(FILE_LOG_DOC))
                 .contains(
                         "Inbound callback config updated",
-                        "Inbound callback token rotated",
+                        "Inbound open API token rotated",
                         "Inbound callback config validated",
-                        "不得记录真实 token、token hash、Authorization header、完整 MES 回调 JSON 或完整请求体");
+                        "不得记录真实 token、token hash、Authorization header、完整 MES 回调 JSON、完整销售订单同步请求或完整请求体");
     }
 
     @Test
@@ -95,8 +95,8 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
         assertThat(read(MES_SYNC_DOC))
                 .contains(
                         "QPO 通过数据中心获取 MES 物料号",
-                        "数据中心调用 QPO 的入站配置",
-                        "系统配置 > 入站接口 > MES 物料号回调",
+                        "数据中心调用 QPO 的入站接口由 **系统配置 > 入站接口** 管理",
+                        "QPO_OPEN_API_TOKEN",
                         "ERP_MES_CALLBACK_TOKEN",
                         "deprecated fallback")
                 .contains("不新增用户权限，继续使用 `market:delivered-item:mes-sync`");
@@ -104,8 +104,8 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
         assertThat(read(MES_OUTBOUND_DOC))
                 .contains(
                         "回调接口详情见 `08-MES物料号回调接口对接说明.md`",
-                        "回调 URL 和 token 由 QPO 管理员从系统配置页面的入站接口提供给数据中心",
-                        "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}")
+                        "回调 URL 由入站接口列表提供，统一 token 由 QPO 管理员从系统配置页面的入站接口顶部生成或轮换",
+                        "Authorization: Bearer {QPO_OPEN_API_TOKEN}")
                 .doesNotContain("交付给 MES")
                 .doesNotContain("未带或带错 `ERP_MES_CALLBACK_TOKEN`");
 
@@ -114,8 +114,8 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
                         "交付对象：数据中心",
                         "调用方向：数据中心 -> QPO",
                         "业务来源：MES",
-                        "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
-                        "系统配置 > 入站接口 > MES 物料号回调",
+                        "Authorization: Bearer {QPO_OPEN_API_TOKEN}",
+                        "系统配置 > 入站接口",
                         "真实 token 单独交付数据中心",
                         "明文只展示一次",
                         "ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback")
@@ -128,12 +128,12 @@ class SystemInboundCallbackConfigStage6DocumentationTest {
         assertThat(read(DATA_CENTER_DOC))
                 .contains(
                         "数据中心调用 QPO",
-                        "调用方为数据中心，业务来源为 MES",
-                        "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
+                        "QPO 入站接口统一使用 `QPO_OPEN_API_TOKEN`",
+                        "Authorization: Bearer {QPO_OPEN_API_TOKEN}",
                         "真实 token 单独交付数据中心",
                         "ERP_MES_CALLBACK_TOKEN",
                         "deprecated fallback")
-                .doesNotContain("QPO_INBOUND_CALLBACK_TOKEN=")
+                .doesNotContain("QPO_OPEN_API_TOKEN=")
                 .doesNotContain("Bearer eyJ")
                 .doesNotContain("交付给 MES");
     }

@@ -291,7 +291,7 @@ public class AuditService {
             case "SYSTEM_DATA_CENTER_ENDPOINT_TEST" -> "测试数据中心功能接口配置";
             case "SYSTEM_DATA_CENTER_ENDPOINT_TEST_FAILED" -> "测试数据中心功能接口配置失败";
             case "SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE" -> "保存入站接口配置";
-            case "SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE" -> "轮换入站回调Token";
+            case "SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE" -> "轮换入站开放接口Token";
             case "SYSTEM_INBOUND_CALLBACK_CONFIG_VALIDATE" -> "校验入站接口配置";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "QUOTE_TEMPLATE_CONFIG_UPDATE" -> "保存报价模板配置";

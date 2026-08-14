@@ -43,6 +43,8 @@ class SystemInboundCallbackConfigStage3Test {
         assertThat(source)
                 .contains("@RequestMapping(\"/api/system/inbound-callback-configs\")")
                 .contains("@GetMapping")
+                .contains("@GetMapping(\"/open-api-token\")")
+                .contains("@PostMapping(\"/open-api-token\")")
                 .contains("@GetMapping(\"/mes-material-callback\")")
                 .contains("@PutMapping(\"/mes-material-callback\")")
                 .contains("@PostMapping(\"/mes-material-callback/token\")")
@@ -50,6 +52,61 @@ class SystemInboundCallbackConfigStage3Test {
                 .contains("@RequirePermission(\"system:config:view\")")
                 .contains("@RequirePermission(\"system:config:inbound:update\")")
                 .contains("@RequirePermission(\"system:config:inbound:token-rotate\")");
+    }
+
+    @Test
+    void openApiTokenStatusDoesNotExposePlainTokenOrHash() {
+        SystemInboundCallbackConfigMapper mapper = mock(SystemInboundCallbackConfigMapper.class);
+        SystemInboundCallbackConfigService service = service(mapper, mock(AuditService.class));
+        SystemInboundCallbackConfig entity = config(21L);
+        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(entity);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> status = ReflectionTestUtils.invokeMethod(service, "getOpenApiTokenStatus");
+
+        assertThat(status)
+                .containsEntry("tokenConfigured", true)
+                .containsEntry("tokenMask", "***oken");
+        assertThat(String.valueOf(status)).doesNotContain(OLD_TOKEN, OLD_HASH, "Authorization");
+    }
+
+    @Test
+    void rotateOpenApiTokenReturnsPlainTextOnceAndInvalidatesOldTokenGlobally() {
+        SystemInboundCallbackConfigMapper mapper = mock(SystemInboundCallbackConfigMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        SystemInboundCallbackConfigService service = service(mapper, auditService);
+        SystemInboundCallbackConfig existing = config(22L);
+        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(existing);
+
+        SystemInboundCallbackTokenResp resp = ReflectionTestUtils.invokeMethod(service, "rotateOpenApiToken");
+
+        assertThat(resp).isNotNull();
+        assertThat(resp.getCallbackCode()).isEqualTo("QPO_OPEN_API_TOKEN");
+        assertThat(resp.getToken()).isNotBlank();
+        assertThat(resp.getTokenMask()).startsWith("***");
+
+        ArgumentCaptor<SystemInboundCallbackConfig> updateCaptor = ArgumentCaptor.forClass(SystemInboundCallbackConfig.class);
+        verify(mapper).updateById(updateCaptor.capture());
+        SystemInboundCallbackConfig updated = updateCaptor.getValue();
+        assertThat(updated.getTokenHash()).isEqualTo(sha256Hex(resp.getToken()));
+        assertThat(updated.getTokenHash()).isNotEqualTo(OLD_HASH);
+        assertThat(updated.getTokenHash()).doesNotContain(resp.getToken());
+
+        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(updated);
+        Boolean oldAccepted = ReflectionTestUtils.invokeMethod(service, "hasValidOpenApiBearerToken", "Bearer " + OLD_TOKEN);
+        Boolean newAccepted = ReflectionTestUtils.invokeMethod(service, "hasValidOpenApiBearerToken", "Bearer " + resp.getToken());
+        Boolean missingAccepted = ReflectionTestUtils.invokeMethod(service, "hasValidOpenApiBearerToken", (String) null);
+        assertThat(oldAccepted).isFalse();
+        assertThat(newAccepted).isTrue();
+        assertThat(missingAccepted).isFalse();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> status = ReflectionTestUtils.invokeMethod(service, "getOpenApiTokenStatus");
+        assertThat(String.valueOf(status)).doesNotContain(resp.getToken(), updated.getTokenHash(), "Authorization");
+
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(eq("SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE"), eq("system_inbound_callback_config"), eq(22L), isNull(), afterCaptor.capture());
+        assertThat(String.valueOf(afterCaptor.getValue())).doesNotContain(resp.getToken(), updated.getTokenHash(), "Authorization");
     }
 
     @Test
@@ -164,7 +221,7 @@ class SystemInboundCallbackConfigStage3Test {
     void auditActionsExposeSystemModuleAndReadableLabels() {
         assertThat(AuditService.inferModule("SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE")).isEqualTo("SYSTEM");
         assertThat(AuditService.labelForAction("SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE")).contains("入站");
-        assertThat(AuditService.labelForAction("SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE")).contains("回调");
+        assertThat(AuditService.labelForAction("SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE")).contains("入站开放接口");
         assertThat(AuditService.labelForAction("SYSTEM_INBOUND_CALLBACK_CONFIG_VALIDATE")).contains("入站");
 
         AuditService auditService = new AuditService();

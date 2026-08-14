@@ -3,7 +3,7 @@
 
 > 更新说明：本文档记录的是 MES 物料号同步的第一版“同步响应”口径。后续已确认需要同时支持“即时返回物料号”和“受理后回调物料号”两种 MES 结果，详细设计以 `docs/QPO报价状态流转/18-MES物料号异步回调开发文档.md` 为准。实施阶段应保留本文档中已提零件、权限、日志和基础 MES 客户端能力，并按第 18 号文档扩展 `mes_request_id`、`CALLBACK_PENDING` 和回调接口。
 
-> 阶段 5 收口说明：正式联调口径同时支持 **即时返回物料号** 和 **受理后回调物料号**。QPO 每次请求生成 `mesRequestId`，MES 响应和后续回调必须原样带回；回调接口为 `POST /api/integrations/mes/material-callback`。待回调响应下 `system_task` 按成功完成，提单行进入 `CALLBACK_PENDING`。本次不新增用户权限，继续使用 `market:delivered-item:mes-sync` 触发获取 / 重试；MES 回调接口使用机器 token，不挂用户权限。
+> 阶段 5 收口说明：正式联调口径同时支持 **即时返回物料号** 和 **受理后回调物料号**。QPO 每次请求生成 `mesRequestId`，MES 响应和后续回调必须原样带回；回调接口为 `POST /api/integrations/mes/material-callback`。待回调响应下 `system_task` 按成功完成，提单行进入 `CALLBACK_PENDING`。本次不新增用户权限，继续使用 `market:delivered-item:mes-sync` 触发获取 / 重试；MES 回调接口使用 `QPO_OPEN_API_TOKEN`，不挂用户权限。
 
 > 阶段 6 最终收口说明：已确认物料号复用前移到 RFQ 重复件核价和销售订单导入自动快照补全，提单行继承确认结果。只有未确认行进入 MES；QPO 对同一 `图号 + 版本` 同一时间只保留一个活动主请求，后续行成为 follower，不再重复请求 MES。没有活动主请求时创建新的主请求，不查询其他历史成功提单行。MES 仍只回调主 `mesRequestId`，QPO 收到主请求即时成功或回调成功后负责 QPO fan-out 写回所有 follower。
 
@@ -13,7 +13,7 @@
 
 > 阶段 22 收口说明：MES 对接现在包含两条独立业务 path：物料号获取继续使用 `ERP_MES_MATERIAL_PATH`，锁库零件待生产下发使用 `ERP_MES_PRODUCTION_PATH`。两者复用 `ERP_MES_BASE_URL`、`ERP_MES_AUTH_TOKEN` 和 `ERP_MES_TIMEOUT_MS`，但请求契约、权限点、操作日志和文件日志事件名彼此独立；待生产下发接口详见 `docs/QPO-MES-WMS对接/09-提供给MES的待生产下发接口对接说明.md`。
 
-> 系统配置阶段 6 收口说明：QPO 通过数据中心获取 MES 物料号，出站配置由 **系统配置 > 出站接口/数据中心配置** 或 `ERP_DATA_CENTER_*` fallback 提供；数据中心调用 QPO 的入站配置由 **系统配置 > 入站接口 > MES 物料号回调** 管理，调用方为数据中心，业务来源为 MES。回调 URL 和机器 token 在页面生成、轮换、启停，真实 token 单独交付数据中心。`ERP_MES_CALLBACK_TOKEN` 与 `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为页面配置不存在时的老环境 deprecated fallback，不作为给数据中心的主要交付变量。
+> 系统配置最终收口说明：QPO 通过数据中心获取 MES 物料号，出站配置由 **系统配置 > 出站接口/数据中心配置** 或 `ERP_DATA_CENTER_*` fallback 提供；数据中心调用 QPO 的入站接口由 **系统配置 > 入站接口** 管理，调用方为数据中心，业务来源为 MES。回调 URL 在接口列表展示，`QPO_OPEN_API_TOKEN` 在入站接口页顶部生成、轮换和查看状态，真实 token 单独交付数据中心。`ERP_MES_CALLBACK_TOKEN` 与 `ERP_MES_CALLBACK_TOKEN_ENABLED` 仅作为老环境 deprecated fallback，不作为给数据中心的主要交付变量。
 
 > 数据中心统一对接阶段 8 收口：MES 物料号获取底层调用使用 `MES_MATERIAL_RESOLVE` endpoint，链路为 `QPO -> 数据中心 -> MES`。同图号版本去重仍由 QPO 负责，数据中心只需要转发主 `mesRequestId` 的 MES 结果；QPO 收到主请求即时成功或回调成功后负责 fan-out 写回 follower。
 
@@ -311,7 +311,7 @@ QPO 处理规则：
 ```text
 POST /api/integrations/mes/material-callback
 Content-Type: application/json
-Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
+Authorization: Bearer {QPO_OPEN_API_TOKEN}
 ```
 
 请求体：
@@ -327,7 +327,7 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 }
 ```
 
-QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；RFQ 来源提单行同步回写 `item_quote_version.material_no` 与物料号确认字段，销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。回调 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次并通过受控渠道交付数据中心。
+QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验。成功回调写回 `order_delivery_ticket.material_no` 和 `mes_sync_status=SUCCESS`；RFQ 来源提单行同步回写 `item_quote_version.material_no` 与物料号确认字段，销售订单来源提单行同步回写 `sales_order_item.material_no` 与物料号确认字段。重复同一物料号回调幂等返回成功，不同物料号冲突回调拒绝覆盖。统一 token 由 QPO 管理员在 **系统配置 > 入站接口** 页面顶部生成或轮换，明文只展示一次并通过受控渠道交付数据中心。
 
 ## 8. 后端设计
 
@@ -341,7 +341,7 @@ QPO 使用 `mesRequestId` 定位请求流水，并用 `ticketId` 做交叉校验
 | --- | --- | --- | --- |
 | `market:delivered-item:mes-sync` | `BUTTON` / `API` | `market:delivered-item:view` | 获取MES物料号 |
 
-MES 物料号回调接口不使用用户登录态，不进入权限树；数据中心调用该接口时通过入站接口配置中的机器 token 做认证。页面配置不存在时才兼容 `ERP_MES_CALLBACK_TOKEN` deprecated fallback。
+MES 物料号回调接口不使用用户登录态，不进入权限树；数据中心调用该接口时通过 `QPO_OPEN_API_TOKEN` 做认证。页面配置不存在时才兼容 `ERP_MES_CALLBACK_TOKEN` deprecated fallback。
 
 默认角色：
 
@@ -605,7 +605,7 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 - rejected 用 WARN。
 - failed 用 ERROR，并传异常对象。
 - 失败必须能在 `qpo-error.log` 查到 `taskId` 和堆栈。
-- 日志不记录 MES token、回调 token、Authorization header、图纸文件内容、完整请求 JSON、完整响应 JSON 或完整回调 JSON。
+- 日志不记录 MES token、QPO 入站开放接口统一 token、Authorization header、图纸文件内容、完整请求 JSON、完整响应 JSON 或完整回调 JSON。
 
 ## 11. 测试计划
 
@@ -647,7 +647,7 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 - 回调成功写回 `order_delivery_ticket`。
 - RFQ 来源回调成功写回 `item_quote_version`；销售订单来源回调成功写回 `sales_order_item`。
 - 重复回调幂等、冲突回调拒绝覆盖、旧 `mesRequestId` 回调不覆盖新请求。
-- 回调 token 缺失 / 错误被拒绝。
+- `QPO_OPEN_API_TOKEN` 缺失 / 错误被拒绝。
 - 批量任务待回调计数正确。
 
 ### 11.2 前端测试

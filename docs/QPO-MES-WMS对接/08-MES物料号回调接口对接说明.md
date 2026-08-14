@@ -1,6 +1,6 @@
 # QPO 提供给数据中心的 MES 物料号回调接口对接说明
 
-本文档是 QPO 提供给数据中心联调方的入站接口文档。业务来源仍是 MES：当 MES 在物料号无法即时返回、后续生成正式物料号后，由数据中心携带 QPO 入站 token 调用 QPO，把物料号结果写回 QPO。
+本文档是 QPO 提供给数据中心联调方的入站接口文档。业务来源仍是 MES：当 MES 在物料号无法即时返回、后续生成正式物料号后，由数据中心携带 QPO 入站开放接口统一 token 调用 QPO，把物料号结果写回 QPO。
 
 ## 1. 接口结论
 
@@ -10,9 +10,9 @@
 - 调用时机：MES 在 QPO 获取物料号请求中返回 `callbackRequired=true`，或返回 `status=CALLBACK_PENDING / ACCEPTED / PENDING` 后，后续生成正式物料号时由数据中心转发调用。
 - 接口路径：`POST /api/integrations/mes/material-callback`。
 - 请求格式：`application/json`。
-- 认证方式：`Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
-- 鉴权边界：该接口不走普通用户登录态，已从前端登录拦截中排除；后端最终安全边界是入站接口机器 token 校验。
-- 配置来源：优先读取系统配置页 **入站接口 > MES 物料号回调** 的 DB 配置；页面配置不存在时，才兼容 `ERP_PUBLIC_BASE_URL`、`ERP_MES_CALLBACK_TOKEN`、`ERP_MES_CALLBACK_TOKEN_ENABLED` 等老环境 fallback。
+- 认证方式：`Authorization: Bearer {QPO_OPEN_API_TOKEN}`。
+- 鉴权边界：该接口不走普通用户登录态，已从前端登录拦截中排除；后端最终安全边界是 QPO 入站开放接口统一 token 校验。
+- 配置来源：统一 token 由 QPO 管理员在 **系统配置 > 入站接口** 页面顶部生成或轮换；接口列表中的 `MES 物料号回调` 只维护路径、启停和说明。老环境 `ERP_MES_CALLBACK_TOKEN` 仅作为历史 fallback，不作为对数据中心交付口径。
 - 主定位键：`mesRequestId`，值必须等于 QPO 出站请求中的批量 `bizId`，当前格式为 `QPO-MAT-{yyyyMMdd}-{ulid}`。
 - 内部定位：QPO 根据 `mesRequestId` 查询 `mes_integration_batch` 批次，再按 `items[].drawingNo + items[].drawingVersion` 匹配批次内行；`ticketId`、行级流水号和 QPO 内部 ID 不要求也不接受数据中心回传。
 - 去重口径：数据中心只需要转发主 `mesRequestId` 的 MES 结果；同图号版本的 follower 等待行由 QPO 内部 fan-out 写回，数据中心和 MES 都不需要逐行回调。
@@ -53,17 +53,17 @@ QPO 通过数据中心请求 MES 获取物料号时，会在请求体中传入�
 ```http
 POST {QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback
 Content-Type: application/json
-Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
+Authorization: Bearer {QPO_OPEN_API_TOKEN}
 ```
 
 说明：
 
 - `QPO_PUBLIC_BASE_URL` 是 QPO 提供给数据中心可访问的内网地址，例如 `http://192.168.70.21:8088`；正式 URL 需要等部署网络、端口、域名或反向代理确定后再给数据中心。
-- `QPO_INBOUND_CALLBACK_TOKEN` 是 QPO 侧生成的入站回调机器 token，占位符不是实际 token。真实 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次，并通过受控渠道单独交付数据中心。
-- 当 QPO 入站接口配置开启 token 校验时，数据中心必须携带 `Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
-- `ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback；页面入站接口配置存在时，以页面配置为准。数据中心联调方不需要也不应依赖该环境变量名。
+- `QPO_OPEN_API_TOKEN` 是 QPO 侧生成的入站开放接口统一 token，占位符不是实际 token。真实 token 由 QPO 管理员在 **系统配置 > 入站接口** 页面顶部生成或轮换，明文只展示一次，并通过受控渠道单独交付数据中心。
+- 当 QPO 入站开放接口开启 token 校验时，数据中心必须携带 `Authorization: Bearer {QPO_OPEN_API_TOKEN}`。
+- `ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback；完成统一 token 改造后，生产联调和新文档交付均以 `QPO_OPEN_API_TOKEN` 为准。数据中心联调方不需要也不应依赖该环境变量名。
 - 只要请求已经到达 QPO 回调接口，HTTP 状态码统一返回 `200`，表示网络和接口可达；业务处理结果请读取响应体里的 `success`、`code`、`msg`。
-- 如果页面配置存在但未生成 token，且 token 校验开启，即使老环境变量里配置了 token，也会按当前 DB 配置校验，并在响应体返回 `code=401`；因此生产联调应以页面展示的 token 状态为准。
+- 如果统一 token 未生成且 token 校验开启，即使老环境变量里配置了 token，也会按当前 DB 配置校验，并在响应体返回 `code=401`；因此生产联调应以页面展示的统一 token 状态为准。
 - token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 仍返回 HTTP `200`，但响应体返回 `success=false`、`code=401`。
 - 不要在日志、截图、工单或联调群中明文发送真实 token。
 
@@ -74,9 +74,9 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 | 项目 | 当前口径 | 交付给数据中心的形式 |
 | --- | --- | --- |
 | 回调 URL | 部署后确定，格式为 `{QPO_PUBLIC_BASE_URL}/api/integrations/mes/material-callback` | 例如 `http://qpo-host:8088/api/integrations/mes/material-callback` |
-| 回调 token | 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次 | 只提供 token 值本身，数据中心调用 QPO 时放入 `Authorization: Bearer {token}` |
+| 统一 token | 由 QPO 管理员在 **系统配置 > 入站接口** 页面顶部生成或轮换，明文只展示一次 | 只提供 token 值本身，数据中心调用 QPO 时放入 `Authorization: Bearer {token}` |
 
-数据中心拿到 **回调 URL + 回调 token + 本文档请求/响应字段说明** 后，即可调用本接口。联调时建议先用一条 QPO 已进入 `CALLBACK_PENDING` 的 `mesRequestId` 做成功回调验证，再验证 token 错误、重复回调、冲突回调等异常场景。
+数据中心拿到 **回调 URL + QPO_OPEN_API_TOKEN + 本文档请求/响应字段说明** 后，即可调用本接口。联调时建议先用一条 QPO 已进入 `CALLBACK_PENDING` 的 `mesRequestId` 做成功回调验证，再验证 token 错误、重复回调、冲突回调等异常场景。
 
 ## 4. 成功回调
 
@@ -200,7 +200,7 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 
 QPO 收到回调后按以下顺序处理：
 
-1. 校验回调 token。
+1. 校验 QPO 入站开放接口统一 token。
 2. 校验 `mesRequestId` 不为空，且 `items` 必须存在并至少 1 行。
 3. 按 `mesRequestId` 查询 `mes_integration_batch` 批次。
 4. 按每个 `items[].drawingNo + items[].drawingVersion` 匹配 `mes_material_batch_item` 批次行；无法匹配时响应体返回 `code=409`。
@@ -258,14 +258,14 @@ HTTP `200`，响应体 `code=401`
 {
   "success": false,
   "code": 401,
-  "msg": "QPO 入站回调 token 无效",
+  "msg": "QPO 入站开放接口 token 无效",
   "mesRequestId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
   "data": {
     "bizId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
     "receivedCount": 1,
     "appliedCount": 0,
     "duplicateCount": 0,
-    "errors": ["QPO 入站回调 token 无效"]
+    "errors": ["QPO 入站开放接口 token 无效"]
   }
 }
 ```
@@ -333,7 +333,7 @@ HTTP `200`，响应体 `code=409`
 ## 12. 双方上线前确认
 
 - QPO 提供数据中心可访问的公网或内网 base URL。
-- QPO 和数据中心确认 `QPO_INBOUND_CALLBACK_TOKEN` 的发放、轮换和保密方式；真实 token 单独交付数据中心，不写入文档、日志、截图或工单。
+- QPO 和数据中心确认 `QPO_OPEN_API_TOKEN` 的发放、轮换和保密方式；真实 token 单独交付数据中心，不写入文档、日志、截图或工单。
 - 数据中心确认只转发主 `mesRequestId` 的 MES 结果，不需要逐个回调同图号版本 follower。
 - 数据中心确认失败场景会转发 `status=FAILED` 和明确 `message`，或由 QPO 用户重试触发下一次请求。
 - 双方保留 `mesRequestId`、`externalTraceId` 作为联调排查要素；`ticketId` 仅作为 QPO 内部日志和请求流水排查字段。

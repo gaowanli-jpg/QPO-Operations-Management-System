@@ -27,6 +27,7 @@ import java.util.Map;
 @Service
 public class SystemInboundCallbackConfigService {
     private static final Logger log = LoggerFactory.getLogger(SystemInboundCallbackConfigService.class);
+    private static final String OPEN_API_TOKEN_CODE = "QPO_OPEN_API_TOKEN";
     private static final String SOURCE_SYSTEM_MES = "MES";
     private static final String MES_CALLBACK_NAME = "MES物料号回调";
     private static final String MES_CALLBACK_PATH = "/api/integrations/mes/material-callback";
@@ -95,6 +96,29 @@ public class SystemInboundCallbackConfigService {
 
     @Transactional
     public SystemInboundCallbackTokenResp rotateMesMaterialCallbackToken() {
+        return rotateToken("MES_MATERIAL_CALLBACK", "token 已生成，请立即复制并通过受控渠道交付数据中心；关闭后无法再次查看明文。");
+    }
+
+    public Map<String, Object> getOpenApiTokenStatus() {
+        SystemInboundCallbackConfig entity = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
+        boolean tokenHashConfigured = entity != null && !isBlank(entity.getTokenHash());
+        boolean fallbackConfigured = !isBlank(fallbackCallbackToken);
+        LinkedHashMap<String, Object> status = new LinkedHashMap<>();
+        status.put("tokenConfigured", tokenHashConfigured || fallbackConfigured);
+        status.put("tokenMask", tokenHashConfigured ? entity.getTokenMask() : (fallbackConfigured ? "已配置" : null));
+        status.put("tokenUpdatedAt", entity == null ? null : entity.getTokenUpdatedAt());
+        status.put("message", tokenHashConfigured || fallbackConfigured
+                ? "统一 token 已配置；明文不可再次查看"
+                : "统一 token 未配置，请先生成 QPO_OPEN_API_TOKEN");
+        return status;
+    }
+
+    @Transactional
+    public SystemInboundCallbackTokenResp rotateOpenApiToken() {
+        return rotateToken(OPEN_API_TOKEN_CODE, "QPO 入站开放接口统一 token 已生成，请立即复制并通过受控渠道交付外部调用方；关闭后无法再次查看明文。");
+    }
+
+    private SystemInboundCallbackTokenResp rotateToken(String responseCode, String message) {
         SystemInboundCallbackConfig entity = ensureConfig();
         String token = generateToken();
         entity.setTokenHash(sha256Hex(token));
@@ -112,10 +136,10 @@ public class SystemInboundCallbackConfigService {
         log.info("Inbound callback token rotated callbackCode={} tokenConfigured=true", entity.getCallbackCode());
 
         SystemInboundCallbackTokenResp resp = new SystemInboundCallbackTokenResp();
-        resp.setCallbackCode(entity.getCallbackCode());
+        resp.setCallbackCode(responseCode);
         resp.setToken(token);
         resp.setTokenMask(entity.getTokenMask());
-        resp.setMessage("token 已生成，请立即复制并通过受控渠道交付数据中心；关闭后无法再次查看明文。");
+        resp.setMessage(message);
         return resp;
     }
 
@@ -158,6 +182,22 @@ public class SystemInboundCallbackConfigService {
                     callbackCode.name(), entity == null ? "ENV" : "DB");
             return true;
         }
+        String expectedHash = entity == null ? null : trimToNull(entity.getTokenHash());
+        if (expectedHash == null && !isBlank(fallbackCallbackToken)) {
+            expectedHash = sha256Hex(fallbackCallbackToken.trim());
+        }
+        String actualToken = bearerToken(authorization);
+        if (isBlank(expectedHash) || isBlank(actualToken)) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                expectedHash.getBytes(StandardCharsets.UTF_8),
+                sha256Hex(actualToken).getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    public boolean hasValidOpenApiBearerToken(String authorization) {
+        SystemInboundCallbackConfig entity = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
         String expectedHash = entity == null ? null : trimToNull(entity.getTokenHash());
         if (expectedHash == null && !isBlank(fallbackCallbackToken)) {
             expectedHash = sha256Hex(fallbackCallbackToken.trim());

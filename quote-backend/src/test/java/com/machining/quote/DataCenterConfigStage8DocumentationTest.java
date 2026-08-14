@@ -92,14 +92,14 @@ class DataCenterConfigStage8DocumentationTest {
                         "SYSTEM_DATA_CENTER_ENDPOINT_UPDATE",
                         "SYSTEM_DATA_CENTER_ENDPOINT_TEST",
                         "SYSTEM_DATA_CENTER_ENDPOINT_TEST_FAILED",
-                        "不得记录 `client_secret`、access token、QPO 入站 token、Authorization header 或完整请求/响应体");
+                        "不得记录 `client_secret`、access token、QPO 入站开放接口统一 token、Authorization header 或完整请求/响应体");
 
         assertThat(read(FILE_LOG_DOC))
                 .contains(
                         "Data center config created/updated/token test completed/token test failed/activated/disabled",
                         "Data center endpoint updated/test completed/test failed",
                         "统一 client 调用只记录 `endpointCode`、`targetSystemCode`、host、path、HTTP status 或网络错误摘要",
-                        "不得记录 `client_secret`、access token、QPO 入站 token、Authorization header、完整 token 响应、完整业务请求体或完整业务响应体");
+                        "不得记录 `client_secret`、access token、QPO 入站开放接口统一 token、Authorization header、完整 token 响应、完整业务请求体或完整业务响应体");
     }
 
     @Test
@@ -144,9 +144,9 @@ class DataCenterConfigStage8DocumentationTest {
                 .contains(
                         "QPO 提供给数据中心的 MES 物料号回调接口对接说明",
                         "调用方向：数据中心 -> QPO",
-                        "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
+                        "Authorization: Bearer {QPO_OPEN_API_TOKEN}",
                         "真实 token 单独交付数据中心",
-                        "数据中心拿到 **回调 URL + 回调 token + 本文档请求/响应字段说明** 后，即可调用本接口");
+                        "数据中心拿到 **回调 URL + QPO_OPEN_API_TOKEN + 本文档请求/响应字段说明** 后，即可调用本接口");
 
         assertThat(read(DATA_CENTER_DOC))
                 .contains(
@@ -164,7 +164,8 @@ class DataCenterConfigStage8DocumentationTest {
                             "Authorization: Bearer " + "eyJ",
                             "access_token=" + "eyJ",
                             "ERP_DATA_CENTER_CLIENT_SECRET=" + "X",
-                            "QPO_INBOUND_CALLBACK_TOKEN=")
+                            "QPO_INBOUND_CALLBACK_TOKEN=",
+                            "QPO_OPEN_API_TOKEN=")
                     .doesNotContainPattern("ERP_DATA_CENTER_CLIENT_SECRET=[A-Za-z0-9+/=_-]+")
                     .doesNotContainPattern("client_secret=[A-Za-z0-9+/=_-]{12,}");
         }
