@@ -36,8 +36,9 @@ public class DataCenterEndpointRegistry {
                     "WMS库存锁定",
                     "WMS",
                     "POST",
-                    "WMS_ALLOCATION_V1",
-                    "WMS_ALLOCATION_RESPONSE_V1"
+                    "WMS_SALE_LADING_RESERVE_V1",
+                    "WMS_SALE_LADING_RESERVE_RESPONSE_V1",
+                    60000
             ),
             U9_SALES_ORDER_SYNC,
             new EndpointDefinition(

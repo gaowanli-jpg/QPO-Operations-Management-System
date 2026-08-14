@@ -65,7 +65,12 @@ class DataCenterConfigStage4Test {
         Object production = ReflectionTestUtils.invokeMethod(registry, "requireDefinition", "MES_PRODUCTION_DISPATCH");
 
         assertThat(String.valueOf(mes)).contains("MES_MATERIAL_RESOLVE", "MES_MATERIAL_V1", "MES_MATERIAL_RESPONSE_V1");
-        assertThat(String.valueOf(wms)).contains("WMS_INVENTORY_ALLOCATE", "WMS_ALLOCATION_V1", "WMS_ALLOCATION_RESPONSE_V1");
+        assertThat(String.valueOf(wms)).contains(
+                "WMS_INVENTORY_ALLOCATE",
+                "WMS_SALE_LADING_RESERVE_V1",
+                "WMS_SALE_LADING_RESERVE_RESPONSE_V1",
+                "minimumTimeoutMs=60000"
+        );
         assertThat(String.valueOf(u9)).contains("U9_SALES_ORDER_SYNC", "U9_SALES_ORDER_V1", "U9_SALES_ORDER_RESPONSE_V1", "minimumTimeoutMs=60000");
         assertThat(String.valueOf(u9Common)).contains("U9_COMMON_ENTITY_QUERY", "U9_COMMON_ENTITY_QUERY_V1", "U9_COMMON_ENTITY_RESPONSE_V1", "minimumTimeoutMs=60000");
         assertThat(String.valueOf(production)).contains(

@@ -16,6 +16,9 @@ class DataCenterConfigStage2Test {
     private static final Path SEED_BASELINE = Path.of(
             "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql"
     );
+    private static final Path WMS_RESERVATION_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V10__wms_batch_reservation_contract.sql"
+    );
     private static final Path PERMISSION_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java"
     );
@@ -68,6 +71,21 @@ class DataCenterConfigStage2Test {
                 )
                 .doesNotContain("access_token=ey", "client_secret=X");
         assertThat(seed).doesNotContain("ON CONFLICT (endpoint_code) DO UPDATE");
+    }
+
+    @Test
+    void wmsReservationMigrationMovesInventoryEndpointToSaleLadingReserve() throws IOException {
+        String migration = read(WMS_RESERVATION_MIGRATION);
+
+        assertThat(migration)
+                .contains(
+                        "'WMS_INVENTORY_ALLOCATE'",
+                        "'/api/v1/wms/admin-api/wms/datacenter/sale-lading/reserve'",
+                        "'WMS_SALE_LADING_RESERVE_V1'",
+                        "'WMS_SALE_LADING_RESERVE_RESPONSE_V1'",
+                        "timeout_ms = GREATEST(COALESCE(system_data_center_endpoint_config.timeout_ms, 0), 60000)"
+                )
+                .doesNotContain("/api/wms/inventory/allocate");
     }
 
     @Test
