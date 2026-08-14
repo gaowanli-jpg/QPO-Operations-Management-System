@@ -45,7 +45,7 @@ class SalesOrderIntegrationStage6Test {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
-    void queryBuildsTypedResponseDtosWithStableBusinessIdentityAndOrderTypeFallback() {
+    void queryBuildsTypedResponseDtosWithStableBusinessIdentityAndOrderTypeFallback() throws Exception {
         SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
         SalesOrderIntegrationSyncService service = service(mapper);
         SalesOrderSyncQueryReq req = req(100);
@@ -54,6 +54,7 @@ class SalesOrderIntegrationStage6Test {
                 .thenReturn(List.of(order(1L, "SO-20260814-001", "FORMAL", changedAt)));
         SalesOrderSyncItemRow inheritedTypeItem = item(1L, "SO-20260814-001", 10, "P-001", "A", "MAT-001", null);
         inheritedTypeItem.setSaleOrderItemNo("999");
+        setExternalItemDetailFields(inheritedTypeItem);
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
                 .thenReturn(List.of(
                         inheritedTypeItem,
@@ -84,6 +85,19 @@ class SalesOrderIntegrationStage6Test {
         assertThat(firstItem.getCustomerDeliveryDate()).isEqualTo(LocalDate.of(2026, 8, 30));
         assertThat(firstItem.getStatus()).isEqualTo("READY");
         assertThat(firstItem.getOrderType()).isEqualTo("FORMAL");
+        assertThat(objectMapper.writeValueAsString(firstItem))
+                .contains("\"materialName\":\"Imported material\"")
+                .contains("\"engineeringMaterialCode\":\"RAW-001\"")
+                .contains("\"engineeringMaterialName\":\"6061-T6\"")
+                .contains("\"engineeringMaterialTypeCode\":\"AL\"")
+                .contains("\"engineeringMaterialTypeName\":\"Aluminum\"")
+                .contains("\"engineeringMaterialCategory\":\"Plate\"")
+                .contains("\"materialShape\":\"Plate\"")
+                .contains("\"surfaceTreatment\":\"Anodized\"")
+                .contains("\"shippedQty\":1")
+                .contains("\"unshippedQty\":2")
+                .contains("\"releasedQty\":1")
+                .contains("\"remainingQty\":2");
 
         SalesOrderSyncItemDTO secondItem = order.getItems().get(1);
         assertThat(secondItem.getSaleOrderItemNo()).isEqualTo("20");
@@ -186,5 +200,20 @@ class SalesOrderIntegrationStage6Test {
         row.setCreatedAt(LocalDateTime.of(2026, 8, 14, 9, 30));
         row.setUpdatedAt(LocalDateTime.of(2026, 8, 14, 10, 20));
         return row;
+    }
+
+    private void setExternalItemDetailFields(SalesOrderSyncItemRow row) {
+        ReflectionTestUtils.setField(row, "materialName", "Imported material");
+        ReflectionTestUtils.setField(row, "engineeringMaterialCode", "RAW-001");
+        ReflectionTestUtils.setField(row, "engineeringMaterialName", "6061-T6");
+        ReflectionTestUtils.setField(row, "engineeringMaterialTypeCode", "AL");
+        ReflectionTestUtils.setField(row, "engineeringMaterialTypeName", "Aluminum");
+        ReflectionTestUtils.setField(row, "engineeringMaterialCategory", "Plate");
+        ReflectionTestUtils.setField(row, "materialShape", "Plate");
+        ReflectionTestUtils.setField(row, "surfaceTreatment", "Anodized");
+        ReflectionTestUtils.setField(row, "shippedQty", 1);
+        ReflectionTestUtils.setField(row, "unshippedQty", 2);
+        ReflectionTestUtils.setField(row, "releasedQty", 1);
+        ReflectionTestUtils.setField(row, "remainingQty", 2);
     }
 }
