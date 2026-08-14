@@ -64,9 +64,10 @@ class MesMaterialCallbackConfigStage4Test {
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer wrong", callback("MAT-100"));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getSuccess()).isFalse();
+        assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         verifyNoInteractions(syncService);
         ArgumentCaptor<InboundCallbackCode> codeCaptor = ArgumentCaptor.forClass(InboundCallbackCode.class);
         verify(configService).hasValidBearerToken(codeCaptor.capture(), eq("Bearer wrong"));

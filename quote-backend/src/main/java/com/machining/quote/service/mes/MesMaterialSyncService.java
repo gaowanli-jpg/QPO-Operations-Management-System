@@ -529,7 +529,6 @@ public class MesMaterialSyncService {
         resp.setSuccess(success);
         resp.setCode(code);
         resp.setMsg(msg);
-        resp.setMessage(msg);
         resp.setMesRequestId(bizId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("bizId", bizId);
@@ -1639,7 +1638,7 @@ public class MesMaterialSyncService {
             String materialNo) {
         MesMaterialCallbackResp resp = new MesMaterialCallbackResp();
         resp.setSuccess(success);
-        resp.setMessage(message);
+        resp.setMsg(message);
         resp.setMesRequestId(mesRequestId);
         resp.setMaterialNo(trimToNull(materialNo));
         return resp;

@@ -10,7 +10,6 @@ public class MesMaterialCallbackResp {
     private String msg;
     private Map<String, Object> data;
     private Boolean success;
-    private String message;
     private String mesRequestId;
     private String materialNo;
 }

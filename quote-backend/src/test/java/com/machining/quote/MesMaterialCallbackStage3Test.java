@@ -18,8 +18,11 @@ import com.machining.quote.service.mes.MesMaterialSyncService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +43,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class MesMaterialCallbackStage3Test {
     private static final Path CALLBACK_REQ = Path.of(
@@ -135,7 +141,7 @@ class MesMaterialCallbackStage3Test {
         MesMaterialCallbackResp response = service.handleMaterialCallback(callback("MAT-NEW"));
 
         assertThat(response.getSuccess()).isTrue();
-        assertThat(response.getMessage()).contains("已处理");
+        assertThat(response.getMsg()).contains("已处理");
         verify(ticketMapper, never()).updateById(any());
         ArgumentCaptor<SalesOrderItem> salesCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
         verify(salesOrderItemMapper).updateById(salesCaptor.capture());
@@ -276,10 +282,13 @@ class MesMaterialCallbackStage3Test {
         ResponseEntity<MesMaterialCallbackResp> missing = controller.materialCallback(null, callback("MAT-NEW"));
         ResponseEntity<MesMaterialCallbackResp> wrong = controller.materialCallback("Bearer wrong", callback("MAT-NEW"));
 
-        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(wrong.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(wrong.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(missing.getBody()).isNotNull();
         assertThat(missing.getBody().getSuccess()).isFalse();
+        assertThat(missing.getBody().getCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        assertThat(wrong.getBody()).isNotNull();
+        assertThat(wrong.getBody().getCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         verifyNoInteractions(service);
     }
 
@@ -345,10 +354,31 @@ class MesMaterialCallbackStage3Test {
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", req);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getSuccess()).isFalse();
-        assertThat(response.getBody().getMessage()).contains("bizId");
+        assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.getBody().getMsg()).contains("bizId");
+    }
+
+    @Test
+    void callbackEndpointReturnsHttpOkWithBadRequestCodeWhenJsonCannotBeParsed() throws Exception {
+        MesMaterialSyncService service = mock(MesMaterialSyncService.class);
+        SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
+        MesIntegrationCallbackController controller = controller(service, configService);
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+
+        mockMvc.perform(post("/api/integrations/mes/material-callback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer callback-token")
+                        .content("{not-json"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.value()))
+                .andExpect(jsonPath("$.msg").value("MES material callback request body is invalid"))
+                .andExpect(jsonPath("$.message").doesNotExist());
+
+        verifyNoInteractions(service);
     }
 
     private MesMaterialSyncService syncService() {

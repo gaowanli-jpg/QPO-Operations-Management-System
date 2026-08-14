@@ -60,6 +60,9 @@ class MesMaterialBatchCallbackStage4Test {
         assertThat(response.getSuccess()).isTrue();
         assertThat(response.getCode()).isEqualTo(0);
         assertThat(response.getMsg()).isEqualTo("accepted");
+        com.fasterxml.jackson.databind.JsonNode responseBody = new ObjectMapper().valueToTree(response);
+        assertThat(responseBody.has("msg")).isTrue();
+        assertThat(responseBody.has("message")).isFalse();
         assertThat(response.getData())
                 .containsEntry("bizId", BIZ_ID)
                 .containsEntry("receivedCount", 1)
@@ -294,7 +297,7 @@ class MesMaterialBatchCallbackStage4Test {
     }
 
     @Test
-    void controllerPreservesBatchCallbackHttpStatusAndUnifiedFailureWrapper() {
+    void controllerAlwaysReturnsHttpOkWithBusinessCodeForBatchCallbackFailures() {
         MesMaterialSyncService service = mock(MesMaterialSyncService.class);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
@@ -307,7 +310,7 @@ class MesMaterialBatchCallbackStage4Test {
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback(
                 "Bearer callback-token", batchCallback(successItem("MAT-NEW")));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getSuccess()).isFalse();
         assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.CONFLICT.value());
@@ -332,8 +335,9 @@ class MesMaterialBatchCallbackStage4Test {
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback(
                 "Bearer callback-token", batchCallback(successItem("MAT-NEW")));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
         assertThat(response.getBody().getMsg()).isEqualTo("MES material callback handling failed");
         assertThat(response.getBody().getMsg())
                 .doesNotContain("secret" + "-token")
@@ -359,8 +363,9 @@ class MesMaterialBatchCallbackStage4Test {
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", req);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(response.getBody().getMsg()).contains("items cannot be empty");
         verify(service).handleMaterialBatchCallback(req);
         verify(service, never()).handleMaterialCallback(any(MesMaterialCallbackReq.class));

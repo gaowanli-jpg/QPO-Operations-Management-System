@@ -55,6 +55,23 @@ class MesMaterialCallbackStage5DocumentationTest {
     }
 
     @Test
+    void mesCallbackDocsKeepHttp200ForBusinessErrors() throws IOException {
+        assertThat(read(MES_CALLBACK_DOC))
+                .contains("HTTP `200`", "code=404", "code=409")
+                .doesNotContain("HTTP `404`")
+                .doesNotContain("HTTP `409`");
+    }
+
+    @Test
+    void mesCallbackDocsExposeOnlyMsgInQpoResponseBody() throws IOException {
+        assertThat(read(MES_CALLBACK_DOC))
+                .contains("\"msg\": \"accepted\"")
+                .doesNotContain("\"message\": \"accepted\"")
+                .doesNotContain("`msg/message`")
+                .doesNotContain("`message` / `msg`");
+    }
+
+    @Test
     void logDocsDescribeAcceptedCallbackAndConflictEventsWithoutSensitivePayloads() throws IOException {
         assertThat(read(LOG_OPS_DOC))
                 .contains(

@@ -62,8 +62,9 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 - `QPO_INBOUND_CALLBACK_TOKEN` 是 QPO 侧生成的入站回调机器 token，占位符不是实际 token。真实 token 由 QPO 管理员在 **系统配置 > 入站接口 > MES 物料号回调** 生成或轮换，明文只展示一次，并通过受控渠道单独交付数据中心。
 - 当 QPO 入站接口配置开启 token 校验时，数据中心必须携带 `Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}`。
 - `ERP_MES_CALLBACK_TOKEN` 仅作为 QPO 侧老环境 deprecated fallback；页面入站接口配置存在时，以页面配置为准。数据中心联调方不需要也不应依赖该环境变量名。
-- 如果页面配置存在但未生成 token，且 token 校验开启，即使老环境变量里配置了 token，也会按当前 DB 配置校验并返回 `401`；因此生产联调应以页面展示的 token 状态为准。
-- token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 返回 HTTP `401`。
+- 只要请求已经到达 QPO 回调接口，HTTP 状态码统一返回 `200`，表示网络和接口可达；业务处理结果请读取响应体里的 `success`、`code`、`msg`。
+- 如果页面配置存在但未生成 token，且 token 校验开启，即使老环境变量里配置了 token，也会按当前 DB 配置校验，并在响应体返回 `code=401`；因此生产联调应以页面展示的 token 状态为准。
+- token 错误、缺失或格式不是 `Bearer xxx` 时，QPO 仍返回 HTTP `200`，但响应体返回 `success=false`、`code=401`。
 - 不要在日志、截图、工单或联调群中明文发送真实 token。
 
 ### 3.1 联调交付信息
@@ -119,7 +120,6 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
   "success": true,
   "code": 0,
   "msg": "accepted",
-  "message": "accepted",
   "mesRequestId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
   "data": {
     "bizId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
@@ -138,7 +138,7 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `success` | boolean | QPO 是否成功处理该回调。 |
-| `message` / `msg` | string | QPO 处理摘要。 |
+| `msg` | string | QPO 处理摘要。 |
 | `mesRequestId` | string | 本次回调对应的 QPO 请求 ID。 |
 | `data.bizId` | string | 本次回调对应的 QPO 批量请求 ID。 |
 | `data.receivedCount` | number | QPO 收到的回调行数。 |
@@ -183,7 +183,6 @@ Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}
   "success": true,
   "code": 0,
   "msg": "accepted",
-  "message": "accepted",
   "mesRequestId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
   "data": {
     "bizId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
@@ -204,7 +203,7 @@ QPO 收到回调后按以下顺序处理：
 1. 校验回调 token。
 2. 校验 `mesRequestId` 不为空，且 `items` 必须存在并至少 1 行。
 3. 按 `mesRequestId` 查询 `mes_integration_batch` 批次。
-4. 按每个 `items[].drawingNo + items[].drawingVersion` 匹配 `mes_material_batch_item` 批次行；无法匹配时返回 `409`。
+4. 按每个 `items[].drawingNo + items[].drawingVersion` 匹配 `mes_material_batch_item` 批次行；无法匹配时响应体返回 `code=409`。
 5. 对匹配到的行加载其行级请求流水 `order_delivery_ticket_mes_request` 和提单行。
 6. 校验当前 `order_delivery_ticket.mes_request_id` 仍等于批次行的 `lineRequestId`，旧回调不能覆盖新请求。
 7. 成功行校验 `items[].productCode` 非空且长度不超过 100，并写回 `order_delivery_ticket.material_no`、`mes_sync_status=SUCCESS`、`mes_synced_at`、`mes_external_task_id`、`mes_callback_received_at` 和回调摘要。
@@ -242,25 +241,24 @@ MES 不需要：
 | 场景 | QPO 处理 |
 | --- | --- |
 | 相同 `mesRequestId + drawingNo + drawingVersion` + 相同 `items[].productCode` 重复回调 | 幂等返回成功，不重复污染数据。 |
-| 相同 `mesRequestId + drawingNo + drawingVersion` + 不同 `items[].productCode` | 返回 HTTP `409`，拒绝覆盖已确认物料号。 |
-| 旧 `mesRequestId` 回调到当前已有新请求的 ticket | 请求流水标记为 `STALE`，返回 HTTP `409`，旧回调不能覆盖新请求。 |
-| 销售订单零件已有不同且已确认物料号 | 返回 HTTP `409`，不覆盖销售订单主零件表。 |
-| 找不到 `mesRequestId` 对应批次 | 返回 HTTP `404`。 |
-| 缺少 `mesRequestId`、缺少 `items`、`items` 为空，或成功行缺少 `items[].productCode` | 返回 HTTP `400`。 |
-| token 缺失或错误 | 返回 HTTP `401`。 |
+| 相同 `mesRequestId + drawingNo + drawingVersion` + 不同 `items[].productCode` | HTTP `200`，响应体 `code=409`，拒绝覆盖已确认物料号。 |
+| 旧 `mesRequestId` 回调到当前已有新请求的 ticket | 请求流水标记为 `STALE`，HTTP `200`，响应体 `code=409`，旧回调不能覆盖新请求。 |
+| 销售订单零件已有不同且已确认物料号 | HTTP `200`，响应体 `code=409`，不覆盖销售订单主零件表。 |
+| 找不到 `mesRequestId` 对应批次 | HTTP `200`，响应体 `code=404`。 |
+| 缺少 `mesRequestId`、缺少 `items`、`items` 为空，或成功行缺少 `items[].productCode` | HTTP `200`，响应体 `code=400`。 |
+| token 缺失或错误 | HTTP `200`，响应体 `code=401`。 |
 
 ## 9. 错误响应示例
 
 ### 9.1 token 错误
 
-HTTP `401`
+HTTP `200`，响应体 `code=401`
 
 ```json
 {
   "success": false,
   "code": 401,
   "msg": "QPO 入站回调 token 无效",
-  "message": "QPO 入站回调 token 无效",
   "mesRequestId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
   "data": {
     "bizId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
@@ -274,14 +272,13 @@ HTTP `401`
 
 ### 9.2 批次不存在
 
-HTTP `404`
+HTTP `200`，响应体 `code=404`
 
 ```json
 {
   "success": false,
   "code": 404,
   "msg": "MES material batch bizId does not exist",
-  "message": "MES material batch bizId does not exist",
   "mesRequestId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
   "data": {
     "bizId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
@@ -295,14 +292,13 @@ HTTP `404`
 
 ### 9.3 物料号冲突或回调行不匹配
 
-HTTP `409`
+HTTP `200`，响应体 `code=409`
 
 ```json
 {
   "success": false,
   "code": 409,
   "msg": "MES material callback row does not match current QPO batch item",
-  "message": "MES material callback row does not match current QPO batch item",
   "mesRequestId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
   "data": {
     "bizId": "QPO-MAT-20260814-01KZZ08THK316WKM13FFENVJD0",
@@ -323,9 +319,9 @@ HTTP `409`
 | 销售订单来源成功 | 回调销售订单来源提单行 | `sales_order_item.material_no` 和 `material_no_status=已确认` 被回写。 |
 | 同图号版本主请求成功 | 只回调 MASTER 所在批次和行 | MASTER 和所有 FOLLOWER 等待行都写回物料号。 |
 | 重复相同回调 | 重复发送相同 `items[].productCode` | QPO 幂等返回成功。 |
-| 冲突回调 | 同一批次同一图号版本发送不同 `items[].productCode` | QPO 返回 `409`，不覆盖数据。 |
-| 旧请求回调 | ticket 已经有新的 `mesRequestId` | QPO 返回 `409`，旧请求不覆盖新请求。 |
-| token 错误 | 不带或带错 Bearer token | QPO 返回 `401`。 |
+| 冲突回调 | 同一批次同一图号版本发送不同 `items[].productCode` | HTTP `200`，响应体 `code=409`，不覆盖数据。 |
+| 旧请求回调 | ticket 已经有新的 `mesRequestId` | HTTP `200`，响应体 `code=409`，旧请求不覆盖新请求。 |
+| token 错误 | 不带或带错 Bearer token | HTTP `200`，响应体 `code=401`。 |
 
 ## 11. 日志和安全要求
 
