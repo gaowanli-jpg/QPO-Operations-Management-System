@@ -129,6 +129,29 @@ class LoggingConventionTest {
     }
 
     @Test
+    void wmsReservationBatchLogsCarryTraceableBusinessKeysWithoutSecrets() throws IOException {
+        String source = source("service/wms/WmsReservationBatchService.java");
+
+        assertThat(source)
+                .contains(
+                        "taskId={}",
+                        "batchId={}",
+                        "externalBizId={}",
+                        "saleOrderNo={}",
+                        "count={}",
+                        "status={}",
+                        "durationMs={}"
+                )
+                .doesNotContain(
+                        "requestPayload",
+                        "responsePayload",
+                        "Authorization",
+                        "authToken",
+                        "clientSecret"
+                );
+    }
+
+    @Test
     void retentionAndSupportServicesKeepLowNoiseLogEvents() throws IOException {
         assertThat(source("service/AuditLogRetentionService.java"))
                 .contains("Audit log cleanup started")

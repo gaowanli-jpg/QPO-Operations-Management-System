@@ -9,12 +9,17 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DataCenterConfigStage1Test {
     private static final Path ENV_EXAMPLE = Path.of("..", "erp.env.example");
+    private static final Path DOCKER_COMPOSE = Path.of("..", "docker-compose.yml");
     private static final Path APPLICATION_YAML = Path.of("src", "main", "resources", "application.yaml");
+    private static final Path EXTERNAL_CONFIG_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "integration", "ExternalIntegrationConfigService.java"
+    );
     private static final Path SYSTEM_CONFIG_DOC = Path.of(
             "..", "docs", "QPO系统配置", "05-数据中心统一对接开发文档.md"
     );
@@ -38,14 +43,12 @@ class DataCenterConfigStage1Test {
                         "ERP_DATA_CENTER_WMS_ALLOCATION_PATH=",
                         "ERP_DATA_CENTER_U9_SALES_ORDER_SYNC_PATH=",
                         "ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH=",
-                        "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH=/api/v1/mes/openapi/demand/create"
-                )
-                .contains(
-                        "deprecated direct-system fallback",
+                        "ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH=/api/v1/mes/openapi/demand/create",
                         "ERP_MES_BASE_URL=",
-                        "ERP_WMS_BASE_URL=",
                         "ERP_U9_BASE_URL="
-                )
+                );
+        assertNoLegacyWmsDirectConfig(env);
+        assertThat(env)
                 .doesNotContain(
                         "access_token=",
                         "client_secret="
@@ -83,6 +86,18 @@ class DataCenterConfigStage1Test {
                         "client-secret: ${ERP_DATA_CENTER_CLIENT_SECRET:X",
                         "access_" + "token="
                 );
+        assertNoLegacyWmsDirectConfig(yaml);
+    }
+
+    @Test
+    void deploymentAndRuntimeDoNotExposeLegacyWmsDirectFallback() throws IOException {
+        for (Path artifact : List.of(ENV_EXAMPLE, DOCKER_COMPOSE, APPLICATION_YAML, EXTERNAL_CONFIG_SERVICE)) {
+            assertNoLegacyWmsDirectConfig(read(artifact));
+        }
+
+        assertThat(read(ENV_EXAMPLE)).contains("ERP_DATA_CENTER_WMS_ALLOCATION_PATH=");
+        assertThat(read(DOCKER_COMPOSE)).contains("ERP_DATA_CENTER_WMS_ALLOCATION_PATH: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:-}");
+        assertThat(read(APPLICATION_YAML)).contains("wms-allocation-path: ${ERP_DATA_CENTER_WMS_ALLOCATION_PATH:}");
     }
 
     @Test
@@ -124,18 +139,32 @@ class DataCenterConfigStage1Test {
     }
 
     @Test
-    void systemConfigDocStatesEnvIsFallbackOnlyAndContainsNoRealSecret() throws IOException {
+    void systemConfigDocStatesDataCenterWmsRouteAndContainsNoRealSecret() throws IOException {
         String doc = read(SYSTEM_CONFIG_DOC);
 
         assertThat(doc)
                 .contains(
-                        "erp.env` 作为本地开发、首次部署和页面配置缺失时的 fallback",
-                        "真实 `ERP_DATA_CENTER_CLIENT_SECRET` 只写入本机或服务器真实 `erp.env`",
-                        "文档不包含真实 `client_secret` 或真实 access token"
+                        "ERP_DATA_CENTER_WMS_ALLOCATION_PATH",
+                        "WMS_INVENTORY_ALLOCATE",
+                        "QPO -> 数据中心 -> WMS",
+                        "真实 `ERP_DATA_CENTER_CLIENT_SECRET` 只写入真实 `erp.env` 或系统配置密文字段"
                 )
                 .doesNotContain(
                         "client_" + "secret=X",
                         "access_" + "token=ey"
+                );
+        assertNoLegacyWmsDirectConfig(doc);
+    }
+
+    private static void assertNoLegacyWmsDirectConfig(String content) {
+        assertThat(content)
+                .doesNotContain(
+                        "ERP_WMS_BASE_URL",
+                        "ERP_WMS_AUTH_TOKEN",
+                        "ERP_WMS_ALLOCATION_PATH",
+                        "ERP_WMS_TIMEOUT_MS",
+                        "erp.wms",
+                        "WMS environment fallback"
                 );
     }
 

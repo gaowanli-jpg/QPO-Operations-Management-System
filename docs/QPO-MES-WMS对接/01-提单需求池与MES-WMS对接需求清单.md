@@ -524,3 +524,13 @@ docs/QPO-MES-WMS对接/02-MES-WMS对接开发文档.md
 6. 锁库零件页面。
 7. 权限、日志、审计、文档收口。
 8. 全量回归与提交。
+## 15. 阶段 7 补充：WMS 批量 reserve 现行口径
+
+- WMS 锁库只保留后台任务 `WMS_ALLOCATION_BATCH`，单个零件和多个零件都走同一个批量入口。
+- QPO 只通过数据中心 endpoint `WMS_INVENTORY_ALLOCATE` 调用 WMS，链路为 `QPO -> 数据中心 -> WMS`。
+- 数据中心路径为 `/api/v1/wms/admin-api/wms/datacenter/sale-lading/reserve`。
+- 请求字段为 `externalBizId`、`saleNo`、`items[].productCode`、`items[].reserveCount`、`items[].remark`。
+- 响应字段为 `saleOrderNo`、`externalBizId`、`items[].productCode`、`items[].reserveCount`、`items[].stockCount`、`items[].inProductionCount`、`items[].frozenCount`、`items[].surplusCount`。
+- `inProductionCount` 归入“在产覆盖”，库存覆盖为 `frozenCount - inProductionCount`，缺口为 `surplusCount`。
+- QPO 按销售订单分组、按 `productCode` 聚合，再按 `sales_order_item.line_no ASC, ticket.id ASC` 稳定拆回 ticket。
+- WMS 审计动作覆盖：`DELIVERY_WMS_ALLOCATION_SUBMIT`、`DELIVERY_WMS_ALLOCATION_SUCCESS`、`DELIVERY_WMS_ALLOCATION_FAILED`、`DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN`、`DELIVERY_WMS_ALLOCATION_APPLY_FAILED`、`DELIVERY_WMS_ALLOCATION_RECONCILED`。

@@ -29,15 +29,6 @@ public class ExternalIntegrationConfigService {
     @Value("${erp.mes.timeout-ms:10000}")
     private Integer mesTimeoutMs;
 
-    @Value("${erp.wms.base-url:}")
-    private String wmsBaseUrl;
-    @Value("${erp.wms.auth-token:}")
-    private String wmsAuthToken;
-    @Value("${erp.wms.allocation-path:/api/wms/inventory/allocate}")
-    private String wmsAllocationPath;
-    @Value("${erp.wms.timeout-ms:10000}")
-    private Integer wmsTimeoutMs;
-
     @Value("${erp.u9.base-url:}")
     private String u9BaseUrl;
     @Value("${erp.u9.auth-login-path:/webapi/OAuth2/AuthLogin}")
@@ -116,7 +107,7 @@ public class ExternalIntegrationConfigService {
                     authType,
                     trimRight(text(config, "baseUrl", null)),
                     null,
-                    normalizePath(text(config, "allocationPath", "/api/wms/inventory/allocate")),
+                    normalizePath(text(config, "allocationPath", null)),
                     text(config, "authToken", null),
                     integer(config, "timeoutMs", 10000),
                     null,
@@ -228,16 +219,11 @@ public class ExternalIntegrationConfigService {
             );
             case WMS -> new ExternalIntegrationConfig(
                     null,
-                    "WMS environment fallback",
+                    "WMS data-center only",
                     ExternalSystemCode.WMS,
                     false,
-                    true,
-                    isBlank(wmsAuthToken) ? ExternalAuthType.NONE : ExternalAuthType.BEARER_TOKEN,
-                    trimRight(wmsBaseUrl),
-                    null,
-                    normalizePath(defaultText(wmsAllocationPath, "/api/wms/inventory/allocate")),
-                    blankToNull(wmsAuthToken),
-                    positive(wmsTimeoutMs, 10000),
+                    false,
+                    ExternalAuthType.NONE,
                     null,
                     null,
                     null,
@@ -247,7 +233,12 @@ public class ExternalIntegrationConfigService {
                     null,
                     null,
                     null,
-                    "Loaded from erp.env fallback"
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "WMS inventory allocation is configured through Data Center endpoints"
             );
             case U9 -> new ExternalIntegrationConfig(
                     null,

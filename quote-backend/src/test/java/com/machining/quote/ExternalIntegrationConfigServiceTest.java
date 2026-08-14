@@ -10,6 +10,10 @@ import com.machining.quote.mapper.SystemExternalIntegrationConfigMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -20,6 +24,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ExternalIntegrationConfigServiceTest {
+    private static final Path SERVICE_SOURCE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "integration", "ExternalIntegrationConfigService.java"
+    );
 
     @Test
     void activeMesConfigUsesDatabaseConfigWhenPresent() {
@@ -123,10 +130,6 @@ class ExternalIntegrationConfigServiceTest {
         ReflectionTestUtils.setField(service, "mesAuthToken", "env-mes-token");
         ReflectionTestUtils.setField(service, "mesMaterialPath", "/env/mes/material");
         ReflectionTestUtils.setField(service, "mesTimeoutMs", 17000);
-        ReflectionTestUtils.setField(service, "wmsBaseUrl", "http://env-wms");
-        ReflectionTestUtils.setField(service, "wmsAuthToken", "env-wms-token");
-        ReflectionTestUtils.setField(service, "wmsAllocationPath", "/env/wms/allocate");
-        ReflectionTestUtils.setField(service, "wmsTimeoutMs", 18000);
         ReflectionTestUtils.setField(service, "u9BaseUrl", "http://env-u9");
         ReflectionTestUtils.setField(service, "u9UserCode", "env-user");
         ReflectionTestUtils.setField(service, "u9EntCode", "env-ent");
@@ -144,10 +147,12 @@ class ExternalIntegrationConfigServiceTest {
         assertThat(mes.authToken()).isEqualTo("env-mes-token");
         assertThat(mes.materialPath()).isEqualTo("/env/mes/material");
         assertThat(mes.timeoutMs()).isEqualTo(17000);
-        assertThat(wms.baseUrl()).isEqualTo("http://env-wms");
-        assertThat(wms.authToken()).isEqualTo("env-wms-token");
-        assertThat(wms.allocationPath()).isEqualTo("/env/wms/allocate");
-        assertThat(wms.timeoutMs()).isEqualTo(18000);
+        assertThat(wms.name()).isEqualTo("WMS data-center only");
+        assertThat(wms.enabled()).isFalse();
+        assertThat(wms.baseUrl()).isNull();
+        assertThat(wms.authToken()).isNull();
+        assertThat(wms.allocationPath()).isNull();
+        assertThat(wms.timeoutMs()).isNull();
         assertThat(u9.baseUrl()).isEqualTo("http://env-u9");
         assertThat(u9.userCode()).isEqualTo("env-user");
         assertThat(u9.entCode()).isEqualTo("env-ent");
@@ -196,6 +201,22 @@ class ExternalIntegrationConfigServiceTest {
         assertThat(u9Dto.getClientSecret()).isEqualTo("******");
         assertThat(u9Dto.getConfigJson()).containsEntry("clientSecret", "******");
         assertThat(u9Dto.toString()).doesNotContain("plain-secret");
+    }
+
+    @Test
+    void serviceSourceDoesNotReadLegacyWmsEnvironmentFallback() throws IOException {
+        String source = Files.readString(SERVICE_SOURCE, StandardCharsets.UTF_8);
+
+        assertThat(source)
+                .doesNotContain(
+                        "erp.wms",
+                        "wmsBaseUrl",
+                        "wmsAuthToken",
+                        "wmsAllocationPath",
+                        "wmsTimeoutMs",
+                        "WMS environment fallback",
+                        "/api/wms/inventory/allocate"
+                );
     }
 
     private SystemExternalIntegrationConfig entity(

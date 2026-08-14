@@ -95,11 +95,6 @@ erp:
     timeout-ms: ${ERP_MES_TIMEOUT_MS:60000}
     callback-token: ${ERP_MES_CALLBACK_TOKEN:}
     callback-token-enabled: ${ERP_MES_CALLBACK_TOKEN_ENABLED:true}
-  wms:
-    base-url: ${ERP_WMS_BASE_URL:}
-    auth-token: ${ERP_WMS_AUTH_TOKEN:}
-    allocation-path: ${ERP_WMS_ALLOCATION_PATH:/api/wms/inventory/allocate}
-    timeout-ms: ${ERP_WMS_TIMEOUT_MS:10000}
   task:
     core-pool-size: ${ERP_TASK_CORE_POOL_SIZE:2}
     max-pool-size: ${ERP_TASK_MAX_POOL_SIZE:4}

@@ -367,6 +367,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_APPLY_FAILED")).isEqualTo("DELIVERY");
+        assertThat(AuditService.inferModule("DELIVERY_WMS_ALLOCATION_RECONCILED")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("PRODUCTION_ITEM_MES_PRODUCTION_FAILED")).isEqualTo("DELIVERY");
@@ -392,6 +395,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_SUCCESS");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_FAILED");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_APPLY_FAILED")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_APPLY_FAILED");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_RECONCILED")).isNotEqualTo("DELIVERY_WMS_ALLOCATION_RECONCILED");
         assertThat(AuditService.labelForAction("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT")).isNotEqualTo("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT");
         assertThat(AuditService.labelForAction("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS")).isNotEqualTo("PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS");
         assertThat(AuditService.labelForAction("PRODUCTION_ITEM_MES_PRODUCTION_FAILED")).isNotEqualTo("PRODUCTION_ITEM_MES_PRODUCTION_FAILED");
@@ -424,6 +430,9 @@ class AuditActionCoverageTests {
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUBMIT")).isEqualTo("提交WMS锁库");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_SUCCESS")).isEqualTo("WMS锁库成功");
         assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_FAILED")).isEqualTo("WMS锁库失败");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN")).isEqualTo("WMS锁库结果待核对");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_APPLY_FAILED")).isEqualTo("WMS锁库本地写入待修复");
+        assertThat(AuditService.labelForAction("DELIVERY_WMS_ALLOCATION_RECONCILED")).isEqualTo("WMS锁库结果已核对");
     }
 
     @Test
@@ -442,11 +451,18 @@ class AuditActionCoverageTests {
                         "DELIVERY_WMS_ALLOCATION_SUBMIT",
                         "DELIVERY_WMS_ALLOCATION_SUCCESS",
                         "DELIVERY_WMS_ALLOCATION_FAILED",
-                        "WMS allocation submitted",
-                        "WMS allocation started",
-                        "WMS allocation completed",
-                        "WMS allocation rejected",
-                        "WMS allocation failed",
+                        "DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN",
+                        "DELIVERY_WMS_ALLOCATION_APPLY_FAILED",
+                        "DELIVERY_WMS_ALLOCATION_RECONCILED",
+                        "WMS reservation batch started",
+                        "WMS reservation batch completed",
+                        "WMS reservation group failed",
+                        "WMS reservation recovery failed",
+                        "taskId",
+                        "batchId",
+                        "externalBizId",
+                        "saleOrderNo",
+                        "durationMs",
                         "qpo-error.log"
                 );
     }

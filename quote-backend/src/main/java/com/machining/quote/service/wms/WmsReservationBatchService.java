@@ -48,7 +48,9 @@ public class WmsReservationBatchService {
 
     public Map<String, Object> allocateBatch(List<Integer> ticketIds, Long taskId) {
         List<Integer> normalizedTicketIds = normalizeTicketIds(ticketIds);
-        log.info("WMS reservation batch started taskId={} ticketCount={}", taskId, normalizedTicketIds.size());
+        long startedAt = System.currentTimeMillis();
+        log.info("WMS reservation batch started taskId={} batchId={} externalBizId={} saleOrderNo={} count={} status={}",
+                taskId, null, null, null, normalizedTicketIds.size(), "STARTED");
         List<Row> rows = new ArrayList<>();
         LinkedHashSet<Long> recoveredBatchIds = new LinkedHashSet<>();
         List<Integer> newTicketIds = new ArrayList<>();
@@ -79,9 +81,14 @@ public class WmsReservationBatchService {
             rows.addAll(createAndSendBatches(candidateTicketIds, taskId));
         }
         Map<String, Object> summary = summary(taskId, rows);
-        log.info("WMS reservation batch completed taskId={} ticketCount={} batchCount={} successCount={} failedCount={} unknownCount={} applyFailedCount={} skippedCount={}",
+        log.info("WMS reservation batch completed taskId={} batchId={} externalBizId={} saleOrderNo={} count={} status={} durationMs={} batchCount={} successCount={} failedCount={} unknownCount={} applyFailedCount={} skippedCount={}",
                 taskId,
+                null,
+                null,
+                null,
                 normalizedTicketIds.size(),
+                "COMPLETED",
+                durationMs(startedAt),
                 summary.get("batchCount"),
                 summary.get("successCount"),
                 summary.get("failedCount"),
@@ -106,21 +113,25 @@ public class WmsReservationBatchService {
     private List<Row> sendNewGroup(Long taskId, WmsReservationPlanService.ReservationGroup group) {
         Long batchId = null;
         String externalBizId = null;
+        long startedAt = System.currentTimeMillis();
         try {
             WmsReservationStateService.ReservationBatchContext context = stateService.reserveBatch(taskId, group);
             batchId = context.batchId();
             externalBizId = context.externalBizId();
             WmsSaleLadingReserveResp response = stateService.sendWithReplay(batchId);
             stateService.applyResponse(batchId);
+            log.info("WMS reservation group completed taskId={} batchId={} externalBizId={} saleOrderNo={} count={} status={} durationMs={}",
+                    taskId, batchId, externalBizId, group.getSaleNo(), group.getTickets().size(), STATUS_SUCCESS, durationMs(startedAt));
             return groupRows(group, STATUS_SUCCESS, batchId, externalBizId, message(response, "WMS reservation applied"));
         } catch (RuntimeException error) {
-            log.warn("WMS reservation group failed taskId={} batchId={} saleNo={} externalBizId={} status={} message={}",
-                    taskId, batchId, group.getSaleNo(), externalBizId, statusFor(error), safeMessage(error));
+            log.warn("WMS reservation group failed taskId={} batchId={} externalBizId={} saleOrderNo={} count={} status={} durationMs={} message={}",
+                    taskId, batchId, externalBizId, group.getSaleNo(), group.getTickets().size(), statusFor(error), durationMs(startedAt), safeMessage(error));
             return groupRows(group, statusFor(error), batchId, externalBizId, safeMessage(error));
         }
     }
 
     private List<Row> recoverBatch(Long batchId) {
+        long startedAt = System.currentTimeMillis();
         WmsReservationBatch batch = batchMapper.selectById(batchId);
         List<WmsReservationTicket> tickets = ticketMapper.selectByBatchId(batchId);
         assertCanAccessReservationTickets(tickets);
@@ -145,8 +156,8 @@ public class WmsReservationBatchService {
             }
             return ticketRows(tickets, STATUS_RESULT_UNKNOWN, batchId, saleNo, externalBizId, "WMS reservation batch status requires review: " + status);
         } catch (RuntimeException error) {
-            log.warn("WMS reservation recovery failed batchId={} status={} message={}",
-                    batchId, statusFor(error), safeMessage(error));
+            log.warn("WMS reservation recovery failed taskId={} batchId={} externalBizId={} saleOrderNo={} count={} status={} durationMs={} message={}",
+                    null, batchId, externalBizId, saleNo, tickets == null ? 0 : tickets.size(), statusFor(error), durationMs(startedAt), safeMessage(error));
             return ticketRows(tickets, statusFor(error), batchId, saleNo, externalBizId, safeMessage(error));
         }
     }
@@ -218,6 +229,10 @@ public class WmsReservationBatchService {
 
     private int count(List<Row> rows, String status) {
         return Math.toIntExact(rows.stream().filter(row -> status.equals(row.status())).count());
+    }
+
+    private long durationMs(long startedAt) {
+        return Math.max(0L, System.currentTimeMillis() - startedAt);
     }
 
     private String statusFor(RuntimeException error) {

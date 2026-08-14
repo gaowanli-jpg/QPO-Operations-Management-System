@@ -102,8 +102,8 @@ services:
       ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH: ${ERP_DATA_CENTER_U9_COMMON_ENTITY_QUERY_PATH:-}
       ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH: ${ERP_DATA_CENTER_MES_PRODUCTION_DISPATCH_PATH:-/api/v1/mes/openapi/demand/create}
       # Deprecated direct integration fallback configuration.
-      # Backend still receives ERP_MES/ERP_WMS/ERP_U9 for local development and emergency fallback
-      # when Data Center is not configured or deliberately disabled. Active DB/Data Center config wins.
+      # Backend still receives ERP_MES/ERP_U9 for local development and emergency fallback
+      # when Data Center is not configured or deliberately disabled. WMS is data-center only.
       # MES material-number sync fallback configuration.
       ERP_MES_BASE_URL: ${ERP_MES_BASE_URL:-}
       ERP_MES_AUTH_TOKEN: ${ERP_MES_AUTH_TOKEN:-}
@@ -112,11 +112,6 @@ services:
       ERP_MES_TIMEOUT_MS: ${ERP_MES_TIMEOUT_MS:-60000}
       ERP_MES_CALLBACK_TOKEN: ${ERP_MES_CALLBACK_TOKEN:-}
       ERP_MES_CALLBACK_TOKEN_ENABLED: ${ERP_MES_CALLBACK_TOKEN_ENABLED:-true}
-      # WMS inventory allocation fallback configuration.
-      ERP_WMS_BASE_URL: ${ERP_WMS_BASE_URL:-}
-      ERP_WMS_AUTH_TOKEN: ${ERP_WMS_AUTH_TOKEN:-}
-      ERP_WMS_ALLOCATION_PATH: ${ERP_WMS_ALLOCATION_PATH:-/api/wms/inventory/allocate}
-      ERP_WMS_TIMEOUT_MS: ${ERP_WMS_TIMEOUT_MS:-10000}
       # U9 sales order sync fallback configuration.
       ERP_U9_BASE_URL: ${ERP_U9_BASE_URL:-}
       ERP_U9_USER_CODE: ${ERP_U9_USER_CODE:-}
