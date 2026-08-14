@@ -83,6 +83,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         return uri.startsWith("/api/auth/login")
                 || uri.startsWith("/api/health")
                 || uri.startsWith("/api/integrations/mes/material-callback")
+                || uri.startsWith("/api/integrations/sales-orders")
                 || uri.equals("/error");
     }
 
