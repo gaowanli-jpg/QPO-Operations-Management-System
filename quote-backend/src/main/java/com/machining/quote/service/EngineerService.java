@@ -606,7 +606,7 @@ public class EngineerService {
         Map<String, Integer> routeFrequency = new LinkedHashMap<>();
         Map<String, List<Map<String, Object>>> routeSamples = new LinkedHashMap<>();
         Map<String, Integer> materialFrequency = new LinkedHashMap<>();
-        Map<String, String> materialShapeMap = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> materialSamples = new LinkedHashMap<>();
 
         for (ItemQuoteVersion item : currentItems) {
             RepeatSource source = repeatSources.get(itemKey(item));
@@ -624,17 +624,16 @@ public class EngineerService {
                 routeSamples.putIfAbsent(routeKey, normalizeProcessRoute(sourceItem.getProcessRoute()));
             }
 
-            Map<String, Object> materialData = normalizeMap(sourceItem.getMaterialData());
-            String materialName = stringValue(materialData.get("name"));
-            String shape = stringValue(materialData.get("shape"));
-            if (!isBlank(materialName)) {
-                String materialKey = materialName + "||" + (isBlank(shape) ? "板材" : shape);
+            String materialCode = MaterialDataResolver.materialCode(sourceItem);
+            String shape = MaterialDataResolver.materialShape(sourceItem);
+            if (!isBlank(materialCode)) {
+                String materialKey = materialCode.trim().toUpperCase(Locale.ROOT) + "||" + (isBlank(shape) ? "板材" : shape);
                 materialFrequency.put(materialKey, materialFrequency.getOrDefault(materialKey, 0) + 1);
-                materialShapeMap.put(materialKey, materialName + "||" + (isBlank(shape) ? "板材" : shape));
+                materialSamples.putIfAbsent(materialKey, repeatMaterialIdentity(sourceItem, materialCode, shape));
             }
         }
 
-        Map<String, Object> recommendedConfig = buildRecommendedConfig(routeFrequency, routeSamples, materialFrequency, materialShapeMap);
+        Map<String, Object> recommendedConfig = buildRecommendedConfig(routeFrequency, routeSamples, materialFrequency, materialSamples);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
@@ -1137,7 +1136,7 @@ public class EngineerService {
             Map<String, Integer> routeFrequency,
             Map<String, List<Map<String, Object>>> routeSamples,
             Map<String, Integer> materialFrequency,
-            Map<String, String> materialShapeMap) {
+            Map<String, Map<String, Object>> materialSamples) {
         Map<String, Object> config = new LinkedHashMap<>();
 
         String bestRouteKey = mostFrequentKey(routeFrequency);
@@ -1165,18 +1164,26 @@ public class EngineerService {
         }
 
         String bestMaterialKey = mostFrequentKey(materialFrequency);
-        String materialName = null;
-        String shape = "板材";
         if (bestMaterialKey != null) {
-            String[] parts = materialShapeMap.get(bestMaterialKey).split("\\|\\|", 2);
-            materialName = parts.length > 0 ? parts[0] : null;
-            shape = parts.length > 1 ? parts[1] : "板材";
+            Map<String, Object> material = materialSamples.get(bestMaterialKey);
+            if (material != null) {
+                config.putAll(material);
+            }
         }
 
-        config.put("materialName", materialName);
-        config.put("shape", shape);
         config.put("processRoute", processRoute);
         return config;
+    }
+
+    private Map<String, Object> repeatMaterialIdentity(ItemQuoteVersion sourceItem, String materialCode, String shape) {
+        Map<String, Object> material = new LinkedHashMap<>();
+        material.put("materialCode", materialCode.trim());
+        material.put("materialName", MaterialDataResolver.engineeringMaterialName(sourceItem));
+        material.put("materialTypeCode", MaterialDataResolver.materialTypeCode(sourceItem));
+        material.put("materialTypeName", MaterialDataResolver.materialTypeName(sourceItem));
+        material.put("materialCategory", MaterialDataResolver.materialCategory(sourceItem));
+        material.put("shape", isBlank(shape) ? "板材" : shape);
+        return material;
     }
 
     private String recommendedRouteSourceType(Map<String, Object> route) {

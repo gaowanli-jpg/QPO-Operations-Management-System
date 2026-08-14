@@ -12,6 +12,7 @@ import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
@@ -21,6 +22,7 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
@@ -65,6 +67,8 @@ class CoreWorkflowIntegrationTests {
     private OrderRfqMapper orderMapper;
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
@@ -1049,6 +1053,72 @@ class CoreWorkflowIntegrationTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void repeatAnalysisRecommendedMaterialUsesEngineeringMaterialCodeIdentity() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-MAT-CODE-" + System.nanoTime());
+        historicalOrder.setCustomerName("Material coded source");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion source = releasedReusableItem(historicalOrder, "MAT-CODE-100", "A", 12.0);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-MAT-CODE-" + System.nanoTime());
+        currentOrder.setCustomerName("Material coded current");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        pendingItem(currentOrder, "MAT-CODE-100", "A");
+
+        Map<String, Object> result = engineerService.analyzeRepeatOrder(currentOrder.getId());
+
+        Map<String, Object> recommendedConfig = (Map<String, Object>) result.get("recommendedConfig");
+        assertThat(recommendedConfig)
+                .containsEntry("materialCode", source.getEngineeringMaterialCode())
+                .containsEntry("materialName", source.getEngineeringMaterialName())
+                .containsEntry("materialTypeCode", source.getEngineeringMaterialTypeCode())
+                .containsEntry("materialTypeName", source.getEngineeringMaterialTypeName())
+                .containsEntry("materialCategory", source.getEngineeringMaterialCategory())
+                .containsEntry("shape", source.getMaterialShape());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void repeatAnalysisDoesNotRecommendLegacyMaterialNameWithoutCode() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-MAT-LEGACY-" + System.nanoTime());
+        historicalOrder.setCustomerName("Material legacy source");
+        historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion source = releasedReusableItem(historicalOrder, "MAT-LEGACY-100", "A", 12.0);
+        source.setEngineeringMaterialCode("");
+        source.setEngineeringMaterialName("");
+        source.setEngineeringMaterialTypeCode("");
+        source.setEngineeringMaterialTypeName("");
+        source.setEngineeringMaterialCategory("");
+        source.setMaterialShape("");
+        source.setMaterialData(Map.of("name", "Legacy material only", "shape", "\u677f\u6750", "cost", 12.0));
+        itemMapper.updateById(source);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-MAT-LEGACY-" + System.nanoTime());
+        currentOrder.setCustomerName("Material legacy current");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        pendingItem(currentOrder, "MAT-LEGACY-100", "A");
+
+        Map<String, Object> result = engineerService.analyzeRepeatOrder(currentOrder.getId());
+
+        Map<String, Object> recommendedConfig = (Map<String, Object>) result.get("recommendedConfig");
+        assertThat(recommendedConfig).doesNotContainKeys(
+                "materialCode",
+                "materialName",
+                "materialTypeCode",
+                "materialTypeName",
+                "materialCategory"
+        );
+    }
+
+    @Test
     void repeatQuoteBatchesLargeCurrentPartVersionSets() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-BATCH-" + System.nanoTime());
@@ -1302,10 +1372,11 @@ class CoreWorkflowIntegrationTests {
         if (existing != null) {
             return existing;
         }
+        DictMaterialType materialType = ensureRepeatMaterialType();
         DictMaterial material = new DictMaterial();
         material.setMaterialCode("MAT-CORE-REPEAT");
         material.setMaterialName("Core repeat test material");
-        material.setMaterialTypeId(1L);
+        material.setMaterialTypeId(materialType.getId());
         material.setMaterialCategory("\u94a2\u94c1");
         material.setDensity(1.0);
         material.setPlateDensity(1.0);
@@ -1319,6 +1390,25 @@ class CoreWorkflowIntegrationTests {
         material.setRemarks("test material");
         materialMapper.insert(material);
         return material;
+    }
+
+    private DictMaterialType ensureRepeatMaterialType() {
+        DictMaterialType existing = materialTypeMapper.selectOne(new QueryWrapper<DictMaterialType>()
+                .eq("type_code", "RAW_MATERIAL")
+                .or()
+                .eq("type_name", "\u539f\u6750\u6599")
+                .last("LIMIT 1"));
+        if (existing != null) {
+            return existing;
+        }
+        DictMaterialType materialType = new DictMaterialType();
+        materialType.setTypeCode("RAW_MATERIAL");
+        materialType.setTypeName("\u539f\u6750\u6599");
+        materialType.setEnabled(true);
+        materialType.setSortNo(1);
+        materialType.setRemarks("Test default material type");
+        materialTypeMapper.insert(materialType);
+        return materialType;
     }
 
     private Map<String, Object> standardProcessRoute(String processCode,
