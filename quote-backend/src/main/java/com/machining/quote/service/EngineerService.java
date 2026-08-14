@@ -1145,10 +1145,21 @@ public class EngineerService {
         if (bestRouteKey != null) {
             for (Map<String, Object> route : routeSamples.getOrDefault(bestRouteKey, List.of())) {
                 Map<String, Object> row = new LinkedHashMap<>();
+                String sourceType = recommendedRouteSourceType(route);
                 row.put("sortNo", route.get("sortNo"));
                 row.put("processName", route.get("processName"));
                 row.put("calcType", route.get("calcType"));
-                row.put("sourceType", "非工时费用".equals(route.get("calcType")) ? "extra" : "process");
+                row.put("sourceType", sourceType);
+                if ("process".equals(sourceType)) {
+                    row.put("processDetailId", route.get("processDetailId"));
+                    row.put("processCategoryId", route.get("processCategoryId"));
+                    row.put("processCode", route.get("processCode"));
+                    row.put("categoryName", route.get("categoryName"));
+                    row.put("detailName", route.get("detailName"));
+                    row.put("hourlyRate", route.get("hourlyRate"));
+                    row.put("unitWorkHours", route.get("unitWorkHours"));
+                    row.put("inputVal", route.get("inputVal"));
+                }
                 processRoute.add(row);
             }
         }
@@ -1168,6 +1179,15 @@ public class EngineerService {
         return config;
     }
 
+    private String recommendedRouteSourceType(Map<String, Object> route) {
+        String sourceType = stringValue(route.get("sourceType"));
+        if ("extra".equalsIgnoreCase(sourceType)
+                || "\u975e\u5de5\u65f6\u8d39\u7528".equals(route.get("calcType"))) {
+            return "extra";
+        }
+        return "process";
+    }
+
     private String mostFrequentKey(Map<String, Integer> frequency) {
         String bestKey = null;
         int bestCount = 0;
@@ -1182,14 +1202,28 @@ public class EngineerService {
 
     private String routeSignature(Object processRoute) {
         List<Map<String, Object>> routes = normalizeProcessRoute(processRoute);
-        List<String> names = new ArrayList<>();
+        List<String> identities = new ArrayList<>();
         for (Map<String, Object> route : routes) {
+            String sourceType = recommendedRouteSourceType(route);
+            if ("process".equals(sourceType)) {
+                Long processDetailId = longValue(route.get("processDetailId"));
+                if (processDetailId != null) {
+                    identities.add("process-detail:" + processDetailId);
+                    continue;
+                }
+                String processCode = stringValue(route.get("processCode"));
+                String detailName = stringValue(route.get("detailName"));
+                if (!isBlank(processCode) || !isBlank(detailName)) {
+                    identities.add("process:" + processCode + ":" + detailName);
+                    continue;
+                }
+            }
             String name = stringValue(route.get("processName"));
             if (!isBlank(name)) {
-                names.add(name);
+                identities.add(sourceType + ":" + name);
             }
         }
-        return String.join(">", names);
+        return String.join(">", identities);
     }
 
     private Map<String, Object> buildBasicItemInfo(ItemQuoteVersion item) {
