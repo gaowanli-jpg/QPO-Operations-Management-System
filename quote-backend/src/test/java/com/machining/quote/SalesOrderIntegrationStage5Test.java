@@ -2,7 +2,9 @@ package com.machining.quote;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.dto.SalesOrderSyncItemDTO;
 import com.machining.quote.dto.SalesOrderSyncItemRow;
+import com.machining.quote.dto.SalesOrderSyncOrderDTO;
 import com.machining.quote.dto.SalesOrderSyncOrderRow;
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
 import com.machining.quote.dto.SalesOrderSyncResp;
@@ -53,12 +55,12 @@ class SalesOrderIntegrationStage5Test {
         assertThat(resp.getData().getPageSize()).isEqualTo(2);
         assertThat(resp.getData().isHasMore()).isTrue();
         assertThat(resp.getData().getRecords()).hasSize(2);
-        Map<String, Object> first = record(resp, 0);
-        Map<String, Object> second = record(resp, 1);
-        assertThat(first).containsEntry("saleOrderNo", "SO-1");
-        assertThat((List<?>) first.get("items")).hasSize(2);
-        assertThat(second).containsEntry("saleOrderNo", "SO-2");
-        assertThat((List<?>) second.get("items")).hasSize(1);
+        SalesOrderSyncOrderDTO first = record(resp, 0);
+        SalesOrderSyncOrderDTO second = record(resp, 1);
+        assertThat(first.getSaleOrderNo()).isEqualTo("SO-1");
+        assertThat(first.getItems()).hasSize(2);
+        assertThat(second.getSaleOrderNo()).isEqualTo("SO-2");
+        assertThat(second.getItems()).hasSize(1);
         JsonNode cursor = decodeCursor(resp.getData().getNextCursor());
         assertThat(cursor.get("changedAt").asText()).isEqualTo("2026-08-14T10:05:00");
         assertThat(cursor.get("salesOrderId").asLong()).isEqualTo(2L);
@@ -77,10 +79,10 @@ class SalesOrderIntegrationStage5Test {
 
         SalesOrderSyncResp resp = service.query(req);
 
-        Map<String, Object> first = record(resp, 0);
-        List<?> items = (List<?>) first.get("items");
+        SalesOrderSyncOrderDTO first = record(resp, 0);
+        List<SalesOrderSyncItemDTO> items = first.getItems();
         assertThat(items).hasSize(1);
-        assertThat(itemRecord(items, 0)).containsEntry("materialNo", "MAT-ONLY");
+        assertThat(items.get(0).getMaterialNo()).isEqualTo("MAT-ONLY");
         verify(mapper).selectItemsByOrderIds(List.of(1L), req);
     }
 
@@ -163,14 +165,8 @@ class SalesOrderIntegrationStage5Test {
         return row;
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> record(SalesOrderSyncResp resp, int index) {
-        return (Map<String, Object>) resp.getData().getRecords().get(index);
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> itemRecord(List<?> items, int index) {
-        return (Map<String, Object>) items.get(index);
+    private SalesOrderSyncOrderDTO record(SalesOrderSyncResp resp, int index) {
+        return resp.getData().getRecords().get(index);
     }
 
     private String encodeCursor(String changedAt, Long salesOrderId) throws Exception {

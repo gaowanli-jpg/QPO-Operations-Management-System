@@ -2,7 +2,9 @@ package com.machining.quote.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.dto.SalesOrderSyncItemDTO;
 import com.machining.quote.dto.SalesOrderSyncItemRow;
+import com.machining.quote.dto.SalesOrderSyncOrderDTO;
 import com.machining.quote.dto.SalesOrderSyncOrderRow;
 import com.machining.quote.dto.SalesOrderSyncPageData;
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
@@ -14,7 +16,6 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,53 +60,58 @@ public class SalesOrderIntegrationSyncService {
                 ));
     }
 
-    private List<Map<String, Object>> toRecords(
+    private List<SalesOrderSyncOrderDTO> toRecords(
             List<SalesOrderSyncOrderRow> orders,
             Map<Long, List<SalesOrderSyncItemRow>> itemsByOrderId) {
-        List<Map<String, Object>> records = new ArrayList<>();
-        for (SalesOrderSyncOrderRow order : orders) {
-            LinkedHashMap<String, Object> record = new LinkedHashMap<>();
-            record.put("saleOrderNo", order.getSaleOrderNo());
-            record.put("documentNo", order.getDocumentNo());
-            record.put("customerCode", order.getCustomerCode());
-            record.put("customerName", order.getCustomerName());
-            record.put("customerShortName", order.getCustomerShortName());
-            record.put("salesOrderDate", order.getSalesOrderDate());
-            record.put("customerOrderNo", order.getCustomerOrderNo());
-            record.put("customerProjectNo", order.getCustomerProjectNo());
-            record.put("customerOrderTitle", order.getCustomerOrderTitle());
-            record.put("internalProjectNo", order.getInternalProjectNo());
-            record.put("orderType", order.getOrderType());
-            record.put("status", order.getStatus());
-            record.put("createdAt", order.getCreatedAt());
-            record.put("updatedAt", order.getUpdatedAt());
-            record.put("changedAt", order.getChangedAt());
-            record.put("items", itemsByOrderId.getOrDefault(order.getSalesOrderId(), List.of()).stream()
-                    .map(this::toItemRecord)
-                    .toList());
-            records.add(record);
-        }
-        return records;
+        return orders.stream()
+                .map(order -> toOrderRecord(order, itemsByOrderId.getOrDefault(order.getSalesOrderId(), List.of())))
+                .toList();
     }
 
-    private Map<String, Object> toItemRecord(SalesOrderSyncItemRow item) {
-        LinkedHashMap<String, Object> record = new LinkedHashMap<>();
-        record.put("saleOrderNo", item.getSaleOrderNo());
-        record.put("saleOrderItemNo", item.getSaleOrderItemNo());
-        record.put("lineNo", item.getLineNo());
-        record.put("partNo", item.getPartNo());
-        record.put("version", item.getVersion());
-        record.put("description", item.getDescription());
-        record.put("qty", item.getQty());
-        record.put("materialNo", item.getMaterialNo());
-        record.put("materialNoStatus", item.getMaterialNoStatus());
-        record.put("salesMaterialNo", item.getSalesMaterialNo());
-        record.put("customerDeliveryDate", item.getCustomerDeliveryDate());
-        record.put("internalDeliveryDate", item.getInternalDeliveryDate());
-        record.put("orderType", item.getOrderType());
-        record.put("status", item.getStatus());
-        record.put("createdAt", item.getCreatedAt());
-        record.put("updatedAt", item.getUpdatedAt());
+    private SalesOrderSyncOrderDTO toOrderRecord(SalesOrderSyncOrderRow order, List<SalesOrderSyncItemRow> items) {
+        SalesOrderSyncOrderDTO record = new SalesOrderSyncOrderDTO();
+        record.setSaleOrderNo(order.getSaleOrderNo());
+        record.setDocumentNo(order.getDocumentNo());
+        record.setCustomerCode(order.getCustomerCode());
+        record.setCustomerName(order.getCustomerName());
+        record.setCustomerShortName(order.getCustomerShortName());
+        record.setSalesOrderDate(order.getSalesOrderDate());
+        record.setCustomerOrderNo(order.getCustomerOrderNo());
+        record.setCustomerProjectNo(order.getCustomerProjectNo());
+        record.setCustomerOrderTitle(order.getCustomerOrderTitle());
+        record.setInternalProjectNo(order.getInternalProjectNo());
+        record.setOrderType(order.getOrderType());
+        record.setStatus(order.getStatus());
+        record.setCreatedAt(order.getCreatedAt());
+        record.setUpdatedAt(order.getUpdatedAt());
+        record.setChangedAt(order.getChangedAt());
+        record.setItems(items.stream()
+                .map(item -> toItemRecord(item, order.getSaleOrderNo(), order.getOrderType()))
+                .toList());
+        return record;
+    }
+
+    private SalesOrderSyncItemDTO toItemRecord(SalesOrderSyncItemRow item, String saleOrderNo, String orderType) {
+        if (item.getLineNo() == null) {
+            throw new IllegalArgumentException("sales_order_item.line_no is required for external sales order sync");
+        }
+        SalesOrderSyncItemDTO record = new SalesOrderSyncItemDTO();
+        record.setSaleOrderNo(isBlank(item.getSaleOrderNo()) ? saleOrderNo : item.getSaleOrderNo());
+        record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));
+        record.setLineNo(item.getLineNo());
+        record.setPartNo(item.getPartNo());
+        record.setVersion(item.getVersion());
+        record.setDescription(item.getDescription());
+        record.setQty(item.getQty());
+        record.setMaterialNo(item.getMaterialNo());
+        record.setMaterialNoStatus(item.getMaterialNoStatus());
+        record.setSalesMaterialNo(item.getSalesMaterialNo());
+        record.setCustomerDeliveryDate(item.getCustomerDeliveryDate());
+        record.setInternalDeliveryDate(item.getInternalDeliveryDate());
+        record.setOrderType(isBlank(item.getOrderType()) ? orderType : item.getOrderType());
+        record.setStatus(item.getStatus());
+        record.setCreatedAt(item.getCreatedAt());
+        record.setUpdatedAt(item.getUpdatedAt());
         return record;
     }
 
