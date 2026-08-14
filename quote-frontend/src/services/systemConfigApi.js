@@ -83,17 +83,19 @@ export const testDataCenterEndpoint = (endpointCode) => request(`/api/system/dat
 
 export const listInboundCallbackConfigs = () => request('/api/system/inbound-callback-configs')
 
-export const getMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback')
+export const getOpenApiTokenStatus = () => request('/api/system/inbound-callback-configs/open-api-token')
 
-export const saveMesMaterialCallbackConfig = (payload) => request('/api/system/inbound-callback-configs/mes-material-callback', {
+export const rotateOpenApiToken = () => request('/api/system/inbound-callback-configs/open-api-token', {
+  method: 'POST'
+})
+
+export const getInboundCallbackConfig = (interfaceCode) => request(`/api/system/inbound-callback-configs/${interfaceCode}`)
+
+export const saveInboundCallbackConfig = (interfaceCode, payload) => request(`/api/system/inbound-callback-configs/${interfaceCode}`, {
   method: 'PUT',
   data: payload
 })
 
-export const rotateMesMaterialCallbackToken = () => request('/api/system/inbound-callback-configs/mes-material-callback/token', {
-  method: 'POST'
-})
-
-export const validateMesMaterialCallbackConfig = () => request('/api/system/inbound-callback-configs/mes-material-callback/validate', {
+export const validateInboundCallbackConfig = (interfaceCode) => request(`/api/system/inbound-callback-configs/${interfaceCode}/validate`, {
   method: 'POST'
 })
