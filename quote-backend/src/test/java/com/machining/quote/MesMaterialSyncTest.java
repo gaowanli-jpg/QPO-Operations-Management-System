@@ -2,6 +2,7 @@ package com.machining.quote;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.controller.OrderDeliveryController;
 import com.machining.quote.dto.mes.MesMaterialResolveReq;
 import com.machining.quote.dto.mes.MesMaterialResolveResp;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -10,34 +11,31 @@ import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
-import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
-import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SourceItemMaterialNoSyncService;
 import com.machining.quote.service.mes.MesMaterialClient;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.SystemTaskService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.bind.annotation.PostMapping;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -46,7 +44,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -61,57 +58,6 @@ class MesMaterialSyncTest {
             "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
     private static final Path MES_SYNC_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesMaterialSyncService.java");
-
-    @Test
-    void submitMesMaterialSyncTaskCreatesSystemTaskAndDispatchesAsyncWork() {
-        OrderDeliveryTicket ticket = ticket();
-        SystemTaskService service = new SystemTaskService();
-        SystemTaskMapper taskMapper = mock(SystemTaskMapper.class);
-        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
-        ThreadPoolTaskExecutor taskExecutor = mock(ThreadPoolTaskExecutor.class);
-        MesMaterialSyncService syncService = mock(MesMaterialSyncService.class);
-        AuditService auditService = mock(AuditService.class);
-        DataScopeService dataScopeService = mock(DataScopeService.class);
-        AtomicReference<SystemTask> inserted = new AtomicReference<>();
-        doAnswer(invocation -> {
-            SystemTask task = invocation.getArgument(0);
-            task.setId(501L);
-            inserted.set(task);
-            return 1;
-        }).when(taskMapper).insert(any(SystemTask.class));
-        when(taskMapper.selectById(501L)).thenAnswer(invocation -> inserted.get());
-        when(ticketMapper.selectById(123)).thenReturn(ticket);
-        ReflectionTestUtils.setField(service, "taskMapper", taskMapper);
-        ReflectionTestUtils.setField(service, "orderDeliveryTicketMapper", ticketMapper);
-        ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
-        ReflectionTestUtils.setField(service, "mesMaterialSyncService", syncService);
-        ReflectionTestUtils.setField(service, "auditService", auditService);
-        ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
-
-        SystemTask task = service.submitMesMaterialSyncTask(123);
-
-        assertThat(task.getId()).isEqualTo(501L);
-        assertThat(task.getTaskType()).isEqualTo("MES_MATERIAL_SYNC");
-        assertThat(task.getStatus()).isEqualTo("PENDING");
-        Map<String, Object> requestJson = new LinkedHashMap<>((Map<String, Object>) task.getRequestJson());
-        assertThat(requestJson)
-                .containsEntry("ticketId", 123)
-                .containsEntry("rfqId", 88)
-                .containsEntry("partNo", "P-100");
-        verify(dataScopeService).assertCanAccessDeliveryTicket(ticket);
-        verify(auditService).record(
-                eq("DELIVERY_MES_MATERIAL_SYNC_SUBMIT"),
-                eq("system_task"),
-                eq(501L),
-                isNull(),
-                any(),
-                eq("DELIVERY"),
-                eq("SUCCESS"),
-                contains("taskId=501"),
-                isNull()
-        );
-        verify(taskExecutor).execute(any(Runnable.class));
-    }
 
     @Test
     void syncMaterialNoWritesMaterialNumberAndSuccessStatus() {
@@ -507,17 +453,28 @@ class MesMaterialSyncTest {
     }
 
     @Test
-    void deliveredItemMesSyncEndpointIsPermissionProtected() throws IOException {
-        String controller = read(ORDER_DELIVERY_CONTROLLER);
+    void deliveredItemMesSyncOnlyExposesBatchEndpoint() {
+        List<String> controllerMethods = Arrays.stream(OrderDeliveryController.class.getDeclaredMethods())
+                .map(Method::getName)
+                .toList();
+        List<String> postMappings = Arrays.stream(OrderDeliveryController.class.getDeclaredMethods())
+                .map(method -> method.getAnnotation(PostMapping.class))
+                .filter(annotation -> annotation != null)
+                .flatMap(annotation -> Arrays.stream(annotation.value()))
+                .toList();
+        List<String> taskMethods = Arrays.stream(SystemTaskService.class.getDeclaredMethods())
+                .map(Method::getName)
+                .toList();
 
-        assertThat(controller)
-                .as("MES material sync must be triggered from delivered-item module only")
-                .contains(
-                        "SystemTaskService",
-                        "@PostMapping(\"/tickets/{ticketId}/mes-material\")",
-                        "@RequirePermission(\"market:delivered-item:mes-sync\")",
-                        "submitMesMaterialSyncTask(ticketId)"
-                );
+        assertThat(controllerMethods)
+                .contains("syncMesMaterialBatch")
+                .doesNotContain("syncMesMaterial");
+        assertThat(postMappings)
+                .contains("/tickets/mes-material/batch")
+                .doesNotContain("/tickets/{ticketId}/mes-material");
+        assertThat(taskMethods)
+                .contains("submitMesMaterialBatchSyncTask")
+                .doesNotContain("submitMesMaterialSyncTask");
     }
 
     @Test
@@ -526,13 +483,14 @@ class MesMaterialSyncTest {
         String syncService = read(MES_SYNC_SERVICE);
 
         assertThat(taskService)
-                .as("System tasks need a distinct MES material sync task type")
+                .as("System tasks must submit MES material requests through the batch entry")
                 .contains(
-                        "MES_MATERIAL_SYNC",
-                        "submitMesMaterialSyncTask",
+                        "MES_MATERIAL_BATCH_SYNC",
+                        "submitMesMaterialBatchSyncTask",
                         "DELIVERY_MES_MATERIAL_SYNC_SUBMIT",
-                        "dataScopeService.assertCanAccessDeliveryTicket"
-                );
+                        "deliveryIntegrationBatchService.syncMesMaterialBatch"
+                )
+                .doesNotContain("submitMesMaterialSyncTask");
         assertThat(syncService)
                 .as("Ticket status transitions and audit actions must be stable before implementation continues")
                 .contains(

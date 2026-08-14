@@ -6,7 +6,6 @@ import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SystemTask;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
-import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.mes.MesProductionDispatchService;
 import com.machining.quote.service.wms.WmsAllocationService;
 import org.slf4j.Logger;
@@ -41,8 +40,6 @@ public class SystemTaskService {
     private ExcelExportService excelExportService;
     @Autowired
     private QuoteProcessService quoteProcessService;
-    @Autowired(required = false)
-    private MesMaterialSyncService mesMaterialSyncService;
     @Autowired(required = false)
     private WmsAllocationService wmsAllocationService;
     @Autowired(required = false)
@@ -101,44 +98,6 @@ public class SystemTaskService {
             result.put("exportType", safeExportType);
             return new TaskRunResult(result, file.toAbsolutePath().normalize().toString());
         }));
-        return taskMapper.selectById(task.getId());
-    }
-
-    public SystemTask submitMesMaterialSyncTask(Integer ticketId) {
-        if (ticketId == null) {
-            throw new RuntimeException("提单行 ID 不能为空");
-        }
-        if (orderDeliveryTicketMapper == null) {
-            throw new RuntimeException("提单行服务不可用");
-        }
-        OrderDeliveryTicket ticket = orderDeliveryTicketMapper.selectById(ticketId);
-        if (ticket == null) {
-            throw new RuntimeException("提单行不存在");
-        }
-        if (dataScopeService != null) {
-            dataScopeService.assertCanAccessDeliveryTicket(ticket);
-        }
-        if ("SUCCESS".equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
-            throw new RuntimeException("该提单行已获取 MES 物料号，不能重复提交");
-        }
-        if ("PROCESSING".equalsIgnoreCase(ticket.getMesSyncStatus())) {
-            throw new RuntimeException("该提单行 MES 物料号任务正在处理中");
-        }
-        if ("CALLBACK_PENDING".equalsIgnoreCase(ticket.getMesSyncStatus())) {
-            throw new RuntimeException("该提单行 MES 物料号等待回调，不能重复提交");
-        }
-        Map<String, Object> request = new LinkedHashMap<>();
-        request.put("ticketId", ticket.getId());
-        request.put("rfqId", ticket.getRfqId());
-        request.put("partNo", ticket.getPartNo());
-        request.put("version", ticket.getVersion());
-        SystemTask task = createTask("MES_MATERIAL_SYNC", request);
-        recordTaskSubmitAudit("DELIVERY_MES_MATERIAL_SYNC_SUBMIT", "DELIVERY", task, request);
-        log.info("MES material sync submitted ticketId={} taskId={} rfqId={} partNo={}",
-                ticket.getId(), task.getId(), ticket.getRfqId(), ticket.getPartNo());
-        if (mesMaterialSyncService != null) {
-            taskExecutor.execute(() -> runTask(task.getId(), () -> mesMaterialSyncService.syncMaterialNo(ticketId, task.getId())));
-        }
         return taskMapper.selectById(task.getId());
     }
 

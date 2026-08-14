@@ -39,10 +39,7 @@ public class MesIntegrationCallbackController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(failure(HttpStatus.UNAUTHORIZED, "QPO 入站回调 token 无效", req));
         }
         try {
-            if (isBatchCallback(req)) {
-                return ResponseEntity.ok(mesMaterialSyncService.handleMaterialBatchCallback(req));
-            }
-            return ResponseEntity.ok(mesMaterialSyncService.handleMaterialCallback(req));
+            return ResponseEntity.ok(mesMaterialSyncService.handleMaterialBatchCallback(req));
         } catch (MesMaterialCallbackException error) {
             return ResponseEntity.status(error.getStatus()).body(failure(error.getStatus(), error.getMessage(), req));
         } catch (RuntimeException error) {
@@ -55,10 +52,6 @@ public class MesIntegrationCallbackController {
         }
     }
 
-    private boolean isBatchCallback(MesMaterialCallbackReq req) {
-        return req != null && req.getItems() != null;
-    }
-
     private MesMaterialCallbackResp failure(HttpStatus status, String message, MesMaterialCallbackReq req) {
         MesMaterialCallbackResp resp = new MesMaterialCallbackResp();
         resp.setSuccess(false);
@@ -68,15 +61,13 @@ public class MesIntegrationCallbackController {
         if (req != null) {
             resp.setMesRequestId(req.getMesRequestId());
         }
-        if (isBatchCallback(req)) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("bizId", req.getMesRequestId());
-            data.put("receivedCount", req.getItems() == null ? 0 : req.getItems().size());
-            data.put("appliedCount", 0);
-            data.put("duplicateCount", 0);
-            data.put("errors", List.of(message));
-            resp.setData(data);
-        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("bizId", req == null ? null : req.getMesRequestId());
+        data.put("receivedCount", req == null || req.getItems() == null ? 0 : req.getItems().size());
+        data.put("appliedCount", 0);
+        data.put("duplicateCount", 0);
+        data.put("errors", List.of(message));
+        resp.setData(data);
         return resp;
     }
 }

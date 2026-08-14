@@ -64,10 +64,10 @@
 
 ```text
 用户进入 已提零件
-  -> 选择一条 material_no 为空或 MES 状态为 FAILED 的提单行
+  -> 选择一条或多条 material_no 为空或 MES 状态为 FAILED 的提单行
   -> 点击 获取物料号 / 重试
   -> 后端校验权限和数据范围
-  -> 创建 system_task: MES_MATERIAL_SYNC
+  -> 创建 system_task: MES_MATERIAL_BATCH_SYNC
   -> ticket.mes_sync_status = PROCESSING
   -> 先按 图号 + 版本 判断是否存在活跃主请求
   -> 如果提单行已继承前置匹配确认物料号：保持 SUCCESS，不进入 MES 待处理池
@@ -109,8 +109,8 @@ MES 调用异常 / 返回无物料号 / 请求字段不完整
 | 新增 | `quote-backend/src/main/java/com/machining/quote/dto/MesMaterialResolveResp.java` | MES 返回 DTO。 |
 | 新增 | `quote-backend/src/main/java/com/machining/quote/service/MesMaterialClient.java` | MES HTTP 客户端。 |
 | 新增 | `quote-backend/src/main/java/com/machining/quote/service/MesMaterialSyncService.java` | 物料号同步业务服务。 |
-| 修改 | `quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加 `submitMesMaterialSyncTask(ticketId)`。 |
-| 修改 | `quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 增加触发接口。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/service/SystemTaskService.java` | 增加/保留 `submitMesMaterialBatchSyncTask(ticketIds)`，删除旧单条提交入口。 |
+| 修改 | `quote-backend/src/main/java/com/machining/quote/controller/OrderDeliveryController.java` | 仅保留批量触发接口。 |
 | 修改 | `quote-backend/src/main/java/com/machining/quote/service/AuditService.java` | 增加 MES 动作中文化。 |
 | 修改 | `docker-compose.yml` | 注入 MES 配置。 |
 | 修改 | `erp.env` | 增加 MES 配置项。 |
@@ -119,7 +119,7 @@ MES 调用异常 / 返回无物料号 / 请求字段不完整
 
 | 类型 | 文件 | 说明 |
 | --- | --- | --- |
-| 修改 | `quote-frontend/src/services/deliveredItemApi.js` | 增加 `syncMesMaterial(ticketId)`。 |
+| 修改 | `quote-frontend/src/services/deliveredItemApi.js` | 仅保留 `syncMesMaterialBatch(ticketIds)`；单个零件传 1 个 `ticketId`。 |
 | 修改 | `quote-frontend/src/components/DeliveredItemManage.vue` | 增加按钮、状态刷新、任务提示。 |
 | 视情况修改 | `quote-frontend/src/services/taskApi.js` | 如已有任务 API 可复用则不新增。 |
 
@@ -355,48 +355,47 @@ MES 物料号回调接口不使用用户登录态，不进入权限树；数据�
 
 ### 8.2 Controller
 
-`OrderDeliveryController` 新增：
+`OrderDeliveryController` 仅保留批量触发入口：
 
 ```java
-@PostMapping("/tickets/{ticketId}/mes-material")
+@PostMapping("/tickets/mes-material/batch")
 @RequirePermission("market:delivered-item:mes-sync")
-public Map<String, Object> syncMesMaterial(@PathVariable Integer ticketId) {
-    SystemTask task = systemTaskService.submitMesMaterialSyncTask(ticketId);
-    return Map.of("success", true, "message", "MES material sync submitted", "task", task);
+public SystemTask syncMesMaterialBatch(@RequestBody DeliveryTicketBatchReq req) {
+    return systemTaskService.submitMesMaterialBatchSyncTask(req == null ? null : req.getTicketIds());
 }
 ```
 
 接口路径：
 
 ```text
-POST /api/order-delivery/tickets/{ticketId}/mes-material
+POST /api/order-delivery/tickets/mes-material/batch
 ```
+
+旧单条入口已删除；前端即使只选择 1 个零件，也通过批量入口提交 `ticketIds: [id]`。
 
 ### 8.3 SystemTaskService
 
-新增任务类型：
+任务类型：
 
 ```text
-MES_MATERIAL_SYNC
+MES_MATERIAL_BATCH_SYNC
 ```
 
-新增方法：
+保留方法：
 
 ```java
-public SystemTask submitMesMaterialSyncTask(Integer ticketId)
+public SystemTask submitMesMaterialBatchSyncTask(List<Integer> ticketIds)
 ```
 
 行为：
 
-- `ticketId` 为空时报业务错误。
-- 查询并锁定或校验提单行存在。
-- 通过 `DataScopeService.assertCanAccessOrder(ticket.getRfqId(), orderRfqMapper)` 校验数据范围。
-- 已有 `material_no` 且 `mes_sync_status=SUCCESS` 时拒绝重复提交。
-- `mes_sync_status=PROCESSING` 时拒绝重复提交。
-- `mes_sync_status=CALLBACK_PENDING` 时拒绝重复提交，提示等待 MES 回调。
+- `ticketIds` 为空时报业务错误。
+- 逐个校验提单行存在性和数据范围。
+- 已有 `material_no` 且 `mes_sync_status=SUCCESS` 的行在批量结果中跳过。
+- `mes_sync_status=PROCESSING` 或 `CALLBACK_PENDING` 的行在批量结果中跳过或标记待回调，不再单独提交 MES。
 - 创建 `system_task`。
 - 记录操作日志 `DELIVERY_MES_MATERIAL_SYNC_SUBMIT`。
-- 异步执行 `MesMaterialSyncService.syncMaterialNo(ticketId, taskId)`。
+- 异步执行 `DeliveryIntegrationBatchService.syncMesMaterialBatch(ticketIds, taskId)`，并最终通过 `bizId + items[]` 调用 MES。
 
 ### 8.4 MesMaterialSyncService
 
@@ -505,11 +504,12 @@ public class MesMaterialClient {
 
 ### 9.1 API
 
-`deliveredItemApi.js` 增加：
+`deliveredItemApi.js` 保留批量 helper：
 
 ```js
-export const syncMesMaterial = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/mes-material`, {
-  method: 'POST'
+export const syncMesMaterialBatch = (ticketIds = []) => request('/api/order-delivery/tickets/mes-material/batch', {
+  method: 'POST',
+  data: { ticketIds }
 })
 ```
 
@@ -654,7 +654,7 @@ MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}
 
 扩展 `deliveredItemApi.test.js`：
 
-- `syncMesMaterial(123)` 调用 `POST /api/order-delivery/tickets/123/mes-material`。
+- 不再导出 `syncMesMaterial(ticketId)`；`syncMesMaterialBatch([123])` 调用 `POST /api/order-delivery/tickets/mes-material/batch`。
 
 新增 `deliveredItemMesSync.test.js`：
 
@@ -736,14 +736,14 @@ npm test -- deliveredItemApi.test.js deliveredItemMesSync.test.js
 后端：
 
 - 新增 `MesMaterialSyncService`。
-- 修改 `SystemTaskService`，新增 `submitMesMaterialSyncTask(ticketId)`。
-- 修改 `OrderDeliveryController`，新增触发接口。
+- 修改 `SystemTaskService`，仅保留 `submitMesMaterialBatchSyncTask(ticketIds)`。
+- 修改 `OrderDeliveryController`，仅保留批量触发接口。
 - 更新 `AuditService` 中文化。
 - 文件日志按事件名记录。
 
 验收：
 
-- 提交任务后 `system_task` 生成 `MES_MATERIAL_SYNC`。
+- 提交任务后 `system_task` 生成 `MES_MATERIAL_BATCH_SYNC`。
 - 成功后 `material_no` 写回。
 - 失败后 ticket 状态为 `FAILED`。
 - `qpo-error.log` 有 taskId 和异常堆栈。

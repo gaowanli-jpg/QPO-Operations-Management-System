@@ -319,13 +319,12 @@ GET /api/order-delivery/tickets/{ticketId}
 建议接口：
 
 ```text
-POST /api/order-delivery/tickets/{ticketId}/mes-material
 POST /api/order-delivery/tickets/mes-material/batch
 ```
 
 要求：
 
-- 单条和批量可分阶段实现。
+- 仅保留批量入口；单个零件也通过 `ticketIds` 长度为 1 的批量请求提交。
 - 触发后创建可追踪任务。
 - 成功写回 `material_no`。
 - 失败写回 `mes_sync_status=FAILED` 和失败摘要。
@@ -395,7 +394,7 @@ GET /api/order-delivery/tickets/{ticketId}/allocations
 
 | 动作编码 | 中文含义 | 记录摘要 |
 | --- | --- | --- |
-| `DELIVERY_MES_MATERIAL_SYNC_SUBMIT` | 提交 MES 物料号获取 | ticketId、rfqId、partNo、version、internalProjectNo。 |
+| `DELIVERY_MES_MATERIAL_SYNC_SUBMIT` | 提交 MES 物料号批量获取 | taskId、ticketIds、ticketCount。 |
 | `DELIVERY_MES_MATERIAL_SYNC_SUCCESS` | MES 物料号获取成功 | ticketId、materialNo。 |
 | `DELIVERY_MES_MATERIAL_SYNC_FAILED` | MES 物料号获取失败 | ticketId、失败摘要。 |
 | `DELIVERY_WMS_ALLOCATION_SUBMIT` | 提交 WMS 锁库分配 | ticketId、materialNo、qty。 |

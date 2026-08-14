@@ -99,8 +99,10 @@ public class DeliveryIntegrationBatchService {
         }
 
         if (!batchAttemptFailed && (batchResults == null || batchResults.isEmpty()) && !pendingTickets.isEmpty()) {
-            for (Map<String, Object> result : syncMesMaterialOneByOne(pendingTickets, taskId)) {
-                rowByTicketId.put(ticketIdFromResult(result), result);
+            for (OrderDeliveryTicket ticket : pendingTickets) {
+                Map<String, Object> failed = row(ticket.getId(), STATUS_FAILED, "MES 批量结果未生成", null);
+                failed.put("submittedToMes", true);
+                rowByTicketId.put(ticket.getId(), failed);
             }
         } else if (batchResults != null) {
             for (Map<String, Object> result : batchResults) {
@@ -137,21 +139,6 @@ public class DeliveryIntegrationBatchService {
             }
         }
         return summary("WMS_ALLOCATION_BATCH", taskId, rows);
-    }
-
-    private List<Map<String, Object>> syncMesMaterialOneByOne(List<OrderDeliveryTicket> tickets, Long taskId) {
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (OrderDeliveryTicket ticket : tickets) {
-            try {
-                Object result = mesMaterialSyncService.syncMaterialNo(ticket.getId(), taskId);
-                rows.add(mesResultRow(ticket.getId(), result));
-            } catch (RuntimeException error) {
-                Map<String, Object> failed = row(ticket.getId(), STATUS_FAILED, safeMessage(error), null);
-                failed.put("submittedToMes", true);
-                rows.add(failed);
-            }
-        }
-        return rows;
     }
 
     private String mesSkipReason(OrderDeliveryTicket ticket) {

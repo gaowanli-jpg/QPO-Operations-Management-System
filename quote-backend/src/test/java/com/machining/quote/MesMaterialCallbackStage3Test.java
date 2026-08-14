@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -288,18 +289,18 @@ class MesMaterialCallbackStage3Test {
         MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
         MesMaterialCallbackResp expected = new MesMaterialCallbackResp();
         expected.setSuccess(true);
-        expected.setMesRequestId("MES-REQ-123");
-        when(service.handleMaterialCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
+        expected.setMesRequestId("QPO-MAT-20260812-01J5ABCDEF");
+        when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
         when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
         ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
 
-        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", callback("MAT-NEW"));
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", batchCallback("MAT-NEW"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isSameAs(expected);
-        verify(service).handleMaterialCallback(any(MesMaterialCallbackReq.class));
+        verify(service).handleMaterialBatchCallback(any(MesMaterialCallbackReq.class));
     }
 
     @Test
@@ -309,21 +310,28 @@ class MesMaterialCallbackStage3Test {
     }
 
     @Test
-    void callbackRequestAcceptsMesFieldAliases() throws IOException {
+    void callbackRequestAcceptsBatchBizIdAndItemAliases() throws IOException {
         MesMaterialCallbackReq req = new ObjectMapper().readValue("""
                 {
-                  "bizId": "MES-REQ-123",
-                  "status": "SUCCESS",
-                  "productCode": "MAT-NEW",
-                  "externalTraceId": "MP202608050001",
-                  "msg": "MES completed"
+                  "bizId": "QPO-MAT-20260812-01J5ABCDEF",
+                  "items": [
+                    {
+                      "taskNo": "MP202608050001",
+                      "drawingNo": "P-100",
+                      "drawingVersion": "A",
+                      "status": "SUCCESS",
+                      "productCode": "MAT-NEW",
+                      "msg": "MES completed"
+                    }
+                  ]
                 }
                 """, MesMaterialCallbackReq.class);
 
-        assertThat(req.getMesRequestId()).isEqualTo("MES-REQ-123");
-        assertThat(req.getMaterialNo()).isEqualTo("MAT-NEW");
-        assertThat(req.getMessage()).isEqualTo("MES completed");
-        assertThat(req.getExternalTraceId()).isEqualTo("MP202608050001");
+        assertThat(req.getMesRequestId()).isEqualTo("QPO-MAT-20260812-01J5ABCDEF");
+        assertThat(req.getItems()).hasSize(1);
+        assertThat(req.getItems().get(0).getTaskNo()).isEqualTo("MP202608050001");
+        assertThat(req.getItems().get(0).getProductCode()).isEqualTo("MAT-NEW");
+        assertThat(req.getItems().get(0).getMessage()).isEqualTo("MES completed");
     }
 
     @Test
@@ -340,7 +348,7 @@ class MesMaterialCallbackStage3Test {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getSuccess()).isFalse();
-        assertThat(response.getBody().getMessage()).contains("MES 请求ID");
+        assertThat(response.getBody().getMessage()).contains("bizId");
     }
 
     private MesMaterialSyncService syncService() {
@@ -378,6 +386,20 @@ class MesMaterialCallbackStage3Test {
         req.setStatus("SUCCESS");
         req.setMaterialNo(materialNo);
         req.setMessage("MES completed");
+        return req;
+    }
+
+    private MesMaterialCallbackReq batchCallback(String productCode) {
+        MesMaterialCallbackReq req = new MesMaterialCallbackReq();
+        req.setMesRequestId("QPO-MAT-20260812-01J5ABCDEF");
+        MesMaterialCallbackReq.Item item = new MesMaterialCallbackReq.Item();
+        item.setTaskNo("MP202608050001");
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        item.setStatus("SUCCESS");
+        item.setProductCode(productCode);
+        item.setMessage("MES completed");
+        req.setItems(List.of(item));
         return req;
     }
 

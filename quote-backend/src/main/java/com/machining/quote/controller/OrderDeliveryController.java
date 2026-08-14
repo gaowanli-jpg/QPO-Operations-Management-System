@@ -62,12 +62,6 @@ public class OrderDeliveryController {
         return deliveredItemService.getTicket(ticketId);
     }
 
-    @PostMapping("/tickets/{ticketId}/mes-material")
-    @RequirePermission("market:delivered-item:mes-sync")
-    public SystemTask syncMesMaterial(@PathVariable Integer ticketId) {
-        return systemTaskService.submitMesMaterialSyncTask(ticketId);
-    }
-
     @PostMapping("/tickets/mes-material/batch")
     @RequirePermission("market:delivered-item:mes-sync")
     public SystemTask syncMesMaterialBatch(@RequestBody DeliveryTicketBatchReq req) {

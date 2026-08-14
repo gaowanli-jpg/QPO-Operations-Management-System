@@ -9,8 +9,10 @@ const apiSource = readFileSync(resolve(currentDir, 'services', 'deliveredItemApi
 
 describe('DeliveredItemManage MES material sync guardrails', () => {
   test('freezes MES sync API and module-owned permission', () => {
-    expect(apiSource).toContain('syncMesMaterial')
-    expect(apiSource).toContain('/api/order-delivery/tickets/${ticketId}/mes-material')
+    expect(apiSource).toContain('syncMesMaterialBatch')
+    expect(apiSource).toContain('/api/order-delivery/tickets/mes-material/batch')
+    expect(apiSource).not.toContain('syncMesMaterial =')
+    expect(apiSource).not.toContain('/api/order-delivery/tickets/${ticketId}/mes-material')
     expect(apiSource).toContain("method: 'POST'")
     expect(pageSource).toContain('DELIVERED_ITEM_MES_SYNC_PERMISSION')
     expect(pageSource).toContain('market:delivered-item:mes-sync')

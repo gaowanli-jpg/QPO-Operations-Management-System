@@ -999,12 +999,11 @@ RESERVED -> SUBMITTING -> SUCCESS
 ### 9.1 现有 API 保持
 
 ```text
-POST /api/order-delivery/tickets/{ticketId}/mes-material
 POST /api/order-delivery/tickets/mes-material/batch
 POST /api/order-delivery/production-items/mes-production
 ```
 
-接口入参不变，内部变为真实批次编排。异步 `system_task` 仍用于页面轮询。
+MES 物料号获取统一使用批量入口，单个零件也通过 `ticketIds` 长度为 1 的批量请求提交。异步 `system_task` 仍用于页面轮询。
 
 ### 9.2 新增批次查询/核对 API
 

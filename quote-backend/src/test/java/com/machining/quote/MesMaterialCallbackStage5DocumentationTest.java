@@ -14,6 +14,8 @@ class MesMaterialCallbackStage5DocumentationTest {
             "..", "docs", "QPO-MES-WMS对接", "03-MES物料号同步开发文档.md");
     private static final Path MES_INTERFACE_DOC = Path.of(
             "..", "docs", "QPO-MES-WMS对接", "06-提供给MES的物料号接口对接说明.md");
+    private static final Path MES_CALLBACK_DOC = Path.of(
+            "..", "docs", "QPO-MES-WMS对接", "08-MES物料号回调接口对接说明.md");
     private static final Path LOG_OPS_DOC = Path.of(
             "..", "docs", "QPO日志模块", "03-日志运维说明.md");
     private static final Path FILE_LOG_DOC = Path.of(
@@ -42,6 +44,14 @@ class MesMaterialCallbackStage5DocumentationTest {
                         "Authorization: Bearer {QPO_INBOUND_CALLBACK_TOKEN}",
                         "旧同步响应口径已废弃")
                 .doesNotContain("不需要 MES 回调");
+
+        assertThat(read(MES_CALLBACK_DOC))
+                .contains(
+                        "批量 envelope 契约",
+                        "即使只有 1 个零件，也必须放在 `items` 数组中回调",
+                        "`items[].productCode`",
+                        "缺少 `items`")
+                .doesNotContain("扁平 JSON 契约");
     }
 
     @Test

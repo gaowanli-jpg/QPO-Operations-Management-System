@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,6 +48,8 @@ class MesMaterialCallbackConfigStage4Test {
         assertThat(source)
                 .contains("SystemInboundCallbackConfigService")
                 .contains("hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)")
+                .contains("handleMaterialBatchCallback(req)")
+                .doesNotContain("handleMaterialCallback(req)")
                 .doesNotContain("${erp.mes.callback-token")
                 .doesNotContain("private String callbackToken")
                 .doesNotContain("private boolean callbackTokenEnabled");
@@ -79,13 +82,13 @@ class MesMaterialCallbackConfigStage4Test {
         expected.setSuccess(true);
         expected.setMesRequestId("MES-REQ-123");
         when(configService.hasValidBearerToken(any(), eq("Bearer page-generated-token"))).thenReturn(true);
-        when(syncService.handleMaterialCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
+        when(syncService.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
 
-        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer page-generated-token", callback("MAT-100"));
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer page-generated-token", batchCallback("MAT-100"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isSameAs(expected);
-        verify(syncService).handleMaterialCallback(any(MesMaterialCallbackReq.class));
+        verify(syncService).handleMaterialBatchCallback(any(MesMaterialCallbackReq.class));
     }
 
     @Test
@@ -172,6 +175,19 @@ class MesMaterialCallbackConfigStage4Test {
         req.setMesRequestId("MES-REQ-123");
         req.setStatus("SUCCESS");
         req.setMaterialNo(materialNo);
+        return req;
+    }
+
+    private MesMaterialCallbackReq batchCallback(String productCode) {
+        MesMaterialCallbackReq req = new MesMaterialCallbackReq();
+        req.setMesRequestId("QPO-MAT-20260812-01J5ABCDEF");
+        MesMaterialCallbackReq.Item item = new MesMaterialCallbackReq.Item();
+        item.setTaskNo("MP202608120001");
+        item.setDrawingNo("P-100");
+        item.setDrawingVersion("A");
+        item.setStatus("SUCCESS");
+        item.setProductCode(productCode);
+        req.setItems(List.of(item));
         return req;
     }
 

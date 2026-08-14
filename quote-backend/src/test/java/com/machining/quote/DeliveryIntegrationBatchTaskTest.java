@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -119,7 +120,7 @@ class DeliveryIntegrationBatchTaskTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void mesBatchSkipsInvalidRowsAndSummarizesPartialSuccess() {
+    void mesBatchDoesNotFallbackToLegacySingleRequestsWhenBatchReturnsNoRows() {
         DeliveryIntegrationBatchService service = new DeliveryIntegrationBatchService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
         MesMaterialSyncService mesService = mock(MesMaterialSyncService.class);
@@ -131,29 +132,23 @@ class DeliveryIntegrationBatchTaskTest {
         when(ticketMapper.selectById(5)).thenReturn(ticket(5, "PENDING", null, "PENDING", "MAT-5", 10));
         when(ticketMapper.selectById(6)).thenReturn(ticket(6, "CALLBACK_PENDING", null, "PENDING", "MAT-6", 10));
         when(ticketMapper.selectById(99)).thenReturn(null);
-        when(mesService.syncMaterialNo(3, 9001L)).thenReturn(Map.of("ticketId", 3, "materialNo", "MAT-3"));
-        when(mesService.syncMaterialNo(4, 9001L)).thenThrow(new RuntimeException("MES down"));
-        when(mesService.syncMaterialNo(5, 9001L)).thenReturn(Map.of(
-                "ticketId", 5,
-                "status", "CALLBACK_PENDING",
-                "mesRequestId", "MES-REQ-5"));
+        when(mesService.syncMaterialBatch(any(), eq(9001L))).thenReturn(List.of());
 
         Map<String, Object> result = service.syncMesMaterialBatch(List.of(1, 2, 3, 4, 5, 6, 99), 9001L);
 
         assertThat(result)
                 .containsEntry("taskId", 9001L)
                 .containsEntry("totalCount", 7)
-                .containsEntry("successCount", 1)
-                .containsEntry("callbackPendingCount", 2)
-                .containsEntry("failedCount", 1)
+                .containsEntry("successCount", 0)
+                .containsEntry("callbackPendingCount", 1)
+                .containsEntry("failedCount", 3)
                 .containsEntry("skippedCount", 3);
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
         assertThat(rows)
                 .extracting(row -> row.get("status"))
-                .containsExactly("SKIPPED", "SKIPPED", "SUCCESS", "FAILED", "CALLBACK_PENDING", "CALLBACK_PENDING", "SKIPPED");
-        verify(mesService).syncMaterialNo(3, 9001L);
-        verify(mesService).syncMaterialNo(4, 9001L);
-        verify(mesService).syncMaterialNo(5, 9001L);
+                .containsExactly("SKIPPED", "SKIPPED", "FAILED", "FAILED", "FAILED", "CALLBACK_PENDING", "SKIPPED");
+        verify(mesService).syncMaterialBatch(any(), eq(9001L));
+        verify(mesService, never()).syncMaterialNo(any(), any());
     }
 
     @Test

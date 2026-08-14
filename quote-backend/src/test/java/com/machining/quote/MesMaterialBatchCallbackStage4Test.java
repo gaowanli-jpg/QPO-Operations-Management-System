@@ -342,6 +342,31 @@ class MesMaterialBatchCallbackStage4Test {
     }
 
     @Test
+    void controllerRejectsFlatMaterialCallbackInsteadOfFallingBackToLineCallback() {
+        MesMaterialSyncService service = mock(MesMaterialSyncService.class);
+        SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
+        MesIntegrationCallbackController controller = new MesIntegrationCallbackController();
+        ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
+        ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
+        when(configService.hasValidBearerToken(any(), eq("Bearer callback-token"))).thenReturn(true);
+        when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class)))
+                .thenThrow(new MesMaterialCallbackException(HttpStatus.BAD_REQUEST,
+                        "MES material callback items cannot be empty"));
+        MesMaterialCallbackReq req = new MesMaterialCallbackReq();
+        req.setMesRequestId(BIZ_ID);
+        req.setStatus("SUCCESS");
+        req.setMaterialNo("MAT-NEW");
+
+        ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer callback-token", req);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMsg()).contains("items cannot be empty");
+        verify(service).handleMaterialBatchCallback(req);
+        verify(service, never()).handleMaterialCallback(any(MesMaterialCallbackReq.class));
+    }
+
+    @Test
     void batchCallbackRequestAcceptsBizIdItemsShape() throws Exception {
         MesMaterialCallbackReq req = new ObjectMapper().readValue("""
                 {

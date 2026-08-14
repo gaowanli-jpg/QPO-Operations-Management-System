@@ -25,12 +25,8 @@ describe('deliveredItemApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/42')
   })
 
-  test('syncMesMaterial posts MES material sync task by ticket id', async () => {
-    await deliveredItemApi.syncMesMaterial(123)
-
-    expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/123/mes-material', {
-      method: 'POST'
-    })
+  test('does not expose legacy single-ticket MES material sync helper', () => {
+    expect(deliveredItemApi.syncMesMaterial).toBeUndefined()
   })
 
   test('syncMesMaterialBatch posts one MES batch task for selected ticket ids', async () => {
