@@ -1020,3 +1020,9 @@ npm run build
 - token 可配置但不可回显、不可落日志、不可进入前端缓存。
 - MES 回调接口运行时优先使用 DB 配置，缺失时兼容 `erp.env`。
 - 权限、操作日志、文件日志、管理员说明、MES 联调文档和测试全部收口。
+
+## 销售订单外部同步阶段 7 收口说明
+
+- 入站接口列表必须展示 `SALES_ORDER_SYNC_QUERY`，接口路径为 `GET /api/integrations/sales-orders`，认证方式固定展示 `QPO_OPEN_API_TOKEN`。
+- `SALES_ORDER_SYNC_QUERY` 只维护来源系统、启停状态、接口路径和说明，不新增独立 token；统一 token 仍在入站接口页顶部生成 / 轮换。
+- 统一 token 轮换后，MES 回调、销售订单外部同步和后续所有入站开放接口同时切换；外部调用方未同步新 token 前请求会被拒绝。

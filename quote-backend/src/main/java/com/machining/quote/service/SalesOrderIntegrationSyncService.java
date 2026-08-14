@@ -10,6 +10,8 @@ import com.machining.quote.dto.SalesOrderSyncPageData;
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
 import com.machining.quote.dto.SalesOrderSyncResp;
 import com.machining.quote.mapper.SalesOrderIntegrationMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class SalesOrderIntegrationSyncService {
+    private static final Logger log = LoggerFactory.getLogger(SalesOrderIntegrationSyncService.class);
+    private static final String CALLER = "EXTERNAL_SALES_ORDER_SYNC";
     private static final DateTimeFormatter CURSOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -31,20 +35,39 @@ public class SalesOrderIntegrationSyncService {
     private SalesOrderIntegrationMapper salesOrderIntegrationMapper;
 
     public SalesOrderSyncResp query(SalesOrderSyncQueryReq req) {
+        long startedAt = System.nanoTime();
         SalesOrderSyncQueryReq query = req == null ? new SalesOrderSyncQueryReq() : req;
         int pageSize = query.getPageSize() == null ? 100 : query.getPageSize();
-        Cursor cursor = decodeCursor(query.getCursor());
-        List<SalesOrderSyncOrderRow> rawOrders = nullToEmpty(salesOrderIntegrationMapper.selectOrderPage(
-                query, cursor.changedAt(), cursor.salesOrderId(), pageSize + 1));
-        boolean hasMore = rawOrders.size() > pageSize;
-        List<SalesOrderSyncOrderRow> pageOrders = hasMore ? rawOrders.subList(0, pageSize) : rawOrders;
+        try {
+            Cursor cursor = decodeCursor(query.getCursor());
+            List<SalesOrderSyncOrderRow> rawOrders = nullToEmpty(salesOrderIntegrationMapper.selectOrderPage(
+                    query, cursor.changedAt(), cursor.salesOrderId(), pageSize + 1));
+            boolean hasMore = rawOrders.size() > pageSize;
+            List<SalesOrderSyncOrderRow> pageOrders = hasMore ? rawOrders.subList(0, pageSize) : rawOrders;
 
-        SalesOrderSyncResp resp = SalesOrderSyncResp.empty(pageSize);
-        SalesOrderSyncPageData data = resp.getData();
-        data.setHasMore(hasMore);
-        data.setRecords(toRecords(pageOrders, loadItems(pageOrders, query)));
-        data.setNextCursor(hasMore && !pageOrders.isEmpty() ? encodeCursor(pageOrders.get(pageOrders.size() - 1)) : null);
-        return resp;
+            SalesOrderSyncResp resp = SalesOrderSyncResp.empty(pageSize);
+            SalesOrderSyncPageData data = resp.getData();
+            data.setHasMore(hasMore);
+            data.setRecords(toRecords(pageOrders, loadItems(pageOrders, query)));
+            data.setNextCursor(hasMore && !pageOrders.isEmpty() ? encodeCursor(pageOrders.get(pageOrders.size() - 1)) : null);
+            log.info(
+                    "Sales order sync query completed caller={} pageSize={} orderCount={} itemCount={} hasMore={} durationMs={}",
+                    CALLER,
+                    pageSize,
+                    data.getRecords().size(),
+                    data.getRecords().stream().mapToInt(order -> order.getItems() == null ? 0 : order.getItems().size()).sum(),
+                    hasMore,
+                    durationMs(startedAt));
+            return resp;
+        } catch (RuntimeException error) {
+            log.warn(
+                    "Sales order sync query failed caller={} pageSize={} reason={} durationMs={}",
+                    CALLER,
+                    pageSize,
+                    failureReason(error),
+                    durationMs(startedAt));
+            throw error;
+        }
     }
 
     private Map<Long, List<SalesOrderSyncItemRow>> loadItems(List<SalesOrderSyncOrderRow> orders, SalesOrderSyncQueryReq req) {
@@ -149,6 +172,21 @@ public class SalesOrderIntegrationSyncService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private long durationMs(long startedAt) {
+        return Math.max(0, (System.nanoTime() - startedAt) / 1_000_000);
+    }
+
+    private String failureReason(RuntimeException error) {
+        String message = error.getMessage();
+        if (message != null && message.contains("sales_order_item.line_no")) {
+            return "missingLineNo";
+        }
+        if (message != null && message.contains("cursor")) {
+            return "invalidCursor";
+        }
+        return error.getClass().getSimpleName();
     }
 
     private record Cursor(LocalDateTime changedAt, Long salesOrderId) {
