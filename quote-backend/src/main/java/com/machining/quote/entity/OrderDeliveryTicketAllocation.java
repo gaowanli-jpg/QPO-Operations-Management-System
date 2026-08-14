@@ -34,7 +34,6 @@ public class OrderDeliveryTicketAllocation {
     private String rfqNo;
     private String customerName;
     private String internalProjectNo;
-    private String wmsProductionOrderNo;
     private String customerOrderNo;
     private String customerProjectNo;
     private String materialName;

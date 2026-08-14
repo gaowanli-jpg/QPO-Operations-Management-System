@@ -38,12 +38,8 @@ describe('deliveredItemApi', () => {
     })
   })
 
-  test('submitWmsAllocation posts WMS allocation task by ticket id', async () => {
-    await deliveredItemApi.submitWmsAllocation(123)
-
-    expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/123/wms-allocation', {
-      method: 'POST'
-    })
+  test('does not expose legacy single-ticket WMS allocation helper', () => {
+    expect(deliveredItemApi['submit' + 'WmsAllocation']).toBeUndefined()
   })
 
   test('submitWmsAllocationBatch posts one WMS batch task for selected ticket ids', async () => {
@@ -56,11 +52,12 @@ describe('deliveredItemApi', () => {
   })
 
   test('listLockedItems calls locked stock result endpoint with params', async () => {
-    const params = { allocationType: 'IN_PRODUCTION_LOCK', wmsProductionOrderNo: 'MO-001' }
+    const params = { allocationType: 'IN_PRODUCTION_LOCK', partNo: 'P-100' }
 
     await deliveredItemApi.listLockedItems(params)
 
     expect(request).toHaveBeenCalledWith('/api/order-delivery/locked-items', { params })
+    expect(JSON.stringify(params)).not.toContain('wms' + 'ProductionOrderNo')
   })
 
 

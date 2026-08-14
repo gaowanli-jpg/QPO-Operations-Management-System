@@ -115,6 +115,25 @@ class MaterialMasterStage8DeliveryWmsSnapshotTest {
         }
     }
 
+    @Test
+    void productionOrderNumberIsNotPartOfMaterialOrWmsSnapshots() throws IOException {
+        String camel = "wms" + "ProductionOrderNo";
+        String snake = "wms_" + "production_order_no";
+
+        for (Path path : List.of(
+                MAIN.resolve(Path.of("entity", "OrderDeliveryTicketAllocation.java")),
+                MAIN.resolve(Path.of("dto", "LockedItemDTO.java")),
+                MAIN.resolve(Path.of("dto", "LockedItemQueryReq.java")),
+                MAIN.resolve(Path.of("mapper", "OrderDeliveryTicketAllocationMapper.java")),
+                MAIN.resolve(Path.of("service", "LockedItemService.java")),
+                FRONTEND_COMPONENTS.resolve("LockedItemManage.vue"),
+                FRONTEND_COMPONENTS.resolve("ProductionItemManage.vue"))) {
+            assertThat(read(path))
+                    .as("%s should follow the new in-production coverage contract", path)
+                    .doesNotContain(camel, snake);
+        }
+    }
+
     private String read(Path path) throws IOException {
         assertThat(Files.exists(path)).as("%s should exist", path).isTrue();
         return Files.readString(path, StandardCharsets.UTF_8).replace("\r\n", "\n");

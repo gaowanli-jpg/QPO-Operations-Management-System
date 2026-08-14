@@ -60,9 +60,10 @@ describe('LockedItemManage guardrails', () => {
       expect(pageSource).toContain(token)
     }
 
-    for (const label of ['客户', '来源订单号', '图号', '版本', '物料号', '零件类型', '内部项目号', '分配类型', '在产订单号', '数量']) {
+    for (const label of ['客户', '来源订单号', '图号', '版本', '物料号', '零件类型', '内部项目号', '分配类型', '数量']) {
       expect(pageSource).toContain(label)
     }
+    expect(pageSource).not.toContain('在产订单号')
     expect(pageSource).not.toContain('placeholder="RFQ号"')
     expect(pageSource).not.toContain('label="RFQ号"')
   })
@@ -148,7 +149,7 @@ describe('LockedItemManage guardrails', () => {
     }
 
     for (const removedCommonFilter of [
-      'filters.wmsProductionOrderNo'
+      'filters.' + 'wms' + 'ProductionOrderNo'
     ]) {
       expect(primarySource).not.toContain(removedCommonFilter)
       expect(advancedSource).not.toContain(removedCommonFilter)
@@ -164,7 +165,6 @@ describe('LockedItemManage guardrails', () => {
       '物料号',
       '零件类型',
       '分配类型',
-      '在产订单号',
       '订单类型',
       '数量',
       '客户',
@@ -215,7 +215,8 @@ describe('LockedItemManage guardrails', () => {
     expect(pageSource).toContain('IN_PRODUCTION_LOCK')
     expect(pageSource).not.toContain('PRODUCTION_REQUIRED')
     expect(pageSource).toContain('已入库库存锁定')
-    expect(pageSource).toContain('在产库存锁定')
+    expect(pageSource).toContain('在产覆盖')
+    expect(pageSource).not.toContain('在产库存锁定')
     expect(pageSource).not.toContain('待生产数量')
     expect(pageSource).toContain("type: 'success'")
     expect(pageSource).toContain("type: 'warning'")

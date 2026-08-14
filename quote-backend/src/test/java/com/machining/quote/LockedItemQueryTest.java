@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,6 +35,12 @@ class LockedItemQueryTest {
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SCHEMA_SQL = Path.of(
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path PRODUCTION_ORDER_REMOVAL_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V11__remove_wms_" + "production_order_no.sql");
+    private static final Path LOCKED_ITEM_PAGE = Path.of(
+            "..", "quote-frontend", "src", "components", "LockedItemManage.vue");
+    private static final Path PRODUCTION_ITEM_PAGE = Path.of(
+            "..", "quote-frontend", "src", "components", "ProductionItemManage.vue");
 
     @Test
     void lockedItemQueryContractFreezesEndpointsAndPermission() throws IOException {
@@ -70,7 +77,6 @@ class LockedItemQueryTest {
                         "materialNo",
                         "internalProjectNo",
                         "allocationType",
-                        "wms_production_order_no",
                         "IN_STOCK_LOCK",
                         "IN_PRODUCTION_LOCK",
                         "PRODUCTION_REQUIRED"
@@ -82,8 +88,7 @@ class LockedItemQueryTest {
                         "private String materialNo;",
                         "private String orderType;",
                         "private String customerName;",
-                        "private String internalProjectNo;",
-                        "private String wmsProductionOrderNo;"
+                        "private String internalProjectNo;"
                 );
     }
 
@@ -137,8 +142,7 @@ class LockedItemQueryTest {
                         "private Object processRoute;",
                         "private Object materialData;",
                         "private Double materialGrossWeight;",
-                        "private Double partNetWeight;",
-                        "private String wmsProductionOrderNo;"
+                        "private Double partNetWeight;"
                 );
         assertThat(pageDto)
                 .contains("private java.util.List<LockedItemDTO> records;", "private long total;");
@@ -152,8 +156,7 @@ class LockedItemQueryTest {
                         "private String customerOrderNo;",
                         "private String customerProjectNo;",
                         "private String itemType;",
-                        "private String allocationType;",
-                        "private String wmsProductionOrderNo;"
+                        "private String allocationType;"
                 );
         assertThat(service)
                 .contains(
@@ -175,6 +178,9 @@ class LockedItemQueryTest {
         assertThat(service)
                 .as("Customer picker passes exact customer names, so locked-item queries should not use fuzzy customer matching")
                 .doesNotContain("applyLike(query, \"alloc.customer_name\", req.getCustomerName())");
+        assertNoLegacyProductionOrderNumber(dto, LOCKED_ITEM_DTO);
+        assertNoLegacyProductionOrderNumber(queryReq, LOCKED_ITEM_QUERY_REQ);
+        assertNoLegacyProductionOrderNumber(service, LOCKED_ITEM_SERVICE);
         assertThat(mapper)
                 .contains(
                         "countLockedItems",
@@ -194,6 +200,7 @@ class LockedItemQueryTest {
                         "alloc.remark",
                         "ORDER BY alloc.id DESC"
                 );
+        assertNoLegacyProductionOrderNumber(mapper, ALLOCATION_MAPPER);
         assertThat(mapper)
                 .as("Locked-item list rows should read their own immutable allocation snapshot fields")
                 .doesNotContain(
@@ -315,10 +322,42 @@ class LockedItemQueryTest {
                 );
     }
 
+    @Test
+    void wmsProductionOrderNumberRemovedFromRuntimeSourcesAndV11DropsColumn() throws IOException {
+        String camel = "wms" + "ProductionOrderNo";
+        String snake = "wms_" + "production_order_no";
+
+        for (Path path : List.of(
+                ALLOCATION_ENTITY,
+                LOCKED_ITEM_DTO,
+                LOCKED_ITEM_QUERY_REQ,
+                ALLOCATION_MAPPER,
+                LOCKED_ITEM_SERVICE,
+                LOCKED_ITEM_PAGE,
+                PRODUCTION_ITEM_PAGE)) {
+            assertThat(read(path))
+                    .as("%s must not retain the retired WMS production order number", path)
+                    .doesNotContain(camel, snake);
+        }
+
+        assertThat(read(PRODUCTION_ORDER_REMOVAL_MIGRATION))
+                .as("V11 should remove the retired production order number index and column")
+                .contains(
+                        "DROP INDEX IF EXISTS idx_delivery_allocation_wms_order",
+                        "DROP COLUMN IF EXISTS " + snake
+                );
+    }
+
     private String read(Path path) throws IOException {
         assertThat(Files.exists(path))
                 .as("%s should exist", path)
                 .isTrue();
         return Files.readString(path, StandardCharsets.UTF_8);
+    }
+
+    private void assertNoLegacyProductionOrderNumber(String source, Path path) {
+        assertThat(source)
+                .as("%s should not expose the retired WMS production order number", path)
+                .doesNotContain("wms" + "ProductionOrderNo", "wms_" + "production_order_no");
     }
 }

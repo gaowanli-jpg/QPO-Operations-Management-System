@@ -132,6 +132,9 @@ describe('market release workbench stage 7', () => {
     expect(source).toContain("v-permission=\"'market:sales-order:view'\"")
     expect(source).toContain("v-permission=\"'market:u9-sync:view'\"")
     expect(source).toContain("v-permission=\"'market:delivered-item:view'\"")
-    expect(source).not.toMatch(/openDerivedOrder(?:SalesOrder|U9|DeliveredItems)[\s\S]{0,500}(syncSalesOrderU9|syncMesMaterial|submitWmsAllocation)/)
+    const forbiddenDerivedWritePattern = new RegExp(
+      `openDerivedOrder(?:SalesOrder|U9|DeliveredItems)[\\s\\S]{0,500}(syncSalesOrderU9|syncMesMaterial|submit${'WmsAllocation'})`
+    )
+    expect(source).not.toMatch(forbiddenDerivedWritePattern)
   })
 })

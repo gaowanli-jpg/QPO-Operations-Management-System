@@ -85,9 +85,6 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="wmsProductionOrderNo" label="在产订单号" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatDash(row.wmsProductionOrderNo) }}</template>
-          </el-table-column>
           <el-table-column prop="orderType" label="订单类型" width="110" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.orderType) }}</template>
           </el-table-column>
@@ -241,7 +238,7 @@ const filters = reactive({
 
 const allocationTypeOptions = [
   { value: 'IN_STOCK_LOCK', label: '已入库库存锁定', type: 'success' },
-  { value: 'IN_PRODUCTION_LOCK', label: '在产库存锁定', type: 'warning' }
+  { value: 'IN_PRODUCTION_LOCK', label: '在产覆盖', type: 'warning' }
 ]
 
 const items = ref([])

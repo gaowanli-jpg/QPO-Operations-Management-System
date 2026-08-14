@@ -20,7 +20,6 @@ public class LockedItemQueryReq {
     private String itemType;
     private String allocationType;
     private String mesProductionStatus;
-    private String wmsProductionOrderNo;
     private LocalDate dateFrom;
     private LocalDate dateTo;
 }

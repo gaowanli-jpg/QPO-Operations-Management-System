@@ -57,7 +57,7 @@ class WmsReservationMigrationTest {
                         "CONSTRAINT chk_wms_reservation_item_status CHECK (status IN",
                         "CONSTRAINT chk_wms_reservation_ticket_status CHECK (status IN"
                 )
-                .doesNotContain("DROP COLUMN wms_production_order_no");
+                .doesNotContain("DROP COLUMN wms_" + "production_order_no");
     }
 
     @Test

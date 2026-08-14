@@ -4,10 +4,6 @@ export const listDeliveredItems = (params = {}) => request('/api/order-delivery/
 
 export const getDeliveredItem = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}`)
 
-export const submitWmsAllocation = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/wms-allocation`, {
-  method: 'POST'
-})
-
 export const syncMesMaterialBatch = (ticketIds = []) => request('/api/order-delivery/tickets/mes-material/batch', {
   method: 'POST',
   data: { ticketIds }

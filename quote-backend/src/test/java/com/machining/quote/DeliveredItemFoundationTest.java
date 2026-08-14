@@ -120,7 +120,6 @@ class DeliveredItemFoundationTest {
                         "private String allocationType;",
                         "private Integer qty;",
                         "private String materialNo;",
-                        "private String wmsProductionOrderNo;",
                         "private String rfqNo;",
                         "private String customerOrderNo;",
                         "private String customerProjectNo;",
@@ -134,6 +133,9 @@ class DeliveredItemFoundationTest {
                         "private Double materialGrossWeight;",
                         "private Double partNetWeight;"
                 );
+        assertThat(source)
+                .as("The new WMS reserve contract no longer carries a production order number")
+                .doesNotContain("wms" + "ProductionOrderNo");
         assertThat(source)
                 .as("jsonb snapshot fields need explicit type handlers on the allocation entity")
                 .contains(

@@ -67,7 +67,6 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.material_data,
                 alloc.material_gross_weight,
                 alloc.part_net_weight,
-                alloc.wms_production_order_no,
                 alloc.source_payload,
                 alloc.mes_production_status,
                 alloc.mes_production_request_id,

@@ -66,6 +66,9 @@ describe('Dashboard backend integration stage 4', () => {
     expect(source).not.toContain('listOrders')
     expect(source).not.toContain('listDeliveredItems')
     expect(source).not.toContain('listLockedItems')
-    expect(source).not.toMatch(/\b(syncMesMaterial|submitWmsAllocation|syncSalesOrder|submitMesProduction|generateTicket)\b/)
+    const forbiddenWriteApiPattern = new RegExp(
+      `\\b(syncMesMaterial|submit${'WmsAllocation'}|syncSalesOrder|submitMesProduction|generateTicket)\\b`
+    )
+    expect(source).not.toMatch(forbiddenWriteApiPattern)
   })
 })

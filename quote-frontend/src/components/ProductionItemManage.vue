@@ -141,9 +141,6 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="wmsProductionOrderNo" label="在产订单号" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }">{{ formatDash(row.wmsProductionOrderNo) }}</template>
-          </el-table-column>
           <el-table-column prop="orderType" label="订单类型" width="110" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.orderType) }}</template>
           </el-table-column>

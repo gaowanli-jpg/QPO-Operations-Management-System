@@ -42,7 +42,6 @@ public class LockedItemDTO {
     private Object materialData;
     private Double materialGrossWeight;
     private Double partNetWeight;
-    private String wmsProductionOrderNo;
     private Object sourcePayload;
     private String mesProductionStatus;
     private String mesProductionRequestId;

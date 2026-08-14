@@ -112,6 +112,35 @@
       </div>
     </section>
 
+    <section v-if="wmsBatchResult" class="erp-table-surface wms-batch-result-surface">
+      <div class="erp-table-header wms-batch-result-header">
+        <div>
+          <h3>WMS 批量库存结果</h3>
+          <p>任务已提交后按后台任务结果展示；结果待核对和本地写入待修复可再次勾选触发后端恢复原批次。</p>
+        </div>
+        <div class="wms-batch-result-actions">
+          <el-button text @click="closeWmsBatchResult">关闭结果</el-button>
+        </div>
+      </div>
+      <div class="wms-batch-result-stats">
+        <div v-for="stat in wmsBatchStats" :key="stat.label" class="wms-batch-result-stat">
+          <span>{{ stat.label }}</span>
+          <strong>{{ stat.value }}</strong>
+        </div>
+      </div>
+      <div v-if="wmsBatchRows.length" class="wms-batch-result-details">
+        <div v-for="row in wmsBatchRows" :key="`wms-batch-${row.ticketId || row.batchId || row.externalBizId || row.message}`" class="wms-batch-result-row">
+          <span class="result-row-id">提单ID：{{ row.ticketId || '-' }}</span>
+          <span class="result-row-code">batchId：{{ row.batchId || '-' }}</span>
+          <span class="result-row-code">bizId：{{ row.externalBizId || '-' }}</span>
+          <el-tag :type="wmsBatchRowTagType(row.status)" size="small">{{ wmsBatchRowStatusText(row.status) }}</el-tag>
+          <el-tooltip :content="row.message || '-'" placement="top">
+            <span class="result-row-message">{{ row.message || '-' }}</span>
+          </el-tooltip>
+        </div>
+      </div>
+    </section>
+
     <section class="erp-table-surface delivered-table-surface">
       <div class="erp-table-body">
         <el-table
@@ -347,6 +376,7 @@ const syncStatusOptions = [
   { value: 'PROCESSING', label: '处理中' },
   { value: 'CALLBACK_PENDING', label: '待MES回调' },
   { value: 'RESULT_UNKNOWN', label: '结果待核对' },
+  { value: 'APPLY_FAILED', label: '本地写入待修复' },
   { value: 'SUCCESS', label: '成功' },
   { value: 'FAILED', label: '失败' }
 ]
@@ -371,6 +401,7 @@ const detailVisible = ref(false)
 const selectedItem = ref(null)
 const customerPickerVisible = ref(false)
 const mesBatchResult = ref(null)
+const wmsBatchResult = ref(null)
 const advancedFiltersVisible = ref(false)
 
 watch([page, pageSize], () => loadItems())
@@ -524,6 +555,7 @@ const handleBatchWmsAllocation = async () => {
   if (selectedTicketIds.value.length === 0) {
     return ElMessage.warning('请先选择需要获取库存数据的已提零件。')
   }
+  wmsBatchResult.value = null
   try {
     await ElMessageBox.confirm(`确认批量向 WMS 获取 ${selectedCountText()} 的库存数据？缺少物料号、已成功或处理中的行会自动跳过。`, '批量获取WMS库存数据', {
       confirmButtonText: '确认提交',
@@ -538,7 +570,8 @@ const handleBatchWmsAllocation = async () => {
     try {
       const task = await submitWmsAllocationBatch(selectedTicketIds.value)
       const taskId = taskIdOf(task)
-      ElMessage.success(taskId ? `锁库完成，库存锁定结果进入锁库零件，待生产数量进入待产零件，任务ID：${taskId}` : '锁库完成，库存锁定结果进入锁库零件，待生产数量进入待产零件')
+      ElMessage.success(taskId ? `WMS 库存任务已提交，任务ID：${taskId}` : 'WMS 库存任务已提交')
+      wmsBatchResult.value = wmsBatchResultOf(task) || await waitWmsBatchTaskResult(taskId)
       selectedRows.value = []
       await loadItems()
     } catch (error) {
@@ -606,6 +639,7 @@ const statusTagType = (value) => ({
   PROCESSING: 'warning',
   CALLBACK_PENDING: 'warning',
   RESULT_UNKNOWN: 'warning',
+  APPLY_FAILED: 'danger',
   PENDING: 'info'
 }[value] || 'info')
 
@@ -645,12 +679,16 @@ const mesBatchResultOf = (task) => {
   return null
 }
 
+const wmsBatchResultOf = (task) => mesBatchResultOf(task)
+
 const resultRowsOf = (result, primaryKey = 'results') => {
   const rows = result?.[primaryKey] || result?.rows || result?.results || []
   return Array.isArray(rows) ? rows : []
 }
 
 const mesMaterialBatchRows = computed(() => resultRowsOf(mesBatchResult.value, 'results'))
+
+const wmsBatchRows = computed(() => resultRowsOf(wmsBatchResult.value, 'results'))
 
 const numberCount = (value) => Number.isFinite(Number(value)) ? Number(value) : 0
 
@@ -703,6 +741,23 @@ const closeMesBatchResult = () => {
   mesBatchResult.value = null
 }
 
+const wmsBatchStats = computed(() => {
+  const result = wmsBatchResult.value || {}
+  const rows = wmsBatchRows.value
+  return [
+    { label: '批次数', value: numberCount(result.batchCount) || distinctRowValueCount(rows, row => row?.batchId || row?.externalBizId) },
+    { label: '成功', value: numberCount(result.successCount) || countRowsByStatus(rows, ['SUCCESS']) },
+    { label: '失败', value: numberCount(result.failedCount) || countRowsByStatus(rows, ['FAILED']) },
+    { label: '待核对', value: numberCount(result.unknownCount) || numberCount(result.resultUnknownCount) || countRowsByStatus(rows, ['RESULT_UNKNOWN']) },
+    { label: '应用失败', value: numberCount(result.applyFailedCount) || countRowsByStatus(rows, ['APPLY_FAILED']) },
+    { label: '跳过', value: numberCount(result.skippedCount) || countRowsByStatus(rows, ['SKIPPED']) }
+  ]
+})
+
+const closeWmsBatchResult = () => {
+  wmsBatchResult.value = null
+}
+
 const mesMaterialRowStatusText = (value) => ({
   SUCCESS: '成功',
   FAILED: '失败',
@@ -721,6 +776,22 @@ const mesMaterialRowTagType = (value) => ({
   RESULT_UNKNOWN: 'warning'
 }[String(value || '').toUpperCase()] || 'info')
 
+const wmsBatchRowStatusText = (value) => ({
+  SUCCESS: '成功',
+  FAILED: '失败',
+  SKIPPED: '跳过',
+  RESULT_UNKNOWN: '结果待核对',
+  APPLY_FAILED: '本地写入待修复'
+}[String(value || '').toUpperCase()] || formatDash(value))
+
+const wmsBatchRowTagType = (value) => ({
+  SUCCESS: 'success',
+  FAILED: 'danger',
+  SKIPPED: 'info',
+  RESULT_UNKNOWN: 'warning',
+  APPLY_FAILED: 'danger'
+}[String(value || '').toUpperCase()] || 'info')
+
 const waitFor = (milliseconds) => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds))
 
 const waitMesBatchTaskResult = async (taskId) => {
@@ -737,6 +808,26 @@ const waitMesBatchTaskResult = async (taskId) => {
       }
     } catch (error) {
       console.warn('MES batch task result polling failed', error)
+      return null
+    }
+  }
+  return null
+}
+
+const waitWmsBatchTaskResult = async (taskId) => {
+  if (!taskId) return null
+  const delays = [300, 700, 1000, 1200, 1500]
+  for (const delayMs of delays) {
+    await waitFor(delayMs)
+    try {
+      const latestTask = await getDeliveryIntegrationTask(taskId)
+      const result = wmsBatchResultOf(latestTask)
+      if (result) return result
+      if (['SUCCESS', 'FAILED'].includes(String(latestTask?.status || '').toUpperCase())) {
+        return null
+      }
+    } catch (error) {
+      console.warn('WMS batch task result polling failed', error)
       return null
     }
   }
@@ -890,42 +981,49 @@ onMounted(() => loadItems())
   margin-left: 0;
 }
 
-.mes-batch-result-surface {
+.mes-batch-result-surface,
+.wms-batch-result-surface {
   margin-bottom: 12px;
 }
 
-.mes-batch-result-header {
+.mes-batch-result-header,
+.wms-batch-result-header {
   align-items: center;
   gap: 12px;
 }
 
-.mes-batch-result-header h3 {
+.mes-batch-result-header h3,
+.wms-batch-result-header h3 {
   margin: 0 0 4px;
   font-size: 15px;
   color: var(--erp-text);
 }
 
-.mes-batch-result-header p {
+.mes-batch-result-header p,
+.wms-batch-result-header p {
   margin: 0;
   color: var(--erp-text-secondary);
   font-size: 13px;
 }
 
-.mes-batch-result-actions {
+.mes-batch-result-actions,
+.wms-batch-result-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.mes-batch-result-stats {
+.mes-batch-result-stats,
+.wms-batch-result-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
   padding: 0 var(--erp-space-3) var(--erp-space-3);
 }
 
-.mes-batch-result-stat {
+.mes-batch-result-stat,
+.wms-batch-result-stat {
   min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--erp-border-light);
@@ -933,13 +1031,15 @@ onMounted(() => loadItems())
   background: var(--erp-bg-soft);
 }
 
-.mes-batch-result-stat span {
+.mes-batch-result-stat span,
+.wms-batch-result-stat span {
   display: block;
   color: var(--erp-text-secondary);
   font-size: var(--erp-font-size-sm);
 }
 
-.mes-batch-result-stat strong {
+.mes-batch-result-stat strong,
+.wms-batch-result-stat strong {
   display: block;
   margin-top: 4px;
   color: var(--erp-text-primary);
@@ -947,7 +1047,8 @@ onMounted(() => loadItems())
   line-height: 1.2;
 }
 
-.mes-batch-result-details {
+.mes-batch-result-details,
+.wms-batch-result-details {
   display: grid;
   gap: 8px;
   max-width: 100%;
@@ -955,7 +1056,8 @@ onMounted(() => loadItems())
   overflow-x: auto;
 }
 
-.mes-batch-result-row {
+.mes-batch-result-row,
+.wms-batch-result-row {
   display: grid;
   grid-template-columns: minmax(88px, 0.8fr) minmax(180px, 1.5fr) minmax(140px, 1fr) auto minmax(220px, 2fr);
   gap: 8px;
@@ -1029,7 +1131,9 @@ onMounted(() => loadItems())
   }
 
   .mes-batch-result-header,
-  .mes-batch-result-actions {
+  .mes-batch-result-actions,
+  .wms-batch-result-header,
+  .wms-batch-result-actions {
     justify-content: flex-start;
   }
 }
@@ -1050,7 +1154,8 @@ onMounted(() => loadItems())
     flex: 1 1 100%;
   }
 
-  .mes-batch-result-row {
+  .mes-batch-result-row,
+  .wms-batch-result-row {
     grid-template-columns: 1fr;
     min-width: 0;
     align-items: flex-start;

@@ -14,10 +14,8 @@ describe('DeliveredItemManage WMS allocation guardrails', () => {
     expect(pageSource).toContain('v-permission="DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION"')
     expect(pageSource).toContain('submitWmsAllocationBatch')
     expect(pageSource).toContain('handleBatchWmsAllocation')
-    expect(pageSource).toContain('批量获取库存数据')
     expect(pageSource).not.toContain('wmsAllocationAction')
     expect(pageSource).not.toContain('@click="handleWmsAllocation(row)"')
-    expect(pageSource).toContain('查看锁库')
   })
 
   test('keeps WMS status display but removes row-level WMS mutation rules', () => {
@@ -31,19 +29,31 @@ describe('DeliveredItemManage WMS allocation guardrails', () => {
     expect(pageSource).toContain("row.wmsAllocateStatus === 'SUCCESS'")
   })
 
-  test('posts batch WMS allocation then refreshes list with Element Plus feedback', () => {
-    expect(apiSource).toContain('submitWmsAllocation')
-    expect(apiSource).toContain('/api/order-delivery/tickets/${ticketId}/wms-allocation')
+  test('posts batch WMS allocation, announces task submission, and polls task result', () => {
+    expect(apiSource).not.toContain('submit' + 'WmsAllocation =')
+    expect(apiSource).not.toContain('/api/order-delivery/tickets/${ticketId}/' + 'wms-allocation')
     expect(pageSource).toContain('ElMessageBox.confirm')
-    expect(pageSource).toContain('确认批量向 WMS 获取')
     expect(pageSource).toContain('submitWmsAllocationBatch(selectedTicketIds.value)')
-    expect(pageSource).not.toContain('submitWmsAllocation(row.id)')
-    expect(pageSource).toContain('锁库完成，库存锁定结果进入锁库零件，待生产数量进入待产零件')
-    expect(pageSource).not.toContain('WMS 锁库任务已提交')
-    expect(pageSource).not.toContain('批量 WMS 库存任务已提交')
-    expect(pageSource).toContain('任务ID')
+    expect(pageSource).not.toContain('submit' + 'WmsAllocation(row.id)')
+    expect(pageSource).toContain('WMS 库存任务已提交')
+    expect(pageSource).toContain('waitWmsBatchTaskResult(taskId)')
+    expect(pageSource).toContain('getDeliveryIntegrationTask(taskId)')
+    expect(pageSource).not.toContain('锁库完成')
     expect(pageSource).toContain('await loadItems()')
-    expect(pageSource).toContain('批量 WMS 库存任务提交失败。')
+  })
+
+  test('renders WMS batch result statuses without reusing MES result state', () => {
+    expect(pageSource).toContain('wmsBatchResult')
+    expect(pageSource).toContain('wmsBatchStats')
+    expect(pageSource).toContain('wmsBatchRows')
+    expect(pageSource).toContain('closeWmsBatchResult')
+    expect(pageSource).toContain('WMS 批量库存结果')
+    expect(pageSource).toContain('结果待核对')
+    expect(pageSource).toContain('本地写入待修复')
+    expect(pageSource).toContain('跳过')
+    expect(pageSource).toContain('应用失败')
+    expect(pageSource).toContain('wmsBatchResult.value = null')
+    expect(pageSource).toContain('mesBatchResult.value = null')
   })
 
   test('links successful WMS allocations to locked item results with permission guard', () => {
