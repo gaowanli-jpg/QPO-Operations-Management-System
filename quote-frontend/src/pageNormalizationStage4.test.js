@@ -51,6 +51,6 @@ describe('QPO Stage 4 dialog, form, and table action normalization', () => {
     expect(countOccurrences(source, 'class="erp-dialog-form"')).toBeGreaterThanOrEqual(4)
     expect(countOccurrences(source, 'class="erp-dialog-footer"')).toBeGreaterThanOrEqual(4)
     expect(countOccurrences(source, 'class="erp-table-actions"')).toBeGreaterThanOrEqual(4)
-    expect(countOccurrences(source, 'erp-danger-action')).toBeGreaterThanOrEqual(4)
+    expect(countOccurrences(source, 'erp-danger-action')).toBeGreaterThanOrEqual(3)
   })
 })

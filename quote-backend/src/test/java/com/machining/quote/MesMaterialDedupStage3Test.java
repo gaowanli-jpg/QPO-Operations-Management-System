@@ -148,18 +148,17 @@ class MesMaterialDedupStage3Test {
         ReflectionTestUtils.setField(batchService, "mesMaterialSyncService", mesSyncService);
         when(ticketMapper.selectById(401)).thenReturn(first);
         when(ticketMapper.selectById(402)).thenReturn(second);
-        when(mesSyncService.syncMaterialNo(401, 9202L)).thenReturn(Map.of(
+        when(mesSyncService.syncMaterialBatch(any(), any())).thenReturn(List.of(Map.of(
                 "ticketId", 401,
                 "status", "SUCCESS",
                 "materialNo", "MAT-401"
-        ));
-        when(mesSyncService.syncMaterialNo(402, 9202L)).thenReturn(Map.of(
+        ), Map.of(
                 "ticketId", 402,
                 "status", "SUCCESS",
                 "materialNo", "MAT-401",
                 "dedupResult", "MASTER_CREATED",
                 "dedupKey", "P-REUSE|A"
-        ));
+        )));
 
         Map<String, Object> result = batchService.syncMesMaterialBatch(List.of(401, 402), 9202L);
 

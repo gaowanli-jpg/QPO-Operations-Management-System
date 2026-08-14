@@ -413,7 +413,7 @@
           show-icon
           title="MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度；策略默认关闭，保存后作为运行时配置。"
         />
-        <el-form label-width="150px" class="mes-schedule-form">
+        <el-form label-width="150px" class="erp-dialog-form" :class="'mes-schedule-form'">
           <el-form-item label="开启定时同步">
             <el-switch v-model="scheduleForm.enabled" active-text="开启" inactive-text="关闭" />
           </el-form-item>

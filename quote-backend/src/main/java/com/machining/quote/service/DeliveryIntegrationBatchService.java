@@ -164,7 +164,7 @@ public class DeliveryIntegrationBatchService {
         String dedupResult = dedupResult(result);
         if (DEDUP_FOLLOW_EXISTING_ACTIVE.equals(dedupResult)) {
             Map<String, Object> row = row(ticketId, STATUS_DEDUP_FOLLOWING,
-                    "Following existing active MES master request", result);
+                    "已关联同图号版本 MES 主请求，等待主请求结果", result);
             row.put("submittedToMes", false);
             return row;
         }
@@ -185,7 +185,7 @@ public class DeliveryIntegrationBatchService {
             row.put("submittedToMes", submittedToMes(result));
             return row;
         }
-        Map<String, Object> row = row(ticketId, STATUS_SUCCESS, "MES material sync succeeded", result);
+        Map<String, Object> row = row(ticketId, STATUS_SUCCESS, "MES 物料号同步成功", result);
         row.put("submittedToMes", submittedToMes(result));
         return row;
     }

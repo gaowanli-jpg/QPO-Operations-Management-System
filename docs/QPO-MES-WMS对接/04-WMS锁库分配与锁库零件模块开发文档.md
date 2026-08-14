@@ -82,6 +82,8 @@ sales_order_item.line_no ASC, ticket.id ASC
 - 在产覆盖：`inProductionCount`，写 `IN_PRODUCTION_LOCK`。
 - 待生产：`surplusCount`，写 `PRODUCTION_REQUIRED`。
 
+阶段 31 后，锁库零件模块只展示 `IN_STOCK_LOCK` 和 `IN_PRODUCTION_LOCK`；`PRODUCTION_REQUIRED` 行进入待产零件模块 `/production-items`，由待产零件页面负责后续 MES 生产下发。
+
 `order_delivery_ticket_allocation` 是锁库结果池。`qty` 表示 allocation 拆分后的当前数量，`ticket_qty` 表示未锁库存前的原始提单数量，必须保存原始提单数量快照。WMS 成功后结果进入锁库零件模块，原始 ticket 不删除，通过 `ticketId` 反查原始 `order_delivery_ticket`，完成行从已提零件默认列表隐藏。
 
 ## 5. 持久化与恢复
@@ -112,7 +114,7 @@ sales_order_item.line_no ASC, ticket.id ASC
 - 前端页面：`LockedItemManage.vue`，路由 `/locked-items`。
 - 权限：`market:locked-item:view`。
 
-查询字段覆盖 `customerName`、`rfqNo`、`partNo`、`version`、`materialNo`、`internalProjectNo`、`allocationType`，并保留 `IN_STOCK_LOCK`、`IN_PRODUCTION_LOCK`、`PRODUCTION_REQUIRED` 三类拆分结果。列表排序固定为 `order_delivery_ticket_allocation.id DESC`，查询必须继续应用数据范围。
+查询字段覆盖 `customerName`、`rfqNo`、`partNo`、`version`、`materialNo`、`internalProjectNo`、`allocationType`。锁库零件模块只展示 `IN_STOCK_LOCK` 和 `IN_PRODUCTION_LOCK`，`PRODUCTION_REQUIRED` 行进入待产零件模块。列表排序固定为 `order_delivery_ticket_allocation.id DESC`，查询必须继续应用数据范围。
 
 ## 7. 材料身份快照
 
@@ -126,7 +128,11 @@ WMS 锁库和锁库零件展示只记录可审计材料身份摘要，不把完�
 
 中文口径固定为：材料编码、材料类型、材质分类、材料形态。
 
-## 8. 权限与审计
+## 8. 工艺路线快照
+
+WMS 锁库不重新查询当前工艺字典，必须复制原始提单行的标准工艺快照，确保锁库、待产和后续 MES 生产使用同一条已审计的历史工艺身份。文件日志和审计摘要不得记录完整工艺 JSON，只记录必要的 `processCode / categoryName / detailName / unitWorkHours / sortNo` 摘要字段。
+
+## 9. 权限与审计
 
 批量触发权限仍为 `market:delivered-item:wms-allocate`，页面和后端都必须校验。审计动作：
 
