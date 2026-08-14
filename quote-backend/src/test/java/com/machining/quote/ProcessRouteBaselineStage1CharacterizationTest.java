@@ -108,8 +108,8 @@ class ProcessRouteBaselineStage1CharacterizationTest {
         String rfqReleaseService = read(service("RfqReleaseSalesOrderService.java"));
         String deliveryService = read(service("DeliveryService.java"));
         String autoSnapshotCompletionService = read(service("SalesOrderAutoSnapshotCompletionService.java"));
-        String wmsAllocationService = read(Path.of(
-                "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsAllocationService.java"));
+        String wmsReservationStateService = read(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsReservationStateService.java"));
         String mesProductionService = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "service", "mes", "MesProductionDispatchService.java"));
         String mesProductionReq = read(Path.of(
@@ -126,7 +126,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
         assertThat(autoSnapshotCompletionService)
                 .contains(
                         "item.setProcessRoute(processRouteSnapshotService.copySnapshot(source.getProcessRoute()))");
-        assertThat(wmsAllocationService)
+        assertThat(wmsReservationStateService)
                 .contains("row.setProcessRoute(processRouteSnapshotService.copySnapshot(ticket.getProcessRoute()))");
         assertThat(mesProductionService)
                 .contains("item.setProcessRoute(buildProcessRoute(allocation.getProcessRoute()))");

@@ -21,8 +21,9 @@ class ExternalIntegrationPackageStructureTest {
                 Map.entry("service/u9/U9TokenService.java", "package com.machining.quote.service.u9;"),
                 Map.entry("service/mes/MesMaterialClient.java", "package com.machining.quote.service.mes;"),
                 Map.entry("service/mes/MesMaterialSyncService.java", "package com.machining.quote.service.mes;"),
-                Map.entry("service/wms/WmsAllocationClient.java", "package com.machining.quote.service.wms;"),
-                Map.entry("service/wms/WmsAllocationService.java", "package com.machining.quote.service.wms;"),
+                Map.entry("service/wms/WmsReservationClient.java", "package com.machining.quote.service.wms;"),
+                Map.entry("service/wms/WmsReservationBatchService.java", "package com.machining.quote.service.wms;"),
+                Map.entry("service/wms/WmsReservationStateService.java", "package com.machining.quote.service.wms;"),
                 Map.entry("dto/u9/U9ApiResult.java", "package com.machining.quote.dto.u9;"),
                 Map.entry("dto/u9/U9ResultDTO.java", "package com.machining.quote.dto.u9;"),
                 Map.entry("dto/u9/U9SalesOrderHeadDTO.java", "package com.machining.quote.dto.u9;"),
@@ -30,8 +31,8 @@ class ExternalIntegrationPackageStructureTest {
                 Map.entry("dto/u9/U9SalesOrderShipLineDTO.java", "package com.machining.quote.dto.u9;"),
                 Map.entry("dto/mes/MesMaterialResolveReq.java", "package com.machining.quote.dto.mes;"),
                 Map.entry("dto/mes/MesMaterialResolveResp.java", "package com.machining.quote.dto.mes;"),
-                Map.entry("dto/wms/WmsAllocationReq.java", "package com.machining.quote.dto.wms;"),
-                Map.entry("dto/wms/WmsAllocationResp.java", "package com.machining.quote.dto.wms;")
+                Map.entry("dto/wms/WmsSaleLadingReserveReq.java", "package com.machining.quote.dto.wms;"),
+                Map.entry("dto/wms/WmsSaleLadingReserveResp.java", "package com.machining.quote.dto.wms;")
         );
 
         expectedPackages.forEach((relativePath, packageLine) -> {
@@ -53,8 +54,9 @@ class ExternalIntegrationPackageStructureTest {
         assertThat(ROOT.resolve("service/U9TokenService.java")).doesNotExist();
         assertThat(ROOT.resolve("service/MesMaterialClient.java")).doesNotExist();
         assertThat(ROOT.resolve("service/MesMaterialSyncService.java")).doesNotExist();
-        assertThat(ROOT.resolve("service/WmsAllocationClient.java")).doesNotExist();
-        assertThat(ROOT.resolve("service/WmsAllocationService.java")).doesNotExist();
+        assertThat(ROOT.resolve("service/WmsReservationClient.java")).doesNotExist();
+        assertThat(ROOT.resolve("service/WmsReservationBatchService.java")).doesNotExist();
+        assertThat(ROOT.resolve("service/WmsReservationStateService.java")).doesNotExist();
         assertThat(ROOT.resolve("dto/U9ApiResult.java")).doesNotExist();
         assertThat(ROOT.resolve("dto/U9ResultDTO.java")).doesNotExist();
         assertThat(ROOT.resolve("dto/U9SalesOrderHeadDTO.java")).doesNotExist();
@@ -62,7 +64,7 @@ class ExternalIntegrationPackageStructureTest {
         assertThat(ROOT.resolve("dto/U9SalesOrderShipLineDTO.java")).doesNotExist();
         assertThat(ROOT.resolve("dto/MesMaterialResolveReq.java")).doesNotExist();
         assertThat(ROOT.resolve("dto/MesMaterialResolveResp.java")).doesNotExist();
-        assertThat(ROOT.resolve("dto/WmsAllocationReq.java")).doesNotExist();
-        assertThat(ROOT.resolve("dto/WmsAllocationResp.java")).doesNotExist();
+        assertThat(ROOT.resolve("dto/WmsSaleLadingReserveReq.java")).doesNotExist();
+        assertThat(ROOT.resolve("dto/WmsSaleLadingReserveResp.java")).doesNotExist();
     }
 }

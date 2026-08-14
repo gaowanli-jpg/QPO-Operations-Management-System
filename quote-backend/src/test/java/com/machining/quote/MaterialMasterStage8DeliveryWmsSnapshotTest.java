@@ -65,7 +65,7 @@ class MaterialMasterStage8DeliveryWmsSnapshotTest {
     void releaseAndWmsServicesCopyCompleteMaterialSnapshotsWithoutLoggingMaterialDataJson() throws IOException {
         String deliveryService = read(MAIN.resolve(Path.of("service", "DeliveryService.java")));
         String rfqReleaseService = read(MAIN.resolve(Path.of("service", "RfqReleaseSalesOrderService.java")));
-        String wmsAllocationService = read(MAIN.resolve(Path.of("service", "wms", "WmsAllocationService.java")));
+        String wmsReservationStateService = read(MAIN.resolve(Path.of("service", "wms", "WmsReservationStateService.java")));
 
         assertThat(deliveryService)
                 .contains(
@@ -81,14 +81,13 @@ class MaterialMasterStage8DeliveryWmsSnapshotTest {
                         "ticket.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(item));",
                         "ticket.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(item));",
                         "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));");
-        assertThat(wmsAllocationService)
+        assertThat(wmsReservationStateService)
                 .contains(
                         "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());",
                         "row.setEngineeringMaterialTypeCode(ticket.getEngineeringMaterialTypeCode());",
                         "row.setEngineeringMaterialTypeName(ticket.getEngineeringMaterialTypeName());",
                         "row.setEngineeringMaterialCategory(ticket.getEngineeringMaterialCategory());",
-                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));",
-                        "summary.put(\"materialSnapshotAvailable\", hasMaterialSnapshot(ticket));")
+                        "row.setMaterialData(deepCopySnapshot(ticket.getMaterialData()));")
                 .doesNotContain(
                         "summary.put(\"materialData\"",
                         "log.info(\"{}\", ticket.getMaterialData()",

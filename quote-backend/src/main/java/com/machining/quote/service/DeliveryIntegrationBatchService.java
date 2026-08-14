@@ -3,7 +3,7 @@ package com.machining.quote.service;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.service.mes.MesMaterialSyncService;
-import com.machining.quote.service.wms.WmsAllocationService;
+import com.machining.quote.service.wms.WmsReservationBatchService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -29,13 +29,13 @@ public class DeliveryIntegrationBatchService {
     @Autowired(required = false)
     private MesMaterialSyncService mesMaterialSyncService;
     @Autowired(required = false)
-    private WmsAllocationService wmsAllocationService;
+    private WmsReservationBatchService wmsReservationBatchService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
 
     public List<Integer> normalizeTicketIds(List<Integer> ticketIds) {
         if (ticketIds == null) {
-            throw new RuntimeException("请选择至少一个已提零件");
+            throw new RuntimeException("Please select at least one delivered item");
         }
         LinkedHashSet<Integer> normalized = new LinkedHashSet<>();
         for (Integer ticketId : ticketIds) {
@@ -44,7 +44,7 @@ public class DeliveryIntegrationBatchService {
             }
         }
         if (normalized.isEmpty()) {
-            throw new RuntimeException("请选择至少一个已提零件");
+            throw new RuntimeException("Please select at least one delivered item");
         }
         return new ArrayList<>(normalized);
     }
@@ -63,7 +63,7 @@ public class DeliveryIntegrationBatchService {
 
     public Map<String, Object> syncMesMaterialBatch(List<Integer> ticketIds, Long taskId) {
         if (mesMaterialSyncService == null) {
-            throw new RuntimeException("MES 物料号同步服务不可用");
+            throw new RuntimeException("MES material batch sync service is unavailable");
         }
         List<Integer> normalizedTicketIds = normalizeTicketIds(ticketIds);
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -72,7 +72,7 @@ public class DeliveryIntegrationBatchService {
         for (Integer ticketId : normalizedTicketIds) {
             OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
             if (isMesCallbackPending(ticket)) {
-                rowByTicketId.put(ticketId, row(ticketId, STATUS_CALLBACK_PENDING, "MES 物料号等待回调", null));
+                rowByTicketId.put(ticketId, row(ticketId, STATUS_CALLBACK_PENDING, "MES material is waiting for callback", null));
                 continue;
             }
             String skipReason = mesSkipReason(ticket);
@@ -100,7 +100,7 @@ public class DeliveryIntegrationBatchService {
 
         if (!batchAttemptFailed && (batchResults == null || batchResults.isEmpty()) && !pendingTickets.isEmpty()) {
             for (OrderDeliveryTicket ticket : pendingTickets) {
-                Map<String, Object> failed = row(ticket.getId(), STATUS_FAILED, "MES 批量结果未生成", null);
+                Map<String, Object> failed = row(ticket.getId(), STATUS_FAILED, "MES batch result was not generated", null);
                 failed.put("submittedToMes", true);
                 rowByTicketId.put(ticket.getId(), failed);
             }
@@ -114,61 +114,27 @@ public class DeliveryIntegrationBatchService {
         }
         for (Integer ticketId : normalizedTicketIds) {
             rows.add(rowByTicketId.getOrDefault(ticketId,
-                    row(ticketId, STATUS_FAILED, "MES 批量结果未生成", null)));
+                    row(ticketId, STATUS_FAILED, "MES batch result was not generated", null)));
         }
         return summary(TASK_MES_MATERIAL_BATCH_SYNC, taskId, rows);
     }
 
     public Map<String, Object> allocateWmsBatch(List<Integer> ticketIds, Long taskId) {
-        if (wmsAllocationService == null) {
-            throw new RuntimeException("WMS 锁库服务不可用");
+        if (wmsReservationBatchService == null) {
+            throw new RuntimeException("WMS batch reservation service is unavailable");
         }
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Integer ticketId : normalizeTicketIds(ticketIds)) {
-            OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
-            String skipReason = wmsSkipReason(ticket);
-            if (skipReason != null) {
-                rows.add(row(ticketId, STATUS_SKIPPED, skipReason, null));
-                continue;
-            }
-            try {
-                Object result = wmsAllocationService.allocate(ticketId, taskId);
-                rows.add(row(ticketId, STATUS_SUCCESS, "WMS 库存数据获取成功", result));
-            } catch (RuntimeException error) {
-                rows.add(row(ticketId, STATUS_FAILED, safeMessage(error), null));
-            }
-        }
-        return summary("WMS_ALLOCATION_BATCH", taskId, rows);
+        return wmsReservationBatchService.allocateBatch(normalizeTicketIds(ticketIds), taskId);
     }
 
     private String mesSkipReason(OrderDeliveryTicket ticket) {
         if (ticket == null) {
-            return "提单行不存在";
+            return "Delivery ticket does not exist";
         }
         if ("SUCCESS".equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
-            return "MES 物料号已获取";
+            return "MES material number already exists";
         }
         if ("PROCESSING".equalsIgnoreCase(ticket.getMesSyncStatus())) {
-            return "MES 物料号任务处理中";
-        }
-        return null;
-    }
-
-    private String wmsSkipReason(OrderDeliveryTicket ticket) {
-        if (ticket == null) {
-            return "提单行不存在";
-        }
-        if (isBlank(ticket.getMaterialNo())) {
-            return "缺少 MES 物料号";
-        }
-        if ("SUCCESS".equalsIgnoreCase(ticket.getWmsAllocateStatus())) {
-            return "WMS 锁库已完成";
-        }
-        if ("PROCESSING".equalsIgnoreCase(ticket.getWmsAllocateStatus())) {
-            return "WMS 锁库任务处理中";
-        }
-        if (ticket.getQty() == null || ticket.getQty() <= 0) {
-            return "提单数量必须大于 0";
+            return "MES material task is processing";
         }
         return null;
     }
@@ -198,7 +164,7 @@ public class DeliveryIntegrationBatchService {
         String dedupResult = dedupResult(result);
         if (DEDUP_FOLLOW_EXISTING_ACTIVE.equals(dedupResult)) {
             Map<String, Object> row = row(ticketId, STATUS_DEDUP_FOLLOWING,
-                    "已关联同图号版本 MES 主请求，等待回调", result);
+                    "Following existing active MES master request", result);
             row.put("submittedToMes", false);
             return row;
         }
@@ -215,11 +181,11 @@ public class DeliveryIntegrationBatchService {
         }
         if (isCallbackPendingResult(result)) {
             Map<String, Object> row = row(ticketId, STATUS_CALLBACK_PENDING,
-                    "MES 已受理，等待回调", result);
+                    "MES accepted the request and is waiting for callback", result);
             row.put("submittedToMes", submittedToMes(result));
             return row;
         }
-        Map<String, Object> row = row(ticketId, STATUS_SUCCESS, "MES 物料号同步成功", result);
+        Map<String, Object> row = row(ticketId, STATUS_SUCCESS, "MES material sync succeeded", result);
         row.put("submittedToMes", submittedToMes(result));
         return row;
     }
@@ -278,7 +244,6 @@ public class DeliveryIntegrationBatchService {
                 .count());
     }
 
-    @SuppressWarnings("unchecked")
     private String bizIdOf(Map<String, Object> row) {
         Object direct = row == null ? null : row.get("bizId");
         if (direct != null && !String.valueOf(direct).isBlank()) {

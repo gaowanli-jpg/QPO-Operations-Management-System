@@ -79,9 +79,7 @@ class WmsReservationClientTest {
                         "RestTemplate",
                         "new RestTemplate",
                         "@Value",
-                        "erp.wms",
-                        "WmsAllocationReq",
-                        "WmsAllocationResp"
+                        "erp.wms"
                 );
     }
 

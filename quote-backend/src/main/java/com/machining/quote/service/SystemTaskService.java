@@ -2,12 +2,9 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
-import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SystemTask;
-import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.mes.MesProductionDispatchService;
-import com.machining.quote.service.wms.WmsAllocationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,13 +38,9 @@ public class SystemTaskService {
     @Autowired
     private QuoteProcessService quoteProcessService;
     @Autowired(required = false)
-    private WmsAllocationService wmsAllocationService;
-    @Autowired(required = false)
     private MesProductionDispatchService mesProductionDispatchService;
     @Autowired(required = false)
     private DeliveryIntegrationBatchService deliveryIntegrationBatchService;
-    @Autowired(required = false)
-    private OrderDeliveryTicketMapper orderDeliveryTicketMapper;
     @Autowired(required = false)
     private SystemTaskGuardService taskGuardService;
     @Autowired
@@ -62,7 +55,7 @@ public class SystemTaskService {
 
     public SystemTask submitRefreshQuotesTask(Integer rfqId) {
         if (rfqId == null) {
-            throw new RuntimeException("订单 ID 不能为空");
+            throw new RuntimeException("璁㈠崟 ID 涓嶈兘涓虹┖");
         }
         assertOrderDataScope(rfqId);
         assertNoActiveRefreshQuotesTask(rfqId);
@@ -76,7 +69,7 @@ public class SystemTaskService {
 
     public SystemTask submitQuoteExportTask(Integer rfqId, String exportType) {
         if (rfqId == null) {
-            throw new RuntimeException("订单 ID 不能为空");
+            throw new RuntimeException("璁㈠崟 ID 涓嶈兘涓虹┖");
         }
         String safeExportType = normalizeQuoteExportType(exportType);
         assertOrderDataScope(rfqId);
@@ -91,7 +84,7 @@ public class SystemTaskService {
             try {
                 file = excelExportService.exportQuoteSheetFile(rfqId, taskOutputDirectory(), safeExportType);
             } catch (Exception e) {
-                throw new RuntimeException("报价单导出失败：" + e.getMessage(), e);
+                throw new RuntimeException("鎶ヤ环鍗曞鍑哄け璐ワ細" + e.getMessage(), e);
             }
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("fileName", file.getFileName().toString());
@@ -103,7 +96,7 @@ public class SystemTaskService {
 
     public SystemTask submitMesMaterialBatchSyncTask(List<Integer> ticketIds) {
         if (deliveryIntegrationBatchService == null) {
-            throw new RuntimeException("MES 批量物料号同步服务不可用");
+            throw new RuntimeException("MES 鎵归噺鐗╂枡鍙峰悓姝ユ湇鍔′笉鍙敤");
         }
         List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
         deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
@@ -117,48 +110,6 @@ public class SystemTaskService {
         return taskMapper.selectById(task.getId());
     }
 
-    public SystemTask submitWmsAllocationTask(Integer ticketId) {
-        if (ticketId == null) {
-            throw new RuntimeException("提单行 ID 不能为空");
-        }
-        if (orderDeliveryTicketMapper == null) {
-            throw new RuntimeException("提单行服务不可用");
-        }
-        OrderDeliveryTicket ticket = orderDeliveryTicketMapper.selectById(ticketId);
-        if (ticket == null) {
-            throw new RuntimeException("提单行不存在");
-        }
-        if (dataScopeService != null) {
-            dataScopeService.assertCanAccessDeliveryTicket(ticket);
-        }
-        if (isBlank(ticket.getMaterialNo())) {
-            throw new RuntimeException("该提单行缺少物料号，请先获取 MES 物料号");
-        }
-        if ("SUCCESS".equalsIgnoreCase(ticket.getWmsAllocateStatus())) {
-            throw new RuntimeException("该提单行已完成 WMS 锁库，不能重复提交");
-        }
-        if ("PROCESSING".equalsIgnoreCase(ticket.getWmsAllocateStatus())) {
-            throw new RuntimeException("该提单行 WMS 锁库任务正在处理中");
-        }
-        if (ticket.getQty() == null || ticket.getQty() <= 0) {
-            throw new RuntimeException("提单数量必须大于 0");
-        }
-        Map<String, Object> request = new LinkedHashMap<>();
-        request.put("ticketId", ticket.getId());
-        request.put("rfqId", ticket.getRfqId());
-        request.put("partNo", ticket.getPartNo());
-        request.put("version", ticket.getVersion());
-        request.put("materialNo", ticket.getMaterialNo());
-        request.put("demandQty", ticket.getQty());
-        SystemTask task = createTask("WMS_ALLOCATION", request);
-        recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
-        log.info("WMS allocation submitted ticketId={} taskId={} rfqId={} materialNo={} demandQty={}",
-                ticket.getId(), task.getId(), ticket.getRfqId(), ticket.getMaterialNo(), ticket.getQty());
-        if (wmsAllocationService != null) {
-            taskExecutor.execute(() -> runTask(task.getId(), () -> wmsAllocationService.allocate(ticketId, task.getId())));
-        }
-        return taskMapper.selectById(task.getId());
-    }
 
     public SystemTask submitWmsAllocationBatchTask(List<Integer> ticketIds) {
         if (deliveryIntegrationBatchService == null) {
@@ -204,7 +155,7 @@ public class SystemTaskService {
 
     public SystemTask getTask(Long taskId) {
         if (taskId == null) {
-            throw new RuntimeException("任务 ID 不能为空");
+            throw new RuntimeException("浠诲姟 ID 涓嶈兘涓虹┖");
         }
         SystemTask task = taskMapper.selectById(taskId);
         if (task == null) {
@@ -216,7 +167,7 @@ public class SystemTaskService {
     public Path getTaskFile(Long taskId) {
         SystemTask task = getTask(taskId);
         if (task.getFilePath() == null || task.getFilePath().trim().isEmpty()) {
-            throw new RuntimeException("该任务没有可下载文件");
+            throw new RuntimeException("璇ヤ换鍔℃病鏈夊彲涓嬭浇鏂囦欢");
         }
         Path baseDir = taskOutputDirectory();
         Path file = Path.of(task.getFilePath()).toAbsolutePath().normalize();
@@ -358,10 +309,6 @@ public class SystemTaskService {
         }
         String text = String.valueOf(value);
         return text.length() <= 120 ? text : text.substring(0, 120) + "...";
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
     }
 
     private record TaskRunResult(Object resultJson, String filePath) {

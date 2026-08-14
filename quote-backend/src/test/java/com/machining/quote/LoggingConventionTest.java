@@ -44,7 +44,7 @@ class LoggingConventionTest {
         assertHasLogger("service/OrderManagementService.java", "OrderManagementService");
         assertHasLogger("service/DeliveryService.java", "DeliveryService");
         assertHasLogger("service/DeliveryDocumentService.java", "DeliveryDocumentService");
-        assertHasLogger("service/wms/WmsAllocationService.java", "WmsAllocationService");
+        assertHasLogger("service/wms/WmsReservationBatchService.java", "WmsReservationBatchService");
         assertHasLogger("service/QuoteProcessService.java", "QuoteProcessService");
         assertHasLogger("service/InternalTargetLeadTimeService.java", "InternalTargetLeadTimeService");
         assertHasLogger("service/StorageInitializer.java", "StorageInitializer");
@@ -108,11 +108,11 @@ class LoggingConventionTest {
                 .contains("Delivery document export failed")
                 .contains("log.error(\"Delivery document export failed");
 
-        assertThat(source("service/wms/WmsAllocationService.java"))
-                .contains("WMS allocation started")
-                .contains("WMS allocation completed")
-                .contains("WMS allocation failed")
-                .contains("log.error(\"WMS allocation failed");
+        assertThat(source("service/wms/WmsReservationBatchService.java"))
+                .contains("WMS reservation batch started")
+                .contains("WMS reservation batch completed")
+                .contains("WMS reservation group failed")
+                .contains("WMS reservation recovery failed");
 
         assertThat(source("service/QuoteProcessService.java"))
                 .contains("Quote lead time shifted")

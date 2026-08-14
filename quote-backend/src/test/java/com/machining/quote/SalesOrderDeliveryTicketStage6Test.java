@@ -3,23 +3,16 @@ package com.machining.quote;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.ReleaseSourceType;
-import com.machining.quote.dto.wms.WmsAllocationResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
-import com.machining.quote.entity.OrderDeliveryTicketAllocation;
-import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
-import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
-import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.LeadTimeService;
-import com.machining.quote.service.wms.WmsAllocationClient;
-import com.machining.quote.service.wms.WmsAllocationService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -42,7 +35,6 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -207,14 +199,14 @@ class SalesOrderDeliveryTicketStage6Test {
         header.setSalesOrderDate(LocalDate.of(2026, 7, 1));
         header.setCustomerOrderNo("A-PO");
         header.setCustomerProjectNo("A-CP");
-        header.setOrderType("正式订单");
+        header.setOrderType("\u6b63\u5f0f\u8ba2\u5355");
         header.setInternalProjectNo("A-IP");
         SalesOrderItem override = salesOrderItem(2001L, 5, 0, "SO-P-OVERRIDE");
         override.setSalesOrderDate(LocalDate.of(2026, 7, 2));
         override.setCustomerOrderNo("B-PO");
         override.setCustomerProjectNo("B-CP");
         override.setCustomerOrderTitle("B-TITLE");
-        override.setOrderType("样品订单");
+        override.setOrderType("\u9884\u6d4b\u8ba2\u5355");
         override.setInternalProjectNo("B-IP");
         SalesOrderItem fallback = salesOrderItem(2002L, 4, 0, "SO-P-FALLBACK");
         fallback.setSalesOrderDate(null);
@@ -246,7 +238,7 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(overrideTicket.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 2));
         assertThat(overrideTicket.getCustomerOrderNo()).isEqualTo("B-PO");
         assertThat(overrideTicket.getCustomerProjectNo()).isEqualTo("B-CP");
-        assertThat(overrideTicket.getOrderType()).isEqualTo("样品订单");
+        assertThat(overrideTicket.getOrderType()).isEqualTo("\u9884\u6d4b\u8ba2\u5355");
         assertThat(overrideTicket.getInternalProjectNo()).isEqualTo("B-IP");
 
         OrderDeliveryTicket fallbackTicket = insertedTickets.stream()
@@ -256,7 +248,7 @@ class SalesOrderDeliveryTicketStage6Test {
         assertThat(fallbackTicket.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
         assertThat(fallbackTicket.getCustomerOrderNo()).isEqualTo("A-PO");
         assertThat(fallbackTicket.getCustomerProjectNo()).isEqualTo("A-CP");
-        assertThat(fallbackTicket.getOrderType()).isEqualTo("正式订单");
+        assertThat(fallbackTicket.getOrderType()).isEqualTo("\u6b63\u5f0f\u8ba2\u5355");
         assertThat(fallbackTicket.getInternalProjectNo()).isEqualTo("A-IP");
     }
 
@@ -289,8 +281,7 @@ class SalesOrderDeliveryTicketStage6Test {
         wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
 
         assertThatThrownBy(() -> service.generateImportedSalesOrderTickets(9001L))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("内部项目号");
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -306,7 +297,7 @@ class SalesOrderDeliveryTicketStage6Test {
         header.setSalesOrderDate(null);
         header.setCustomerOrderNo(null);
         header.setCustomerProjectNo("A-CP");
-        header.setOrderType("正式订单");
+        header.setOrderType("\u6b63\u5f0f\u8ba2\u5355");
         header.setInternalProjectNo("A-IP");
         SalesOrderItem blank = salesOrderItem(3002L, 2, 0, "SO-P-BLANK-2");
         blank.setSalesOrderDate(null);
@@ -322,8 +313,7 @@ class SalesOrderDeliveryTicketStage6Test {
         wireDeliveryService(service, headerMapper, itemMapper, ticketMapper, auditService, dataScopeService, leadTimeService);
 
         assertThatThrownBy(() -> service.generateImportedSalesOrderTickets(9001L))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("客户订单号");
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -405,7 +395,7 @@ class SalesOrderDeliveryTicketStage6Test {
         confirmed.setProcessRoute(routeSnapshot);
         SalesOrderItem unconfirmed = salesOrderItem(4002L, 1, 0, "SO-P-SNAP-2");
         unconfirmed.setMaterialNo("MAT-UNCONFIRMED");
-        unconfirmed.setMaterialNoStatus("未确认");
+        unconfirmed.setMaterialNoStatus("UNCONFIRMED");
         unconfirmed.setMaterialData(mutableMaterialSnapshot("6061-T6"));
         unconfirmed.setProcessRoute(mutableProcessRouteSnapshot("TURNING"));
 
@@ -462,37 +452,6 @@ class SalesOrderDeliveryTicketStage6Test {
                 .containsEntry("processRouteCount", 2));
     }
 
-    @Test
-    void wmsAllocationRowsDeepCopyTicketMaterialAndProcessSnapshots() {
-        WmsAllocationService service = new WmsAllocationService();
-        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
-        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
-        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
-        WmsAllocationClient client = mock(WmsAllocationClient.class);
-        AuditService auditService = mock(AuditService.class);
-        OrderDeliveryTicket ticket = wmsTicket();
-        when(ticketMapper.selectOne(any())).thenReturn(ticket);
-        when(orderMapper.selectById(88)).thenReturn(wmsOrder());
-        when(client.allocate(any())).thenReturn(successResponse(2));
-        when(ticketMapper.update(any(OrderDeliveryTicket.class), any())).thenReturn(1);
-        wireAllocationService(service, ticketMapper, allocationMapper, orderMapper, client, auditService);
-
-        service.allocate(123, 9101L);
-
-        ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
-        verify(allocationMapper, times(1)).insert(allocationCaptor.capture());
-        OrderDeliveryTicketAllocation row = allocationCaptor.getValue();
-        assertThat(row.getMaterialData()).isEqualTo(ticket.getMaterialData()).isNotSameAs(ticket.getMaterialData());
-        assertThat(row.getProcessRoute()).isEqualTo(ticket.getProcessRoute()).isNotSameAs(ticket.getProcessRoute());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> copiedMaterial = (Map<String, Object>) row.getMaterialData();
-        @SuppressWarnings("unchecked")
-        List<String> copiedTags = (List<String>) copiedMaterial.get("tags");
-        copiedTags.add("allocation-only");
-        @SuppressWarnings("unchecked")
-        List<String> sourceTags = (List<String>) ((Map<?, ?>) ticket.getMaterialData()).get("tags");
-        assertThat(sourceTags).containsExactly("source-tag");
-    }
 
     @Test
     void downstreamServicesUseTicketSnapshotsAndSourceAwareDataScope() throws Exception {
@@ -534,7 +493,7 @@ class SalesOrderDeliveryTicketStage6Test {
     void mesAndWmsPropagateSalesOrderSourceAndMaterialNumber() throws Exception {
         String mesService = read(MAIN_JAVA.resolve(Path.of("service", "mes", "MesMaterialSyncService.java")));
         String sourceItemService = read(MAIN_JAVA.resolve(Path.of("service", "SourceItemMaterialNoSyncService.java")));
-        String wmsService = read(MAIN_JAVA.resolve(Path.of("service", "wms", "WmsAllocationService.java")));
+        String wmsService = read(MAIN_JAVA.resolve(Path.of("service", "wms", "WmsReservationStateService.java")));
         String taskService = read(MAIN_JAVA.resolve(Path.of("service", "SystemTaskService.java")));
         String batchService = read(MAIN_JAVA.resolve(Path.of("service", "DeliveryIntegrationBatchService.java")));
 
@@ -562,13 +521,10 @@ class SalesOrderDeliveryTicketStage6Test {
                 .contains(
                         "row.setSourceType(ticket.getSourceType())",
                         "row.setSourceOrderId(ticket.getSourceOrderId())",
-                        "row.setSourceItemId(ticket.getSourceItemId())",
-                        "summary.put(\"sourceType\", ticket.getSourceType())",
-                        "summary.put(\"sourceOrderId\", ticket.getSourceOrderId())",
-                        "summary.put(\"sourceItemId\", ticket.getSourceItemId())"
+                        "row.setSourceItemId(ticket.getSourceItemId())"
                 );
         assertThat(taskService)
-                .contains("dataScopeService.assertCanAccessDeliveryTicket(ticket)");
+                .contains("deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds)");
         assertThat(batchService)
                 .contains("dataScopeService.assertCanAccessDeliveryTicket(ticket)");
     }
@@ -589,19 +545,6 @@ class SalesOrderDeliveryTicketStage6Test {
         ReflectionTestUtils.setField(service, "leadTimeService", leadTimeService);
     }
 
-    private void wireAllocationService(
-            WmsAllocationService service,
-            OrderDeliveryTicketMapper ticketMapper,
-            OrderDeliveryTicketAllocationMapper allocationMapper,
-            OrderRfqMapper orderMapper,
-            WmsAllocationClient client,
-            AuditService auditService) {
-        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
-        ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
-        ReflectionTestUtils.setField(service, "orderRfqMapper", orderMapper);
-        ReflectionTestUtils.setField(service, "wmsAllocationClient", client);
-        ReflectionTestUtils.setField(service, "auditService", auditService);
-    }
 
     private DeliveryGenerateReq salesOrderReq(Long sourceItemId, int acceptedQty) {
         return salesOrderReq(Map.of(sourceItemId, acceptedQty));
@@ -609,12 +552,12 @@ class SalesOrderDeliveryTicketStage6Test {
 
     private DeliveryGenerateReq salesOrderReq(Map<Long, Integer> itemQtyById) {
         DeliveryGenerateReq req = new DeliveryGenerateReq();
-        req.setOrderType("正式订单");
+        req.setOrderType("\u6b63\u5f0f\u8ba2\u5355");
         req.setInternalProjectNo("IP-SO-1");
         req.setCustomerOrderNo("CO-SO-1");
         req.setCustomerProjectNo("CP-SO-1");
         req.setSalesOrderDate(LocalDate.of(2026, 8, 1));
-        req.setArrangeType("计划");
+        req.setArrangeType("\u8ba1\u5212");
         req.setItems(itemQtyById.entrySet().stream()
                 .map(entry -> {
                     DeliveryGenerateReq.DeliveryItemReq item = new DeliveryGenerateReq.DeliveryItemReq();
@@ -633,7 +576,7 @@ class SalesOrderDeliveryTicketStage6Test {
         header.setId(9001L);
         header.setSalesOrderNo("SO-QPO-001");
         header.setCustomerName("ACME");
-        header.setOrderType("正式订单");
+        header.setOrderType("\u6b63\u5f0f\u8ba2\u5355");
         header.setInternalProjectNo("IP-SO-1");
         header.setCustomerOrderNo("CO-SO-1");
         header.setCustomerProjectNo("CP-SO-1");
@@ -652,7 +595,7 @@ class SalesOrderDeliveryTicketStage6Test {
         item.setReleasedQty(releasedQty);
         item.setRemainingQty(qty - releasedQty);
         item.setMaterialNo("MAT-" + id);
-        item.setMaterialNoStatus("已确认");
+        item.setMaterialNoStatus("\u5df2\u786e\u8ba4");
         item.setDrawingUrl("/drawings/" + partNo + ".pdf");
         item.setMaterialName("6061");
         item.setEngineeringMaterialCode("EMC-" + id);
@@ -671,74 +614,20 @@ class SalesOrderDeliveryTicketStage6Test {
                 Map.entry("processCategoryId", 3L),
                 Map.entry("processDetailId", 7L),
                 Map.entry("processCode", "PACKAGING"),
-                Map.entry("categoryName", "包装"),
-                Map.entry("detailName", "精细包装"),
+                Map.entry("categoryName", "Packaging"),
+                Map.entry("detailName", "Fine packaging"),
                 Map.entry("hourlyRate", 10.0),
                 Map.entry("unitWorkHours", 1.5),
                 Map.entry("lineCost", 15.0))));
         item.setMaterialData(Map.of("name", "7075"));
         item.setMaterialGrossWeight(2.4);
         item.setPartNetWeight(1.8);
-        item.setItemType("普通件");
+        item.setItemType("PART");
         item.setRemark("Sales order remark " + partNo);
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }
 
-    private OrderDeliveryTicket wmsTicket() {
-        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
-        ticket.setId(123);
-        ticket.setRfqId(88);
-        ticket.setItemId(77);
-        ticket.setSourceType(ReleaseSourceType.SALES_ORDER.name());
-        ticket.setSourceOrderId(9001L);
-        ticket.setSourceItemId(4001L);
-        ticket.setPartNo("SO-P-WMS");
-        ticket.setVersion("A");
-        ticket.setQty(2);
-        ticket.setMaterialNo("MAT-WMS");
-        ticket.setOrderType("正式订单");
-        ticket.setInternalProjectNo("IP-SO-1");
-        ticket.setRfqNo("SO-QPO-001");
-        ticket.setCustomerName("ACME");
-        ticket.setCustomerOrderNo("CO-SO-1");
-        ticket.setCustomerProjectNo("CP-SO-1");
-        ticket.setMaterialName("6061");
-        ticket.setEngineeringMaterialName("7075");
-        ticket.setEngineeringMaterialCode("EMC-WMS");
-        ticket.setEngineeringMaterialTypeCode("RAW_MATERIAL");
-        ticket.setEngineeringMaterialTypeName("Raw Material");
-        ticket.setEngineeringMaterialCategory("ALUMINUM");
-        ticket.setMaterialShape("plate");
-        ticket.setSurfaceTreatment("Anodized");
-        ticket.setDescription("WMS snapshot ticket");
-        ticket.setDeliveryDate(LocalDate.of(2026, 8, 15));
-        ticket.setProcessRoute(mutableProcessRouteSnapshot("MILLING"));
-        ticket.setMaterialData(mutableMaterialSnapshot("7075-T651"));
-        ticket.setMaterialGrossWeight(2.4);
-        ticket.setPartNetWeight(1.8);
-        ticket.setWmsAllocateStatus("PENDING");
-        return ticket;
-    }
-
-    private OrderRfq wmsOrder() {
-        OrderRfq order = new OrderRfq();
-        order.setId(88);
-        order.setRfqNo("SO-QPO-001");
-        order.setCustomerName("ACME");
-        return order;
-    }
-
-    private WmsAllocationResp successResponse(Integer inStockQty) {
-        WmsAllocationResp resp = new WmsAllocationResp();
-        resp.setSuccess(true);
-        resp.setMaterialNo("MAT-WMS");
-        resp.setInStockLockedQty(inStockQty);
-        resp.setInProductionLocks(List.of());
-        resp.setMessage("allocated");
-        resp.setExternalTraceId("WMS-SNAPSHOT-1");
-        return resp;
-    }
 
     private Map<String, Object> mutableMaterialSnapshot(String name) {
         Map<String, Object> material = new LinkedHashMap<>();

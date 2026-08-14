@@ -22,8 +22,8 @@ class MaterialMasterStage1CharacterizationTest {
     private static final Path RFQ_RELEASE_SERVICE = main("service", "RfqReleaseSalesOrderService.java");
     private static final Path DELIVERY_SERVICE = main("service", "DeliveryService.java");
     private static final Path MATERIAL_RESOLVER = main("util", "MaterialDataResolver.java");
-    private static final Path WMS_ALLOCATION_SERVICE = Path.of(
-            "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsAllocationService.java");
+    private static final Path WMS_RESERVATION_STATE_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "wms", "WmsReservationStateService.java");
     private static final Path ITEM_PRICING = Path.of("..", "quote-frontend", "src", "components", "ItemPricing.vue");
     private static final Path MATERIAL_PICKER = Path.of(
             "..", "quote-frontend", "src", "components", "EngineeringOptionPickerDialog.vue");
@@ -123,7 +123,7 @@ class MaterialMasterStage1CharacterizationTest {
                         "qw.eq(\"enabled\", true);",
                         "materialData.put(\"materialCode\", material.getMaterialCode());",
                         "materialData.put(\"materialTypeCode\", materialType == null ? null : materialType.getTypeCode());",
-                        "materialData.put(\"density\", density);",
+                        "materialData.put(\"density\", density == null ? 0.0 : density);",
                         "materialData.put(\"unitPrice\", unitPrice);",
                         "materialData.put(\"cost\", cost);")
                 .doesNotContain("qw.eq(\"material_name\", materialName);");
@@ -209,7 +209,7 @@ class MaterialMasterStage1CharacterizationTest {
         String autoSnapshotCompletionService = read(AUTO_SNAPSHOT_COMPLETION_SERVICE);
         String rfqReleaseService = read(RFQ_RELEASE_SERVICE);
         String deliveryService = read(DELIVERY_SERVICE);
-        String wmsAllocationService = read(WMS_ALLOCATION_SERVICE);
+        String wmsReservationStateService = read(WMS_RESERVATION_STATE_SERVICE);
 
         assertThat(autoSnapshotCompletionService)
                 .contains(
@@ -249,7 +249,7 @@ class MaterialMasterStage1CharacterizationTest {
                         "ticket.setMaterialShape(resolveSalesOrderMaterialShape(item));",
                         "ticket.setMaterialData(deepCopySnapshot(item.getMaterialData()));",
                         "sheet.setEngineeringMaterialName(ticket.getEngineeringMaterialName());");
-        assertThat(wmsAllocationService)
+        assertThat(wmsReservationStateService)
                 .contains(
                         "row.setEngineeringMaterialCode(ticket.getEngineeringMaterialCode());",
                         "row.setEngineeringMaterialName(ticket.getEngineeringMaterialName());",

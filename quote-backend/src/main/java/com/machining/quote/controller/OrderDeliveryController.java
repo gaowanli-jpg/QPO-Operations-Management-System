@@ -68,12 +68,6 @@ public class OrderDeliveryController {
         return systemTaskService.submitMesMaterialBatchSyncTask(req == null ? null : req.getTicketIds());
     }
 
-    @PostMapping("/tickets/{ticketId}/wms-allocation")
-    @RequirePermission("market:delivered-item:wms-allocate")
-    public SystemTask submitWmsAllocation(@PathVariable Integer ticketId) {
-        return systemTaskService.submitWmsAllocationTask(ticketId);
-    }
-
     @PostMapping("/tickets/wms-allocation/batch")
     @RequirePermission("market:delivered-item:wms-allocate")
     public SystemTask submitWmsAllocationBatch(@RequestBody DeliveryTicketBatchReq req) {

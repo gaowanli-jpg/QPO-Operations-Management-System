@@ -9,7 +9,7 @@ import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryIntegrationBatchService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.SystemTaskService;
-import com.machining.quote.service.wms.WmsAllocationService;
+import com.machining.quote.service.wms.WmsReservationBatchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -156,30 +156,21 @@ class DeliveryIntegrationBatchTaskTest {
     void wmsBatchSkipsInvalidRowsAndSummarizesPartialSuccess() {
         DeliveryIntegrationBatchService service = new DeliveryIntegrationBatchService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
-        WmsAllocationService wmsService = mock(WmsAllocationService.class);
+        WmsReservationBatchService wmsService = mock(WmsReservationBatchService.class);
         wireBatchService(service, ticketMapper, null, wmsService, null);
-        when(ticketMapper.selectById(1)).thenReturn(ticket(1, "SUCCESS", null, "PENDING", null, 10));
-        when(ticketMapper.selectById(2)).thenReturn(ticket(2, "SUCCESS", "MAT-2", "SUCCESS", "MAT-2", 10));
-        when(ticketMapper.selectById(3)).thenReturn(ticket(3, "SUCCESS", "MAT-3", "PROCESSING", "MAT-3", 10));
-        when(ticketMapper.selectById(4)).thenReturn(ticket(4, "SUCCESS", "MAT-4", "PENDING", "MAT-4", 10));
-        when(ticketMapper.selectById(5)).thenReturn(ticket(5, "SUCCESS", "MAT-5", "FAILED", "MAT-5", 10));
-        when(wmsService.allocate(4, 9002L)).thenReturn(Map.of("ticketId", 4, "allocationCount", 2));
-        when(wmsService.allocate(5, 9002L)).thenThrow(new RuntimeException("WMS down"));
+        Map<String, Object> expected = Map.of(
+                "taskType", "WMS_ALLOCATION_BATCH",
+                "taskId", 9002L,
+                "totalCount", 5,
+                "successCount", 4,
+                "failedCount", 1,
+                "results", List.of());
+        when(wmsService.allocateBatch(List.of(1, 2, 3, 4, 5), 9002L)).thenReturn(expected);
 
         Map<String, Object> result = service.allocateWmsBatch(List.of(1, 2, 3, 4, 5), 9002L);
 
-        assertThat(result)
-                .containsEntry("taskId", 9002L)
-                .containsEntry("totalCount", 5)
-                .containsEntry("successCount", 1)
-                .containsEntry("failedCount", 1)
-                .containsEntry("skippedCount", 3);
-        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
-        assertThat(rows)
-                .extracting(row -> row.get("status"))
-                .containsExactly("SKIPPED", "SKIPPED", "SKIPPED", "SUCCESS", "FAILED");
-        verify(wmsService).allocate(4, 9002L);
-        verify(wmsService).allocate(5, 9002L);
+        assertThat(result).isSameAs(expected);
+        verify(wmsService).allocateBatch(List.of(1, 2, 3, 4, 5), 9002L);
     }
 
     @Test
@@ -213,11 +204,11 @@ class DeliveryIntegrationBatchTaskTest {
             DeliveryIntegrationBatchService service,
             OrderDeliveryTicketMapper ticketMapper,
             MesMaterialSyncService mesService,
-            WmsAllocationService wmsService,
+            WmsReservationBatchService wmsService,
             DataScopeService dataScopeService) {
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "mesMaterialSyncService", mesService);
-        ReflectionTestUtils.setField(service, "wmsAllocationService", wmsService);
+        ReflectionTestUtils.setField(service, "wmsReservationBatchService", wmsService);
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
     }
 
