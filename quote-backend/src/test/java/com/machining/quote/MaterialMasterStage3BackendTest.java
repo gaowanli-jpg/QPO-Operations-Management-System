@@ -163,6 +163,67 @@ class MaterialMasterStage3BackendTest {
     }
 
     @Test
+    void mesSourcedMaterialKeepsMesIdentityButAllowsQpoPriceAndDensityMaintenance() {
+        MaterialMasterService service = service();
+        DictMaterialMapper materialMapper = mapper(service, "materialMapper");
+        DictMaterialTypeMapper materialTypeMapper = mapper(service, "materialTypeMapper");
+        when(materialTypeMapper.selectById(1L)).thenReturn(materialType(1L, "MATERIAL", "MES raw", true));
+        when(materialTypeMapper.selectById(2L)).thenReturn(materialType(2L, "SEMI", "MES semi", true));
+
+        DictMaterial before = material(10L, "MES-MAT-001", "MES 45#", 1L, true);
+        before.setMaterialCategory("steel");
+        before.setSourceType("MES");
+        before.setMesExternalId("mes-001");
+        when(materialMapper.selectById(10L)).thenReturn(before);
+
+        MaterialMasterSaveReq changedIdentity = materialReq("LOCAL-MAT", "Local 45#", 2L);
+        changedIdentity.setMaterialCategory("aluminum");
+        assertThatThrownBy(() -> service.saveMaterial(10L, changedIdentity))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("MES material identity");
+        verify(materialMapper, never()).updateById(any(DictMaterial.class));
+
+        MaterialMasterSaveReq localMaintenance = materialReq("MES-MAT-001", "MES 45#", 1L);
+        localMaintenance.setMaterialCategory("steel");
+        localMaintenance.setPlateDensity(7.9);
+        localMaintenance.setPlatePrice(8.8);
+        localMaintenance.setBarDensity(7.7);
+        localMaintenance.setBarPrice(8.6);
+        localMaintenance.setTubeDensity(7.6);
+        localMaintenance.setTubePrice(8.4);
+        localMaintenance.setRemarks("QPO local price and density");
+
+        MaterialMasterDTO saved = service.saveMaterial(10L, localMaintenance);
+
+        assertThat(saved.getMaterialCode()).isEqualTo("MES-MAT-001");
+        assertThat(saved.getMaterialName()).isEqualTo("MES 45#");
+        assertThat(saved.getMaterialTypeId()).isEqualTo(1L);
+        assertThat(saved.getMaterialCategory()).isEqualTo("steel");
+        assertThat(saved.getPlateDensity()).isEqualTo(7.9);
+        assertThat(saved.getPlatePrice()).isEqualTo(8.8);
+        assertThat(saved.getBarDensity()).isEqualTo(7.7);
+        assertThat(saved.getBarPrice()).isEqualTo(8.6);
+        assertThat(saved.getTubeDensity()).isEqualTo(7.6);
+        assertThat(saved.getTubePrice()).isEqualTo(8.4);
+        assertThat(saved.getSourceType()).isEqualTo("MES");
+        assertThat(saved.getMesExternalId()).isEqualTo("mes-001");
+    }
+
+    @Test
+    void deleteMesSourcedMaterialIsRejectedBecauseMesOwnsMaterialIdentity() {
+        MaterialMasterService service = service();
+        DictMaterialMapper materialMapper = mapper(service, "materialMapper");
+        DictMaterial before = material(10L, "MES-MAT-001", "MES 45#", 1L, true);
+        before.setSourceType("MES");
+        when(materialMapper.selectById(10L)).thenReturn(before);
+
+        assertThatThrownBy(() -> service.deleteMaterial(10L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("MES material");
+        verify(materialMapper, never()).updateById(any(DictMaterial.class));
+    }
+
+    @Test
     void deleteReferencedMaterialTypeDisablesInsteadOfHardDelete() {
         MaterialMasterService service = service();
         DictMaterialMapper materialMapper = mapper(service, "materialMapper");

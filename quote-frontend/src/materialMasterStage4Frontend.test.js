@@ -31,15 +31,13 @@ describe('material master stage 4 frontend refactor', () => {
     expect(dictionaryStore).toContain('materialCategory:')
   })
 
-  test('material process page adds material type maintenance tab', () => {
+  test('material process page keeps material type tab read-only for MES ownership', () => {
     expect(materialProcess).toContain('name="materialTypes"')
     expect(materialProcess).toContain('材料类型')
     expect(materialProcess).toContain('类型编码')
     expect(materialProcess).toContain('类型名称')
-    expect(materialProcess).toContain('openMaterialTypeDialog')
-    expect(materialProcess).toContain('saveMaterialType')
-    expect(materialProcess).toContain('deleteMaterialType')
-    expect(materialProcess).toContain("v-permission=\"'engineer:dict:material-manage'\"")
+    expect(materialProcess).not.toContain('@click="openMaterialTypeDialog')
+    expect(materialProcess).not.toContain('@click="deleteMaterialType')
   })
 
   test('material table and dialog use material code, business type, category, state and sort order', () => {
@@ -50,14 +48,15 @@ describe('material master stage 4 frontend refactor', () => {
       'prop="materialCategory" label="材质分类"',
       'prop="sortNo" label="排序"',
       'label="状态"',
-      'v-model="materialForm.materialCode"',
-      'v-model="materialForm.materialTypeId"',
-      'v-model="materialForm.materialCategory"',
-      'v-model="materialForm.enabled"',
-      'v-model="materialForm.sortNo"'
+      'v-model="materialForm.materialCode" disabled',
+      'v-model="materialForm.materialName" disabled',
+      'v-model="materialForm.materialTypeId" filterable disabled',
+      'v-model="materialForm.materialCategory" disabled'
     ]) {
       expect(materialProcess).toContain(fragment)
     }
+    expect(materialProcess).not.toContain('@click="openMaterialDialog()"')
+    expect(materialProcess).not.toContain('@click="deleteMaterial(scope.row)"')
     expect(materialProcess).not.toContain('prop="materialType" label="材质"')
     expect(materialProcess).not.toContain('v-model="materialForm.materialType"')
   })

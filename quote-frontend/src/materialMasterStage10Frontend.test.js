@@ -7,7 +7,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 describe('material master stage 10 frontend closure', () => {
-  test('material type APIs and maintenance actions reuse material dictionary permission', () => {
+  test('material type APIs stay available for legacy compatibility while the page is read-only', () => {
     const dictApi = readSource('services', 'dictApi.js')
     const materialProcess = readSource('components', 'MaterialProcessManage.vue')
 
@@ -16,10 +16,9 @@ describe('material master stage 10 frontend closure', () => {
     expect(dictApi).toContain('deleteMaterialType')
     expect(dictApi).toContain('/api/dict/material-types')
     expect(materialProcess).toContain("v-permission=\"'engineer:dict:material-manage'\"")
-    expect(materialProcess).toContain("activeTab === 'materialTypes'")
-    expect(materialProcess).toContain('openMaterialTypeDialog')
-    expect(materialProcess).toContain('saveMaterialType')
-    expect(materialProcess).toContain('deleteMaterialType')
+    expect(materialProcess).toContain('name="materialTypes"')
+    expect(materialProcess).not.toContain('@click="openMaterialTypeDialog')
+    expect(materialProcess).not.toContain('@click="deleteMaterialType')
   })
 
   test('material maintenance, picker, global defaults and pricing submit identify material by code', () => {
@@ -28,9 +27,12 @@ describe('material master stage 10 frontend closure', () => {
     const globalSetup = readSource('components', 'GlobalSetup.vue')
     const itemPricing = readSource('components', 'ItemPricing.vue')
 
-    expect(materialProcess).toContain('v-model="materialForm.materialCode"')
-    expect(materialProcess).toContain('v-model="materialForm.materialTypeId"')
-    expect(materialProcess).toContain('v-model="materialForm.materialCategory"')
+    expect(materialProcess).toContain('v-model="materialForm.materialCode" disabled')
+    expect(materialProcess).toContain('v-model="materialForm.materialName" disabled')
+    expect(materialProcess).toContain('v-model="materialForm.materialTypeId" filterable disabled')
+    expect(materialProcess).toContain('v-model="materialForm.materialCategory" disabled')
+    expect(materialProcess).not.toContain('@click="openMaterialDialog()"')
+    expect(materialProcess).not.toContain('@click="deleteMaterial(scope.row)"')
     expect(optionPicker).toContain('prop="materialCode"')
     expect(optionPicker).toContain('item?.materialCode')
     expect(globalSetup).toContain(':selected-key="config.materialCode"')

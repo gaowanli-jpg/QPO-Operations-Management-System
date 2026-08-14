@@ -143,6 +143,24 @@ class ProcessMasterStage3BackendTest {
     }
 
     @Test
+    void mesSourcedProcessCategoryRejectsManualMaintenanceBecauseMesOwnsIt() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        ProcessMasterService service = service(categoryMapper, mock(DictProcessDetailMapper.class), mock(AuditService.class));
+        DictProcessCategory before = category(7L, true);
+        before.setSourceType("MES");
+        before.setMesExternalId("mes-process-7");
+        when(categoryMapper.selectById(7L)).thenReturn(before);
+
+        ProcessCategorySaveReq req = validCategoryReq();
+        req.setCategoryName("Manual renamed category");
+
+        assertThatThrownBy(() -> service.saveCategory(7L, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("MES process category");
+        verify(categoryMapper, never()).updateById(any(DictProcessCategory.class));
+    }
+
+    @Test
     void createDetailRequiresEnabledCategoryChecksNameUniquenessAndRecordsSummaryOnlyAudit() {
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
@@ -183,6 +201,51 @@ class ProcessMasterStage3BackendTest {
         assertThatThrownBy(() -> service.saveDetail(null, underDisabled))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("已停用");
+    }
+
+    @Test
+    void mesProcessDetailRejectsIdentityChangesButAllowsLocalRemarkStateAndSortMaintenance() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
+        DictProcessCategory category = category(7L, true);
+        category.setSourceType("MES");
+        DictProcessCategory anotherCategory = category(8L, true);
+        anotherCategory.setSourceType("MES");
+        when(categoryMapper.selectById(7L)).thenReturn(category);
+        when(categoryMapper.selectById(8L)).thenReturn(anotherCategory);
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        DictProcessDetail before = new DictProcessDetail();
+        before.setId(99L);
+        before.setCategoryId(7L);
+        before.setDetailName("MES detail");
+        before.setEnabled(true);
+        before.setSortNo(0);
+        when(detailMapper.selectById(99L)).thenReturn(before);
+
+        ProcessDetailSaveReq changedIdentity = new ProcessDetailSaveReq();
+        changedIdentity.setCategoryId(8L);
+        changedIdentity.setDetailName("Manual detail");
+        assertThatThrownBy(() -> service.saveDetail(99L, changedIdentity))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("MES process detail identity");
+        verify(detailMapper, never()).updateById(any(DictProcessDetail.class));
+
+        ProcessDetailSaveReq localMaintenance = new ProcessDetailSaveReq();
+        localMaintenance.setCategoryId(7L);
+        localMaintenance.setDetailName("MES detail");
+        localMaintenance.setDetailRemarks("QPO local remark");
+        localMaintenance.setEnabled(false);
+        localMaintenance.setSortNo(20);
+
+        var saved = service.saveDetail(99L, localMaintenance);
+
+        assertThat(saved.getCategoryId()).isEqualTo(7L);
+        assertThat(saved.getDetailName()).isEqualTo("MES detail");
+        assertThat(saved.getDetailRemarks()).isEqualTo("QPO local remark");
+        assertThat(saved.getEnabled()).isFalse();
+        assertThat(saved.getSortNo()).isEqualTo(20);
     }
 
     private static ProcessMasterService service(

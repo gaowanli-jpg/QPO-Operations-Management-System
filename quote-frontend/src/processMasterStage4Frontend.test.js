@@ -34,7 +34,7 @@ describe('process master stage 4 frontend refactor', () => {
     expect(dictionaryStore).toContain("calcType: '工时'")
   })
 
-  test('material process page separates process category and detail maintenance', () => {
+  test('material process page keeps MES-owned process category read-only and detail identity locked', () => {
     expect(materialProcess).toContain('工艺大类')
     expect(materialProcess).toContain('具体工艺')
     expect(materialProcess).toContain('工艺编码')
@@ -44,9 +44,11 @@ describe('process master stage 4 frontend refactor', () => {
     expect(materialProcess).toContain('状态')
     expect(materialProcess).toContain('备注')
     expect(materialProcess).toContain('具体备注')
-    expect(materialProcess).toContain('openProcessCategoryDialog')
-    expect(materialProcess).toContain('saveProcessCategory')
-    expect(materialProcess).toContain('openProcessDetailDialog')
+    expect(materialProcess).not.toContain('@click="openProcessCategoryDialog')
+    expect(materialProcess).not.toContain('@click="openProcessDetailDialog()"')
+    expect(materialProcess).toContain('@click="openProcessDetailDialog(scope.row)"')
+    expect(materialProcess).toContain('v-model="processDetailForm.categoryId" filterable disabled')
+    expect(materialProcess).toContain('v-model="processDetailForm.detailName" readonly')
     expect(materialProcess).toContain('saveProcessDetail')
     expect(materialProcess).toContain("v-permission=\"'engineer:dict:process-manage'\"")
   })

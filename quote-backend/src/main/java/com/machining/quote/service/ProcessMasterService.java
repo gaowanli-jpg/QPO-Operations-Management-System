@@ -56,6 +56,9 @@ public class ProcessMasterService {
     @Transactional
     public ProcessCategoryDTO saveCategory(Long id, ProcessCategorySaveReq req) {
         DictProcessCategory before = id == null ? null : requireCategory(id);
+        if (before != null && isMesSource(before.getSourceType())) {
+            throw new IllegalArgumentException("MES process category cannot be maintained manually; sync MES master data instead");
+        }
         DictProcessCategory entity = normalizeCategory(req);
         entity.setId(id);
         ensureCategoryCodeUnique(entity.getProcessCode(), id);
@@ -84,9 +87,14 @@ public class ProcessMasterService {
     @Transactional
     public ProcessDetailDTO saveDetail(Long id, ProcessDetailSaveReq req) {
         DictProcessDetail before = id == null ? null : requireDetail(id);
+        DictProcessCategory beforeCategory = before == null ? null : requireCategory(before.getCategoryId());
+        validateMesProcessDetailIdentityUnchanged(before, beforeCategory, req);
         DictProcessDetail entity = normalizeDetail(req, before);
         entity.setId(id);
         DictProcessCategory category = requireCategory(entity.getCategoryId());
+        if (before == null && isMesSource(category.getSourceType())) {
+            throw new IllegalArgumentException("MES process detail must be created by MES sync, not manually");
+        }
         if (Boolean.TRUE.equals(entity.getEnabled()) && !Boolean.TRUE.equals(category.getEnabled())) {
             throw new IllegalStateException("工艺大类已停用，不能启用具体工艺");
         }
@@ -106,7 +114,7 @@ public class ProcessMasterService {
                     "DICT_PROCESS_DETAIL_UPDATE",
                     "dict_process_detail",
                     id,
-                    detailAuditSummary(before, requireCategory(before.getCategoryId())),
+                    detailAuditSummary(before, beforeCategory),
                     detailAuditSummary(entity, category)
             );
         }
@@ -155,6 +163,21 @@ public class ProcessMasterService {
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
         entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : Objects.requireNonNullElse(before.getSortNo(), 0) : req.getSortNo());
         return entity;
+    }
+
+    private void validateMesProcessDetailIdentityUnchanged(
+            DictProcessDetail before,
+            DictProcessCategory beforeCategory,
+            ProcessDetailSaveReq req) {
+        if (before == null || !isMesSource(beforeCategory == null ? null : beforeCategory.getSourceType()) || req == null) {
+            return;
+        }
+        Long requestedCategoryId = req.getCategoryId() == null ? before.getCategoryId() : req.getCategoryId();
+        String requestedDetailName = optional(req.getDetailName());
+        if (!Objects.equals(before.getCategoryId(), requestedCategoryId)
+                || !Objects.equals(optional(before.getDetailName()), requestedDetailName)) {
+            throw new IllegalArgumentException("MES process detail identity fields are read-only in QPO; update MES and sync again");
+        }
     }
 
     private DictProcessCategory requireCategory(Long id) {
@@ -277,5 +300,9 @@ public class ProcessMasterService {
 
     private String upper(String value, String label, int maxLength) {
         return limit(value, label, maxLength).toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isMesSource(String value) {
+        return SOURCE_MES.equalsIgnoreCase(optional(value));
     }
 }

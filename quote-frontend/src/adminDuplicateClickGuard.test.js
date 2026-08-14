@@ -71,7 +71,6 @@ describe('admin duplicate click guards', () => {
     expect(sources.dict).toContain("saveMaterialDialog: 'engineer:dict:material-save-dialog'")
     expect(sources.dict).toContain("syncMesMaterials: 'engineer:dict:material-sync-mes'")
     expect(sources.dict).toContain("syncMesProcessTypes: 'engineer:dict:process-sync-mes'")
-    expect(sources.dict).toContain("saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog'")
     expect(sources.dict).toContain("saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog'")
     expect(sources.dict).toContain("saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog'")
     expect(sources.dict).toContain("deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`")
@@ -145,7 +144,7 @@ describe('admin duplicate click guards', () => {
   test('organization and dictionary pages use dialog scoped saves and row scoped deletes/status changes', () => {
     const departmentSaveBlock = blockBetween(sources.org, 'const submitDepartment = async () =>', 'const toggleDepartmentStatus = async (row) =>')
     const postSaveBlock = blockBetween(sources.org, 'const submitPost = async () =>', 'const togglePostStatus = async (row) =>')
-    const materialSaveBlock = blockBetween(sources.dict, 'const saveMaterial = async () =>', 'const saveProcessCategory = async () =>')
+    const materialSaveBlock = blockBetween(sources.dict, 'const saveMaterial = async () =>', 'const saveProcessDetail = async () =>')
     const extraDeleteBlock = blockBetween(sources.dict, 'const deleteExtraFee = async (row) =>', 'onMounted(loadAll)')
 
     expect(sources.org).toContain(':loading="isPending(orgActionKeys.saveDepartmentDialog)"')
@@ -159,8 +158,8 @@ describe('admin duplicate click guards', () => {
 
     expect(sources.dict).toContain(':loading="isPending(dictActionKeys.saveMaterialDialog)"')
     expect(sources.dict).toContain(':disabled="isPending(dictActionKeys.saveMaterialDialog)"')
-    expect(sources.dict).toContain(':loading="isMaterialDeletePending(scope.row)"')
-    expect(sources.dict).toContain(':disabled="isMaterialDeletePending(scope.row)"')
+    expect(sources.dict).not.toContain(':loading="isMaterialDeletePending(scope.row)"')
+    expect(sources.dict).not.toContain(':disabled="isMaterialDeletePending(scope.row)"')
     expect(sources.dict).toContain(':loading="isExtraFeeDeletePending(scope.row)"')
     expect(sources.dict).toContain(':disabled="isExtraFeeDeletePending(scope.row)"')
     expect(materialSaveBlock).toContain('return runAction(dictActionKeys.saveMaterialDialog, async () =>')

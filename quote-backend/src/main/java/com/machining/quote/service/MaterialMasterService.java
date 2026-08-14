@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 @Service
 public class MaterialMasterService {
     private static final String SOURCE_LOCAL = "LOCAL";
+    private static final String SOURCE_MES = "MES";
 
     @Autowired
     private DictMaterialMapper materialMapper;
@@ -131,6 +132,7 @@ public class MaterialMasterService {
     @Transactional
     public MaterialMasterDTO saveMaterial(Long id, MaterialMasterSaveReq req) {
         DictMaterial before = id == null ? null : requireMaterial(id);
+        validateMesMaterialIdentityUnchanged(before, req);
         DictMaterial entity = normalizeMaterial(req, before);
         entity.setId(id);
         DictMaterialType type = requireEnabledMaterialType(entity.getMaterialTypeId());
@@ -164,6 +166,9 @@ public class MaterialMasterService {
     @Transactional
     public void deleteMaterial(Long id) {
         DictMaterial before = requireMaterial(id);
+        if (isMesSource(before.getSourceType())) {
+            throw new IllegalArgumentException("MES material cannot be deleted manually; sync MES master data instead");
+        }
         DictMaterialType type = before.getMaterialTypeId() == null ? null : materialTypeMapper.selectById(before.getMaterialTypeId());
         DictMaterial disabled = copyMaterial(before);
         disabled.setEnabled(false);
@@ -227,6 +232,18 @@ public class MaterialMasterService {
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
         entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : Objects.requireNonNullElse(before.getSortNo(), 0) : req.getSortNo());
         return entity;
+    }
+
+    private void validateMesMaterialIdentityUnchanged(DictMaterial before, MaterialMasterSaveReq req) {
+        if (before == null || !isMesSource(before.getSourceType()) || req == null) {
+            return;
+        }
+        if (!Objects.equals(optional(before.getMaterialCode()), optional(req.getMaterialCode()))
+                || !Objects.equals(optional(before.getMaterialName()), optional(req.getMaterialName()))
+                || !Objects.equals(before.getMaterialTypeId(), req.getMaterialTypeId())
+                || !Objects.equals(optional(before.getMaterialCategory()), optional(req.getMaterialCategory()))) {
+            throw new IllegalArgumentException("MES material identity fields are read-only in QPO; update MES and sync again");
+        }
     }
 
     private void copyMesSourceFields(DictMaterial target, DictMaterial before) {
@@ -446,6 +463,10 @@ public class MaterialMasterService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean isMesSource(String value) {
+        return SOURCE_MES.equalsIgnoreCase(optional(value));
     }
 
     private String limit(String value, String label, int maxLength) {

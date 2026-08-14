@@ -14,13 +14,9 @@
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" plain :loading="scheduleLoading && scheduleTarget === 'MES_MATERIAL'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesMaterialScheduleDialog">定时同步策略</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" plain :loading="scheduleLoading && scheduleTarget === 'MES_PROCESS_TYPE'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesProcessScheduleDialog">定时同步策略</el-button>
-        <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="primary" @click="openMaterialDialog()">新增材料</el-button>
-        <el-button v-permission="'engineer:dict:material-manage'" v-else-if="activeTab === 'materialTypes'" type="primary" @click="openMaterialTypeDialog()">新增材料类型</el-button>
-        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processCategories'" type="primary" @click="openProcessCategoryDialog()">新增工艺大类</el-button>
-        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processDetails'" type="primary" @click="openProcessDetailDialog()">新增具体工艺</el-button>
-        <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
+        <el-button v-permission="'engineer:dict:fee-manage'" v-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'assemblyMarkupFees'" type="primary" @click="openAssemblyMarkupFeeDialog()">新增组装件费用类</el-button>
-        <el-button v-permission="'engineer:dict:fee-manage'" v-else type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
+        <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'extraFees'" type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
       </div>
     </section>
 
@@ -87,11 +83,10 @@
               </el-table-column>
               <el-table-column prop="sortNo" label="排序" width="90" align="center" />
               <el-table-column prop="remarks" label="备注" min-width="150" show-overflow-tooltip />
-              <el-table-column label="操作" width="150" align="center" fixed="right">
+              <el-table-column label="操作" width="90" align="center" fixed="right">
                 <template #default="scope">
                   <div class="erp-table-actions">
-                    <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialDeletePending(scope.row)" @click="openMaterialDialog(scope.row)">编辑</el-button>
-                    <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialDeletePending(scope.row)" :disabled="isMaterialDeletePending(scope.row)" @click="deleteMaterial(scope.row)">删除</el-button>
+                    <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" @click="openMaterialDialog(scope.row)">编辑</el-button>
                   </div>
                 </template>
               </el-table-column>
@@ -109,14 +104,6 @@
                 </template>
               </el-table-column>
               <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
-              <el-table-column label="操作" width="150" align="center" fixed="right">
-                <template #default="scope">
-                  <div class="erp-table-actions">
-                    <el-button v-permission="'engineer:dict:material-manage'" type="primary" size="small" :disabled="isMaterialTypeDeletePending(scope.row)" @click="openMaterialTypeDialog(scope.row)">编辑</el-button>
-                    <el-button v-permission="'engineer:dict:material-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMaterialTypeDeletePending(scope.row)" :disabled="isMaterialTypeDeletePending(scope.row)" @click="deleteMaterialType(scope.row)">删除</el-button>
-                  </div>
-                </template>
-              </el-table-column>
             </el-table>
           </el-tab-pane>
 
@@ -143,13 +130,6 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
-                <el-table-column label="操作" width="120" align="center" fixed="right">
-                  <template #default="scope">
-                    <div class="erp-table-actions">
-                      <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" @click="openProcessCategoryDialog(scope.row)">编辑</el-button>
-                    </div>
-                  </template>
-                </el-table-column>
               </el-table>
             </div>
           </el-tab-pane>
@@ -254,18 +234,18 @@
     <el-dialog v-model="materialDialogVisible" :title="materialForm.id ? '编辑材料' : '新增材料'" width="820px">
       <el-form :model="materialForm" label-width="120px" class="erp-dialog-form process-dialog-grid material-dialog-grid">
         <el-form-item label="材料编码" required>
-          <el-input v-model="materialForm.materialCode" placeholder="例如：MAT-000001" />
+          <el-input v-model="materialForm.materialCode" disabled placeholder="例如：MAT-000001" />
         </el-form-item>
         <el-form-item label="材料名称" required>
-          <el-input v-model="materialForm.materialName" placeholder="例如：45#" />
+          <el-input v-model="materialForm.materialName" disabled placeholder="例如：45#" />
         </el-form-item>
         <el-form-item label="材料类型" required>
-          <el-select v-model="materialForm.materialTypeId" filterable class="dialog-select" placeholder="选择材料类型">
+          <el-select v-model="materialForm.materialTypeId" filterable disabled class="dialog-select" placeholder="选择材料类型">
             <el-option v-for="type in materialTypes" :key="type.id" :label="materialTypeLabel(type)" :value="type.id" :disabled="type.enabled === false" />
           </el-select>
         </el-form-item>
         <el-form-item label="材质分类">
-          <el-input v-model="materialForm.materialCategory" placeholder="例如：钢铁、铝、塑料" />
+          <el-input v-model="materialForm.materialCategory" disabled placeholder="例如：钢铁、铝、塑料" />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="materialForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
@@ -321,85 +301,18 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="materialTypeDialogVisible" :title="materialTypeForm.id ? '编辑材料类型' : '新增材料类型'" width="620px">
-      <el-form :model="materialTypeForm" label-width="110px" class="erp-dialog-form">
-        <el-form-item label="类型编码" required>
-          <el-input v-model="materialTypeForm.typeCode" placeholder="例如：RAW_MATERIAL" />
-        </el-form-item>
-        <el-form-item label="类型名称" required>
-          <el-input v-model="materialTypeForm.typeName" placeholder="例如：原材料" />
-        </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="materialTypeForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="materialTypeForm.enabled" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="materialTypeForm.remarks" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="erp-dialog-footer">
-          <el-button @click="materialTypeDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:material-manage'" type="primary" :loading="isPending(dictActionKeys.saveMaterialTypeDialog)" :disabled="isPending(dictActionKeys.saveMaterialTypeDialog)" @click="saveMaterialType">保存</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="processCategoryDialogVisible" :title="processCategoryForm.id ? '编辑工艺大类' : '新增工艺大类'" width="720px">
-      <el-form :model="processCategoryForm" label-width="120px" class="erp-dialog-form process-dialog-grid">
-        <el-form-item label="序号">
-          <el-input-number v-model="processCategoryForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
-        </el-form-item>
-        <el-form-item label="工艺编码" required>
-          <el-input v-model="processCategoryForm.processCode" placeholder="例如：PACKAGING" />
-        </el-form-item>
-        <el-form-item label="工艺名称" required>
-          <el-input v-model="processCategoryForm.categoryName" placeholder="例如：包装" />
-        </el-form-item>
-        <el-form-item label="小时价格" required>
-          <div class="unit-input">
-            <el-input-number v-model="processCategoryForm.hourlyRate" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-            <span class="unit-label wide">元/小时</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="来源">
-          <el-select v-model="processCategoryForm.sourceType" class="dialog-select">
-            <el-option label="本地维护" value="LOCAL" />
-            <el-option label="MES同步" value="MES" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="processCategoryForm.enabled" />
-        </el-form-item>
-        <el-form-item label="MES外部ID">
-          <el-input v-model="processCategoryForm.mesExternalId" placeholder="MES 同步后可记录外部 ID" />
-        </el-form-item>
-        <el-form-item label="备注" class="process-dialog-wide">
-          <el-input v-model="processCategoryForm.remarks" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="erp-dialog-footer">
-          <el-button @click="processCategoryDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="isPending(dictActionKeys.saveProcessCategoryDialog)" :disabled="isPending(dictActionKeys.saveProcessCategoryDialog)" @click="saveProcessCategory">保存</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
     <el-dialog v-model="processDetailDialogVisible" :title="processDetailForm.id ? '编辑具体工艺' : '新增具体工艺'" width="680px">
       <el-form :model="processDetailForm" label-width="120px" class="erp-dialog-form process-dialog-grid">
         <el-form-item label="序号">
           <el-input-number v-model="processDetailForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
         </el-form-item>
         <el-form-item label="工艺大类" required>
-          <el-select v-model="processDetailForm.categoryId" filterable class="dialog-select" placeholder="选择工艺大类">
+          <el-select v-model="processDetailForm.categoryId" filterable disabled class="dialog-select" placeholder="选择工艺大类">
             <el-option v-for="category in processCategories" :key="category.id" :label="categoryLabel(category)" :value="category.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="具体工艺" required>
-          <el-input v-model="processDetailForm.detailName" placeholder="例如：精细包装" />
+          <el-input v-model="processDetailForm.detailName" readonly placeholder="例如：精细包装" />
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="processDetailForm.enabled" />
@@ -551,18 +464,14 @@ import {
   deleteAssemblyMarkupFee as deleteAssemblyMarkupFeeRequest,
   deleteExtraFeeItem,
   deleteMarkupFee as deleteMarkupFeeRequest,
-  deleteMaterial as deleteMaterialRequest,
-  deleteMaterialType as deleteMaterialTypeRequest,
   getMesMaterialSyncSchedule,
   getMesProcessSyncSchedule,
   saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
   saveExtraFeeItem,
   saveMarkupFee as saveMarkupFeeRequest,
   saveMaterial as saveMaterialRequest,
-  saveMaterialType as saveMaterialTypeRequest,
   saveMesMaterialSyncSchedule,
   saveMesProcessSyncSchedule,
-  saveProcessCategory as saveProcessCategoryRequest,
   saveProcessDetail as saveProcessDetailRequest,
   syncMesMaterials as syncMesMaterialsRequest,
   syncMesProcessTypes as syncMesProcessTypesRequest
@@ -600,28 +509,20 @@ const dictActionKeys = {
   syncMesMaterials: 'engineer:dict:material-sync-mes',
   syncMesProcessTypes: 'engineer:dict:process-sync-mes',
   saveMesSchedule: 'engineer:dict:mes-master-data-schedule-save',
-  saveMaterialTypeDialog: 'engineer:dict:material-type-save-dialog',
-  saveProcessCategoryDialog: 'engineer:dict:process-category-save-dialog',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
   saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog',
   saveAssemblyMarkupFeeDialog: 'engineer:dict:assembly-markup-fee-save-dialog',
   saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
-  deleteMaterial: (materialId) => `engineer:dict:material-delete:${materialId || 'none'}`,
-  deleteMaterialType: (typeId) => `engineer:dict:material-type-delete:${typeId || 'none'}`,
   deleteMarkupFee: (feeId) => `engineer:dict:markup-fee-delete:${feeId || 'none'}`,
   deleteAssemblyMarkupFee: (feeId) => `engineer:dict:assembly-markup-fee-delete:${feeId || 'none'}`,
   deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`
 }
 
-const isMaterialDeletePending = (row) => isPending(dictActionKeys.deleteMaterial(row?.id))
-const isMaterialTypeDeletePending = (row) => isPending(dictActionKeys.deleteMaterialType(row?.id))
 const isMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteMarkupFee(row?.id))
 const isAssemblyMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteAssemblyMarkupFee(row?.id))
 const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
 const materialDialogVisible = ref(false)
-const materialTypeDialogVisible = ref(false)
-const processCategoryDialogVisible = ref(false)
 const processDetailDialogVisible = ref(false)
 const markupFeeDialogVisible = ref(false)
 const assemblyMarkupFeeDialogVisible = ref(false)
@@ -631,8 +532,6 @@ const scheduleLoading = ref(false)
 const scheduleTarget = ref('MES_MATERIAL')
 
 const materialForm = reactive(createEmptyMaterial())
-const materialTypeForm = reactive(createEmptyMaterialType())
-const processCategoryForm = reactive(createEmptyProcessCategory())
 const processDetailForm = reactive(createEmptyProcessDetail())
 const markupFeeForm = reactive(createEmptyMarkupFee())
 const assemblyMarkupFeeForm = reactive(createEmptyMarkupFee())
@@ -726,31 +625,6 @@ function createEmptyMaterial() {
   }
 }
 
-function createEmptyMaterialType() {
-  return {
-    id: null,
-    typeCode: '',
-    typeName: '',
-    remarks: '',
-    enabled: true,
-    sortNo: 0
-  }
-}
-
-function createEmptyProcessCategory() {
-  return {
-    id: null,
-    sortNo: 0,
-    processCode: '',
-    categoryName: '',
-    hourlyRate: 0,
-    remarks: '',
-    sourceType: 'LOCAL',
-    mesExternalId: '',
-    enabled: true
-  }
-}
-
 function createEmptyProcessDetail() {
   return {
     id: null,
@@ -798,19 +672,6 @@ const openMaterialDialog = (row) => {
   Object.assign(materialForm, createEmptyMaterial(), row || {})
   materialForm.enabled = materialForm.enabled !== false
   materialDialogVisible.value = true
-}
-
-const openMaterialTypeDialog = (row) => {
-  Object.assign(materialTypeForm, createEmptyMaterialType(), row || {})
-  materialTypeForm.enabled = materialTypeForm.enabled !== false
-  materialTypeDialogVisible.value = true
-}
-
-const openProcessCategoryDialog = (row) => {
-  Object.assign(processCategoryForm, createEmptyProcessCategory(), row || {})
-  processCategoryForm.sourceType = processCategoryForm.sourceType || 'LOCAL'
-  processCategoryForm.enabled = processCategoryForm.enabled !== false
-  processCategoryDialogVisible.value = true
 }
 
 const openProcessDetailDialog = (row) => {
@@ -929,38 +790,6 @@ const saveMaterial = async () => {
   })
 }
 
-const saveMaterialType = async () => {
-  if (!materialTypeForm.typeCode) return ElMessage.warning('请填写材料类型编码。')
-  if (!materialTypeForm.typeName) return ElMessage.warning('请填写材料类型名称。')
-  return runAction(dictActionKeys.saveMaterialTypeDialog, async () => {
-    try {
-      const response = await saveMaterialTypeRequest(materialTypeForm)
-      ElMessage.success(response.message || '保存成功')
-      materialTypeDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
-    } catch (error) {
-      console.error(error)
-      ElMessage.error('材料类型保存失败。')
-    }
-  })
-}
-
-const saveProcessCategory = async () => {
-  if (!processCategoryForm.processCode) return ElMessage.warning('请填写工艺编码。')
-  if (!processCategoryForm.categoryName) return ElMessage.warning('请填写工艺名称。')
-  return runAction(dictActionKeys.saveProcessCategoryDialog, async () => {
-    try {
-      const response = await saveProcessCategoryRequest(processCategoryForm)
-      ElMessage.success(response.message || '保存成功')
-      processCategoryDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
-    } catch (error) {
-      console.error(error)
-      ElMessage.error('工艺大类保存失败。')
-    }
-  })
-}
-
 const saveProcessDetail = async () => {
   if (!processDetailForm.categoryId) return ElMessage.warning('请选择工艺大类。')
   if (!processDetailForm.detailName) return ElMessage.warning('请填写具体工艺名称。')
@@ -1019,24 +848,6 @@ const saveExtraFee = async () => {
       console.error(error)
       ElMessage.error('非工时费用工艺保存失败。')
     }
-  })
-}
-
-const deleteMaterial = async (row) => {
-  return runAction(dictActionKeys.deleteMaterial(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除材料「${row.materialCode || '-'} / ${row.materialName}」？`, '删除确认', { type: 'warning' })
-    await deleteMaterialRequest(row.id)
-    ElMessage.success('材料已删除')
-    await dictionaryStore.reloadAfterMutation()
-  })
-}
-
-const deleteMaterialType = async (row) => {
-  return runAction(dictActionKeys.deleteMaterialType(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除材料类型「${row.typeCode || '-'} / ${row.typeName}」？若已被材料引用，后端会自动收口为停用。`, '删除确认', { type: 'warning' })
-    await deleteMaterialTypeRequest(row.id)
-    ElMessage.success('材料类型已处理')
-    await dictionaryStore.reloadAfterMutation()
   })
 }
 

@@ -89,17 +89,21 @@ describe('MES master data sync stage 0 frontend guard', () => {
     expect(materialProcess).toContain('单价未维护')
   })
 
-  test('keeps the four material process dictionary tabs before MES sync implementation', () => {
+  test('keeps the four material process dictionary tabs but gates MES-owned maintenance', () => {
     const materialProcess = readSource('components', 'MaterialProcessManage.vue')
 
     expect(materialProcess).toContain('name="materials"')
     expect(materialProcess).toContain('name="materialTypes"')
     expect(materialProcess).toContain('name="processCategories"')
     expect(materialProcess).toContain('name="processDetails"')
-    expect(materialProcess).toContain('openMaterialDialog')
-    expect(materialProcess).toContain('openMaterialTypeDialog')
-    expect(materialProcess).toContain('openProcessCategoryDialog')
-    expect(materialProcess).toContain('openProcessDetailDialog')
+    expect(materialProcess).not.toContain('@click="openMaterialDialog()"')
+    expect(materialProcess).not.toContain('@click="openMaterialTypeDialog')
+    expect(materialProcess).not.toContain('@click="deleteMaterialType')
+    expect(materialProcess).not.toContain('@click="openProcessCategoryDialog')
+    expect(materialProcess).not.toContain('@click="openProcessDetailDialog()"')
+    expect(materialProcess).not.toContain('@click="deleteMaterial(scope.row)"')
+    expect(materialProcess).toContain('@click="openMaterialDialog(scope.row)"')
+    expect(materialProcess).toContain('@click="openProcessDetailDialog(scope.row)"')
   })
 
   test('material list exposes read-only MES density from synchronized materials', () => {
