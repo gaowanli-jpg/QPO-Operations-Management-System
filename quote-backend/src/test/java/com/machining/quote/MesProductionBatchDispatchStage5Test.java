@@ -48,7 +48,9 @@ class MesProductionBatchDispatchStage5Test {
         when(fixture.salesItemMapper.selectByIdForUpdate(9002L)).thenReturn(salesItem(9002L, 20, 3001L, null));
         when(fixture.headerMapper.selectById(3001L)).thenReturn(header(3001L, "SO-DOC-1"));
         mockReserve(fixture, "QPO-DEM-BATCH-1", List.of(line(1, "QPO-DEML-1", "MAT-001"), line(2, "QPO-DEML-2", "MAT-002")));
-        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-BATCH-1", item("MAT-001", "PLAN-1"), item("MAT-002", "PLAN-2")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-BATCH-1",
+                item("SO-DOC-1", "10", "MAT-001", "PLAN-1"),
+                item("SO-DOC-1", "20", "MAT-002", "PLAN-2")));
 
         Map<String, Object> result = fixture.service.dispatchBatch(List.of(1, 2), 9901L);
 
@@ -117,7 +119,7 @@ class MesProductionBatchDispatchStage5Test {
         when(fixture.salesItemMapper.selectBySourceTicketIdForUpdate(203)).thenReturn(salesItem(9303L, 30, 3303L, 203));
         when(fixture.headerMapper.selectById(3303L)).thenReturn(header(3303L, "SO-FROM-TICKET"));
         mockReserve(fixture, "QPO-DEM-RFQ", List.of(line(3, "QPO-DEML-RFQ", "MAT-RFQ")));
-        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-RFQ", item("MAT-RFQ", "PLAN-RFQ")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-RFQ", item("SO-FROM-TICKET", "30", "MAT-RFQ", "PLAN-RFQ")));
 
         fixture.service.dispatchBatch(List.of(3), 9903L);
 
@@ -152,7 +154,7 @@ class MesProductionBatchDispatchStage5Test {
         when(fixture.salesItemMapper.selectByIdForUpdate(9407L)).thenReturn(salesItem(9407L, 70, 3404L, null));
         when(fixture.headerMapper.selectById(3404L)).thenReturn(header(3404L, "SO-DOC-VALID"));
         mockReserve(fixture, "QPO-DEM-VALID", List.of(line(4, "QPO-DEML-4", "MAT-OK")));
-        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-VALID", item("MAT-OK", "PLAN-OK")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-VALID", item("SO-DOC-VALID", "40", "MAT-OK", "PLAN-OK")));
 
         Map<String, Object> result = fixture.service.dispatchBatch(List.of(4, 5, 6, 7), 9904L);
 
@@ -171,7 +173,7 @@ class MesProductionBatchDispatchStage5Test {
     }
 
     @Test
-    void duplicateProductCodesInSameGroupAreSplitIntoSeparateBatchesToAvoidAmbiguousMesResponse() {
+    void duplicateProductCodesWithDistinctSalesOrderLinesStayInOneBatch() {
         Fixture fixture = fixture();
         OrderDeliveryTicketAllocation first = allocation(8, 108, "MAT-DUP", 1, 9801L);
         OrderDeliveryTicketAllocation second = allocation(9, 109, "MAT-DUP", 1, 9802L);
@@ -182,19 +184,85 @@ class MesProductionBatchDispatchStage5Test {
         when(fixture.salesItemMapper.selectByIdForUpdate(9801L)).thenReturn(salesItem(9801L, 80, 3808L, null));
         when(fixture.salesItemMapper.selectByIdForUpdate(9802L)).thenReturn(salesItem(9802L, 90, 3808L, null));
         when(fixture.headerMapper.selectById(3808L)).thenReturn(header(3808L, "SO-DOC-DUP"));
-        mockReserveSequence(fixture,
-                reservation("QPO-DEM-DUP-1", line(8, "QPO-DEML-DUP-1", "MAT-DUP")),
-                reservation("QPO-DEM-DUP-2", line(9, "QPO-DEML-DUP-2", "MAT-DUP")));
-        when(fixture.client.dispatch(any()))
-                .thenReturn(success("QPO-DEM-DUP-1", item("MAT-DUP", "PLAN-DUP-1")))
-                .thenReturn(success("QPO-DEM-DUP-2", item("MAT-DUP", "PLAN-DUP-2")));
+        mockReserve(fixture, "QPO-DEM-DUP", List.of(
+                line(8, "QPO-DEML-DUP-1", "MAT-DUP"),
+                line(9, "QPO-DEML-DUP-2", "MAT-DUP")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-DUP",
+                item("SO-DOC-DUP", "80", "MAT-DUP", "PLAN-DUP-1"),
+                item("SO-DOC-DUP", "90", "MAT-DUP", "PLAN-DUP-2")));
 
         Map<String, Object> result = fixture.service.dispatchBatch(List.of(8, 9), 9908L);
 
-        assertThat(result).containsEntry("successCount", 2);
+        assertThat(result).containsEntry("successCount", 2).containsEntry("batchCount", 1);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(fixture.client).dispatch(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getItems()).hasSize(2);
+    }
+
+    @Test
+    void responseRowsAreMatchedBySalesOrderLineEvenWhenProductCodesCross() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation first = allocation(11, 111, "MAT-LINE-A", 1, 9811L);
+        OrderDeliveryTicketAllocation second = allocation(12, 112, "MAT-LINE-B", 1, 9812L);
+        first.setSourceOrderId(3811L);
+        second.setSourceOrderId(3811L);
+        when(fixture.allocationMapper.selectById(11)).thenReturn(first);
+        when(fixture.allocationMapper.selectById(12)).thenReturn(second);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9811L)).thenReturn(salesItem(9811L, 10, 3811L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9812L)).thenReturn(salesItem(9812L, 20, 3811L, null));
+        when(fixture.headerMapper.selectById(3811L)).thenReturn(header(3811L, "SO-DOC-LINE"));
+        mockReserve(fixture, "QPO-DEM-LINE", List.of(
+                line(11, "QPO-DEML-LINE-10", "MAT-LINE-A"),
+                line(12, "QPO-DEML-LINE-20", "MAT-LINE-B")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-LINE",
+                item("SO-DOC-LINE", "10", "MAT-LINE-B", "PLAN-LINE-10"),
+                item("SO-DOC-LINE", "20", "MAT-LINE-A", "PLAN-LINE-20")));
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(11, 12), 9911L);
+
+        assertThat(result).containsEntry("successCount", 2).containsEntry("unknownCount", 0);
+        ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper, times(2)).updateById(allocationCaptor.capture());
+        assertThat(allocationCaptor.getAllValues())
+                .anySatisfy(update -> {
+                    assertThat(update.getId()).isEqualTo(11);
+                    assertThat(update.getMesProductionExternalId()).isEqualTo("PLAN-LINE-10");
+                })
+                .anySatisfy(update -> {
+                    assertThat(update.getId()).isEqualTo(12);
+                    assertThat(update.getMesProductionExternalId()).isEqualTo("PLAN-LINE-20");
+                });
+    }
+
+    @Test
+    void duplicateSalesOrderLinesInSameGroupAreSplitIntoSeparateBatches() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation first = allocation(13, 113, "MAT-SO-LINE-A", 1, 9813L);
+        OrderDeliveryTicketAllocation second = allocation(14, 114, "MAT-SO-LINE-B", 1, 9814L);
+        first.setSourceOrderId(3813L);
+        second.setSourceOrderId(3813L);
+        when(fixture.allocationMapper.selectById(13)).thenReturn(first);
+        when(fixture.allocationMapper.selectById(14)).thenReturn(second);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9813L)).thenReturn(salesItem(9813L, 10, 3813L, null));
+        when(fixture.salesItemMapper.selectByIdForUpdate(9814L)).thenReturn(salesItem(9814L, 10, 3813L, null));
+        when(fixture.headerMapper.selectById(3813L)).thenReturn(header(3813L, "SO-DOC-DUP-LINE"));
+        mockReserveSequence(fixture,
+                reservation("QPO-DEM-SO-LINE-1", line(13, "QPO-DEML-SO-LINE-1", "MAT-SO-LINE-A")),
+                reservation("QPO-DEM-SO-LINE-2", line(14, "QPO-DEML-SO-LINE-2", "MAT-SO-LINE-B")));
+        when(fixture.client.dispatch(any()))
+                .thenReturn(success("QPO-DEM-SO-LINE-1", item("SO-DOC-DUP-LINE", "10", "MAT-SO-LINE-A", "PLAN-SO-LINE-1")))
+                .thenReturn(success("QPO-DEM-SO-LINE-2", item("SO-DOC-DUP-LINE", "10", "MAT-SO-LINE-B", "PLAN-SO-LINE-2")));
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(13, 14), 9913L);
+
+        assertThat(result).containsEntry("successCount", 2).containsEntry("batchCount", 2);
         ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
         verify(fixture.client, times(2)).dispatch(requestCaptor.capture());
-        assertThat(requestCaptor.getAllValues()).allSatisfy(request -> assertThat(request.getItems()).hasSize(1));
+        assertThat(requestCaptor.getAllValues()).allSatisfy(request -> {
+            assertThat(request.getItems()).hasSize(1);
+            assertThat(request.getItems().get(0).getSaleOrderNo()).isEqualTo("SO-DOC-DUP-LINE");
+            assertThat(request.getItems().get(0).getSaleOrderItemNo()).isEqualTo("10");
+        });
     }
 
     @Test
@@ -217,6 +285,27 @@ class MesProductionBatchDispatchStage5Test {
         assertThat(allocationCaptor.getValue().getMesProductionRequestId()).isEqualTo("QPO-DEML-UNKNOWN");
         assertThat(allocationCaptor.getValue().getMesProductionMessage()).contains("missing");
         verify(fixture.client).dispatch(any());
+    }
+
+    @Test
+    void responseWithoutSalesOrderLineIsUnknownEvenWhenProductCodeMatches() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation allocation = allocation(15, 115, "MAT-STRICT", 5, 9915L);
+        allocation.setSourceOrderId(3915L);
+        when(fixture.allocationMapper.selectById(15)).thenReturn(allocation);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9915L)).thenReturn(salesItem(9915L, 150, 3915L, null));
+        when(fixture.headerMapper.selectById(3915L)).thenReturn(header(3915L, "SO-DOC-STRICT"));
+        mockReserve(fixture, "QPO-DEM-STRICT", List.of(line(15, "QPO-DEML-STRICT", "MAT-STRICT")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-STRICT", productOnlyItem("MAT-STRICT", "PLAN-SHOULD-NOT-MATCH")));
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(15), 9915L);
+
+        assertThat(result).containsEntry("unknownCount", 1).containsEntry("successCount", 0).containsEntry("failedCount", 0);
+        ArgumentCaptor<OrderDeliveryTicketAllocation> allocationCaptor = ArgumentCaptor.forClass(OrderDeliveryTicketAllocation.class);
+        verify(fixture.allocationMapper).updateById(allocationCaptor.capture());
+        assertThat(allocationCaptor.getValue().getMesProductionStatus()).isEqualTo("RESULT_UNKNOWN");
+        assertThat(allocationCaptor.getValue().getMesProductionExternalId()).isNull();
+        assertThat(allocationCaptor.getValue().getMesProductionMessage()).contains("saleOrderNo/saleOrderItemNo");
     }
 
     private Fixture fixture() {
@@ -335,11 +424,18 @@ class MesProductionBatchDispatchStage5Test {
         return resp;
     }
 
-    private MesProductionDispatchResp.Item item(String productCode, String planNo) {
+    private MesProductionDispatchResp.Item productOnlyItem(String productCode, String planNo) {
         MesProductionDispatchResp.Item item = new MesProductionDispatchResp.Item();
         item.setProductCode(productCode);
         item.setPlanNo(planNo);
         item.setStatus(0);
+        return item;
+    }
+
+    private MesProductionDispatchResp.Item item(String saleOrderNo, String saleOrderItemNo, String productCode, String planNo) {
+        MesProductionDispatchResp.Item item = productOnlyItem(productCode, planNo);
+        item.setSaleOrderNo(saleOrderNo);
+        item.setSaleOrderItemNo(saleOrderItemNo);
         return item;
     }
 

@@ -23,16 +23,16 @@ POST /api/v1/mes/openapi/demand/create
 
 本次补丁按 QPO 与 MES 最终沟通口径执行：
 
-- QPO 请求需求任务时，`items[]` 每个零件行新增 `orderType`。
-- MES 响应需求任务时，`items[]` 每个返回行新增 `saleOrderNo` 和 `saleOrderItemNo`。
+- QPO 请求需求任务的现有字段保持不变，本轮不向 MES 额外传 `orderType`。
+- MES 响应需求任务时，`items[]` 每个返回行新增 `saleOrderNo` 和 `saleOrderItemNo`，并原样返回 QPO 请求中的销售订单号和销售订单行号。
 - QPO 以 `bizId + saleOrderNo + saleOrderItemNo` 作为本轮需求任务响应的行级匹配依据。
 - 如果未来同一销售订单行拆成多条生产任务，QPO 在请求 MES 前做批次拆分，保证单个 `bizId` 内 `saleOrderNo + saleOrderItemNo` 唯一。
 
 ## 2. 最终接口口径
 
-### 2.1 QPO 请求 MES：需求任务新增订单类型
+### 2.1 QPO 请求 MES：需求任务请求体保持不变
 
-请求体保持原结构，只在 `items[]` 行内增加 `orderType`。
+QPO 请求体继续沿用现有结构，不新增 `orderType` 字段。
 
 ```json
 {
@@ -45,7 +45,6 @@ POST /api/v1/mes/openapi/demand/create
       "saleOrderNo": "SO-20260813-001",
       "saleOrderItemNo": "10",
       "productCode": "MAT-000123",
-      "orderType": "正式订单",
       "demandQty": 10,
       "makeQty": 10,
       "buyQty": 0,
@@ -113,7 +112,6 @@ MES 在 `data.items[]` 中原样返回 QPO 请求中的：
 | `bizId` | 根节点 | QPO -> MES，MES -> QPO | 是 | 本次批量需求任务请求号，也是 QPO 侧批次身份。 |
 | `items[].saleOrderNo` | 行 | QPO -> MES，MES -> QPO | 是 | 销售订单号，MES 必须原样返回。 |
 | `items[].saleOrderItemNo` | 行 | QPO -> MES，MES -> QPO | 是 | 销售订单行号，MES 必须原样返回。 |
-| `items[].orderType` | 行 | QPO -> MES | 是 | 订单类型，例如 `备货订单`、`正式订单`、`预测订单`。 |
 | `items[].productCode` | 行 | QPO -> MES，MES -> QPO | 是 | MES 物料号 / 产品编码。 |
 | `items[].planNo` | 行 | MES -> QPO | 成功时是 | MES 生成的生产计划号。 |
 | `items[].id` | 行 | MES -> QPO | 成功时建议返回 | MES 需求任务 ID 或任务标识。 |
@@ -192,16 +190,13 @@ QPO 也能在单个 `bizId` 内唯一定位对应行。
 quote-backend/src/main/java/com/machining/quote/dto/mes/MesProductionDispatchReq.java
 ```
 
-修改点：在 `MesProductionDispatchReq.Item` 中新增：
-
-```java
-private String orderType;
-```
+修改点：本轮无需修改请求 DTO。
 
 注意：
 
-- 当前 `MesProductionDispatchReq` 根对象上已有兼容用的 `orderType`，但该字段是 `@JsonIgnore`，不会进入 MES 请求体。
-- 本次需要把 `orderType` 放到 `items[]` 行内，作为单个零件的属性传给 MES。
+- `MesProductionDispatchReq.Item` 不新增 `orderType`。
+- 当前 `MesProductionDispatchReq` 根对象上已有兼容用的 `orderType`，但该字段是 `@JsonIgnore`，继续不进入 MES 请求体。
+- 订单类型仍是 QPO 内部订单 / 零件属性，本轮不作为 MES 需求任务接口字段传输。
 
 ### 6.2 请求组装逻辑
 
@@ -211,29 +206,13 @@ private String orderType;
 quote-backend/src/main/java/com/machining/quote/service/mes/MesProductionDispatchService.java
 ```
 
-修改点：在构造需求任务 `Item` 时补充：
+修改点：本轮不在需求任务请求组装逻辑中新增 `orderType` 写入。
 
-```java
-item.setOrderType(...);
-```
+处理要求：
 
-字段来源建议：
-
-```text
-order_delivery_ticket_allocation.order_type
-```
-
-如果 allocation 行为空，可按现有业务来源降级：
-
-```text
-allocation.orderType -> ticket.orderType -> salesOrderItem.orderType -> salesOrderHeader.orderType
-```
-
-最终发送给 MES 的值应为业务可读订单类型：
-
-```text
-备货订单 / 正式订单 / 预测订单
-```
+- 保持现有 `saleOrderNo`、`saleOrderItemNo`、`productCode`、数量、交期、BOM 和工艺路线字段不变。
+- 不调用 `item.setOrderType(...)`，避免 QPO 单方面扩展 MES 当前不接收的字段。
+- 后续如果 MES 明确新增订单类型接收字段，再单独补充字段契约和请求组装逻辑。
 
 ### 6.3 响应 DTO
 
@@ -267,21 +246,20 @@ private String message;
 quote-backend/src/main/java/com/machining/quote/service/mes/MesProductionDispatchService.java
 ```
 
-现状：当前主要按 `productCode` 匹配响应行。
+现状：当前联调口径中，MES 需求任务响应会返回 `saleOrderNo` 和 `saleOrderItemNo`。
 
-补丁后优先级建议：
+补丁后唯一匹配键：
 
 ```text
-第一优先级：bizId + saleOrderNo + saleOrderItemNo
-第二优先级：productCode，仅作为兼容旧 MES 响应的兜底逻辑
+bizId + saleOrderNo + saleOrderItemNo
 ```
 
 处理建议：
 
-1. 如果 MES 响应行包含 `saleOrderNo`、`saleOrderItemNo`，优先使用销售订单行匹配。
-2. 如果 MES 响应行不包含这两个字段，则继续使用当前 `productCode` 匹配逻辑，保持旧接口兼容。
+1. MES 响应行必须包含 `saleOrderNo`、`saleOrderItemNo`，QPO 只按销售订单行匹配。
+2. 如果 MES 响应行缺少 `saleOrderNo` 或 `saleOrderItemNo`，该 QPO 行进入 `RESULT_UNKNOWN`，不按 `productCode` 兜底。
 3. 如果同一 `bizId` 内发现重复 `saleOrderNo + saleOrderItemNo`，QPO 应在发起前拆批，不应把重复行放在同一批次。
-4. 如果仍发生响应重复或无法匹配，不做错误回写，只记录失败摘要和异常原因。
+4. 如果 MES 响应仍出现重复或无法匹配，不做错误回写，只记录失败摘要和异常原因。
 
 ### 6.5 下发前拆批逻辑
 
@@ -291,7 +269,7 @@ quote-backend/src/main/java/com/machining/quote/service/mes/MesProductionDispatc
 quote-backend/src/main/java/com/machining/quote/service/mes/MesProductionDispatchService.java
 ```
 
-现有逻辑已经有按重复 `productCode` 拆批的保护。本次补丁建议增加一个同类拆分规则：
+本次补丁只保留销售订单行维度的拆批规则：
 
 ```text
 同一批次内 saleOrderNo + saleOrderItemNo 不允许重复。
@@ -303,19 +281,20 @@ quote-backend/src/main/java/com/machining/quote/service/mes/MesProductionDispatc
 
 ```text
 每个最终发送给 MES 的 bizId 批次内：
-1. productCode 不重复，兼容旧 MES 响应；
-2. saleOrderNo + saleOrderItemNo 不重复，支持新 MES 响应；
-3. 每个 items[] 行都有 orderType。
+1. saleOrderNo + saleOrderItemNo 不重复；
+2. 每个 items[] 行都有 saleOrderNo 和 saleOrderItemNo；
+3. productCode 可以重复，只要销售订单行不同即可同批下发；
+4. 请求体不新增 orderType。
 ```
 
-## 7. 兼容策略
+## 7. 严格处理策略
 
-本次补丁应保持向后兼容。
+本次补丁不保留旧响应兜底逻辑。MES 需求任务响应必须返回 `saleOrderNo` 和 `saleOrderItemNo`，否则 QPO 无法安全判断响应属于哪一条待生产行。
 
 | MES 响应情况 | QPO 处理方式 |
 | --- | --- |
-| 返回 `saleOrderNo + saleOrderItemNo` | 优先使用销售订单行身份匹配。 |
-| 未返回 `saleOrderNo + saleOrderItemNo` | 继续使用现有 `productCode` 兜底匹配。 |
+| 返回 `saleOrderNo + saleOrderItemNo` | 使用销售订单行身份匹配。 |
+| 未返回 `saleOrderNo + saleOrderItemNo` | 判定为无法安全匹配，相关 QPO 行进入 `RESULT_UNKNOWN`，不按 `productCode` 兜底。 |
 | 返回重复销售订单行 | 判定为异常响应，不做不确定回写。 |
 | 返回未知销售订单行 | 判定为无法匹配，不写入其他行。 |
 | 行级 `status` 失败 | 回写失败状态和失败摘要。 |
@@ -367,15 +346,16 @@ durationMs
 
 ### 10.1 请求体测试
 
-验证 QPO 发给 MES 的 `items[]` 包含：
+验证 QPO 发给 MES 的 `items[]` 仍包含销售订单号和销售订单行号：
 
 ```json
 {
-  "orderType": "正式订单"
+  "saleOrderNo": "SO-001",
+  "saleOrderItemNo": "10"
 }
 ```
 
-并确认 `orderType` 不在根节点暴露为业务字段。
+并确认请求体根节点和 `items[]` 行内都不新增 `orderType`。
 
 ### 10.2 新响应匹配测试
 
@@ -404,9 +384,9 @@ MES 返回：
 QPO 精准回写 BIZ-001 批次内 SO-001 / 10 对应的待生产行。
 ```
 
-### 10.3 旧响应兼容测试
+### 10.3 缺少销售订单行响应测试
 
-MES 仍只返回：
+MES 只返回：
 
 ```json
 {
@@ -419,7 +399,9 @@ MES 仍只返回：
 预期：
 
 ```text
-QPO 继续使用现有 productCode 兜底逻辑，不影响当前已联通链路。
+QPO 不按 productCode 兜底；
+对应待生产行进入 RESULT_UNKNOWN；
+不写入 planNo / MES 外部生产任务号。
 ```
 
 ### 10.4 重复销售订单行拆批测试
@@ -460,6 +442,7 @@ QPO 不做不确定回写；
 本补丁不做以下事项：
 
 - 不要求 MES 本轮支持 `lineRequestId`。
+- 不向 MES 需求任务请求新增或下发 `orderType`。
 - 不改 MES 物料准备接口。
 - 不调整 QPO 原有物料号幂等逻辑。
 - 不改变 WMS 锁库分配逻辑。
@@ -468,10 +451,10 @@ QPO 不做不确定回写；
 
 ## 12. 最终结论
 
-本补丁采用最小改造方案：
+本补丁采用严格行级回写方案：
 
 ```text
-QPO 请求新增 items[].orderType
+QPO 请求体保持现有字段，不新增 items[].orderType
 MES 响应新增 items[].saleOrderNo + items[].saleOrderItemNo
 QPO 按 bizId + saleOrderNo + saleOrderItemNo 回写
 QPO 对重复销售订单行做批次拆分

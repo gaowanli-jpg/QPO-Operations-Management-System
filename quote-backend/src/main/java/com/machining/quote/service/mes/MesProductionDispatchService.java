@@ -39,7 +39,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -157,7 +156,7 @@ public class MesProductionDispatchService {
             }
         }
 
-        for (List<ProductionDispatchPlan> group : splitAmbiguousProductCodeGroups(groupPlans(plans))) {
+        for (List<ProductionDispatchPlan> group : splitAmbiguousResponseIdentityGroups(groupPlans(plans))) {
             dispatchPlanGroup(group, taskId, rowsByAllocationId);
         }
 
@@ -295,15 +294,15 @@ public class MesProductionDispatchService {
         return new ArrayList<>(grouped.values());
     }
 
-    private List<List<ProductionDispatchPlan>> splitAmbiguousProductCodeGroups(List<List<ProductionDispatchPlan>> groupedPlans) {
+    private List<List<ProductionDispatchPlan>> splitAmbiguousResponseIdentityGroups(List<List<ProductionDispatchPlan>> groupedPlans) {
         List<List<ProductionDispatchPlan>> result = new ArrayList<>();
         for (List<ProductionDispatchPlan> group : groupedPlans) {
-            Map<String, Integer> productCounts = new HashMap<>();
+            Map<String, Integer> salesOrderLineCounts = new LinkedHashMap<>();
             for (ProductionDispatchPlan plan : group) {
-                productCounts.merge(plan.item().getProductCode(), 1, Integer::sum);
+                salesOrderLineCounts.merge(salesOrderLineKey(plan.item()), 1, Integer::sum);
             }
-            boolean hasDuplicateProductCode = productCounts.values().stream().anyMatch(count -> count > 1);
-            if (!hasDuplicateProductCode) {
+            boolean hasDuplicateSalesOrderLine = salesOrderLineCounts.values().stream().anyMatch(count -> count > 1);
+            if (!hasDuplicateSalesOrderLine) {
                 result.add(group);
                 continue;
             }
@@ -398,16 +397,17 @@ public class MesProductionDispatchService {
             MesProductionDispatchResp response,
             Long taskId,
             Map<Integer, Map<String, Object>> rowsByAllocationId) {
-        Map<String, List<MesProductionDispatchResp.Item>> responseItemsByProduct = responseItemsByProduct(response);
+        Map<String, List<MesProductionDispatchResp.Item>> responseItemsBySalesOrderLine = responseItemsBySalesOrderLine(response);
         int successCount = 0;
         int unknownCount = 0;
         int failedCount = 0;
         for (ProductionDispatchPlan plan : plans) {
             MesProductionBatchItem batchItem = batchItemByAllocationId.get(plan.allocation().getId());
             String requestId = batchItem == null ? null : batchItem.getLineRequestId();
-            List<MesProductionDispatchResp.Item> matches = responseItemsByProduct.get(plan.item().getProductCode());
+            String matchLabel = "saleOrderNo/saleOrderItemNo " + plan.item().getSaleOrderNo() + "/" + plan.item().getSaleOrderItemNo();
+            List<MesProductionDispatchResp.Item> matches = responseItemsBySalesOrderLine.get(salesOrderLineKey(plan.item()));
             if (matches == null || matches.isEmpty()) {
-                String message = "MES production response missing row for productCode " + plan.item().getProductCode();
+                String message = "MES production response missing row for " + matchLabel;
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, null, message);
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
@@ -416,7 +416,7 @@ public class MesProductionDispatchService {
                 continue;
             }
             if (matches.size() > 1) {
-                String message = "MES production response has ambiguous duplicate productCode " + plan.item().getProductCode();
+                String message = "MES production response has ambiguous duplicate " + matchLabel;
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, null, message);
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
@@ -426,7 +426,7 @@ public class MesProductionDispatchService {
             }
             MesProductionDispatchResp.Item responseItem = matches.get(0);
             if (!isSuccessStatus(responseItem.getStatus())) {
-                String message = "MES production response row failed for productCode " + plan.item().getProductCode();
+                String message = "MES production response row failed for " + matchLabel;
                 markFailed(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_FAILED, responseItem, message);
                 Map<String, Object> result = withBizId(resultSummary(plan.allocation(), requestId, null), batch.getBizId());
@@ -438,7 +438,7 @@ public class MesProductionDispatchService {
             }
             String externalId = responseExternalId(responseItem);
             if (isBlank(externalId)) {
-                String message = "MES production response missing planNo for productCode " + plan.item().getProductCode();
+                String message = "MES production response missing planNo for " + matchLabel;
                 markResultUnknown(plan.allocation(), requestId, message);
                 updateProductionBatchItem(batchItem, STATUS_RESULT_UNKNOWN, responseItem, message);
                 rowsByAllocationId.put(plan.allocation().getId(), row(plan.allocation().getId(), STATUS_RESULT_UNKNOWN, message,
@@ -461,18 +461,30 @@ public class MesProductionDispatchService {
         updateBatch(batch, batchStatus, responseCode(response), response.getMessage(), true);
     }
 
-    private Map<String, List<MesProductionDispatchResp.Item>> responseItemsByProduct(MesProductionDispatchResp response) {
+    private Map<String, List<MesProductionDispatchResp.Item>> responseItemsBySalesOrderLine(MesProductionDispatchResp response) {
         Map<String, List<MesProductionDispatchResp.Item>> result = new LinkedHashMap<>();
         if (response == null || response.getData() == null || response.getData().getItems() == null) {
             return result;
         }
         for (MesProductionDispatchResp.Item item : response.getData().getItems()) {
-            if (item == null || isBlank(item.getProductCode())) {
+            if (item == null || isBlank(item.getSaleOrderNo()) || isBlank(item.getSaleOrderItemNo())) {
                 continue;
             }
-            result.computeIfAbsent(item.getProductCode().trim(), ignored -> new ArrayList<>()).add(item);
+            result.computeIfAbsent(salesOrderLineKey(item), ignored -> new ArrayList<>()).add(item);
         }
         return result;
+    }
+
+    private String salesOrderLineKey(MesProductionDispatchReq.Item item) {
+        return String.join("|",
+                blankToEmpty(item == null ? null : item.getSaleOrderNo()),
+                blankToEmpty(item == null ? null : item.getSaleOrderItemNo()));
+    }
+
+    private String salesOrderLineKey(MesProductionDispatchResp.Item item) {
+        return String.join("|",
+                blankToEmpty(item == null ? null : item.getSaleOrderNo()),
+                blankToEmpty(item == null ? null : item.getSaleOrderItemNo()));
     }
 
     private Map<Integer, MesProductionBatchItem> indexProductionBatchItems(List<MesProductionBatchItem> items) {

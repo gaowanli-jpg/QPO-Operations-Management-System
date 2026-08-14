@@ -72,7 +72,7 @@ class LockedItemMesProductionClientTest {
                     .contains("\"processTypeCode\":\"PACKAGING\"")
                     .contains("\"workHour\":1.5")
                     .contains("\"programNum\":\"10\"")
-                    .doesNotContain("allocationId", "ticketId", "sourceType", "partNo", "version", "productionQty", "ticketQty", "lineCost", "hourlyRate", "materialData", "assemblyRelations");
+                    .doesNotContain("allocationId", "ticketId", "sourceType", "partNo", "version", "productionQty", "ticketQty", "orderType", "lineCost", "hourlyRate", "materialData", "assemblyRelations");
         } finally {
             server.stop(0);
         }

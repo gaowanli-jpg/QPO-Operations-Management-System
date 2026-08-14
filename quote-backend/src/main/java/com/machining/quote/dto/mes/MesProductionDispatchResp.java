@@ -70,6 +70,8 @@ public class MesProductionDispatchResp {
     public static class Item {
         private Long id;
         private String planNo;
+        private String saleOrderNo;
+        private String saleOrderItemNo;
         private String productCode;
         private Object status;
     }
