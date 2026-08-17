@@ -1,8 +1,10 @@
 package com.machining.quote.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 @Data
+@JsonInclude(JsonInclude.Include.ALWAYS)
 public class SalesOrderSyncItemDTO {
     private String saleOrderItemNo;
     private String materialNo;

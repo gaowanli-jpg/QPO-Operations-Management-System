@@ -288,6 +288,18 @@
                       <th scope="row" title="预测本件材料费">预测本件材料费</th>
                       <td :title="`¥ ${calculatedMaterialCost.toFixed(2)}`">¥ {{ calculatedMaterialCost.toFixed(2) }}</td>
                     </tr>
+                    <tr v-if="quoteMode === 'NORMAL'">
+                      <th scope="row" title="未税单价">未税单价</th>
+                      <td :title="`¥ ${normalUntaxedUnitPricePreview.toFixed(2)}`">¥ {{ normalUntaxedUnitPricePreview.toFixed(2) }}</td>
+                      <th scope="row" title="含税单价">含税单价</th>
+                      <td :title="`¥ ${normalTaxIncludedUnitPricePreview.toFixed(2)}`">¥ {{ normalTaxIncludedUnitPricePreview.toFixed(2) }}</td>
+                    </tr>
+                    <tr v-if="quoteMode === 'NORMAL'">
+                      <th scope="row" title="未税金额">未税金额</th>
+                      <td :title="`¥ ${normalUntaxedTotalPricePreview.toFixed(2)}`">¥ {{ normalUntaxedTotalPricePreview.toFixed(2) }}</td>
+                      <th scope="row" title="含税金额">含税金额</th>
+                      <td :title="`¥ ${normalTaxIncludedTotalPricePreview.toFixed(2)}`">¥ {{ normalTaxIncludedTotalPricePreview.toFixed(2) }}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -679,6 +691,7 @@ const pricingItemTotal = ref(0)
 const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
+const markupFeeOptions = computed(() => dictionaryStore.markupFees)
 const assemblyMarkupFeeOptions = computed(() => dictionaryStore.assemblyMarkupFees)
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
@@ -1649,6 +1662,48 @@ const calculatedVolume = computed(() => {
 })
 const calculatedWeight = computed(() => calculatedVolume.value * currentDensity.value)
 const calculatedMaterialCost = computed(() => calculatedWeight.value * currentUnitPrice.value)
+const currentItemQty = computed(() => numberOrZero(currentRow.value?.qty))
+
+const normalProcessCostPreview = computed(() => processRoute.value.reduce((sum, proc) => {
+  const inputVal = numberOrZero(proc.inputVal)
+  if (inputVal <= 0) return sum
+  if (isSelectableProcessRoute(proc)) {
+    const option = findProcessOption(proc)
+    const hourlyRate = numberOrZero(option?.hourlyRate ?? proc.hourlyRate ?? proc.unitRate)
+    return sum + inputVal * hourlyRate
+  }
+  if (!proc.processName) return sum
+  return sum + inputVal
+}, 0))
+
+const normalBaseCostPreview = computed(() => calculatedMaterialCost.value + normalProcessCostPreview.value)
+const normalMarkupFeeRowsPreview = computed(() => markupFeeOptions.value
+  .filter(fee => fee.enabled !== false)
+  .map(fee => {
+    const ratePercent = numberOrZero(fee.ratePercent)
+    const cost = normalBaseCostPreview.value * ratePercent / 100
+    return {
+      feeName: fee.feeName,
+      ratePercent,
+      cost
+    }
+  }))
+const normalMarkupCostPreview = computed(() => normalMarkupFeeRowsPreview.value
+  .reduce((sum, row) => sum + numberOrZero(row.cost), 0))
+const isTaxFeeName = (feeName) => {
+  const text = String(feeName || '').toLowerCase()
+  return text.includes('税') || text.includes('tax') || text.includes('vat')
+}
+const normalTaxFeeCostPreview = computed(() => normalMarkupFeeRowsPreview.value
+  .filter(row => isTaxFeeName(row.feeName))
+  .reduce((sum, row) => sum + numberOrZero(row.cost), 0))
+const normalTaxIncludedUnitPricePreview = computed(() => normalBaseCostPreview.value + normalMarkupCostPreview.value)
+const normalUntaxedUnitPricePreview = computed(() => Math.max(
+  0,
+  normalTaxIncludedUnitPricePreview.value - normalTaxFeeCostPreview.value
+))
+const normalTaxIncludedTotalPricePreview = computed(() => normalTaxIncludedUnitPricePreview.value * currentItemQty.value)
+const normalUntaxedTotalPricePreview = computed(() => normalUntaxedUnitPricePreview.value * currentItemQty.value)
 
 // 提交逻辑
 const submitCurrentQuote = async () => {

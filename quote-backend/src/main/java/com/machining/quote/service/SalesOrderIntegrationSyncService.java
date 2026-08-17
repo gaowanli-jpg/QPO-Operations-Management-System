@@ -109,9 +109,6 @@ public class SalesOrderIntegrationSyncService {
         if (item.getLineNo() == null) {
             throw new IllegalArgumentException("sales_order_item.line_no is required for external sales order sync");
         }
-        if (isBlank(item.getMaterialNo())) {
-            throw new IllegalArgumentException("sales_order_item.material_no is required for MES sales order demand sync");
-        }
         SalesOrderSyncItemDTO record = new SalesOrderSyncItemDTO();
         record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));
         record.setMaterialNo(item.getMaterialNo());
@@ -166,9 +163,6 @@ public class SalesOrderIntegrationSyncService {
         String message = error.getMessage();
         if (message != null && message.contains("sales_order_item.line_no")) {
             return "missingLineNo";
-        }
-        if (message != null && message.contains("sales_order_item.material_no")) {
-            return "missingMaterialNo";
         }
         if (message != null && message.contains("cursor")) {
             return "invalidCursor";

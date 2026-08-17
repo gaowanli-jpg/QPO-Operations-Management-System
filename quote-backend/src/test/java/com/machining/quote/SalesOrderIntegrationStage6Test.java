@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.dto.SalesOrderSyncItemDTO;
 import com.machining.quote.dto.SalesOrderSyncItemRow;
@@ -73,6 +74,9 @@ class SalesOrderIntegrationStage6Test {
     );
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper nonNullObjectMapper = new ObjectMapper()
+            .findAndRegisterModules()
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     @Test
     void responseDtosExposeOnlyMesDemandContractFields() {
@@ -170,7 +174,7 @@ class SalesOrderIntegrationStage6Test {
     }
 
     @Test
-    void queryRejectsItemRowsWithoutMaterialNoBecauseMesDemandRequiresIt() {
+    void queryAllowsItemRowsWithoutMaterialNoBecauseMaterialMayBeAssignedLater() {
         SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
         SalesOrderIntegrationSyncService service = service(mapper);
         SalesOrderSyncQueryReq req = req(100);
@@ -180,9 +184,43 @@ class SalesOrderIntegrationStage6Test {
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
                 .thenReturn(List.of(item));
 
-        assertThatThrownBy(() -> service.query(req))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("sales_order_item.material_no");
+        SalesOrderSyncResp resp = service.query(req);
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getData().getRecords()).hasSize(1);
+        SalesOrderSyncItemDTO returnedItem = resp.getData().getRecords().get(0).getItems().get(0);
+        assertThat(returnedItem.getSaleOrderItemNo()).isEqualTo("10");
+        assertThat(returnedItem.getMaterialNo()).isNull();
+    }
+
+    @Test
+    void serializedResponseIncludesNullFieldsForStableMesContract() throws Exception {
+        SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
+        SalesOrderIntegrationSyncService service = service(mapper);
+        SalesOrderSyncQueryReq req = req(100);
+        SalesOrderSyncOrderRow order = order(1L, "SO-20260814-001", null, LocalDateTime.of(2026, 8, 14, 10, 30));
+        order.setStatus(null);
+        order.setInternalProjectNo(null);
+        when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
+                .thenReturn(List.of(order));
+        SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 10, "P-001", "A", null, null);
+        item.setDescription(null);
+        item.setSurfaceTreatment(null);
+        item.setRemark(null);
+        when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
+                .thenReturn(List.of(item));
+
+        String json = nonNullObjectMapper.writeValueAsString(service.query(req));
+
+        assertThat(json)
+                .contains("\"status\":null")
+                .contains("\"orderType\":null")
+                .contains("\"internalProjectNo\":null")
+                .contains("\"materialNo\":null")
+                .contains("\"description\":null")
+                .contains("\"surfaceTreatment\":null")
+                .contains("\"remark\":null")
+                .contains("\"nextCursor\":null");
     }
 
     private SalesOrderIntegrationSyncService service(SalesOrderIntegrationMapper mapper) {

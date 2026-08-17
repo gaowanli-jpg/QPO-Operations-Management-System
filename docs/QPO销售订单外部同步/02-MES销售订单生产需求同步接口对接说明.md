@@ -41,6 +41,8 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 
 ## 4. 响应结构
 
+响应字段集合固定；字段没有业务值时仍返回字段，值为 `null`，不会省略字段。典型场景包括 `status`、`orderType`、`internalProjectNo`、`materialNo`、`description`、`surfaceTreatment`、`remark` 和 `nextCursor`。
+
 ### 4.1 成功响应
 
 ```json
@@ -111,7 +113,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 | 字段 | 类型 | 必返 | 说明 |
 | --- | --- | --- | --- |
 | `saleOrderItemNo` | string | 是 | 订单内稳定且唯一的明细编号，来自 QPO 销售订单行号。 |
-| `materialNo` | string | 是 | 销售物料号 / MES 物料编码，用于 MES 匹配物料。 |
+| `materialNo` | string | 否 | 销售物料号 / MES 物料编码，用于 MES 匹配物料；QPO 销售订单可能先于 MES 物料号生成，未获取物料号时返回空值 / `null`。 |
 | `releasedQty` | decimal | 是 | 已提数量，固定来自 QPO `sales_order_item.released_qty`。 |
 | `description` | string | 否 | 明细描述。 |
 | `surfaceTreatment` | string | 否 | 表面处理要求。 |
@@ -195,7 +197,8 @@ HTTP/1.1 401 Unauthorized
 {
   "success": false,
   "code": 401,
-  "message": "销售订单同步接口 token 无效"
+  "message": "销售订单同步接口 token 无效",
+  "data": null
 }
 ```
 
@@ -209,7 +212,8 @@ HTTP/1.1 400 Bad Request
 {
   "success": false,
   "code": 400,
-  "message": "pageSize 只允许 20、50、100"
+  "message": "pageSize 只允许 20、50、100",
+  "data": null
 }
 ```
 
@@ -218,7 +222,7 @@ HTTP/1.1 400 Bad Request
 - `pageSize` 不是 `20` / `50` / `100`。
 - 时间参数格式错误。
 - `cursor` 格式错误。
-- QPO 数据治理未通过，例如明细缺少 `saleOrderItemNo` 或 `materialNo`。
+- QPO 数据治理未通过，例如明细缺少 `saleOrderItemNo`。`materialNo` 不是必填字段，缺失时不会导致 `400`。
 
 ## 9. 不返回字段
 
