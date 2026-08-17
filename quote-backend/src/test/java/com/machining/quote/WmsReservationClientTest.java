@@ -24,8 +24,9 @@ import static org.mockito.Mockito.when;
 
 class WmsReservationClientTest {
     @Test
-    void singleItemRequestStillSerializesItemsArrayWithRemarkAndBigDecimalQuantity() throws Exception {
-        WmsSaleLadingReserveReq request = request("QPO-WMS-1", "SO-1", item("500901000700", "5", "waterproof dressing"));
+    void singleItemRequestStillSerializesItemsArrayWithRemarkCustomerFieldsAndBigDecimalQuantity() throws Exception {
+        WmsSaleLadingReserveReq request = request("QPO-WMS-1", "SO-1",
+                item("500901000700", "5", "waterproof dressing", "CP-001", "CO-001"));
 
         JsonNode root = new ObjectMapper().readTree(new ObjectMapper().writeValueAsString(request));
 
@@ -36,6 +37,8 @@ class WmsReservationClientTest {
         assertThat(root.at("/items/0/productCode").asText()).isEqualTo("500901000700");
         assertThat(root.at("/items/0/reserveCount").decimalValue()).isEqualByComparingTo(new BigDecimal("5"));
         assertThat(root.at("/items/0/remark").asText()).isEqualTo("waterproof dressing");
+        assertThat(root.at("/items/0/customerProjectNo").asText()).isEqualTo("CP-001");
+        assertThat(root.at("/items/0/customerOrderNo").asText()).isEqualTo("CO-001");
         assertThat(request.getItems().get(0).getReserveCount()).isInstanceOf(BigDecimal.class);
     }
 
@@ -92,10 +95,21 @@ class WmsReservationClientTest {
     }
 
     private WmsSaleLadingReserveReq.Item item(String productCode, String reserveCount, String remark) {
+        return item(productCode, reserveCount, remark, null, null);
+    }
+
+    private WmsSaleLadingReserveReq.Item item(
+            String productCode,
+            String reserveCount,
+            String remark,
+            String customerProjectNo,
+            String customerOrderNo) {
         WmsSaleLadingReserveReq.Item item = new WmsSaleLadingReserveReq.Item();
         item.setProductCode(productCode);
         item.setReserveCount(new BigDecimal(reserveCount));
         item.setRemark(remark);
+        item.setCustomerProjectNo(customerProjectNo);
+        item.setCustomerOrderNo(customerOrderNo);
         return item;
     }
 }

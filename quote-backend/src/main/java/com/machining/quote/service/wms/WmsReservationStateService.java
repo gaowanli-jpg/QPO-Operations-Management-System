@@ -438,6 +438,8 @@ public class WmsReservationStateService {
                     requestItem.setProductCode(item.getProductCode());
                     requestItem.setReserveCount(item.getReserveCount());
                     requestItem.setRemark(item.getRemark());
+                    requestItem.setCustomerProjectNo(item.getCustomerProjectNo());
+                    requestItem.setCustomerOrderNo(item.getCustomerOrderNo());
                     return requestItem;
                 })
                 .toList();

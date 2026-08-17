@@ -98,13 +98,13 @@
                 <ImportDrawingUploadPanel
                   v-model="drawingFiles"
                   permission="market:rfq:upload-drawing"
-                  alert-title="按图号绑定图纸：支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
+                  alert-title="按图号绑定图纸：支持 图号.pdf、图号 空格说明.pdf；文件名中的 - 会按图号内容处理。"
                   selected-title="按图号待绑定图纸"
                 />
                 <ImportDrawingUploadPanel
                   v-model="versionDrawingFiles"
                   permission="market:rfq:upload-drawing"
-                  alert-title="按图号+版本绑定图纸：支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf。"
+                  alert-title="按图号+版本绑定图纸：支持 图号_版本.pdf、图号_版本 空格说明.pdf；文件名中的 - 会按图号或版本内容处理。"
                   selected-title="按图号+版本待绑定图纸"
                 />
               </div>
@@ -317,14 +317,14 @@
                   v-model="salesOrderDrawingFiles"
                   permission="market:rfq:import-sales-order"
                   :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                  alert-title="按图号绑定图纸：支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。"
+                  alert-title="按图号绑定图纸：支持 图号.pdf、图号 空格说明.pdf；文件名中的 - 会按图号内容处理。"
                   selected-title="销售订单按图号待绑定图纸"
                 />
                 <ImportDrawingUploadPanel
                   v-model="salesOrderVersionDrawingFiles"
                   permission="market:rfq:import-sales-order"
                   :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
-                  alert-title="按图号+版本绑定图纸：支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf。"
+                  alert-title="按图号+版本绑定图纸：支持 图号_版本.pdf、图号_版本 空格说明.pdf；文件名中的 - 会按图号或版本内容处理。"
                   selected-title="销售订单按图号+版本待绑定图纸"
                 />
               </div>

@@ -38,7 +38,9 @@ class WmsReservationStateServiceTest {
     @Test
     void reserveBatchPersistsRequestSnapshotItemsAndTicketsBeforeReturningRequest() {
         Fixture fixture = fixture();
-        WmsReservationPlanService.ReservationGroup group = group("SO-100", item("MAT-A", "5", "first remark"), item("MAT-B", "2", "second remark"));
+        WmsReservationPlanService.ReservationGroup group = group("SO-100",
+                item("MAT-A", "5", "first remark", "CP-001", "CO-001"),
+                item("MAT-B", "2", "second remark", "CP-002", "CO-002"));
         group.getTickets().add(ticketReservation(101, 1001L, 10, "MAT-A", "3"));
         group.getTickets().add(ticketReservation(102, 1002L, 20, "MAT-A", "2"));
         group.getTickets().add(ticketReservation(103, 1003L, 30, "MAT-B", "2"));
@@ -50,6 +52,10 @@ class WmsReservationStateServiceTest {
         assertThat(context.request().getSaleNo()).isEqualTo("SO-100");
         assertThat(context.request().getItems()).extracting(WmsSaleLadingReserveReq.Item::getProductCode)
                 .containsExactly("MAT-A", "MAT-B");
+        assertThat(context.request().getItems()).extracting(WmsSaleLadingReserveReq.Item::getCustomerProjectNo)
+                .containsExactly("CP-001", "CP-002");
+        assertThat(context.request().getItems()).extracting(WmsSaleLadingReserveReq.Item::getCustomerOrderNo)
+                .containsExactly("CO-001", "CO-002");
 
         ArgumentCaptor<WmsReservationBatch> batchCaptor = ArgumentCaptor.forClass(WmsReservationBatch.class);
         verify(fixture.batchMapper).insert(batchCaptor.capture());
@@ -233,7 +239,12 @@ class WmsReservationStateServiceTest {
         group.setSaleNo(saleNo);
         group.getItems().addAll(List.of(items));
         WmsSaleLadingReserveReq request = request(null, saleNo,
-                List.of(items).stream().map(item -> requestItem(item.getProductCode(), item.getReserveCount().toPlainString(), item.getRemark()))
+                List.of(items).stream().map(item -> requestItem(
+                                item.getProductCode(),
+                                item.getReserveCount().toPlainString(),
+                                item.getRemark(),
+                                item.getCustomerProjectNo(),
+                                item.getCustomerOrderNo()))
                         .toArray(WmsSaleLadingReserveReq.Item[]::new));
         group.setRequest(request);
         group.setRequestFingerprint(new WmsReservationFingerprintService().fingerprint(saleNo, request.getItems()));
@@ -241,10 +252,21 @@ class WmsReservationStateServiceTest {
     }
 
     private WmsReservationPlanService.ReservationItem item(String productCode, String reserveCount, String remark) {
+        return item(productCode, reserveCount, remark, null, null);
+    }
+
+    private WmsReservationPlanService.ReservationItem item(
+            String productCode,
+            String reserveCount,
+            String remark,
+            String customerProjectNo,
+            String customerOrderNo) {
         WmsReservationPlanService.ReservationItem item = new WmsReservationPlanService.ReservationItem();
         item.setProductCode(productCode);
         item.setReserveCount(new BigDecimal(reserveCount));
         item.setRemark(remark);
+        item.setCustomerProjectNo(customerProjectNo);
+        item.setCustomerOrderNo(customerOrderNo);
         return item;
     }
 
@@ -271,10 +293,21 @@ class WmsReservationStateServiceTest {
     }
 
     private WmsSaleLadingReserveReq.Item requestItem(String productCode, String reserveCount, String remark) {
+        return requestItem(productCode, reserveCount, remark, null, null);
+    }
+
+    private WmsSaleLadingReserveReq.Item requestItem(
+            String productCode,
+            String reserveCount,
+            String remark,
+            String customerProjectNo,
+            String customerOrderNo) {
         WmsSaleLadingReserveReq.Item item = new WmsSaleLadingReserveReq.Item();
         item.setProductCode(productCode);
         item.setReserveCount(new BigDecimal(reserveCount));
         item.setRemark(remark);
+        item.setCustomerProjectNo(customerProjectNo);
+        item.setCustomerOrderNo(customerOrderNo);
         return item;
     }
 

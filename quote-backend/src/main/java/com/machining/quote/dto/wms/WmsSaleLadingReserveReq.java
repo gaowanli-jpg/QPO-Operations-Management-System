@@ -16,5 +16,7 @@ public class WmsSaleLadingReserveReq {
         private String productCode;
         private BigDecimal reserveCount;
         private String remark;
+        private String customerProjectNo;
+        private String customerOrderNo;
     }
 }

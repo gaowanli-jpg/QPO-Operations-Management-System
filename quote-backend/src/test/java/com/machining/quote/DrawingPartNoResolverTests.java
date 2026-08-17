@@ -23,6 +23,16 @@ class DrawingPartNoResolverTests {
     }
 
     @Test
+    void keepsDashInsidePartNoInsteadOfTreatingItAsDescription() {
+        String result = DrawingPartNoResolver.extractPartNo(
+                "LK17.5.1.1-1.pdf",
+                Set.of("LK17.5.1.1")
+        );
+
+        assertThat(result).isEqualTo("LK17.5.1.1-1");
+    }
+
+    @Test
     void matchesPartNoBeforeSpaceSeparatedDescription() {
         String result = DrawingPartNoResolver.extractPartNo(
                 "L20100002619 B042动子安装座合盖.pdf",
@@ -33,19 +43,19 @@ class DrawingPartNoResolverTests {
     }
 
     @Test
-    void matchesPartNoBeforeDashSeparatedDescription() {
+    void keepsDashSeparatedSuffixInsidePartNo() {
         String result = DrawingPartNoResolver.extractPartNo(
                 "L20100000759-异形垫片2 -2.pdf",
                 Set.of("L20100000759")
         );
 
-        assertThat(result).isEqualTo("L20100000759");
+        assertThat(result).isEqualTo("L20100000759-异形垫片2 -2");
     }
 
     @Test
     void longestKnownPrefixWins() {
         String result = DrawingPartNoResolver.extractPartNo(
-                "ABC12-定位块.pdf",
+                "ABC12 定位块.pdf",
                 Set.of("ABC1", "ABC12")
         );
 
@@ -73,6 +83,16 @@ class DrawingPartNoResolverTests {
     }
 
     @Test
+    void doesNotTreatDashAfterVersionAsDescriptionBoundary() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P-100_A-LOCATOR.pdf",
+                Set.of(identity("P-100", "A"))
+        );
+
+        assertThat(result).isNull();
+    }
+
+    @Test
     void matchesPartNoAndVersionBeforeSpaceSeparatedDescription() {
         DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
                 "P-100_A 定位块.pdf",
@@ -83,13 +103,13 @@ class DrawingPartNoResolverTests {
     }
 
     @Test
-    void matchesPartNoAndVersionBeforeDashSeparatedDescription() {
+    void doesNotTreatDashSeparatedSuffixAfterVersionAsDescription() {
         DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
                 "P-100_A-定位块.pdf",
                 Set.of(identity("P-100", "A"))
         );
 
-        assertThat(result).isEqualTo(identity("P-100", "A"));
+        assertThat(result).isNull();
     }
 
     @Test
@@ -103,9 +123,19 @@ class DrawingPartNoResolverTests {
     }
 
     @Test
-    void matchesKnownIdentityWithoutSplittingPartNoOrVersionBlindly() {
+    void matchesKnownIdentityWhenDashBelongsToVersion() {
         DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
-                "P_100_A-1-定位块.pdf",
+                "P_100_A-1.pdf",
+                Set.of(identity("P_100", "A-1"))
+        );
+
+        assertThat(result).isEqualTo(identity("P_100", "A-1"));
+    }
+
+    @Test
+    void matchesKnownIdentityWithDashVersionBeforeSpaceSeparatedDescription() {
+        DrawingPartNoResolver.DrawingIdentity result = DrawingPartNoResolver.extractPartNoVersion(
+                "P_100_A-1 定位块.pdf",
                 Set.of(identity("P_100", "A-1"))
         );
 

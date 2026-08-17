@@ -34,7 +34,7 @@
             >
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
               <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
-              <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。</div>
+              <div class="el-upload__tip">支持 图号.pdf、图号 空格说明.pdf，例如 L20100000733.pdf 或 L20100000733 定位块.pdf；文件名中的 - 会按图号内容处理。</div>
               <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
               <div class="supplement-upload-actions import-upload-button-stack">
                 <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerFileSelect">选择多个 PDF</el-button>
@@ -65,7 +65,7 @@
             >
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
               <div class="el-upload__text">拖拽 PDF 图纸或图纸文件夹到这里</div>
-              <div class="el-upload__tip">支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf，例如 L20100000733_A.pdf。</div>
+              <div class="el-upload__tip">支持 图号_版本.pdf、图号_版本 空格说明.pdf，例如 L20100000733_A.pdf；文件名中的 - 会按图号或版本内容处理。</div>
               <div class="folder-select-row">或点击下方按钮选择多个 PDF / 图纸文件夹</div>
               <div class="supplement-upload-actions import-upload-button-stack">
                 <el-button v-permission="permission" plain class="workflow-soft-button folder-select-button" :disabled="pending" @click="triggerVersionFileSelect">选择多个 PDF</el-button>

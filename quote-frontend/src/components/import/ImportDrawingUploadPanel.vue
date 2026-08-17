@@ -82,7 +82,7 @@ const props = defineProps({
   },
   alertTitle: {
     type: String,
-    default: '请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf。'
+    default: '请将图纸文件夹或多个 PDF 图纸拖入下方区域，系统会自动提取图号，支持 图号.pdf、图号 空格说明.pdf；文件名中的 - 会按图号内容处理。'
   },
   selectedTitle: {
     type: String,

@@ -153,6 +153,56 @@ class WmsReservationPlanServiceTest {
     }
 
     @Test
+    void prepareAddsCustomerProjectAndOrderNumbersToRequestItemsAndRejectsConflictingAggregates() {
+        Fixture fixture = fixture();
+        fixture.ticket(ticket(101, "MAT-A", 2, null, null, "remark-101", "", "", "P-101"));
+        fixture.ticket(ticket(102, "MAT-A", 3, null, null, "remark-102", "", "", "P-102"));
+        SalesOrderItem firstItem = item(1001L, 501L, 10);
+        firstItem.setCustomerProjectNo("CP-001");
+        firstItem.setCustomerOrderNo("CO-001");
+        SalesOrderItem secondItem = item(1002L, 501L, 20);
+        secondItem.setCustomerProjectNo("CP-001");
+        secondItem.setCustomerOrderNo("CO-001");
+        fixture.sourceTicketItem(101, firstItem);
+        fixture.sourceTicketItem(102, secondItem);
+        fixture.header(header(501L, "SO-501", "DOC-501", "CO-HEADER", "CP-HEADER"));
+
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(102, 101));
+
+        assertThat(plan.getFailures()).isEmpty();
+        assertThat(plan.getGroups()).hasSize(1);
+        assertThat(plan.getGroups().get(0).getRequest().getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getProductCode()).isEqualTo("MAT-A");
+            assertThat(item.getReserveCount()).isEqualByComparingTo("5");
+            assertThat(item.getCustomerProjectNo()).isEqualTo("CP-001");
+            assertThat(item.getCustomerOrderNo()).isEqualTo("CO-001");
+        });
+
+        Fixture conflictFixture = fixture();
+        conflictFixture.ticket(ticket(201, "MAT-A", 2, null, null));
+        conflictFixture.ticket(ticket(202, "MAT-A", 3, null, null));
+        SalesOrderItem conflictA = item(2001L, 601L, 10);
+        conflictA.setCustomerProjectNo("CP-A");
+        conflictA.setCustomerOrderNo("CO-001");
+        SalesOrderItem conflictB = item(2002L, 601L, 20);
+        conflictB.setCustomerProjectNo("CP-B");
+        conflictB.setCustomerOrderNo("CO-001");
+        conflictFixture.sourceTicketItem(201, conflictA);
+        conflictFixture.sourceTicketItem(202, conflictB);
+        conflictFixture.header(header(601L, "SO-601", "DOC-601"));
+
+        WmsReservationPlanService.ReservationPlan conflictPlan = conflictFixture.service.prepare(List.of(201, 202));
+
+        assertThat(conflictPlan.getGroups()).isEmpty();
+        assertThat(conflictPlan.getFailures())
+                .extracting(WmsReservationPlanService.RowFailure::getTicketId)
+                .containsExactly(201, 202);
+        assertThat(conflictPlan.getFailures())
+                .extracting(WmsReservationPlanService.RowFailure::getMessage)
+                .allSatisfy(message -> assertThat(message).contains("customerProjectNo"));
+    }
+
+    @Test
     void prepareGeneratesStableFingerprintFromSortedProductSaleNoQuantityAndRemark() {
         Fixture fixture = fixture();
         fixture.ticket(ticket(101, "MAT-B", 2, null, null, "remark-b", "", "", "P-101"));
@@ -171,6 +221,10 @@ class WmsReservationPlanServiceTest {
         group.getRequest().getItems().get(0).setRemark("changed");
         String changedFingerprint = new WmsReservationFingerprintService().fingerprint(group.getSaleNo(), group.getRequest().getItems());
         assertThat(changedFingerprint).isNotEqualTo(sameFingerprint);
+        group.getRequest().getItems().get(0).setRemark("remark-a");
+        group.getRequest().getItems().get(0).setCustomerOrderNo("changed-order");
+        String changedCustomerFieldFingerprint = new WmsReservationFingerprintService().fingerprint(group.getSaleNo(), group.getRequest().getItems());
+        assertThat(changedCustomerFieldFingerprint).isNotEqualTo(sameFingerprint);
     }
 
     @Test
@@ -253,10 +307,16 @@ class WmsReservationPlanServiceTest {
     }
 
     private SalesOrderHeader header(Long id, String salesOrderNo, String documentNo) {
+        return header(id, salesOrderNo, documentNo, null, null);
+    }
+
+    private SalesOrderHeader header(Long id, String salesOrderNo, String documentNo, String customerOrderNo, String customerProjectNo) {
         SalesOrderHeader header = new SalesOrderHeader();
         header.setId(id);
         header.setSalesOrderNo(salesOrderNo);
         header.setDocumentNo(documentNo);
+        header.setCustomerOrderNo(customerOrderNo);
+        header.setCustomerProjectNo(customerProjectNo);
         return header;
     }
 

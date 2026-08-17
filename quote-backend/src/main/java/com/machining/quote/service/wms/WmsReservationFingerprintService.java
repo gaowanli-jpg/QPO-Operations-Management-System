@@ -21,7 +21,9 @@ public class WmsReservationFingerprintService {
                     .forEach(item -> canonical
                             .append(normalize(item.getProductCode())).append('|')
                             .append(quantity(item.getReserveCount())).append('|')
-                            .append(normalize(item.getRemark())).append('\n'));
+                            .append(normalize(item.getRemark())).append('|')
+                            .append(normalize(item.getCustomerProjectNo())).append('|')
+                            .append(normalize(item.getCustomerOrderNo())).append('\n'));
         }
         return sha256(canonical.toString());
     }

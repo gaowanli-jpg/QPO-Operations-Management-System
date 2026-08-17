@@ -166,6 +166,8 @@ public class WmsReservationPlanService {
         prepared.setProductCode(productCode);
         prepared.setReserveCount(BigDecimal.valueOf(ticket.getQty()));
         prepared.setFallbackRemark(fallbackRemark);
+        prepared.setCustomerOrderNo(firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo(), ticket.getCustomerOrderNo()));
+        prepared.setCustomerProjectNo(firstText(sourceItem.getCustomerProjectNo(), header.getCustomerProjectNo(), ticket.getCustomerProjectNo()));
         return prepared;
     }
 
@@ -194,7 +196,10 @@ public class WmsReservationPlanService {
                 ));
         byProduct.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> addItem(group, entry.getKey(), entry.getValue()));
+                .forEach(entry -> addItem(group, entry.getKey(), entry.getValue(), plan.getFailures()));
+        if (group.getItems().isEmpty()) {
+            return;
+        }
         group.getTickets().sort(ticketComparator());
         WmsSaleLadingReserveReq request = new WmsSaleLadingReserveReq();
         request.setExternalBizId(null);
@@ -205,8 +210,14 @@ public class WmsReservationPlanService {
         plan.getGroups().add(group);
     }
 
-    private void addItem(ReservationGroup group, String productCode, List<PreparedTicket> tickets) {
+    private void addItem(ReservationGroup group, String productCode, List<PreparedTicket> tickets, List<RowFailure> failures) {
         tickets.sort(preparedComparator());
+        int failuresBefore = failures.size();
+        String customerProjectNo = consistentValue(productCode, tickets, PreparedTicket::getCustomerProjectNo, "customerProjectNo", failures);
+        String customerOrderNo = consistentValue(productCode, tickets, PreparedTicket::getCustomerOrderNo, "customerOrderNo", failures);
+        if (failures.size() > failuresBefore) {
+            return;
+        }
         BigDecimal reserveCount = tickets.stream()
                 .map(PreparedTicket::getReserveCount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -214,6 +225,8 @@ public class WmsReservationPlanService {
         item.setProductCode(productCode);
         item.setReserveCount(reserveCount);
         item.setRemark(remark(tickets));
+        item.setCustomerProjectNo(customerProjectNo);
+        item.setCustomerOrderNo(customerOrderNo);
         group.getItems().add(item);
         for (PreparedTicket ticket : tickets) {
             TicketReservation reservation = new TicketReservation();
@@ -224,6 +237,27 @@ public class WmsReservationPlanService {
             reservation.setReserveCount(ticket.getReserveCount());
             group.getTickets().add(reservation);
         }
+    }
+
+    private String consistentValue(
+            String productCode,
+            List<PreparedTicket> tickets,
+            Function<PreparedTicket, String> extractor,
+            String fieldName,
+            List<RowFailure> failures) {
+        List<String> values = tickets.stream()
+                .map(extractor)
+                .map(this::text)
+                .distinct()
+                .toList();
+        if (values.size() <= 1) {
+            return values.isEmpty() ? null : values.get(0);
+        }
+        for (PreparedTicket ticket : tickets) {
+            failures.add(new RowFailure(ticket.getTicket().getId(),
+                    fieldName + " is inconsistent for productCode=" + productCode));
+        }
+        return null;
     }
 
     private String remark(List<PreparedTicket> tickets) {
@@ -258,6 +292,8 @@ public class WmsReservationPlanService {
         requestItem.setProductCode(item.getProductCode());
         requestItem.setReserveCount(item.getReserveCount());
         requestItem.setRemark(item.getRemark());
+        requestItem.setCustomerProjectNo(item.getCustomerProjectNo());
+        requestItem.setCustomerOrderNo(item.getCustomerOrderNo());
         return requestItem;
     }
 
@@ -327,6 +363,8 @@ public class WmsReservationPlanService {
         private String productCode;
         private BigDecimal reserveCount;
         private String remark;
+        private String customerProjectNo;
+        private String customerOrderNo;
     }
 
     @Data
@@ -348,6 +386,8 @@ public class WmsReservationPlanService {
         private String productCode;
         private BigDecimal reserveCount;
         private String fallbackRemark;
+        private String customerProjectNo;
+        private String customerOrderNo;
     }
 
     @Data

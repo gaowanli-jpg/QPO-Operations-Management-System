@@ -112,6 +112,9 @@ public final class DrawingPartNoResolver {
             return true;
         }
         char next = filenameBase.charAt(partNo.length());
+        if (next == '-') {
+            return false;
+        }
         return !isAsciiLetterOrDigit(next);
     }
 

@@ -80,8 +80,8 @@ describe('release drawing replacement stage 4', () => {
     const source = readSource('components', 'MarketRelease.vue')
 
     expect(source).toContain('class="release-table-actions import-action-row"')
-    expect(source).toContain('支持 图号.pdf、图号 空格说明.pdf、图号-说明.pdf，例如 L20100000733.pdf 或 L20100000733-定位块.pdf。')
-    expect(source).toContain('支持 图号_版本.pdf、图号_版本 空格说明.pdf、图号_版本-说明.pdf，例如 L20100000733_A.pdf。')
+    expect(source).toContain('支持 图号.pdf、图号 空格说明.pdf，例如 L20100000733.pdf 或 L20100000733 定位块.pdf；文件名中的 - 会按图号内容处理。')
+    expect(source).toContain('支持 图号_版本.pdf、图号_版本 空格说明.pdf，例如 L20100000733_A.pdf；文件名中的 - 会按图号或版本内容处理。')
     expect(source).toContain('class="custom-dropzone drawing-replace-dropzone supplement-dropzone"')
     expect(source).toContain('class="drawing-replace-upload-actions import-upload-button-stack"')
     expect(source).toContain('将 <em>图纸文件夹</em> 或多个 PDF 图纸直接拖拽至此处')

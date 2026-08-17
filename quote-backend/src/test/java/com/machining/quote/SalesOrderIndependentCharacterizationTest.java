@@ -78,7 +78,10 @@ class SalesOrderIndependentCharacterizationTest {
         String releaseService = read(MAIN_JAVA.resolve(Path.of("service", "InternalTargetLeadTimeService.java")));
         String dataScopeService = read(MAIN_JAVA.resolve(Path.of("service", "DataScopeService.java")));
         String marketController = read(MAIN_JAVA.resolve(Path.of("controller", "MarketController.java")));
-        String coreWorkflowTests = read(TEST_JAVA.resolve("CoreWorkflowIntegrationTests.java"));
+        String coreWorkflowTests = readAll(
+                "CoreQuoteLeadTimeWorkflowTest.java",
+                "CoreDeliveryWorkflowIntegrationTest.java",
+                "RepeatQuoteApplicationWorkflowTest.java");
         String auditActionTests = read(TEST_JAVA.resolve("AuditActionWorkflowTest.java"));
         String releaseTests = read(TEST_JAVA.resolve("SalesOrderReleaseSourceCharacterizationTest.java"));
         String deliveryTicketTests = read(TEST_JAVA.resolve("SalesOrderDeliveryTicketWorkflowTest.java"));
@@ -165,5 +168,13 @@ class SalesOrderIndependentCharacterizationTest {
                 .as("%s should exist", path)
                 .isTrue();
         return Files.readString(path, StandardCharsets.UTF_8).replace("\r\n", "\n");
+    }
+
+    private String readAll(String... fileNames) throws IOException {
+        StringBuilder builder = new StringBuilder();
+        for (String fileName : fileNames) {
+            builder.append(read(TEST_JAVA.resolve(fileName))).append('\n');
+        }
+        return builder.toString();
     }
 }

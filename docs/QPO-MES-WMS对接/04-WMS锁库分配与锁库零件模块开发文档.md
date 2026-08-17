@@ -22,7 +22,9 @@
     {
       "productCode": "500901000700",
       "reserveCount": 5,
-      "remark": "医用防水贴无菌敷贴"
+      "remark": "医用防水贴无菌敷贴",
+      "customerProjectNo": "CP-0814-001",
+      "customerOrderNo": "CO-0814-001"
     }
   ]
 }
@@ -35,6 +37,10 @@
 | `items[].productCode` | 已提零件 MES 物料号 `materialNo`，同一请求内唯一。 |
 | `items[].reserveCount` | 同销售订单同物料有效 ticket 数量求和，使用 `BigDecimal`。 |
 | `items[].remark` | 按 `sales_order_item.line_no ASC, ticket.id ASC` 取首个非空备注，兜底材料名、描述、图号。 |
+| `items[].customerProjectNo` | 客户项目号，按销售订单行、销售订单头、提单行快照依次兜底。 |
+| `items[].customerOrderNo` | 客户订单号，按销售订单行、销售订单头、提单行快照依次兜底。 |
+
+同一销售订单、同一 `productCode` 聚合时，`customerProjectNo` 和 `customerOrderNo` 必须一致；不一致的 ticket 作为行级失败，不进入 WMS 请求。
 
 ## 3. 响应契约
 
