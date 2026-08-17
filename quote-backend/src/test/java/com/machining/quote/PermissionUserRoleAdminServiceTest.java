@@ -38,7 +38,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class PermissionSystemStage3Test {
+class PermissionUserRoleAdminServiceTest {
     @Test
     void userAdminServiceCreatesLegacyUserAndBindsMultipleSystemRoles() {
         ErpUserMapper erpUserMapper = mock(ErpUserMapper.class);

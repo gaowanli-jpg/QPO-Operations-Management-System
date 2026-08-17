@@ -29,7 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class PermissionSystemStage1Stage2Test {
+class PermissionBootstrapServiceTest {
     private static final Path SCHEMA_BASELINE = Path.of("src", "main", "resources", "db", "migration",
             "V1__qpo_baseline_schema.sql");
     private static final Path SEED_BASELINE = Path.of("src", "main", "resources", "db", "migration",

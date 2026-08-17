@@ -79,7 +79,7 @@ class SalesOrderIndependentCharacterizationTest {
         String dataScopeService = read(MAIN_JAVA.resolve(Path.of("service", "DataScopeService.java")));
         String marketController = read(MAIN_JAVA.resolve(Path.of("controller", "MarketController.java")));
         String coreWorkflowTests = read(TEST_JAVA.resolve("CoreWorkflowIntegrationTests.java"));
-        String auditActionTests = read(TEST_JAVA.resolve("AuditActionCoverageTests.java"));
+        String auditActionTests = read(TEST_JAVA.resolve("AuditActionWorkflowTest.java"));
         String releaseTests = read(TEST_JAVA.resolve("SalesOrderReleaseSourceCharacterizationTest.java"));
         String deliveryTicketTests = read(TEST_JAVA.resolve("SalesOrderDeliveryTicketWorkflowTest.java"));
         String deliveredTests = read(TEST_JAVA.resolve("DeliveredItemQueryBackendTest.java"));

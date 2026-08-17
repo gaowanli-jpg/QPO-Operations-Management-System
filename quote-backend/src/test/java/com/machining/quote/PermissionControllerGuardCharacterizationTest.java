@@ -24,7 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class PermissionSystemStage5Test {
+class PermissionControllerGuardCharacterizationTest {
+    private static final Path MAIN_JAVA = Path.of("src", "main", "java");
     private static final Path CONTROLLER_DIR = Path.of("src", "main", "java", "com", "machining", "quote", "controller");
 
     @AfterEach
@@ -47,6 +48,35 @@ class PermissionSystemStage5Test {
                     .as("Stage 5 should migrate controller interface guards from roles to permission points")
                     .isEmpty();
         }
+    }
+
+    @Test
+    void legacyRequireRoleAnnotationIsRemovedFromMainCode() throws Exception {
+        assertThat(MAIN_JAVA.resolve(Path.of("com", "machining", "quote", "config", "RequireRole.java")))
+                .doesNotExist();
+
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            List<Path> offenders = files
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> source(path).contains("RequireRole"))
+                    .toList();
+
+            assertThat(offenders)
+                    .as("Production code should not retain role-annotation compatibility")
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void authInterceptorUsesPermissionInfoOnlyForAuthorizationBypass() throws Exception {
+        String interceptor = source(MAIN_JAVA.resolve(Path.of("com", "machining", "quote", "config", "AuthInterceptor.java")));
+
+        assertThat(interceptor)
+                .doesNotContain("resolveRequireRole")
+                .doesNotContain("hasRole(")
+                .doesNotContain("\"ADMIN\".equalsIgnoreCase")
+                .contains("info.isSuperAdmin()")
+                .contains("info.getPermissions()");
     }
 
     @Test
@@ -233,6 +263,14 @@ class PermissionSystemStage5Test {
 
     private String source(String fileName) throws Exception {
         return Files.readString(CONTROLLER_DIR.resolve(fileName), StandardCharsets.UTF_8);
+    }
+
+    private String source(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     static class SecuredController {

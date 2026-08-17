@@ -30,7 +30,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class PermissionSystemStage8_3Test {
+class PermissionRoleTreeServiceTest {
     @Test
     void controllerExposesPermissionTreeEndpoint() throws Exception {
         String controllerSource = Files.readString(

@@ -11,7 +11,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class LoggingConventionTest {
+class LoggingConventionCharacterizationTest {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java");
     private static final Path MAIN_RESOURCES = Path.of("src", "main", "resources");
 
@@ -92,7 +92,7 @@ class LoggingConventionTest {
 
         assertThat(source("service/OrderManagementService.java"))
                 .contains("Order supplement drawings completed")
-                .contains("Order delete completed")
+                .doesNotContain("Order delete completed")
                 .doesNotContain("Order production reset completed");
 
         assertThat(source("service/DeliveryService.java"))

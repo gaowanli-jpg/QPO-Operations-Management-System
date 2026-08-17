@@ -36,7 +36,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class PermissionSystemStage6Test {
+class PermissionDataScopeServiceTest {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java");
     private static final Path MIGRATION_DIR = Path.of("src", "main", "resources", "db", "migration");
 

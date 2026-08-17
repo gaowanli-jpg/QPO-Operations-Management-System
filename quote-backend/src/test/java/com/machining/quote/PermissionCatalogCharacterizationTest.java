@@ -1,5 +1,7 @@
 package com.machining.quote;
 
+import com.machining.quote.dto.PermissionInfoDTO;
+import com.machining.quote.service.PermissionService;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -15,10 +17,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class PermissionModuleTreeTest {
+class PermissionCatalogCharacterizationTest {
+    private static final Path MAIN_JAVA = Path.of("src", "main", "java");
+    private static final Path CONTROLLER_DIR = MAIN_JAVA.resolve(Path.of("com", "machining", "quote", "controller"));
+    private static final Path MAPPING_DOC = Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path PERMISSION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "PermissionService.java");
     private static final Path BASELINE_SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
     private static final Path FRONTEND_ROUTER = Path.of("..", "quote-frontend", "src", "router", "index.js");
@@ -35,6 +41,162 @@ class PermissionModuleTreeTest {
     private static final Pattern ROUTE_PERMISSION = Pattern.compile(
             "\\{ path: '([^']+)', component: \\w+, meta: \\{ permission: '([^']+)' } }"
     );
+    private static final Pattern PERMISSION_CATALOG_ROW = Pattern.compile("^\\| `([a-z]+:[a-z0-9-]+:[a-z0-9-]+)` \\|");
+    private static final Pattern REQUIRE_ROLE = Pattern.compile("@RequireRole\\(\\{([^}]*)}\\)");
+
+    @Test
+    void permissionDocumentationFreezesUniquePermissionCodes() throws IOException {
+        String doc = readMappingDoc();
+        List<String> codes = new ArrayList<>();
+        for (String line : doc.split("\\R")) {
+            Matcher matcher = PERMISSION_CATALOG_ROW.matcher(line);
+            if (matcher.find()) {
+                codes.add(matcher.group(1));
+            }
+        }
+
+        Set<String> seen = new LinkedHashSet<>();
+        Set<String> duplicates = new LinkedHashSet<>();
+        for (String code : codes) {
+            if (!seen.add(code)) {
+                duplicates.add(code);
+            }
+        }
+
+        assertThat(doc).contains("权限清单冻结版本：Stage 8.6 授权树收口版");
+        assertThat(codes)
+                .as("Permission catalog documentation must freeze the target permission catalog before RBAC migrations start")
+                .contains(
+                        "market:rfq:import",
+                        "engineer:pricing:save-item",
+                        "market:release:create",
+                        "system:user:update",
+                        "system:role:assign-permission",
+                        "system:audit:export"
+                );
+        assertThat(duplicates)
+                .as("Permission codes must stay unique")
+                .isEmpty();
+    }
+
+    @Test
+    void requireRoleMigrationCatalogCoversAllCurrentAnnotations() throws IOException {
+        String doc = readMappingDoc();
+        List<String> missing = new ArrayList<>();
+
+        try (Stream<Path> files = Files.walk(CONTROLLER_DIR)) {
+            files.filter(path -> path.toString().endsWith(".java"))
+                    .forEach(path -> collectMissingMigrationRows(path, doc, missing));
+        }
+
+        assertThat(missing)
+                .as("Every current @RequireRole occurrence needs an explicit migration row")
+                .isEmpty();
+    }
+
+    @Test
+    void roleMigrationKeepsCurrentBuiltInRolesExplicit() throws IOException {
+        String doc = readMappingDoc();
+
+        assertThat(doc)
+                .contains("| `ADMIN` | `SUPER_ADMIN` |")
+                .contains("| `MARKET` | `MARKET_USER` |")
+                .contains("| `ENGINEER` | `ENGINEER_USER` |")
+                .contains("管理员继续拥有全部功能权限")
+                .contains("市场与工程账号迁移后默认保持现有可访问页面不变");
+    }
+
+    @Test
+    void fallbackPermissionInfoExposesVisibleMenuTreeForDynamicShell() {
+        PermissionService permissionService = new PermissionService();
+
+        PermissionInfoDTO info = permissionService.getPermissionInfo(null, "ADMIN");
+
+        assertThat(info.getMenus())
+                .extracting("path")
+                .containsExactly(
+                        "/market",
+                        "/orders",
+                        "/sales-orders",
+                        "/delivered-items",
+                        "/production-items",
+                        "/locked-items",
+                        "/quote-process",
+                        "/release",
+                        "/u9-sync",
+                        "/delivery-documents",
+                        "/quote-template",
+                        "/engineering",
+                        "/material-process",
+                        "/users",
+                        "/roles",
+                        "/organization",
+                        "/customers",
+                        "/system-config",
+                        "/audit-logs"
+                );
+    }
+
+    @Test
+    void fallbackPermissionInfoReturnsButtonPermissionPoints() {
+        PermissionService permissionService = new PermissionService();
+
+        PermissionInfoDTO info = permissionService.getPermissionInfo(null, "ADMIN");
+
+        assertThat(info.getPermissions()).contains(
+                "market:rfq:import",
+                "market:rfq:upload-drawing",
+                "market:sales-order:view",
+                "market:sales-order:customer-select",
+                "market:sales-order:file-preview",
+                "market:sales-order:supplement-drawing",
+                "market:sales-order:discard",
+                "market:sales-order:restore",
+                "market:quote-process:update-lead-time",
+                "market:quote-process:save-quote",
+                "market:quote-process:export",
+                "market:delivered-item:wms-allocate",
+                "market:production-item:view",
+                "market:production-item:customer-select",
+                "market:production-item:mes-production-submit",
+                "market:release:create",
+                "market:template:upload",
+                "engineer:setup:save-config",
+                "engineer:pricing:save-item",
+                "engineer:pricing:refresh",
+                "engineer:pricing:complete-order",
+                "engineer:pricing:export-sheet",
+                "engineer:dict:material-manage",
+                "engineer:dict:process-manage",
+                "engineer:dict:fee-manage",
+                "system:user:create",
+                "system:user:update",
+                "system:user:disable",
+                "system:user:reset-password",
+                "system:user:delete",
+                "system:role:create",
+                "system:role:update",
+                "system:role:delete",
+                "system:role:assign-permission",
+                "system:role:assign-data-scope",
+                "system:dept:manage",
+                "system:post:manage",
+                "system:customer:sync",
+                "system:audit:export",
+                "system:audit:retention"
+        );
+        assertThat(info.getPermissions()).doesNotContain(
+                "market:rfq:order-type-select",
+                "market:release:reset",
+                "market:sales-match:view",
+                "market:sales-match:customer-select",
+                "market:sales-match:order-select",
+                "market:sales-match:apply",
+                "system:customer:create",
+                "system:customer:update",
+                "system:customer:delete"
+        );
+    }
 
     @Test
     void fallbackPermissionCodesStayUniqueAndCurrent() throws IOException {
@@ -241,6 +403,36 @@ class PermissionModuleTreeTest {
             routes.put(matcher.group(1), matcher.group(2));
         }
         return routes;
+    }
+
+    private void collectMissingMigrationRows(Path path, String doc, List<String> missing) {
+        try {
+            String source = Files.readString(path, StandardCharsets.UTF_8);
+            Matcher matcher = REQUIRE_ROLE.matcher(source);
+            String relativePath = "controller/" + path.getFileName();
+            while (matcher.find()) {
+                String roleSet = normalizeRoleSet(matcher.group(1));
+                if (!doc.contains(relativePath) || !doc.contains(roleSet)) {
+                    missing.add(relativePath + " " + roleSet);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to scan " + path, e);
+        }
+    }
+
+    private String normalizeRoleSet(String rawRoles) {
+        return rawRoles.replace("\"", "")
+                .replace(" ", "")
+                .replace("\r", "")
+                .replace("\n", "");
+    }
+
+    private String readMappingDoc() throws IOException {
+        assertThat(MAPPING_DOC)
+                .as("Permission mapping document must exist")
+                .exists();
+        return Files.readString(MAPPING_DOC, StandardCharsets.UTF_8);
     }
 
     private static String tokenToString(String token) {
