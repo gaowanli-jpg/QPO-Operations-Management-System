@@ -251,11 +251,10 @@ class SalesOrderU9SyncStage7Test {
                 .contains("assertDataScope(header)");
         assertThat(readSource("controller/SalesOrderQpoImportController.java"))
                 .doesNotContain("@PostMapping(\"/u9-sync\")");
-        assertThat(readSource("controller/SalesOrderU9SyncCompatibilityController.java"))
-                .contains("@Deprecated")
-                .contains("@RequestMapping(\"/api/market/sales-orders\")")
-                .contains("@PostMapping(\"/u9-sync\")")
-                .contains("@RequirePermission(\"market:u9-sync:submit\")");
+        assertThat(java.nio.file.Files.exists(java.nio.file.Path.of(
+                "src/main/java/com/machining/quote/controller/SalesOrderU9SyncCompatibilityController.java")))
+                .as("legacy sales-order U9 compatibility controller should be removed")
+                .isFalse();
     }
 
     @Test

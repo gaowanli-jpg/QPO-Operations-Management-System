@@ -18,7 +18,6 @@ class MaterialShapeSnapshotTest {
     private static final Path DELIVERY_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "DeliveryService.java");
     private static final Path RFQ_RELEASE_SALES_ORDER_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "RfqReleaseSalesOrderService.java");
     private static final Path AUTO_SNAPSHOT_COMPLETION_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderAutoSnapshotCompletionService.java");
-    private static final Path SALES_REPEAT_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "SalesOrderRepeatEnrichmentService.java");
     private static final Path MES_REQ = Path.of("src", "main", "java", "com", "machining", "quote", "dto", "mes", "MesProductionDispatchReq.java");
     private static final Path MES_SERVICE = Path.of("src", "main", "java", "com", "machining", "quote", "service", "mes", "MesProductionDispatchService.java");
     private static final Path MES_INTERFACE_DOC = Path.of("..", "docs", "QPO-MES-WMS对接", "09-提供给MES的待生产下发接口对接说明.md");
@@ -44,8 +43,6 @@ class MaterialShapeSnapshotTest {
                         "String materialShape = resolveMaterialShape(source)",
                         "item.setMaterialShape(materialShape)"
                 );
-        assertThat(read(SALES_REPEAT_SERVICE))
-                .contains("current.setMaterialShape(resolveMaterialShape(source))");
     }
 
     @Test

@@ -16,7 +16,6 @@ class MaterialMasterStage7SnapshotTest {
     void salesOrderProductionSnapshotCarriesCompleteEngineeringMaterialIdentity() throws IOException {
         String salesOrderItem = read("entity", "SalesOrderItem.java");
         String autoSnapshotCompletionService = read("service", "SalesOrderAutoSnapshotCompletionService.java");
-        String enrichmentService = read("service", "SalesOrderRepeatEnrichmentService.java");
         String rfqReleaseService = read("service", "RfqReleaseSalesOrderService.java");
 
         assertThat(salesOrderItem)
@@ -33,13 +32,6 @@ class MaterialMasterStage7SnapshotTest {
                         "item.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
                         "item.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
                         "item.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));");
-        assertThat(enrichmentService)
-                .contains(
-                        "current.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",
-                        "current.setEngineeringMaterialTypeCode(MaterialDataResolver.materialTypeCode(source));",
-                        "current.setEngineeringMaterialTypeName(MaterialDataResolver.materialTypeName(source));",
-                        "current.setEngineeringMaterialCategory(MaterialDataResolver.materialCategory(source));")
-                .doesNotContain("current.setMaterialName(source.getMaterialName())");
         assertThat(rfqReleaseService)
                 .contains(
                         "item.setEngineeringMaterialCode(MaterialDataResolver.materialCode(source));",

@@ -72,7 +72,6 @@ class SalesOrderIndependentStage8Test {
     @Test
     void salesOrderImportKeepsLegacyRfqTablesOutOfWritePathAndProtectsOldFlowTests() throws IOException {
         String importService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderQpoImportService.java")));
-        String enrichmentService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderRepeatEnrichmentService.java")));
         String autoSnapshotCompletionService = read(MAIN_JAVA.resolve(Path.of("service", "SalesOrderAutoSnapshotCompletionService.java")));
         String importResultRow = read(MAIN_JAVA.resolve(Path.of("dto", "SalesOrderQpoImportResultRow.java")));
         String orderService = read(MAIN_JAVA.resolve(Path.of("service", "OrderManagementService.java")));
@@ -126,13 +125,12 @@ class SalesOrderIndependentStage8Test {
                 .contains("row.put(\"rfqNo\", \"\")")
                 .doesNotContain("row.put(\"rfqNo\", order == null ? \"\" : order.getSalesOrderNo())")
                 .doesNotContain("header.sales_order_no AS rfq_no");
-        assertThat(enrichmentService)
-                .contains("ItemQuoteVersionMapper")
-                .contains("selectLatestReleasedRepeatSources")
-                .contains("salesOrderItemMapper.updateById(item)")
-                .contains("releasedProductionSnapshotsByKey")
-                .doesNotContain("public SalesOrderRepeatEnrichmentResult enrich(Integer rfqId")
-                .doesNotContain("salesOrderItemMapper.insert");
+        assertThat(Files.exists(MAIN_JAVA.resolve(Path.of("service", "SalesOrderRepeatEnrichmentService.java"))))
+                .as("legacy sales-order repeat enrichment service should be removed")
+                .isFalse();
+        assertThat(Files.exists(MAIN_JAVA.resolve(Path.of("dto", "SalesOrderRepeatEnrichmentResult.java"))))
+                .as("legacy sales-order repeat enrichment DTO should be removed")
+                .isFalse();
         assertThat(autoSnapshotCompletionService)
                 .contains("public SalesOrderAutoSnapshotCompletionResult completeImportedOrder")
                 .contains("selectLatestReleasedRepeatSources")

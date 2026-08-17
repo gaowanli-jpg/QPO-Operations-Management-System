@@ -123,7 +123,6 @@ class SalesOrderU9ImportStage5Test {
     @Test
     void legacySalesOrderU9EndpointIsCompatibilityOnlyAndRemovedFromImportController() throws IOException {
         String importController = read(MAIN_JAVA.resolve(Path.of("controller", "SalesOrderQpoImportController.java")));
-        String compatController = read(MAIN_JAVA.resolve(Path.of("controller", "SalesOrderU9SyncCompatibilityController.java")));
         String u9Controller = read(MAIN_JAVA.resolve(Path.of("controller", "SalesOrderU9SyncController.java")));
 
         assertThat(importController)
@@ -134,15 +133,9 @@ class SalesOrderU9ImportStage5Test {
                 .doesNotContain("SalesOrderU9SyncResp")
                 .doesNotContain("@PostMapping(\"/u9-sync\")")
                 .doesNotContain("syncU9(");
-        assertThat(compatController)
-                .contains(
-                        "@Deprecated",
-                        "@RequestMapping(\"/api/market/sales-orders\")",
-                        "@PostMapping(\"/u9-sync\")",
-                        "@RequirePermission(\"market:u9-sync:submit\")",
-                        "syncSalesOrders(req == null ? null : req.getSalesOrderIds())"
-                )
-                .doesNotContain("@RequirePermission(\"market:rfq:import-sales-order\")");
+        assertThat(Files.exists(MAIN_JAVA.resolve(Path.of("controller", "SalesOrderU9SyncCompatibilityController.java"))))
+                .as("legacy /api/market/sales-orders/u9-sync compatibility controller should be removed")
+                .isFalse();
         assertThat(u9Controller)
                 .contains(
                         "@RequestMapping(\"/api/market/u9-sync\")",
