@@ -5,6 +5,8 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9AssignmentReq;
 import com.machining.quote.dto.SalesOrderU9AssignmentResp;
+import com.machining.quote.dto.SalesOrderU9ItemUpdateReq;
+import com.machining.quote.dto.SalesOrderU9ItemUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
@@ -12,6 +14,7 @@ import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.dto.SalesOrderU9SyncReq;
 import com.machining.quote.dto.SalesOrderU9SyncResp;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.service.SalesOrderU9ItemEditService;
 import com.machining.quote.service.SalesOrderU9SyncService;
 import com.machining.quote.service.u9.U9MasterDataService;
 import com.machining.quote.service.u9.U9MasterDataSyncService;
@@ -34,6 +37,8 @@ import java.util.Map;
 public class SalesOrderU9SyncController {
     @Autowired
     private SalesOrderU9SyncService salesOrderU9SyncService;
+    @Autowired
+    private SalesOrderU9ItemEditService salesOrderU9ItemEditService;
     @Autowired
     private U9MasterDataService u9MasterDataService;
     @Autowired
@@ -97,6 +102,14 @@ public class SalesOrderU9SyncController {
             @PathVariable Long salesOrderId,
             @RequestBody(required = false) SalesOrderU9AssignmentReq req) {
         return salesOrderU9SyncService.saveAssignment(salesOrderId, req);
+    }
+
+    @PutMapping("/orders/{salesOrderId}/items")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9ItemUpdateResp saveItems(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) SalesOrderU9ItemUpdateReq req) {
+        return salesOrderU9ItemEditService.saveItems(salesOrderId, req);
     }
 
     @PostMapping("/orders/{salesOrderId}/sync")
