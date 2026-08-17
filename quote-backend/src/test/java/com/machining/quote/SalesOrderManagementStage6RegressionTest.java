@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -127,6 +128,47 @@ class SalesOrderManagementStage6RegressionTest {
         assertThat(ticketPageQueryCaptor.getAllValues())
                 .allSatisfy(query -> assertThat(query.getSqlSegment()).contains("LIMIT 20 OFFSET 40"));
         verify(dataScopeService, org.mockito.Mockito.times(2)).assertCanAccessSalesOrder(order);
+    }
+
+    @Test
+    void rfqReleaseSalesOrderTicketPagesQueryLinkedSourceTicketRows() {
+        SalesOrderHeader order = salesOrder(502L, QuoteStatusWorkflow.RELEASED);
+        order.setSourceType("RFQ_RELEASE");
+        SalesOrderItem linkedItem = item(7801L, 502L, QuoteStatusWorkflow.RELEASED, 3);
+        linkedItem.setSourceType(ReleaseSourceType.RFQ.name());
+        linkedItem.setSourceTicketId(9101);
+        OrderDeliveryTicket linkedTicket = ticket(9101, 700L, "RFQ-PART-1");
+        linkedTicket.setSourceType(ReleaseSourceType.RFQ.name());
+        linkedTicket.setSourceOrderId(700L);
+        when(headerMapper.selectById(502L)).thenReturn(order);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(linkedItem));
+        when(ticketMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(linkedTicket));
+
+        PageResult<OrderDeliveryTicket> ticketPage = service.pageOrderTickets(502L, 1, 20);
+        PageResult<?> processSheetPage = service.pageDynamicProcessSheets(502L, 1, 20);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<QueryWrapper<SalesOrderItem>> itemQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(itemMapper, atLeastOnce()).selectList(itemQueryCaptor.capture());
+        assertThat(itemQueryCaptor.getAllValues())
+                .allSatisfy(query -> {
+                    assertThat(query.getSqlSegment()).contains("sales_order_id").contains("source_ticket_id").contains("source_type");
+                    assertThat(query.getParamNameValuePairs().values())
+                            .contains(502L, ReleaseSourceType.RFQ.name());
+                });
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<QueryWrapper<OrderDeliveryTicket>> ticketQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(ticketMapper, org.mockito.Mockito.times(2)).selectCount(ticketQueryCaptor.capture());
+        assertThat(ticketQueryCaptor.getAllValues())
+                .allSatisfy(query -> {
+                    assertThat(query.getSqlSegment()).contains("source_type").contains("source_order_id").contains("id");
+                    assertThat(query.getParamNameValuePairs().values())
+                            .contains(ReleaseSourceType.SALES_ORDER.name(), 502L, 9101);
+                });
+        assertThat(ticketPage.getRecords()).containsExactly(linkedTicket);
+        assertThat(processSheetPage.getTotal()).isEqualTo(1);
     }
 
     @Test

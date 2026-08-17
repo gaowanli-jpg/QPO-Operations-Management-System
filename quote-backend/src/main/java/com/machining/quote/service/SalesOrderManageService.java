@@ -386,24 +386,56 @@ public class SalesOrderManageService {
         int safePage = safePage(page);
         int safePageSize = safePageSize(pageSize);
         long offset = (long) (safePage - 1) * safePageSize;
-        QueryWrapper<OrderDeliveryTicket> countQuery = ticketQuery(salesOrderId);
+        List<Integer> linkedSourceTicketIds = linkedSourceTicketIds(salesOrderId);
+        QueryWrapper<OrderDeliveryTicket> countQuery = ticketQuery(salesOrderId, linkedSourceTicketIds);
         Long total = ticketMapper.selectCount(countQuery);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
-        QueryWrapper<OrderDeliveryTicket> pageQuery = ticketQuery(salesOrderId)
+        QueryWrapper<OrderDeliveryTicket> pageQuery = ticketQuery(salesOrderId, linkedSourceTicketIds)
                 .orderByAsc("id")
                 .last("LIMIT " + safePageSize + " OFFSET " + offset);
         return PageResult.of(ticketMapper.selectList(pageQuery), total, safePage, safePageSize);
     }
 
     private QueryWrapper<OrderDeliveryTicket> ticketQuery(Long salesOrderId) {
+        return ticketQuery(salesOrderId, linkedSourceTicketIds(salesOrderId));
+    }
+
+    private QueryWrapper<OrderDeliveryTicket> ticketQuery(Long salesOrderId, List<Integer> linkedSourceTicketIds) {
         QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
         if (salesOrderId == null) {
             return query.apply("1 = 0");
         }
-        return query.eq("source_type", ReleaseSourceType.SALES_ORDER.name())
-                .eq("source_order_id", salesOrderId);
+        if (linkedSourceTicketIds == null || linkedSourceTicketIds.isEmpty()) {
+            return query.eq("source_type", ReleaseSourceType.SALES_ORDER.name())
+                    .eq("source_order_id", salesOrderId);
+        }
+        return query.and(wrapper -> wrapper
+                .eq("source_type", ReleaseSourceType.SALES_ORDER.name())
+                .eq("source_order_id", salesOrderId)
+                .or()
+                .in("id", linkedSourceTicketIds));
+    }
+
+    private List<Integer> linkedSourceTicketIds(Long salesOrderId) {
+        if (salesOrderId == null) {
+            return List.of();
+        }
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.select("source_ticket_id")
+                .eq("sales_order_id", salesOrderId)
+                .eq("source_type", ReleaseSourceType.RFQ.name())
+                .isNotNull("source_ticket_id");
+        List<SalesOrderItem> items = salesOrderItemMapper.selectList(query);
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(SalesOrderItem::getSourceTicketId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
     }
 
     private OrderStatusChangeResult changeSalesOrderStatus(
@@ -608,6 +640,12 @@ public class SalesOrderManageService {
         if (orderIds == null || orderIds.isEmpty()) {
             return Map.of();
         }
+        Map<Long, TicketStats> statsMap = new HashMap<>(loadDirectTicketStats(orderIds));
+        mergeLinkedSourceTicketStats(statsMap, orderIds);
+        return statsMap;
+    }
+
+    private Map<Long, TicketStats> loadDirectTicketStats(List<Long> orderIds) {
         QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
         query.select(
                 "source_order_id",
@@ -620,6 +658,58 @@ public class SalesOrderManageService {
         return ticketMapper.selectMaps(query).stream()
                 .map(TicketStats::from)
                 .collect(Collectors.toMap(stats -> stats.salesOrderId, Function.identity()));
+    }
+
+    private void mergeLinkedSourceTicketStats(Map<Long, TicketStats> statsMap, List<Long> orderIds) {
+        Map<Integer, Long> ticketOrderMap = linkedSourceTicketOrderMap(orderIds);
+        if (ticketOrderMap.isEmpty()) {
+            return;
+        }
+        QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
+        query.in("id", ticketOrderMap.keySet());
+        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(query);
+        if (tickets == null || tickets.isEmpty()) {
+            return;
+        }
+        for (OrderDeliveryTicket ticket : tickets) {
+            if (ticket == null || ticket.getId() == null) {
+                continue;
+            }
+            Long salesOrderId = ticketOrderMap.get(ticket.getId());
+            if (salesOrderId == null) {
+                continue;
+            }
+            TicketStats stats = statsMap.computeIfAbsent(salesOrderId, id -> {
+                TicketStats created = new TicketStats();
+                created.salesOrderId = id;
+                return created;
+            });
+            stats.ticketCount++;
+            stats.ticketQty += safeInt(ticket.getQty());
+        }
+    }
+
+    private Map<Integer, Long> linkedSourceTicketOrderMap(List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
+        query.select("sales_order_id", "source_ticket_id")
+                .in("sales_order_id", orderIds)
+                .eq("source_type", ReleaseSourceType.RFQ.name())
+                .isNotNull("source_ticket_id");
+        List<SalesOrderItem> items = salesOrderItemMapper.selectList(query);
+        if (items == null || items.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, Long> result = new LinkedHashMap<>();
+        for (SalesOrderItem item : items) {
+            if (item == null || item.getSalesOrderId() == null || item.getSourceTicketId() == null) {
+                continue;
+            }
+            result.putIfAbsent(item.getSourceTicketId(), item.getSalesOrderId());
+        }
+        return result;
     }
 
     private ProcessSheetDTO buildProcessSheet(OrderDeliveryTicket ticket) {
