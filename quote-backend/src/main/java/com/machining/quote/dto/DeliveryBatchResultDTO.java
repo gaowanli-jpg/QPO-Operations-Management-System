@@ -16,4 +16,5 @@ public class DeliveryBatchResultDTO {
     private int confirmedMaterialCount;
     private int pendingMaterialCount;
     private List<Integer> ticketIds;
+    private boolean idempotentReplay;
 }

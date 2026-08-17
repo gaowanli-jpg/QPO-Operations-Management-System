@@ -101,6 +101,7 @@ class RfqReleaseSalesOrderIntegrationTest {
         DeliveryBatchResultDTO result = deliveryService.generateRfqReleaseBatch(req);
 
         assertThat(result.isSuccess()).isTrue();
+        assertThat(result.isIdempotentReplay()).isFalse();
         assertThat(result.getSalesOrderId()).isNotNull();
         assertThat(result.getSalesOrderNo()).isNotBlank();
         assertThat(result.getDocumentNo()).isNotBlank();
@@ -215,6 +216,7 @@ class RfqReleaseSalesOrderIntegrationTest {
 
         DeliveryBatchResultDTO replay = deliveryService.generateRfqReleaseBatch(req);
         assertThat(replay.getSalesOrderId()).isEqualTo(result.getSalesOrderId());
+        assertThat(replay.isIdempotentReplay()).isTrue();
         assertThat(replay.getTicketIds()).containsExactlyElementsOf(result.getTicketIds());
         assertThat(countHeaders(req.getReleaseBatchKey())).isEqualTo(1);
         assertThat(countSalesItems(header.getId())).isEqualTo(3);

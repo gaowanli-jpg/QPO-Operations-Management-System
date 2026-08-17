@@ -170,7 +170,9 @@ public class RfqReleaseSalesOrderService {
         for (Integer rfqId : context.rfqIds()) {
             refreshOrderTicketStatus(rfqId);
         }
-        return buildResult(header, context.rfqIds(), tickets);
+        DeliveryBatchResultDTO result = buildResult(header, context.rfqIds(), tickets);
+        result.setIdempotentReplay(false);
+        return result;
     }
 
     private Map<Integer, OrderRfq> lockOrders(RfqReleaseBatchValidationService.BatchContext context) {
@@ -622,7 +624,12 @@ public class RfqReleaseSalesOrderService {
         if (orderedTickets.size() != ticketIds.size()) {
             throw new RuntimeException("提单批次历史结果不完整");
         }
-        return buildResult(header, sourceRfqIds.isEmpty() ? context.rfqIds() : sourceRfqIds, orderedTickets);
+        DeliveryBatchResultDTO result = buildResult(
+                header,
+                sourceRfqIds.isEmpty() ? context.rfqIds() : sourceRfqIds,
+                orderedTickets);
+        result.setIdempotentReplay(true);
+        return result;
     }
 
     private void audit(
