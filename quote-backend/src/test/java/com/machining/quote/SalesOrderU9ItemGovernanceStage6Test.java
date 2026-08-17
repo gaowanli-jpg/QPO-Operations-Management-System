@@ -15,6 +15,8 @@ class SalesOrderU9ItemGovernanceStage6Test {
             "..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md");
     private static final Path AUDIT_LOG_DOC = Path.of(
             "..", "docs", "QPO日志模块", "01-操作日志模块开发文档.md");
+    private static final Path DEVELOPMENT_DOC = Path.of(
+            "..", "docs", "QPO报价状态流转", "46-U9同步零件行字段编辑与表格替换开发文档.md");
     private static final Path ITEM_EDIT_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "SalesOrderU9ItemEditService.java");
     private static final Path ITEM_REPLACEMENT_SERVICE = Path.of(
@@ -37,6 +39,18 @@ class SalesOrderU9ItemGovernanceStage6Test {
                         "| `market:u9-sync:data-replacement`",
                         "| `market:u9-sync:replace-drawing`",
                         "| `common:u9-sync`");
+    }
+
+    @Test
+    void developmentDocumentationIsMarkedCompletedAfterAllStagesClose() throws IOException {
+        String developmentDoc = read(DEVELOPMENT_DOC);
+
+        assertThat(developmentDoc)
+                .contains(
+                        "文档状态：阶段 1-6 已完成",
+                        "U9 同步页面能在同步前编辑并保存 `qty`、`customerDeliveryDate`、`internalDeliveryDate`、`untaxedUnitPrice`、`customerOrderNo`、`customerProjectNo`、`internalProjectNo`、`remark`",
+                        "日志只记录安全摘要，不记录敏感字段、完整请求 / 响应或 Excel 原文")
+                .doesNotContain("文档状态：待开发");
     }
 
     @Test
