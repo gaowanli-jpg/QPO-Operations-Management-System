@@ -28,6 +28,7 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.BusinessFileService;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.DeliveryAutoMesMaterialSyncService;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.SalesOrderQpoExcelParser;
 import com.machining.quote.service.SalesOrderQpoImportService;
@@ -62,8 +63,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -79,6 +82,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         SalesOrderAutoSnapshotCompletionService matchService = mock(SalesOrderAutoSnapshotCompletionService.class);
         DeliveryService deliveryService = mock(DeliveryService.class);
+        DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService = mock(DeliveryAutoMesMaterialSyncService.class);
         AuditService auditService = mock(AuditService.class);
         SalesOrderQpoImportService service = service(
                 parser,
@@ -92,6 +96,7 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                 matchService,
                 deliveryService
         );
+        ReflectionTestUtils.setField(service, "autoMesMaterialSyncService", autoMesMaterialSyncService);
         when(customerMapper.selectById(7L)).thenReturn(customer());
         when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
         when(headerMapper.selectCount(any())).thenReturn(0L);
@@ -136,6 +141,11 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
         inOrder.verify(itemMapper, org.mockito.Mockito.times(2)).insert(any(SalesOrderItem.class));
         inOrder.verify(matchService).completeImportedOrder(301L);
         inOrder.verify(deliveryService).generateImportedSalesOrderTickets(301L);
+        verify(autoMesMaterialSyncService).submitAfterCommit(
+                eq(ReleaseSourceType.SALES_ORDER),
+                eq(301L),
+                eq(List.of(9001)),
+                eq("SALES_ORDER_IMPORT"));
         assertThat(resp.isSuccess()).isTrue();
         assertThat(resp.getRows().get(0).getMatchedItemCount()).isEqualTo(1);
         assertThat(resp.getRows().get(0).getUnmatchedItemCount()).isEqualTo(1);
@@ -156,6 +166,166 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                 .containsEntry("autoMatchTrigger", "IMPORT_AUTO")
                 .containsEntry("autoDeliveryTrigger", "SALES_ORDER_IMPORT_AUTO")
                 .containsEntry("autoDeliveryTicketCount", 1);
+    }
+
+    @Test
+    void autoMesSubmitFailureDoesNotAffectSalesOrderImportAutoDeliveryResult() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderAutoSnapshotCompletionService matchService = mock(SalesOrderAutoSnapshotCompletionService.class);
+        DeliveryService deliveryService = mock(DeliveryService.class);
+        DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService = mock(DeliveryAutoMesMaterialSyncService.class);
+        AuditService auditService = mock(AuditService.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                auditService,
+                matchService,
+                deliveryService
+        );
+        ReflectionTestUtils.setField(service, "autoMesMaterialSyncService", autoMesMaterialSyncService);
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResultWithBlankPrices());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId(301L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId(401L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId("P-BLANK".equals(item.getPartNo()) ? 501L : 502L);
+            return 1;
+        }).when(itemMapper).insert(any(SalesOrderItem.class));
+        when(matchService.completeImportedOrder(301L)).thenReturn(matchResp(2, 1, 1, "auto unmatched 1"));
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setId(9001);
+        ticket.setSourceOrderId(301L);
+        when(deliveryService.generateImportedSalesOrderTickets(301L)).thenReturn(List.of(ticket));
+        doThrow(new RuntimeException("auto mes submit failed"))
+                .when(autoMesMaterialSyncService)
+                .submitAfterCommit(eq(ReleaseSourceType.SALES_ORDER), eq(301L), eq(List.of(9001)), eq("SALES_ORDER_IMPORT"));
+
+        SalesOrderQpoImportResp resp = service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01"
+        );
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getRows()).singleElement().satisfies(row -> {
+            assertThat(row.getAutoDeliveryTicketCount()).isEqualTo(1);
+            assertThat(row.getMatchedItemCount()).isEqualTo(1);
+            assertThat(row.getUnmatchedItemCount()).isEqualTo(1);
+        });
+        verify(autoMesMaterialSyncService).submitAfterCommit(
+                eq(ReleaseSourceType.SALES_ORDER),
+                eq(301L),
+                eq(List.of(9001)),
+                eq("SALES_ORDER_IMPORT"));
+    }
+
+    @Test
+    void importWithMultipleSalesOrdersSubmitsAutoMesOncePerOrderTicketBatch() throws Exception {
+        SalesOrderQpoExcelParser parser = mock(SalesOrderQpoExcelParser.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        SalesOrderImportBatchMapper batchMapper = mock(SalesOrderImportBatchMapper.class);
+        SalesOrderImportRecordMapper recordMapper = mock(SalesOrderImportRecordMapper.class);
+        SalesOrderHeaderMapper headerMapper = mock(SalesOrderHeaderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        SalesOrderAutoSnapshotCompletionService matchService = mock(SalesOrderAutoSnapshotCompletionService.class);
+        DeliveryService deliveryService = mock(DeliveryService.class);
+        DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService = mock(DeliveryAutoMesMaterialSyncService.class);
+        AuditService auditService = mock(AuditService.class);
+        SalesOrderQpoImportService service = service(
+                parser,
+                customerMapper,
+                batchMapper,
+                recordMapper,
+                headerMapper,
+                itemMapper,
+                mock(DataScopeService.class),
+                auditService,
+                matchService,
+                deliveryService
+        );
+        ReflectionTestUtils.setField(service, "autoMesMaterialSyncService", autoMesMaterialSyncService);
+        when(customerMapper.selectById(7L)).thenReturn(customer());
+        when(parser.parse(any(InputStream.class))).thenReturn(parseResult());
+        when(headerMapper.selectCount(any())).thenReturn(0L);
+        doAnswer(invocation -> {
+            SalesOrderImportBatch batch = invocation.getArgument(0);
+            batch.setId(201L);
+            return 1;
+        }).when(batchMapper).insert(any(SalesOrderImportBatch.class));
+        doAnswer(invocation -> {
+            SalesOrderHeader header = invocation.getArgument(0);
+            header.setId("PO-001".equals(header.getCustomerOrderNo()) ? 301L : 302L);
+            return 1;
+        }).when(headerMapper).insert(any(SalesOrderHeader.class));
+        doAnswer(invocation -> {
+            SalesOrderImportRecord record = invocation.getArgument(0);
+            record.setId("PO-001".equals(record.getCustomerOrderNo()) ? 401L : 402L);
+            return 1;
+        }).when(recordMapper).insert(any(SalesOrderImportRecord.class));
+        doAnswer(invocation -> {
+            SalesOrderItem item = invocation.getArgument(0);
+            item.setId(item.getPartNo().equals("P-001") ? 501L : item.getPartNo().equals("P-002") ? 502L : 503L);
+            return 1;
+        }).when(itemMapper).insert(any(SalesOrderItem.class));
+        when(matchService.completeImportedOrder(301L)).thenReturn(matchResp(2, 2, 0, ""));
+        when(matchService.completeImportedOrder(302L)).thenReturn(matchResp(1, 1, 0, ""));
+        when(deliveryService.generateImportedSalesOrderTickets(301L)).thenReturn(List.of(ticket(9101, 301L), ticket(9102, 301L)));
+        when(deliveryService.generateImportedSalesOrderTickets(302L)).thenReturn(List.of(ticket(9201, 302L)));
+
+        SalesOrderQpoImportResp resp = service.importQpo(
+                new MockMultipartFile(
+                        "excelFile",
+                        "sales-order.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx".getBytes(StandardCharsets.UTF_8)
+                ),
+                7L,
+                "SO01"
+        );
+
+        assertThat(resp.isSuccess()).isTrue();
+        assertThat(resp.getRows()).hasSize(2);
+        verify(autoMesMaterialSyncService).submitAfterCommit(
+                eq(ReleaseSourceType.SALES_ORDER),
+                eq(301L),
+                eq(List.of(9101, 9102)),
+                eq("SALES_ORDER_IMPORT"));
+        verify(autoMesMaterialSyncService).submitAfterCommit(
+                eq(ReleaseSourceType.SALES_ORDER),
+                eq(302L),
+                eq(List.of(9201)),
+                eq("SALES_ORDER_IMPORT"));
+        verify(autoMesMaterialSyncService, times(2)).submitAfterCommit(any(), any(), any(), any());
     }
 
     @Test
@@ -322,5 +492,12 @@ class SalesOrderQpoImportAutoDeliveryWorkflowTest extends SalesOrderQpoImportTes
                 .containsEntry("autoDeliveryTicketCount", 2)
                 .containsEntry("autoMatchTrigger", "IMPORT_AUTO")
                 .containsEntry("autoDeliveryTrigger", "SALES_ORDER_IMPORT_AUTO");
+    }
+
+    private OrderDeliveryTicket ticket(Integer id, Long sourceOrderId) {
+        OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+        ticket.setId(id);
+        ticket.setSourceOrderId(sourceOrderId);
+        return ticket;
     }
 }

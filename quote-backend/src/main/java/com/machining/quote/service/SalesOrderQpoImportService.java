@@ -9,6 +9,7 @@ import com.machining.quote.dto.SalesOrderQpoImportResp;
 import com.machining.quote.dto.SalesOrderQpoImportResultRow;
 import com.machining.quote.dto.SalesOrderQpoOrderGroupDTO;
 import com.machining.quote.dto.SalesOrderAutoSnapshotCompletionResult;
+import com.machining.quote.dto.ReleaseSourceType;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -25,6 +26,7 @@ import com.machining.quote.util.DrawingPartNoResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -73,6 +75,9 @@ public class SalesOrderQpoImportService {
     private SalesOrderAutoSnapshotCompletionService autoSnapshotCompletionService;
     @Autowired(required = false)
     private DeliveryService deliveryService;
+    @Autowired(required = false)
+    @Lazy
+    private DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService;
     @Autowired
     private SalesOrderNumberService salesOrderNumberService;
 
@@ -458,7 +463,31 @@ public class SalesOrderQpoImportService {
             return new AutoDeliverySummary(0);
         }
         List<OrderDeliveryTicket> tickets = deliveryService.generateImportedSalesOrderTickets(header.getId());
+        submitAutoMesForSalesOrderImport(header, tickets);
         return new AutoDeliverySummary(tickets == null ? 0 : tickets.size());
+    }
+
+    private void submitAutoMesForSalesOrderImport(SalesOrderHeader header, List<OrderDeliveryTicket> tickets) {
+        if (autoMesMaterialSyncService == null || header == null || header.getId() == null || tickets == null || tickets.isEmpty()) {
+            return;
+        }
+        List<Integer> ticketIds = tickets.stream()
+                .filter(ticket -> ticket != null && ticket.getId() != null)
+                .map(OrderDeliveryTicket::getId)
+                .toList();
+        if (ticketIds.isEmpty()) {
+            return;
+        }
+        try {
+            autoMesMaterialSyncService.submitAfterCommit(
+                    ReleaseSourceType.SALES_ORDER,
+                    header.getId(),
+                    ticketIds,
+                    "SALES_ORDER_IMPORT");
+        } catch (RuntimeException ex) {
+            log.warn("Sales order import auto MES material sync submit failed salesOrderId={} ticketCount={} reason={}",
+                    header.getId(), ticketIds.size(), ex.getMessage());
+        }
     }
 
     private AutoMatchSummary autoCompleteProductionSnapshot(
