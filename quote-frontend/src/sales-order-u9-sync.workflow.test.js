@@ -66,6 +66,19 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('box-shadow: none;')
   })
 
+  test('keeps U9 preview warnings compact so they do not crowd the item table', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+
+    expect(component).toContain('class="preview-message-summary"')
+    expect(component).toContain('previewMessageSummary')
+    expect(component).toContain('previewMessageDetailVisible')
+    expect(component).toContain('class="preview-message-detail"')
+    expect(component).toContain('class="line-issue-tag"')
+    expect(component).toContain('lineIssueSummary(row)')
+    expect(component).not.toContain('class="message-stack"')
+    expect(component).not.toContain('class="sales-order-u9-sync-alert inline"')
+  })
+
   test('uses U9 sync API helpers through the shared backend-paged order picker', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
     const picker = readSource('components', 'OrderPickerDialog.vue')

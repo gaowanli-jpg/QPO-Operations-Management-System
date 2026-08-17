@@ -267,17 +267,39 @@
             <el-tag type="info">U9价格=未税单价</el-tag>
           </div>
         </div>
-        <div v-if="previewMessages.length" class="message-stack">
-          <el-alert
-            v-for="message in previewMessages"
-            :key="`${message.type}-${message.text}`"
-            class="sales-order-u9-sync-alert inline"
-            :title="message.text"
-            :type="message.type"
-            :closable="false"
-            show-icon
-          />
+        <div
+          v-if="previewMessages.length"
+          class="preview-message-summary"
+          :class="{ blocked: previewMessageSummary.errorCount > 0 }"
+        >
+          <div class="preview-message-summary-main">
+            <el-tag :type="previewMessageSummary.errorCount > 0 ? 'danger' : 'warning'" size="small">
+              {{ previewMessageSummary.title }}
+            </el-tag>
+            <span class="preview-message-summary-text">{{ previewMessageSummary.subtitle }}</span>
+          </div>
+          <el-button
+            class="preview-message-toggle"
+            size="small"
+            text
+            @click="previewMessageDetailVisible = !previewMessageDetailVisible"
+          >
+            {{ previewMessageDetailVisible ? '收起详情' : '查看详情' }}
+          </el-button>
         </div>
+        <el-collapse-transition>
+          <div v-show="previewMessageDetailVisible && previewMessages.length" class="preview-message-detail">
+            <div
+              v-for="message in previewMessages"
+              :key="`${message.type}-${message.text}`"
+              class="preview-message-detail-row"
+              :class="message.type"
+            >
+              <span>{{ previewMessageTypeText(message.type) }}</span>
+              <strong>{{ message.text }}</strong>
+            </div>
+          </div>
+        </el-collapse-transition>
         <el-table
           :data="previewLines"
           border
@@ -327,9 +349,19 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="错误/警告" min-width="180" show-overflow-tooltip>
+          <el-table-column label="错误/警告" min-width="150">
             <template #default="{ row }">
-              <span>{{ row.blockedReason || firstLineWarning(row) || '-' }}</span>
+              <el-tooltip
+                v-if="lineMessages(row).length"
+                :content="lineMessages(row).join('；')"
+                placement="top"
+                effect="light"
+              >
+                <el-tag :type="row.blockingErrors?.length ? 'danger' : 'warning'" size="small" class="line-issue-tag">
+                  {{ lineIssueSummary(row) }}
+                </el-tag>
+              </el-tooltip>
+              <span v-else class="muted-placeholder">-</span>
             </template>
           </el-table-column>
           <el-table-column prop="untaxedUnitPrice" label="U9未税单价" width="122" align="right">
@@ -423,6 +455,7 @@ const syncResult = ref(null)
 const reconcileResult = ref(null)
 const orderPickerVisible = ref(false)
 const previewLoading = ref(false)
+const previewMessageDetailVisible = ref(false)
 const optionsLoading = ref(false)
 const optionsRefreshing = ref(false)
 const assignmentSaving = ref(false)
@@ -486,6 +519,19 @@ const previewMessages = computed(() => {
   }
   ;(source.warnings || []).forEach(text => result.push({ type: 'warning', text }))
   return result
+})
+
+const previewMessageSummary = computed(() => {
+  const messages = previewMessages.value
+  const errorCount = messages.filter(message => message.type === 'error').length
+  const warningCount = messages.filter(message => message.type === 'warning').length
+  const leadMessage = messages[0]?.text || ''
+  return {
+    errorCount,
+    warningCount,
+    title: errorCount > 0 ? `${errorCount} 条阻断` : `${warningCount} 条警告`,
+    subtitle: messages.length > 1 ? `${leadMessage} 等 ${messages.length} 条` : leadMessage
+  }
 })
 
 const assignmentReadOnly = computed(() => ['已同步', '同步中', '结果待确认'].includes(currentU9Status.value))
@@ -790,11 +836,21 @@ const materialStatusTagType = (status) => {
   return 'info'
 }
 
-const firstLineWarning = (row) => row?.warnings?.[0] || ''
 const lineMessages = (row) => [
   ...(row?.blockingErrors || []).map(message => `错误：${message}`),
   ...(row?.warnings || []).map(message => `警告：${message}`)
 ]
+
+const lineIssueSummary = (row) => {
+  const errorCount = row?.blockingErrors?.length || 0
+  const warningCount = row?.warnings?.length || 0
+  if (errorCount > 0 && warningCount > 0) return `${errorCount}错 / ${warningCount}警`
+  if (errorCount > 0) return `${errorCount}条错误`
+  if (warningCount > 0) return `${warningCount}条警告`
+  return '-'
+}
+
+const previewMessageTypeText = (type) => type === 'error' ? '阻断' : '警告'
 
 const u9PrivateFieldValue = (row, field) => {
   const raw = row?.[field.key] ?? (field.fallback ? orderValue(field.fallback) : '')
@@ -996,14 +1052,99 @@ onMounted(() => {
   margin-top: 10px;
 }
 
-.sales-order-u9-sync-alert.inline {
-  margin: 0 0 8px;
+.preview-message-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--erp-warning);
+  border-radius: var(--erp-radius-md);
+  background: var(--erp-warning-soft);
 }
 
-.message-stack {
-  display: grid;
+.preview-message-summary.blocked {
+  border-color: var(--erp-danger);
+  background: var(--erp-danger-soft);
+}
+
+.preview-message-summary-main {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  min-width: 0;
+}
+
+.preview-message-summary-text {
+  min-width: 0;
+  color: var(--erp-warning);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-message-summary.blocked .preview-message-summary-text {
+  color: var(--erp-danger);
+}
+
+.preview-message-toggle {
+  flex: 0 0 auto;
+}
+
+.preview-message-detail {
+  display: grid;
+  gap: 6px;
+  margin: -2px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: var(--erp-radius-md);
+  background: var(--erp-surface-muted);
+}
+
+.preview-message-detail-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.preview-message-detail-row span {
+  color: var(--erp-text-muted);
+  font-weight: 600;
+}
+
+.preview-message-detail-row strong {
+  min-width: 0;
+  color: var(--erp-text);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.preview-message-detail-row.error strong {
+  color: var(--erp-danger);
+}
+
+.preview-message-detail-row.warning strong {
+  color: var(--erp-warning);
+}
+
+.line-issue-tag {
+  max-width: 100%;
+}
+
+.line-issue-tag :deep(.el-tag__content) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted-placeholder {
+  color: var(--erp-text-muted);
 }
 
 .selected-order-meta dl {
