@@ -77,6 +77,16 @@ export const saveSalesOrderU9Items = (salesOrderId, payload) => request(`/api/ma
   data: payload
 })
 
+export const previewSalesOrderU9ItemDataReplacement = (salesOrderId, formData) => multipartPost(
+  `/api/market/u9-sync/orders/${salesOrderId}/item-data-replacement/preview`,
+  formData
+)
+
+export const confirmSalesOrderU9ItemDataReplacement = (salesOrderId, formData) => multipartPost(
+  `/api/market/u9-sync/orders/${salesOrderId}/item-data-replacement/confirm`,
+  formData
+)
+
 export const syncSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/sync`)
 
 export const reconcileSalesOrderU9 = (salesOrderId) => postJson(`/api/market/u9-sync/orders/${salesOrderId}/reconcile`)

@@ -284,6 +284,19 @@
                 </el-button>
               </span>
             </el-tooltip>
+            <el-tooltip :disabled="!itemDataReplacementDisabledReason" :content="itemDataReplacementDisabledReason" placement="top">
+              <span class="sales-order-u9-sync-action-wrap">
+                <el-button
+                  v-permission="U9_SYNC_SUBMIT_PERMISSION"
+                  plain
+                  :loading="itemDataReplacementBusy"
+                  :disabled="itemDataReplacementDisabled"
+                  @click="openItemDataReplacementDialog"
+                >
+                  表格数据替换
+                </el-button>
+              </span>
+            </el-tooltip>
           </div>
         </div>
         <div
@@ -532,6 +545,13 @@
       :allowed-statuses="U9_SYNC_ALLOWED_STATUSES"
       @select="handleOrderSelected"
     />
+    <SalesOrderU9ItemDataReplacementDialog
+      v-model="itemDataReplacementVisible"
+      :sales-order-id="selectedOrderId"
+      :disabled="itemDataReplacementDisabled"
+      @busy-change="itemDataReplacementBusy = $event"
+      @confirmed="handleItemDataReplacementConfirmed"
+    />
   </section>
 </template>
 
@@ -543,6 +563,7 @@ import { useRoute } from 'vue-router'
 import { usePendingAction } from '../composables/usePendingAction'
 import { useAuthStore } from '../stores/authStore'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import SalesOrderU9ItemDataReplacementDialog from './u9-sync/SalesOrderU9ItemDataReplacementDialog.vue'
 import {
   getSalesOrderU9SyncOptions,
   previewSalesOrderU9Sync,
@@ -594,12 +615,14 @@ const previewData = ref(null)
 const syncResult = ref(null)
 const reconcileResult = ref(null)
 const orderPickerVisible = ref(false)
+const itemDataReplacementVisible = ref(false)
 const previewLoading = ref(false)
 const previewMessageDetailVisible = ref(false)
 const optionsLoading = ref(false)
 const optionsRefreshing = ref(false)
 const assignmentSaving = ref(false)
 const itemEditSaving = ref(false)
+const itemDataReplacementBusy = ref(false)
 const u9Options = reactive({ orgCode: '', stale: false, refreshedAt: '', warning: '', sellers: [], departments: [] })
 const assignmentDraft = ref({ sellerCode: '', saleDepartmentCode: '' })
 const savedAssignment = ref({ sellerCode: '', saleDepartmentCode: '' })
@@ -693,6 +716,15 @@ const itemEditSaveDisabledReason = computed(() => {
   return ''
 })
 const itemEditSaveDisabled = computed(() => itemEditSaving.value || previewLoading.value || itemEditReadOnly.value || dirtyItemCount.value === 0)
+const itemDataReplacementDisabledReason = computed(() => {
+  if (!selectedOrderId.value) return '请先选择销售订单'
+  if (!hasItemEditPermission.value) return '当前账号无 U9 同步提交权限'
+  if (['已同步', '同步中', '结果待确认'].includes(currentU9Status.value)) return '当前 U9 状态只读，不可替换零件行数据'
+  if (itemEditSaving.value) return '零件行修改正在保存，请稍后替换'
+  if (previewLoading.value) return 'U9 预览正在刷新，请稍后替换'
+  return ''
+})
+const itemDataReplacementDisabled = computed(() => itemDataReplacementBusy.value || Boolean(itemDataReplacementDisabledReason.value))
 const assignmentDisplayText = computed(() => {
   const seller = sellerByCode(assignmentDraft.value.sellerCode)
   const department = departmentByCode(assignmentDraft.value.saleDepartmentCode)
@@ -732,6 +764,14 @@ const requestErrorMessage = (error, fallback) => error?.response?.data?.message 
 const openOrderPicker = () => {
   loadU9Options({ silent: true })
   orderPickerVisible.value = true
+}
+
+const openItemDataReplacementDialog = () => {
+  if (itemDataReplacementDisabled.value) {
+    ElMessage.warning(itemDataReplacementDisabledReason.value || '当前暂不可进行表格数据替换。')
+    return
+  }
+  itemDataReplacementVisible.value = true
 }
 
 const normalizeSalesOrder = (order = {}) => {
@@ -1004,6 +1044,20 @@ const handleSaveItemEdits = async () => {
     ElMessage.error(requestErrorMessage(error, '零件行修改保存失败。'))
   } finally {
     itemEditSaving.value = false
+  }
+}
+
+const handleItemDataReplacementConfirmed = async (response = {}) => {
+  try {
+    if (response?.preview) {
+      applyPreviewData(response.preview, { preserveResult: true })
+    } else {
+      await previewSelectedOrder({ silent: true, preserveResult: true })
+    }
+    dirtyItemIds.value = new Set()
+    itemDataReplacementVisible.value = false
+  } catch (error) {
+    ElMessage.error(requestErrorMessage(error, '表格数据替换后刷新预览失败。'))
   }
 }
 

@@ -204,6 +204,33 @@ describe('marketApi', () => {
     })
   })
 
+  test('sales order U9 item data replacement helpers upload preview and confirm files', async () => {
+    const previewFormData = new FormData()
+    const confirmFormData = new FormData()
+
+    await marketApi.previewSalesOrderU9ItemDataReplacement(101, previewFormData)
+    await marketApi.confirmSalesOrderU9ItemDataReplacement(101, confirmFormData)
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/market/u9-sync/orders/101/item-data-replacement/preview',
+      {
+        method: 'POST',
+        data: previewFormData,
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      '/api/market/u9-sync/orders/101/item-data-replacement/confirm',
+      {
+        method: 'POST',
+        data: confirmFormData,
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    )
+  })
+
   test('release workspace helpers use split paging endpoints', async () => {
     const params = { page: 2, pageSize: 50, keyword: 'PN' }
 
