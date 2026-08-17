@@ -5,6 +5,7 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9AssignmentReq;
 import com.machining.quote.dto.SalesOrderU9AssignmentResp;
+import com.machining.quote.dto.SalesOrderU9ItemDataReplacementConfirmDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.SalesOrderU9ItemUpdateReq;
 import com.machining.quote.dto.SalesOrderU9ItemUpdateResp;
@@ -134,6 +135,26 @@ public class SalesOrderU9SyncController {
         }
     }
 
+    @PostMapping(
+            value = "/orders/{salesOrderId}/item-data-replacement/confirm",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9ItemDataReplacementConfirmDTO confirmItemDataReplacement(
+            @PathVariable Long salesOrderId,
+            @RequestParam("previewFingerprint") String previewFingerprint,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        validatePreviewFingerprint(previewFingerprint);
+        validateExcelFile(excelFile);
+        try {
+            return itemDataReplacementService.confirm(
+                    salesOrderId,
+                    excelFile.getInputStream(),
+                    previewFingerprint.trim());
+        } catch (IOException e) {
+            throw new IllegalArgumentException("U9同步表格数据替换文件读取失败", e);
+        }
+    }
+
     @PostMapping("/orders/{salesOrderId}/sync")
     @RequirePermission("market:u9-sync:submit")
     public SalesOrderU9SyncResp syncOne(@PathVariable Long salesOrderId) {
@@ -179,6 +200,12 @@ public class SalesOrderU9SyncController {
         String lower = filename == null ? "" : filename.toLowerCase();
         if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
             throw new IllegalArgumentException("U9同步表格数据替换文件仅支持 .xlsx 或 .xls");
+        }
+    }
+
+    private void validatePreviewFingerprint(String previewFingerprint) {
+        if (previewFingerprint == null || previewFingerprint.trim().isEmpty()) {
+            throw new IllegalArgumentException("预览指纹不能为空");
         }
     }
 }

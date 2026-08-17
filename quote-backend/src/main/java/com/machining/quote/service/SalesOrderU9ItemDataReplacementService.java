@@ -1,7 +1,10 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.config.PreviewFingerprintConflictException;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementChangeDTO;
+import com.machining.quote.dto.SalesOrderU9ItemDataReplacementConfirmDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementExcelErrorDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementExcelParseResult;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementExcelRowDTO;
@@ -10,12 +13,14 @@ import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementRowDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementRowStatus;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementSummaryDTO;
+import com.machining.quote.dto.SalesOrderU9SyncPreviewResp;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -23,19 +28,25 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class SalesOrderU9ItemDataReplacementService {
+    private static final String ACTION = "SALES_ORDER_U9_ITEM_DATA_REPLACEMENT";
+    private static final String TARGET_TYPE = "sales_order_header";
+    private static final String FINGERPRINT_CONFLICT_MESSAGE = "数据已发生变化，请重新预览";
     private static final String STATUS_SYNCING = "同步中";
     private static final String STATUS_PENDING_CONFIRMATION = "结果待确认";
     private static final String STATUS_SYNCED = "已同步";
@@ -48,6 +59,10 @@ public class SalesOrderU9ItemDataReplacementService {
     private SalesOrderItemMapper itemMapper;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired
+    private SalesOrderU9SyncService previewService;
+    @Autowired(required = false)
+    private AuditService auditService;
 
     public SalesOrderU9ItemDataReplacementPreviewDTO preview(Long salesOrderId, InputStream excelInput) {
         if (salesOrderId == null) {
@@ -61,6 +76,46 @@ public class SalesOrderU9ItemDataReplacementService {
         SalesOrderU9ItemDataReplacementExcelParseResult parsed = excelParser.parse(excelInput);
         List<SalesOrderItem> items = listItems(salesOrderId);
         return buildPreview(header, parsed, items);
+    }
+
+    @Transactional
+    public SalesOrderU9ItemDataReplacementConfirmDTO confirm(
+            Long salesOrderId,
+            InputStream excelInput,
+            String previewFingerprint) {
+        if (salesOrderId == null) {
+            throw new IllegalArgumentException("销售订单 ID 不能为空");
+        }
+        if (previewFingerprint == null || previewFingerprint.trim().isEmpty()) {
+            throw new IllegalArgumentException("预览指纹不能为空");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new PreviewFingerprintConflictException(FINGERPRINT_CONFLICT_MESSAGE);
+        }
+        assertDataScope(header);
+        SalesOrderU9ItemDataReplacementExcelParseResult parsed = excelParser.parse(excelInput);
+        List<SalesOrderItem> lockedItems = lockOrderItems(salesOrderId);
+        SalesOrderU9ItemDataReplacementPreviewDTO currentPreview = buildPreview(header, parsed, lockedItems);
+        if (!fingerprintsEqual(previewFingerprint.trim(), currentPreview.getPreviewFingerprint())) {
+            throw new PreviewFingerprintConflictException(FINGERPRINT_CONFLICT_MESSAGE);
+        }
+        if (!currentPreview.isCanConfirm()) {
+            throw new IllegalArgumentException("当前替换数据不能确认，请重新预览");
+        }
+
+        ApplyResult applied = applyConfirmation(header, lockedItems, currentPreview);
+        SalesOrderU9ItemDataReplacementConfirmDTO result = new SalesOrderU9ItemDataReplacementConfirmDTO();
+        result.setSuccess(true);
+        result.setMessage("表格数据替换完成，已更新 " + applied.updatedCount() + " 行零件数据。");
+        result.setSalesOrderId(header.getId());
+        result.setSalesOrderNo(header.getSalesOrderNo());
+        result.setUpdatedCount(applied.updatedCount());
+        result.setChangedFields(new ArrayList<>(applied.changedFields()));
+        result.setSummary(currentPreview.getSummary());
+        result.setPreview(previewService.previewSalesOrder(header.getId()));
+        auditSuccess(header, applied, currentPreview.getSummary());
+        return result;
     }
 
     private SalesOrderU9ItemDataReplacementPreviewDTO buildPreview(
@@ -223,6 +278,121 @@ public class SalesOrderU9ItemDataReplacementService {
         return safeList(itemMapper.selectList(query));
     }
 
+    private List<SalesOrderItem> lockOrderItems(Long salesOrderId) {
+        List<SalesOrderItem> snapshot = listItems(salesOrderId);
+        List<SalesOrderItem> locked = new ArrayList<>();
+        for (SalesOrderItem item : snapshot) {
+            if (item == null || item.getId() == null) {
+                continue;
+            }
+            SalesOrderItem lockedItem = itemMapper.selectByIdForUpdate(item.getId());
+            if (lockedItem == null || !Objects.equals(salesOrderId, lockedItem.getSalesOrderId())) {
+                throw new PreviewFingerprintConflictException(FINGERPRINT_CONFLICT_MESSAGE);
+            }
+            locked.add(lockedItem);
+        }
+        locked.sort(Comparator
+                .comparing(SalesOrderItem::getLineNo, Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(SalesOrderItem::getId, Comparator.nullsLast(Long::compareTo)));
+        return locked;
+    }
+
+    private ApplyResult applyConfirmation(
+            SalesOrderHeader header,
+            List<SalesOrderItem> lockedItems,
+            SalesOrderU9ItemDataReplacementPreviewDTO preview) {
+        Map<Long, SalesOrderItem> itemsById = lockedItems.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(
+                        SalesOrderItem::getId,
+                        item -> item,
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        Set<String> changedFields = new LinkedHashSet<>();
+        int updatedCount = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (SalesOrderU9ItemDataReplacementRowDTO row : preview.getRows()) {
+            if (row.getStatus() != SalesOrderU9ItemDataReplacementRowStatus.CHANGED) {
+                continue;
+            }
+            SalesOrderItem item = itemsById.get(row.getSalesOrderItemId());
+            if (item == null) {
+                throw new PreviewFingerprintConflictException(FINGERPRINT_CONFLICT_MESSAGE);
+            }
+            for (SalesOrderU9ItemDataReplacementChangeDTO change : row.getChanges()) {
+                applyChange(item, change);
+                changedFields.add(change.getField());
+            }
+            recalculateDerivedFields(item);
+            item.setUpdatedAt(now);
+            persistItem(header, item, now);
+            updatedCount++;
+        }
+        return new ApplyResult(updatedCount, changedFields);
+    }
+
+    private void applyChange(SalesOrderItem item, SalesOrderU9ItemDataReplacementChangeDTO change) {
+        Object value = change.getAfterValue();
+        switch (change.getField()) {
+            case "qty" -> item.setQty((Integer) value);
+            case "customerDeliveryDate" -> item.setCustomerDeliveryDate((LocalDate) value);
+            case "internalDeliveryDate" -> item.setInternalDeliveryDate((LocalDate) value);
+            case "untaxedUnitPrice" -> item.setUntaxedUnitPrice((BigDecimal) value);
+            case "customerOrderNo" -> item.setCustomerOrderNo(trimToNull(stringValue(value)));
+            case "customerProjectNo" -> item.setCustomerProjectNo(trimToNull(stringValue(value)));
+            case "internalProjectNo" -> item.setInternalProjectNo(trimToNull(stringValue(value)));
+            case "remark" -> item.setRemark(trimToNull(stringValue(value)));
+            default -> throw new IllegalArgumentException("存在不支持的 U9 同步表格替换字段");
+        }
+    }
+
+    private void persistItem(SalesOrderHeader header, SalesOrderItem item, LocalDateTime updatedAt) {
+        UpdateWrapper<SalesOrderItem> update = new UpdateWrapper<>();
+        update.eq("id", item.getId())
+                .eq("sales_order_id", header.getId())
+                .set("qty", item.getQty())
+                .set("customer_delivery_date", item.getCustomerDeliveryDate())
+                .set("internal_delivery_date", item.getInternalDeliveryDate())
+                .set("untaxed_unit_price", item.getUntaxedUnitPrice())
+                .set("customer_order_no", item.getCustomerOrderNo())
+                .set("customer_project_no", item.getCustomerProjectNo())
+                .set("internal_project_no", item.getInternalProjectNo())
+                .set("remark", item.getRemark())
+                .set("untaxed_total_price", item.getUntaxedTotalPrice())
+                .set("tax_included_total_price", item.getTaxIncludedTotalPrice())
+                .set("remaining_qty", item.getRemainingQty())
+                .set("unshipped_qty", item.getUnshippedQty())
+                .set("updated_at", updatedAt);
+        int updated = itemMapper.update(null, update);
+        if (updated <= 0) {
+            throw new RuntimeException("销售订单零件行表格替换保存失败，请刷新后重试");
+        }
+    }
+
+    private void recalculateDerivedFields(SalesOrderItem item) {
+        Integer qty = item.getQty();
+        if (qty == null) {
+            item.setUntaxedTotalPrice(null);
+            item.setTaxIncludedTotalPrice(null);
+            item.setRemainingQty(0);
+            item.setUnshippedQty(0);
+            return;
+        }
+        if (item.getUntaxedUnitPrice() != null) {
+            item.setUntaxedTotalPrice(item.getUntaxedUnitPrice().multiply(BigDecimal.valueOf(qty)));
+        } else {
+            item.setUntaxedTotalPrice(null);
+        }
+        if (item.getTaxIncludedUnitPrice() != null) {
+            item.setTaxIncludedTotalPrice(item.getTaxIncludedUnitPrice().multiply(BigDecimal.valueOf(qty)));
+        } else {
+            item.setTaxIncludedTotalPrice(null);
+        }
+        item.setRemainingQty(Math.max(0, qty - safeInt(item.getReleasedQty())));
+        item.setUnshippedQty(Math.max(0, qty - safeInt(item.getShippedQty())));
+    }
+
     private Map<ItemKey, List<SalesOrderItem>> groupCandidates(List<SalesOrderItem> items) {
         Map<ItemKey, List<SalesOrderItem>> candidates = new LinkedHashMap<>();
         for (SalesOrderItem item : items) {
@@ -279,6 +449,7 @@ public class SalesOrderU9ItemDataReplacementService {
         appendToken(canonical, "salesOrderId", header.getId());
         appendToken(canonical, "salesOrderNo", header.getSalesOrderNo());
         appendToken(canonical, "u9SyncStatus", header.getU9SyncStatus());
+        appendToken(canonical, "headerUpdatedAt", header.getUpdatedAt());
         safeList(parsed.getRecognizedFields()).stream()
                 .sorted()
                 .forEach(field -> appendToken(canonical, "field", field));
@@ -308,8 +479,61 @@ public class SalesOrderU9ItemDataReplacementService {
             appendToken(canonical, "itemLineNo", item.getLineNo());
             appendToken(canonical, "itemPartNo", itemKey(item.getPartNo(), item.getVersion()));
             appendToken(canonical, "itemUpdatedAt", item.getUpdatedAt());
+            appendToken(canonical, "itemQty", item.getQty());
+            appendToken(canonical, "itemReleasedQty", item.getReleasedQty());
+            appendToken(canonical, "itemShippedQty", item.getShippedQty());
+            for (SalesOrderU9ItemDataReplacementField field : SalesOrderU9ItemDataReplacementField.replaceableFields()) {
+                appendToken(canonical, "current:" + field.getPropertyName(), currentValue(item, field));
+            }
         }
         return sha256(canonical.toString());
+    }
+
+    private boolean fingerprintsEqual(String expected, String actual) {
+        if (expected == null || actual == null) {
+            return false;
+        }
+        String left = expected.trim();
+        String right = actual.trim();
+        if (left.length() != 64 || right.length() != 64) {
+            return false;
+        }
+        try {
+            return MessageDigest.isEqual(HexFormat.of().parseHex(left), HexFormat.of().parseHex(right));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private void auditSuccess(
+            SalesOrderHeader header,
+            ApplyResult applied,
+            SalesOrderU9ItemDataReplacementSummaryDTO summary) {
+        if (auditService == null || applied.updatedCount() <= 0) {
+            return;
+        }
+        Map<String, Object> safeSummary = new LinkedHashMap<>();
+        safeSummary.put("salesOrderId", header.getId());
+        safeSummary.put("salesOrderNo", header.getSalesOrderNo());
+        safeSummary.put("updatedCount", applied.updatedCount());
+        safeSummary.put("changedFields", new ArrayList<>(applied.changedFields()));
+        safeSummary.put("importedCount", summary.getImportedCount());
+        safeSummary.put("matchedCount", summary.getMatchedCount());
+        safeSummary.put("changedCount", summary.getChangedCount());
+        safeSummary.put("unchangedCount", summary.getUnchangedCount());
+        safeSummary.put("unmatchedCount", summary.getUnmatchedCount());
+        safeSummary.put("skippedCount", summary.getSkippedCount());
+        safeSummary.put("errorCount", summary.getErrorCount());
+        auditService.record(
+                ACTION,
+                TARGET_TYPE,
+                header.getId(),
+                null,
+                safeSummary,
+                "MARKET",
+                "SUCCESS",
+                AuditService.labelForAction(ACTION),
+                null);
     }
 
     private void appendToken(StringBuilder canonical, String key, Object value) {
@@ -332,6 +556,10 @@ public class SalesOrderU9ItemDataReplacementService {
             return date.toString();
         }
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private ItemKey itemKey(String partNo, String version) {
@@ -362,5 +590,8 @@ public class SalesOrderU9ItemDataReplacementService {
     }
 
     private record ItemKey(String partNo, String version) {
+    }
+
+    private record ApplyResult(int updatedCount, Set<String> changedFields) {
     }
 }
