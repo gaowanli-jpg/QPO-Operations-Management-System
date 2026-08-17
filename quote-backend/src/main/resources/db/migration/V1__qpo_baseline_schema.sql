@@ -1366,7 +1366,7 @@ CREATE TABLE system_inbound_callback_config (
     updated_by character varying(100),
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ck_system_inbound_callback_source CHECK (((source_system_code)::text = ANY (ARRAY[('MES'::character varying)::text, ('EXTERNAL_SALES_ORDER_SYNC'::character varying)::text]))),
+    CONSTRAINT ck_system_inbound_callback_source CHECK (((source_system_code)::text = 'MES'::text)),
     CONSTRAINT ck_system_inbound_callback_validate_status CHECK (((last_validate_status IS NULL) OR ((last_validate_status)::text = ANY (ARRAY[('SUCCESS'::character varying)::text, ('FAILED'::character varying)::text]))))
 );
 
