@@ -19,6 +19,7 @@ import com.machining.quote.util.MaterialDataResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +63,9 @@ public class DeliveryService {
     @Autowired
     private RfqReleaseSalesOrderService rfqReleaseSalesOrderService;
     @Autowired(required = false)
+    @Lazy
+    private DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService;
+    @Autowired(required = false)
     private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
     @Autowired(required = false)
     private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
@@ -69,12 +73,12 @@ public class DeliveryService {
     @Transactional
     public List<OrderDeliveryTicket> generateRfqTickets(DeliveryGenerateReq req) {
         requireRfqOnlyRequest(req);
-        return rfqReleaseSalesOrderService.loadTickets(rfqReleaseSalesOrderService.generate(req));
+        return rfqReleaseSalesOrderService.loadTickets(generateRfqReleaseAndAutoSubmitMes(req));
     }
 
     @Transactional
     public DeliveryBatchResultDTO generateRfqReleaseBatch(DeliveryGenerateReq req) {
-        return rfqReleaseSalesOrderService.generate(req);
+        return generateRfqReleaseAndAutoSubmitMes(req);
     }
 
     @Transactional
@@ -94,7 +98,7 @@ public class DeliveryService {
                 return generateSalesOrderTickets(req, startedAt);
             }
             normalizeLegacyRfqRequest(req);
-            return rfqReleaseSalesOrderService.loadTickets(rfqReleaseSalesOrderService.generate(req));
+            return rfqReleaseSalesOrderService.loadTickets(generateRfqReleaseAndAutoSubmitMes(req));
         } catch (RuntimeException e) {
             if (isBusinessFailure(e)) {
                 log.warn("Delivery ticket generation failed rfqIds={} selectedItemCount={} durationMs={} reason={}",
@@ -104,6 +108,33 @@ public class DeliveryService {
                         rfqIds, selectedItemCount, System.currentTimeMillis() - startedAt, e);
             }
             throw e;
+        }
+    }
+
+    private DeliveryBatchResultDTO generateRfqReleaseAndAutoSubmitMes(DeliveryGenerateReq req) {
+        DeliveryBatchResultDTO result = rfqReleaseSalesOrderService.generate(req);
+        submitAutoMesForRfqRelease(result);
+        return result;
+    }
+
+    private void submitAutoMesForRfqRelease(DeliveryBatchResultDTO result) {
+        if (autoMesMaterialSyncService == null
+                || result == null
+                || !result.isSuccess()
+                || result.isIdempotentReplay()
+                || result.getTicketIds() == null
+                || result.getTicketIds().isEmpty()) {
+            return;
+        }
+        try {
+            autoMesMaterialSyncService.submitAfterCommit(
+                    ReleaseSourceType.RFQ,
+                    result.getSalesOrderId(),
+                    result.getTicketIds(),
+                    "RFQ_RELEASE");
+        } catch (RuntimeException ex) {
+            log.warn("RFQ release auto MES material sync submit failed salesOrderId={} ticketCount={} reason={}",
+                    result.getSalesOrderId(), result.getTicketIds().size(), ex.getMessage());
         }
     }
 
