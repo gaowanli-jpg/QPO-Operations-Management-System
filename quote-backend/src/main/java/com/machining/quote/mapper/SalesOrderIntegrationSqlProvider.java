@@ -44,19 +44,10 @@ public class SalesOrderIntegrationSqlProvider {
                 SELECT
                   so.id AS sales_order_id,
                   so.sales_order_no AS sale_order_no,
-                  so.document_no,
-                  so.customer_code,
-                  so.customer_name,
-                  so.customer_short_name,
-                  so.sales_order_date,
-                  so.customer_order_no,
-                  so.customer_project_no,
-                  so.customer_order_title,
                   so.internal_project_no,
                   so.order_type,
                   so.status,
                   so.created_at,
-                  so.updated_at,
                   oc.changed_at
                 FROM order_changed oc
                 JOIN sales_order_header so ON so.id = oc.id
@@ -81,36 +72,13 @@ public class SalesOrderIntegrationSqlProvider {
                 <script>
                 SELECT
                   soi.sales_order_id,
-                  so.sales_order_no AS sale_order_no,
-                  CAST(soi.line_no AS TEXT) AS sale_order_item_no,
                   soi.line_no,
-                  soi.part_no,
-                  soi.version,
                   soi.description,
-                  soi.qty,
                   soi.material_no,
-                  soi.material_no_status,
-                  soi.sales_material_no,
-                  soi.material_name,
-                  soi.engineering_material_code,
-                  soi.engineering_material_name,
-                  soi.engineering_material_type_code,
-                  soi.engineering_material_type_name,
-                  soi.engineering_material_category,
-                  soi.material_shape,
                   soi.surface_treatment,
-                  soi.customer_delivery_date,
-                  soi.internal_delivery_date,
-                  soi.shipped_qty,
-                  soi.unshipped_qty,
-                  soi.released_qty,
-                  soi.remaining_qty,
-                  COALESCE(soi.order_type, so.order_type) AS order_type,
-                  soi.status,
-                  soi.created_at,
-                  soi.updated_at
+                  soi.remark,
+                  GREATEST(COALESCE(soi.released_qty, 0), 0) AS released_qty
                 FROM sales_order_item soi
-                JOIN sales_order_header so ON so.id = soi.sales_order_id
                 WHERE soi.sales_order_id IN
                   <foreach collection='orderIds' item='orderId' open='(' separator=',' close=')'>
                   #{orderId}

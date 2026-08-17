@@ -94,59 +94,31 @@ public class SalesOrderIntegrationSyncService {
     private SalesOrderSyncOrderDTO toOrderRecord(SalesOrderSyncOrderRow order, List<SalesOrderSyncItemRow> items) {
         SalesOrderSyncOrderDTO record = new SalesOrderSyncOrderDTO();
         record.setSaleOrderNo(order.getSaleOrderNo());
-        record.setDocumentNo(order.getDocumentNo());
-        record.setCustomerCode(order.getCustomerCode());
-        record.setCustomerName(order.getCustomerName());
-        record.setCustomerShortName(order.getCustomerShortName());
-        record.setSalesOrderDate(order.getSalesOrderDate());
-        record.setCustomerOrderNo(order.getCustomerOrderNo());
-        record.setCustomerProjectNo(order.getCustomerProjectNo());
-        record.setCustomerOrderTitle(order.getCustomerOrderTitle());
-        record.setInternalProjectNo(order.getInternalProjectNo());
-        record.setOrderType(order.getOrderType());
-        record.setStatus(order.getStatus());
         record.setCreatedAt(order.getCreatedAt());
-        record.setUpdatedAt(order.getUpdatedAt());
         record.setChangedAt(order.getChangedAt());
+        record.setStatus(order.getStatus());
+        record.setOrderType(order.getOrderType());
+        record.setInternalProjectNo(order.getInternalProjectNo());
         record.setItems(items.stream()
-                .map(item -> toItemRecord(item, order.getSaleOrderNo(), order.getOrderType()))
+                .map(this::toItemRecord)
                 .toList());
         return record;
     }
 
-    private SalesOrderSyncItemDTO toItemRecord(SalesOrderSyncItemRow item, String saleOrderNo, String orderType) {
+    private SalesOrderSyncItemDTO toItemRecord(SalesOrderSyncItemRow item) {
         if (item.getLineNo() == null) {
             throw new IllegalArgumentException("sales_order_item.line_no is required for external sales order sync");
         }
+        if (isBlank(item.getMaterialNo())) {
+            throw new IllegalArgumentException("sales_order_item.material_no is required for MES sales order demand sync");
+        }
         SalesOrderSyncItemDTO record = new SalesOrderSyncItemDTO();
-        record.setSaleOrderNo(isBlank(item.getSaleOrderNo()) ? saleOrderNo : item.getSaleOrderNo());
         record.setSaleOrderItemNo(String.valueOf(item.getLineNo()));
-        record.setLineNo(item.getLineNo());
-        record.setPartNo(item.getPartNo());
-        record.setVersion(item.getVersion());
-        record.setDescription(item.getDescription());
-        record.setQty(item.getQty());
         record.setMaterialNo(item.getMaterialNo());
-        record.setMaterialNoStatus(item.getMaterialNoStatus());
-        record.setSalesMaterialNo(item.getSalesMaterialNo());
-        record.setMaterialName(item.getMaterialName());
-        record.setEngineeringMaterialCode(item.getEngineeringMaterialCode());
-        record.setEngineeringMaterialName(item.getEngineeringMaterialName());
-        record.setEngineeringMaterialTypeCode(item.getEngineeringMaterialTypeCode());
-        record.setEngineeringMaterialTypeName(item.getEngineeringMaterialTypeName());
-        record.setEngineeringMaterialCategory(item.getEngineeringMaterialCategory());
-        record.setMaterialShape(item.getMaterialShape());
+        record.setReleasedQty(nonNegative(item.getReleasedQty()));
+        record.setDescription(item.getDescription());
         record.setSurfaceTreatment(item.getSurfaceTreatment());
-        record.setCustomerDeliveryDate(item.getCustomerDeliveryDate());
-        record.setInternalDeliveryDate(item.getInternalDeliveryDate());
-        record.setShippedQty(item.getShippedQty());
-        record.setUnshippedQty(item.getUnshippedQty());
-        record.setReleasedQty(item.getReleasedQty());
-        record.setRemainingQty(item.getRemainingQty());
-        record.setOrderType(isBlank(item.getOrderType()) ? orderType : item.getOrderType());
-        record.setStatus(item.getStatus());
-        record.setCreatedAt(item.getCreatedAt());
-        record.setUpdatedAt(item.getUpdatedAt());
+        record.setRemark(item.getRemark());
         return record;
     }
 
@@ -195,10 +167,20 @@ public class SalesOrderIntegrationSyncService {
         if (message != null && message.contains("sales_order_item.line_no")) {
             return "missingLineNo";
         }
+        if (message != null && message.contains("sales_order_item.material_no")) {
+            return "missingMaterialNo";
+        }
         if (message != null && message.contains("cursor")) {
             return "invalidCursor";
         }
         return error.getClass().getSimpleName();
+    }
+
+    private Integer nonNegative(Integer value) {
+        if (value == null) {
+            return 0;
+        }
+        return Math.max(value, 0);
     }
 
     private record Cursor(LocalDateTime changedAt, Long salesOrderId) {

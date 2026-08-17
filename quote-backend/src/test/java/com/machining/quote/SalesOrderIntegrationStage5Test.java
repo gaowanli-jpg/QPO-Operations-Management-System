@@ -143,7 +143,6 @@ class SalesOrderIntegrationStage5Test {
         SalesOrderSyncOrderRow row = new SalesOrderSyncOrderRow();
         row.setSalesOrderId(id);
         row.setSaleOrderNo(saleOrderNo);
-        row.setDocumentNo(saleOrderNo);
         row.setOrderType("正式订单");
         row.setStatus("已报价");
         row.setChangedAt(changedAt);
@@ -153,15 +152,8 @@ class SalesOrderIntegrationStage5Test {
     private SalesOrderSyncItemRow item(Long orderId, String saleOrderNo, Integer lineNo, String partNo, String version, String materialNo) {
         SalesOrderSyncItemRow row = new SalesOrderSyncItemRow();
         row.setSalesOrderId(orderId);
-        row.setSaleOrderNo(saleOrderNo);
-        row.setSaleOrderItemNo(String.valueOf(lineNo));
         row.setLineNo(lineNo);
-        row.setPartNo(partNo);
-        row.setVersion(version);
-        row.setQty(1);
         row.setMaterialNo(materialNo);
-        row.setOrderType("正式订单");
-        row.setStatus("已报价");
         return row;
     }
 

@@ -81,7 +81,6 @@ class SalesOrderIntegrationStage7Test {
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order(1L, "SO-20260814-001")));
         SalesOrderSyncItemRow brokenItem = item(1L, "SO-20260814-001", null, "MAT-001");
-        brokenItem.setSaleOrderItemNo("1001");
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
                 .thenReturn(List.of(brokenItem));
 
@@ -123,9 +122,10 @@ class SalesOrderIntegrationStage7Test {
         assertThat(sql)
                 .contains("sales_order_item")
                 .contains("line_no IS NULL")
+                .contains("NULLIF(BTRIM(soi.material_no), '') IS NULL")
                 .contains("sales_order_id")
                 .contains("阻断上线")
-                .contains("补齐 line_no");
+                .contains("补齐 line_no 和 material_no");
     }
 
     @Test
@@ -203,15 +203,8 @@ class SalesOrderIntegrationStage7Test {
     private SalesOrderSyncItemRow item(Long orderId, String saleOrderNo, Integer lineNo, String materialNo) {
         SalesOrderSyncItemRow row = new SalesOrderSyncItemRow();
         row.setSalesOrderId(orderId);
-        row.setSaleOrderNo(saleOrderNo);
-        row.setSaleOrderItemNo(lineNo == null ? null : String.valueOf(lineNo));
         row.setLineNo(lineNo);
-        row.setPartNo("P-001");
-        row.setVersion("A");
-        row.setQty(1);
         row.setMaterialNo(materialNo);
-        row.setOrderType("FORMAL");
-        row.setStatus("READY");
         return row;
     }
 

@@ -30,7 +30,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -47,7 +46,7 @@ import static org.mockito.Mockito.when;
 class SalesOrderIntegrationStage8Test {
     private static final String OLD_TOKEN = "old-open-api-token";
     private static final String SALES_SYNC_PATH = "/api/integrations/sales-orders";
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
     void rotatedOpenApiTokenInvalidatesOldTokenAcrossSalesOrderSyncAndMesCallbackContracts() {
@@ -87,7 +86,7 @@ class SalesOrderIntegrationStage8Test {
     }
 
     @Test
-    void fullSyncReturnsBusinessKeysAndStableNextCursorForExternalUpsert() throws Exception {
+    void fullSyncReturnsMesDemandSlimBusinessKeysAndStableNextCursor() throws Exception {
         SalesOrderIntegrationMapper mapper = mock(SalesOrderIntegrationMapper.class);
         SalesOrderIntegrationSyncService service = service(mapper);
         SalesOrderSyncQueryReq req = req(2);
@@ -109,9 +108,15 @@ class SalesOrderIntegrationStage8Test {
         SalesOrderSyncItemDTO firstItem = firstOrder.getItems().get(0);
         assertThat(firstOrder.getSaleOrderNo()).isEqualTo("SO-20260814-001");
         assertThat(firstOrder.getOrderType()).isEqualTo("正式订单");
-        assertThat(firstItem.getSaleOrderNo()).isEqualTo("SO-20260814-001");
         assertThat(firstItem.getSaleOrderItemNo()).isEqualTo("10");
-        assertThat(firstItem.getOrderType()).isEqualTo("正式订单");
+        assertThat(firstItem.getMaterialNo()).isEqualTo("MAT-001");
+        assertThat(firstItem.getReleasedQty()).isEqualTo(2);
+        assertThat(firstItem.getDescription()).isEqualTo("MES production demand item");
+        assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
+        assertThat(firstItem.getRemark()).isEqualTo("MES remark");
+        assertThat(objectMapper.writeValueAsString(firstOrder))
+                .doesNotContain("customerName", "documentNo", "partNo", "version", "qty", "materialName", "remainingQty");
+        assertThat(objectMapper.writeValueAsString(firstItem)).doesNotContain("orderType");
 
         JsonNode cursor = decodeCursor(resp.getData().getNextCursor());
         assertThat(cursor.get("changedAt").asText()).isEqualTo("2026-08-14T09:05:00");
@@ -235,15 +240,10 @@ class SalesOrderIntegrationStage8Test {
         SalesOrderSyncOrderRow row = new SalesOrderSyncOrderRow();
         row.setSalesOrderId(id);
         row.setSaleOrderNo(saleOrderNo);
-        row.setDocumentNo(saleOrderNo);
-        row.setCustomerCode("CUST-001");
-        row.setCustomerName("Customer A");
-        row.setSalesOrderDate(LocalDate.of(2026, 8, 14));
         row.setInternalProjectNo("IP-001");
         row.setOrderType("正式订单");
         row.setStatus("APPROVED");
         row.setCreatedAt(LocalDateTime.of(2026, 8, 14, 8, 0));
-        row.setUpdatedAt(changedAt);
         row.setChangedAt(changedAt);
         return row;
     }
@@ -251,18 +251,12 @@ class SalesOrderIntegrationStage8Test {
     private SalesOrderSyncItemRow item(Long orderId, String saleOrderNo, Integer lineNo, String partNo, String version, String materialNo) {
         SalesOrderSyncItemRow row = new SalesOrderSyncItemRow();
         row.setSalesOrderId(orderId);
-        row.setSaleOrderNo(saleOrderNo);
-        row.setSaleOrderItemNo(String.valueOf(lineNo));
         row.setLineNo(lineNo);
-        row.setPartNo(partNo);
-        row.setVersion(version);
-        row.setQty(1);
         row.setMaterialNo(materialNo);
-        row.setCustomerDeliveryDate(LocalDate.of(2026, 8, 30));
-        row.setOrderType("正式订单");
-        row.setStatus("READY");
-        row.setCreatedAt(LocalDateTime.of(2026, 8, 14, 8, 30));
-        row.setUpdatedAt(LocalDateTime.of(2026, 8, 14, 9, 30));
+        row.setReleasedQty(2);
+        row.setDescription("MES production demand item");
+        row.setSurfaceTreatment("Anodized");
+        row.setRemark("MES remark");
         return row;
     }
 
