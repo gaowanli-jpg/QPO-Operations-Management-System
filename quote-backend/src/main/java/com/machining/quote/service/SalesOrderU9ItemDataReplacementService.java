@@ -83,6 +83,7 @@ public class SalesOrderU9ItemDataReplacementService {
             Long salesOrderId,
             InputStream excelInput,
             String previewFingerprint) {
+        long startedAt = System.currentTimeMillis();
         if (salesOrderId == null) {
             throw new IllegalArgumentException("销售订单 ID 不能为空");
         }
@@ -114,7 +115,7 @@ public class SalesOrderU9ItemDataReplacementService {
         result.setChangedFields(new ArrayList<>(applied.changedFields()));
         result.setSummary(currentPreview.getSummary());
         result.setPreview(previewService.previewSalesOrder(header.getId()));
-        auditSuccess(header, applied, currentPreview.getSummary());
+        auditSuccess(header, applied, currentPreview.getSummary(), System.currentTimeMillis() - startedAt);
         return result;
     }
 
@@ -508,7 +509,8 @@ public class SalesOrderU9ItemDataReplacementService {
     private void auditSuccess(
             SalesOrderHeader header,
             ApplyResult applied,
-            SalesOrderU9ItemDataReplacementSummaryDTO summary) {
+            SalesOrderU9ItemDataReplacementSummaryDTO summary,
+            long durationMs) {
         if (auditService == null || applied.updatedCount() <= 0) {
             return;
         }
@@ -524,6 +526,7 @@ public class SalesOrderU9ItemDataReplacementService {
         safeSummary.put("unmatchedCount", summary.getUnmatchedCount());
         safeSummary.put("skippedCount", summary.getSkippedCount());
         safeSummary.put("errorCount", summary.getErrorCount());
+        safeSummary.put("durationMs", durationMs);
         auditService.record(
                 ACTION,
                 TARGET_TYPE,

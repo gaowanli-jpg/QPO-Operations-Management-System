@@ -156,16 +156,24 @@ class SalesOrderU9ItemDataReplacementStage3Test {
 
         verify(fixture.itemMapper, times(1)).update(isNull(), any(UpdateWrapper.class));
         verify(fixture.previewService).previewSalesOrder(header.getId());
+        ArgumentCaptor<Object> auditCaptor = ArgumentCaptor.forClass(Object.class);
         verify(fixture.auditService).record(
                 eq("SALES_ORDER_U9_ITEM_DATA_REPLACEMENT"),
                 eq("sales_order_header"),
                 eq(header.getId()),
                 isNull(),
-                any(Map.class),
+                auditCaptor.capture(),
                 eq("MARKET"),
                 eq("SUCCESS"),
                 eq(AuditService.labelForAction("SALES_ORDER_U9_ITEM_DATA_REPLACEMENT")),
                 isNull());
+        Map<String, Object> auditSummary = (Map<String, Object>) auditCaptor.getValue();
+        assertThat(auditSummary)
+                .containsEntry("salesOrderId", header.getId())
+                .containsEntry("salesOrderNo", header.getSalesOrderNo())
+                .containsEntry("updatedCount", 1)
+                .containsKey("durationMs");
+        assertThat(auditSummary.get("durationMs")).isInstanceOf(Number.class);
     }
 
     @Test

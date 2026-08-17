@@ -44,6 +44,7 @@ public class SalesOrderU9ItemEditService {
 
     @Transactional
     public SalesOrderU9ItemUpdateResp saveItems(Long salesOrderId, SalesOrderU9ItemUpdateReq req) {
+        long startedAt = System.currentTimeMillis();
         if (salesOrderId == null) {
             throw new RuntimeException("销售订单 ID 不能为空");
         }
@@ -79,7 +80,7 @@ public class SalesOrderU9ItemEditService {
         resp.setUpdatedCount(updatedCount);
         resp.setChangedFields(new ArrayList<>(changedFields));
         resp.setPreview(previewService.previewSalesOrder(header.getId()));
-        auditSuccess(header, updatedCount, changedFields);
+        auditSuccess(header, updatedCount, changedFields, System.currentTimeMillis() - startedAt);
         return resp;
     }
 
@@ -281,7 +282,7 @@ public class SalesOrderU9ItemEditService {
         }
     }
 
-    private void auditSuccess(SalesOrderHeader header, int updatedCount, Set<String> changedFields) {
+    private void auditSuccess(SalesOrderHeader header, int updatedCount, Set<String> changedFields, long durationMs) {
         if (auditService == null) {
             return;
         }
@@ -290,6 +291,7 @@ public class SalesOrderU9ItemEditService {
         summary.put("salesOrderNo", header.getSalesOrderNo());
         summary.put("updatedCount", updatedCount);
         summary.put("changedFields", new ArrayList<>(changedFields));
+        summary.put("durationMs", durationMs);
         auditService.record(
                 ACTION,
                 TARGET_TYPE,

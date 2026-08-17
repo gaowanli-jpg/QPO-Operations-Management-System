@@ -139,10 +139,13 @@ class SalesOrderU9ItemEditServiceTest {
                 eq(AuditService.labelForAction("SALES_ORDER_U9_ITEM_UPDATE")),
                 isNull()
         );
-        assertThat((Map<String, Object>) auditCaptor.getValue())
+        Map<String, Object> auditSummary = (Map<String, Object>) auditCaptor.getValue();
+        assertThat(auditSummary)
                 .containsEntry("salesOrderId", header.getId())
                 .containsEntry("salesOrderNo", header.getSalesOrderNo())
-                .containsEntry("updatedCount", 1);
+                .containsEntry("updatedCount", 1)
+                .containsKey("durationMs");
+        assertThat(auditSummary.get("durationMs")).isInstanceOf(Number.class);
     }
 
     @Test
