@@ -10,6 +10,10 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AuditActionCatalogCharacterizationTest {
+    private static final Path SYSTEM_TASK_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
+    private static final Path AUTO_MES_MATERIAL_SYNC_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "DeliveryAutoMesMaterialSyncService.java");
     private static final Path WMS_ALLOCATION_PLAN = Path.of(
             "..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
 
@@ -82,6 +86,27 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("工艺");
         assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).contains("MES");
         assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).contains("材料");
+    }
+
+    @Test
+    void autoMesMaterialTriggerReusesManualBatchSubmitAuditAction() throws Exception {
+        String systemTaskService = Files.readString(SYSTEM_TASK_SERVICE, StandardCharsets.UTF_8);
+        String autoTriggerService = Files.readString(AUTO_MES_MATERIAL_SYNC_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(autoTriggerService)
+                .contains("submitMesMaterialBatchSyncTask(ticketIds)")
+                .doesNotContain(
+                        "DELIVERY_AUTO_MES_MATERIAL_SYNC_SUBMIT",
+                        "RFQ_RELEASE_AUTO_MES_MATERIAL_SYNC_SUBMIT",
+                        "SALES_ORDER_IMPORT_AUTO_MES_MATERIAL_SYNC_SUBMIT");
+        assertThat(systemTaskService)
+                .contains(
+                        "recordTaskSubmitAudit(\"DELIVERY_MES_MATERIAL_SYNC_SUBMIT\"",
+                        "createTask(\"MES_MATERIAL_BATCH_SYNC\"")
+                .doesNotContain(
+                        "DELIVERY_AUTO_MES_MATERIAL_SYNC_SUBMIT",
+                        "RFQ_RELEASE_AUTO_MES_MATERIAL_SYNC_SUBMIT",
+                        "SALES_ORDER_IMPORT_AUTO_MES_MATERIAL_SYNC_SUBMIT");
     }
 
     @Test

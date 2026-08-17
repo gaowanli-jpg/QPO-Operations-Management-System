@@ -170,6 +170,32 @@ class PermissionControllerGuardCharacterizationTest {
     }
 
     @Test
+    void autoMesMaterialTriggerDoesNotIntroduceAssignablePermissionPoint() throws Exception {
+        String autoTriggerService = source(MAIN_JAVA.resolve(Path.of(
+                "com", "machining", "quote", "service", "DeliveryAutoMesMaterialSyncService.java")));
+        String orderDelivery = source("OrderDeliveryController.java");
+        String permissionService = source(MAIN_JAVA.resolve(Path.of(
+                "com", "machining", "quote", "service", "PermissionService.java")));
+
+        assertThat(autoTriggerService)
+                .as("Automatic trigger is system-side behavior and must not require a new user permission")
+                .doesNotContain("@RequirePermission");
+        assertThat(orderDelivery)
+                .as("Manual delivered-item MES material sync remains the protected user entry point")
+                .contains(
+                        "@RequirePermission(\"market:delivered-item:mes-sync\")",
+                        "submitMesMaterialBatchSyncTask");
+        assertThat(permissionService)
+                .contains("\"market:delivered-item:mes-sync\"")
+                .doesNotContain(
+                        "market:delivered-item:auto-mes-sync",
+                        "market:release:mes-sync",
+                        "market:sales-order:mes-sync",
+                        "auto:mes",
+                        "AUTO_MES");
+    }
+
+    @Test
     void interceptorRejectsAuthenticatedUserWhenPermissionIsMissing() throws Exception {
         AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:rfq:view"));
         MockHttpServletRequest request = request();

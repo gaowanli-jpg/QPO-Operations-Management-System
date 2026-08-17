@@ -51,6 +51,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSupport {
+    private static final Path AUTO_MES_MATERIAL_SYNC_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "DeliveryAutoMesMaterialSyncService.java");
 
     @Test
     void deliveredItemMesSyncOnlyExposesBatchEndpoint() {
@@ -107,6 +109,55 @@ class MesMaterialSyncContractCharacterizationTest extends MesMaterialSyncTestSup
                         "MES material sync failed",
                         "log.error(\"MES material sync failed ticketId={} taskId={} rfqId={} partNo={} durationMs={}\""
                 );
+    }
+
+    @Test
+    void autoMesMaterialTriggerDelegatesThroughSystemTaskInsteadOfBypassingBatchService() throws IOException {
+        String autoTriggerService = read(AUTO_MES_MATERIAL_SYNC_SERVICE);
+        String systemTaskService = read(SYSTEM_TASK_SERVICE);
+
+        assertThat(autoTriggerService)
+                .as("Auto trigger should be equivalent to submitting the existing manual batch task")
+                .contains("SystemTaskService", "submitMesMaterialBatchSyncTask(ticketIds)")
+                .doesNotContain(
+                        "syncMesMaterialBatch(",
+                        "import com.machining.quote.service.mes.MesMaterialClient",
+                        "import com.machining.quote.service.mes.MesMaterialSyncService",
+                        "mesMaterialClient",
+                        "mesMaterialSyncService",
+                        "new MesMaterialSyncService",
+                        "syncMaterialNo",
+                        "syncMaterialBatch");
+        assertThat(systemTaskService)
+                .contains(
+                        "submitMesMaterialBatchSyncTask",
+                        "deliveryIntegrationBatchService.syncMesMaterialBatch");
+    }
+
+    @Test
+    void autoMesMaterialTriggerLogsOnlySafeSummaryFields() throws IOException {
+        String autoTriggerService = read(AUTO_MES_MATERIAL_SYNC_SERVICE);
+
+        assertThat(autoTriggerService)
+                .contains(
+                        "triggerScene={}",
+                        "sourceType={}",
+                        "sourceOrderId={}",
+                        "ticketCount={}",
+                        "taskId={}",
+                        "reason={}");
+        assertThat(autoTriggerService)
+                .doesNotContain(
+                        "Authorization",
+                        "Cookie",
+                        "token",
+                        "materialData",
+                        "processRoute",
+                        "feeData",
+                        "requestJson",
+                        "resultJson",
+                        "drawingUrl",
+                        "drawingUrls");
     }
 
     @Test
