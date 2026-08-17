@@ -8,6 +8,7 @@ import com.machining.quote.dto.mes.MesMaterialCallbackResp;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderDeliveryTicketMesRequest;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.integration.InboundCallbackCode;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMesRequestMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
@@ -276,8 +277,8 @@ class MesMaterialCallbackStage3Test {
         MesMaterialSyncService service = mock(MesMaterialSyncService.class);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
         MesIntegrationCallbackController controller = controller(service, configService);
-        when(configService.hasValidOpenApiBearerToken(null)).thenReturn(false);
-        when(configService.hasValidOpenApiBearerToken("Bearer wrong")).thenReturn(false);
+        when(configService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, null)).thenReturn(false);
+        when(configService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, "Bearer wrong")).thenReturn(false);
 
         ResponseEntity<MesMaterialCallbackResp> missing = controller.materialCallback(null, callback("MAT-NEW"));
         ResponseEntity<MesMaterialCallbackResp> wrong = controller.materialCallback("Bearer wrong", callback("MAT-NEW"));
@@ -301,7 +302,7 @@ class MesMaterialCallbackStage3Test {
         expected.setMesRequestId("QPO-MAT-20260812-01J5ABCDEF");
         when(service.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
-        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, "Bearer qpo-open-api-token")).thenReturn(true);
         ReflectionTestUtils.setField(controller, "mesMaterialSyncService", service);
         ReflectionTestUtils.setField(controller, "inboundCallbackConfigService", configService);
 
@@ -350,7 +351,7 @@ class MesMaterialCallbackStage3Test {
         MesIntegrationCallbackController controller = controller(service, configService);
         MesMaterialCallbackReq req = callback("MAT-NEW");
         req.setMesRequestId(" ");
-        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, "Bearer qpo-open-api-token")).thenReturn(true);
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer qpo-open-api-token", req);
 

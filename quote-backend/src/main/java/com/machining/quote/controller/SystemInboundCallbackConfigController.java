@@ -4,9 +4,11 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.SystemInboundCallbackConfigDTO;
 import com.machining.quote.dto.SystemInboundCallbackConfigSaveReq;
 import com.machining.quote.dto.SystemInboundCallbackTokenResp;
+import com.machining.quote.integration.InboundCallbackCode;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,6 +45,30 @@ public class SystemInboundCallbackConfigController {
     public Map<String, Object> rotateOpenApiToken() {
         SystemInboundCallbackTokenResp data = inboundCallbackConfigService.rotateOpenApiToken();
         return Map.of("success", true, "message", "Inbound open API token rotated", "data", data);
+    }
+
+    @GetMapping("/{interfaceCode}")
+    @RequirePermission("system:config:view")
+    public SystemInboundCallbackConfigDTO getInboundCallbackConfig(@PathVariable String interfaceCode) {
+        return inboundCallbackConfigService.getInboundCallbackConfig(InboundCallbackCode.fromApiCode(interfaceCode));
+    }
+
+    @PutMapping("/{interfaceCode}")
+    @RequirePermission("system:config:inbound:update")
+    public Map<String, Object> saveInboundCallbackConfig(
+            @PathVariable String interfaceCode,
+            @RequestBody SystemInboundCallbackConfigSaveReq req) {
+        return Map.of(
+                "success", true,
+                "message", "Inbound callback config saved",
+                "data", inboundCallbackConfigService.saveInboundCallbackConfig(InboundCallbackCode.fromApiCode(interfaceCode), req)
+        );
+    }
+
+    @PostMapping("/{interfaceCode}/validate")
+    @RequirePermission("system:config:inbound:update")
+    public Map<String, Object> validateInboundCallbackConfig(@PathVariable String interfaceCode) {
+        return inboundCallbackConfigService.validateInboundCallbackConfig(InboundCallbackCode.fromApiCode(interfaceCode));
     }
 
     @GetMapping("/mes-material-callback")

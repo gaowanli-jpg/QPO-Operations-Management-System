@@ -139,14 +139,6 @@
           </div>
         </section>
 
-        <el-alert
-          v-if="!supportsConfigMaintenance(selectedConfig)"
-          title="该入站接口当前仅展示统一 token 鉴权口径；元数据保存和校验会在对应后端阶段接入。"
-          type="info"
-          show-icon
-          :closable="false"
-        />
-
         <el-form :model="form" label-width="132px" class="system-inbound-form">
           <el-form-item label="QPO 访问基础地址">
             <el-input v-model.trim="form.publicBaseUrl" placeholder="例如 http://192.168.70.21:8088" />
@@ -250,6 +242,7 @@ const interfaceApiPaths = {
   [MES_MATERIAL_CALLBACK]: 'mes-material-callback',
   [SALES_ORDER_SYNC_QUERY]: 'sales-order-sync-query'
 }
+const CONFIGURABLE_INBOUND_CALLBACK_CODES = [MES_MATERIAL_CALLBACK, SALES_ORDER_SYNC_QUERY]
 
 const loading = ref(false)
 const editDrawerVisible = ref(false)
@@ -302,7 +295,7 @@ function defaultConfig(callbackCode = MES_MATERIAL_CALLBACK) {
       callbackPath: SALES_ORDER_SYNC_PATH,
       callbackUrl: SALES_ORDER_SYNC_PATH,
       authMode: OPEN_API_TOKEN_AUTH_MODE,
-      configSource: 'BUILT_IN',
+      configSource: 'ENV',
       lastValidateStatus: '',
       lastValidateMessage: '',
       lastValidateAt: '',
@@ -443,7 +436,7 @@ const buildPayload = () => ({
 const saveConfig = async () => {
   return runAction(inboundActionKeys.saveConfig, async () => {
     if (!supportsConfigMaintenance(selectedConfig.value)) {
-      ElMessage.warning('该入站接口的保存接口待接入')
+      ElMessage.warning('该入站接口暂不支持页面保存')
       return
     }
     try {
@@ -461,7 +454,7 @@ const saveConfig = async () => {
 const validateConfig = async (row = selectedConfig.value) => {
   return runAction(inboundActionKeys.validateConfig, async () => {
     if (!supportsConfigMaintenance(row)) {
-      ElMessage.warning('该入站接口的校验接口待接入')
+      ElMessage.warning('该入站接口暂不支持页面校验')
       return
     }
     try {
@@ -522,7 +515,7 @@ const clearPlainToken = () => {
   plainToken.value = ''
 }
 
-const supportsConfigMaintenance = (row) => row?.callbackCode === MES_MATERIAL_CALLBACK
+const supportsConfigMaintenance = (row) => CONFIGURABLE_INBOUND_CALLBACK_CODES.includes(row?.callbackCode)
 const interfaceApiCode = (row) => interfaceApiPaths[row?.callbackCode] || row?.callbackCode
 
 const callbackName = (row) => ({
@@ -550,8 +543,7 @@ const validateMessageText = (row) => {
 const configSourceLabel = (value) => ({
   DB: '使用页面配置',
   ENV: '使用环境变量 fallback',
-  MIXED: '页面配置 + 环境变量兜底',
-  BUILT_IN: '内置元数据'
+  MIXED: '页面配置 + 环境变量兜底'
 })[value] || value || '-'
 
 const formatDateTime = (value) => {

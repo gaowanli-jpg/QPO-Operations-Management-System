@@ -2,6 +2,7 @@ package com.machining.quote.controller;
 
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
 import com.machining.quote.dto.SalesOrderSyncResp;
+import com.machining.quote.integration.InboundCallbackCode;
 import com.machining.quote.service.SalesOrderIntegrationSyncService;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ public class SalesOrderIntegrationController {
             @ModelAttribute SalesOrderSyncQueryReq req) {
         long startedAt = System.nanoTime();
         SalesOrderSyncQueryReq query = req == null ? new SalesOrderSyncQueryReq() : req;
-        if (!inboundCallbackConfigService.hasValidOpenApiBearerToken(authorization)) {
+        if (!inboundCallbackConfigService.hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, authorization)) {
             log.warn(
                     "Sales order sync query failed caller={} pageSize={} reason={} durationMs={}",
                     CALLER,

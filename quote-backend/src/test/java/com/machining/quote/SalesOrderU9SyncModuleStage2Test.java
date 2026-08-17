@@ -1,5 +1,6 @@
 package com.machining.quote;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
@@ -21,6 +22,7 @@ import com.machining.quote.service.u9.U9SalesOrderReconciliationService;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -105,6 +107,24 @@ class SalesOrderU9SyncModuleStage2Test {
         assertThat(result.getRecords().get(1).getBlockedReason()).contains("尚未生成 QPO 提单");
         verify(fixture.dataScopeService).applySalesOrderScope(any());
         verify(fixture.u9Client, never()).create(any());
+    }
+
+    @Test
+    void listOrdersDefaultsToReleasedSalesOrdersThatAreNotAlreadySyncedToU9() {
+        Fixture fixture = fixture();
+        when(fixture.headerMapper.selectCount(any())).thenReturn(0L);
+
+        fixture.service.listOrders(
+                null, "客户A", "SOQPO", QuoteStatusWorkflow.RELEASED, null, null, 1, 20);
+
+        ArgumentCaptor<QueryWrapper<SalesOrderHeader>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(fixture.headerMapper).selectCount(queryCaptor.capture());
+        QueryWrapper<SalesOrderHeader> query = queryCaptor.getValue();
+        assertThat(query.getCustomSqlSegment())
+                .contains("status")
+                .contains("u9_sync_status IS NULL")
+                .contains("u9_sync_status <>");
+        assertThat(query.getParamNameValuePairs()).containsValue("已同步");
     }
 
     @Test

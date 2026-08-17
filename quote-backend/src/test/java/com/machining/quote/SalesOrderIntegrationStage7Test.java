@@ -4,6 +4,7 @@ import com.machining.quote.controller.SalesOrderIntegrationController;
 import com.machining.quote.dto.SalesOrderSyncItemRow;
 import com.machining.quote.dto.SalesOrderSyncOrderRow;
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
+import com.machining.quote.integration.InboundCallbackCode;
 import com.machining.quote.mapper.SalesOrderIntegrationMapper;
 import com.machining.quote.service.SalesOrderIntegrationSyncService;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
@@ -102,7 +103,7 @@ class SalesOrderIntegrationStage7Test {
         SalesOrderIntegrationSyncService syncService = mock(SalesOrderIntegrationSyncService.class);
         SystemInboundCallbackConfigService tokenService = mock(SystemInboundCallbackConfigService.class);
         SalesOrderIntegrationController controller = controller(syncService, tokenService);
-        when(tokenService.hasValidOpenApiBearerToken("Bearer secret-token-value")).thenReturn(false);
+        when(tokenService.hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, "Bearer secret-token-value")).thenReturn(false);
 
         ResponseEntity<?> response = controller.listSalesOrders("Bearer secret-token-value", req(50));
 

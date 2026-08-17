@@ -201,6 +201,7 @@ INSERT INTO system_file_storage_config VALUES (1, 'Default local upload storage'
 --
 
 INSERT INTO system_inbound_callback_config VALUES (1, 'MES_MATERIAL_CALLBACK', 'MES', 'MES物料号回调', true, true, NULL, '/api/integrations/mes/material-callback', NULL, NULL, NULL, NULL, NULL, NULL, 'Baseline callback metadata only; rotate token in system configuration after deployment.', NULL, NULL, '2026-08-10 10:07:59.996993', '2026-08-10 10:07:59.996993');
+INSERT INTO system_inbound_callback_config VALUES (2, 'SALES_ORDER_SYNC_QUERY', 'EXTERNAL_SALES_ORDER_SYNC', '销售订单外部同步查询', true, true, NULL, '/api/integrations/sales-orders', NULL, NULL, NULL, NULL, NULL, NULL, 'Baseline sales order sync metadata only; uses shared QPO_OPEN_API_TOKEN.', NULL, NULL, '2026-08-17 09:00:00', '2026-08-17 09:00:00');
 
 --
 -- Data for Name: system_permission; Type: TABLE DATA; Schema: public; Owner: -
@@ -715,7 +716,7 @@ SELECT pg_catalog.setval('system_file_storage_config_id_seq', 234, true);
 -- Name: system_inbound_callback_config_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('system_inbound_callback_config_id_seq', 1, true);
+SELECT pg_catalog.setval('system_inbound_callback_config_id_seq', 2, true);
 
 --
 -- Name: system_permission_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -

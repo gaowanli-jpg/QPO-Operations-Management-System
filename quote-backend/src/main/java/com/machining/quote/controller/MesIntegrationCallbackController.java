@@ -2,6 +2,7 @@ package com.machining.quote.controller;
 
 import com.machining.quote.dto.mes.MesMaterialCallbackReq;
 import com.machining.quote.dto.mes.MesMaterialCallbackResp;
+import com.machining.quote.integration.InboundCallbackCode;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
 import com.machining.quote.service.mes.MesMaterialCallbackException;
 import com.machining.quote.service.mes.MesMaterialSyncService;
@@ -36,7 +37,7 @@ public class MesIntegrationCallbackController {
     public ResponseEntity<MesMaterialCallbackResp> materialCallback(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestBody(required = false) MesMaterialCallbackReq req) {
-        if (!inboundCallbackConfigService.hasValidOpenApiBearerToken(authorization)) {
+        if (!inboundCallbackConfigService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)) {
             return ResponseEntity.ok(failure(HttpStatus.UNAUTHORIZED, "QPO 入站回调 token 无效", req));
         }
         try {

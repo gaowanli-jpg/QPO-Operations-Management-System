@@ -28,9 +28,6 @@ import java.util.Map;
 public class SystemInboundCallbackConfigService {
     private static final Logger log = LoggerFactory.getLogger(SystemInboundCallbackConfigService.class);
     private static final String OPEN_API_TOKEN_CODE = "QPO_OPEN_API_TOKEN";
-    private static final String SOURCE_SYSTEM_MES = "MES";
-    private static final String MES_CALLBACK_NAME = "MES物料号回调";
-    private static final String MES_CALLBACK_PATH = "/api/integrations/mes/material-callback";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Autowired
@@ -52,25 +49,47 @@ public class SystemInboundCallbackConfigService {
                 .orderByDesc("updated_at")
                 .orderByAsc("id");
         List<SystemInboundCallbackConfig> configs = configMapper.selectList(query);
-        if (configs == null || configs.isEmpty()) {
-            return List.of(defaultMesMaterialCallbackDTO());
+        Map<String, SystemInboundCallbackConfig> byCode = new LinkedHashMap<>();
+        if (configs != null) {
+            for (SystemInboundCallbackConfig config : configs) {
+                if (config != null && !isBlank(config.getCallbackCode())) {
+                    byCode.putIfAbsent(config.getCallbackCode(), config);
+                }
+            }
         }
-        return configs.stream().map(this::toDTO).toList();
+
+        List<SystemInboundCallbackConfigDTO> result = new ArrayList<>();
+        for (InboundCallbackCode code : InboundCallbackCode.values()) {
+            SystemInboundCallbackConfig entity = byCode.remove(code.name());
+            result.add(entity == null ? defaultDTO(code) : toDTO(entity, code));
+        }
+        for (SystemInboundCallbackConfig entity : byCode.values()) {
+            result.add(toDTO(entity, null));
+        }
+        return result;
+    }
+
+    public SystemInboundCallbackConfigDTO getInboundCallbackConfig(InboundCallbackCode callbackCode) {
+        SystemInboundCallbackConfig entity = findConfig(callbackCode);
+        return entity == null ? defaultDTO(callbackCode) : toDTO(entity, callbackCode);
     }
 
     public SystemInboundCallbackConfigDTO getMesMaterialCallbackConfig() {
-        SystemInboundCallbackConfig entity = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
-        return entity == null ? defaultMesMaterialCallbackDTO() : toDTO(entity);
+        return getInboundCallbackConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
     }
 
     @Transactional
-    public SystemInboundCallbackConfigDTO saveMesMaterialCallbackConfig(SystemInboundCallbackConfigSaveReq req) {
+    public SystemInboundCallbackConfigDTO saveInboundCallbackConfig(InboundCallbackCode callbackCode, SystemInboundCallbackConfigSaveReq req) {
+        if (callbackCode == null) {
+            throw new IllegalArgumentException("Inbound callback code cannot be null");
+        }
         if (req == null) {
             throw new IllegalArgumentException("Inbound callback config request cannot be null");
         }
-        SystemInboundCallbackConfig existing = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
+        SystemInboundCallbackConfig existing = findConfig(callbackCode);
         Map<String, Object> beforeAudit = existing == null ? null : auditSummary(existing, false);
-        SystemInboundCallbackConfig entity = existing == null ? defaultEntity() : existing;
+        SystemInboundCallbackConfig entity = existing == null ? defaultEntity(callbackCode) : existing;
+        ensureFixedFields(entity, callbackCode);
         entity.setEnabled(req.getEnabled() == null ? Boolean.TRUE : req.getEnabled());
         entity.setTokenEnabled(req.getTokenEnabled() == null ? Boolean.TRUE : req.getTokenEnabled());
         entity.setPublicBaseUrl(trimToNull(req.getPublicBaseUrl()));
@@ -89,9 +108,14 @@ public class SystemInboundCallbackConfigService {
                 beforeAudit,
                 auditSummary(entity, false)
         );
-        log.info("Inbound callback config saved callbackCode={} enabled={} tokenEnabled={} tokenConfigured={}",
-                entity.getCallbackCode(), entity.getEnabled(), entity.getTokenEnabled(), !isBlank(entity.getTokenHash()));
-        return toDTO(entity);
+        log.info("Inbound callback config saved callbackCode={} enabled={} tokenEnabled={}",
+                entity.getCallbackCode(), entity.getEnabled(), entity.getTokenEnabled());
+        return toDTO(entity, callbackCode);
+    }
+
+    @Transactional
+    public SystemInboundCallbackConfigDTO saveMesMaterialCallbackConfig(SystemInboundCallbackConfigSaveReq req) {
+        return saveInboundCallbackConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK, req);
     }
 
     @Transactional
@@ -100,14 +124,12 @@ public class SystemInboundCallbackConfigService {
     }
 
     public Map<String, Object> getOpenApiTokenStatus() {
-        SystemInboundCallbackConfig entity = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
-        boolean tokenHashConfigured = entity != null && !isBlank(entity.getTokenHash());
-        boolean fallbackConfigured = !isBlank(fallbackCallbackToken);
+        TokenSnapshot token = tokenSnapshot();
         LinkedHashMap<String, Object> status = new LinkedHashMap<>();
-        status.put("tokenConfigured", tokenHashConfigured || fallbackConfigured);
-        status.put("tokenMask", tokenHashConfigured ? entity.getTokenMask() : (fallbackConfigured ? "已配置" : null));
-        status.put("tokenUpdatedAt", entity == null ? null : entity.getTokenUpdatedAt());
-        status.put("message", tokenHashConfigured || fallbackConfigured
+        status.put("tokenConfigured", token.configured());
+        status.put("tokenMask", token.mask());
+        status.put("tokenUpdatedAt", token.updatedAt());
+        status.put("message", token.configured()
                 ? "统一 token 已配置；明文不可再次查看"
                 : "统一 token 未配置，请先生成 QPO_OPEN_API_TOKEN");
         return status;
@@ -119,7 +141,7 @@ public class SystemInboundCallbackConfigService {
     }
 
     private SystemInboundCallbackTokenResp rotateToken(String responseCode, String message) {
-        SystemInboundCallbackConfig entity = ensureConfig();
+        SystemInboundCallbackConfig entity = ensureConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
         String token = generateToken();
         entity.setTokenHash(sha256Hex(token));
         entity.setTokenMask(maskToken(token));
@@ -133,7 +155,7 @@ public class SystemInboundCallbackConfigService {
                 null,
                 auditSummary(entity, true)
         );
-        log.info("Inbound callback token rotated callbackCode={} tokenConfigured=true", entity.getCallbackCode());
+        log.info("Inbound callback token rotated callbackCode={} tokenConfigured=true", responseCode);
 
         SystemInboundCallbackTokenResp resp = new SystemInboundCallbackTokenResp();
         resp.setCallbackCode(responseCode);
@@ -144,11 +166,14 @@ public class SystemInboundCallbackConfigService {
     }
 
     @Transactional
-    public Map<String, Object> validateMesMaterialCallbackConfig() {
-        SystemInboundCallbackConfig entity = ensureConfig();
+    public Map<String, Object> validateInboundCallbackConfig(InboundCallbackCode callbackCode) {
+        if (callbackCode == null) {
+            throw new IllegalArgumentException("Inbound callback code cannot be null");
+        }
+        SystemInboundCallbackConfig entity = ensureConfig(callbackCode);
         List<String> issues = validatePersistedConfig(entity);
         boolean success = issues.isEmpty();
-        String message = success ? "入站回调配置完整" : String.join("；", issues);
+        String message = success ? "入站接口配置完整" : String.join("；", issues);
         entity.setLastValidateStatus(success ? "SUCCESS" : "FAILED");
         entity.setLastValidateMessage(message);
         entity.setLastValidateAt(LocalDateTime.now());
@@ -162,66 +187,63 @@ public class SystemInboundCallbackConfigService {
                 validationSummary(entity, success, message)
         );
         log.info("Inbound callback config validated callbackCode={} success={}", entity.getCallbackCode(), success);
-        return response(success, message, toDTO(entity));
+        return response(success, message, toDTO(entity, callbackCode));
+    }
+
+    @Transactional
+    public Map<String, Object> validateMesMaterialCallbackConfig() {
+        return validateInboundCallbackConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
     }
 
     public boolean hasValidBearerToken(InboundCallbackCode callbackCode, String authorization) {
         if (callbackCode == null) {
             return false;
         }
-        SystemInboundCallbackConfig entity = findConfig(callbackCode);
-        boolean enabled = entity == null || entity.getEnabled() == null || Boolean.TRUE.equals(entity.getEnabled());
+        SystemInboundCallbackConfig interfaceConfig = findConfig(callbackCode);
+        boolean enabled = interfaceConfig == null
+                || interfaceConfig.getEnabled() == null
+                || Boolean.TRUE.equals(interfaceConfig.getEnabled());
         if (!enabled) {
             return false;
         }
-        boolean tokenEnabled = entity == null
+        boolean tokenEnabled = interfaceConfig == null
                 ? fallbackCallbackTokenEnabled
-                : (entity.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : Boolean.TRUE.equals(entity.getTokenEnabled()));
+                : (interfaceConfig.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : Boolean.TRUE.equals(interfaceConfig.getTokenEnabled()));
         if (!tokenEnabled) {
-            log.warn("Data center inbound material callback token verification disabled callbackCode={} configSource={}",
-                    callbackCode.name(), entity == null ? "ENV" : "DB");
+            log.warn("Inbound open API token verification disabled callbackCode={} configSource={}",
+                    callbackCode.name(), interfaceConfig == null ? "ENV" : "DB");
             return true;
         }
-        String expectedHash = entity == null ? null : trimToNull(entity.getTokenHash());
-        if (expectedHash == null && !isBlank(fallbackCallbackToken)) {
-            expectedHash = sha256Hex(fallbackCallbackToken.trim());
-        }
+
+        TokenSnapshot token = tokenSnapshot();
         String actualToken = bearerToken(authorization);
-        if (isBlank(expectedHash) || isBlank(actualToken)) {
+        if (isBlank(token.hash()) || isBlank(actualToken)) {
             return false;
         }
         return MessageDigest.isEqual(
-                expectedHash.getBytes(StandardCharsets.UTF_8),
+                token.hash().getBytes(StandardCharsets.UTF_8),
                 sha256Hex(actualToken).getBytes(StandardCharsets.UTF_8)
         );
+    }
+
+    public boolean hasValidOpenApiBearerToken(InboundCallbackCode callbackCode, String authorization) {
+        return hasValidBearerToken(callbackCode, authorization);
     }
 
     public boolean hasValidOpenApiBearerToken(String authorization) {
-        SystemInboundCallbackConfig entity = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
-        String expectedHash = entity == null ? null : trimToNull(entity.getTokenHash());
-        if (expectedHash == null && !isBlank(fallbackCallbackToken)) {
-            expectedHash = sha256Hex(fallbackCallbackToken.trim());
-        }
-        String actualToken = bearerToken(authorization);
-        if (isBlank(expectedHash) || isBlank(actualToken)) {
-            return false;
-        }
-        return MessageDigest.isEqual(
-                expectedHash.getBytes(StandardCharsets.UTF_8),
-                sha256Hex(actualToken).getBytes(StandardCharsets.UTF_8)
-        );
+        return hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization);
     }
 
-    private SystemInboundCallbackConfig ensureConfig() {
-        SystemInboundCallbackConfig existing = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
+    private SystemInboundCallbackConfig ensureConfig(InboundCallbackCode callbackCode) {
+        SystemInboundCallbackConfig existing = findConfig(callbackCode);
         if (existing != null) {
-            ensureFixedFields(existing);
+            ensureFixedFields(existing, callbackCode);
             return existing;
         }
-        SystemInboundCallbackConfig entity = defaultEntity();
+        SystemInboundCallbackConfig entity = defaultEntity(callbackCode);
         entity.setPublicBaseUrl(trimToNull(fallbackPublicBaseUrl));
         entity.setTokenEnabled(fallbackCallbackTokenEnabled);
-        if (!isBlank(fallbackCallbackToken)) {
+        if (callbackCode == InboundCallbackCode.MES_MATERIAL_CALLBACK && !isBlank(fallbackCallbackToken)) {
             entity.setTokenHash(sha256Hex(fallbackCallbackToken.trim()));
             entity.setTokenMask("已配置");
         }
@@ -238,54 +260,65 @@ public class SystemInboundCallbackConfigService {
         return configMapper.selectOne(query);
     }
 
-    private SystemInboundCallbackConfig defaultEntity() {
+    private SystemInboundCallbackConfig defaultEntity(InboundCallbackCode callbackCode) {
         SystemInboundCallbackConfig entity = new SystemInboundCallbackConfig();
-        ensureFixedFields(entity);
+        ensureFixedFields(entity, callbackCode);
         entity.setEnabled(true);
         entity.setTokenEnabled(true);
         return entity;
     }
 
-    private void ensureFixedFields(SystemInboundCallbackConfig entity) {
-        entity.setCallbackCode(InboundCallbackCode.MES_MATERIAL_CALLBACK.name());
-        entity.setSourceSystemCode(SOURCE_SYSTEM_MES);
-        entity.setName(MES_CALLBACK_NAME);
-        entity.setCallbackPath(MES_CALLBACK_PATH);
+    private void ensureFixedFields(SystemInboundCallbackConfig entity, InboundCallbackCode callbackCode) {
+        entity.setCallbackCode(callbackCode.name());
+        entity.setSourceSystemCode(callbackCode.getSourceSystemCode());
+        entity.setName(callbackCode.getDisplayName());
+        entity.setCallbackPath(callbackCode.getCallbackPath());
     }
 
-    private SystemInboundCallbackConfigDTO defaultMesMaterialCallbackDTO() {
+    private SystemInboundCallbackConfigDTO defaultDTO(InboundCallbackCode callbackCode) {
+        TokenSnapshot token = tokenSnapshot();
         SystemInboundCallbackConfigDTO dto = new SystemInboundCallbackConfigDTO();
-        dto.setCallbackCode(InboundCallbackCode.MES_MATERIAL_CALLBACK.name());
-        dto.setSourceSystemCode(SOURCE_SYSTEM_MES);
-        dto.setName(MES_CALLBACK_NAME);
+        dto.setCallbackCode(callbackCode.name());
+        dto.setSourceSystemCode(callbackCode.getSourceSystemCode());
+        dto.setName(callbackCode.getDisplayName());
         dto.setEnabled(true);
         dto.setTokenEnabled(fallbackCallbackTokenEnabled);
-        dto.setTokenConfigured(!isBlank(fallbackCallbackToken));
-        dto.setTokenMask(isBlank(fallbackCallbackToken) ? null : "已配置");
+        dto.setTokenConfigured(token.configured());
+        dto.setTokenMask(token.mask());
+        dto.setTokenUpdatedAt(token.updatedAt());
         dto.setPublicBaseUrl(trimToNull(fallbackPublicBaseUrl));
-        dto.setCallbackPath(MES_CALLBACK_PATH);
+        dto.setCallbackPath(callbackCode.getCallbackPath());
         dto.setCallbackUrl(callbackUrl(dto.getPublicBaseUrl(), dto.getCallbackPath()));
         dto.setConfigSource("ENV");
         return dto;
     }
 
-    private SystemInboundCallbackConfigDTO toDTO(SystemInboundCallbackConfig entity) {
+    private SystemInboundCallbackConfigDTO toDTO(SystemInboundCallbackConfig entity, InboundCallbackCode definition) {
+        InboundCallbackCode callbackCode = definition;
+        if (callbackCode == null) {
+            try {
+                callbackCode = InboundCallbackCode.fromCode(entity.getCallbackCode());
+            } catch (IllegalArgumentException ignored) {
+                callbackCode = null;
+            }
+        }
         String publicBaseUrl = trimToNull(entity.getPublicBaseUrl());
-        boolean tokenHashConfigured = !isBlank(entity.getTokenHash());
+        String callbackPath = callbackCode == null ? trimToNull(entity.getCallbackPath()) : callbackCode.getCallbackPath();
+        TokenSnapshot token = tokenSnapshot();
         SystemInboundCallbackConfigDTO dto = new SystemInboundCallbackConfigDTO();
         dto.setId(entity.getId());
-        dto.setCallbackCode(entity.getCallbackCode());
-        dto.setSourceSystemCode(entity.getSourceSystemCode());
-        dto.setName(entity.getName());
+        dto.setCallbackCode(callbackCode == null ? trimToNull(entity.getCallbackCode()) : callbackCode.name());
+        dto.setSourceSystemCode(callbackCode == null ? trimToNull(entity.getSourceSystemCode()) : callbackCode.getSourceSystemCode());
+        dto.setName(callbackCode == null ? trimToNull(entity.getName()) : callbackCode.getDisplayName());
         dto.setEnabled(entity.getEnabled() == null ? Boolean.TRUE : entity.getEnabled());
         dto.setTokenEnabled(entity.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : entity.getTokenEnabled());
-        dto.setTokenConfigured(tokenHashConfigured || !isBlank(fallbackCallbackToken));
-        dto.setTokenMask(tokenHashConfigured ? entity.getTokenMask() : (isBlank(fallbackCallbackToken) ? null : "已配置"));
-        dto.setTokenUpdatedAt(entity.getTokenUpdatedAt());
+        dto.setTokenConfigured(token.configured());
+        dto.setTokenMask(token.mask());
+        dto.setTokenUpdatedAt(token.updatedAt());
         dto.setPublicBaseUrl(publicBaseUrl == null ? trimToNull(fallbackPublicBaseUrl) : publicBaseUrl);
-        dto.setCallbackPath(defaultText(entity.getCallbackPath(), MES_CALLBACK_PATH));
-        dto.setCallbackUrl(callbackUrl(dto.getPublicBaseUrl(), dto.getCallbackPath()));
-        dto.setConfigSource(configSource(entity, publicBaseUrl, tokenHashConfigured));
+        dto.setCallbackPath(callbackPath);
+        dto.setCallbackUrl(callbackUrl(dto.getPublicBaseUrl(), callbackPath));
+        dto.setConfigSource(configSource(entity, publicBaseUrl, token.dbConfigured()));
         dto.setLastValidateStatus(entity.getLastValidateStatus());
         dto.setLastValidateMessage(entity.getLastValidateMessage());
         dto.setLastValidateAt(entity.getLastValidateAt());
@@ -314,10 +347,21 @@ public class SystemInboundCallbackConfigService {
         if (isBlank(entity.getCallbackPath())) {
             issues.add("callbackPath 未配置");
         }
-        if (Boolean.TRUE.equals(entity.getTokenEnabled()) && isBlank(entity.getTokenHash())) {
+        boolean tokenEnabled = entity.getTokenEnabled() == null ? fallbackCallbackTokenEnabled : Boolean.TRUE.equals(entity.getTokenEnabled());
+        if (tokenEnabled && !tokenSnapshot().configured()) {
             issues.add("token 未生成");
         }
         return issues;
+    }
+
+    private TokenSnapshot tokenSnapshot() {
+        SystemInboundCallbackConfig tokenConfig = findConfig(InboundCallbackCode.MES_MATERIAL_CALLBACK);
+        boolean dbConfigured = tokenConfig != null && !isBlank(tokenConfig.getTokenHash());
+        boolean fallbackConfigured = !isBlank(fallbackCallbackToken);
+        String hash = dbConfigured ? trimToNull(tokenConfig.getTokenHash()) : (fallbackConfigured ? sha256Hex(fallbackCallbackToken.trim()) : null);
+        String mask = dbConfigured ? tokenConfig.getTokenMask() : (fallbackConfigured ? "已配置" : null);
+        LocalDateTime updatedAt = tokenConfig == null ? null : tokenConfig.getTokenUpdatedAt();
+        return new TokenSnapshot(dbConfigured || fallbackConfigured, dbConfigured, hash, mask, updatedAt);
     }
 
     private Map<String, Object> auditSummary(SystemInboundCallbackConfig entity, boolean tokenRotated) {
@@ -389,7 +433,7 @@ public class SystemInboundCallbackConfigService {
 
     private String callbackUrl(String publicBaseUrl, String callbackPath) {
         String base = trimToNull(publicBaseUrl);
-        String path = defaultText(callbackPath, MES_CALLBACK_PATH);
+        String path = defaultText(callbackPath, "");
         if (base == null) {
             return path;
         }
@@ -414,5 +458,8 @@ public class SystemInboundCallbackConfigService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private record TokenSnapshot(boolean configured, boolean dbConfigured, String hash, String mask, LocalDateTime updatedAt) {
     }
 }

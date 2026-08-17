@@ -4,6 +4,7 @@ import com.machining.quote.controller.SalesOrderIntegrationController;
 import com.machining.quote.dto.SalesOrderSyncPageData;
 import com.machining.quote.dto.SalesOrderSyncQueryReq;
 import com.machining.quote.dto.SalesOrderSyncResp;
+import com.machining.quote.integration.InboundCallbackCode;
 import com.machining.quote.mapper.SalesOrderIntegrationMapper;
 import com.machining.quote.service.SalesOrderIntegrationSyncService;
 import com.machining.quote.service.SystemInboundCallbackConfigService;
@@ -41,8 +42,8 @@ class SalesOrderIntegrationStage4Test {
         SalesOrderIntegrationSyncService syncService = mock(SalesOrderIntegrationSyncService.class);
         SystemInboundCallbackConfigService tokenService = mock(SystemInboundCallbackConfigService.class);
         SalesOrderIntegrationController controller = controller(syncService, tokenService);
-        when(tokenService.hasValidOpenApiBearerToken(null)).thenReturn(false);
-        when(tokenService.hasValidOpenApiBearerToken("Bearer wrong")).thenReturn(false);
+        when(tokenService.hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, null)).thenReturn(false);
+        when(tokenService.hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, "Bearer wrong")).thenReturn(false);
 
         ResponseEntity<SalesOrderSyncResp> missing = controller.listSalesOrders(null, new SalesOrderSyncQueryReq());
         ResponseEntity<SalesOrderSyncResp> wrong = controller.listSalesOrders("Bearer wrong", new SalesOrderSyncQueryReq());
@@ -63,7 +64,7 @@ class SalesOrderIntegrationStage4Test {
         SalesOrderIntegrationSyncService syncService = mock(SalesOrderIntegrationSyncService.class);
         SystemInboundCallbackConfigService tokenService = mock(SystemInboundCallbackConfigService.class);
         SalesOrderIntegrationController controller = controller(syncService, tokenService);
-        when(tokenService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
+        when(tokenService.hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, "Bearer qpo-open-api-token")).thenReturn(true);
         when(syncService.query(any(SalesOrderSyncQueryReq.class))).thenReturn(SalesOrderSyncResp.empty(20));
         SalesOrderSyncQueryReq req = new SalesOrderSyncQueryReq();
         req.setPageSize(20);
@@ -102,7 +103,7 @@ class SalesOrderIntegrationStage4Test {
         SalesOrderIntegrationSyncService syncService = mock(SalesOrderIntegrationSyncService.class);
         SystemInboundCallbackConfigService tokenService = mock(SystemInboundCallbackConfigService.class);
         SalesOrderIntegrationController controller = controller(syncService, tokenService);
-        when(tokenService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
+        when(tokenService.hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, "Bearer qpo-open-api-token")).thenReturn(true);
         when(syncService.query(any(SalesOrderSyncQueryReq.class))).thenAnswer(invocation -> {
             SalesOrderSyncQueryReq req = invocation.getArgument(0);
             return SalesOrderSyncResp.empty(req.getPageSize());
@@ -174,7 +175,7 @@ class SalesOrderIntegrationStage4Test {
         assertThat(authInterceptor).contains(PATH);
         assertThat(webConfig).contains(PATH);
         assertThat(controller)
-                .contains("hasValidOpenApiBearerToken(authorization)")
+                .contains("hasValidOpenApiBearerToken(InboundCallbackCode.SALES_ORDER_SYNC_QUERY, authorization)")
                 .doesNotContain("@RequirePermission");
     }
 

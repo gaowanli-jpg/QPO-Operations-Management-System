@@ -45,6 +45,9 @@ class SystemInboundCallbackConfigStage3Test {
                 .contains("@GetMapping")
                 .contains("@GetMapping(\"/open-api-token\")")
                 .contains("@PostMapping(\"/open-api-token\")")
+                .contains("@GetMapping(\"/{interfaceCode}\")")
+                .contains("@PutMapping(\"/{interfaceCode}\")")
+                .contains("@PostMapping(\"/{interfaceCode}/validate\")")
                 .contains("@GetMapping(\"/mes-material-callback\")")
                 .contains("@PutMapping(\"/mes-material-callback\")")
                 .contains("@PostMapping(\"/mes-material-callback/token\")")
@@ -52,6 +55,79 @@ class SystemInboundCallbackConfigStage3Test {
                 .contains("@RequirePermission(\"system:config:view\")")
                 .contains("@RequirePermission(\"system:config:inbound:update\")")
                 .contains("@RequirePermission(\"system:config:inbound:token-rotate\")");
+    }
+
+    @Test
+    void inboundCallbackCodeDefinesSalesOrderSyncMetadata() throws Exception {
+        String source = Files.readString(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "integration", "InboundCallbackCode.java"
+        ), StandardCharsets.UTF_8);
+
+        assertThat(source)
+                .contains("MES_MATERIAL_CALLBACK")
+                .contains("SALES_ORDER_SYNC_QUERY")
+                .contains("EXTERNAL_SALES_ORDER_SYNC")
+                .contains("/api/integrations/sales-orders")
+                .contains("fromApiCode(String value)");
+
+        assertThat(InboundCallbackCode.fromCode("sales_order_sync_query").name()).isEqualTo("SALES_ORDER_SYNC_QUERY");
+    }
+
+    @Test
+    void listConfigsIncludesSalesOrderSyncAsConfigurableMetadata() {
+        SystemInboundCallbackConfigMapper mapper = mock(SystemInboundCallbackConfigMapper.class);
+        SystemInboundCallbackConfigService service = service(mapper, mock(AuditService.class));
+        SystemInboundCallbackConfig mes = config(11L);
+        when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(mes));
+
+        List<SystemInboundCallbackConfigDTO> configs = service.listConfigs();
+
+        assertThat(configs).extracting(SystemInboundCallbackConfigDTO::getCallbackCode)
+                .containsExactly("MES_MATERIAL_CALLBACK", "SALES_ORDER_SYNC_QUERY");
+        SystemInboundCallbackConfigDTO salesOrderSync = configs.stream()
+                .filter(config -> "SALES_ORDER_SYNC_QUERY".equals(config.getCallbackCode()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(salesOrderSync.getSourceSystemCode()).isEqualTo("EXTERNAL_SALES_ORDER_SYNC");
+        assertThat(salesOrderSync.getCallbackPath()).isEqualTo("/api/integrations/sales-orders");
+        assertThat(salesOrderSync.getConfigSource()).isNotEqualTo("BUILT_IN");
+    }
+
+    @Test
+    void saveSalesOrderSyncConfigKeepsFixedMetadataAndRecordsAudit() {
+        SystemInboundCallbackConfigMapper mapper = mock(SystemInboundCallbackConfigMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        SystemInboundCallbackConfigService service = service(mapper, auditService);
+        SystemInboundCallbackConfig existing = salesOrderSyncConfig(31L);
+        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(existing);
+        SystemInboundCallbackConfigSaveReq req = new SystemInboundCallbackConfigSaveReq();
+        req.setPublicBaseUrl(" http://qpo.example.com ");
+        req.setEnabled(false);
+        req.setTokenEnabled(false);
+        req.setRemark("  sales order sync  ");
+
+        SystemInboundCallbackConfigDTO dto = service.saveInboundCallbackConfig(
+                InboundCallbackCode.fromCode("SALES_ORDER_SYNC_QUERY"), req);
+
+        assertThat(dto.getCallbackCode()).isEqualTo("SALES_ORDER_SYNC_QUERY");
+        assertThat(dto.getSourceSystemCode()).isEqualTo("EXTERNAL_SALES_ORDER_SYNC");
+        assertThat(dto.getCallbackPath()).isEqualTo("/api/integrations/sales-orders");
+        assertThat(dto.getPublicBaseUrl()).isEqualTo("http://qpo.example.com");
+        ArgumentCaptor<SystemInboundCallbackConfig> updateCaptor = ArgumentCaptor.forClass(SystemInboundCallbackConfig.class);
+        verify(mapper).updateById(updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getName()).contains("销售订单");
+        verify(auditService).record(eq("SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE"), eq("system_inbound_callback_config"), eq(31L), any(), any());
+    }
+
+    @Test
+    void salesOrderSyncTokenValidationRespectsInterfaceEnabledStatus() {
+        SystemInboundCallbackConfigMapper mapper = mock(SystemInboundCallbackConfigMapper.class);
+        SystemInboundCallbackConfigService service = service(mapper, mock(AuditService.class));
+        SystemInboundCallbackConfig entity = salesOrderSyncConfig(32L);
+        entity.setEnabled(false);
+        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(entity);
+
+        assertThat(service.hasValidBearerToken(InboundCallbackCode.fromCode("SALES_ORDER_SYNC_QUERY"), "Bearer " + OLD_TOKEN)).isFalse();
     }
 
     @Test
@@ -120,7 +196,9 @@ class SystemInboundCallbackConfigStage3Test {
         List<SystemInboundCallbackConfigDTO> configs = service.listConfigs();
         SystemInboundCallbackConfigDTO detail = service.getMesMaterialCallbackConfig();
 
-        assertThat(configs).hasSize(1);
+        assertThat(configs).hasSize(2);
+        assertThat(configs).extracting(SystemInboundCallbackConfigDTO::getCallbackCode)
+                .containsExactly("MES_MATERIAL_CALLBACK", "SALES_ORDER_SYNC_QUERY");
         assertThat(detail.getCallbackCode()).isEqualTo("MES_MATERIAL_CALLBACK");
         assertThat(detail.getTokenConfigured()).isTrue();
         assertThat(detail.getTokenMask()).isEqualTo("***oken");
@@ -257,6 +335,15 @@ class SystemInboundCallbackConfigStage3Test {
         entity.setTokenMask("***oken");
         entity.setTokenUpdatedAt(LocalDateTime.of(2026, 8, 3, 10, 30));
         entity.setRemark("callback config");
+        return entity;
+    }
+
+    private SystemInboundCallbackConfig salesOrderSyncConfig(Long id) {
+        SystemInboundCallbackConfig entity = config(id);
+        entity.setCallbackCode("SALES_ORDER_SYNC_QUERY");
+        entity.setSourceSystemCode("EXTERNAL_SALES_ORDER_SYNC");
+        entity.setName("销售订单外部同步查询");
+        entity.setCallbackPath("/api/integrations/sales-orders");
         return entity;
     }
 

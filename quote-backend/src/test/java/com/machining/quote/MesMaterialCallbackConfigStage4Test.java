@@ -46,8 +46,7 @@ class MesMaterialCallbackConfigStage4Test {
 
         assertThat(source)
                 .contains("SystemInboundCallbackConfigService")
-                .contains("hasValidOpenApiBearerToken(authorization)")
-                .doesNotContain("hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)")
+                .contains("hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, authorization)")
                 .contains("handleMaterialBatchCallback(req)")
                 .doesNotContain("handleMaterialCallback(req)")
                 .doesNotContain("${erp.mes.callback-token")
@@ -60,7 +59,7 @@ class MesMaterialCallbackConfigStage4Test {
         MesMaterialSyncService syncService = mock(MesMaterialSyncService.class);
         SystemInboundCallbackConfigService configService = mock(SystemInboundCallbackConfigService.class);
         MesIntegrationCallbackController controller = controller(syncService, configService);
-        when(configService.hasValidOpenApiBearerToken("Bearer wrong")).thenReturn(false);
+        when(configService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, "Bearer wrong")).thenReturn(false);
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer wrong", callback("MAT-100"));
 
@@ -69,7 +68,7 @@ class MesMaterialCallbackConfigStage4Test {
         assertThat(response.getBody().getSuccess()).isFalse();
         assertThat(response.getBody().getCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         verifyNoInteractions(syncService);
-        verify(configService).hasValidOpenApiBearerToken("Bearer wrong");
+        verify(configService).hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, "Bearer wrong");
     }
 
     @Test
@@ -80,7 +79,7 @@ class MesMaterialCallbackConfigStage4Test {
         MesMaterialCallbackResp expected = new MesMaterialCallbackResp();
         expected.setSuccess(true);
         expected.setMesRequestId("MES-REQ-123");
-        when(configService.hasValidOpenApiBearerToken("Bearer qpo-open-api-token")).thenReturn(true);
+        when(configService.hasValidOpenApiBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, "Bearer qpo-open-api-token")).thenReturn(true);
         when(syncService.handleMaterialBatchCallback(any(MesMaterialCallbackReq.class))).thenReturn(expected);
 
         ResponseEntity<MesMaterialCallbackResp> response = controller.materialCallback("Bearer qpo-open-api-token", batchCallback("MAT-100"));
@@ -125,7 +124,7 @@ class MesMaterialCallbackConfigStage4Test {
             assertThat(service.hasValidBearerToken(InboundCallbackCode.MES_MATERIAL_CALLBACK, null)).isTrue();
 
             assertThat(output.getOut())
-                    .contains("Data center inbound material callback token verification disabled")
+                    .contains("Inbound open API token verification disabled")
                     .doesNotContain("db-token", "env-token", sha256Hex("db-token"));
         } finally {
             logger.setLevel(original);

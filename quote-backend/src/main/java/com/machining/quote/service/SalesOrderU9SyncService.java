@@ -561,6 +561,8 @@ public class SalesOrderU9SyncService {
         }
         if (!isBlank(u9SyncStatus)) {
             query.eq("u9_sync_status", u9SyncStatus.trim());
+        } else {
+            query.and(wrapper -> wrapper.isNull("u9_sync_status").or().ne("u9_sync_status", STATUS_SYNCED));
         }
         if (!isBlank(keyword)) {
             String text = keyword.trim();

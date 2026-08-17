@@ -1025,4 +1025,5 @@ npm run build
 
 - 入站接口列表必须展示 `SALES_ORDER_SYNC_QUERY`，接口路径为 `GET /api/integrations/sales-orders`，认证方式固定展示 `QPO_OPEN_API_TOKEN`。
 - `SALES_ORDER_SYNC_QUERY` 只维护来源系统、启停状态、接口路径和说明，不新增独立 token；统一 token 仍在入站接口页顶部生成 / 轮换。
+- `SALES_ORDER_SYNC_QUERY` 必须作为 `system_inbound_callback_config` 中的可配置元数据返回，来源系统为 `EXTERNAL_SALES_ORDER_SYNC`，不得由前端兜底显示为 `BUILT_IN` / “内置元数据”。
 - 统一 token 轮换后，MES 回调、销售订单外部同步和后续所有入站开放接口同时切换；外部调用方未同步新 token 前请求会被拒绝。
