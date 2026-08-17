@@ -622,9 +622,9 @@ Permission: engineer:dict:view
 - Modify: `quote-backend/src/main/resources/application.yaml`
 - Modify: `erp.env`
 - Create: `quote-backend/src/main/resources/db/migration/V8__mes_master_data_sync.sql`
-- Modify/Test: `quote-backend/src/test/java/com/machining/quote/DataCenterConfigStage4Test.java`
-- Modify/Test: `quote-backend/src/test/java/com/machining/quote/DataCenterConfigStage8DocumentationTest.java`
-- Create/Test: `quote-backend/src/test/java/com/machining/quote/MesMasterDataEndpointStage1Test.java`
+- Modify/Test: `quote-backend/src/test/java/com/machining/quote/DataCenterEndpointContractTest.java`
+- Modify/Test: `quote-backend/src/test/java/com/machining/quote/DataCenterDocumentationCharacterizationTest.java`
+- Create/Test: `quote-backend/src/test/java/com/machining/quote/MesMasterDataEndpointContractTest.java`
 
 **Interfaces produced:**
 
@@ -653,7 +653,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 
 ```powershell
 cd quote-backend
-mvn -Dtest=DataCenterConfigStage4Test,DataCenterConfigStage8DocumentationTest,MesMasterDataEndpointStage1Test test
+mvn -Dtest=DataCenterEndpointContractTest,DataCenterDocumentationCharacterizationTest,MesMasterDataEndpointContractTest test
 ```
 
 Expected: all selected tests pass.
@@ -686,7 +686,7 @@ Expected: all selected tests pass.
 
 ```powershell
 cd quote-backend
-mvn -Dtest=MesMasterDataClientTest,MesMasterDataEndpointStage1Test test
+mvn -Dtest=MesMasterDataClientTest,MesMasterDataEndpointContractTest test
 ```
 
 Expected: all selected tests pass.
@@ -703,8 +703,8 @@ Expected: all selected tests pass.
 - Modify: `quote-backend/src/main/java/com/machining/quote/service/MaterialMasterService.java`
 - Create: `quote-backend/src/main/java/com/machining/quote/entity/MesMasterDataSyncRun.java`
 - Create: `quote-backend/src/main/java/com/machining/quote/mapper/MesMasterDataSyncRunMapper.java`
-- Create/Test: `quote-backend/src/test/java/com/machining/quote/MesMasterDataSchemaStage2Test.java`
-- Modify/Test: `quote-backend/src/test/java/com/machining/quote/MaterialMasterStage1CharacterizationTest.java`
+- Create/Test: `quote-backend/src/test/java/com/machining/quote/MesMasterDataMigrationTest.java`
+- Modify/Test: `quote-backend/src/test/java/com/machining/quote/MaterialMasterSchemaCharacterizationTest.java`
 
 **Interfaces produced:**
 
@@ -733,7 +733,7 @@ Expected: all selected tests pass.
 
 ```powershell
 cd quote-backend
-mvn -Dtest=MesMasterDataSchemaStage2Test,MaterialMasterStage1CharacterizationTest,MaterialMasterStage3BackendTest test
+mvn -Dtest=MesMasterDataMigrationTest,MaterialMasterSchemaCharacterizationTest,MaterialMasterBackendServiceTest test
 ```
 
 Expected: all selected tests pass.
@@ -748,7 +748,7 @@ Expected: all selected tests pass.
 - Modify: `quote-backend/src/main/java/com/machining/quote/service/ProcessMasterService.java` only if helper extraction is needed; avoid large refactor.
 - Modify: `quote-backend/src/main/java/com/machining/quote/service/AuditService.java`
 - Create/Test: `quote-backend/src/test/java/com/machining/quote/MesProcessTypeSyncServiceTest.java`
-- Modify/Test: `quote-backend/src/test/java/com/machining/quote/ProcessMasterStage3BackendTest.java`
+- Modify/Test: `quote-backend/src/test/java/com/machining/quote/ProcessMasterBackendServiceTest.java`
 
 **Interfaces produced:**
 
@@ -770,7 +770,7 @@ Expected: all selected tests pass.
 
 ```powershell
 cd quote-backend
-mvn -Dtest=MesProcessTypeSyncServiceTest,ProcessMasterStage3BackendTest,AuditServiceTests test
+mvn -Dtest=MesProcessTypeSyncServiceTest,ProcessMasterBackendServiceTest,AuditServiceTests test
 ```
 
 Expected: all selected tests pass.
@@ -785,7 +785,7 @@ Expected: all selected tests pass.
 - Modify: `quote-backend/src/main/java/com/machining/quote/service/MaterialMasterService.java` only if shared material type helpers are needed.
 - Modify: `quote-backend/src/main/java/com/machining/quote/service/AuditService.java`
 - Create/Test: `quote-backend/src/test/java/com/machining/quote/MesMaterialMasterSyncServiceTest.java`
-- Modify/Test: `quote-backend/src/test/java/com/machining/quote/MaterialMasterStage3BackendTest.java`
+- Modify/Test: `quote-backend/src/test/java/com/machining/quote/MaterialMasterBackendServiceTest.java`
 
 **Interfaces produced:**
 
@@ -810,7 +810,7 @@ Expected: all selected tests pass.
 
 ```powershell
 cd quote-backend
-mvn -Dtest=MesMaterialMasterSyncServiceTest,MaterialMasterStage3BackendTest,AuditServiceTests test
+mvn -Dtest=MesMaterialMasterSyncServiceTest,MaterialMasterBackendServiceTest,AuditServiceTests test
 ```
 
 Expected: all selected tests pass.
@@ -889,9 +889,9 @@ Expected: all selected tests pass.
 
 - Modify: `quote-frontend/src/services/dictApi.js`
 - Modify: `quote-frontend/src/components/MaterialProcessManage.vue`
-- Modify/Test: `quote-frontend/src/materialMasterStage10Frontend.test.js`
-- Modify/Test: `quote-frontend/src/processMasterStage4Frontend.test.js`
-- Create/Test: `quote-frontend/src/mesMasterDataSyncFrontend.test.js`
+- Modify/Test: `quote-frontend/src/material-master-governance.workflow.test.js`
+- Modify/Test: `quote-frontend/src/process-master-management.workflow.test.js`
+- Create/Test: `quote-frontend/src/mes-master-data-sync.workflow.test.js`
 - Modify/Test: `quote-frontend/src/adminDuplicateClickGuard.test.js`
 
 **Interfaces consumed:**
@@ -914,7 +914,7 @@ Expected: all selected tests pass.
 
 ```powershell
 cd quote-frontend
-npm test -- --run src/mesMasterDataSyncFrontend.test.js src/materialMasterStage10Frontend.test.js src/processMasterStage4Frontend.test.js src/adminDuplicateClickGuard.test.js
+npm test -- --run src/mes-master-data-sync.workflow.test.js src/material-master-governance.workflow.test.js src/process-master-management.workflow.test.js src/adminDuplicateClickGuard.test.js
 ```
 
 Expected: all selected Vitest tests pass.
@@ -931,7 +931,7 @@ Expected: all selected Vitest tests pass.
 - Modify: `docs/QPO权限用户体系/` 下权限说明
 - Create/Test: `quote-backend/src/test/java/com/machining/quote/MesMasterDataSyncDocumentationTest.java`
 - Modify/Test: `quote-backend/src/test/java/com/machining/quote/LockedItemMesProductionDispatchTest.java`
-- Modify/Test: `quote-backend/src/test/java/com/machining/quote/MesRealBatchStage8AcceptanceTest.java`
+- Modify/Test: `quote-backend/src/test/java/com/machining/quote/MesRealBatchAcceptanceTest.java`
 
 **Acceptance checks:**
 
@@ -950,7 +950,7 @@ Expected: all selected Vitest tests pass.
 
 ```powershell
 cd quote-backend
-mvn -Dtest=MesMasterDataSyncDocumentationTest,LockedItemMesProductionDispatchTest,MesRealBatchStage8AcceptanceTest test
+mvn -Dtest=MesMasterDataSyncDocumentationTest,LockedItemMesProductionDispatchTest,MesRealBatchAcceptanceTest test
 ```
 
 Expected: all selected tests pass.
@@ -1031,8 +1031,8 @@ Expected: backend and frontend test suites pass, or any unrelated pre-existing f
 - 保留材料工艺模块四个核心页签：材料费用、材料类型、工艺大类、具体工艺。
 - 保留四张字典表：`dict_material`、`dict_material_type`、`dict_process_category`、`dict_process_detail`。
 - 明确 MES 来源字段只维护主数据身份，QPO 本地继续维护材料单价和必要例外。
-- 新增后端测试文件骨架：`MesMasterDataEndpointStage1Test`、`MesMasterDataClientTest`、`MesProcessTypeSyncServiceTest`、`MesMaterialMasterSyncServiceTest`。
-- 新增前端测试文件骨架：`mesMasterDataSyncFrontend.test.js`。
+- 新增后端测试文件骨架：`MesMasterDataEndpointContractTest`、`MesMasterDataClientTest`、`MesProcessTypeSyncServiceTest`、`MesMaterialMasterSyncServiceTest`。
+- 新增前端测试文件骨架：`mes-master-data-sync.workflow.test.js`。
 
 验收：
 
@@ -1067,7 +1067,7 @@ Expected: backend and frontend test suites pass, or any unrelated pre-existing f
 
 ```powershell
 cd D:\QPO-Operations-Management-System\quote-backend
-.\mvnw.cmd test -Dtest=DataCenterConfigStage4Test,DataCenterConfigStage8DocumentationTest,MesMasterDataEndpointStage1Test
+.\mvnw.cmd test -Dtest=DataCenterEndpointContractTest,DataCenterDocumentationCharacterizationTest,MesMasterDataEndpointContractTest
 ```
 
 ### 阶段 2：MES 主数据 DTO 与只读 Client
@@ -1096,7 +1096,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ```powershell
 cd D:\QPO-Operations-Management-System\quote-backend
-.\mvnw.cmd test -Dtest=MesMasterDataClientTest,MesMasterDataEndpointStage1Test
+.\mvnw.cmd test -Dtest=MesMasterDataClientTest,MesMasterDataEndpointContractTest
 ```
 
 ### 阶段 3：数据库迁移与本地字典字段扩展
@@ -1123,7 +1123,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ```powershell
 cd D:\QPO-Operations-Management-System\quote-backend
-.\mvnw.cmd test -Dtest=MesMasterDataSchemaStage2Test,MaterialMasterStage1CharacterizationTest,MaterialMasterStage3BackendTest
+.\mvnw.cmd test -Dtest=MesMasterDataMigrationTest,MaterialMasterSchemaCharacterizationTest,MaterialMasterBackendServiceTest
 ```
 
 ### 阶段 4：MES 工艺类型同步到工艺大类
@@ -1152,7 +1152,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ```powershell
 cd D:\QPO-Operations-Management-System\quote-backend
-.\mvnw.cmd test -Dtest=MesProcessTypeSyncServiceTest,ProcessMasterStage3BackendTest,AuditServiceTests
+.\mvnw.cmd test -Dtest=MesProcessTypeSyncServiceTest,ProcessMasterBackendServiceTest,AuditServiceTests
 ```
 
 ### 阶段 5：MES 全量材料同步到材料字典
@@ -1187,7 +1187,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ```powershell
 cd D:\QPO-Operations-Management-System\quote-backend
-.\mvnw.cmd test -Dtest=MesMaterialMasterSyncServiceTest,MaterialMasterStage3BackendTest,AuditServiceTests
+.\mvnw.cmd test -Dtest=MesMaterialMasterSyncServiceTest,MaterialMasterBackendServiceTest,AuditServiceTests
 ```
 
 ### 阶段 6：材料单价缺失禁止完成核价
@@ -1278,7 +1278,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 
 ```powershell
 cd D:\QPO-Operations-Management-System\quote-frontend
-npm test -- --run src/mesMasterDataSyncFrontend.test.js src/materialMasterStage10Frontend.test.js src/processMasterStage4Frontend.test.js src/adminDuplicateClickGuard.test.js
+npm test -- --run src/mes-master-data-sync.workflow.test.js src/material-master-governance.workflow.test.js src/process-master-management.workflow.test.js src/adminDuplicateClickGuard.test.js
 ```
 
 ### 阶段 9：文档、回归和真实链路验收
@@ -1291,7 +1291,7 @@ npm test -- --run src/mesMasterDataSyncFrontend.test.js src/materialMasterStage1
 - 更新 `docs/QPO系统配置/` 中数据中心 endpoint 配置说明。
 - 更新 `docs/QPO权限用户体系/` 中字典同步权限说明。
 - 更新 `docs/QPO日志模块/` 中同步操作日志说明。
-- 扩展 `LockedItemMesProductionDispatchTest` 和 `MesRealBatchStage8AcceptanceTest`，证明同步后的字典字段进入 MES 下发 payload。
+- 扩展 `LockedItemMesProductionDispatchTest` 和 `MesRealBatchAcceptanceTest`，证明同步后的字典字段进入 MES 下发 payload。
 - 如具备测试环境权限，执行真实数据中心读取 MES 工艺/材料并同步一轮；真实写 MES 仍使用独立显式开关，不在普通回归中自动执行。
 
 验收：
@@ -1353,5 +1353,5 @@ cd D:\QPO-Operations-Management-System\quote-backend
 .\mvnw.cmd test -Dtest=MesMasterDataSyncScheduleConfigTest,MesMasterDataSyncControllerTest,MesProcessTypeSyncServiceTest,MesMaterialMasterSyncServiceTest
 
 cd D:\QPO-Operations-Management-System\quote-frontend
-npm test -- --run src/mesMasterDataSyncFrontend.test.js src/adminDuplicateClickGuard.test.js
+npm test -- --run src/mes-master-data-sync.workflow.test.js src/adminDuplicateClickGuard.test.js
 ```
