@@ -219,6 +219,17 @@
                   size="small"
                   plain
                   class="workflow-soft-button"
+                  :disabled="bulkSaveDisabled"
+                  :loading="savingReleaseDrafts"
+                  @click="saveAllReleaseDraftChanges"
+                >
+                  保存修改
+                </el-button>
+                <el-button
+                  v-permission="'market:release:create'"
+                  size="small"
+                  plain
+                  class="workflow-soft-button"
                   :disabled="selectedOrders.length === 0 || replacingDrawings || submitting || dataReplacementBusy"
                   :loading="replacingDrawings"
                   @click="openDrawingReplaceDialog"
@@ -808,7 +819,11 @@ import {
 } from '../utils/clientPagination'
 import { usePendingAction } from '../composables/usePendingAction'
 import { applyReleaseItemDataReplacementResult } from './marketReleaseDataReplacement'
-import { hydrateReleaseItemDrafts } from './marketReleaseDrafts'
+import {
+  collectReleaseRowsWithDraftChanges,
+  hydrateReleaseItemDrafts,
+  releaseDraftChangeSummary
+} from './marketReleaseDrafts'
 
 const selectedRfqId = ref(null)
 const selectedOrders = ref([])
@@ -859,6 +874,7 @@ const { isPending, runAction } = usePendingAction()
 const releaseActionKeys = {
   importSelection: 'market:release:import-selection',
   replaceDrawings: 'market:release:replace-drawings',
+  bulkSave: 'market:release:bulk-save-drafts',
   shiftInternalLeadTime: 'market:release:shift-internal-lead-time',
   setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time',
   fields: (releaseItemKey) => `market:release:fields:${releaseItemKey}`,
@@ -872,6 +888,12 @@ const adjustingInternalLeadTime = computed(() => isPending(releaseActionKeys.shi
 const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys.setInternalTargetLeadTime))
 const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
 const replacingDrawings = computed(() => isPending(releaseActionKeys.replaceDrawings))
+const savingReleaseDrafts = computed(() => isPending(releaseActionKeys.bulkSave))
+const releaseDraftRowsForBulkSave = computed(() => collectReleaseRowsWithDraftChanges([
+  ...Object.values(selectedItemIdMap),
+  ...itemList.value
+], rowKey).filter(row => !isFullyReleasedReleaseItem(row)))
+const bulkSaveDisabled = computed(() => submitting.value || dataReplacementBusy.value || replacingDrawings.value || savingReleaseDrafts.value)
 const dataReplacementDisabled = computed(() => selectedOrders.value.length === 0 || dataReplacementBusy.value || submitting.value || selectedSourcesIncludeNonRfq.value)
 const dataReplacementDraftRowsByKey = computed(() => {
   const rowsByKey = {}
@@ -1190,29 +1212,122 @@ const isOrderFieldSaving = (row, field) => isPending(releaseActionKeys.orderFiel
 
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
+const mergeSavedReleaseItemRow = (row, saved) => {
+  const key = rowKey(row)
+  const index = itemList.value.findIndex(item => rowKey(item) === key)
+  if (index >= 0) {
+    itemList.value.splice(index, 1, saved)
+  }
+  if (selectedItemIdMap[key]) {
+    selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...saved }
+  }
+  return saved
+}
+
+const requireReleaseRowId = (row) => {
+  if (!row?.id) throw new Error('零件缺少有效 ID，无法保存。')
+}
+
+const requireReleaseRowRfqId = (row) => {
+  const rowRfqId = row?.rfqId || row?.sourceOrderId || selectedRfqId.value
+  if (!rowRfqId) throw new Error('零件缺少订单信息，无法保存。')
+  return rowRfqId
+}
+
+const persistReleaseItemVersion = async (row) => {
+  requireReleaseRowId(row)
+  const rowRfqId = row?.rfqId || selectedRfqId.value
+  if (!rowRfqId) throw new Error('零件缺少订单信息，无法保存。')
+  const version = String(row.versionDraft ?? '').trim()
+  row.versionDraft = version
+  const response = await updateReleaseItemVersion(row.id, {
+    rfqId: rowRfqId,
+    version
+  })
+  const savedData = response?.data || {}
+  return mergeSavedReleaseItemRow(row, {
+    ...row,
+    ...savedData,
+    versionDraft: savedData.version ?? version
+  })
+}
+
+const persistReleaseItemFields = async (row) => {
+  requireReleaseRowId(row)
+  row.descriptionDraft = String(row.descriptionDraft ?? '').trim()
+  row.surfaceTreatmentDraft = String(row.surfaceTreatmentDraft ?? '').trim()
+  row.remarkDraft = String(row.remarkDraft ?? '').trim()
+  const response = await updateReleaseItemFields(row.id, {
+    sourceType: row.sourceType || 'RFQ',
+    sourceOrderId: row.sourceOrderId,
+    rfqId: row.rfqId || selectedRfqId.value,
+    description: row.descriptionDraft,
+    surfaceTreatment: row.surfaceTreatmentDraft,
+    remark: row.remarkDraft
+  })
+  const savedData = response?.data || {}
+  return mergeSavedReleaseItemRow(row, {
+    ...row,
+    ...savedData,
+    descriptionDraft: savedData.description ?? '',
+    surfaceTreatmentDraft: savedData.surfaceTreatment ?? '',
+    remarkDraft: savedData.remark ?? ''
+  })
+}
+
+const orderFieldPayloadForBulkSave = (row) => {
+  const payload = {}
+  Object.entries(orderFieldDefaults).forEach(([fieldName, draftField]) => {
+    payload[fieldName] = normalizeOrderFieldDraft(row?.[`${draftField}Draft`])
+  })
+  return payload
+}
+
+const mergeSavedAllOrderFieldDrafts = (row, savedData) => {
+  const saved = { ...row, ...savedData }
+  Object.entries(orderFieldDefaults).forEach(([field, draftField]) => {
+    saved[`${draftField}Draft`] = savedData[field] ?? ''
+  })
+  return saved
+}
+
+const persistReleaseItemOrderFields = async (row) => {
+  requireReleaseRowId(row)
+  const rowRfqId = requireReleaseRowRfqId(row)
+  if (!canEditReleaseItemOrderFields(row)) {
+    throw new Error('已生成提单的零件不能修改订单信息。')
+  }
+  const response = await updateReleaseItemOrderFields(row.id, {
+    rfqId: rowRfqId,
+    ...orderFieldPayloadForBulkSave(row)
+  })
+  const savedData = response?.data || {}
+  return mergeSavedReleaseItemRow(row, mergeSavedAllOrderFieldDrafts(row, savedData))
+}
+
+const persistInternalTargetLeadTime = async (row) => {
+  requireReleaseRowId(row)
+  const rowRfqId = row?.rfqId || selectedRfqId.value
+  if (!rowRfqId) throw new Error('零件缺少订单信息，无法保存。')
+  const response = await updateInternalTargetLeadTime({
+    rfqId: rowRfqId,
+    itemId: row.id,
+    internalTargetLeadTime: row.internalTargetLeadTimeDraft
+  })
+  const savedData = response?.data || {}
+  return mergeSavedReleaseItemRow(row, {
+    ...row,
+    ...savedData,
+    internalTargetLeadTimeDraft: savedData.internalTargetLeadTime ?? ''
+  })
+}
+
 const saveReleaseItemVersion = async (row) => {
   const rowRfqId = row?.rfqId || selectedRfqId.value
   if (!rowRfqId || !row?.id) return
-  row.versionDraft = String(row.versionDraft ?? '').trim()
   return runAction(releaseActionKeys.version(row.id), async () => {
     try {
-      const response = await updateReleaseItemVersion(row.id, {
-        rfqId: rowRfqId,
-        version: row.versionDraft
-      })
-      const savedData = response?.data || {}
-      const saved = {
-        ...row,
-        ...savedData,
-        versionDraft: savedData.version ?? row.versionDraft ?? ''
-      }
-      const index = itemList.value.findIndex(item => item.id === row.id)
-      if (index >= 0) {
-        itemList.value.splice(index, 1, saved)
-      }
-      if (selectedItemIdMap[rowKey(row)]) {
-        selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }
-      }
+      await persistReleaseItemVersion(row)
       ElMessage.success('版本已保存。')
     } catch (error) {
       console.error(error)
@@ -1223,34 +1338,9 @@ const saveReleaseItemVersion = async (row) => {
 
 const saveReleaseItemFields = async (row) => {
   if (!row?.id) return
-  row.descriptionDraft = String(row.descriptionDraft ?? '').trim()
-  row.surfaceTreatmentDraft = String(row.surfaceTreatmentDraft ?? '').trim()
-  row.remarkDraft = String(row.remarkDraft ?? '').trim()
   return runAction(releaseActionKeys.fields(rowKey(row)), async () => {
     try {
-      const response = await updateReleaseItemFields(row.id, {
-        sourceType: row.sourceType || 'RFQ',
-        sourceOrderId: row.sourceOrderId,
-        rfqId: row.rfqId || selectedRfqId.value,
-        description: row.descriptionDraft,
-        surfaceTreatment: row.surfaceTreatmentDraft,
-        remark: row.remarkDraft
-      })
-      const savedData = response?.data || {}
-      const saved = {
-        ...row,
-        ...savedData,
-        descriptionDraft: savedData.description || '',
-        surfaceTreatmentDraft: savedData.surfaceTreatment || '',
-        remarkDraft: savedData.remark || ''
-      }
-      const index = itemList.value.findIndex(item => rowKey(item) === rowKey(row))
-      if (index >= 0) {
-        itemList.value.splice(index, 1, saved)
-      }
-      if (selectedItemIdMap[rowKey(row)]) {
-        selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }
-      }
+      await persistReleaseItemFields(row)
       ElMessage.success('零件信息已保存。')
     } catch (error) {
       console.error(error)
@@ -1284,6 +1374,55 @@ const saveReleaseItemOrderField = async (row, field) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(requestErrorMessage(error, '零件订单信息保存失败。'))
+    }
+  })
+}
+
+const saveAllReleaseDraftChanges = async () => {
+  const rows = releaseDraftRowsForBulkSave.value
+  if (rows.length === 0) {
+    ElMessage.info('没有需要保存的修改。')
+    return
+  }
+
+  return runAction(releaseActionKeys.bulkSave, async () => {
+    const failures = []
+    let savedRows = 0
+
+    for (const row of rows) {
+      let workingRow = row
+      let rowSaved = false
+      try {
+        const summary = releaseDraftChangeSummary(workingRow)
+        if (summary.version) {
+          workingRow = await persistReleaseItemVersion(workingRow)
+          rowSaved = true
+        }
+        if (summary.internalTargetLeadTime) {
+          workingRow = await persistInternalTargetLeadTime(workingRow)
+          rowSaved = true
+        }
+        if (summary.fields) {
+          workingRow = await persistReleaseItemFields(workingRow)
+          rowSaved = true
+        }
+        if (summary.orderFields) {
+          workingRow = await persistReleaseItemOrderFields(workingRow)
+          rowSaved = true
+        }
+        if (rowSaved) savedRows += 1
+      } catch (error) {
+        console.error(error)
+        failures.push({ row: workingRow, message: requestErrorMessage(error, '保存失败。') })
+      }
+    }
+
+    if (failures.length === 0) {
+      ElMessage.success(`已保存 ${savedRows} 个零件的修改。`)
+    } else if (savedRows > 0) {
+      ElMessage.warning(`已保存 ${savedRows} 个零件，${failures.length} 个零件保存失败。`)
+    } else {
+      ElMessage.error(`保存失败：${failures[0]?.message || '请稍后重试。'}`)
     }
   })
 }
@@ -1643,22 +1782,7 @@ const saveInternalTargetLeadTime = async (row) => {
   if (!rowRfqId || !row?.id) return
   return runAction(releaseActionKeys.internalLeadTime(row.id), async () => {
     try {
-      const response = await updateInternalTargetLeadTime({
-        rfqId: rowRfqId,
-        itemId: row.id,
-        internalTargetLeadTime: row.internalTargetLeadTimeDraft
-      })
-      const saved = {
-        ...(response.data || {}),
-        internalTargetLeadTimeDraft: response.data?.internalTargetLeadTime || ''
-      }
-      const index = itemList.value.findIndex(item => item.id === row.id)
-      if (index >= 0) {
-        itemList.value.splice(index, 1, saved)
-      }
-      if (selectedItemIdMap[rowKey(row)]) {
-        selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }
-      }
+      await persistInternalTargetLeadTime(row)
       ElMessage.success('内部目标交期已保存。')
     } catch (error) {
       console.error(error)

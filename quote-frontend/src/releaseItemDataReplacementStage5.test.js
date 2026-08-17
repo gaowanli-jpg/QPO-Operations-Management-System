@@ -77,6 +77,25 @@ describe('release item data replacement stage 5 frontend', () => {
     expect(actionRow).toContain(':loading="dataReplacementBusy"')
   })
 
+  test('market release places the bulk draft save button beside data replacement', () => {
+    const actionRow = blockBetween(
+      marketReleaseSource,
+      'class="release-table-actions import-action-row"',
+      '<el-table'
+    )
+    const dataReplacementIndex = actionRow.indexOf('表格数据替换')
+    const bulkSaveIndex = actionRow.indexOf('保存修改')
+    const drawingReplacementIndex = actionRow.indexOf('导入替换图纸')
+
+    expect(dataReplacementIndex).toBeGreaterThanOrEqual(0)
+    expect(bulkSaveIndex).toBeGreaterThan(dataReplacementIndex)
+    expect(drawingReplacementIndex).toBeGreaterThan(bulkSaveIndex)
+    expect(actionRow).toContain('v-permission="\'market:release:create\'"')
+    expect(actionRow).toContain('@click="saveAllReleaseDraftChanges"')
+    expect(actionRow).toContain(':disabled="bulkSaveDisabled"')
+    expect(actionRow).toContain(':loading="savingReleaseDrafts"')
+  })
+
   test('market release mounts an independent dialog with selected RFQ sources', () => {
     expect(marketReleaseSource).toContain("import ReleaseItemDataReplacementDialog from './market-release/ReleaseItemDataReplacementDialog.vue'")
     expect(marketReleaseSource).toContain('<ReleaseItemDataReplacementDialog')

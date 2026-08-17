@@ -95,7 +95,8 @@ describe('market release workbench stage 7', () => {
       source.indexOf('const remainingQtyFor')
     )
 
-    expect(source).toContain("import { hydrateReleaseItemDrafts } from './marketReleaseDrafts'")
+    expect(source).toContain('hydrateReleaseItemDrafts')
+    expect(source).toContain("from './marketReleaseDrafts'")
     expect(setItemListBlock).toContain('hydrateReleaseItemDrafts(row, selectedItemIdMap[rowKey(row)])')
   })
 

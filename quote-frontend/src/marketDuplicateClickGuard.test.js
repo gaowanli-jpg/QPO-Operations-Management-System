@@ -43,6 +43,7 @@ describe('market duplicate click guards', () => {
     expect(source).toContain('const { isPending, runAction } = usePendingAction()')
     expect(source).toContain("importSelection: 'market:release:import-selection'")
     expect(source).toContain("replaceDrawings: 'market:release:replace-drawings'")
+    expect(source).toContain("bulkSave: 'market:release:bulk-save-drafts'")
     expect(source).toContain("shiftInternalLeadTime: 'market:release:shift-internal-lead-time'")
     expect(source).toContain("setInternalTargetLeadTime: 'market:release:set-internal-target-lead-time'")
     expect(source).toContain('version: (itemId) => `market:release:version:${itemId}`')
@@ -55,7 +56,9 @@ describe('market duplicate click guards', () => {
 
     const versionBlock = blockBetween(source, 'const saveReleaseItemVersion = async (row) =>', 'const handleSelectionChange')
     expect(versionBlock).toContain('return runAction(releaseActionKeys.version(row.id), async () =>')
-    expect(versionBlock).toContain('await updateReleaseItemVersion(row.id')
+    expect(versionBlock).toContain('await persistReleaseItemVersion(row)')
+    const persistVersionBlock = blockBetween(source, 'const persistReleaseItemVersion = async (row) =>', 'const persistReleaseItemFields = async (row) =>')
+    expect(persistVersionBlock).toContain('await updateReleaseItemVersion(row.id')
 
     const importBlock = blockBetween(source, 'const handleSelectionExcelChange = async (uploadFile) =>', 'const openDrawingReplaceDialog')
     expect(importBlock).toContain('return runAction(releaseActionKeys.importSelection, async () =>')
@@ -75,7 +78,16 @@ describe('market duplicate click guards', () => {
 
     const rowLeadTimeBlock = blockBetween(source, 'const saveInternalTargetLeadTime = async (row) =>', 'const submitTicket')
     expect(rowLeadTimeBlock).toContain('return runAction(releaseActionKeys.internalLeadTime(row.id), async () =>')
-    expect(rowLeadTimeBlock).toContain('await updateInternalTargetLeadTime')
+    expect(rowLeadTimeBlock).toContain('await persistInternalTargetLeadTime(row)')
+    const persistLeadTimeBlock = blockBetween(source, 'const persistInternalTargetLeadTime = async (row) =>', 'const saveReleaseItemVersion = async (row) =>')
+    expect(persistLeadTimeBlock).toContain('await updateInternalTargetLeadTime')
+
+    const bulkSaveBlock = blockBetween(source, 'const saveAllReleaseDraftChanges = async () =>', 'const handleSelectionChange')
+    expect(bulkSaveBlock).toContain('return runAction(releaseActionKeys.bulkSave, async () =>')
+    expect(bulkSaveBlock).toContain('await persistReleaseItemVersion(workingRow)')
+    expect(bulkSaveBlock).toContain('await persistReleaseItemFields(workingRow)')
+    expect(bulkSaveBlock).toContain('await persistReleaseItemOrderFields(workingRow)')
+    expect(bulkSaveBlock).toContain('await persistInternalTargetLeadTime(workingRow)')
 
     const submitBlock = blockBetween(source, 'const submitTicket = async () =>', 'const resolveDeliveryLeadTime')
     expect(submitBlock).toContain('return runAction(releaseActionKeys.generateTicket(), async () =>')

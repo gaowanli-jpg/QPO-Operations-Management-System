@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest'
-import { hydrateReleaseItemDrafts } from './components/marketReleaseDrafts'
+import {
+  collectReleaseRowsWithDraftChanges,
+  hasReleaseDraftChange,
+  hydrateReleaseItemDrafts,
+  releaseDraftChangeSummary
+} from './components/marketReleaseDrafts'
 
 describe('market release draft persistence', () => {
   test('preserves selected row drafts when a page is reloaded', () => {
@@ -46,5 +51,56 @@ describe('market release draft persistence', () => {
     expect(hydrated.descriptionDraft).toBe('Part')
     expect(hydrated.salesOrderDateDraft).toBe('2026-08-08')
     expect(hydrated.customerOrderNoDraft).toBe('')
+  })
+
+  test('collects unique release rows with unsaved draft changes', () => {
+    const selectedRows = [
+      {
+        id: 401,
+        releaseItemKey: 'RFQ:401',
+        version: 'A',
+        versionDraft: 'A'
+      },
+      {
+        id: 402,
+        releaseItemKey: 'RFQ:402',
+        customerOrderNo: null,
+        customerOrderNoDraft: 'CO-402'
+      }
+    ]
+    const currentPageRows = [
+      {
+        id: 401,
+        releaseItemKey: 'RFQ:401',
+        version: 'A',
+        versionDraft: 'B'
+      },
+      {
+        id: 403,
+        releaseItemKey: 'RFQ:403',
+        description: 'Same description',
+        descriptionDraft: 'Same description'
+      }
+    ]
+
+    const changedRows = collectReleaseRowsWithDraftChanges(
+      [...selectedRows, ...currentPageRows],
+      row => row.releaseItemKey
+    )
+
+    expect(changedRows.map(row => row.id)).toEqual([401, 402])
+    expect(changedRows[0].versionDraft).toBe('B')
+    expect(hasReleaseDraftChange({ remark: null, remarkDraft: '' }, 'remarkDraft', 'remark')).toBe(false)
+    expect(releaseDraftChangeSummary(changedRows[0])).toMatchObject({
+      version: true,
+      internalTargetLeadTime: false,
+      fields: false,
+      orderFields: false,
+      any: true
+    })
+    expect(releaseDraftChangeSummary(changedRows[1])).toMatchObject({
+      orderFields: true,
+      any: true
+    })
   })
 })

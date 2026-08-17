@@ -24,6 +24,10 @@ describe('release version edit stage 3', () => {
       source.indexOf('const saveReleaseItemFields = async (row) =>'),
       source.indexOf('const handleSelectionChange')
     )
+    const fieldPersistBlock = source.slice(
+      source.indexOf('const persistReleaseItemFields = async (row) =>'),
+      source.indexOf('const orderFieldPayloadForBulkSave')
+    )
     const materialIndex = source.indexOf('prop="engineeringMaterialName" label="材料"')
     const descriptionDraftIndex = source.indexOf('v-model="row.descriptionDraft"')
     const surfaceTreatmentDraftIndex = source.indexOf('v-model="row.surfaceTreatmentDraft"')
@@ -39,7 +43,8 @@ describe('release version edit stage 3', () => {
     expect(source).not.toContain(`v-model="row.${removedField}Draft"`)
     expect(source).toContain(':loading="isFieldSaving(row)"')
     expect(source).toContain('@click.stop="saveReleaseItemFields(row)"')
-    expect(source).toContain("import { hydrateReleaseItemDrafts } from './marketReleaseDrafts'")
+    expect(source).toContain('hydrateReleaseItemDrafts')
+    expect(source).toContain("from './marketReleaseDrafts'")
     expect(draftSource).toContain("descriptionDraft: 'description'")
     expect(draftSource).toContain("surfaceTreatmentDraft: 'surfaceTreatment'")
     expect(draftSource).toContain("remarkDraft: 'remark'")
@@ -51,16 +56,17 @@ describe('release version edit stage 3', () => {
     expect(statusIndex).toBeGreaterThan(remarkDraftIndex)
 
     expect(fieldSaveBlock).toContain('return runAction(releaseActionKeys.fields(rowKey(row)), async () =>')
-    expect(fieldSaveBlock).toContain('updateReleaseItemFields(row.id, {')
-    expect(fieldSaveBlock).toContain('sourceType: row.sourceType || \'RFQ\'')
-    expect(fieldSaveBlock).toContain('sourceOrderId: row.sourceOrderId')
-    expect(fieldSaveBlock).toContain('rfqId: row.rfqId || selectedRfqId.value')
-    expect(fieldSaveBlock).toContain('description: row.descriptionDraft')
-    expect(fieldSaveBlock).toContain('surfaceTreatment: row.surfaceTreatmentDraft')
-    expect(fieldSaveBlock).toContain('remark: row.remarkDraft')
-    expect(fieldSaveBlock).not.toContain(`${removedField}: row.${removedField}Draft`)
-    expect(fieldSaveBlock).toContain('itemList.value.splice(index, 1, saved)')
-    expect(fieldSaveBlock).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
+    expect(fieldSaveBlock).toContain('await persistReleaseItemFields(row)')
+    expect(fieldPersistBlock).toContain('updateReleaseItemFields(row.id, {')
+    expect(fieldPersistBlock).toContain('sourceType: row.sourceType || \'RFQ\'')
+    expect(fieldPersistBlock).toContain('sourceOrderId: row.sourceOrderId')
+    expect(fieldPersistBlock).toContain('rfqId: row.rfqId || selectedRfqId.value')
+    expect(fieldPersistBlock).toContain('description: row.descriptionDraft')
+    expect(fieldPersistBlock).toContain('surfaceTreatment: row.surfaceTreatmentDraft')
+    expect(fieldPersistBlock).toContain('remark: row.remarkDraft')
+    expect(fieldPersistBlock).not.toContain(`${removedField}: row.${removedField}Draft`)
+    expect(source).toContain('itemList.value.splice(index, 1, saved)')
+    expect(source).toContain('selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...saved }')
     expect(fieldSaveBlock).not.toContain('clearSelectedRows()')
     expect(fieldSaveBlock).not.toContain('fetchReleaseItemsBatch()')
   })
@@ -70,6 +76,10 @@ describe('release version edit stage 3', () => {
     const saveBlock = source.slice(
       source.indexOf('const saveReleaseItemVersion = async (row) =>'),
       source.indexOf('const handleSelectionChange')
+    )
+    const persistBlock = source.slice(
+      source.indexOf('const persistReleaseItemVersion = async (row) =>'),
+      source.indexOf('const persistReleaseItemFields = async (row) =>')
     )
 
     expect(source).toContain('updateReleaseItemVersion')
@@ -81,11 +91,12 @@ describe('release version edit stage 3', () => {
     expect(source).toContain('@click.stop="saveReleaseItemVersion(row)"')
 
     expect(saveBlock).toContain('return runAction(releaseActionKeys.version(row.id), async () =>')
-    expect(saveBlock).toContain('updateReleaseItemVersion(row.id, {')
-    expect(saveBlock).toContain('rfqId: rowRfqId')
-    expect(saveBlock).toContain('version: row.versionDraft')
-    expect(saveBlock).toContain('itemList.value.splice(index, 1, saved)')
-    expect(saveBlock).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
+    expect(saveBlock).toContain('await persistReleaseItemVersion(row)')
+    expect(persistBlock).toContain('updateReleaseItemVersion(row.id, {')
+    expect(persistBlock).toContain('rfqId: rowRfqId')
+    expect(persistBlock).toContain('version')
+    expect(source).toContain('itemList.value.splice(index, 1, saved)')
+    expect(source).toContain('selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...saved }')
     expect(saveBlock).not.toContain('clearSelectedRows()')
     expect(saveBlock).not.toContain('fetchReleaseItemsBatch()')
   })
@@ -98,7 +109,7 @@ describe('release version edit stage 3', () => {
     )
 
     expect(source).toContain('const selectedRows = computed(() => Object.values(selectedItemIdMap))')
-    expect(source).toContain('selectedItemIdMap[rowKey(row)] = { ...selectedItemIdMap[rowKey(row)], ...saved }')
+    expect(source).toContain('selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...saved }')
     expect(submitBlock).toContain('const orderedSelectedRows = selectedRowsInItemOrder()')
     expect(submitBlock).toContain('items: orderedSelectedRows.map(row => ({')
   })
