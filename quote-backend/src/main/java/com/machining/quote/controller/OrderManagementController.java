@@ -12,7 +12,13 @@ import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.OrderStatusManagementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -87,20 +93,6 @@ public class OrderManagementController {
         return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
     }
 
-    /**
-     * @deprecated history-order UI has been retired; use the sales-order management customer API.
-     */
-    @Deprecated
-    @GetMapping("/history-orders/customers")
-    @RequirePermission("market:history-order:customer-select")
-    public PageResult<CustomerOptionDTO> listHistoryCustomers(
-            @RequestParam(value = "field", required = false) String field,
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
-    }
-
     @PostMapping(value = "/orders/{rfqId}/supplement-drawings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:order:supplement-drawing")
     public Map<String, Object> supplementDrawings(
@@ -108,20 +100,6 @@ public class OrderManagementController {
             @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
             @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
         return orderManagementService.supplementDrawings(rfqId, drawings, versionDrawings);
-    }
-
-    /**
-     * @deprecated physical order deletion is retained only for legacy compatibility.
-     * New inquiry-order and sales-order pages must use discard/restore governance instead.
-     */
-    @Deprecated
-    @DeleteMapping("/orders/{rfqId}")
-    @RequirePermission("market:order:delete")
-    public Map<String, Object> deleteOrder(
-            @PathVariable Integer rfqId,
-            @RequestParam(value = "deleteFiles", defaultValue = "true") boolean deleteFiles) {
-        orderManagementService.deleteOrderCompletely(rfqId, deleteFiles);
-        return Map.of("success", true, "message", "订单及关联数据已彻底删除");
     }
 
     @PostMapping("/orders/{rfqId}/rollback-quoted")

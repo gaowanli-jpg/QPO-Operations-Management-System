@@ -111,7 +111,6 @@ class AuditServiceTests {
         assertThat(AuditService.inferModule("PRICING_SHEET_EXPORT")).isEqualTo("ENGINEER");
         assertThat(AuditService.inferModule("QUOTE_TEMPLATE_UPLOAD")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("QUOTE_TEMPLATE_CONFIG_UPDATE")).isEqualTo("SYSTEM");
-        assertThat(AuditService.inferModule("ORDER_DELETE_COMPLETELY")).isEqualTo("ORDER");
         assertThat(AuditService.inferModule("SYSTEM_DEPT_CREATE")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("SYSTEM_POST_DELETE")).isEqualTo("SYSTEM");
     }

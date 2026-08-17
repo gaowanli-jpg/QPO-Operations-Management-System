@@ -462,38 +462,6 @@ public class OrderManagementService {
         return result;
     }
 
-    /**
-     * @deprecated physical RFQ deletion is a legacy compatibility path. New order governance uses discard/restore.
-     */
-    @Deprecated
-    @Transactional
-    public void deleteOrderCompletely(Integer rfqId, boolean deleteFiles) {
-        OrderRfq order = requireOrderForUpdate(rfqId);
-
-        List<ItemQuoteVersion> items = listItems(rfqId);
-        List<OrderDeliveryTicket> tickets = listTickets(rfqId);
-        List<ProcessSheetDTO> processSheets = listProcessSheets(rfqId);
-
-        QueryWrapper<OrderDeliveryTicket> ticketQw = new QueryWrapper<>();
-        ticketQw.eq("rfq_id", rfqId);
-        ticketMapper.delete(ticketQw);
-
-        QueryWrapper<ItemQuoteVersion> itemQw = new QueryWrapper<>();
-        itemQw.eq("rfq_id", rfqId);
-        itemMapper.delete(itemQw);
-        orderMapper.deleteById(rfqId);
-
-        if (deleteFiles) {
-            deleteOrderFiles(order, items);
-        }
-        auditService.record("ORDER_DELETE_COMPLETELY", "order_rfq", rfqId, order, Map.of(
-                "itemCount", items.size(),
-                "deleteFiles", deleteFiles
-        ));
-        log.info("Order delete completed rfqId={} deleteFiles={} itemCount={} ticketCount={} dynamicProcessSheetCount={}",
-                rfqId, deleteFiles, items.size(), tickets.size(), processSheets.size());
-    }
-
     private Map<String, Object> buildSummary(OrderRfq order) {
         ItemStats itemStats = loadItemStats(List.of(order.getId())).getOrDefault(order.getId(), new ItemStats());
         TicketStats ticketStats = loadTicketStats(List.of(order.getId())).getOrDefault(order.getId(), new TicketStats());
@@ -693,22 +661,6 @@ public class OrderManagementService {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         return itemMapper.selectList(qw);
-    }
-
-    private List<OrderDeliveryTicket> listTickets(Integer rfqId) {
-        QueryWrapper<OrderDeliveryTicket> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
-        return ticketMapper.selectList(qw);
-    }
-
-    private List<ProcessSheetDTO> listProcessSheets(Integer rfqId) {
-        return deliveryService.listProcessSheets(rfqId);
-    }
-
-    private void deleteOrderFiles(OrderRfq order, List<ItemQuoteVersion> items) {
-        for (ItemQuoteVersion item : items) {
-            businessFileService.deleteByPublicPath(item.getDrawingUrl());
-        }
     }
 
     private String buildOrderFileRoot(OrderRfq order) {

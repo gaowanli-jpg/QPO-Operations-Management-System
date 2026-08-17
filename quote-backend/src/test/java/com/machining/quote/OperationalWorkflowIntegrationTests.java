@@ -64,7 +64,7 @@ class OperationalWorkflowIntegrationTests {
     }
 
     @Test
-    void supplementDrawingsAndDeleteOrderWorkTogether() throws Exception {
+    void supplementDrawingsBindAllMatchingRfqPartsWithoutPhysicalDeleteDependency() throws Exception {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("WF-" + System.nanoTime());
         order.setCustomerName("试运行客户");
@@ -109,8 +109,7 @@ class OperationalWorkflowIntegrationTests {
         Files.createDirectories(uploaded);
         assertThat(Files.exists(uploaded)).isTrue();
 
-        orderManagementService.deleteOrderCompletely(order.getId(), true);
-        assertThat(orderMapper.selectById(order.getId())).isNull();
+        assertThat(orderMapper.selectById(order.getId())).isNotNull();
     }
 
     @Test

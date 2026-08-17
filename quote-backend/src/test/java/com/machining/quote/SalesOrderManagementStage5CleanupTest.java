@@ -28,17 +28,20 @@ class SalesOrderManagementStage5CleanupTest {
     }
 
     @Test
-    void backendLegacyHistoryAndDeleteEndpointsAreDeprecatedCompatibilityOnly() throws Exception {
+    void backendLegacyHistoryAndPhysicalDeleteEndpointsAreRemoved() throws Exception {
         String controller = source(Path.of("src", "main", "java", "com", "machining", "quote", "controller", "OrderManagementController.java"));
         String service = source(Path.of("src", "main", "java", "com", "machining", "quote", "service", "OrderManagementService.java"));
 
         assertThat(controller)
-                .contains("@Deprecated")
-                .contains("@GetMapping(\"/history-orders/customers\")")
-                .contains("@DeleteMapping(\"/orders/{rfqId}\")");
+                .doesNotContain("@GetMapping(\"/history-orders/customers\")")
+                .doesNotContain("@RequirePermission(\"market:history-order:customer-select\")")
+                .doesNotContain("@DeleteMapping(\"/orders/{rfqId}\")")
+                .doesNotContain("@RequirePermission(\"market:order:delete\")")
+                .doesNotContain("deleteOrder(");
         assertThat(service)
-                .contains("@Deprecated")
-                .contains("deleteOrderCompletely");
+                .doesNotContain("deleteOrderCompletely")
+                .doesNotContain("ORDER_DELETE_COMPLETELY")
+                .doesNotContain("deleteOrderFiles");
     }
 
     @Test

@@ -371,7 +371,6 @@ public class AuditService {
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "LOCKED_ITEM_MES_PRODUCTION_SUBMIT" -> "提交MES生产下发";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
             case "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
-            case "ORDER_DELETE_COMPLETELY" -> "彻底删除订单";
             case "ORDER_SUPPLEMENT_DRAWINGS" -> "补传图纸";
             default -> action;
         };
