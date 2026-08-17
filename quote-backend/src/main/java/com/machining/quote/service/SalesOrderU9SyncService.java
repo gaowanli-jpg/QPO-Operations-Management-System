@@ -512,6 +512,9 @@ public class SalesOrderU9SyncService {
         line.setVersion(item.getVersion());
         line.setSalesOrderDate(header.getSalesOrderDate());
         line.setCustomerOrderTitle(header.getCustomerOrderTitle());
+        line.setCustomerOrderNo(item.getCustomerOrderNo());
+        line.setCustomerProjectNo(item.getCustomerProjectNo());
+        line.setInternalProjectNo(item.getInternalProjectNo());
         line.setSalesMaterialNo(item.getSalesMaterialNo());
         line.setCustomerDeliveryDate(item.getCustomerDeliveryDate());
         line.setInternalDeliveryDate(item.getInternalDeliveryDate());

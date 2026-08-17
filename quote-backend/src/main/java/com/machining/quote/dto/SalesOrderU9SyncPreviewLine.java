@@ -15,6 +15,9 @@ public class SalesOrderU9SyncPreviewLine {
     private String version;
     private LocalDate salesOrderDate;
     private String customerOrderTitle;
+    private String customerOrderNo;
+    private String customerProjectNo;
+    private String internalProjectNo;
     private String salesMaterialNo;
     private LocalDate customerDeliveryDate;
     private LocalDate internalDeliveryDate;

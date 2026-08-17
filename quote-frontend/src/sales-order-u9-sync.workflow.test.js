@@ -143,7 +143,7 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('priceMissingTagType')
   })
 
-  test('keeps order-level sales order fields in order info instead of repeated item columns', () => {
+  test('keeps order-level sales order metadata in order info while item edits stay line scoped', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
     const orderInfoIndex = component.indexOf('<div class="selected-order-meta">')
     const syncResultIndex = component.indexOf('<div class="sync-result-panel">')
@@ -172,6 +172,9 @@ describe('sales order U9 sync module', () => {
     expect(orderInfo).not.toContain('<dt>U9编码</dt>')
     expect(component).toContain('<div class="sync-result-code-row">')
     expect(component).toContain('当前U9编码')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerOrderNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerProjectNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalProjectNo"')
   })
 
   test('orders preview item columns as fixed material fields followed by remaining line-level import-template fields', () => {
@@ -189,6 +192,9 @@ describe('sales order U9 sync module', () => {
       'label="未税金额"',
       'label="下单日期"',
       'label="客户下单抬头"',
+      'label="客户订单号"',
+      'label="客户项目号"',
+      'label="内部项目号"',
       'label="客户交期"',
       'label="内部交期(给生产的交期)"',
       'label="已出数量"',
@@ -211,10 +217,61 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('label="物料号来源"')
     expect(component).not.toContain('label="来源提单行"')
     expect(component).not.toContain('label="实际出货日期"')
-    expect(component).not.toContain('label="客户订单号"')
-    expect(component).not.toContain('label="客户项目号"')
     expect(component).not.toContain('label="订单类型"')
-    expect(component).not.toContain('label="内部项目号"')
     expect(component).not.toContain('ItemCode 来自销售订单零件物料号')
+  })
+
+  test('supports inline editing and batch saving for U9 item fields only', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+
+    expect(component).toContain('saveSalesOrderU9Items')
+    expect(component).toContain('const U9_ITEM_EDITABLE_FIELDS = [')
+    ;[
+      'qty',
+      'customerDeliveryDate',
+      'internalDeliveryDate',
+      'untaxedUnitPrice',
+      'customerOrderNo',
+      'customerProjectNo',
+      'internalProjectNo',
+      'remark'
+    ].forEach(field => expect(component).toContain(`'${field}'`))
+    expect(component).toContain('itemDrafts')
+    expect(component).toContain('dirtyItemIds')
+    expect(component).toContain('handleItemDraftChange')
+    expect(component).toContain('handleSaveItemEdits')
+    expect(component).toContain('itemEditReadOnly')
+    expect(component).toContain(':loading="itemEditSaving"')
+    expect(component).toContain(':disabled="itemEditSaveDisabled"')
+    expect(component).toContain('保存修改')
+    expect(component).toContain('hasItemEditPermission')
+    expect(component).toContain("authStore.hasPermission(U9_SYNC_SUBMIT_PERMISSION)")
+    expect(component).toContain("['已同步', '同步中', '结果待确认'].includes(currentU9Status.value)")
+  })
+
+  test('keeps identity and material fields read-only while editable fields use explicit controls', () => {
+    const component = readSource('components', 'SalesOrderU9Sync.vue')
+
+    const readOnlyColumns = [
+      'prop="partNo" label="图号"',
+      'prop="lineNo" label="行号"',
+      'prop="version" label="版本"',
+      'prop="materialNo" label="物料号"'
+    ]
+    readOnlyColumns.forEach(column => expect(component).toContain(column))
+
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].qty"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerDeliveryDate"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalDeliveryDate"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerOrderNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerProjectNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalProjectNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].remark"')
+    expect(component).toContain(':disabled="itemEditReadOnly"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].materialNo"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].partNo"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].version"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].lineNo"')
   })
 })

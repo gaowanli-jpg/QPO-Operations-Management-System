@@ -259,12 +259,31 @@
             <div class="panel-title">销售订单零件</div>
             <p class="panel-subtitle">{{ itemPanelTitle }}</p>
           </div>
-          <div class="sales-order-u9-sync-result-tags">
-            <el-tag :type="previewData?.syncReady ? 'success' : 'warning'">
-              {{ previewData ? (previewData.syncReady ? '可同步' : '不可同步') : '待选择' }}
-            </el-tag>
-            <el-tag type="info">U9同步使用已确认物料号</el-tag>
-            <el-tag type="info">U9价格=未税单价</el-tag>
+          <div class="sales-order-u9-sync-table-actions">
+            <div class="sales-order-u9-sync-result-tags">
+              <el-tag :type="previewData?.syncReady ? 'success' : 'warning'">
+                {{ previewData ? (previewData.syncReady ? '可同步' : '不可同步') : '待选择' }}
+              </el-tag>
+              <el-tag v-if="dirtyItemCount > 0" class="item-edit-dirty-tag" type="warning">
+                已修改 {{ dirtyItemCount }} 行
+              </el-tag>
+              <el-tag type="info">U9同步使用已确认物料号</el-tag>
+              <el-tag type="info">U9价格=未税单价</el-tag>
+            </div>
+            <el-tooltip :disabled="!itemEditSaveDisabledReason" :content="itemEditSaveDisabledReason" placement="top">
+              <span class="sales-order-u9-sync-action-wrap">
+                <el-button
+                  v-permission="U9_SYNC_SUBMIT_PERMISSION"
+                  type="primary"
+                  plain
+                  :loading="itemEditSaving"
+                  :disabled="itemEditSaveDisabled"
+                  @click="handleSaveItemEdits"
+                >
+                  保存修改
+                </el-button>
+              </span>
+            </el-tooltip>
           </div>
         </div>
         <div
@@ -341,7 +360,21 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="qty" label="数量(PCS)" width="96" align="right" />
+          <el-table-column prop="qty" label="数量(PCS)" width="118" align="right">
+            <template #default="{ row }">
+              <el-input-number
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].qty"
+                class="item-edit-input item-edit-number"
+                :controls="false"
+                :min="1"
+                :precision="0"
+                :disabled="itemEditReadOnly"
+                @change="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ numberOrZero(row.qty) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="就绪" width="88" align="center">
             <template #default="{ row }">
               <el-tag :type="row.ready ? 'success' : 'danger'" size="small">
@@ -366,7 +399,16 @@
           </el-table-column>
           <el-table-column prop="untaxedUnitPrice" label="U9未税单价" width="122" align="right">
             <template #default="{ row }">
-              <el-tag v-if="row.untaxedUnitPrice == null" type="danger" size="small">未税单价缺失</el-tag>
+              <el-input
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"
+                class="item-edit-input item-edit-money"
+                inputmode="decimal"
+                :disabled="itemEditReadOnly"
+                placeholder="未税单价"
+                @input="handleItemDraftChange(row)"
+              />
+              <el-tag v-else-if="row.untaxedUnitPrice == null" type="danger" size="small">未税单价缺失</el-tag>
               <span v-else>{{ formatMoney(row.untaxedUnitPrice) }}</span>
             </template>
           </el-table-column>
@@ -377,11 +419,81 @@
             <template #default="{ row }">{{ formatDate(row.salesOrderDate) }}</template>
           </el-table-column>
           <el-table-column prop="customerOrderTitle" label="客户下单抬头" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="customerDeliveryDate" label="客户交期" width="116">
-            <template #default="{ row }">{{ formatDate(row.customerDeliveryDate) }}</template>
+          <el-table-column prop="customerOrderNo" label="客户订单号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-input
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].customerOrderNo"
+                class="item-edit-input"
+                clearable
+                :disabled="itemEditReadOnly"
+                placeholder="客户订单号"
+                @input="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ row.customerOrderNo || orderField('customerOrderNo') }}</span>
+            </template>
           </el-table-column>
-          <el-table-column prop="internalDeliveryDate" label="内部交期(给生产的交期)" width="170">
-            <template #default="{ row }">{{ formatDate(row.internalDeliveryDate) }}</template>
+          <el-table-column prop="customerProjectNo" label="客户项目号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-input
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].customerProjectNo"
+                class="item-edit-input"
+                clearable
+                :disabled="itemEditReadOnly"
+                placeholder="客户项目号"
+                @input="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ row.customerProjectNo || orderField('customerProjectNo') }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="internalProjectNo" label="内部项目号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-input
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].internalProjectNo"
+                class="item-edit-input"
+                clearable
+                :disabled="itemEditReadOnly"
+                placeholder="内部项目号"
+                @input="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ row.internalProjectNo || orderField('internalProjectNo') }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="customerDeliveryDate" label="客户交期" width="148">
+            <template #default="{ row }">
+              <el-date-picker
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].customerDeliveryDate"
+                class="item-edit-input item-edit-date"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                clearable
+                :disabled="itemEditReadOnly"
+                placeholder="客户交期"
+                @change="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ formatDate(row.customerDeliveryDate) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="internalDeliveryDate" label="内部交期(给生产的交期)" width="178">
+            <template #default="{ row }">
+              <el-date-picker
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].internalDeliveryDate"
+                class="item-edit-input item-edit-date"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                clearable
+                :disabled="itemEditReadOnly"
+                placeholder="内部交期"
+                @change="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ formatDate(row.internalDeliveryDate) }}</span>
+            </template>
           </el-table-column>
           <el-table-column prop="shippedQty" label="已出数量" width="90" align="right">
             <template #default="{ row }">{{ numberOrZero(row.shippedQty) }}</template>
@@ -394,7 +506,20 @@
           <el-table-column prop="engineeringMaterialCode" label="材料编码" min-width="120" show-overflow-tooltip />
           <el-table-column prop="engineeringMaterialTypeName" label="材料类型" min-width="120" show-overflow-tooltip />
           <el-table-column prop="surfaceTreatment" label="表面处理" min-width="110" show-overflow-tooltip />
-          <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-input
+                v-if="itemDrafts[row.salesOrderItemId]"
+                v-model="itemDrafts[row.salesOrderItemId].remark"
+                class="item-edit-input"
+                clearable
+                :disabled="itemEditReadOnly"
+                placeholder="备注"
+                @input="handleItemDraftChange(row)"
+              />
+              <span v-else>{{ row.remark || '-' }}</span>
+            </template>
+          </el-table-column>
         </el-table>
       </main>
     </section>
@@ -416,6 +541,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import { usePendingAction } from '../composables/usePendingAction'
+import { useAuthStore } from '../stores/authStore'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   getSalesOrderU9SyncOptions,
@@ -423,12 +549,25 @@ import {
   reconcileSalesOrderU9,
   refreshSalesOrderU9SyncOptions,
   saveSalesOrderU9Assignment,
+  saveSalesOrderU9Items,
   syncSalesOrderU9
 } from '../services/marketApi'
 
 const U9_SYNC_SUBMIT_PERMISSION = 'market:u9-sync:submit'
 const U9_SYNC_ORDER_SELECT_PERMISSION = 'market:u9-sync:order-select'
 const U9_SYNC_ALLOWED_STATUSES = ['已生成提单']
+const U9_ITEM_EDITABLE_FIELDS = [
+  'qty',
+  'customerDeliveryDate',
+  'internalDeliveryDate',
+  'untaxedUnitPrice',
+  'customerOrderNo',
+  'customerProjectNo',
+  'internalProjectNo',
+  'remark'
+]
+const TEXT_ITEM_EDITABLE_FIELDS = ['customerOrderNo', 'customerProjectNo', 'internalProjectNo', 'remark']
+const NULLABLE_ITEM_EDITABLE_FIELDS = ['customerDeliveryDate', 'internalDeliveryDate', ...TEXT_ITEM_EDITABLE_FIELDS]
 
 const u9SyncActionKeys = {
   sync: 'sales-order-u9-sync',
@@ -447,6 +586,7 @@ const privateFieldDefinitions = [
 
 const { isPending, runAction } = usePendingAction()
 const route = useRoute()
+const authStore = useAuthStore()
 
 const selectedOrder = ref(null)
 const selectedOrderId = ref(null)
@@ -459,9 +599,13 @@ const previewMessageDetailVisible = ref(false)
 const optionsLoading = ref(false)
 const optionsRefreshing = ref(false)
 const assignmentSaving = ref(false)
+const itemEditSaving = ref(false)
 const u9Options = reactive({ orgCode: '', stale: false, refreshedAt: '', warning: '', sellers: [], departments: [] })
 const assignmentDraft = ref({ sellerCode: '', saleDepartmentCode: '' })
 const savedAssignment = ref({ sellerCode: '', saleDepartmentCode: '' })
+const itemDrafts = reactive({})
+const savedItemDrafts = reactive({})
+const dirtyItemIds = ref(new Set())
 
 const selectedOrderLabel = computed(() => selectedOrder.value
   ? `${selectedOrder.value.salesOrderNo || selectedOrder.value.salesOrderId || '-'} / ${selectedOrder.value.customerName || '-'}`
@@ -538,6 +682,17 @@ const assignmentReadOnly = computed(() => ['已同步', '同步中', '结果待�
 const assignmentDirty = computed(() => assignmentDraft.value.sellerCode !== savedAssignment.value.sellerCode ||
   assignmentDraft.value.saleDepartmentCode !== savedAssignment.value.saleDepartmentCode)
 const assignmentSaveDisabled = computed(() => assignmentSaving.value || optionsLoading.value || optionsRefreshing.value || !selectedOrderId.value || assignmentReadOnly.value || !assignmentDirty.value)
+const hasItemEditPermission = computed(() => authStore.hasPermission(U9_SYNC_SUBMIT_PERMISSION))
+const dirtyItemCount = computed(() => dirtyItemIds.value.size)
+const itemEditReadOnly = computed(() => !hasItemEditPermission.value || !selectedOrderId.value || ['已同步', '同步中', '结果待确认'].includes(currentU9Status.value))
+const itemEditSaveDisabledReason = computed(() => {
+  if (!selectedOrderId.value) return '请先选择销售订单'
+  if (!hasItemEditPermission.value) return '当前账号无 U9 同步提交权限'
+  if (['已同步', '同步中', '结果待确认'].includes(currentU9Status.value)) return '当前 U9 状态只读，不可修改零件行'
+  if (dirtyItemCount.value === 0) return '暂无需要保存的零件行修改'
+  return ''
+})
+const itemEditSaveDisabled = computed(() => itemEditSaving.value || previewLoading.value || itemEditReadOnly.value || dirtyItemCount.value === 0)
 const assignmentDisplayText = computed(() => {
   const seller = sellerByCode(assignmentDraft.value.sellerCode)
   const department = departmentByCode(assignmentDraft.value.saleDepartmentCode)
@@ -555,6 +710,7 @@ const syncDisabledReason = computed(() => {
   }
   if (currentU9Status.value === '已同步') return '该销售订单已同步 U9'
   if (assignmentDirty.value) return '请先保存 Seller / SaleDepartment 选择'
+  if (dirtyItemCount.value > 0) return '请先保存零件行修改'
   if (previewData.value.syncReady !== true) {
     return previewData.value.blockedReason || selectedOrder.value.blockedReason || '未满足整单同步条件'
   }
@@ -597,6 +753,7 @@ const handleOrderSelected = async (order) => {
   selectedOrderId.value = normalized.salesOrderId
   syncResult.value = null
   reconcileResult.value = null
+  resetItemDrafts()
   hydrateAssignment(normalized)
   await previewSelectedOrder({ silent: true })
 }
@@ -653,6 +810,21 @@ const handleRefreshU9Options = async () => {
   }
 }
 
+const applyPreviewData = (response = {}, { preserveResult = false } = {}) => {
+  previewData.value = response || {}
+  selectedOrder.value = {
+    ...selectedOrder.value,
+    ...(response || {}),
+    salesOrderId: selectedOrderId.value
+  }
+  hydrateAssignment(response || {})
+  hydrateItemDrafts(response || {})
+  if (!preserveResult) {
+    syncResult.value = null
+    reconcileResult.value = null
+  }
+}
+
 const previewSelectedOrder = async ({ silent = false, preserveResult = false } = {}) => {
   if (!selectedOrderId.value) {
     if (!silent) ElMessage.warning('请先选择销售订单。')
@@ -661,17 +833,7 @@ const previewSelectedOrder = async ({ silent = false, preserveResult = false } =
   previewLoading.value = true
   try {
     const response = await previewSalesOrderU9Sync(selectedOrderId.value)
-    previewData.value = response || {}
-    selectedOrder.value = {
-      ...selectedOrder.value,
-      ...(response || {}),
-      salesOrderId: selectedOrderId.value
-    }
-    hydrateAssignment(response || {})
-    if (!preserveResult) {
-      syncResult.value = null
-      reconcileResult.value = null
-    }
+    applyPreviewData(response || {}, { preserveResult })
     if (!silent) {
       if (response?.syncReady) {
         ElMessage.success('U9同步预览已就绪，可以提交整单同步。')
@@ -681,6 +843,7 @@ const previewSelectedOrder = async ({ silent = false, preserveResult = false } =
     }
   } catch (error) {
     previewData.value = null
+    resetItemDrafts()
     if (!preserveResult) {
       syncResult.value = null
       reconcileResult.value = null
@@ -718,6 +881,129 @@ const handleSaveAssignment = async () => {
     ElMessage.error(requestErrorMessage(error, 'U9销售员和部门保存失败。'))
   } finally {
     assignmentSaving.value = false
+  }
+}
+
+const clearReactiveObject = (target) => {
+  Object.keys(target).forEach(key => delete target[key])
+}
+
+const dateDraftValue = (value) => value ? String(value).slice(0, 10) : null
+
+const textDraftValue = (line, field) => {
+  if (line?.[field] !== undefined && line?.[field] !== null) return String(line[field])
+  const fallback = (previewData.value || selectedOrder.value || {})[field]
+  return fallback === undefined || fallback === null ? '' : String(fallback)
+}
+
+const normalizeItemDraft = (line = {}) => ({
+  qty: line.qty ?? null,
+  customerDeliveryDate: dateDraftValue(line.customerDeliveryDate),
+  internalDeliveryDate: dateDraftValue(line.internalDeliveryDate),
+  untaxedUnitPrice: line.untaxedUnitPrice === undefined || line.untaxedUnitPrice === null ? '' : String(line.untaxedUnitPrice),
+  customerOrderNo: textDraftValue(line, 'customerOrderNo'),
+  customerProjectNo: textDraftValue(line, 'customerProjectNo'),
+  internalProjectNo: textDraftValue(line, 'internalProjectNo'),
+  remark: line.remark === undefined || line.remark === null ? '' : String(line.remark)
+})
+
+const resetItemDrafts = () => {
+  clearReactiveObject(itemDrafts)
+  clearReactiveObject(savedItemDrafts)
+  dirtyItemIds.value = new Set()
+}
+
+const hydrateItemDrafts = (source = {}) => {
+  clearReactiveObject(itemDrafts)
+  clearReactiveObject(savedItemDrafts)
+  ;(source.lines || []).forEach(line => {
+    if (!line?.salesOrderItemId) return
+    const key = String(line.salesOrderItemId)
+    const draft = normalizeItemDraft(line)
+    itemDrafts[key] = { ...draft }
+    savedItemDrafts[key] = { ...draft }
+  })
+  dirtyItemIds.value = new Set()
+}
+
+const comparableItemValue = (field, value) => {
+  if (NULLABLE_ITEM_EDITABLE_FIELDS.includes(field)) {
+    const text = value === undefined || value === null ? '' : String(value).trim()
+    return text || null
+  }
+  if (field === 'qty') {
+    if (value === undefined || value === null || value === '') return null
+    const number = Number(value)
+    return Number.isFinite(number) ? number : String(value)
+  }
+  if (field === 'untaxedUnitPrice') {
+    if (value === undefined || value === null || value === '') return null
+    return String(value).trim()
+  }
+  return value ?? null
+}
+
+const itemFieldChanged = (key, field) => comparableItemValue(field, itemDrafts[key]?.[field]) !== comparableItemValue(field, savedItemDrafts[key]?.[field])
+
+const refreshItemDirtyState = (salesOrderItemId) => {
+  const key = String(salesOrderItemId || '')
+  if (!key || !itemDrafts[key] || !savedItemDrafts[key]) return
+  const next = new Set(dirtyItemIds.value)
+  if (U9_ITEM_EDITABLE_FIELDS.some(field => itemFieldChanged(key, field))) {
+    next.add(key)
+  } else {
+    next.delete(key)
+  }
+  dirtyItemIds.value = next
+}
+
+const handleItemDraftChange = (row) => {
+  refreshItemDirtyState(row?.salesOrderItemId)
+}
+
+const itemRequestValue = (field, value) => {
+  if (TEXT_ITEM_EDITABLE_FIELDS.includes(field)) {
+    const text = value === undefined || value === null ? '' : String(value).trim()
+    return text || null
+  }
+  if (field === 'customerDeliveryDate' || field === 'internalDeliveryDate') return value || null
+  if (field === 'qty') return value === undefined || value === null || value === '' ? null : Number(value)
+  if (field === 'untaxedUnitPrice') return value === undefined || value === null || value === '' ? null : String(value).trim()
+  return value
+}
+
+const buildDirtyItemPayload = () => Array.from(dirtyItemIds.value)
+  .map(key => {
+    const line = { salesOrderItemId: Number(key) }
+    U9_ITEM_EDITABLE_FIELDS.forEach(field => {
+      if (itemFieldChanged(key, field)) {
+        line[field] = itemRequestValue(field, itemDrafts[key]?.[field])
+      }
+    })
+    return line
+  })
+  .filter(line => Object.keys(line).length > 1)
+
+const handleSaveItemEdits = async () => {
+  if (itemEditSaveDisabled.value) return
+  const items = buildDirtyItemPayload()
+  if (!items.length) {
+    dirtyItemIds.value = new Set()
+    return
+  }
+  itemEditSaving.value = true
+  try {
+    const response = await saveSalesOrderU9Items(selectedOrderId.value, { items })
+    if (response?.preview) {
+      applyPreviewData(response.preview, { preserveResult: true })
+    } else {
+      await previewSelectedOrder({ silent: true, preserveResult: true })
+    }
+    ElMessage.success(response?.message || `已保存 ${items.length} 行零件修改。`)
+  } catch (error) {
+    ElMessage.error(requestErrorMessage(error, '零件行修改保存失败。'))
+  } finally {
+    itemEditSaving.value = false
   }
 }
 
@@ -1187,6 +1473,36 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
+.sales-order-u9-sync-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.item-edit-dirty-tag {
+  font-weight: 600;
+}
+
+.item-edit-input {
+  width: 100%;
+}
+
+.item-edit-input :deep(.el-input__wrapper) {
+  min-height: 28px;
+}
+
+.item-edit-number :deep(.el-input__inner),
+.item-edit-money :deep(.el-input__inner) {
+  text-align: right;
+}
+
+.item-edit-date {
+  min-width: 128px;
+}
+
 .sync-result-code-row {
   justify-content: space-between;
   margin-bottom: 10px;
@@ -1260,7 +1576,8 @@ onMounted(() => {
   }
 
   .sales-order-u9-sync-header-actions,
-  .sales-order-u9-sync-result-tags {
+  .sales-order-u9-sync-result-tags,
+  .sales-order-u9-sync-table-actions {
     justify-content: stretch;
     width: 100%;
   }
@@ -1269,6 +1586,7 @@ onMounted(() => {
   .sales-order-u9-sync-action-wrap,
   .panel-title-actions,
   .panel-title-actions :deep(.el-button),
+  .sales-order-u9-sync-table-actions :deep(.el-button),
   .assignment-form-grid :deep(.el-button) {
     width: 100%;
     margin-left: 0;

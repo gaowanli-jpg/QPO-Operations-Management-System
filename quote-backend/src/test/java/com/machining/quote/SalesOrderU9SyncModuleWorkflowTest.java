@@ -170,6 +170,9 @@ class SalesOrderU9SyncModuleWorkflowTest {
                     assertThat(line.getSalesOrderItemId()).isEqualTo(ready.getId());
                     assertThat(line.getSalesOrderDate()).isEqualTo(header.getSalesOrderDate());
                     assertThat(line.getCustomerOrderTitle()).isEqualTo(header.getCustomerOrderTitle());
+                    assertThat(line.getCustomerOrderNo()).isEqualTo(ready.getCustomerOrderNo());
+                    assertThat(line.getCustomerProjectNo()).isEqualTo(ready.getCustomerProjectNo());
+                    assertThat(line.getInternalProjectNo()).isEqualTo(ready.getInternalProjectNo());
                     assertThat(line.getSalesMaterialNo()).isEqualTo(ready.getSalesMaterialNo());
                     assertThat(line.getCustomerDeliveryDate()).isEqualTo(ready.getCustomerDeliveryDate());
                     assertThat(line.getInternalDeliveryDate()).isEqualTo(ready.getInternalDeliveryDate());
@@ -199,10 +202,8 @@ class SalesOrderU9SyncModuleWorkflowTest {
                         "itemCode",
                         "materialNoSource",
                         "materialNoSourceTicketId",
-                        "customerOrderNo",
-                        "customerProjectNo",
                         "orderType",
-                        "internalProjectNo");
+                        "salesMaterialNoSource");
         verify(fixture.dataScopeService).assertCanAccessSalesOrder(header);
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());

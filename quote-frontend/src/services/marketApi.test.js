@@ -142,6 +142,21 @@ describe('marketApi', () => {
     await marketApi.refreshSalesOrderU9SyncOptions()
     await marketApi.previewSalesOrderU9Sync(101)
     await marketApi.saveSalesOrderU9Assignment(101, { sellerCode: 'C00150', saleDepartmentCode: '200201' })
+    await marketApi.saveSalesOrderU9Items(101, {
+      items: [
+        {
+          salesOrderItemId: 9001,
+          qty: 5,
+          customerDeliveryDate: '2026-09-30',
+          internalDeliveryDate: '2026-09-25',
+          untaxedUnitPrice: '1344.47',
+          customerOrderNo: 'PO-001',
+          customerProjectNo: 'CUS-PROJ-001',
+          internalProjectNo: 'QPO-PROJ-001',
+          remark: 'U9同步前备注'
+        }
+      ]
+    })
     await marketApi.syncSalesOrderU9(101)
     await marketApi.reconcileSalesOrderU9(101)
     await marketApi.syncSalesOrdersU9([101, 102])
@@ -157,15 +172,33 @@ describe('marketApi', () => {
       method: 'PUT',
       data: { sellerCode: 'C00150', saleDepartmentCode: '200201' }
     })
-    expect(request).toHaveBeenNthCalledWith(6, '/api/market/u9-sync/orders/101/sync', {
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/u9-sync/orders/101/items', {
+      method: 'PUT',
+      data: {
+        items: [
+          {
+            salesOrderItemId: 9001,
+            qty: 5,
+            customerDeliveryDate: '2026-09-30',
+            internalDeliveryDate: '2026-09-25',
+            untaxedUnitPrice: '1344.47',
+            customerOrderNo: 'PO-001',
+            customerProjectNo: 'CUS-PROJ-001',
+            internalProjectNo: 'QPO-PROJ-001',
+            remark: 'U9同步前备注'
+          }
+        ]
+      }
+    })
+    expect(request).toHaveBeenNthCalledWith(7, '/api/market/u9-sync/orders/101/sync', {
       method: 'POST',
       data: undefined
     })
-    expect(request).toHaveBeenNthCalledWith(7, '/api/market/u9-sync/orders/101/reconcile', {
+    expect(request).toHaveBeenNthCalledWith(8, '/api/market/u9-sync/orders/101/reconcile', {
       method: 'POST',
       data: undefined
     })
-    expect(request).toHaveBeenNthCalledWith(8, '/api/market/u9-sync/sync', {
+    expect(request).toHaveBeenNthCalledWith(9, '/api/market/u9-sync/sync', {
       method: 'POST',
       data: { salesOrderIds: [101, 102] }
     })
