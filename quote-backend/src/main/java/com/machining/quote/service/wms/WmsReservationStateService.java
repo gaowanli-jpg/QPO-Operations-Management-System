@@ -533,16 +533,54 @@ public class WmsReservationStateService {
     }
 
     private void markTerminalLike(Long batchId, String status, String errorType, String message, boolean completed) {
-        WmsReservationBatch update = new WmsReservationBatch();
-        update.setId(batchId);
-        update.setStatus(status);
-        update.setLastErrorType(errorType);
-        update.setResponseMsg(abbreviate(message, 500));
-        if (completed) {
-            update.setCompletedAt(LocalDateTime.now());
+        executeWithoutResult(() -> {
+            WmsReservationBatch update = new WmsReservationBatch();
+            update.setId(batchId);
+            update.setStatus(status);
+            update.setLastErrorType(errorType);
+            update.setResponseMsg(abbreviate(message, 500));
+            if (completed) {
+                update.setCompletedAt(LocalDateTime.now());
+            }
+            update.setUpdatedAt(LocalDateTime.now());
+            batchMapper.updateById(update);
+            if (STATUS_FAILED.equals(status)) {
+                markPersistedRowsFailed(batchId, message);
+            }
+        });
+    }
+
+    private void markPersistedRowsFailed(Long batchId, String message) {
+        String safeMessage = abbreviate(message, 500);
+        LocalDateTime now = LocalDateTime.now();
+        List<WmsReservationItem> items = loadItems(batchId);
+        if (items != null) {
+            for (WmsReservationItem item : items) {
+                WmsReservationItem update = new WmsReservationItem();
+                update.setId(item.getId());
+                update.setStatus(STATUS_FAILED);
+                update.setUpdatedAt(now);
+                itemMapper.updateById(update);
+            }
         }
-        update.setUpdatedAt(LocalDateTime.now());
-        batchMapper.updateById(update);
+        List<WmsReservationTicket> tickets = ticketMapper.selectByBatchId(batchId);
+        if (tickets == null) {
+            return;
+        }
+        for (WmsReservationTicket ticket : tickets) {
+            WmsReservationTicket update = new WmsReservationTicket();
+            update.setId(ticket.getId());
+            update.setStatus(STATUS_FAILED);
+            update.setMessage(safeMessage);
+            update.setUpdatedAt(now);
+            ticketMapper.updateById(update);
+
+            OrderDeliveryTicket ticketUpdate = new OrderDeliveryTicket();
+            ticketUpdate.setId(ticket.getTicketId());
+            ticketUpdate.setWmsAllocateStatus(STATUS_FAILED);
+            ticketUpdate.setWmsAllocateMessage(safeMessage);
+            ticketSourceMapper.updateById(ticketUpdate);
+        }
     }
 
     private boolean isAllowedTransition(String current, String next) {

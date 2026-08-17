@@ -2,9 +2,11 @@ package com.machining.quote;
 
 import com.machining.quote.dto.wms.WmsSaleLadingReserveReq;
 import com.machining.quote.dto.wms.WmsSaleLadingReserveResp;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.WmsReservationBatch;
 import com.machining.quote.entity.WmsReservationItem;
 import com.machining.quote.entity.WmsReservationTicket;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.WmsReservationBatchMapper;
 import com.machining.quote.mapper.WmsReservationItemMapper;
 import com.machining.quote.mapper.WmsReservationTicketMapper;
@@ -184,6 +186,43 @@ class WmsReservationStateServiceTest {
                 .contains("FAILED");
     }
 
+    @Test
+    void definiteFailureMarksPersistedRowsFailedSoNextSubmitCanCreateNewBatch() {
+        Fixture fixture = fixture();
+        WmsSaleLadingReserveReq request = request("QPO-WMS-1", "SO-100", requestItem("MAT-A", "5", "remark"));
+        WmsReservationBatch failedBatch = batch(502L, "RESERVED", 1);
+        failedBatch.setRequestPayload(request);
+        failedBatch.setRequestFingerprint(new WmsReservationFingerprintService().fingerprint("SO-100", request.getItems()));
+        WmsReservationItem item = reservationItem(702L, 502L, "MAT-A", "5");
+        WmsReservationTicket ticket = reservationTicket(802L, 502L, 702L, 101, 1001L, 10, "MAT-A", "5");
+        when(fixture.batchMapper.selectById(502L)).thenReturn(failedBatch, failedBatch);
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of(item));
+        when(fixture.ticketMapper.selectByBatchId(502L)).thenReturn(List.of(ticket));
+        when(fixture.client.reserve(any()))
+                .thenThrow(callException(DataCenterCallException.FailureCertainty.DEFINITE_FAILURE, "business failed"));
+
+        assertThatThrownBy(() -> fixture.service.sendWithReplay(502L))
+                .isInstanceOf(DataCenterCallException.class)
+                .hasMessageContaining("business failed");
+
+        ArgumentCaptor<WmsReservationItem> itemUpdate = ArgumentCaptor.forClass(WmsReservationItem.class);
+        verify(fixture.itemMapper).updateById(itemUpdate.capture());
+        assertThat(itemUpdate.getValue().getId()).isEqualTo(702L);
+        assertThat(itemUpdate.getValue().getStatus()).isEqualTo("FAILED");
+
+        ArgumentCaptor<WmsReservationTicket> ticketUpdate = ArgumentCaptor.forClass(WmsReservationTicket.class);
+        verify(fixture.ticketMapper).updateById(ticketUpdate.capture());
+        assertThat(ticketUpdate.getValue().getId()).isEqualTo(802L);
+        assertThat(ticketUpdate.getValue().getStatus()).isEqualTo("FAILED");
+        assertThat(ticketUpdate.getValue().getMessage()).contains("business failed");
+
+        ArgumentCaptor<OrderDeliveryTicket> deliveryTicketUpdate = ArgumentCaptor.forClass(OrderDeliveryTicket.class);
+        verify(fixture.ticketSourceMapper).updateById(deliveryTicketUpdate.capture());
+        assertThat(deliveryTicketUpdate.getValue().getId()).isEqualTo(101);
+        assertThat(deliveryTicketUpdate.getValue().getWmsAllocateStatus()).isEqualTo("FAILED");
+        assertThat(deliveryTicketUpdate.getValue().getWmsAllocateMessage()).contains("business failed");
+    }
+
     private Fixture fixture() {
         return new Fixture();
     }
@@ -267,6 +306,38 @@ class WmsReservationStateServiceTest {
         return item;
     }
 
+    private WmsReservationItem reservationItem(Long id, Long batchId, String productCode, String reserveCount) {
+        WmsReservationItem item = new WmsReservationItem();
+        item.setId(id);
+        item.setBatchId(batchId);
+        item.setProductCode(productCode);
+        item.setReserveCount(new BigDecimal(reserveCount));
+        item.setRemark("remark");
+        item.setStatus("RESERVED");
+        return item;
+    }
+
+    private WmsReservationTicket reservationTicket(Long id,
+                                                   Long batchId,
+                                                   Long itemId,
+                                                   Integer ticketId,
+                                                   Long salesOrderItemId,
+                                                   Integer lineNo,
+                                                   String productCode,
+                                                   String reserveCount) {
+        WmsReservationTicket ticket = new WmsReservationTicket();
+        ticket.setId(id);
+        ticket.setBatchId(batchId);
+        ticket.setBatchItemId(itemId);
+        ticket.setTicketId(ticketId);
+        ticket.setSalesOrderItemId(salesOrderItemId);
+        ticket.setSalesOrderLineNo(lineNo);
+        ticket.setProductCode(productCode);
+        ticket.setReserveCount(new BigDecimal(reserveCount));
+        ticket.setStatus("RESERVED");
+        return ticket;
+    }
+
     private WmsReservationBatch batch(Long id, String status, Integer attemptNo) {
         WmsReservationBatch batch = new WmsReservationBatch();
         batch.setId(id);
@@ -286,6 +357,7 @@ class WmsReservationStateServiceTest {
         private final WmsReservationBatchMapper batchMapper = mock(WmsReservationBatchMapper.class);
         private final WmsReservationItemMapper itemMapper = mock(WmsReservationItemMapper.class);
         private final WmsReservationTicketMapper ticketMapper = mock(WmsReservationTicketMapper.class);
+        private final OrderDeliveryTicketMapper ticketSourceMapper = mock(OrderDeliveryTicketMapper.class);
         private final WmsReservationClient client = mock(WmsReservationClient.class);
         private final WmsReservationStateService service = new WmsReservationStateService();
 
@@ -293,6 +365,7 @@ class WmsReservationStateServiceTest {
             ReflectionTestUtils.setField(service, "batchMapper", batchMapper);
             ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
             ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
+            ReflectionTestUtils.setField(service, "ticketSourceMapper", ticketSourceMapper);
             ReflectionTestUtils.setField(service, "client", client);
             ReflectionTestUtils.setField(service, "validator", new WmsReservationContractValidator());
             ReflectionTestUtils.setField(service, "fingerprintService", new WmsReservationFingerprintService());

@@ -13,6 +13,9 @@ class WmsReservationMigrationTest {
     private static final Path V10 = Path.of(
             "src", "main", "resources", "db", "migration", "V10__wms_batch_reservation_contract.sql"
     );
+    private static final Path V13 = Path.of(
+            "src", "main", "resources", "db", "migration", "V13__wms_failed_reservation_state_repair.sql"
+    );
     private static final Path BATCH_ENTITY = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "WmsReservationBatch.java"
     );
@@ -99,6 +102,23 @@ class WmsReservationMigrationTest {
                         "'WMS_ALLOCATION_V1'",
                         "'WMS_ALLOCATION_RESPONSE_V1'",
                         "'/api/wms/inventory/allocate'"
+                );
+    }
+
+    @Test
+    void v13BackfillsFailedReservationRowsSoTicketsCanRetry() throws IOException {
+        String sql = read(V13);
+
+        assertThat(sql)
+                .contains(
+                        "UPDATE wms_reservation_item i",
+                        "FROM wms_reservation_batch b",
+                        "b.status = 'FAILED'",
+                        "UPDATE wms_reservation_ticket t",
+                        "SET status = 'FAILED'",
+                        "UPDATE order_delivery_ticket odt",
+                        "SET wms_allocate_status = 'FAILED'",
+                        "COALESCE(odt.wms_allocate_status, 'PENDING') <> 'SUCCESS'"
                 );
     }
 
