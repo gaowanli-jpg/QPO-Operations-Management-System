@@ -149,6 +149,7 @@ run_checked docker save -o "$archive_path" "${images[@]}"
 
 cp "$PROJECT_ROOT/docker-compose.yml" "$OUTPUT_DIR/docker-compose.yml"
 cp "$PROJECT_ROOT/erp.env.example" "$OUTPUT_DIR/erp.env.example"
+cp "$PROJECT_ROOT/QPO部署说明.md" "$OUTPUT_DIR/QPO部署说明.md"
 cp "$PROJECT_ROOT/scripts/load-offline-images.ps1" "$OUTPUT_DIR/scripts/load-offline-images.ps1"
 cp "$PROJECT_ROOT/scripts/load-offline-images.sh" "$OUTPUT_DIR/scripts/load-offline-images.sh"
 

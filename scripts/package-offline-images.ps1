@@ -125,6 +125,7 @@ Run-Checked "docker" (@("save", "-o", $archivePath) + $images)
 
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "docker-compose.yml") -Destination (Join-Path $OutputDir "docker-compose.yml") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "erp.env.example") -Destination (Join-Path $OutputDir "erp.env.example") -Force
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO部署说明.md") -Destination (Join-Path $OutputDir "QPO部署说明.md") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/load-offline-images.ps1") -Destination (Join-Path $scriptsOutputDir "load-offline-images.ps1") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/load-offline-images.sh") -Destination (Join-Path $scriptsOutputDir "load-offline-images.sh") -Force
 

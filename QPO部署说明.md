@@ -52,6 +52,7 @@ workflow 产物目录包含：
 - `qpo-offline-images-<tag>.tar`：Docker 离线镜像包。
 - `docker-compose.yml`：离线启动使用的 Compose 文件。
 - `erp.env.example`：环境变量模板，不包含真实密钥。
+- `QPO部署说明.md`：离线部署和回滚说明。
 - `qpo-image.env`：本次包的镜像标签摘要。
 - `qpo-offline-package-manifest.json`：镜像清单。
 - `scripts/load-offline-images.ps1` / `scripts/load-offline-images.sh`：离线加载和启动脚本。
@@ -82,7 +83,32 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package-offline-images.ps1 -I
 生成目录默认在 `dist/qpo-offline-package-<tag>/`，该目录已加入 `.gitignore`，不要提交离线镜像包。
 
 ### 内网服务器加载和启动
-把 `dist/qpo-offline-package-<tag>/` 整个目录复制到内网服务器。首次部署时，在该目录下根据 `erp.env.example` 准备真实 `erp.env`，填写数据库密码、JWT 密钥、MES/WMS/U9 等真实配置。不要把真实 `erp.env` 回传或提交到仓库。
+把 `dist/qpo-offline-package-<tag>/` 整个目录复制到内网服务器。首次部署时，在该目录下根据 `erp.env.example` 准备真实 `erp.env`。普通数据中心转发部署只需要先填写 `POSTGRES_PASSWORD` 和 `ERP_JWT_SECRET`；数据中心、MES、U9、入站回调等业务接口可启动后在系统页面配置。不要把真实 `erp.env` 回传或提交到仓库。
+
+Linux 上传示例：
+
+```bash
+mkdir -p /opt/qpo
+# 在有离线包的机器执行；也可以用 U 盘、堡垒机或内网文件共享传输整个目录。
+scp -r dist/qpo-offline-package-master root@<server-ip>:/opt/qpo/
+```
+
+服务器首次准备 `erp.env`：
+
+```bash
+cd /opt/qpo/qpo-offline-package-master
+cp erp.env.example erp.env
+vi erp.env
+```
+
+最小必填项：
+
+```env
+POSTGRES_PASSWORD=change-to-a-strong-password
+ERP_JWT_SECRET=change-to-a-random-secret-at-least-32-chars
+```
+
+直接通过服务器 IP 访问前端时，模板默认 `FRONTEND_BIND=0.0.0.0`、`FRONTEND_PORT=8088`，通常不需要改。若前面还有服务器 Nginx/网关反代，再改成 `FRONTEND_BIND=127.0.0.1` 并配置 `ERP_CORS_ALLOWED_ORIGINS` 为真实域名。
 
 Linux 部署服务器：
 
@@ -116,6 +142,8 @@ bash scripts/load-offline-images.sh --no-start
 bash scripts/load-offline-images.sh --include-minio
 ```
 
+使用 `--include-minio` 前必须在 `erp.env` 填写 `MINIO_ROOT_PASSWORD`。普通 LOCAL 文件存储或公司统一 MinIO 场景不需要启动这个 profile，也不需要填写 `MINIO_ROOT_PASSWORD`。
+
 ### 回滚
 正式环境建议使用 Git tag 产物部署。需要回滚时，把目标版本的离线包上传到服务器，重新执行加载脚本即可。Compose 会按该包内 `qpo-image.env` 的 `QPO_IMAGE_TAG` 启动对应版本镜像；数据库迁移仍由后端 Flyway 管理，涉及数据库结构降级时需先做备份和人工评估。
 
@@ -140,6 +168,18 @@ notepad erp.env
 - `ERP_TASK_CORE_POOL_SIZE` / `ERP_TASK_MAX_POOL_SIZE`：报价刷新、大文件导出等后台任务线程池。默认 `2` / `4` 即可，调大前要评估CPU和数据库能力。
 - `ERP_FILE_STORAGE_TYPE`：本地开发默认 LOCAL，现有上传目录继续使用 `ERP_UPLOAD_DIR`。
 - `ERP_MINIO_*`：仅在初始化、测试或连接 MinIO 文件存储策略时使用；真实密钥只写 `erp.env`，不要写入代码、示例文件或文档。
+
+普通上线可先留空的可选项：
+
+```env
+ERP_DATA_CENTER_CLIENT_SECRET=
+ERP_MES_AUTH_TOKEN=
+ERP_MES_CALLBACK_TOKEN=
+ERP_U9_CLIENT_SECRET=
+MINIO_ROOT_PASSWORD=
+```
+
+其中 `ERP_DATA_CENTER_CLIENT_SECRET` 可在系统配置页维护；`ERP_MES_*`、`ERP_U9_*` 是直连或老环境 fallback；`MINIO_ROOT_PASSWORD` 只在启动本包自带 MinIO profile 时需要。
 
 连接池经验公式：
 
