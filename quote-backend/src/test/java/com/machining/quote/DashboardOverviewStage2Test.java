@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,7 +79,20 @@ class DashboardOverviewStage2Test {
         assertThat(overview.getCustomerMatrix().get(0).getRfqQuoted()).isEqualTo(3L);
         assertThat(overview.getCustomerMatrix().get(0).getU9Ready()).isEqualTo(5L);
         assertThat(overview.getSummaryCards()).extracting("key")
-                .contains("rfqTodo", "salesQuoted", "deliveredActive", "lockedProduction");
+                .contains("rfqTodo", "salesReleased", "deliveredActive", "lockedProduction");
+        assertThat(overview.getSummaryCards())
+                .filteredOn(card -> "salesReleased".equals(card.getKey()))
+                .singleElement()
+                .satisfies(card -> {
+                    assertThat(card.getTitle()).isEqualTo("销售已提单");
+                    assertThat(card.getValue()).isEqualTo(8L);
+                    assertThat(card.getHelper()).isEqualTo("已提单且待同步 U9");
+                    assertThat(card.getTrendText()).isEqualTo("进入 U9 同步选择订单");
+                    assertThat(card.getPermission()).isEqualTo("market:u9-sync:view");
+                    assertThat(card.getTarget()).containsEntry("path", "/u9-sync");
+                    assertThat(card.getTarget()).extractingByKey("query")
+                            .isEqualTo(java.util.Map.of("materialReadyStatus", "READY"));
+                });
         assertThat(overview.getTodoCards()).extracting("key")
                 .contains("materialTodo", "wmsTodo", "mesProductionTodo", "u9SyncReady")
                 .doesNotContain("salesMatch");
@@ -88,6 +102,7 @@ class DashboardOverviewStage2Test {
         verify(dataScopeService, atLeastOnce()).applyOrderScope(any(QueryWrapper.class), eq("rfq"));
         verify(dataScopeService, atLeastOnce()).applySalesOrderScope(any(QueryWrapper.class), eq("so"));
         verify(dataScopeService, atLeastOnce()).applyDeliveryTicketScope(any(QueryWrapper.class), eq("ticket"));
+        verify(mapper, never()).countSalesQuotedByCustomer(any());
     }
 
     @Test

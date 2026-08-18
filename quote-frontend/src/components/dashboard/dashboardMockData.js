@@ -13,15 +13,15 @@ export const dashboardMockData = {
       permission: 'market:order:view'
     },
     {
-      key: 'salesQuoted',
-      title: '销售已报价',
-      value: 19,
+      key: 'salesReleased',
+      title: '销售已提单',
+      value: 6,
       unit: '单',
-      helper: '按客户查看销售订单',
-      trendText: '查看导入、物料号和 U9 状态',
+      helper: '已提单且待同步 U9',
+      trendText: '进入 U9 同步选择订单',
       tone: 'success',
-      target: { path: '/sales-orders', query: { status: '已报价' } },
-      permission: 'market:sales-order:view'
+      target: { path: '/u9-sync', query: { materialReadyStatus: 'READY' } },
+      permission: 'market:u9-sync:view'
     },
     {
       key: 'deliveredActive',

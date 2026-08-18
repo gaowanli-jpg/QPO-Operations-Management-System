@@ -30,6 +30,15 @@ describe('Dashboard prototype phase 6 acceptance guard', () => {
   test('keeps mock dashboard statistics inside the approved business scope', async () => {
     const { dashboardMockData } = await importFile(resolve(dashboardDir, 'dashboardMockData.js'))
 
+    const salesReleasedSummary = dashboardMockData.summaryCards.find((item) => item.key === 'salesReleased')
+    expect(salesReleasedSummary).toEqual(expect.objectContaining({
+      title: '销售已提单',
+      helper: '已提单且待同步 U9',
+      trendText: '进入 U9 同步选择订单',
+      target: { path: '/u9-sync', query: { materialReadyStatus: 'READY' } },
+      permission: 'market:u9-sync:view'
+    }))
+    expect(dashboardMockData.summaryCards.some((item) => item.key === 'salesQuoted')).toBe(false)
     expect(dashboardMockData.rfqStatusDistribution.map((item) => item.name)).toEqual(['未核价', '已核价', '已报价'])
     expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.customerId && (item.customerName || item.name))).toBe(true)
     expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.targetPath === '/u9-sync')).toBe(true)
@@ -60,9 +69,11 @@ describe('Dashboard prototype phase 6 acceptance guard', () => {
   })
 
   test('does not use post-ticket statuses as main dashboard chart data', () => {
-    const dashboardHomeSource = readFileSync(resolve(dashboardDir, 'DashboardHome.vue'), 'utf8')
     const mockSource = readFileSync(resolve(dashboardDir, 'dashboardMockData.js'), 'utf8')
-    const chartDataSource = `${dashboardHomeSource}\n${mockSource}`
+    const rfqStatusDistribution = /rfqStatusDistribution:\s*\[([\s\S]*?)\],\s*u9ReadyCustomerDistribution/.exec(mockSource)?.[1] || ''
+    const u9ReadyCustomerDistribution = /u9ReadyCustomerDistribution:\s*\[([\s\S]*?)\],\s*customerMatrix/.exec(mockSource)?.[1] || ''
+    const customerMatrix = /customerMatrix:\s*\[([\s\S]*?)\],\s*todoCards/.exec(mockSource)?.[1] || ''
+    const chartDataSource = `${rfqStatusDistribution}\n${u9ReadyCustomerDistribution}\n${customerMatrix}`
 
     expect(chartDataSource).not.toContain('部分已提单')
     expect(chartDataSource).not.toContain('已生成提单')

@@ -42,11 +42,6 @@ public class DashboardOverviewService {
             "market:quote-process:view",
             "market:release:view"
     );
-    private static final List<String> SALES_DOMAIN_PERMISSIONS = List.of(
-            "market:sales-order:view",
-            "market:release:view",
-            "market:u9-sync:view"
-    );
     private static final List<String> DELIVERED_DOMAIN_PERMISSIONS = List.of("market:delivered-item:view");
     private static final List<String> PRODUCTION_DOMAIN_PERMISSIONS = List.of("market:production-item:view");
     private static final List<String> U9_DOMAIN_PERMISSIONS = List.of("market:u9-sync:view");
@@ -83,16 +78,12 @@ public class DashboardOverviewService {
 
         PermissionGate permissionGate = currentPermissionGate();
         boolean canSeeRfq = permissionGate.hasAny(RFQ_DOMAIN_PERMISSIONS);
-        boolean canSeeSales = permissionGate.hasAny(SALES_DOMAIN_PERMISSIONS);
         boolean canSeeDelivered = permissionGate.hasAny(DELIVERED_DOMAIN_PERMISSIONS);
         boolean canSeeProduction = permissionGate.hasAny(PRODUCTION_DOMAIN_PERMISSIONS);
         boolean canSeeU9 = permissionGate.hasAny(U9_DOMAIN_PERMISSIONS);
 
         List<DashboardStatusCountRow> rfqStatusRows = canSeeRfq
                 ? safeList(aggregationMapper.countRfqByStatus(rfqStatusQuery()))
-                : List.of();
-        List<DashboardCustomerCountRow> salesQuotedRows = canSeeSales
-                ? safeList(aggregationMapper.countSalesQuotedByCustomer(salesQuotedQuery()))
                 : List.of();
         List<DashboardCustomerCountRow> u9ReadyRows = canSeeU9
                 ? safeList(aggregationMapper.countU9ReadyByCustomer(u9ReadyQuery()))
@@ -104,7 +95,6 @@ public class DashboardOverviewService {
         long rfqUnpriced = countForStatus(rfqStatusRows, QuoteStatusWorkflow.UNPRICED);
         long rfqPriced = countForStatus(rfqStatusRows, QuoteStatusWorkflow.PRICED);
         long rfqQuoted = countForStatus(rfqStatusRows, QuoteStatusWorkflow.QUOTED);
-        long salesQuoted = salesQuotedRows.stream().mapToLong(this::rowCount).sum();
         long deliveredActive = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredActive(deliveredActiveQuery())) : 0L;
         long lockedProductionTodo = canSeeProduction ? count(() -> aggregationMapper.countLockedProductionTodo(lockedProductionTodoQuery())) : 0L;
         long deliveredNeedMaterial = canSeeDelivered ? count(() -> aggregationMapper.countDeliveredNeedMaterial(deliveredNeedMaterialQuery())) : 0L;
@@ -120,7 +110,7 @@ public class DashboardOverviewService {
         overview.setU9ReadyCustomerDistribution(canSeeU9 ? u9ReadyCustomerDistribution(u9ReadyRows) : List.of());
         overview.setCustomerMatrix(customerMatrix(rfqCustomerRows, u9ReadyRows));
         overview.setSummaryCards(filterSummaryCards(
-                summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, salesQuoted, deliveredActive, lockedProductionTodo),
+                summaryCards(rfqUnpriced + rfqPriced + rfqQuoted, u9Ready, deliveredActive, lockedProductionTodo),
                 permissionGate));
         overview.setTodoCards(filterTodoCards(
                 todoCards(rfqUnpriced, rfqPriced, rfqQuoted, deliveredNeedMaterial,
@@ -183,13 +173,6 @@ public class DashboardOverviewService {
 
     private QueryWrapper<Object> rfqCustomerQuery() {
         return rfqStatusQuery();
-    }
-
-    private QueryWrapper<Object> salesQuotedQuery() {
-        QueryWrapper<Object> query = new QueryWrapper<>();
-        query.eq("so.status", QuoteStatusWorkflow.QUOTED);
-        applySalesOrderScope(query);
-        return query;
     }
 
     private QueryWrapper<Object> u9ReadyQuery() {
@@ -391,12 +374,12 @@ public class DashboardOverviewService {
         return row;
     }
 
-    private List<DashboardSummaryCardDTO> summaryCards(long rfqTodo, long salesQuoted, long deliveredActive, long lockedProduction) {
+    private List<DashboardSummaryCardDTO> summaryCards(long rfqTodo, long salesReleased, long deliveredActive, long lockedProduction) {
         return List.of(
                 summaryCard("rfqTodo", "询价待推进", rfqTodo, "单", "未核价、已核价、已报价",
                         "优先关注工程核价积压", "primary", "/orders", query("status", QuoteStatusWorkflow.UNPRICED), "market:order:view"),
-                summaryCard("salesQuoted", "销售已报价", salesQuoted, "单", "按客户查看销售订单",
-                        "查看导入、物料号和 U9 状态", "success", "/sales-orders", query("status", QuoteStatusWorkflow.QUOTED), "market:sales-order:view"),
+                summaryCard("salesReleased", "销售已提单", salesReleased, "单", "已提单且待同步 U9",
+                        "进入 U9 同步选择订单", "success", "/u9-sync", query("materialReadyStatus", "READY"), "market:u9-sync:view"),
                 summaryCard("deliveredActive", "已提未完成", deliveredActive, "行", "等待物料号或库存信息",
                         "处理 MES / WMS 待办", "warning", "/delivered-items", query("flowScope", "ACTIVE"), "market:delivered-item:view"),
                 summaryCard("lockedProduction", "待生产下发", lockedProduction, "行", "WMS 锁库后仍需生产",

@@ -29,6 +29,13 @@ describe('Dashboard prototype stage 2 data contract', () => {
     expect(existsSync(mockPath)).toBe(true)
 
     const { dashboardMockData } = await importFile(mockPath)
+    const salesReleasedSummary = dashboardMockData.summaryCards.find((item) => item.key === 'salesReleased')
+    expect(salesReleasedSummary).toEqual(expect.objectContaining({
+      title: '销售已提单',
+      target: { path: '/u9-sync', query: { materialReadyStatus: 'READY' } },
+      permission: 'market:u9-sync:view'
+    }))
+    expect(dashboardMockData.summaryCards.some((item) => item.key === 'salesQuoted')).toBe(false)
     expect(dashboardMockData.rfqStatusDistribution.map((item) => item.name)).toEqual(['未核价', '已核价', '已报价'])
     expect(dashboardMockData.u9ReadyCustomerDistribution.every((item) => item.customerName || item.name)).toBe(true)
     expect(dashboardMockData.u9ReadyCustomerDistribution.some((item) => item.name === '已生成提单')).toBe(false)

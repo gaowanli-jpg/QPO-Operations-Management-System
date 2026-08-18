@@ -101,7 +101,13 @@ class DashboardOverviewStage3Test {
         assertThat(overview.getU9ReadyCustomerDistribution().get(8).getCustomerId()).isNull();
         assertThat(overview.getU9ReadyCustomerDistribution().get(8).getValue()).isEqualTo(23L);
         assertThat(overview.getCustomerMatrix()).hasSize(10);
-        assertThat(overview.getSummaryCards()).isEmpty();
+        assertThat(overview.getSummaryCards()).singleElement().satisfies(card -> {
+            assertThat(card.getKey()).isEqualTo("salesReleased");
+            assertThat(card.getTitle()).isEqualTo("销售已提单");
+            assertThat(card.getPermission()).isEqualTo("market:u9-sync:view");
+            assertThat(card.getTarget()).containsEntry("path", "/u9-sync");
+            assertThat(card.getTarget()).extractingByKey("query").isEqualTo(Map.of("materialReadyStatus", "READY"));
+        });
         assertThat(overview.getTodoCards()).extracting("key").containsExactly("u9SyncReady");
         assertThat(overview.getAttentionItems()).extracting("key").containsExactly("u9Failed");
 
@@ -189,7 +195,7 @@ class DashboardOverviewStage3Test {
         assertThat(overview.getU9ReadyCustomerDistribution()).hasSize(1);
         assertThat(overview.getCustomerMatrix()).hasSize(1);
         assertThat(overview.getSummaryCards()).extracting("key")
-                .containsExactly("rfqTodo", "salesQuoted", "deliveredActive", "lockedProduction");
+                .containsExactly("rfqTodo", "salesReleased", "deliveredActive", "lockedProduction");
         assertThat(overview.getTodoCards()).extracting("key")
                 .contains("rfqPricing", "rfqQuote", "rfqRelease", "materialTodo",
                         "wmsTodo", "mesProductionTodo", "u9SyncReady")

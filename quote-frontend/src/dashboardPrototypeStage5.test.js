@@ -92,6 +92,10 @@ describe('Dashboard prototype stage 5 interactive workbench components', () => {
   test('dashboard mock U9 ready entry follows sales order sync query contract', () => {
     const source = readSource('dashboardMockData.js')
 
+    expect(source).toContain("key: 'salesReleased'")
+    expect(source).toContain("title: '销售已提单'")
+    expect(source).toContain("target: { path: '/u9-sync', query: { materialReadyStatus: 'READY' } }")
+    expect(source).not.toContain("key: 'salesQuoted'")
     expect(source).toContain("key: 'u9SyncReady'")
     expect(source).toContain("query: { materialReadyStatus: 'READY' }")
     expect(source).not.toContain("query: { status: '已提单' }")
