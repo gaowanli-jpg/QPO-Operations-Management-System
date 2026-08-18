@@ -549,7 +549,7 @@ public class InternalTargetLeadTimeService {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
-        result.put("message", "Drawing replacement completed, replaced " + replacedItems.size() + " items.");
+        result.put("message", "图纸替换完成，已替换 " + replacedItems.size() + " 个零件。");
         result.put("uploadCount", uploadCount);
         result.put("uploadedDrawingCount", uploadedDrawingCount);
         result.put("versionUploadedDrawingCount", versionUploadedDrawingCount);

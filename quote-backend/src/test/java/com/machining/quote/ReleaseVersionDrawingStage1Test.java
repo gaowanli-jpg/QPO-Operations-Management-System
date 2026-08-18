@@ -255,6 +255,7 @@ class ReleaseVersionDrawingStage1Test {
 
         assertThat(result)
                 .containsEntry("success", true)
+                .containsEntry("message", "图纸替换完成，已替换 2 个零件。")
                 .containsEntry("uploadCount", 1)
                 .containsEntry("matchedCount", 2)
                 .containsEntry("replacedCount", 2)
