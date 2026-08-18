@@ -85,9 +85,9 @@ class SalesOrderManagementGovernanceTest {
     }
 
     @Test
-    void quotedSalesOrderCanBeDiscardedAndDiscardedSalesOrderCanBeRestored() throws Exception {
-        SalesOrderItem quotedItem = item(501L, 100L, QuoteStatusWorkflow.QUOTED);
-        Fixture discardFixture = fixture(header(100L, QuoteStatusWorkflow.QUOTED), List.of(quotedItem), 0L);
+    void releasedUnsyncedSalesOrderCanBeDiscardedAndRestoredToReleased() throws Exception {
+        SalesOrderItem releasedItem = item(501L, 100L, QuoteStatusWorkflow.RELEASED);
+        Fixture discardFixture = fixture(header(100L, QuoteStatusWorkflow.RELEASED), List.of(releasedItem), 1L);
 
         Object discardResult = invokeStatusAction(discardFixture.service, "discard", 100L, "客户取消");
 
@@ -106,36 +106,38 @@ class SalesOrderManagementGovernanceTest {
 
         Object restoreResult = invokeStatusAction(restoreFixture.service, "restore", 200L, "恢复订单");
 
-        assertThat(String.valueOf(restoreResult)).contains(QuoteStatusWorkflow.QUOTED);
+        assertThat(String.valueOf(restoreResult)).contains(QuoteStatusWorkflow.RELEASED);
         ArgumentCaptor<SalesOrderHeader> restoredHeader = ArgumentCaptor.forClass(SalesOrderHeader.class);
         verify(restoreFixture.headerMapper).updateById(restoredHeader.capture());
-        assertThat(restoredHeader.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(restoredHeader.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
         ArgumentCaptor<SalesOrderItem> restoredItem = ArgumentCaptor.forClass(SalesOrderItem.class);
         verify(restoreFixture.itemMapper).updateById(restoredItem.capture());
-        assertThat(restoredItem.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(restoredItem.getValue().getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
         verify(restoreFixture.auditService).record(eq("SALES_ORDER_RESTORE"), eq("sales_order_header"), eq(200L), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
     }
 
     @Test
-    void releasedOrTicketedSalesOrdersCannotBeDiscarded() {
+    void syncedOrNonReleasedSalesOrdersCannotBeDiscarded() {
         Fixture partiallyReleased = fixture(header(300L, QuoteStatusWorkflow.PARTIALLY_RELEASED), List.of(), 0L);
         assertThatThrownBy(() -> invokeStatusAction(partiallyReleased.service, "discard", 300L, "不能废弃"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("只有已报价且未生成提单的销售订单可以废弃");
+                .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
         verify(partiallyReleased.headerMapper, never()).updateById(any());
         verify(partiallyReleased.itemMapper, never()).updateById(any());
 
-        Fixture released = fixture(header(301L, QuoteStatusWorkflow.RELEASED), List.of(), 0L);
-        assertThatThrownBy(() -> invokeStatusAction(released.service, "discard", 301L, "不能废弃"))
+        SalesOrderHeader syncedHeader = header(301L, QuoteStatusWorkflow.RELEASED);
+        syncedHeader.setU9SyncStatus("已同步");
+        Fixture synced = fixture(syncedHeader, List.of(), 0L);
+        assertThatThrownBy(() -> invokeStatusAction(synced.service, "discard", 301L, "不能废弃"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("只有已报价且未生成提单的销售订单可以废弃");
-        verify(released.headerMapper, never()).updateById(any());
-        verify(released.itemMapper, never()).updateById(any());
+                .hasMessageContaining("已同步 U9 的销售订单不能废弃");
+        verify(synced.headerMapper, never()).updateById(any());
+        verify(synced.itemMapper, never()).updateById(any());
 
         Fixture ticketed = fixture(header(302L, QuoteStatusWorkflow.QUOTED), List.of(), 1L);
         assertThatThrownBy(() -> invokeStatusAction(ticketed.service, "discard", 302L, "已有提单"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("只有已报价且未生成提单的销售订单可以废弃");
+                .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
         verify(ticketed.headerMapper, never()).updateById(any());
         verify(ticketed.itemMapper, never()).updateById(any());
     }
@@ -334,6 +336,7 @@ class SalesOrderManagementGovernanceTest {
         header.setCustomerId(88L);
         header.setCustomerName("客户A");
         header.setStatus(status);
+        header.setU9SyncStatus("未同步");
         return header;
     }
 

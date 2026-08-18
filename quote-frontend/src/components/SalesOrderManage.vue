@@ -329,38 +329,37 @@ import {
 const { isPending, runAction } = usePendingAction()
 
 const SALES_ORDER_STATUSES = ['已报价', '部分已提单', '已生成提单', '废弃']
-const RELEASED_SALES_ORDER_STATUSES = ['部分已提单', '已生成提单']
-const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已生成提单，不能废弃'
+const SALES_ORDER_STATUS_LOCKED_REASON = '销售订单已同步 U9，不能废弃'
 const salesOrderActionKeys = {
   statusChange: (orderId) => `sales-order:status-change:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `sales-order:supplement-drawings:${orderId || 'none'}`
 }
 const SALES_ORDER_STATUS_ACTIONS = [
   {
-    status: '已报价',
+    status: '已生成提单',
     label: '废弃',
     permission: 'market:sales-order:discard',
     handler: discardSalesOrder,
     type: 'danger',
-    reason: '销售订单：废弃已报价订单',
+    reason: '销售订单：废弃未同步 U9 订单',
     successMessage: '销售订单已废弃。',
     errorMessage: '废弃销售订单失败。',
     confirmTitle: '废弃销售订单',
     confirmButtonText: '确认废弃',
-    confirmMessage: (row) => `确认废弃销售订单「${row.salesOrderNo || row.id}」吗？系统只调整销售订单头和零件状态，不清空价格、数量、交期、图纸或物料号。`
+    confirmMessage: (row) => `确认废弃销售订单「${row.salesOrderNo || row.id}」吗？系统只调整销售订单头和零件状态，不清空价格、数量、交期、图纸、提单快照或物料号。`
   },
   {
     status: '废弃',
-    label: '恢复为已报价',
+    label: '恢复为已生成提单',
     permission: 'market:sales-order:restore',
     handler: restoreSalesOrder,
     type: 'success',
     reason: '销售订单：恢复废弃订单',
-    successMessage: '销售订单已恢复为已报价。',
+    successMessage: '销售订单已恢复为已生成提单。',
     errorMessage: '恢复销售订单失败。',
     confirmTitle: '恢复销售订单',
     confirmButtonText: '确认恢复',
-    confirmMessage: (row) => `确认将废弃销售订单「${row.salesOrderNo || row.id}」恢复为“已报价”吗？恢复后可重新处理或等待后续导入自动链路处理，不再进入旧的手工议价提单链路。`
+    confirmMessage: (row) => `确认将废弃销售订单「${row.salesOrderNo || row.id}」恢复为“已生成提单”吗？恢复后可继续进入 U9 同步选择订单池。`
   }
 ]
 
@@ -625,7 +624,7 @@ const isOrderStatusPending = (row) => isPending(salesOrderActionKeys.statusChang
 
 const statusActionLocked = (row) => {
   if (!row) return false
-  return RELEASED_SALES_ORDER_STATUSES.includes(row.status) || Number(row.ticketCount || 0) > 0
+  return row.status === '已生成提单' && row.u9SyncStatus === '已同步'
 }
 
 const rowStatusActions = (row) => {

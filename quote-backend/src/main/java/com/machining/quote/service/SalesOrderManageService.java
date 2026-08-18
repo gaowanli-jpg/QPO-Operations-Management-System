@@ -41,6 +41,7 @@ public class SalesOrderManageService {
     private static final String ACTION_DISCARD = "SALES_ORDER_DISCARD";
     private static final String ACTION_RESTORE = "SALES_ORDER_RESTORE";
     private static final String ACTION_DRAWING_SUPPLEMENT = "SALES_ORDER_DRAWING_SUPPLEMENT";
+    private static final String U9_STATUS_SYNCED = "已同步";
 
     @Autowired
     private SalesOrderHeaderMapper salesOrderHeaderMapper;
@@ -182,9 +183,9 @@ public class SalesOrderManageService {
                 req,
                 ACTION_DISCARD,
                 "废弃销售订单",
-                QuoteStatusWorkflow.QUOTED,
+                QuoteStatusWorkflow.RELEASED,
                 QuoteStatusWorkflow.DISCARDED,
-                "只有已报价且未生成提单的销售订单可以废弃。"
+                "只有已生成提单且未同步 U9 的销售订单可以废弃。"
         );
     }
 
@@ -196,7 +197,7 @@ public class SalesOrderManageService {
                 ACTION_RESTORE,
                 "恢复销售订单",
                 QuoteStatusWorkflow.DISCARDED,
-                QuoteStatusWorkflow.QUOTED,
+                QuoteStatusWorkflow.RELEASED,
                 "只有废弃状态的销售订单可以恢复。"
         );
     }
@@ -461,7 +462,9 @@ public class SalesOrderManageService {
             fromStatus = order.getStatus();
             assertSalesOrderDataScope(order);
             ticketCount = countSalesOrderTickets(salesOrderId);
-            if (!requiredStatus.equals(fromStatus) || (ACTION_DISCARD.equals(auditAction) && ticketCount != null && ticketCount > 0)) {
+            if (ACTION_DISCARD.equals(auditAction)) {
+                validateSalesOrderDiscardAllowed(order, fromStatus, rejectionMessage);
+            } else if (!requiredStatus.equals(fromStatus)) {
                 throw new RuntimeException(rejectionMessage);
             }
 
@@ -517,6 +520,15 @@ public class SalesOrderManageService {
         return ticketMapper.selectCount(ticketQuery(salesOrderId));
     }
 
+    private void validateSalesOrderDiscardAllowed(SalesOrderHeader order, String fromStatus, String rejectionMessage) {
+        if (order != null && U9_STATUS_SYNCED.equals(order.getU9SyncStatus())) {
+            throw new RuntimeException("已同步 U9 的销售订单不能废弃。");
+        }
+        if (!QuoteStatusWorkflow.RELEASED.equals(fromStatus)) {
+            throw new RuntimeException(rejectionMessage);
+        }
+    }
+
     private List<SalesOrderItem> listSalesOrderItems(Long salesOrderId) {
         QueryWrapper<SalesOrderItem> query = new QueryWrapper<>();
         query.eq("sales_order_id", salesOrderId).orderByAsc("line_no").orderByAsc("id");
@@ -530,6 +542,9 @@ public class SalesOrderManageService {
         }
         if (ACTION_RESTORE.equals(auditAction)) {
             return QuoteStatusWorkflow.DISCARDED.equals(item.getStatus());
+        }
+        if (ACTION_DISCARD.equals(auditAction)) {
+            return !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus());
         }
         return safeInt(item.getReleasedQty()) == 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())

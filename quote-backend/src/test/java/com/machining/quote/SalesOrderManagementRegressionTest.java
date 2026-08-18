@@ -172,12 +172,12 @@ class SalesOrderManagementRegressionTest {
     }
 
     @Test
-    void quotedSalesOrderCanBeDiscardedAndDiscardedSalesOrderCanBeRestored() {
-        SalesOrderHeader quoted = salesOrder(601L, QuoteStatusWorkflow.QUOTED);
-        SalesOrderItem quotedItem = item(7001L, 601L, QuoteStatusWorkflow.QUOTED, 0);
-        when(headerMapper.selectByIdForUpdate(601L)).thenReturn(quoted);
-        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(quotedItem));
-        when(ticketMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+    void releasedUnsyncedSalesOrderCanBeDiscardedAndRestoredToReleased() {
+        SalesOrderHeader released = salesOrder(601L, QuoteStatusWorkflow.RELEASED);
+        SalesOrderItem releasedItem = item(7001L, 601L, QuoteStatusWorkflow.RELEASED, 1);
+        when(headerMapper.selectByIdForUpdate(601L)).thenReturn(released);
+        when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(releasedItem));
+        when(ticketMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
 
         assertThat(service.discard(601L, reason("customer cancelled")).getToStatus())
                 .isEqualTo(QuoteStatusWorkflow.DISCARDED);
@@ -193,23 +193,32 @@ class SalesOrderManagementRegressionTest {
         when(itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(discardedItem));
 
         assertThat(service.restore(602L, reason("resume")).getToStatus())
-                .isEqualTo(QuoteStatusWorkflow.QUOTED);
+                .isEqualTo(QuoteStatusWorkflow.RELEASED);
         verify(headerMapper).updateById(org.mockito.Mockito.argThat(header ->
-                QuoteStatusWorkflow.QUOTED.equals(header.getStatus())));
+                QuoteStatusWorkflow.RELEASED.equals(header.getStatus())));
         verify(itemMapper).updateById(org.mockito.Mockito.argThat(item ->
-                QuoteStatusWorkflow.QUOTED.equals(item.getStatus())));
+                QuoteStatusWorkflow.RELEASED.equals(item.getStatus())));
         verify(auditService).record(eq("SALES_ORDER_RESTORE"), eq("sales_order_header"), eq(602L), any(), any(), eq("MARKET"), eq("SUCCESS"), any(), isNull());
     }
 
     @Test
-    void releasedSalesOrderStatusesCannotBeDiscarded() {
-        for (String status : List.of(QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED)) {
+    void syncedOrNonReleasedSalesOrdersCannotBeDiscarded() {
+        for (String status : List.of(QuoteStatusWorkflow.QUOTED, QuoteStatusWorkflow.PARTIALLY_RELEASED)) {
             SalesOrderHeader order = salesOrder(701L, status);
             when(headerMapper.selectByIdForUpdate(701L)).thenReturn(order);
 
             assertThatThrownBy(() -> service.discard(701L, reason("blocked")))
-                    .isInstanceOf(RuntimeException.class);
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("只有已生成提单且未同步 U9 的销售订单可以废弃");
         }
+        SalesOrderHeader synced = salesOrder(702L, QuoteStatusWorkflow.RELEASED);
+        synced.setU9SyncStatus("已同步");
+        when(headerMapper.selectByIdForUpdate(702L)).thenReturn(synced);
+
+        assertThatThrownBy(() -> service.discard(702L, reason("blocked")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("已同步 U9 的销售订单不能废弃");
+
         verify(headerMapper, never()).updateById(any());
         verify(itemMapper, never()).updateById(any());
     }
@@ -288,6 +297,7 @@ class SalesOrderManagementRegressionTest {
         order.setCustomerId(88L);
         order.setCustomerName("ACME");
         order.setStatus(status);
+        order.setU9SyncStatus("未同步");
         return order;
     }
 
