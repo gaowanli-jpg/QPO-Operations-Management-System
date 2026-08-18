@@ -93,6 +93,61 @@ mkdir -p /opt/qpo
 scp -r dist/qpo-offline-package-master root@<server-ip>:/opt/qpo/
 ```
 
+从本机连接内网服务器、创建目录、上传并启动的完整衔接流程：
+
+```powershell
+# 1. 在本机 PowerShell 连接服务器；第一次连接提示确认指纹时输入 yes。
+ssh root@<server-ip>
+```
+
+```bash
+# 2. 在服务器上创建部署目录并确认路径。
+mkdir -p /opt/qpo
+cd /opt/qpo
+pwd
+```
+
+如果使用普通用户而不是 `root`：
+
+```bash
+sudo mkdir -p /opt/qpo
+sudo chown -R $USER:$USER /opt/qpo
+cd /opt/qpo
+```
+
+然后退出服务器，回到本机：
+
+```bash
+exit
+```
+
+```powershell
+# 3. 在本机上传整个离线包目录。
+scp -r D:\QPO-Operations-Management-System\dist\qpo-offline-package-local-20260818 root@<server-ip>:/opt/qpo/
+
+# 4. 上传完成后重新登录服务器。
+ssh root@<server-ip>
+```
+
+```bash
+# 5. 进入离线包目录并确认文件齐全。
+cd /opt/qpo/qpo-offline-package-local-20260818
+ls
+```
+
+目录内应能看到：
+
+```text
+qpo-offline-images-local-20260818.tar
+docker-compose.yml
+erp.env.example
+qpo-image.env
+QPO部署说明.md
+scripts
+```
+
+接下来按下方步骤准备 `erp.env` 并执行加载脚本。
+
 服务器首次准备 `erp.env`：
 
 ```bash
