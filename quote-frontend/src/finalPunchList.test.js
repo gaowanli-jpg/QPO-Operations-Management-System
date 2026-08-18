@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 
-const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8').replace(/\r\n/g, '\n')
 const readComponent = (fileName) => readSource('components', fileName)
 
 const componentFiles = () => readdirSync(resolve(currentDir, 'components')).filter((fileName) => fileName.endsWith('.vue'))

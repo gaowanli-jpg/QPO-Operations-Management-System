@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
-const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8').replace(/\r\n/g, '\n')
 
 describe('shared supplement drawing dialog', () => {
   const dialog = readSource('components', 'order', 'SupplementDrawingDialog.vue')

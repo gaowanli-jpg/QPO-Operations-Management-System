@@ -6,7 +6,8 @@ import { collectPdfFilesFromFileList, mergePdfFiles } from './utils/drawingUploa
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 
-const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
+const normalizeSource = (source) => source.replace(/\r\n/g, '\n')
+const readSource = (...segments) => normalizeSource(readFileSync(resolve(currentDir, ...segments), 'utf8'))
 const readComponent = (fileName) => readSource('components', fileName)
 const importDrawingPanelPath = resolve(currentDir, 'components', 'import', 'ImportDrawingUploadPanel.vue')
 const supplementDrawingDialogPath = resolve(currentDir, 'components', 'order', 'SupplementDrawingDialog.vue')
@@ -28,7 +29,7 @@ describe('drawing upload workflow parity', () => {
 
   test('shared drawing upload panel exposes drop, file, folder, and remove controls', () => {
     expect(existsSync(importDrawingPanelPath)).toBe(true)
-    const source = readFileSync(importDrawingPanelPath, 'utf8')
+    const source = normalizeSource(readFileSync(importDrawingPanelPath, 'utf8'))
 
     expect(source).toContain('@drop.prevent="handleDrop"')
     expect(source).toContain('ref="fileInput"')
@@ -47,7 +48,7 @@ describe('drawing upload workflow parity', () => {
   })
 
   test('shared drawing upload panel keeps paired entrances equal height and action buttons aligned', () => {
-    const panel = readFileSync(importDrawingPanelPath, 'utf8')
+    const panel = normalizeSource(readFileSync(importDrawingPanelPath, 'utf8'))
     const marketDashboard = readComponent('MarketDashboard.vue')
 
     expect(panel).toContain('.import-drawing-upload-panel {\n  display: flex')
@@ -74,7 +75,7 @@ describe('drawing upload workflow parity', () => {
 
   test('order supplement supports paired part and part-version drawing entrances', () => {
     const orderSource = readComponent('OrderManage.vue')
-    const source = readFileSync(supplementDrawingDialogPath, 'utf8')
+    const source = normalizeSource(readFileSync(supplementDrawingDialogPath, 'utf8'))
 
     expect(orderSource).toContain('<SupplementDrawingDialog')
     expect(orderSource).toContain('v-model:files="supplementFiles"')
