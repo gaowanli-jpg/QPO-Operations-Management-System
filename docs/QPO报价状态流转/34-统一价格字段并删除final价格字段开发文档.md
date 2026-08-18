@@ -223,7 +223,7 @@ tax_included_total_price = ROUND(tax_included_unit_price * qty, 2)
 
 ### 5.5 索引替换
 
-现有重复件索引 `idx_item_quote_version_repeat_released_key` 的条件使用了 `final_unit_price`。迁移中先删除该索引，再重建为：
+当时现有重复件索引 `idx_item_quote_version_repeat_released_key` 的条件使用了 `final_unit_price`。该阶段迁移中先删除该索引，再重建为：
 
 ```sql
 CREATE INDEX idx_item_quote_version_repeat_released_key
@@ -234,7 +234,7 @@ CREATE INDEX idx_item_quote_version_repeat_released_key
       AND process_route IS NOT NULL;
 ```
 
-索引名称保持不变，避免运维监控和性能检查口径产生额外变化。
+索引名称在该阶段保持不变，避免当时的运维监控和性能检查口径产生额外变化。现行重复件候选口径已由 `V14__repeat_match_eligible_flag.sql` 改为 `idx_item_quote_version_repeat_eligible_key` 和 `repeat_match_eligible IS TRUE`。
 
 ### 5.6 破坏性迁移要求
 
@@ -538,7 +538,7 @@ docs/QPO日志模块/04-主流程文件日志规范化开发文档.md
 4. 金额不一致时，迁移失败且事务回滚。
 5. 含税单价存在、含税金额为空时，按数量补齐含税金额。
 6. 迁移后四个 `final_*` 字段不存在。
-7. `idx_item_quote_version_repeat_released_key` 使用 `tax_included_unit_price IS NOT NULL`。
+7. 该阶段的 `idx_item_quote_version_repeat_released_key` 使用 `tax_included_unit_price IS NOT NULL`；现行索引已由 V14 替换为 `idx_item_quote_version_repeat_eligible_key`。
 
 ### 9.2 后端测试
 

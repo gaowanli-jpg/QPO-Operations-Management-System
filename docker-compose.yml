@@ -50,6 +50,7 @@ services:
     cpus: "${POSTGRES_CPUS:-1.0}"
 
   backend:
+    image: qpo-backend:${QPO_IMAGE_TAG:-latest}
     build:
       context: ./quote-backend
     container_name: quote-backend
@@ -158,6 +159,7 @@ services:
       - no-new-privileges:true
 
   frontend:
+    image: qpo-frontend:${QPO_IMAGE_TAG:-latest}
     build:
       context: ./quote-frontend
       args:

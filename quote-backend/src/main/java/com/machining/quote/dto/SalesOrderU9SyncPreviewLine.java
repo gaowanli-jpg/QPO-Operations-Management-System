@@ -31,8 +31,6 @@ public class SalesOrderU9SyncPreviewLine {
     private String materialNo;
     private String materialNoStatus;
     private Integer qty;
-    private Integer shippedQty;
-    private Integer unshippedQty;
     private BigDecimal taxIncludedUnitPrice;
     private BigDecimal taxIncludedTotalPrice;
     private BigDecimal untaxedUnitPrice;

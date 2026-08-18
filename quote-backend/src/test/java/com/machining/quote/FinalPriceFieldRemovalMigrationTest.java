@@ -34,7 +34,7 @@ class FinalPriceFieldRemovalMigrationTest {
                         "untaxed_total_price numeric")
                 .doesNotContain("final_unit_price", "final_total_price");
         assertThat(schema)
-                .contains("idx_item_quote_version_repeat_released_key")
+                .contains("idx_item_quote_version_repeat_eligible_key")
                 .contains("tax_included_unit_price IS NOT NULL")
                 .doesNotContain("final_unit_price", "final_total_price");
     }

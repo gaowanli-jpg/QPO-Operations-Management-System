@@ -336,6 +336,7 @@ abstract class SalesOrderQpoImportTestSupport {
         source.setPartNo("P-MATCH");
         source.setVersion("A");
         source.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
+        source.setRepeatMatchEligible(true);
         source.setMaterialName("historical imported material");
         source.setMaterialNo("MAT-HIST-001");
         source.setMaterialNoStatus("已确认");

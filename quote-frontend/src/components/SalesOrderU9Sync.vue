@@ -508,12 +508,6 @@
               <span v-else>{{ formatDate(row.internalDeliveryDate) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="shippedQty" label="已出数量" width="90" align="right">
-            <template #default="{ row }">{{ numberOrZero(row.shippedQty) }}</template>
-          </el-table-column>
-          <el-table-column prop="unshippedQty" label="未出数量" width="90" align="right">
-            <template #default="{ row }">{{ numberOrZero(row.unshippedQty) }}</template>
-          </el-table-column>
           <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
           <el-table-column prop="materialName" label="材料" min-width="110" show-overflow-tooltip />
           <el-table-column prop="engineeringMaterialCode" label="材料编码" min-width="120" show-overflow-tooltip />

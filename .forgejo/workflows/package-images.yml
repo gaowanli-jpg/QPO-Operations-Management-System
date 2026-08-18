@@ -1,0 +1,74 @@
+name: Package offline Docker images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Optional image tag. Defaults to tag name, master, or short commit sha."
+        required: false
+      include_minio:
+        description: "Set to true to include minio/minio:latest in the offline tar."
+        required: false
+        default: "false"
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+      - "V*"
+      - "release-*"
+      - "qpo-*"
+
+permissions:
+  contents: read
+
+jobs:
+  package-images:
+    name: Build and export offline image package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          input_tag="${{ github.event.inputs.image_tag }}"
+          if [[ -n "$input_tag" ]]; then
+            tag="$input_tag"
+          elif [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          elif [[ "${GITHUB_REF_NAME:-}" == "master" ]]; then
+            tag="master"
+          else
+            tag="${GITHUB_SHA::12}"
+          fi
+
+          tag="$(printf '%s' "$tag" | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//' | cut -c1-120)"
+          if [[ -z "$tag" ]]; then
+            tag="latest"
+          fi
+
+          echo "IMAGE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "PACKAGE_DIR=dist/qpo-offline-package-$tag" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=qpo-offline-images-$tag" >> "$GITHUB_ENV"
+          echo "Resolved IMAGE_TAG=$tag"
+
+      - name: Build offline image package
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--image-tag "$IMAGE_TAG" --output-dir "$PACKAGE_DIR")
+          if [[ "${{ github.event.inputs.include_minio }}" == "true" ]]; then
+            args+=(--include-minio)
+          fi
+          bash scripts/package-offline-images.sh "${args[@]}"
+
+      - name: Upload offline image package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.PACKAGE_DIR }}
+          if-no-files-found: error
+          retention-days: 30

@@ -1607,14 +1607,22 @@ const openQuoteDialog = async (row) => {
   matForm.inR = toMetricDimension(savedDimensions.inR, savedDimensionUnit)
   matForm.netWeight = numberOrNullForInput(row.partNetWeight ?? savedMaterialData.netWeight)
 
+  const loadGlobalProcessRouteDefaults = () => {
+    if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
+      processRoute.value = assignProcessSortNos(normalizeRouteList(globalConfig.value.processRoute)
+        .map(p => hydrateRouteItem(createProcessRow(p))))
+    } else {
+      processRoute.value = []
+    }
+  }
+
   const savedProcessRoutes = normalizeRouteList(row.processRoute)
-  if (savedProcessRoutes.length > 0) {
+  const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0
+  if (shouldUseSavedProcessRoutes) {
     processRoute.value = assignProcessSortNos(savedProcessRoutes.map(route => hydrateRouteItem(createProcessRow(route))))
-  } else if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
-    processRoute.value = assignProcessSortNos(normalizeRouteList(globalConfig.value.processRoute)
-      .map(p => hydrateRouteItem(createProcessRow(p))))
   } else {
-    processRoute.value = []
+    // 组合件的 processRoute 是后端保存的“组装费”快照，不能回灌到普通件工艺模板状态。
+    loadGlobalProcessRouteDefaults()
   }
 
   if (quoteMode.value === 'ASSEMBLY') {

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 const FALLBACK_KEY = 'erp_global_config'
 const rfqConfigKey = (rfqId) => `erp_global_config_${rfqId}`
 const PROCESS_SORT_STEP = 10
+const ASSEMBLY_FEE_PROCESS_NAME = '组装费'
 
 export const defaultGlobalConfig = () => ({
   materialCode: '',
@@ -39,6 +40,12 @@ const resolveProcessDetailId = (item = {}) => numericOrOriginal(
 )
 
 const resolveSourceType = (item = {}) => item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process')
+
+const isAssemblyFeeRoute = (item = {}) => {
+  const sourceType = resolveSourceType(item)
+  const processName = String(item.processName || item.detailName || item.feeName || '').trim()
+  return sourceType === 'extra' && processName === ASSEMBLY_FEE_PROCESS_NAME
+}
 
 const normalizeProcessOptionKey = (item = {}, sourceType = resolveSourceType(item)) => {
   if (sourceType === 'process') {
@@ -102,7 +109,9 @@ export const normalizeRouteList = (route) => {
       return list
     }
   }
-  return sortRouteList(Array.isArray(list) ? list : []).map(normalizeRouteItem)
+  return sortRouteList(Array.isArray(list) ? list : [])
+    .filter(item => !isAssemblyFeeRoute(item))
+    .map(normalizeRouteItem)
 }
 
 export const hasLegacyProcessIdentity = (configOrRoutes) => {
@@ -162,12 +171,16 @@ export const useGlobalConfigStore = defineStore('globalConfig', {
     loadLocalConfig(rfqId) {
       const key = String(rfqId || '')
       this.currentRfqId = key
-      const rawConfig = (key ? readLocalConfig(rfqConfigKey(key)) : null) || readLocalConfig(FALLBACK_KEY)
+      const rawSpecificConfig = key ? readLocalConfig(rfqConfigKey(key)) : null
+      const rawFallbackConfig = readLocalConfig(FALLBACK_KEY)
+      const rawConfig = rawSpecificConfig || rawFallbackConfig
       const config = normalizeGlobalConfig(rawConfig)
       if (key) {
         this.configByRfqId[key] = config
       }
-      this.fallbackConfig = config
+      if (!key || !rawSpecificConfig) {
+        this.fallbackConfig = config
+      }
       return config
     },
 
@@ -176,6 +189,7 @@ export const useGlobalConfigStore = defineStore('globalConfig', {
       const key = String(rfqId || '')
       if (key) {
         localStorage.setItem(rfqConfigKey(key), JSON.stringify(normalized))
+        return normalized
       }
       localStorage.setItem(FALLBACK_KEY, JSON.stringify(normalized))
       return normalized
@@ -187,8 +201,9 @@ export const useGlobalConfigStore = defineStore('globalConfig', {
       if (key) {
         this.currentRfqId = key
         this.configByRfqId[key] = normalized
+      } else {
+        this.fallbackConfig = normalized
       }
-      this.fallbackConfig = normalized
       return normalized
     },
 

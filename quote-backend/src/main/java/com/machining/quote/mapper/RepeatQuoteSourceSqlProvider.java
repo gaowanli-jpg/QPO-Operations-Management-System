@@ -1,6 +1,5 @@
 package com.machining.quote.mapper;
 
-import com.machining.quote.domain.QuoteStatusWorkflow;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +19,6 @@ public class RepeatQuoteSourceSqlProvider {
                     .append(i).append("].version})");
         }
 
-        String releasedStatus = QuoteStatusWorkflow.ITEM_RELEASED.replace("'", "''");
         String currentRfqFilter = params.get("currentRfqId") == null ? "" : "\n                      AND h.rfq_id <> #{currentRfqId}";
         return """
                 WITH current_keys(part_no, version) AS (
@@ -34,7 +32,7 @@ public class RepeatQuoteSourceSqlProvider {
                     WHERE h.part_no = k.part_no
                       AND h.version = k.version
                       %s
-                      AND h.status = '%s'
+                      AND h.repeat_match_eligible = TRUE
                       AND h.tax_included_unit_price IS NOT NULL
                       AND h.material_data IS NOT NULL
                       AND h.material_data <> '{}'::jsonb
@@ -44,6 +42,6 @@ public class RepeatQuoteSourceSqlProvider {
                     LIMIT 1
                 ) h ON true
                 ORDER BY h.id DESC
-                """.formatted(values, currentRfqFilter, releasedStatus);
+                """.formatted(values, currentRfqFilter);
     }
 }

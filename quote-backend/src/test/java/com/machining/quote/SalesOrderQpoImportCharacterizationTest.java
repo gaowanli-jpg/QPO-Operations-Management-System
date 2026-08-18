@@ -45,7 +45,7 @@ class SalesOrderQpoImportCharacterizationTest {
     }
 
     @Test
-    void repeatSourceSqlUsesOnlyReleasedRfqItemQuoteVersionsAndAllowsSalesOrderLookupWithoutCurrentRfq() {
+    void repeatSourceSqlUsesReleasedOrTicketedRfqItemQuoteVersionsAndAllowsSalesOrderLookupWithoutCurrentRfq() {
         RepeatQuoteSourceSqlProvider provider = new RepeatQuoteSourceSqlProvider();
 
         Map<String, Object> salesOrderLookupParams = new HashMap<>();
@@ -54,7 +54,9 @@ class SalesOrderQpoImportCharacterizationTest {
         String salesOrderLookupSql = provider.selectLatestReleasedRepeatSources(salesOrderLookupParams);
         assertThat(salesOrderLookupSql)
                 .contains("FROM item_quote_version h")
-                .contains("h.status = '\u5df2\u63d0\u5355'")
+                .contains("h.repeat_match_eligible = TRUE")
+                .doesNotContain("order_delivery_ticket")
+                .doesNotContain("EXISTS (")
                 .contains("ORDER BY h.id DESC")
                 .contains("LIMIT 1")
                 .doesNotContain("sales_order_item")

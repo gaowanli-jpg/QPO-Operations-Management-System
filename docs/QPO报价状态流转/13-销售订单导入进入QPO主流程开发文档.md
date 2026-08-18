@@ -290,7 +290,7 @@ Content-Type: multipart/form-data
 图号 + 版本
 ```
 
-重复源仍使用“已提单历史零件”口径：
+重复源使用“已提单状态或已生成提单行历史零件”口径：
 
 - 历史零件 `status = 已提单`。
 - 历史零件有 `tax_included_unit_price`。

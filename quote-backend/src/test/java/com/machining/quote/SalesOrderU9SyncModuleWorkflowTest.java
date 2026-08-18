@@ -176,8 +176,6 @@ class SalesOrderU9SyncModuleWorkflowTest {
                     assertThat(line.getSalesMaterialNo()).isEqualTo(ready.getSalesMaterialNo());
                     assertThat(line.getCustomerDeliveryDate()).isEqualTo(ready.getCustomerDeliveryDate());
                     assertThat(line.getInternalDeliveryDate()).isEqualTo(ready.getInternalDeliveryDate());
-                    assertThat(line.getShippedQty()).isEqualTo(ready.getShippedQty());
-                    assertThat(line.getUnshippedQty()).isEqualTo(ready.getUnshippedQty());
                     assertThat(line.getDescription()).isEqualTo(ready.getDescription());
                     assertThat(line.getMaterialName()).isEqualTo(ready.getMaterialName());
                     assertThat(line.getSurfaceTreatment()).isEqualTo(ready.getSurfaceTreatment());
@@ -203,7 +201,9 @@ class SalesOrderU9SyncModuleWorkflowTest {
                         "materialNoSource",
                         "materialNoSourceTicketId",
                         "orderType",
-                        "salesMaterialNoSource");
+                        "salesMaterialNoSource",
+                        "shippedQty",
+                        "unshippedQty");
         verify(fixture.dataScopeService).assertCanAccessSalesOrder(header);
         verify(fixture.headerMapper, never()).updateById(any());
         verify(fixture.itemMapper, never()).updateById(any());
@@ -214,7 +214,9 @@ class SalesOrderU9SyncModuleWorkflowTest {
                 .doesNotContain("SOLineDTOList")
                 .doesNotContain("SOShiplineDTOList")
                 .doesNotContain("U9SalesOrderHeadDTO")
-                .doesNotContain("requestJson");
+                .doesNotContain("requestJson")
+                .doesNotContain("shippedQty")
+                .doesNotContain("unshippedQty");
     }
 
     @Test

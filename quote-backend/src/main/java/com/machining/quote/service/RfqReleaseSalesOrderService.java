@@ -518,6 +518,7 @@ public class RfqReleaseSalesOrderService {
 
     private void refreshItemTicketStatus(ItemQuoteVersion item) {
         int generatedQty = ticketedQty(item);
+        item.setRepeatMatchEligible(Boolean.TRUE.equals(item.getRepeatMatchEligible()) || generatedQty > 0);
         if (generatedQty <= 0) {
             item.setStatus(item.getTaxIncludedUnitPrice() == null
                     ? QuoteStatusWorkflow.UNPRICED : QuoteStatusWorkflow.QUOTED);

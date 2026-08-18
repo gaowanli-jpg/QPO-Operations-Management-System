@@ -1,6 +1,8 @@
 package com.machining.quote;
 
 import com.machining.quote.dto.QuoteSubmitReq;
+import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.EngineerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -10,6 +12,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class EngineerServiceProcessSortTests {
 
@@ -73,6 +80,29 @@ class EngineerServiceProcessSortTests {
         assertThat(firstSignature).isNotEqualTo(secondSignature);
         assertThat(firstSignature).contains("process-detail:7");
         assertThat(secondSignature).contains("process-detail:8");
+    }
+
+    @Test
+    void orderEngineerConfigRejectsAssemblyFeeProcessRouteSnapshots() {
+        EngineerService service = new EngineerService();
+        OrderRfqMapper orderMapper = mock(OrderRfqMapper.class);
+        OrderRfq order = new OrderRfq();
+        order.setId(12);
+        when(orderMapper.selectByIdForUpdate(12)).thenReturn(order);
+        ReflectionTestUtils.setField(service, "orderMapper", orderMapper);
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("processRoute", List.of(Map.of(
+                "sortNo", 10,
+                "processName", "组装费",
+                "calcType", "非工时费用",
+                "sourceType", "extra"
+        )));
+
+        assertThatThrownBy(() -> service.saveOrderEngineerConfig(12, config))
+                .hasMessageContaining("组装费")
+                .hasMessageContaining("全局工艺");
+        verify(orderMapper, never()).updateById(order);
     }
 
     private Map<String, Object> route(int sortNo, long processDetailId, String detailName, double unitWorkHours) {

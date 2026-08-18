@@ -45,7 +45,7 @@ describe('Stage 38 process route frontend contract', () => {
       expect.objectContaining({ sortNo: 20, optionKey: 'process-detail-2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', legacyProcessIdentity: false })
     ])
     expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config_38', expect.stringContaining('processDetailId'))
-    expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config', expect.stringContaining('process-detail-1'))
+    expect(localStorage.setItem).not.toHaveBeenCalledWith('erp_global_config', expect.stringContaining('process-detail-1'))
   })
 
   test('normalizeRouteList sorts routes and marks old processName-only identities', () => {
@@ -76,7 +76,8 @@ describe('Stage 38 process route frontend contract', () => {
     expect(itemPricing).toContain('unitWorkHours: p.inputVal')
     expect(comparableBlock).toContain('processDetailId: sourceType === \'process\' ? (p.processDetailId ?? null) : null')
     expect(comparableBlock).toContain('processName: p.processName || \'\'')
-    expect(openDialogBlock).toContain('if (savedProcessRoutes.length > 0)')
+    expect(openDialogBlock).toContain("const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0")
+    expect(openDialogBlock).toContain('if (shouldUseSavedProcessRoutes)')
     expect(itemPricing).not.toContain('return `${sourceType}::${route.processName || \'\'}`')
     expect(itemPricing).not.toContain('mergeRoutesByGlobalOrder')
 

@@ -284,7 +284,9 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         assertThat(firstBatch).hasSize(1);
         assertThat(firstBatch.get(0).getQty()).isEqualTo(4);
         assertThat(firstBatch.get(0).getOrderType()).isEqualTo("预测订单");
-        assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        ItemQuoteVersion partiallyReleasedItem = itemMapper.selectById(item.getId());
+        assertThat(partiallyReleasedItem.getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(partiallyReleasedItem.getRepeatMatchEligible()).isTrue();
         assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PARTIALLY_RELEASED);
 
         List<OrderDeliveryTicket> secondBatch = deliveryService.generateTickets(deliveryReq(order, item, 6, "正式订单"));

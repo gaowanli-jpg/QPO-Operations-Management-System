@@ -76,6 +76,7 @@ public class ItemQuoteVersion {
     private Double taxIncludedTotalPrice;
     private Double untaxedUnitPrice;
     private Double untaxedTotalPrice;
+    private Boolean repeatMatchEligible;
     @Deprecated
     private Integer shippedQty;
     @Deprecated

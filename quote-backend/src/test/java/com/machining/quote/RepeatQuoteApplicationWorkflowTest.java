@@ -87,6 +87,8 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         ticket.setQty(1);
         ticket.setArrangeType("计划");
         ticketMapper.insert(ticket);
+        historicalItem.setRepeatMatchEligible(true);
+        itemMapper.updateById(historicalItem);
 
         OrderRfq currentOrder = new OrderRfq();
         currentOrder.setRfqNo("CUR-" + System.nanoTime());
@@ -247,12 +249,12 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
     }
 
     @Test
-    void repeatQuoteIgnoresNonReleasedHistoryEvenWhenDeliveryTicketExists() {
-        String customerName = "非已提单重复客户-" + System.nanoTime();
+    void repeatQuoteReusesTicketedHistoryEvenWhenItemStatusStillQuoted() {
+        String customerName = "部分已提单重复客户-" + System.nanoTime();
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-NON-REL-" + System.nanoTime());
         historicalOrder.setCustomerName(customerName);
-        historicalOrder.setStatus(QuoteStatusWorkflow.QUOTED);
+        historicalOrder.setStatus(QuoteStatusWorkflow.PARTIALLY_RELEASED);
         orderMapper.insert(historicalOrder);
         ItemQuoteVersion historicalItem = reusableItem(historicalOrder, "NONREL-100", "A", 20.0, QuoteStatusWorkflow.QUOTED);
 
@@ -264,6 +266,8 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         ticket.setQty(1);
         ticket.setArrangeType("计划");
         ticketMapper.insert(ticket);
+        historicalItem.setRepeatMatchEligible(true);
+        itemMapper.updateById(historicalItem);
 
         OrderRfq currentOrder = new OrderRfq();
         currentOrder.setRfqNo("CUR-NON-REL-" + System.nanoTime());
@@ -275,13 +279,11 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
-        assertThat(result.get("appliedCount")).isEqualTo(0);
-        assertThat(saved.getTaxIncludedUnitPrice()).isNull();
-        assertThat(saved.getStatus()).isEqualTo("待核价");
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> skippedItems = (List<Map<String, Object>>) result.get("skippedItems");
-        assertThat(skippedItems).extracting(row -> row.get("reason").toString())
-                .contains("未找到已提单历史重复件");
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
+        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(saved.getMaterialData()).isNotNull();
+        assertThat(saved.getProcessRoute()).isNotNull();
     }
 
     @Test
@@ -342,6 +344,8 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         ticket.setQty(1);
         ticket.setArrangeType("计划");
         ticketMapper.insert(ticket);
+        historicalItem.setRepeatMatchEligible(true);
+        itemMapper.updateById(historicalItem);
 
         OrderRfq currentOrder = new OrderRfq();
         currentOrder.setRfqNo("CUR-AUTO-" + System.nanoTime());

@@ -42,7 +42,7 @@ describe('Stage 38 phase 6 item pricing process route payload', () => {
     expect(source).not.toContain('mergeRoutesByGlobalOrder')
   })
 
-  test('ItemPricing opens existing quoted items with their saved process route before global defaults', () => {
+  test('ItemPricing opens existing normal quoted items with their saved process route before global defaults', () => {
     const source = readSource('components', 'ItemPricing.vue')
     const openDialogBlock = source.slice(
       source.indexOf('const openQuoteDialog'),
@@ -50,11 +50,28 @@ describe('Stage 38 phase 6 item pricing process route payload', () => {
     )
 
     expect(openDialogBlock).toContain('const savedProcessRoutes = normalizeRouteList(row.processRoute)')
-    expect(openDialogBlock).toContain('if (savedProcessRoutes.length > 0)')
+    expect(openDialogBlock).toContain("const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0")
+    expect(openDialogBlock).toContain('if (shouldUseSavedProcessRoutes)')
     expect(openDialogBlock).toContain('processRoute.value = assignProcessSortNos(savedProcessRoutes.map(route => hydrateRouteItem(createProcessRow(route))))')
-    expect(openDialogBlock.indexOf('if (savedProcessRoutes.length > 0)')).toBeLessThan(
-      openDialogBlock.indexOf('globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0')
+    expect(openDialogBlock.indexOf('if (shouldUseSavedProcessRoutes)')).toBeLessThan(
+      openDialogBlock.indexOf('loadGlobalProcessRouteDefaults()')
     )
     expect(openDialogBlock).not.toContain('mergeRoutesByGlobalOrder(row.processRoute, globalConfig.value.processRoute)')
+  })
+
+  test('ItemPricing does not load assembly fee snapshots into the normal process route state', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+    const openDialogBlock = source.slice(
+      source.indexOf('const openQuoteDialog'),
+      source.indexOf('// 智能计算材料费')
+    )
+
+    expect(openDialogBlock).toContain("const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0")
+    expect(openDialogBlock).toContain('if (shouldUseSavedProcessRoutes)')
+    expect(openDialogBlock).toContain('loadGlobalProcessRouteDefaults()')
+    expect(openDialogBlock).toContain("if (quoteMode.value === 'ASSEMBLY')")
+    expect(openDialogBlock.indexOf('if (shouldUseSavedProcessRoutes)')).toBeLessThan(
+      openDialogBlock.indexOf('loadGlobalProcessRouteDefaults()')
+    )
   })
 })

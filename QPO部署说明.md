@@ -25,6 +25,99 @@ docker compose --env-file erp.env up -d --build
 - 前端：`http://localhost:8088`
 - 后端健康检查：`http://localhost:8080/api/health`
 
+## 离线Docker镜像包部署
+QPO 支持把前端、后端和基础依赖镜像打成一个离线 `tar` 包，用于内网隔离环境部署。这个方案不依赖部署服务器联网；部署服务器只需要 Docker、Docker Compose、`erp.env` 和离线镜像包。
+
+### 镜像标签规则
+- `master` 分支打包时使用镜像标签 `master`，代表当前主干最新版。
+- 给 `master` 上的正式发布 commit 打 Git tag 时，使用 tag 名称作为镜像标签，便于 QA / 正式环境回滚。
+- 手动打包可通过参数指定镜像标签；未指定时脚本会按“当前 Git tag > master/main 分支名 > 短 commit sha”的顺序自动推断。
+
+### Forgejo Actions打包
+仓库内置 `.forgejo/workflows/package-images.yml`。Linux + Docker runner 可在以下场景自动生成离线包附件：
+
+- push 到 `master`。
+- push `v*`、`V*`、`release-*`、`qpo-*` tag。
+- 在 Actions 页面手动触发 workflow，并可指定 `image_tag`。
+
+Actions runner 需要满足：
+
+- 能执行 Docker CLI，并能访问 Docker daemon。
+- 能拉取构建基础镜像和依赖镜像，例如 `maven:3.9-eclipse-temurin-17`、`eclipse-temurin:17-jre`、`node:22-alpine`、`nginx:1.27-alpine`、`postgres:15`。
+- 能下载或已缓存 `actions/checkout`、`actions/upload-artifact`。如果公司 Forgejo 无法访问外部 Actions，需要平台管理员配置镜像源或本地 Action 缓存。
+
+workflow 产物目录包含：
+
+- `qpo-offline-images-<tag>.tar`：Docker 离线镜像包。
+- `docker-compose.yml`：离线启动使用的 Compose 文件。
+- `erp.env.example`：环境变量模板，不包含真实密钥。
+- `qpo-image.env`：本次包的镜像标签摘要。
+- `qpo-offline-package-manifest.json`：镜像清单。
+- `scripts/load-offline-images.ps1` / `scripts/load-offline-images.sh`：离线加载和启动脚本。
+
+### 本机打包兜底
+如果 Forgejo Actions 暂时走不通，可在本机或任意可联网的 Docker 构建机直接打包，生成的产物与 Actions 产物一致。
+
+Windows PowerShell：
+
+```powershell
+cd D:\QPO-Operations-Management-System
+powershell -ExecutionPolicy Bypass -File .\scripts\package-offline-images.ps1 -ImageTag master
+```
+
+Linux：
+
+```bash
+cd /path/to/QPO-Operations-Management-System
+bash scripts/package-offline-images.sh --image-tag master
+```
+
+如需把可选 MinIO 镜像也放入离线包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-offline-images.ps1 -ImageTag master -IncludeMinio
+```
+
+生成目录默认在 `dist/qpo-offline-package-<tag>/`，该目录已加入 `.gitignore`，不要提交离线镜像包。
+
+### 内网服务器加载和启动
+把 `dist/qpo-offline-package-<tag>/` 整个目录复制到内网服务器。首次部署时，在该目录下根据 `erp.env.example` 准备真实 `erp.env`，填写数据库密码、JWT 密钥、MES/WMS/U9 等真实配置。不要把真实 `erp.env` 回传或提交到仓库。
+
+Linux 部署服务器：
+
+```bash
+cd /opt/qpo/qpo-offline-package-master
+bash scripts/load-offline-images.sh
+```
+
+Windows 部署服务器：
+
+```powershell
+cd D:\qpo\qpo-offline-package-master
+powershell -ExecutionPolicy Bypass -File .\scripts\load-offline-images.ps1
+```
+
+脚本会先执行 `docker load -i qpo-offline-images-<tag>.tar`，再设置 `QPO_IMAGE_TAG=<tag>` 并执行：
+
+```bash
+docker compose --env-file erp.env up -d --no-build
+```
+
+如果只想加载镜像、不启动服务：
+
+```bash
+bash scripts/load-offline-images.sh --no-start
+```
+
+如需同时启动 Compose 的 MinIO profile：
+
+```bash
+bash scripts/load-offline-images.sh --include-minio
+```
+
+### 回滚
+正式环境建议使用 Git tag 产物部署。需要回滚时，把目标版本的离线包上传到服务器，重新执行加载脚本即可。Compose 会按该包内 `qpo-image.env` 的 `QPO_IMAGE_TAG` 启动对应版本镜像；数据库迁移仍由后端 Flyway 管理，涉及数据库结构降级时需先做备份和人工评估。
+
 ## 环境变量文件
 在部署机器上把 `erp.env.example` 复制成 `erp.env`，然后修改生产配置：
 

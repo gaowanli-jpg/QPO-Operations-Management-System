@@ -41,6 +41,7 @@ public class EngineerService {
     private static final Logger log = LoggerFactory.getLogger(EngineerService.class);
     private static final String QUOTE_MODE_NORMAL = "NORMAL";
     private static final String QUOTE_MODE_ASSEMBLY = "ASSEMBLY";
+    private static final String ASSEMBLY_FEE_PROCESS_NAME = "组装费";
     private static final int REPEAT_SOURCE_KEY_BATCH_SIZE = 500;
 
     @Autowired
@@ -928,12 +929,42 @@ public class EngineerService {
     @Transactional
     public void saveOrderEngineerConfig(Integer rfqId, Map<String, Object> config) {
         OrderRfq order = requireOrderForUpdate(rfqId);
+        validateOrderEngineerConfig(config);
         Object before = order.getEngineerConfig();
         order.setEngineerConfig(config == null ? Map.of() : config);
         orderMapper.updateById(order);
         auditService.record("ORDER_ENGINEER_CONFIG_SAVE", "order_rfq", rfqId, before, order.getEngineerConfig());
         log.info("Order engineer config saved rfqId={} configKeys={}",
                 rfqId, config == null ? Set.of() : config.keySet());
+    }
+
+    private void validateOrderEngineerConfig(Map<String, Object> config) {
+        if (config == null) {
+            return;
+        }
+        for (Map<String, Object> route : normalizeProcessRoute(config.get("processRoute"))) {
+            if (isAssemblyFeeProcessRoute(route)) {
+                throw new RuntimeException("订单全局工艺模板不能包含组装费；组装件请在组合件核价区单独维护组装费");
+            }
+        }
+    }
+
+    private boolean isAssemblyFeeProcessRoute(Map<String, Object> route) {
+        if (route == null) {
+            return false;
+        }
+        String sourceType = stringValue(route.get("sourceType"));
+        String calcType = stringValue(route.get("calcType"));
+        String processName = stringValue(route.get("processName"));
+        if (processName == null) {
+            processName = stringValue(route.get("detailName"));
+        }
+        if (processName == null) {
+            processName = stringValue(route.get("feeName"));
+        }
+        return "extra".equalsIgnoreCase(sourceType)
+                && "非工时费用".equals(calcType)
+                && ASSEMBLY_FEE_PROCESS_NAME.equals(processName == null ? "" : processName.trim());
     }
 
     private ItemQuoteVersion copyItem(ItemQuoteVersion source) {
@@ -1126,7 +1157,7 @@ public class EngineerService {
 
     private boolean hasReusableQuote(ItemQuoteVersion item) {
         return item != null
-                && QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
+                && Boolean.TRUE.equals(item.getRepeatMatchEligible())
                 && item.getTaxIncludedUnitPrice() != null
                 && item.getMaterialData() != null
                 && item.getProcessRoute() != null;

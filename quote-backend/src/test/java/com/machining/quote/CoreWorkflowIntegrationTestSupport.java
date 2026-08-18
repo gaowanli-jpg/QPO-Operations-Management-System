@@ -140,6 +140,7 @@ abstract class CoreWorkflowIntegrationTestSupport {
         item.setTaxIncludedUnitPrice(unitPrice);
         item.setTaxIncludedTotalPrice(unitPrice);
         item.setStatus(status);
+        item.setRepeatMatchEligible(QuoteStatusWorkflow.ITEM_RELEASED.equals(status));
         itemMapper.insert(item);
         return itemMapper.selectById(item.getId());
     }

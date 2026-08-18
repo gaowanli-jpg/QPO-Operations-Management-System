@@ -528,8 +528,6 @@ public class SalesOrderU9SyncService {
         line.setMaterialNo(item.getMaterialNo());
         line.setMaterialNoStatus(item.getMaterialNoStatus());
         line.setQty(item.getQty());
-        line.setShippedQty(item.getShippedQty());
-        line.setUnshippedQty(item.getUnshippedQty());
         line.setTaxIncludedUnitPrice(item.getTaxIncludedUnitPrice());
         line.setTaxIncludedTotalPrice(item.getTaxIncludedTotalPrice());
         line.setUntaxedUnitPrice(item.getUntaxedUnitPrice());

@@ -57,7 +57,7 @@ describe('globalConfigStore', () => {
     store.setConfig(15, { materialName: '40Cr', shape: '棒材', processRoute: [] })
 
     expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config_15', expect.stringContaining('40Cr'))
-    expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config', expect.stringContaining('40Cr'))
+    expect(localStorage.setItem).not.toHaveBeenCalledWith('erp_global_config', expect.stringContaining('40Cr'))
   })
 
   test('applyEngineerConfig overwrites cached config with backend config', () => {
@@ -68,5 +68,14 @@ describe('globalConfigStore', () => {
 
     expect(config.materialName).toBe('server')
     expect(store.getConfig(16).shape).toBe('管材')
+  })
+
+  test('normalizes assembly fee snapshots out of global process templates', () => {
+    const config = normalizeRouteList([
+      { sortNo: 10, processName: '组装费', calcType: '非工时费用', sourceType: 'extra' },
+      { sortNo: 20, processDetailId: 7, processName: 'CNC1', calcType: '工时', sourceType: 'process' }
+    ])
+
+    expect(config.map(item => item.processName)).toEqual(['CNC1'])
   })
 })

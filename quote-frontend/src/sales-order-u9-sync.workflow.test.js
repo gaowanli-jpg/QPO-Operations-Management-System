@@ -197,8 +197,6 @@ describe('sales order U9 sync module', () => {
       'label="内部项目号"',
       'label="客户交期"',
       'label="内部交期(给生产的交期)"',
-      'label="已出数量"',
-      'label="未出数量"',
       'label="描述"',
       'label="材料"',
       'label="表面处理"',
@@ -217,6 +215,10 @@ describe('sales order U9 sync module', () => {
     expect(component).not.toContain('label="物料号来源"')
     expect(component).not.toContain('label="来源提单行"')
     expect(component).not.toContain('label="实际出货日期"')
+    expect(component).not.toContain('label="已出数量"')
+    expect(component).not.toContain('label="未出数量"')
+    expect(component).not.toContain('prop="shippedQty"')
+    expect(component).not.toContain('prop="unshippedQty"')
     expect(component).not.toContain('label="订单类型"')
     expect(component).not.toContain('ItemCode 来自销售订单零件物料号')
   })
