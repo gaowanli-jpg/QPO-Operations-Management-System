@@ -45,7 +45,7 @@ class ProcessMasterBaselineCompressionMigrationTest {
     }
 
     @Test
-    void compressedSeedRetainsSystemMaterialAndProcessMasterDataButNoOrderOrU9CacheRows() throws Exception {
+    void compressedSeedRetainsSystemAndLocalFeeDataButNoExternalMasterOrOrderRows() throws Exception {
         String seed = Files.readString(MIGRATION_DIR.resolve("V2__qpo_baseline_seed_data.sql"), StandardCharsets.UTF_8);
 
         assertThat(seed)
@@ -54,9 +54,6 @@ class ProcessMasterBaselineCompressionMigrationTest {
                         "INSERT INTO system_role",
                         "INSERT INTO erp_user",
                         "INSERT INTO dict_material_type",
-                        "INSERT INTO dict_material",
-                        "INSERT INTO dict_process_category",
-                        "INSERT INTO dict_process_detail",
                         "INSERT INTO dict_markup_fee",
                         "INSERT INTO dict_assembly_markup_fee",
                         "INSERT INTO dict_extra_fee_item");
@@ -68,6 +65,9 @@ class ProcessMasterBaselineCompressionMigrationTest {
                         "INSERT INTO sales_order_header",
                         "INSERT INTO sales_order_item",
                         "INSERT INTO customer_master",
+                        "INSERT INTO dict_material VALUES",
+                        "INSERT INTO dict_process_category",
+                        "INSERT INTO dict_process_detail",
                         "INSERT INTO u9_sync_seller_option_cache",
                         "INSERT INTO u9_sync_department_option_cache",
                         "INSERT INTO u9_master_data_sync_run",

@@ -47,16 +47,20 @@ class ProcessMasterMigrationTest {
     }
 
     @Test
-    void baselineSeedContainsTemporaryLocalProcessMasterRowsForDevelopment() throws IOException {
+    void baselineSeedLeavesConcreteProcessRowsForMesSync() throws IOException {
         String seed = read(BASELINE_SEED);
 
         assertThat(seed)
                 .contains(
+                        "SELECT pg_catalog.setval('dict_process_category_id_seq', 1, false)",
+                        "SELECT pg_catalog.setval('dict_process_detail_id_seq', 1, false)")
+                .doesNotContain("INSERT INTO dict_process ");
+        assertThat(seed)
+                .doesNotContain(
                         "INSERT INTO dict_process_category",
                         "INSERT INTO dict_process_detail",
-                        "'LOCAL'",
-                        "Baseline process category seed")
-                .doesNotContain("INSERT INTO dict_process ");
+                        "Baseline process category seed",
+                        "Baseline process detail seed");
     }
 
     private static String tableDefinition(String schema, String tableName) {

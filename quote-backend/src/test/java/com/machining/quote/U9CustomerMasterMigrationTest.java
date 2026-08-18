@@ -141,9 +141,10 @@ class U9CustomerMasterMigrationTest {
                         "5|u9 customer sync schedule config|true");
                 assertThat(rowCount(connection, schema, "system_permission")).isPositive();
                 assertThat(rowCount(connection, schema, "system_role")).isPositive();
-                assertThat(rowCount(connection, schema, "dict_material")).isPositive();
-                assertThat(rowCount(connection, schema, "dict_process_category")).isPositive();
-                assertThat(rowCount(connection, schema, "dict_process_detail")).isPositive();
+                assertThat(rowCount(connection, schema, "dict_material_type")).isPositive();
+                assertThat(rowCount(connection, schema, "dict_material")).isZero();
+                assertThat(rowCount(connection, schema, "dict_process_category")).isZero();
+                assertThat(rowCount(connection, schema, "dict_process_detail")).isZero();
                 assertThat(rowCount(connection, schema, "order_rfq")).isZero();
                 assertThat(rowCount(connection, schema, "sales_order_header")).isZero();
                 assertThat(rowCount(connection, schema, "customer_master")).isZero();

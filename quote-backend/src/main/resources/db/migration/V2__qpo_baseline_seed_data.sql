@@ -1,6 +1,6 @@
 -- QPO compressed Flyway baseline seed data.
--- Retains system data plus material/process/fee master data only.
--- Order business data, U9 customer/Seller/Department cache rows, audit logs, uploaded file metadata, tokens, and external secrets are intentionally not seeded.
+-- Retains system data, default material type, local fee master data, roles, permissions, and interface metadata only.
+-- Concrete MES/U9-sourced material, hourly process, customer, order, cache, audit, uploaded file, token, and external secret rows are intentionally not seeded.
 
 --
 -- PostgreSQL database dump
@@ -62,106 +62,18 @@ INSERT INTO dict_material_type VALUES (1, 'RAW_MATERIAL', '原材料', '当前�
 
 --
 -- Data for Name: dict_material; Type: TABLE DATA; Schema: public; Owner: -
+-- Concrete material rows are sourced from MES master-data sync.
 --
-
-INSERT INTO dict_material VALUES (5, 'MAT-000005', '45#', 1, '钢铁', 7.8300, 7.8300, 7.10, 7.8500, 10.00, 7.8500, 10.00, '', true, 5, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (6, 'MAT-000006', 'Q235', 1, '钢铁', 7.8500, 7.8500, 5.00, 7.8500, 4.80, 7.8500, 4.80, '', true, 6, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (7, 'MAT-000007', 'A3', 1, '钢铁', 7.8500, 7.8500, 5.00, 7.8500, 4.80, 7.8500, 4.80, '', true, 7, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (8, 'MAT-000008', 'SKD11', 1, '钢铁', 7.8500, 7.8500, 31.00, 7.8500, 31.00, 7.8500, 31.00, '(抚顺D2)', true, 8, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (9, 'MAT-000009', 'SKD61', 1, '钢铁', 7.8500, 7.8500, 36.00, 7.8500, 36.00, 7.8500, 36.00, '(抚顺电渣）', true, 9, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (10, 'MAT-000010', 'GCR15', 1, '钢铁', 7.8500, 7.8500, 80.00, 7.8500, 18.00, 7.8500, 18.00, '', true, 10, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (12, 'MAT-000012', '35CRMO', 1, '钢铁', 7.8500, 7.8500, 16.00, 7.8500, 16.00, 7.8500, 16.00, '', true, 12, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (13, 'MAT-000013', '38CRMOV', 1, '钢铁', 7.8500, 7.8500, 16.00, 7.8500, 16.00, 7.8500, 16.00, '', true, 13, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (14, 'MAT-000014', '42CRMO', 1, '钢铁', 7.8500, 7.8500, 16.00, 7.8500, 36.00, 7.8500, 36.00, '', true, 14, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (15, 'MAT-000015', 'T11', 1, '钢铁', 7.8500, 7.8500, 35.00, 7.8500, 175.00, 7.8500, 175.00, '', true, 15, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (16, 'MAT-000016', 'SK3', 1, '钢铁', 7.8500, 7.8500, 35.00, 7.8500, 175.00, 7.8500, 175.00, '', true, 16, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (17, 'MAT-000017', 'W18CR4V', 1, '钢铁', 7.8500, 7.8500, 110.00, 7.8500, 110.00, 7.8500, 110.00, '(高速钢）', true, 17, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (18, 'MAT-000018', 'SKH55', 1, '钢铁', 7.8500, 7.8500, 158.00, 7.8500, 136.00, 7.8500, 136.00, '(高速钢）', true, 18, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (19, 'MAT-000019', 'SKH59', 1, '钢铁', 7.8500, 7.8500, 158.00, 7.8500, 158.00, 7.8500, 158.00, '(高速钢）', true, 19, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (20, 'MAT-000020', '440C', 1, '钢铁', 7.8500, 7.8500, 55.00, 7.8500, 55.00, 7.8500, 55.00, '(抚顺电渣）', true, 20, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (21, 'MAT-000021', '9MV2V', 1, '钢铁', 7.8500, 7.8500, 24.00, 7.8500, 24.50, 7.8500, 24.50, '', true, 21, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (22, 'MAT-000022', '9CRWMN', 1, '钢铁', 7.8500, 7.8500, 22.00, 7.8500, 24.50, 7.8500, 24.50, '', true, 22, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (23, 'MAT-000023', '4CR13', 1, '钢铁', 7.9000, 7.9000, 17.00, 7.8500, 18.00, 7.8500, 18.00, '(S136大连电炉）BAM', true, 23, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (24, 'MAT-000024', '4CR13', 1, '钢铁', 7.8500, 7.8500, 16.00, 7.8500, 55.00, 7.8500, 55.00, '(S136抚顺电渣）', true, 24, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (25, 'MAT-000025', '4CR13', 1, '钢铁', 7.8500, 7.8500, 24.75, 7.8500, 25.00, 7.8500, 25.00, '(S136 BQD订单批量）', true, 25, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (26, 'MAT-000026', 'SUS303', 1, '不锈钢', 7.9000, 7.9000, 26.00, 7.9000, 22.50, 7.9000, 22.50, '', true, 26, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (27, 'MAT-000027', 'SUS304', 1, '不锈钢', 7.9000, 7.9000, 26.00, 7.9000, 22.50, 7.9000, 22.50, '', true, 27, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (28, 'MAT-000028', 'SUS316', 1, '不锈钢', 7.9000, 7.9000, 26.00, 7.9000, 22.50, 7.9000, 22.50, '', true, 28, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (29, 'MAT-000029', 'SUS316L', 1, '不锈钢', 7.9000, 7.9000, 26.00, 7.9000, 22.50, 7.9000, 22.50, '', true, 29, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (30, 'MAT-000030', 'SUS431', 1, '不锈钢', 7.6000, 7.6000, 20.00, 7.9000, 38.00, 7.9000, 38.00, '', true, 30, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (31, 'MAT-000031', 'SUS430', 1, '不锈钢', 7.6000, 7.6000, 20.00, 7.9000, 38.00, 7.9000, 38.00, '', true, 31, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (32, 'MAT-000032', 'KG4', 1, '合金', 13.0000, 13.0000, 680.00, 13.0000, 530.00, 13.0000, 530.00, '(硬质合金)', true, 32, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (33, 'MAT-000033', 'SALY', 1, '合金', 15.0000, 15.0000, 920.00, 15.0000, 0.00, 15.0000, 0.00, '(日本硬质合金）', true, 33, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (34, 'MAT-000034', '纯钨', 1, '合金', 19.6000, 19.6000, 1200.00, 19.6000, 0.00, 19.6000, 0.00, '', true, 34, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (35, 'MAT-000035', '黄铜', 1, '铜', 8.4000, 8.4000, 21.00, 8.7000, 50.00, 8.7000, 50.00, '', true, 35, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (36, 'MAT-000036', '紫铜', 1, '铜', 11.0000, 11.0000, 50.00, 9.0000, 120.00, 9.0000, 120.00, '', true, 36, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (37, 'MAT-000037', 'YH52', 1, '铝', 2.7000, 2.7000, 49.00, 2.7000, 71.00, 2.7000, 71.00, '(上海白铜）', true, 37, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (38, 'MAT-000038', 'A5052', 1, '铝', 2.7000, 2.7000, 49.00, 2.7000, NULL, 2.7000, NULL, '(上海白铜）', true, 38, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (39, 'MAT-000039', 'A6061', 1, '铝', 2.8000, 2.8000, 65.00, 2.8000, 22.80, 2.8000, 22.80, '', true, 39, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (40, 'MAT-000040', 'A7075', 1, '铝', 2.8000, 2.8000, 20.00, 2.8000, 22.80, 2.8000, 22.80, '', true, 40, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (41, 'MAT-000041', 'A5052', 1, '铝', 2.8000, 2.8000, 20.00, 2.8000, 22.80, 2.8000, 22.80, '', true, 41, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (42, 'MAT-000042', 'A5083', 1, '铝', 2.7500, 2.7500, 28.00, 2.7500, 67.00, 2.7500, 67.00, '', true, 42, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (43, 'MAT-000043', 'A6082', 1, '铝', 2.7500, 2.7500, 28.00, 2.7500, 67.00, 2.7500, 67.00, '', true, 43, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (44, 'MAT-000044', 'A2024', 1, '铝', 2.7500, 2.7500, 28.00, 2.7500, 67.00, 2.7500, 67.00, '', true, 44, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (45, 'MAT-000045', 'PEEK', 1, '塑料', 1.5000, 1.5000, 971.00, 1.5000, 1400.00, 1.5000, 1400.00, '', true, 45, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (46, 'MAT-000046', '尼龙', 1, '塑料', 1.2000, 1.2000, 132.00, 1.1500, 42.00, 1.1500, 42.00, '', true, 46, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (47, 'MAT-000047', 'POM', 1, '塑料', 1.6000, 1.6000, 21.00, 1.3800, 16.00, 1.3800, 16.00, '', true, 47, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (48, 'MAT-000048', 'PTFE', 1, '塑料', 2.3000, 2.3000, 28.00, 2.3000, 80.00, 2.3000, 80.00, '', true, 48, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
-INSERT INTO dict_material VALUES (11, 'MAT-000011', '15CRMO', 1, '钢铁', 7.8500, 7.8500, 24.50, 7.8500, 12.00, 7.8500, 12.00, '', true, 11, '2026-08-09 00:00:00', '2026-08-09 00:00:00');
 
 --
 -- Data for Name: dict_process_category; Type: TABLE DATA; Schema: public; Owner: -
+-- Hourly process categories are sourced from MES master-data sync.
 --
-
-INSERT INTO dict_process_category VALUES (1, 'LEGACY_4', '铣', 70.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 1, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (2, 'LEGACY_5', 'CNC1', 120.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 2, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (3, 'LEGACY_6', 'CNC-5', 300.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 3, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (4, 'LEGACY_7', 'CNC-D', 300.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 4, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (5, 'LEGACY_8', '车', 70.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 5, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (6, 'LEGACY_9', 'CNC车', 120.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 6, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (7, 'LEGACY_10', '平磨', 80.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 7, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (8, 'LEGACY_11', '圆磨', 100.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 8, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (9, 'LEGACY_12', '大水磨', 120.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 9, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (10, 'LEGACY_13', 'W/C快', 60.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 10, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (11, 'LEGACY_14', 'W/C慢', 150.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 11, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (12, 'LEGACY_15', 'W/C中', 80.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 12, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (13, 'LEGACY_16', '国产EDM', 120.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 13, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (14, 'LEGACY_17', '攻丝机', 50.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 14, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (15, 'LEGACY_18', '钳', 50.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 15, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (16, 'LEGACY_19', '抛光', 60.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 16, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (17, 'LEGACY_20', '清洗', 50.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 17, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (18, 'LEGACY_21', 'QA', 80.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 18, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (19, 'LEGACY_22', '下料', 50.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 19, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (20, 'LEGACY_23', '无心磨', 80.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 20, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (21, 'LEGACY_24', '走芯机', 80.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 21, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_category VALUES (22, 'LEGACY_25', 'EDD', 120.0000, 'Baseline process category seed', 'LOCAL', NULL, true, 22, NULL, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
 
 --
 -- Data for Name: dict_process_detail; Type: TABLE DATA; Schema: public; Owner: -
+-- Process details are created by MES sync defaults or maintained after sync.
 --
-
-INSERT INTO dict_process_detail VALUES (1, 1, '铣', 'Baseline process detail seed', true, 1, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (2, 2, 'CNC1', 'Baseline process detail seed', true, 2, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (3, 3, 'CNC-5', 'Baseline process detail seed', true, 3, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (4, 4, 'CNC-D', 'Baseline process detail seed', true, 4, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (5, 5, '车', 'Baseline process detail seed', true, 5, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (6, 6, 'CNC车', 'Baseline process detail seed', true, 6, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (7, 7, '平磨', 'Baseline process detail seed', true, 7, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (8, 8, '圆磨', 'Baseline process detail seed', true, 8, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (9, 9, '大水磨', 'Baseline process detail seed', true, 9, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (10, 10, 'W/C快', 'Baseline process detail seed', true, 10, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (11, 11, 'W/C慢', 'Baseline process detail seed', true, 11, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (12, 12, 'W/C中', 'Baseline process detail seed', true, 12, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (13, 13, '国产EDM', 'Baseline process detail seed', true, 13, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (14, 14, '攻丝机', 'Baseline process detail seed', true, 14, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (15, 15, '钳', 'Baseline process detail seed', true, 15, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (16, 16, '抛光', 'Baseline process detail seed', true, 16, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (17, 17, '清洗', 'Baseline process detail seed', true, 17, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (18, 18, 'QA', 'Baseline process detail seed', true, 18, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (19, 19, '下料', 'Baseline process detail seed', true, 19, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (20, 20, '无心磨', 'Baseline process detail seed', true, 20, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (21, 21, '走芯机', 'Baseline process detail seed', true, 21, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
-INSERT INTO dict_process_detail VALUES (22, 22, 'EDD', 'Baseline process detail seed', true, 22, '2026-08-08 13:02:52.00319', '2026-08-08 13:02:52.00319');
 
 --
 -- Data for Name: erp_user; Type: TABLE DATA; Schema: public; Owner: -
@@ -667,7 +579,7 @@ SELECT pg_catalog.setval('dict_markup_fee_id_seq', 290, true);
 -- Name: dict_material_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('dict_material_id_seq', 1935, true);
+SELECT pg_catalog.setval('dict_material_id_seq', 1, false);
 
 --
 -- Name: dict_material_type_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
@@ -679,13 +591,13 @@ SELECT pg_catalog.setval('dict_material_type_id_seq', 1, true);
 -- Name: dict_process_category_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('dict_process_category_id_seq', 885, true);
+SELECT pg_catalog.setval('dict_process_category_id_seq', 1, false);
 
 --
 -- Name: dict_process_detail_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('dict_process_detail_id_seq', 885, true);
+SELECT pg_catalog.setval('dict_process_detail_id_seq', 1, false);
 
 --
 -- Name: erp_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
