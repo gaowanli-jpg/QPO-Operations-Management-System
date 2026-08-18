@@ -55,6 +55,16 @@ jobs:
           echo "ARTIFACT_NAME=qpo-offline-images-$tag" >> "$GITHUB_ENV"
           echo "Resolved IMAGE_TAG=$tag"
 
+      - name: Install Docker CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends docker.io
+          fi
+          docker version
+
       - name: Build offline image package
         shell: bash
         run: |

@@ -43,6 +43,7 @@ QPO 支持把前端、后端和基础依赖镜像打成一个离线 `tar` 包，
 Actions runner 需要满足：
 
 - 能执行 Docker CLI，并能访问 Docker daemon。
+- 当前 Forgejo runner 会在 `node:20-bookworm` job 容器中执行步骤；workflow 会自动安装 Docker CLI，但 runner 主机仍必须把 Docker daemon/socket 暴露给 job 容器。
 - 能拉取构建基础镜像和依赖镜像，例如 `maven:3.9-eclipse-temurin-17`、`eclipse-temurin:17-jre`、`node:22-alpine`、`nginx:1.27-alpine`、`postgres:15`。
 - 能下载或已缓存 `actions/checkout`、`actions/upload-artifact`。如果公司 Forgejo 无法访问外部 Actions，需要平台管理员配置镜像源或本地 Action 缓存。
 
