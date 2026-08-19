@@ -126,7 +126,12 @@ class PermissionControllerGuardCharacterizationTest {
         assertThat(quoteProcess)
                 .contains("@RequirePermission(\"market:quote-process:view\")")
                 .contains("@RequirePermission(\"market:quote-process:update-lead-time\")")
-                .contains("@RequirePermission(\"market:quote-process:save-quote\")");
+                .contains("@RequirePermission(\"market:quote-process:save-quote\")")
+                .contains("@PostMapping(\"/lead-time/batch-update\")")
+                .contains("@PostMapping(value = \"/{rfqId}/lead-time-replacement/preview\"")
+                .contains("@PostMapping(value = \"/{rfqId}/lead-time-replacement/confirm\"")
+                .doesNotContain("market:quote-process:lead-time-replacement")
+                .doesNotContain("market:quote-process:batch-save-lead-time");
         assertThat(order)
                 .contains("@RequirePermission(\"market:order:view\")")
                 .contains("@RequirePermission(\"market:order:customer-select\")")

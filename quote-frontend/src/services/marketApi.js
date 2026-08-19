@@ -132,6 +132,18 @@ export const setQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-
 
 export const updateQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/update', payload)
 
+export const batchUpdateQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/batch-update', payload)
+
+export const previewQuoteProcessLeadTimeReplacement = (rfqId, formData) => multipartPost(
+  `/api/market/quote-process/${rfqId}/lead-time-replacement/preview`,
+  formData
+)
+
+export const confirmQuoteProcessLeadTimeReplacement = (rfqId, formData) => multipartPost(
+  `/api/market/quote-process/${rfqId}/lead-time-replacement/confirm`,
+  formData
+)
+
 export const saveQuoteSheet = (rfqId) => postJson(`/api/market/quote-process/${rfqId}/save-quote`)
 
 export const downloadMarketExport = (path, rfqId, fallbackName = `${path}-${rfqId}.xlsx`) => downloadFile(

@@ -26,6 +26,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("QUOTE_TEMPLATE_UPLOAD")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("RFQ_IMPORT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("QUOTE_EXPORT_TASK_SUBMIT")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("QUOTE_LEAD_TIME_BATCH_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.inferModule("QUOTE_LEAD_TIME_DATA_REPLACEMENT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("QUOTE_REFRESH_TASK_SUBMIT")).isEqualTo("ENGINEER");
         assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isEqualTo("DELIVERY");
@@ -54,6 +56,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("AUTH_ACCOUNT_LOCKED")).isNotEqualTo("AUTH_ACCOUNT_LOCKED");
         assertThat(AuditService.labelForAction("RFQ_IMPORT")).isNotEqualTo("RFQ_IMPORT");
         assertThat(AuditService.labelForAction("QUOTE_EXPORT_TASK_SUBMIT")).isNotEqualTo("QUOTE_EXPORT_TASK_SUBMIT");
+        assertThat(AuditService.labelForAction("QUOTE_LEAD_TIME_BATCH_UPDATE")).isNotEqualTo("QUOTE_LEAD_TIME_BATCH_UPDATE");
+        assertThat(AuditService.labelForAction("QUOTE_LEAD_TIME_DATA_REPLACEMENT")).isNotEqualTo("QUOTE_LEAD_TIME_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("QUOTE_REFRESH_TASK_SUBMIT")).isNotEqualTo("QUOTE_REFRESH_TASK_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_SUBMIT");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isNotEqualTo("DELIVERY_MES_MATERIAL_SYNC_SUCCESS");
@@ -133,6 +137,12 @@ class AuditActionCatalogCharacterizationTest {
     void deliveryDocumentExportActionsExposeStableChineseLabels() {
         assertThat(AuditService.labelForAction("DELIVERY_TICKET_EXPORT")).isEqualTo("导出提单表");
         assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("导出工艺表");
+    }
+
+    @Test
+    void quoteProcessLeadTimeAuditActionsExposeStableChineseLabels() {
+        assertThat(AuditService.labelForAction("QUOTE_LEAD_TIME_BATCH_UPDATE")).isEqualTo("批量保存报价交期");
+        assertThat(AuditService.labelForAction("QUOTE_LEAD_TIME_DATA_REPLACEMENT")).isEqualTo("报价处理表格数据替换");
     }
 
     @Test

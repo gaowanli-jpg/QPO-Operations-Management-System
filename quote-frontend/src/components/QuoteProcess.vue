@@ -42,7 +42,7 @@
                   :icon="Plus"
                   plain
                   class="workflow-soft-button"
-                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"
                   :loading="adjusting"
                   @click="applyShift(1)"
                 >
@@ -52,7 +52,7 @@
                   :icon="Minus"
                   plain
                   class="workflow-soft-button"
-                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"
                   :loading="adjusting"
                   @click="applyShift(-1)"
                 >
@@ -73,7 +73,7 @@
                 <el-button v-permission="'market:quote-process:update-lead-time'"
                   plain
                   class="workflow-soft-button quote-manual-date-button"
-                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"
+                  :disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"
                   :loading="settingQuoteDate"
                   @click="setQuoteLeadTime"
                 >
@@ -90,7 +90,7 @@
                 type="primary"
                 size="large"
                 class="workflow-primary-action download-btn"
-                :disabled="!canSaveQuoteSheet || savingQuoteSheet || quoteLeadTimeBatchPending || importSelecting"
+                :disabled="!canSaveQuoteSheet || savingQuoteSheet || quoteLeadTimeBatchPending || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"
                 :loading="savingQuoteSheet"
                 @click="saveMarketQuoteSheet"
               >
@@ -152,6 +152,29 @@
                 <el-tag v-if="quoteProcessItemTotal" type="info">{{ quoteProcessItemTotal }} 项</el-tag>
               </div>
               <div class="quote-process-table-actions import-action-row">
+                <el-button
+                  v-permission="'market:quote-process:update-lead-time'"
+                  size="small"
+                  plain
+                  class="workflow-soft-button"
+                  :disabled="leadTimeReplacementDisabled"
+                  :loading="leadTimeReplacementBusy"
+                  @click="openLeadTimeReplacementDialog"
+                >
+                  表格数据替换
+                </el-button>
+                <el-button
+                  v-permission="'market:quote-process:update-lead-time'"
+                  size="small"
+                  type="primary"
+                  plain
+                  class="workflow-soft-button"
+                  :disabled="!hasQuoteLeadTimeDraftChanges || !canEditQuoteLeadTime || savingQuoteLeadTimeDrafts || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || leadTimeReplacementBusy"
+                  :loading="savingQuoteLeadTimeDrafts"
+                  @click="saveAllQuoteLeadTimeDrafts"
+                >
+                  保存修改
+                </el-button>
                 <el-upload
                   ref="selectionUploadRef"
                   action="#"
@@ -166,7 +189,7 @@
                       size="small"
                       plain
                       class="workflow-soft-button"
-                      :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet"
+                      :disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"
                       :loading="importSelecting"
                     >
                       导入表格选定
@@ -219,6 +242,7 @@
                     class="date-input"
                     clearable
                     :disabled="!canEditQuoteLeadTime"
+                    @change="rememberQuoteLeadTimeDraft(row)"
                   />
                 </template>
               </el-table-column>
@@ -244,7 +268,7 @@
                     type="primary"
                     size="small"
                     plain
-                    :disabled="!canEditQuoteLeadTime || isLeadTimeRowSaving(row) || quoteLeadTimeBatchPending || savingQuoteSheet"
+                    :disabled="!canEditQuoteLeadTime || isLeadTimeRowSaving(row) || quoteLeadTimeBatchPending || savingQuoteSheet || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"
                     :loading="isLeadTimeRowSaving(row)"
                     @click="saveLeadTime(row)"
                   >
@@ -278,6 +302,13 @@
       order-scope="quote-process"
       @select="handleOrderSelected"
     />
+    <QuoteLeadTimeReplacementDialog
+      v-model="leadTimeReplacementVisible"
+      :rfq-id="selectedRfqId"
+      :disabled="leadTimeReplacementDisabled"
+      @busy-change="leadTimeReplacementBusy = $event"
+      @confirmed="handleLeadTimeReplacementConfirmed"
+    />
   </div>
 </template>
 
@@ -286,7 +317,9 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check, DocumentChecked, Download, Minus, Plus } from '@element-plus/icons-vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import QuoteLeadTimeReplacementDialog from './quote-process/QuoteLeadTimeReplacementDialog.vue'
 import {
+  batchUpdateQuoteProcessLeadTime,
   downloadQuote,
   downloadQuoteTemplateDetail,
   downloadQuoteTemplateSimple,
@@ -317,6 +350,9 @@ const quoteProcessTableRef = ref(null)
 const selectionUploadRef = ref(null)
 const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const orderPickerVisible = ref(false)
+const leadTimeReplacementVisible = ref(false)
+const leadTimeReplacementBusy = ref(false)
+const quoteLeadTimeDraftCache = ref(new Map())
 const shiftDays = ref(0)
 const manualQuoteDate = ref('')
 
@@ -326,6 +362,7 @@ const { isPending, runAction } = usePendingAction()
 const quoteProcessActionKeys = {
   saveQuote: () => `market:quote-process:save-quote:${selectedRfqId.value || 'none'}`,
   leadTimeBatch: () => `market:quote-process:lead-time-batch:${selectedRfqId.value || 'none'}`,
+  leadTimeBulkSave: () => `market:quote-process:lead-time-bulk-save:${selectedRfqId.value || 'none'}`,
   importSelection: () => `market:quote-process:import-selection:${selectedRfqId.value || 'none'}`,
   exportDetail: () => `market:quote-process:export-detail:${selectedRfqId.value || 'none'}`,
   exportSimple: () => `market:quote-process:export-simple:${selectedRfqId.value || 'none'}`,
@@ -337,6 +374,7 @@ const quoteLeadTimeBatchPending = computed(() => isPending(quoteProcessActionKey
 const adjusting = quoteLeadTimeBatchPending
 const settingQuoteDate = quoteLeadTimeBatchPending
 const savingQuoteSheet = computed(() => isPending(quoteProcessActionKeys.saveQuote()))
+const savingQuoteLeadTimeDrafts = computed(() => isPending(quoteProcessActionKeys.leadTimeBulkSave()))
 const importSelecting = computed(() => isPending(quoteProcessActionKeys.importSelection()))
 const isQuoteExporting = (action) => isPending(quoteProcessActionKeys[action]())
 const isLeadTimeRowSaving = (row) => isPending(quoteProcessActionKeys.leadTimeRow(row?.id))
@@ -356,6 +394,21 @@ const canEditQuoteLeadTime = computed(() => orderInfo.value.status === '已核�
 const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)
 
 const canExportQuoteSheet = computed(() => orderInfo.value.status === '已报价')
+
+const changedQuoteLeadTimeDrafts = computed(() => Array.from(quoteLeadTimeDraftCache.value.values()))
+
+const hasQuoteLeadTimeDraftChanges = computed(() => changedQuoteLeadTimeDrafts.value.length > 0)
+
+const leadTimeReplacementDisabled = computed(() => (
+  !canEditQuoteLeadTime.value
+  || !selectedRfqId.value
+  || quoteProcessItemTotal.value === 0
+  || importSelecting.value
+  || quoteLeadTimeBatchPending.value
+  || savingQuoteSheet.value
+  || savingQuoteLeadTimeDrafts.value
+  || leadTimeReplacementBusy.value
+))
 
 const syncQuoteProcessPageSelection = async () => {
   syncingQuoteProcessSelection = true
@@ -426,6 +479,7 @@ const loadQuoteProcess = async (rfqId) => {
   loadingItems.value = true
   try {
     selectedQuoteProcessItemIds.value = new Set()
+    quoteLeadTimeDraftCache.value = new Map()
     quoteProcessPagination.page = 1
     await fetchQuoteProcessSummary(rfqId)
     await fetchQuoteProcessItems()
@@ -438,10 +492,29 @@ const loadQuoteProcess = async (rfqId) => {
   }
 }
 
+const normalizeQuoteLeadTime = (value) => (value === null || value === undefined ? '' : String(value))
+
 const normalizeRows = (rows) => rows.map(row => ({
   ...row,
-  quoteLeadTimeDraft: row.quoteLeadTime || ''
+  quoteLeadTimeOriginal: normalizeQuoteLeadTime(row.quoteLeadTime),
+  quoteLeadTimeDraft: quoteLeadTimeDraftCache.value.get(row.id)?.quoteLeadTime ?? normalizeQuoteLeadTime(row.quoteLeadTime)
 }))
+
+const rememberQuoteLeadTimeDraft = (row) => {
+  if (!row?.id) return
+  const quoteLeadTime = normalizeQuoteLeadTime(row.quoteLeadTimeDraft)
+  const originalQuoteLeadTime = normalizeQuoteLeadTime(row.quoteLeadTimeOriginal)
+  const nextCache = new Map(quoteLeadTimeDraftCache.value)
+  if (quoteLeadTime === originalQuoteLeadTime) {
+    nextCache.delete(row.id)
+  } else {
+    nextCache.set(row.id, {
+      itemId: row.id,
+      quoteLeadTime
+    })
+  }
+  quoteLeadTimeDraftCache.value = nextCache
+}
 
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
@@ -494,6 +567,17 @@ const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
       ElMessage.error(error.response?.data?.message || '导入表格选定失败。')
     }
   })
+}
+
+const openLeadTimeReplacementDialog = () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能进行表格数据替换。')
+  leadTimeReplacementVisible.value = true
+}
+
+const handleLeadTimeReplacementConfirmed = async () => {
+  quoteLeadTimeDraftCache.value = new Map()
+  await refreshQuoteProcessWorkspace({ clearSelection: false })
 }
 
 const applyShift = async (direction) => {
@@ -568,11 +652,37 @@ const saveLeadTime = async (row) => {
       if (index >= 0) {
         itemList.value.splice(index, 1, saved)
       }
+      const nextCache = new Map(quoteLeadTimeDraftCache.value)
+      nextCache.delete(row.id)
+      quoteLeadTimeDraftCache.value = nextCache
       await fetchQuoteProcessSummary()
       ElMessage.success('报价交期已保存。')
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '报价交期保存失败。')
+    }
+  })
+}
+
+const saveAllQuoteLeadTimeDrafts = async () => {
+  if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再保存。')
+  if (!hasQuoteLeadTimeDraftChanges.value) return ElMessage.warning('没有需要保存的报价交期修改。')
+
+  return runAction(quoteProcessActionKeys.leadTimeBulkSave(), async () => {
+    try {
+      const items = changedQuoteLeadTimeDrafts.value
+      const response = await batchUpdateQuoteProcessLeadTime({
+        rfqId: selectedRfqId.value,
+        items: changedQuoteLeadTimeDrafts.value
+      })
+      quoteLeadTimeDraftCache.value = new Map()
+      await refreshQuoteProcessWorkspace({ clearSelection: false })
+      const updated = Number(response?.updatedCount ?? response?.adjustedCount ?? items.length)
+      ElMessage.success(`已保存 ${updated} 项报价交期修改。`)
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '批量保存报价交期失败。')
     }
   })
 }

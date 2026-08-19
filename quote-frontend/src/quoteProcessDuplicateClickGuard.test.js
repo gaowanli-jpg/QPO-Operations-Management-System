@@ -31,6 +31,7 @@ describe('quote process duplicate click guards', () => {
     expect(source).toContain('const { isPending, runAction } = usePendingAction()')
     expect(source).toContain('saveQuote: () => `market:quote-process:save-quote:${selectedRfqId.value || \'none\'}`')
     expect(source).toContain('leadTimeBatch: () => `market:quote-process:lead-time-batch:${selectedRfqId.value || \'none\'}`')
+    expect(source).toContain('leadTimeBulkSave: () => `market:quote-process:lead-time-bulk-save:${selectedRfqId.value || \'none\'}`')
     expect(source).toContain('importSelection: () => `market:quote-process:import-selection:${selectedRfqId.value || \'none\'}`')
     expect(source).toContain('exportDetail: () => `market:quote-process:export-detail:${selectedRfqId.value || \'none\'}`')
     expect(source).toContain('exportSimple: () => `market:quote-process:export-simple:${selectedRfqId.value || \'none\'}`')
@@ -42,14 +43,17 @@ describe('quote process duplicate click guards', () => {
     const source = readSource('components', 'QuoteProcess.vue')
 
     expect(source).toContain(':loading="savingQuoteSheet"')
-    expect(source).toContain(':disabled="!canSaveQuoteSheet || savingQuoteSheet || quoteLeadTimeBatchPending || importSelecting"')
+    expect(source).toContain(':disabled="!canSaveQuoteSheet || savingQuoteSheet || quoteLeadTimeBatchPending || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"')
     expect(source).toContain(':loading="isQuoteExporting(\'exportDetail\')"')
     expect(source).toContain(':disabled="!canExportQuoteSheet || isQuoteExporting(\'exportDetail\')"')
     expect(source).toContain(':loading="isQuoteExporting(\'exportSimple\')"')
     expect(source).toContain(':loading="isQuoteExporting(\'exportTemplateDetail\')"')
     expect(source).toContain(':loading="isQuoteExporting(\'exportTemplateSimple\')"')
-    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting"')
-    expect(source).toContain(':disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet"')
+    expect(source).toContain(':loading="savingQuoteLeadTimeDrafts"')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"')
+    expect(source).toContain(':disabled="!canEditQuoteLeadTime || quoteProcessItemTotal === 0 || importSelecting || quoteLeadTimeBatchPending || savingQuoteSheet || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"')
+    expect(source).toContain(':disabled="leadTimeReplacementDisabled"')
+    expect(source).toContain(':loading="leadTimeReplacementBusy"')
   })
 
   test('quote process wraps write and export actions with runAction duplicate guards', () => {

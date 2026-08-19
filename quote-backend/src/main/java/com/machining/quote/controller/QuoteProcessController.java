@@ -3,11 +3,15 @@ package com.machining.quote.controller;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.QuoteLeadTimeBatchUpdateReq;
+import com.machining.quote.dto.QuoteLeadTimeReplacementConfirmDTO;
+import com.machining.quote.dto.QuoteLeadTimeReplacementPreviewDTO;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.service.PartSelectionImportService;
 import com.machining.quote.service.QuoteProcessService;
+import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -87,10 +94,54 @@ public class QuoteProcessController {
         return quoteProcessService.updateLeadTime(req);
     }
 
+    @PostMapping("/lead-time/batch-update")
+    @RequirePermission("market:quote-process:update-lead-time")
+    public Map<String, Object> batchUpdateLeadTimes(@RequestBody QuoteLeadTimeBatchUpdateReq req) {
+        return quoteProcessService.batchUpdateLeadTimes(req);
+    }
+
+    @PostMapping(value = "/{rfqId}/lead-time-replacement/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:quote-process:update-lead-time")
+    public QuoteLeadTimeReplacementPreviewDTO previewLeadTimeReplacement(
+            @PathVariable Integer rfqId,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        validateExcelFile(excelFile);
+        try (InputStream inputStream = excelFile.getInputStream()) {
+            return quoteProcessService.previewLeadTimeReplacement(rfqId, inputStream);
+        } catch (IOException e) {
+            throw new RuntimeException("读取报价处理表格数据替换文件失败", e);
+        }
+    }
+
+    @PostMapping(value = "/{rfqId}/lead-time-replacement/confirm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:quote-process:update-lead-time")
+    public QuoteLeadTimeReplacementConfirmDTO confirmLeadTimeReplacement(
+            @PathVariable Integer rfqId,
+            @RequestParam("previewFingerprint") String previewFingerprint,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        validateExcelFile(excelFile);
+        try (InputStream inputStream = excelFile.getInputStream()) {
+            return quoteProcessService.confirmLeadTimeReplacement(rfqId, inputStream, previewFingerprint);
+        } catch (IOException e) {
+            throw new RuntimeException("读取报价处理表格数据替换文件失败", e);
+        }
+    }
+
     @PostMapping("/{rfqId}/save-quote")
     @RequirePermission("market:quote-process:save-quote")
     public Map<String, Object> saveQuoteSheet(@PathVariable Integer rfqId) {
         return quoteProcessService.saveQuoteSheet(rfqId);
+    }
+
+    private void validateExcelFile(MultipartFile excelFile) {
+        if (excelFile == null || excelFile.isEmpty()) {
+            throw new IllegalArgumentException("表格数据替换文件不能为空");
+        }
+        String fileName = excelFile.getOriginalFilename();
+        String lowerName = fileName == null ? "" : fileName.trim().toLowerCase(Locale.ROOT);
+        if (!lowerName.endsWith(".xlsx") && !lowerName.endsWith(".xls")) {
+            throw new IllegalArgumentException("表格数据替换仅支持 .xlsx 或 .xls 文件");
+        }
     }
 
 }

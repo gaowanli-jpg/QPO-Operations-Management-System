@@ -2,11 +2,17 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.config.PreviewFingerprintConflictException;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.QuoteLeadTimeBatchUpdateReq;
+import com.machining.quote.dto.QuoteLeadTimeReplacementConfirmDTO;
+import com.machining.quote.dto.QuoteLeadTimeReplacementPreviewDTO;
+import com.machining.quote.dto.QuoteLeadTimeReplacementRowDTO;
+import com.machining.quote.dto.QuoteLeadTimeReplacementSummaryDTO;
 import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
@@ -22,11 +28,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -47,6 +61,8 @@ public class QuoteProcessService {
     private SystemTaskGuardService taskGuardService;
     @Autowired
     private OrderItemPageService orderItemPageService;
+    @Autowired
+    private QuoteLeadTimeReplacementExcelParser leadTimeReplacementExcelParser;
 
     public Map<String, Object> getQuoteProcess(Integer rfqId) {
         OrderRfq order = requireQuoteProcessReadableOrder(rfqId);
@@ -217,6 +233,135 @@ public class QuoteProcessService {
     }
 
     @Transactional
+    public Map<String, Object> batchUpdateLeadTimes(QuoteLeadTimeBatchUpdateReq req) {
+        if (req == null || req.getRfqId() == null) {
+            throw new RuntimeException("RFQ ID 不能为空");
+        }
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
+        List<QuoteLeadTimeBatchUpdateReq.ItemUpdate> updates = safeList(req.getItems());
+        if (updates.isEmpty()) {
+            throw new RuntimeException("没有需要保存的报价交期修改");
+        }
+
+        List<Map<String, Object>> skipped = new ArrayList<>();
+        List<Map<String, Object>> affectedRows = new ArrayList<>();
+        int adjustedCount = 0;
+        for (QuoteLeadTimeBatchUpdateReq.ItemUpdate updateReq : updates) {
+            Integer itemId = updateReq == null ? null : updateReq.getItemId();
+            if (itemId == null) {
+                skipped.add(skipRow(null, "", "", "零件 ID 不能为空"));
+                continue;
+            }
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
+            if (item == null || !req.getRfqId().equals(item.getRfqId())) {
+                skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
+                continue;
+            }
+
+            String normalizedLeadTime = leadTimeService.normalizeForQuote(updateReq.getQuoteLeadTime());
+            if (Objects.equals(normalizeBlank(item.getQuoteLeadTime()), normalizeBlank(normalizedLeadTime))) {
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "报价交期未变化"));
+                continue;
+            }
+
+            UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+            update.eq("id", item.getId()).set("quote_lead_time", normalizedLeadTime);
+            itemMapper.update(null, update);
+            ItemQuoteVersion saved = itemMapper.selectById(item.getId());
+            affectedRows.add(buildItemRow(saved));
+            adjustedCount++;
+        }
+
+        if (adjustedCount > 0) {
+            Map<String, Object> auditSummary = Map.of(
+                    "rfqId", req.getRfqId(),
+                    "requestedCount", updates.size(),
+                    "updatedItemCount", adjustedCount,
+                    "skippedCount", skipped.size());
+            auditService.record("QUOTE_LEAD_TIME_BATCH_UPDATE", "order_rfq", req.getRfqId(), null, auditSummary,
+                    "QUOTE_PROCESS", "SUCCESS", "批量保存报价交期：更新 " + adjustedCount + " 个零件", null);
+        }
+
+        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped);
+        result.put("updatedCount", adjustedCount);
+        result.put("affectedRows", affectedRows);
+        log.info("Quote lead time batch saved rfqId={} requestedCount={} updatedItemCount={} skippedCount={}",
+                req.getRfqId(), updates.size(), adjustedCount, skipped.size());
+        return result;
+    }
+
+    public QuoteLeadTimeReplacementPreviewDTO previewLeadTimeReplacement(Integer rfqId, InputStream inputStream) {
+        OrderRfq order = requireQuoteProcessEditableOrder(rfqId);
+        QuoteLeadTimeReplacementExcelParser.ParseResult parsed = leadTimeReplacementExcelParser.parse(inputStream);
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        QuoteLeadTimeReplacementPreviewDTO preview = buildLeadTimeReplacementPreview(order, parsed, items);
+        preview.setPreviewFingerprint(leadTimeReplacementFingerprint(rfqId, parsed, preview.getRows(), items, order.getStatus()));
+        return preview;
+    }
+
+    @Transactional
+    public QuoteLeadTimeReplacementConfirmDTO confirmLeadTimeReplacement(
+            Integer rfqId,
+            InputStream inputStream,
+            String previewFingerprint) {
+        if (isBlank(previewFingerprint)) {
+            throw new IllegalArgumentException("预览指纹不能为空");
+        }
+        OrderRfq order = requireQuoteProcessEditableOrderForUpdate(rfqId);
+        QuoteLeadTimeReplacementExcelParser.ParseResult parsed = leadTimeReplacementExcelParser.parse(inputStream);
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        QuoteLeadTimeReplacementPreviewDTO preview = buildLeadTimeReplacementPreview(order, parsed, items);
+        String currentFingerprint = leadTimeReplacementFingerprint(rfqId, parsed, preview.getRows(), items, order.getStatus());
+        if (!previewFingerprint.trim().equals(currentFingerprint)) {
+            throw new PreviewFingerprintConflictException("数据已发生变化，请重新预览");
+        }
+        if (preview.getSummary().getErrorCount() > 0) {
+            throw new IllegalArgumentException("表格数据替换存在错误行，请修正后重新预览");
+        }
+
+        List<Map<String, Object>> affectedRows = new ArrayList<>();
+        int updatedCount = 0;
+        for (QuoteLeadTimeReplacementRowDTO row : preview.getRows()) {
+            if (!"CHANGED".equals(row.getStatus())) {
+                continue;
+            }
+            ItemQuoteVersion item = itemMapper.selectByIdForUpdate(row.getItemId());
+            if (item == null || !rfqId.equals(item.getRfqId())) {
+                throw new PreviewFingerprintConflictException("数据已发生变化，请重新预览");
+            }
+            UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+            update.eq("id", item.getId()).set("quote_lead_time", row.getImportedQuoteLeadTime());
+            itemMapper.update(null, update);
+            affectedRows.add(buildItemRow(itemMapper.selectById(item.getId())));
+            updatedCount++;
+        }
+
+        QuoteLeadTimeReplacementSummaryDTO summary = preview.getSummary();
+        summary.setUpdatedItemCount(updatedCount);
+        QuoteLeadTimeReplacementConfirmDTO confirm = new QuoteLeadTimeReplacementConfirmDTO();
+        confirm.setSummary(summary);
+        confirm.setAffectedRows(affectedRows);
+        confirm.setMessage("表格数据替换完成，已更新 " + updatedCount + " 个零件报价交期。");
+
+        if (updatedCount > 0) {
+            Map<String, Object> auditSummary = Map.of(
+                    "rfqId", rfqId,
+                    "importedCount", summary.getImportedCount(),
+                    "matchedCount", summary.getMatchedCount(),
+                    "updatedItemCount", updatedCount,
+                    "unmatchedCount", summary.getUnmatchedCount(),
+                    "emptyValueCount", summary.getEmptyValueCount(),
+                    "errorCount", summary.getErrorCount());
+            auditService.record("QUOTE_LEAD_TIME_DATA_REPLACEMENT", "order_rfq", rfqId, null, auditSummary,
+                    "QUOTE_PROCESS", "SUCCESS", "报价处理表格数据替换：更新 " + updatedCount + " 个零件", null);
+        }
+        log.info("Quote lead time data replacement completed rfqId={} importedCount={} matchedCount={} updatedItemCount={} unmatchedCount={} emptyValueCount={}",
+                rfqId, summary.getImportedCount(), summary.getMatchedCount(), updatedCount,
+                summary.getUnmatchedCount(), summary.getEmptyValueCount());
+        return confirm;
+    }
+
+    @Transactional
     public Map<String, Object> saveQuoteSheet(Integer rfqId) {
         long startedAt = System.currentTimeMillis();
         log.info("Quote sheet save started rfqId={}", rfqId);
@@ -381,6 +526,157 @@ public class QuoteProcessService {
         }
     }
 
+    private QuoteLeadTimeReplacementPreviewDTO buildLeadTimeReplacementPreview(
+            OrderRfq order,
+            QuoteLeadTimeReplacementExcelParser.ParseResult parsed,
+            List<ItemQuoteVersion> items) {
+        Map<String, List<ItemQuoteVersion>> candidatesByKey = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : safeList(items)) {
+            candidatesByKey.computeIfAbsent(itemKey(item.getPartNo(), item.getVersion()), ignored -> new ArrayList<>())
+                    .add(item);
+        }
+
+        List<QuoteLeadTimeReplacementRowDTO> rows = new ArrayList<>();
+        for (QuoteLeadTimeReplacementRowDTO excelRow : safeList(parsed.rows())) {
+            QuoteLeadTimeReplacementRowDTO row = copyReplacementRow(excelRow);
+            if (row.hasErrors()) {
+                row.setStatus("ERROR");
+                row.setReason(String.join("；", row.getErrors()));
+                rows.add(row);
+                continue;
+            }
+
+            List<ItemQuoteVersion> candidates = candidatesByKey.getOrDefault(
+                    itemKey(row.getNormalizedPartNo(), row.getNormalizedVersion()),
+                    List.of());
+            if (candidates.isEmpty()) {
+                row.setStatus("UNMATCHED");
+                row.setReason("当前 RFQ 未找到对应图号和版本的零件");
+                rows.add(row);
+                continue;
+            }
+            if (candidates.size() > 1) {
+                row.setStatus("ERROR");
+                row.setReason("当前 RFQ 存在多个相同图号和版本的零件");
+                rows.add(row);
+                continue;
+            }
+
+            ItemQuoteVersion item = candidates.get(0);
+            row.setRfqId(item.getRfqId());
+            row.setRfqNo(order == null ? null : order.getRfqNo());
+            row.setItemId(item.getId());
+            row.setCurrentQuoteLeadTime(item.getQuoteLeadTime());
+            if (isBlank(row.getImportedQuoteLeadTime())) {
+                row.setStatus("EMPTY_VALUE");
+                row.setReason("报价交期为空，未替换");
+                rows.add(row);
+                continue;
+            }
+            if (Objects.equals(normalizeBlank(item.getQuoteLeadTime()), normalizeBlank(row.getImportedQuoteLeadTime()))) {
+                row.setStatus("UNCHANGED");
+                row.setReason("报价交期未变化");
+            } else {
+                row.setStatus("CHANGED");
+                row.setReason("");
+            }
+            rows.add(row);
+        }
+
+        QuoteLeadTimeReplacementSummaryDTO summary = summarizeLeadTimeReplacement(rows);
+        QuoteLeadTimeReplacementPreviewDTO preview = new QuoteLeadTimeReplacementPreviewDTO();
+        preview.setRecognizedFields(parsed.recognizedFields());
+        preview.setRows(rows);
+        preview.setSummary(summary);
+        preview.setCanConfirm(summary.getErrorCount() == 0 && summary.getChangedCount() > 0);
+        return preview;
+    }
+
+    private QuoteLeadTimeReplacementRowDTO copyReplacementRow(QuoteLeadTimeReplacementRowDTO source) {
+        QuoteLeadTimeReplacementRowDTO row = new QuoteLeadTimeReplacementRowDTO();
+        row.setExcelRowNumber(source.getExcelRowNumber());
+        row.setPartNo(source.getPartNo());
+        row.setVersion(source.getVersion());
+        row.setNormalizedPartNo(source.getNormalizedPartNo());
+        row.setNormalizedVersion(source.getNormalizedVersion());
+        row.setImportedQuoteLeadTime(source.getImportedQuoteLeadTime());
+        row.setErrors(new ArrayList<>(safeList(source.getErrors())));
+        return row;
+    }
+
+    private QuoteLeadTimeReplacementSummaryDTO summarizeLeadTimeReplacement(List<QuoteLeadTimeReplacementRowDTO> rows) {
+        QuoteLeadTimeReplacementSummaryDTO summary = new QuoteLeadTimeReplacementSummaryDTO();
+        summary.setImportedCount(rows == null ? 0 : rows.size());
+        for (QuoteLeadTimeReplacementRowDTO row : safeList(rows)) {
+            if (row.getItemId() != null) {
+                summary.setMatchedCount(summary.getMatchedCount() + 1);
+            }
+            switch (safe(row.getStatus())) {
+                case "CHANGED" -> summary.setChangedCount(summary.getChangedCount() + 1);
+                case "UNCHANGED" -> summary.setUnchangedCount(summary.getUnchangedCount() + 1);
+                case "EMPTY_VALUE" -> summary.setEmptyValueCount(summary.getEmptyValueCount() + 1);
+                case "UNMATCHED" -> summary.setUnmatchedCount(summary.getUnmatchedCount() + 1);
+                case "ERROR" -> summary.setErrorCount(summary.getErrorCount() + 1);
+                default -> {
+                }
+            }
+        }
+        return summary;
+    }
+
+    private String leadTimeReplacementFingerprint(
+            Integer rfqId,
+            QuoteLeadTimeReplacementExcelParser.ParseResult parsed,
+            List<QuoteLeadTimeReplacementRowDTO> previewRows,
+            List<ItemQuoteVersion> items,
+            String orderStatus) {
+        StringBuilder canonical = new StringBuilder();
+        appendToken(canonical, "rfqId", rfqId);
+        appendToken(canonical, "orderStatus", orderStatus);
+        safeList(parsed.recognizedFields()).stream()
+                .sorted()
+                .forEach(field -> appendToken(canonical, "field", field));
+        safeList(previewRows).stream()
+                .sorted(Comparator
+                        .comparing((QuoteLeadTimeReplacementRowDTO row) -> safe(row.getNormalizedPartNo()))
+                        .thenComparing(row -> safe(row.getNormalizedVersion()))
+                        .thenComparing(row -> row.getExcelRowNumber() == null ? Integer.MAX_VALUE : row.getExcelRowNumber()))
+                .forEach(row -> {
+                    appendToken(canonical, "row", row.getExcelRowNumber());
+                    appendToken(canonical, "partNo", row.getNormalizedPartNo());
+                    appendToken(canonical, "version", row.getNormalizedVersion());
+                    appendToken(canonical, "imported", row.getImportedQuoteLeadTime());
+                    appendToken(canonical, "status", row.getStatus());
+                    appendToken(canonical, "itemId", row.getItemId());
+                    appendToken(canonical, "current", row.getCurrentQuoteLeadTime());
+                    safeList(row.getErrors()).stream().sorted().forEach(error -> appendToken(canonical, "error", error));
+                });
+        safeList(items).stream()
+                .sorted(Comparator.comparing(ItemQuoteVersion::getId))
+                .forEach(item -> {
+                    appendToken(canonical, "candidateId", item.getId());
+                    appendToken(canonical, "candidateKey", itemKey(item.getPartNo(), item.getVersion()));
+                    appendToken(canonical, "candidateLeadTime", item.getQuoteLeadTime());
+                    appendToken(canonical, "candidateStatus", item.getStatus());
+                });
+        return sha256(canonical.toString());
+    }
+
+    private void appendToken(StringBuilder canonical, String key, Object value) {
+        String text = value == null ? "" : String.valueOf(value);
+        canonical.append(key.length()).append(':').append(key)
+                .append(text.length()).append(':').append(text).append('\n');
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
     private Map<String, Object> quoteLeadTimeMutationSummary(Integer rfqId, int adjustedCount,
                                                              List<Map<String, Object>> skipped) {
         OrderItemSummaryDTO summary = orderItemPageService.summarizeItems(rfqId);
@@ -497,6 +793,14 @@ public class QuoteProcessService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String normalizeBlank(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private <T> List<T> safeList(Collection<T> values) {
+        return values == null ? List.of() : new ArrayList<>(values);
     }
 
     private String normalizeVersion(String version) {
