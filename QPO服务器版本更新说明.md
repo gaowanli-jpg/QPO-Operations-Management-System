@@ -81,9 +81,13 @@ ls -dt /opt/qpo/qpo-offline-package-*
 
 ```bash
 grep '^POSTGRES_PASSWORD=' erp.env
+grep '^POSTGRES_BIND=' erp.env
+grep '^POSTGRES_DATACENTER_RO_PASSWORD=' erp.env
 grep '^ERP_JWT_SECRET=' erp.env
 grep '^ERP_CORS_ALLOWED_ORIGINS=' erp.env
 ```
+
+本次数据中心直连 QPO 数据库只读追踪方案要求 `POSTGRES_BIND=0.0.0.0`，并且 `POSTGRES_DATACENTER_RO_PASSWORD` 不能为空；缺少该密码时，新版本后端会在 Flyway V15 创建只读账号前停止启动。
 
 如果服务器 IP 或访问端口没有变，这些配置不用改。
 

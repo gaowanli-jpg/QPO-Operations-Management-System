@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package-offline-images.ps1 -I
 生成目录默认在 `dist/qpo-offline-package-<tag>/`，该目录已加入 `.gitignore`，不要提交离线镜像包。
 
 ### 内网服务器加载和启动
-把 `dist/qpo-offline-package-<tag>/` 整个目录复制到内网服务器。首次部署时，在该目录下根据 `erp.env.example` 准备真实 `erp.env`。普通数据中心转发部署只需要先填写 `POSTGRES_PASSWORD` 和 `ERP_JWT_SECRET`；数据中心、MES、U9、入站回调等业务接口可启动后在系统页面配置。不要把真实 `erp.env` 回传或提交到仓库。
+把 `dist/qpo-offline-package-<tag>/` 整个目录复制到内网服务器。首次部署时，在该目录下根据 `erp.env.example` 准备真实 `erp.env`。普通系统启动至少需要填写 `POSTGRES_PASSWORD`、`POSTGRES_DATACENTER_RO_PASSWORD` 和 `ERP_JWT_SECRET`；本次数据中心直连 QPO 数据库只读追踪方案还需要保持 `POSTGRES_BIND=0.0.0.0`。数据中心、MES、U9、入站回调等业务接口可启动后在系统页面配置。不要把真实 `erp.env` 回传或提交到仓库。
 
 推荐按下面顺序操作，最不容易卡住：
 
@@ -169,6 +169,8 @@ nano erp.env
 
 ```env
 POSTGRES_PASSWORD=change-to-a-strong-password
+POSTGRES_BIND=0.0.0.0
+POSTGRES_DATACENTER_RO_PASSWORD=change-to-a-strong-readonly-password
 ERP_JWT_SECRET=change-to-a-random-secret-at-least-32-chars
 ```
 
@@ -257,10 +259,11 @@ nano erp.env
 
 重要配置：
 - `POSTGRES_PASSWORD`：启动前必须填写，使用长随机密码。
+- `POSTGRES_DATACENTER_RO_PASSWORD`：启动前必须填写，供 Flyway 创建/更新数据中心只读账号 `qpo_datacenter_ro`；如果暂时不交付给数据中心，也要先配置一个强随机值，避免后端启动迁移失败。
 - `ERP_JWT_SECRET`：启动前必须填写，至少32位强随机值；后端会拒绝使用旧默认值或过短密钥启动。
 - `ERP_CORS_ALLOWED_ORIGINS`：设置为真实前端访问地址，例如 `http://192.168.166.15:8088` 或 `https://qpo.example.com`。
 - `QPO_IMAGE_TAG`：离线包镜像标签。最好让 `scripts/load-offline-images.sh` 自动从 `qpo-image.env` 读取；手工 `docker compose` 时必须和包内镜像标签一致，不能让它默认为 `latest`。
-- `POSTGRES_BIND`：通常保持 `127.0.0.1`，除非使用独立数据库服务器或可信内网。
+- `POSTGRES_BIND`：本次数据中心直连只读追踪方案配置为 `0.0.0.0`，让内网数据中心可以连接 PostgreSQL；未来如果取消数据库直连，再恢复为 `127.0.0.1` 或关闭端口映射。
 - `BACKEND_BIND`：通常保持 `127.0.0.1`，前端容器通过Docker内部网络访问后端。
 - `FRONTEND_BIND`：同机外层Nginx代理HTTPS时用 `127.0.0.1`；只有直接暴露前端容器时才用 `0.0.0.0`。
 - `FRONTEND_PORT`：外层Nginx后面建议用 `8088`；没有外层反向代理时才考虑 `80`。
@@ -353,7 +356,8 @@ MinIO 控制台默认地址为 `http://localhost:9001`。启动后进入 QPO 的
 
 ```env
 ERP_CORS_ALLOWED_ORIGINS=https://qpo.example.com
-POSTGRES_BIND=127.0.0.1
+POSTGRES_BIND=0.0.0.0
+POSTGRES_DATACENTER_RO_PASSWORD=change-to-a-strong-readonly-password
 BACKEND_BIND=127.0.0.1
 FRONTEND_BIND=127.0.0.1
 FRONTEND_PORT=8088

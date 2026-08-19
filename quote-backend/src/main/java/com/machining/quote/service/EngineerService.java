@@ -604,8 +604,7 @@ public class EngineerService {
 
         List<Map<String, Object>> repeatItems = new ArrayList<>();
         List<Map<String, Object>> newItems = new ArrayList<>();
-        Map<String, Integer> routeFrequency = new LinkedHashMap<>();
-        Map<String, List<Map<String, Object>>> routeSamples = new LinkedHashMap<>();
+        List<Map<String, Object>> recommendedProcessRoute = reusableEngineerProcessRoute(order.getEngineerConfig());
         Map<String, Integer> materialFrequency = new LinkedHashMap<>();
         Map<String, Map<String, Object>> materialSamples = new LinkedHashMap<>();
 
@@ -619,10 +618,8 @@ public class EngineerService {
             ItemQuoteVersion sourceItem = source.item();
             repeatItems.add(buildRepeatItemInfo(item, source));
 
-            String routeKey = routeSignature(sourceItem.getProcessRoute());
-            if (!routeKey.isEmpty()) {
-                routeFrequency.put(routeKey, routeFrequency.getOrDefault(routeKey, 0) + 1);
-                routeSamples.putIfAbsent(routeKey, normalizeProcessRoute(sourceItem.getProcessRoute()));
+            if (recommendedProcessRoute.isEmpty()) {
+                recommendedProcessRoute = reusableEngineerProcessRoute(source.order().getEngineerConfig());
             }
 
             String materialCode = MaterialDataResolver.materialCode(sourceItem);
@@ -634,7 +631,7 @@ public class EngineerService {
             }
         }
 
-        Map<String, Object> recommendedConfig = buildRecommendedConfig(routeFrequency, routeSamples, materialFrequency, materialSamples);
+        Map<String, Object> recommendedConfig = buildRecommendedConfig(recommendedProcessRoute, materialFrequency, materialSamples);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
@@ -1164,34 +1161,14 @@ public class EngineerService {
     }
 
     private Map<String, Object> buildRecommendedConfig(
-            Map<String, Integer> routeFrequency,
-            Map<String, List<Map<String, Object>>> routeSamples,
+            List<Map<String, Object>> recommendedProcessRoute,
             Map<String, Integer> materialFrequency,
             Map<String, Map<String, Object>> materialSamples) {
         Map<String, Object> config = new LinkedHashMap<>();
 
-        String bestRouteKey = mostFrequentKey(routeFrequency);
         List<Map<String, Object>> processRoute = new ArrayList<>();
-        if (bestRouteKey != null) {
-            for (Map<String, Object> route : routeSamples.getOrDefault(bestRouteKey, List.of())) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                String sourceType = recommendedRouteSourceType(route);
-                row.put("sortNo", route.get("sortNo"));
-                row.put("processName", route.get("processName"));
-                row.put("calcType", route.get("calcType"));
-                row.put("sourceType", sourceType);
-                if ("process".equals(sourceType)) {
-                    row.put("processDetailId", route.get("processDetailId"));
-                    row.put("processCategoryId", route.get("processCategoryId"));
-                    row.put("processCode", route.get("processCode"));
-                    row.put("categoryName", route.get("categoryName"));
-                    row.put("detailName", route.get("detailName"));
-                    row.put("hourlyRate", route.get("hourlyRate"));
-                    row.put("unitWorkHours", route.get("unitWorkHours"));
-                    row.put("inputVal", route.get("inputVal"));
-                }
-                processRoute.add(row);
-            }
+        for (Map<String, Object> route : recommendedProcessRoute == null ? List.<Map<String, Object>>of() : recommendedProcessRoute) {
+            processRoute.add(recommendedRouteRow(route));
         }
 
         String bestMaterialKey = mostFrequentKey(materialFrequency);
@@ -1204,6 +1181,38 @@ public class EngineerService {
 
         config.put("processRoute", processRoute);
         return config;
+    }
+
+    private List<Map<String, Object>> reusableEngineerProcessRoute(Object engineerConfig) {
+        Map<String, Object> config = normalizeMap(engineerConfig);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> route : normalizeProcessRoute(config.get("processRoute"))) {
+            if (isAssemblyFeeProcessRoute(route)) {
+                continue;
+            }
+            rows.add(recommendedRouteRow(route));
+        }
+        return rows;
+    }
+
+    private Map<String, Object> recommendedRouteRow(Map<String, Object> route) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        String sourceType = recommendedRouteSourceType(route);
+        row.put("sortNo", route.get("sortNo"));
+        row.put("processName", route.get("processName"));
+        row.put("calcType", route.get("calcType"));
+        row.put("sourceType", sourceType);
+        if ("process".equals(sourceType)) {
+            row.put("processDetailId", route.get("processDetailId"));
+            row.put("processCategoryId", route.get("processCategoryId"));
+            row.put("processCode", route.get("processCode"));
+            row.put("categoryName", route.get("categoryName"));
+            row.put("detailName", route.get("detailName"));
+            row.put("hourlyRate", route.get("hourlyRate"));
+            row.put("unitWorkHours", route.get("unitWorkHours"));
+            row.put("inputVal", route.get("inputVal"));
+        }
+        return row;
     }
 
     private Map<String, Object> repeatMaterialIdentity(ItemQuoteVersion sourceItem, String materialCode, String shape) {
@@ -1236,32 +1245,6 @@ public class EngineerService {
             }
         }
         return bestKey;
-    }
-
-    private String routeSignature(Object processRoute) {
-        List<Map<String, Object>> routes = normalizeProcessRoute(processRoute);
-        List<String> identities = new ArrayList<>();
-        for (Map<String, Object> route : routes) {
-            String sourceType = recommendedRouteSourceType(route);
-            if ("process".equals(sourceType)) {
-                Long processDetailId = longValue(route.get("processDetailId"));
-                if (processDetailId != null) {
-                    identities.add("process-detail:" + processDetailId);
-                    continue;
-                }
-                String processCode = stringValue(route.get("processCode"));
-                String detailName = stringValue(route.get("detailName"));
-                if (!isBlank(processCode) || !isBlank(detailName)) {
-                    identities.add("process:" + processCode + ":" + detailName);
-                    continue;
-                }
-            }
-            String name = stringValue(route.get("processName"));
-            if (!isBlank(name)) {
-                identities.add(sourceType + ":" + name);
-            }
-        }
-        return String.join(">", identities);
     }
 
     private Map<String, Object> buildBasicItemInfo(ItemQuoteVersion item) {

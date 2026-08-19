@@ -1,4 +1,4 @@
-server:
+﻿server:
   port: ${SERVER_PORT:8080}
 
 spring:
@@ -25,6 +25,8 @@ spring:
     enabled: ${FLYWAY_ENABLED:true}
     baseline-on-migrate: false
     locations: classpath:db/migration
+    placeholders:
+      datacenter_ro_password: ${POSTGRES_DATACENTER_RO_PASSWORD:}
   jackson:
     default-property-inclusion: non_null
     time-zone: Asia/Shanghai
@@ -100,3 +102,4 @@ erp:
     max-pool-size: ${ERP_TASK_MAX_POOL_SIZE:4}
     queue-capacity: ${ERP_TASK_QUEUE_CAPACITY:50}
     output-dir: ${ERP_TASK_OUTPUT_DIR:D:/ERP_Files/tasks/}
+

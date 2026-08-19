@@ -228,4 +228,65 @@ class RepeatQuoteMaterialNoWorkflowTest extends CoreWorkflowIntegrationTestSuppo
                 "materialCategory"
         );
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void repeatAnalysisRecommendsFirstHistoricalOrderEngineerRouteTemplate() {
+        OrderRfq assemblyOnlyOrder = new OrderRfq();
+        assemblyOnlyOrder.setRfqNo("HIST-GLOBAL-ASSY-" + System.nanoTime());
+        assemblyOnlyOrder.setCustomerName("Global template assembly source");
+        assemblyOnlyOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.insert(assemblyOnlyOrder);
+        ItemQuoteVersion assemblyOnlySource = releasedReusableItem(assemblyOnlyOrder, "GLOBAL-TPL-ASSY", "A", 18.0);
+        assemblyOnlySource.setProcessRoute(List.of(Map.of(
+                "sortNo", 10,
+                "sourceType", "extra",
+                "processName", "AssemblyFee",
+                "calcType", "non-hour fee"
+        )));
+        itemMapper.updateById(assemblyOnlySource);
+
+        Map<String, Object> engineerRoute = standardProcessRoute(
+                "TEMPLATE_CNC",
+                "Template process",
+                "Template CNC",
+                66.0,
+                1.5
+        );
+        OrderRfq templatedOrder = new OrderRfq();
+        templatedOrder.setRfqNo("HIST-GLOBAL-TEMPLATE-" + System.nanoTime());
+        templatedOrder.setCustomerName("Global template normal source");
+        templatedOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        templatedOrder.setEngineerConfig(Map.of("processRoute", List.of(engineerRoute)));
+        orderMapper.insert(templatedOrder);
+        ItemQuoteVersion templatedSource = releasedReusableItem(templatedOrder, "GLOBAL-TPL-NORMAL", "A", 22.0);
+        templatedSource.setProcessRoute(List.of(standardProcessRoute(
+                "SOURCE_ITEM_ROUTE",
+                "Source item process",
+                "Source item CNC",
+                33.0,
+                1.0
+        )));
+        itemMapper.updateById(templatedSource);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-GLOBAL-TEMPLATE-" + System.nanoTime());
+        currentOrder.setCustomerName("Current global template order");
+        currentOrder.setStatus("寰呭伐绋嬮儴璇勪及");
+        currentOrder.setEngineerConfig(Map.of());
+        orderMapper.insert(currentOrder);
+        pendingItem(currentOrder, "GLOBAL-TPL-ASSY", "A");
+        pendingItem(currentOrder, "GLOBAL-TPL-NORMAL", "A");
+
+        Map<String, Object> result = engineerService.analyzeRepeatOrder(currentOrder.getId());
+
+        Map<String, Object> recommendedConfig = (Map<String, Object>) result.get("recommendedConfig");
+        List<Map<String, Object>> processRoute = (List<Map<String, Object>>) recommendedConfig.get("processRoute");
+        assertThat(processRoute).singleElement().satisfies(route -> {
+            assertThat(((Number) route.get("processDetailId")).longValue())
+                    .isEqualTo(((Number) engineerRoute.get("processDetailId")).longValue());
+            assertThat(route.get("processName")).isEqualTo("Template CNC");
+            assertThat(route.get("processCode")).isEqualTo("TEMPLATE_CNC");
+        });
+    }
 }

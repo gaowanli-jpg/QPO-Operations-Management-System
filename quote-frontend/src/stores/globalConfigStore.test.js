@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { hasLegacyProcessIdentity, normalizeRouteList, useGlobalConfigStore } from './globalConfigStore'
+import { hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeRouteList, useGlobalConfigStore } from './globalConfigStore'
 
 const createLocalStorage = () => {
   const values = new Map()
@@ -77,5 +77,14 @@ describe('globalConfigStore', () => {
     ])
 
     expect(config.map(item => item.processName)).toEqual(['CNC1'])
+  })
+
+  test('treats empty engineer config as unsaved', () => {
+    expect(hasSavedEngineerConfig(null)).toBe(false)
+    expect(hasSavedEngineerConfig({})).toBe(false)
+    expect(hasSavedEngineerConfig({ processRoute: [] })).toBe(false)
+    expect(hasSavedEngineerConfig({ materialCode: '' })).toBe(false)
+    expect(hasSavedEngineerConfig({ materialCode: 'MAT-001' })).toBe(true)
+    expect(hasSavedEngineerConfig({ processRoute: [{ processDetailId: 7, processName: 'CNC1' }] })).toBe(true)
   })
 })

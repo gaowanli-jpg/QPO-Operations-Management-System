@@ -49,8 +49,7 @@ class EngineerServiceProcessSortTests {
         Map<String, Object> config = ReflectionTestUtils.invokeMethod(
                 service,
                 "buildRecommendedConfig",
-                Map.of("route-key", 1),
-                Map.of("route-key", List.of(sourceRoute)),
+                List.of(sourceRoute),
                 Map.of(),
                 Map.of()
         );
@@ -69,17 +68,31 @@ class EngineerServiceProcessSortTests {
     }
 
     @Test
-    void repeatRouteSignatureUsesConcreteProcessIdentityInsteadOfNameOnly() {
+    void reusableEngineerProcessRouteFiltersAssemblyFeeAndKeepsHistoricalRows() {
         EngineerService service = new EngineerService();
-        Map<String, Object> firstRoute = route(10, 7L, "SHARED_NAME", 1.0);
-        Map<String, Object> secondRoute = route(10, 8L, "SHARED_NAME", 1.0);
+        String assemblyFeeName = String.valueOf(ReflectionTestUtils.getField(EngineerService.class, "ASSEMBLY_FEE_PROCESS_NAME"));
+        Map<String, Object> restorableRoute = route(30, 7L, "SHARED_NAME", 1.0);
+        Map<String, Object> legacyRoute = new LinkedHashMap<>(route(20, 8L, "LEGACY_NAME", 1.0));
+        legacyRoute.remove("processDetailId");
+        Map<String, Object> engineerConfig = Map.of("processRoute", List.of(
+                Map.of(
+                        "sortNo", 10,
+                        "sourceType", "extra",
+                        "processName", assemblyFeeName,
+                        "calcType", "\u975e\u5de5\u65f6\u8d39\u7528"
+                ),
+                legacyRoute,
+                restorableRoute
+        ));
 
-        String firstSignature = ReflectionTestUtils.invokeMethod(service, "routeSignature", List.of(firstRoute));
-        String secondSignature = ReflectionTestUtils.invokeMethod(service, "routeSignature", List.of(secondRoute));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> processRoute = ReflectionTestUtils.invokeMethod(service, "reusableEngineerProcessRoute", engineerConfig);
 
-        assertThat(firstSignature).isNotEqualTo(secondSignature);
-        assertThat(firstSignature).contains("process-detail:7");
-        assertThat(secondSignature).contains("process-detail:8");
+        assertThat(processRoute).hasSize(2);
+        assertThat(processRoute.get(0).get("processDetailId")).isNull();
+        assertThat(processRoute.get(0).get("processName")).isEqualTo(legacyRoute.get("processName"));
+        assertThat(processRoute.get(1).get("processDetailId")).isEqualTo(restorableRoute.get("processDetailId"));
+        assertThat(processRoute.get(1).get("processName")).isEqualTo(restorableRoute.get("processName"));
     }
 
     @Test

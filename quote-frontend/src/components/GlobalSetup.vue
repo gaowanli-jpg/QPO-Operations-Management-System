@@ -273,7 +273,7 @@ import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
-import { defaultGlobalConfig, hasLegacyMaterialIdentity, hasLegacyProcessIdentity, normalizeGlobalConfig, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
+import { defaultGlobalConfig, hasLegacyMaterialIdentity, hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeGlobalConfig, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
   createAuthenticatedObjectUrl,
@@ -636,11 +636,11 @@ const fetchOrderData = async () => {
       itemList.value = response.previewItemList || response.itemList || []
       itemCount.value = Number(response.itemCount ?? itemList.value.length)
       previewLimit.value = Number(response.previewLimit ?? 10)
-      if (orderInfo.value.engineerConfig) {
+      if (hasSavedEngineerConfig(orderInfo.value.engineerConfig)) {
         globalConfigStore.applyEngineerConfig(orderInfo.value.id, orderInfo.value.engineerConfig)
         assignConfig(orderInfo.value.engineerConfig)
       }
-      await loadRepeatAnalysis(orderInfo.value.id, !!orderInfo.value.engineerConfig)
+      await loadRepeatAnalysis(orderInfo.value.id, hasSavedEngineerConfig(orderInfo.value.engineerConfig))
       ElMessage.success(`成功加载订单概览，总零件 ${itemCount.value} 个，当前预览 ${itemList.value.length} 个。`)
     } else {
       ElMessage.warning('未找到该订单，请检查 ID 是否正确。')

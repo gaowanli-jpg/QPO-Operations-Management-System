@@ -135,7 +135,8 @@ docker compose --env-file erp.env up -d --build
 | `POSTGRES_DB` | PostgreSQL 数据库名 | 保持明确，例如 `postgres` 或 `erp` |
 | `POSTGRES_USER` | PostgreSQL 用户名 | 可保留 `postgres`，也可改为专用用户 |
 | `POSTGRES_PASSWORD` | PostgreSQL 密码 | 必须使用强随机密码，不能使用默认值 |
-| `POSTGRES_BIND` | 数据库端口绑定地址 | 当前为 `127.0.0.1`，生产建议继续只绑定本机或取消映射 |
+| `POSTGRES_BIND` | 数据库端口绑定地址 | 数据中心直连 QPO 数据库只读追踪时为 `0.0.0.0`；不需要直连时再恢复本机绑定 |
+| `POSTGRES_DATACENTER_RO_PASSWORD` | 数据中心只读账号密码 | 必须配置强随机值，用于 Flyway 创建/更新 `qpo_datacenter_ro` |
 | `POSTGRES_PORT` | 宿主机数据库端口 | 当前为 `5432` |
 
 ### 5.2 后端变量
@@ -426,10 +427,11 @@ Docker 内部 HTTP
 | 配置 | 要求 |
 | --- | --- |
 | `POSTGRES_PASSWORD` | 强随机密码 |
+| `POSTGRES_DATACENTER_RO_PASSWORD` | 强随机密码，交付给数据中心用于只读连接 |
 | `ERP_JWT_SECRET` | 强随机密钥，不能使用默认值 |
 | `ERP_CORS_ALLOWED_ORIGINS` | 改成真实访问域名 |
 | `ERP_APS_SOURCE_TOKEN` | 与 APS 的 `APS_ERP_AUTH_TOKEN` 一致 |
-| `POSTGRES_BIND` | 保持 `127.0.0.1` 或取消端口映射 |
+| `POSTGRES_BIND` | 数据中心只读直连期间保持 `0.0.0.0`；取消直连后再恢复 `127.0.0.1` 或取消端口映射 |
 | `BACKEND_BIND` | 保持 `127.0.0.1` 或取消端口映射 |
 | `FRONTEND_BIND` | 有外层 Nginx 时保持 `127.0.0.1` |
 

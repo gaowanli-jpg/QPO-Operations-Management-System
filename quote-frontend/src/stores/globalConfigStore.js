@@ -147,6 +147,16 @@ export const normalizeGlobalConfig = (config) => {
   }
 }
 
+export const hasSavedEngineerConfig = (config) => {
+  if (!config || typeof config !== 'object') return false
+  const normalized = normalizeGlobalConfig(config)
+  return Boolean(
+    normalized.materialCode
+    || normalized.materialName
+    || normalized.processRoute.length > 0
+  )
+}
+
 const readLocalConfig = (key) => {
   try {
     const raw = localStorage.getItem(key)
