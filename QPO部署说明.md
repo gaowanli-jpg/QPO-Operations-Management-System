@@ -85,12 +85,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package-offline-images.ps1 -I
 ### 内网服务器加载和启动
 把 `dist/qpo-offline-package-<tag>/` 整个目录复制到内网服务器。首次部署时，在该目录下根据 `erp.env.example` 准备真实 `erp.env`。普通数据中心转发部署只需要先填写 `POSTGRES_PASSWORD` 和 `ERP_JWT_SECRET`；数据中心、MES、U9、入站回调等业务接口可启动后在系统页面配置。不要把真实 `erp.env` 回传或提交到仓库。
 
+推荐按下面顺序操作，最不容易卡住：
+
+1. 把离线包目录整体拷到服务器的 `/opt/qpo/`。
+2. 进入离线包目录。
+3. 复制 `erp.env.example` 为 `erp.env`。
+4. 用 `nano erp.env` 修改环境变量。
+5. 先确认镜像标签，再执行离线加载脚本。
+6. 用浏览器访问服务器 IP 的 `8088` 端口登录。
+
 Linux 上传示例：
 
 ```bash
 mkdir -p /opt/qpo
 # 在有离线包的机器执行；也可以用 U 盘、堡垒机或内网文件共享传输整个目录。
-scp -r dist/qpo-offline-package-master root@<server-ip>:/opt/qpo/
+scp -r dist/qpo-offline-package-<tag> root@<server-ip>:/opt/qpo/
 ```
 
 从本机连接内网服务器、创建目录、上传并启动的完整衔接流程：
@@ -123,7 +132,7 @@ exit
 
 ```powershell
 # 3. 在本机上传整个离线包目录。
-scp -r D:\QPO-Operations-Management-System\dist\qpo-offline-package-local-20260818 root@<server-ip>:/opt/qpo/
+scp -r D:\QPO-Operations-Management-System\dist\qpo-offline-package-<tag> root@<server-ip>:/opt/qpo/
 
 # 4. 上传完成后重新登录服务器。
 ssh root@<server-ip>
@@ -131,14 +140,14 @@ ssh root@<server-ip>
 
 ```bash
 # 5. 进入离线包目录并确认文件齐全。
-cd /opt/qpo/qpo-offline-package-local-20260818
+cd /opt/qpo/qpo-offline-package-<tag>
 ls
 ```
 
 目录内应能看到：
 
 ```text
-qpo-offline-images-local-20260818.tar
+qpo-offline-images-<tag>.tar
 docker-compose.yml
 erp.env.example
 qpo-image.env
@@ -151,9 +160,9 @@ scripts
 服务器首次准备 `erp.env`：
 
 ```bash
-cd /opt/qpo/qpo-offline-package-master
+cd /opt/qpo/qpo-offline-package-<tag>
 cp erp.env.example erp.env
-vi erp.env
+nano erp.env
 ```
 
 最小必填项：
@@ -163,19 +172,38 @@ POSTGRES_PASSWORD=change-to-a-strong-password
 ERP_JWT_SECRET=change-to-a-random-secret-at-least-32-chars
 ```
 
+在 `nano` 里建议优先补这几项：
+
+```env
+ERP_CORS_ALLOWED_ORIGINS=http://<服务器IP>:8088,http://localhost:8088,http://127.0.0.1:8088
+```
+
+保存退出：
+
+- `Ctrl + O`，回车保存
+- `Ctrl + X`，退出
+
 直接通过服务器 IP 访问前端时，模板默认 `FRONTEND_BIND=0.0.0.0`、`FRONTEND_PORT=8088`，通常不需要改。若前面还有服务器 Nginx/网关反代，再改成 `FRONTEND_BIND=127.0.0.1` 并配置 `ERP_CORS_ALLOWED_ORIGINS` 为真实域名。
+
+如果你是通过 `http://192.168.166.15:8088` 打开前端，就必须把这个完整 origin 写进 `ERP_CORS_ALLOWED_ORIGINS`，否则浏览器会报 `Invalid CORS request`。
+
+手工重启前，建议先把标签显式设出来，避免回退到 `latest`：
+
+```bash
+export QPO_IMAGE_TAG="$(grep '^QPO_IMAGE_TAG=' qpo-image.env | cut -d= -f2-)"
+```
 
 Linux 部署服务器：
 
 ```bash
-cd /opt/qpo/qpo-offline-package-master
+cd /opt/qpo/qpo-offline-package-<tag>
 bash scripts/load-offline-images.sh
 ```
 
 Windows 部署服务器：
 
 ```powershell
-cd D:\qpo\qpo-offline-package-master
+cd D:\qpo\qpo-offline-package-<tag>
 powershell -ExecutionPolicy Bypass -File .\scripts\load-offline-images.ps1
 ```
 
@@ -184,6 +212,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\load-offline-images.ps1
 ```bash
 docker compose --env-file erp.env up -d --no-build
 ```
+
+如果你不是用脚本，而是手工重启容器，也要先确认 `QPO_IMAGE_TAG` 和包内镜像一致，再执行：
+
+```bash
+docker compose --env-file erp.env up -d --no-build --force-recreate backend frontend
+```
+
+如果这里报 `No such image: qpo-backend:latest`，说明 `QPO_IMAGE_TAG` 没设对，或者你没有使用包内的 `qpo-image.env`。
+
+如果这里报 `Invalid CORS request`，说明 `ERP_CORS_ALLOWED_ORIGINS` 里还没有包含当前浏览器访问前端时的完整地址。
 
 如果只想加载镜像、不启动服务：
 
@@ -210,10 +248,18 @@ Copy-Item erp.env.example erp.env
 notepad erp.env
 ```
 
+Linux 服务器上更推荐：
+
+```bash
+cp erp.env.example erp.env
+nano erp.env
+```
+
 重要配置：
 - `POSTGRES_PASSWORD`：启动前必须填写，使用长随机密码。
 - `ERP_JWT_SECRET`：启动前必须填写，至少32位强随机值；后端会拒绝使用旧默认值或过短密钥启动。
-- `ERP_CORS_ALLOWED_ORIGINS`：设置为真实前端访问地址，例如 `https://qpo.example.com`。
+- `ERP_CORS_ALLOWED_ORIGINS`：设置为真实前端访问地址，例如 `http://192.168.166.15:8088` 或 `https://qpo.example.com`。
+- `QPO_IMAGE_TAG`：离线包镜像标签。最好让 `scripts/load-offline-images.sh` 自动从 `qpo-image.env` 读取；手工 `docker compose` 时必须和包内镜像标签一致，不能让它默认为 `latest`。
 - `POSTGRES_BIND`：通常保持 `127.0.0.1`，除非使用独立数据库服务器或可信内网。
 - `BACKEND_BIND`：通常保持 `127.0.0.1`，前端容器通过Docker内部网络访问后端。
 - `FRONTEND_BIND`：同机外层Nginx代理HTTPS时用 `127.0.0.1`；只有直接暴露前端容器时才用 `0.0.0.0`。
@@ -235,6 +281,11 @@ MINIO_ROOT_PASSWORD=
 ```
 
 其中 `ERP_DATA_CENTER_CLIENT_SECRET` 可在系统配置页维护；`ERP_MES_*`、`ERP_U9_*` 是直连或老环境 fallback；`MINIO_ROOT_PASSWORD` 只在启动本包自带 MinIO profile 时需要。
+
+这次最容易踩的两个坑可以直接按下面处理：
+
+- `Invalid CORS request`：补 `ERP_CORS_ALLOWED_ORIGINS`，然后只重启后端。
+- `No such image: qpo-backend:latest`：补 `QPO_IMAGE_TAG`，再用 `--no-build` 重启。
 
 连接池经验公式：
 
