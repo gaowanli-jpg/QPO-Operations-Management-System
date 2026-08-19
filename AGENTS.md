@@ -44,6 +44,15 @@ Logging checks are required when a change adds or changes:
 
 Do not add noisy logs for normal high-frequency reads, health checks, list polling, or purely auxiliary helpers. Pure UI styling/layout changes usually do not need new permissions or logs, but they must preserve existing permission checks and audit behavior.
 
+## Flyway Migration Rules
+
+- Flyway migrations are append-only after they have been applied in any real or shared database.
+- Never edit an executed migration to fix schema, index, seed data, or checksum problems.
+- Treat `V1__qpo_baseline_schema.sql` and `V2__qpo_baseline_seed_data.sql` as immutable baseline artifacts.
+- Keep historical compatibility migrations such as `V3` and `V4` unchanged unless the user explicitly requests a coordinated migration strategy change.
+- Any new schema, index, or data correction must go into the next unused migration version (`V5+`), with a regression test that proves the baseline files stay unchanged.
+- Before claiming a rebuild or deployment is safe, run the Flyway policy test and confirm startup validates cleanly without checksum mismatches.
+
 ## Development Cadence
 
 For implementation tasks:
