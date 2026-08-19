@@ -152,6 +152,10 @@ cp "$PROJECT_ROOT/erp.env.example" "$OUTPUT_DIR/erp.env.example"
 cp "$PROJECT_ROOT/QPO部署说明.md" "$OUTPUT_DIR/QPO部署说明.md"
 cp "$PROJECT_ROOT/scripts/load-offline-images.ps1" "$OUTPUT_DIR/scripts/load-offline-images.ps1"
 cp "$PROJECT_ROOT/scripts/load-offline-images.sh" "$OUTPUT_DIR/scripts/load-offline-images.sh"
+cp "$PROJECT_ROOT/scripts/backup-qpo.sh" "$OUTPUT_DIR/scripts/backup-qpo.sh"
+cp "$PROJECT_ROOT/scripts/restore-qpo.sh" "$OUTPUT_DIR/scripts/restore-qpo.sh"
+cp "$PROJECT_ROOT/QPO服务器备份说明.md" "$OUTPUT_DIR/QPO服务器备份说明.md"
+cp "$PROJECT_ROOT/QPO服务器恢复说明.md" "$OUTPUT_DIR/QPO服务器恢复说明.md"
 
 cat > "$OUTPUT_DIR/qpo-image.env" <<EOF
 QPO_IMAGE_TAG=$IMAGE_TAG

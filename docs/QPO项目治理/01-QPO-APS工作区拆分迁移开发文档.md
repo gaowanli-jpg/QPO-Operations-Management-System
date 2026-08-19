@@ -40,11 +40,8 @@ D:\QPO-Operations-Management-System\
 - `docs\QPO报价状态流转\`
 - `docs\QPO-MES-WMS对接\`
 - `scripts\` 中 QPO 专用脚本：
-  - `backup.ps1`
-  - `restore.ps1`
-  - `restore-drill.ps1`
-  - `install-backup-task.ps1`
-  - `run-backup-task.ps1`
+  - `backup-qpo.sh`
+  - `restore-qpo.sh`
   - `capacity-report.ps1`
 - QPO 业务资料文件夹：
   - `图纸\`
@@ -53,7 +50,8 @@ D:\QPO-Operations-Management-System\
 - QPO 运维资料：
   - `QPO部署说明.md`
   - `QPO运维说明.md`
-  - `QPO备份与恢复说明.md`
+  - `QPO服务器备份说明.md`
+  - `QPO服务器恢复说明.md`
   - `backups\` 中 QPO 相关备份
   - `logs\` 中 QPO 相关日志
   - `capacity-reports\` 中 QPO 相关容量报告
@@ -309,17 +307,9 @@ docker compose --env-file APS 环境变量文件 -f APS Compose 文件 config
 
 本阶段不改 QPO 数据库卷和 APS 数据库卷，只改代码目录和 build context。
 
-### 5.4 计划任务
+### 5.4 备份定时任务
 
-当前备份脚本默认 `ProjectRoot = "D:\QPO-Operations-Management-System"`。主目录改名后，Windows 计划任务仍会调用旧路径，需要重装：
-
-```powershell
-cd D:\QPO-Operations-Management-System
-.\scripts\install-backup-task.ps1 -ProjectRoot D:\QPO-Operations-Management-System
-
-cd D:\APS-Operations-Management-System
-.\scripts\install-aps-backup-task.ps1 -ProjectRoot D:\APS-Operations-Management-System
-```
+QPO 服务器使用 Linux `cron` 调用 `scripts/backup-qpo.sh`，不再保留旧的 Windows 计划任务脚本。具体命令和保留策略见 `QPO服务器备份说明.md`。
 
 ## 6. 完成定义
 

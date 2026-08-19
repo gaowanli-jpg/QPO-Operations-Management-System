@@ -128,6 +128,10 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "erp.env.example") -Destination (
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO部署说明.md") -Destination (Join-Path $OutputDir "QPO部署说明.md") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/load-offline-images.ps1") -Destination (Join-Path $scriptsOutputDir "load-offline-images.ps1") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/load-offline-images.sh") -Destination (Join-Path $scriptsOutputDir "load-offline-images.sh") -Force
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/backup-qpo.sh") -Destination (Join-Path $scriptsOutputDir "backup-qpo.sh") -Force
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/restore-qpo.sh") -Destination (Join-Path $scriptsOutputDir "restore-qpo.sh") -Force
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO服务器备份说明.md") -Destination (Join-Path $OutputDir "QPO服务器备份说明.md") -Force
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO服务器恢复说明.md") -Destination (Join-Path $OutputDir "QPO服务器恢复说明.md") -Force
 
 @"
 QPO_IMAGE_TAG=$ImageTag

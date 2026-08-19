@@ -863,10 +863,10 @@ http://localhost:8080/api/health
 
 | 脚本 | 说明 |
 |---|---|
-| `scripts\backup.ps1` | ERP 手动备份 |
-| `scripts\restore.ps1` | ERP 覆盖式恢复，需要 `-Force` |
-| `scripts\restore-drill.ps1` | 不影响业务库的恢复演练 |
-| `scripts\install-backup-task.ps1` | 安装每日定时备份任务 |
+| `scripts\backup-qpo.sh` | Linux 服务器手动备份数据库、上传文件和部署配置 |
+| `scripts\restore-qpo.sh` | Linux 服务器校验并恢复指定备份，需要 `--force` |
+| `QPO服务器备份说明.md` | 手动备份、cron 定时备份和保留策略 |
+| `QPO服务器恢复说明.md` | 恢复前检查、正式恢复和恢复演练说明 |
 | `scripts\capacity-report.ps1` | 容量报告 |
 
 备份内容：

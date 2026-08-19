@@ -20,8 +20,8 @@
 - `quote-frontend/`。
 - `docker-compose.yml`、`erp.env`、`erp.env.example`。
 - `docs/QPO*/` 与本 `docs/QPO项目治理/`。
-- QPO 运维文档：`QPO部署说明.md`、`QPO运维说明.md`、`QPO备份与恢复说明.md`。
-- QPO 脚本：`scripts/backup.ps1`、`scripts/restore.ps1`、`scripts/restore-drill.ps1`、`scripts/install-backup-task.ps1`、`scripts/run-backup-task.ps1`、`scripts/capacity-report.ps1`。
+- QPO 运维文档：`QPO部署说明.md`、`QPO运维说明.md`、`QPO服务器备份说明.md`、`QPO服务器恢复说明.md`。
+- QPO 脚本：`scripts/backup-qpo.sh`、`scripts/restore-qpo.sh`、`scripts/capacity-report.ps1`。
 
 ## 4. QPO 业务资料保留范围
 
