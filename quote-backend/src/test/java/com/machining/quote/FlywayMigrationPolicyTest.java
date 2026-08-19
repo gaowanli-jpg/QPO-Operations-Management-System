@@ -88,6 +88,21 @@ class FlywayMigrationPolicyTest {
                 .contains("scripts/compose-up.ps1");
     }
 
+    @Test
+    void compressedBaselineKeepsRepeatMatchChangesInV14() throws IOException {
+        String baseline = read(MIGRATION_DIR.resolve("V1__qpo_baseline_schema.sql"));
+        String repeatMatchMigration = read(MIGRATION_DIR.resolve("V14__repeat_match_eligible_flag.sql"));
+
+        assertThat(baseline)
+                .doesNotContain("repeat_match_eligible")
+                .doesNotContain("idx_item_quote_version_repeat_eligible_key")
+                .contains("idx_item_quote_version_repeat_released_key");
+        assertThat(repeatMatchMigration)
+                .contains("repeat_match_eligible")
+                .contains("idx_item_quote_version_repeat_released_key")
+                .contains("idx_item_quote_version_repeat_eligible_key");
+    }
+
     private static List<MigrationFile> migrationFiles() throws IOException {
         List<MigrationFile> migrations = new ArrayList<>();
         try (var paths = Files.list(MIGRATION_DIR)) {

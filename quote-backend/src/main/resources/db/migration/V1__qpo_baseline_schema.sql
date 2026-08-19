@@ -476,7 +476,6 @@ CREATE TABLE item_quote_version (
     untaxed_unit_price numeric(12,2),
     tax_included_total_price numeric(12,2),
     untaxed_total_price numeric(12,2),
-    repeat_match_eligible boolean DEFAULT false NOT NULL,
     shipped_qty integer DEFAULT 0,
     unshipped_qty integer DEFAULT 0,
     sales_order_import_record_id bigint,
@@ -2700,10 +2699,10 @@ CREATE INDEX idx_item_quote_version_material_source_ticket ON item_quote_version
 CREATE INDEX idx_item_quote_version_material_status ON item_quote_version USING btree (material_no_status, rfq_id, id);
 
 --
--- Name: idx_item_quote_version_repeat_eligible_key; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_item_quote_version_repeat_released_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_item_quote_version_repeat_eligible_key ON item_quote_version USING btree (part_no, version, id DESC) WHERE ((repeat_match_eligible IS TRUE) AND (tax_included_unit_price IS NOT NULL) AND (material_data IS NOT NULL) AND (material_data <> '{}'::jsonb) AND (process_route IS NOT NULL) AND (process_route <> '[]'::jsonb));
+CREATE INDEX idx_item_quote_version_repeat_released_key ON item_quote_version USING btree (part_no, version, id DESC) WHERE (((status)::text = '已提单'::text) AND (tax_included_unit_price IS NOT NULL) AND (material_data IS NOT NULL) AND (material_data <> '{}'::jsonb) AND (process_route IS NOT NULL) AND (process_route <> '[]'::jsonb));
 
 --
 -- Name: idx_item_quote_version_rfq_id; Type: INDEX; Schema: public; Owner: -
