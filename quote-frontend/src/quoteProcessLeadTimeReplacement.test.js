@@ -13,7 +13,7 @@ vi.mock('./api', () => ({
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readOptionalSource = (...segments) => {
   const path = resolve(currentDir, ...segments)
-  return existsSync(path) ? readFileSync(path, 'utf8') : ''
+  return existsSync(path) ? readFileSync(path, 'utf8').replace(/\r\n/g, '\n') : ''
 }
 
 const quoteProcessSource = readOptionalSource('components', 'QuoteProcess.vue')
