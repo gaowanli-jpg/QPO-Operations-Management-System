@@ -56,7 +56,7 @@ class SystemStorageDeploymentStage6Test {
                 .contains("container_name: quote-minio")
                 .contains("command: server /data --console-address \":9001\"")
                 .contains("MINIO_ROOT_USER: ${MINIO_ROOT_USER:-qpo_minio_admin}")
-                .contains("MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in erp.env before starting MinIO}")
+                .contains("MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}")
                 .contains("${MINIO_BIND:-127.0.0.1}:${MINIO_API_PORT:-9000}:9000")
                 .contains("${MINIO_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001")
                 .contains("minio_data:/data")

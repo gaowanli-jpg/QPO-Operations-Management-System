@@ -490,6 +490,7 @@ class AssemblyWorkflowIntegrationTests {
     private ItemQuoteVersion markItemReleased(ItemQuoteVersion item) {
         ItemQuoteVersion saved = itemMapper.selectById(item.getId());
         saved.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
+        saved.setRepeatMatchEligible(true);
         itemMapper.updateById(saved);
         return itemMapper.selectById(item.getId());
     }

@@ -19,6 +19,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -203,6 +204,7 @@ class U9CustomerMasterMigrationTest {
                 .schemas(schema)
                 .defaultSchema(schema)
                 .locations("filesystem:src/main/resources/db/migration")
+                .placeholders(Map.of("datacenter_ro_password", "test-readonly-password"))
                 .baselineOnMigrate(false)
                 .load()
                 .migrate();

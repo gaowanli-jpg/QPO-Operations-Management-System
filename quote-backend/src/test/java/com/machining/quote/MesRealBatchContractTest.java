@@ -251,6 +251,7 @@ class MesRealBatchContractTest {
                 .schemas(schema)
                 .defaultSchema(schema)
                 .locations("filesystem:" + MIGRATION_DIR)
+                .placeholders(Map.of("datacenter_ro_password", "test-readonly-password"))
                 .baselineOnMigrate(false)
                 .load()
                 .migrate();
