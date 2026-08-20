@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
+import com.machining.quote.service.mes.MesMaterialProcessingRecoveryService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.wms.WmsReservationBatchService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,8 @@ public class DeliveryIntegrationBatchService {
     private WmsReservationBatchService wmsReservationBatchService;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private MesMaterialProcessingRecoveryService mesMaterialProcessingRecoveryService;
 
     public List<Integer> normalizeTicketIds(List<Integer> ticketIds) {
         if (ticketIds == null) {
@@ -73,6 +76,14 @@ public class DeliveryIntegrationBatchService {
             OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
             if (isMesCallbackPending(ticket)) {
                 rowByTicketId.put(ticketId, row(ticketId, STATUS_CALLBACK_PENDING, "MES material is waiting for callback", null));
+                continue;
+            }
+            MesMaterialProcessingRecoveryService.RecoveryResult recoveryResult = recoverProcessing(ticket, taskId);
+            if (recoveryResult != null && recoveryResult.isHandled()) {
+                rowByTicketId.put(ticketId, row(ticketId,
+                        recoveryResult.getStatus(),
+                        recoveryResult.getMessage(),
+                        recoveryResult.getSummary()));
                 continue;
             }
             String skipReason = mesSkipReason(ticket);
@@ -137,6 +148,26 @@ public class DeliveryIntegrationBatchService {
             return "MES material task is processing";
         }
         return null;
+    }
+
+    private MesMaterialProcessingRecoveryService.RecoveryResult recoverProcessing(OrderDeliveryTicket ticket, Long taskId) {
+        if (mesMaterialProcessingRecoveryService == null
+                || ticket == null
+                || !"PROCESSING".equalsIgnoreCase(ticket.getMesSyncStatus())) {
+            return null;
+        }
+        try {
+            return mesMaterialProcessingRecoveryService.recoverProcessing(ticket, taskId);
+        } catch (RuntimeException error) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("recoveredProcessing", false);
+            summary.put("recoveryError", true);
+            summary.put("taskId", taskId);
+            return MesMaterialProcessingRecoveryService.RecoveryResult.handled(
+                    STATUS_FAILED,
+                    safeMessage(error),
+                    summary);
+        }
     }
 
     private Map<String, Object> row(Integer ticketId, String status, String message, Object result) {

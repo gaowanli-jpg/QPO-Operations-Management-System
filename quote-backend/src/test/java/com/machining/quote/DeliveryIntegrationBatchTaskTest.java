@@ -7,6 +7,7 @@ import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.DeliveryIntegrationBatchService;
+import com.machining.quote.service.mes.MesMaterialProcessingRecoveryService;
 import com.machining.quote.service.mes.MesMaterialSyncService;
 import com.machining.quote.service.SystemTaskService;
 import com.machining.quote.service.wms.WmsReservationBatchService;
@@ -153,6 +154,36 @@ class DeliveryIntegrationBatchTaskTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void mesBatchRecoversInterruptedProcessingRowsBeforeSkip() {
+        DeliveryIntegrationBatchService service = new DeliveryIntegrationBatchService();
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        MesMaterialSyncService mesService = mock(MesMaterialSyncService.class);
+        MesMaterialProcessingRecoveryService recoveryService = mock(MesMaterialProcessingRecoveryService.class);
+        wireBatchService(service, ticketMapper, mesService, null, null, recoveryService);
+        OrderDeliveryTicket processing = ticket(7, "PROCESSING", null, "PENDING", null, 10);
+        when(ticketMapper.selectById(7)).thenReturn(processing);
+        when(recoveryService.recoverProcessing(processing, 9007L))
+                .thenReturn(MesMaterialProcessingRecoveryService.RecoveryResult.handled(
+                        "FAILED",
+                        "MES material task was interrupted; please retry",
+                        Map.of("recoveredProcessing", true, "recoveryType", "REQUEST_INTERRUPTED")));
+
+        Map<String, Object> result = service.syncMesMaterialBatch(List.of(7), 9007L);
+
+        assertThat(result)
+                .containsEntry("totalCount", 1)
+                .containsEntry("failedCount", 1)
+                .containsEntry("skippedCount", 0);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("results");
+        assertThat(rows.get(0))
+                .containsEntry("status", "FAILED")
+                .containsEntry("message", "MES material task was interrupted; please retry");
+        verify(recoveryService).recoverProcessing(processing, 9007L);
+        verify(mesService, never()).syncMaterialBatch(any(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void wmsBatchSkipsInvalidRowsAndSummarizesPartialSuccess() {
         DeliveryIntegrationBatchService service = new DeliveryIntegrationBatchService();
         OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
@@ -206,10 +237,21 @@ class DeliveryIntegrationBatchTaskTest {
             MesMaterialSyncService mesService,
             WmsReservationBatchService wmsService,
             DataScopeService dataScopeService) {
+        wireBatchService(service, ticketMapper, mesService, wmsService, dataScopeService, null);
+    }
+
+    private void wireBatchService(
+            DeliveryIntegrationBatchService service,
+            OrderDeliveryTicketMapper ticketMapper,
+            MesMaterialSyncService mesService,
+            WmsReservationBatchService wmsService,
+            DataScopeService dataScopeService,
+            MesMaterialProcessingRecoveryService recoveryService) {
         ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
         ReflectionTestUtils.setField(service, "mesMaterialSyncService", mesService);
         ReflectionTestUtils.setField(service, "wmsReservationBatchService", wmsService);
         ReflectionTestUtils.setField(service, "dataScopeService", dataScopeService);
+        ReflectionTestUtils.setField(service, "mesMaterialProcessingRecoveryService", recoveryService);
     }
 
     private OrderDeliveryTicket ticket(
