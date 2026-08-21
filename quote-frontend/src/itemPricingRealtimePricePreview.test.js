@@ -28,6 +28,7 @@ describe('ItemPricing realtime normal price preview', () => {
     expect(source).toContain('const currentItemQty = computed(() => numberOrZero(currentRow.value?.qty))')
     expect(source).toContain('const normalProcessCostPreview = computed(() =>')
     expect(source).toContain('processRoute.value.reduce')
+    expect(source).toContain('option?.hourlyRate ?? proc.hourlyRate ?? proc.unitRate')
     expect(source).toContain('inputVal * hourlyRate')
     expect(source).toContain('const normalBaseCostPreview = computed(() => calculatedMaterialCost.value + normalProcessCostPreview.value)')
     expect(source).toContain('const normalMarkupFeeRowsPreview = computed(() => markupFeeOptions.value')

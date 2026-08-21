@@ -141,8 +141,14 @@
                 <el-table-column prop="detailName" label="具体工艺" min-width="160" fixed show-overflow-tooltip />
                 <el-table-column prop="processCode" label="大类编码" width="150" show-overflow-tooltip />
                 <el-table-column prop="categoryName" label="大类名称" min-width="150" show-overflow-tooltip />
+                <el-table-column label="具体小时价格" width="150" align="right">
+                  <template #default="scope">{{ formatDetailHourlyRate(scope.row.detailHourlyRate) }}</template>
+                </el-table-column>
                 <el-table-column label="大类小时价格" width="150" align="right">
-                  <template #default="scope">{{ formatHourlyRate(scope.row.hourlyRate) }}</template>
+                  <template #default="scope">{{ formatHourlyRate(scope.row.categoryHourlyRate) }}</template>
+                </el-table-column>
+                <el-table-column label="核价使用价格" width="150" align="right">
+                  <template #default="scope">{{ formatHourlyRate(scope.row.effectiveHourlyRate ?? scope.row.hourlyRate) }}</template>
                 </el-table-column>
                 <el-table-column prop="detailRemarks" label="具体备注" min-width="200" show-overflow-tooltip />
                 <el-table-column label="状态" width="90" align="center">
@@ -316,6 +322,13 @@
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="processDetailForm.enabled" />
+        </el-form-item>
+        <el-form-item label="具体小时价格">
+          <div class="unit-input">
+            <el-input-number v-model="processDetailForm.hourlyRate" :min="0" :precision="2" :value-on-clear="null" clearable controls-position="right" class="unit-input-control" />
+            <span class="unit-label wide">元/小时</span>
+          </div>
+          <div class="form-helper-text">留空继承大类小时价格；填 0 表示该具体工艺按 0 元/小时核价。</div>
         </el-form-item>
         <el-form-item label="具体备注" class="process-dialog-wide">
           <el-input v-model="processDetailForm.detailRemarks" type="textarea" :rows="3" placeholder="例如：包装选择精细包装" />
@@ -588,6 +601,7 @@ const formatHourlyRate = (value) => {
   const text = formatNumber(value, 2)
   return text === '-' ? '-' : `${text} 元/小时`
 }
+const formatDetailHourlyRate = (value) => (value == null || value === '' ? '继承大类' : formatHourlyRate(value))
 const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
 const hasPositivePrice = (value) => Number(value) > 0
 const materialPriceStatusText = (row = {}) => (
@@ -631,6 +645,7 @@ function createEmptyProcessDetail() {
     sortNo: 0,
     categoryId: null,
     detailName: '',
+    hourlyRate: null,
     detailRemarks: '',
     enabled: true
   }
@@ -676,6 +691,7 @@ const openMaterialDialog = (row) => {
 
 const openProcessDetailDialog = (row) => {
   Object.assign(processDetailForm, createEmptyProcessDetail(), row || {})
+  processDetailForm.hourlyRate = row?.detailHourlyRate ?? null
   processDetailForm.enabled = processDetailForm.enabled !== false
   processDetailDialogVisible.value = true
 }
@@ -795,7 +811,10 @@ const saveProcessDetail = async () => {
   if (!processDetailForm.detailName) return ElMessage.warning('请填写具体工艺名称。')
   return runAction(dictActionKeys.saveProcessDetailDialog, async () => {
     try {
-      const response = await saveProcessDetailRequest(processDetailForm)
+      const hourlyRate = processDetailForm.hourlyRate === '' || processDetailForm.hourlyRate == null
+        ? null
+        : Number(processDetailForm.hourlyRate)
+      const response = await saveProcessDetailRequest({ ...processDetailForm, hourlyRate })
       ElMessage.success(response.message || '保存成功')
       processDetailDialogVisible.value = false
       await dictionaryStore.reloadAfterMutation()
@@ -953,6 +972,14 @@ onMounted(loadAll)
 
 .unit-label.wide {
   flex-basis: 64px;
+}
+
+.form-helper-text {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .dialog-number-input,

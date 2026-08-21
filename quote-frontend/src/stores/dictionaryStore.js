@@ -14,10 +14,17 @@ const toProcessCompatibilityRow = (item = {}) => ({
   id: item.id,
   processDetailId: item.id,
   processCategoryId: item.categoryId,
+  detailHourlyRate: item.detailHourlyRate,
+  categoryHourlyRate: item.categoryHourlyRate,
+  effectiveHourlyRate: item.effectiveHourlyRate,
+  hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate,
   processName: item.detailName,
   calcType: '工时',
   sourceType: 'process'
 })
+
+const formatHourlyRate = (value) => Number(value ?? 0).toFixed(2)
+const processRateSourceText = (item = {}) => item.detailHourlyRate == null ? '继承大类' : '具体价'
 
 export const useDictionaryStore = defineStore('dictionary', {
   state: () => ({
@@ -43,9 +50,12 @@ export const useDictionaryStore = defineStore('dictionary', {
         processCode: item.processCode,
         categoryName: item.categoryName,
         detailName: item.detailName,
-        hourlyRate: item.hourlyRate,
+        detailHourlyRate: item.detailHourlyRate,
+        categoryHourlyRate: item.categoryHourlyRate,
+        effectiveHourlyRate: item.effectiveHourlyRate,
+        hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate,
         processName: item.detailName,
-        label: `${item.detailName}（${item.processCode || '-'} / ${item.categoryName || '-'} / ${Number(item.hourlyRate || 0).toFixed(2)}元/小时）`,
+        label: `${item.detailName}（${item.processCode || '-'} / ${item.categoryName || '-'} / ${formatHourlyRate(item.hourlyRate ?? item.effectiveHourlyRate)}元/小时 / ${processRateSourceText(item)}）`,
         calcType: '工时',
         sourceType: 'process'
       })),

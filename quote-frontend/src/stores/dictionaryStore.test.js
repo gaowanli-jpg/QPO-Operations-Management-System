@@ -57,8 +57,10 @@ describe('dictionaryStore', () => {
   test('combinedProcessOptions combines process and extra fee records', async () => {
     listMaterialTypes.mockResolvedValue([])
     listMaterials.mockResolvedValue([])
-    listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'PACKAGING', categoryName: '包装', hourlyRate: 10 }])
-    listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', hourlyRate: 10 }])
+    listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'CNC', categoryName: '数控', hourlyRate: 80 }])
+    listProcessDetails.mockResolvedValue([
+      { id: 2, categoryId: 10, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', detailHourlyRate: 0, categoryHourlyRate: 80, effectiveHourlyRate: 0, hourlyRate: 0 }
+    ])
     listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: 'Heat Treat' }])
     listMarkupFees.mockResolvedValue([])
     listAssemblyMarkupFees.mockResolvedValue([])
@@ -67,9 +69,12 @@ describe('dictionaryStore', () => {
     await store.loadBaseDicts({ force: true })
 
     expect(store.combinedProcessOptions).toEqual([
-      expect.objectContaining({ optionKey: 'process-detail-2', processDetailId: 2, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', processName: '精细包装', hourlyRate: 10, sourceType: 'process' }),
+      expect.objectContaining({ optionKey: 'process-detail-2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', hourlyRate: 0, sourceType: 'process' }),
       expect.objectContaining({ optionKey: 'extra-3', processName: 'Heat Treat', sourceType: 'extra' })
     ])
+    expect(store.combinedProcessOptions[0].label).toContain('0.00元/小时')
+    expect(store.combinedProcessOptions[0].label).toContain('具体价')
+    expect(store.combinedProcessOptions[0].label).not.toContain('80.00元/小时')
   })
 
   test('applyPricingFallbackData preserves ItemPricing fallback strategy', () => {
