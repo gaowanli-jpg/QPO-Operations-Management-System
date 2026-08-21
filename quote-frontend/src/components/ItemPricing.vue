@@ -587,8 +587,10 @@
       type="process"
       :items="combinedProcessOptions"
       :selected-key="selectedProcessOptionKey"
+      :enable-process-rate-edit="true"
       empty-text="暂无工艺字典数据"
       @confirm="selectProcess"
+      @process-rate-updated="handleProcessRateUpdated"
     />
 
     <!-- 图纸预览 -->
@@ -1228,6 +1230,37 @@ const selectProcess = (selected) => {
   const proc = processRoute.value[editingProcessIndex.value]
   applyProcessSelection(proc, selected)
   editingProcessIndex.value = null
+}
+
+const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
+  const detailId = updatedDetail.id ?? updatedDetail.processDetailId
+  if (detailId == null) return
+  const hourlyRate = Number(updatedDetail.hourlyRate ?? updatedDetail.effectiveHourlyRate)
+  const hasHourlyRate = Number.isFinite(hourlyRate)
+  processRoute.value.forEach((proc) => {
+    if (String(proc?.processDetailId ?? '') !== String(detailId)) return
+    proc.processCategoryId = updatedDetail.categoryId ?? updatedDetail.processCategoryId ?? proc.processCategoryId
+    proc.processCode = updatedDetail.processCode ?? proc.processCode
+    proc.categoryName = updatedDetail.categoryName ?? proc.categoryName
+    proc.detailName = updatedDetail.detailName ?? proc.detailName
+    proc.processName = updatedDetail.detailName ?? proc.processName
+    if (hasHourlyRate) {
+      proc.hourlyRate = hourlyRate
+      proc.unitRate = hourlyRate
+    }
+  })
+}
+
+const handleProcessRateUpdated = async (updatedDetail) => {
+  dictionaryStore.upsertProcessDetail(updatedDetail)
+  syncCurrentSelectedProcessRate(updatedDetail)
+  try {
+    await dictionaryStore.reloadAfterMutation()
+    syncCurrentSelectedProcessRate(updatedDetail)
+  } catch (error) {
+    console.error(error)
+    ElMessage.warning('具体小时价格已保存，字典缓存刷新失败，请重新打开页面确认。')
+  }
 }
 
 const isAssemblyItem = (item) => String(item?.quoteMode || '').toUpperCase() === 'ASSEMBLY'

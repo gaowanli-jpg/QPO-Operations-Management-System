@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     :title="title"
-    width="920px"
+    :width="dialogWidth"
     top="7vh"
     class="option-picker-dialog"
     destroy-on-close
@@ -20,7 +20,7 @@
     </div>
 
     <el-table
-      :data="filteredItems"
+      :data="pagedItems"
       border
       stripe
       height="460"
@@ -74,31 +74,69 @@
       </template>
 
       <template v-else>
-        <el-table-column prop="detailName" label="具体工艺" min-width="170" fixed show-overflow-tooltip>
+        <el-table-column prop="detailName" label="具体工艺" min-width="150" fixed show-overflow-tooltip>
           <template #default="{ row }">{{ row.detailName || row.processName || row.feeName || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="processCode" label="大类编码" width="130" show-overflow-tooltip>
+        <el-table-column prop="processCode" label="大类编码" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.processCode || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="categoryName" label="大类名称" min-width="140" show-overflow-tooltip>
+        <el-table-column prop="categoryName" label="大类名称" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.categoryName || '-' }}</template>
         </el-table-column>
-        <el-table-column label="小时价格" width="120" align="right">
-          <template #default="{ row }">{{ formatHourlyRate(row.hourlyRate) }}</template>
+        <el-table-column label="具体小时价格" width="180" align="right">
+          <template #default="{ row }">
+            <div v-if="canEditProcessRate(row)" class="inline-rate-editor" @click.stop>
+              <el-input-number
+                :model-value="processRateDraft(row)"
+                :min="0"
+                :precision="2"
+                :value-on-clear="null"
+                clearable
+                controls-position="right"
+                size="small"
+                class="inline-rate-input"
+                @update:model-value="value => setProcessRateDraft(row, value)"
+              />
+              <el-button
+                v-permission="'engineer:dict:process-manage'"
+                type="primary"
+                plain
+                size="small"
+                :loading="isInlineRateSaving(row)"
+                @click.stop="saveInlineProcessRate(row)"
+              >
+                保存
+              </el-button>
+            </div>
+            <span v-else>{{ formatDetailHourlyRate(row.detailHourlyRate) }}</span>
+          </template>
         </el-table-column>
-        <el-table-column label="类型" width="120" align="center">
+        <el-table-column label="大类小时价格" width="130" align="right">
+          <template #default="{ row }">{{ formatHourlyRate(row.categoryHourlyRate) }}</template>
+        </el-table-column>
+        <el-table-column label="核价使用价格" width="130" align="right">
+          <template #default="{ row }">{{ formatHourlyRate(row.effectiveHourlyRate ?? row.hourlyRate) }}</template>
+        </el-table-column>
+        <el-table-column label="类型" width="110" align="center">
           <template #default="{ row }">
             <el-tag :type="row.sourceType === 'extra' ? 'warning' : 'info'" size="small">
               {{ sourceTypeLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="calcType" label="核算方式" width="140" show-overflow-tooltip>
+        <el-table-column prop="calcType" label="核算方式" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.calcType || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="label" label="显示名称" min-width="220" show-overflow-tooltip />
       </template>
     </el-table>
+
+    <div v-if="isProcessPicker && totalPages > 1" class="picker-pagination">
+      <span>第 {{ processPickerPage }} / {{ totalPages }} 页，每页 {{ PROCESS_PICKER_PAGE_SIZE }} 条</span>
+      <div class="pagination-actions">
+        <el-button size="small" :disabled="processPickerPage <= 1" @click="goProcessPage(processPickerPage - 1)">上一页</el-button>
+        <el-button size="small" :disabled="processPickerPage >= totalPages" @click="goProcessPage(processPickerPage + 1)">下一页</el-button>
+      </div>
+    </div>
 
     <template #footer>
       <div class="picker-footer">
@@ -117,6 +155,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { saveProcessDetail } from '../services/dictApi'
+
+const PROCESS_PICKER_PAGE_SIZE = 10
 
 const props = defineProps({
   modelValue: {
@@ -142,10 +183,14 @@ const props = defineProps({
   emptyText: {
     type: String,
     default: '暂无可选数据'
+  },
+  enableProcessRateEdit: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'confirm'])
+const emit = defineEmits(['update:modelValue', 'confirm', 'process-rate-updated'])
 
 const visible = computed({
   get: () => props.modelValue,
@@ -154,6 +199,12 @@ const visible = computed({
 
 const keyword = ref('')
 const activeKey = ref('')
+const processPickerPage = ref(1)
+const processRateDrafts = ref({})
+const savingRateKeys = ref(new Set())
+
+const isProcessPicker = computed(() => props.type === 'process')
+const dialogWidth = computed(() => (isProcessPicker.value ? '1180px' : '920px'))
 
 const searchPlaceholder = computed(() => (
   props.type === 'material'
@@ -205,6 +256,14 @@ const filteredItems = computed(() => {
   return props.items.filter(item => searchTextOf(item).includes(text))
 })
 
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / PROCESS_PICKER_PAGE_SIZE)))
+
+const pagedItems = computed(() => {
+  if (!isProcessPicker.value) return filteredItems.value
+  const start = (processPickerPage.value - 1) * PROCESS_PICKER_PAGE_SIZE
+  return filteredItems.value.slice(start, start + PROCESS_PICKER_PAGE_SIZE)
+})
+
 const selectedItem = computed(() => {
   const currentKey = String(activeKey.value || '')
   if (!currentKey) return null
@@ -219,6 +278,9 @@ const syncSelectedKey = () => {
 
 const resetPicker = () => {
   keyword.value = ''
+  processPickerPage.value = 1
+  processRateDrafts.value = {}
+  savingRateKeys.value = new Set()
 }
 
 const selectRow = (row) => {
@@ -250,7 +312,93 @@ const formatHourlyRate = (value) => {
   return text === '-' ? '-' : `${text} 元/小时`
 }
 
+const formatDetailHourlyRate = (value) => (value == null ? '继承大类' : formatHourlyRate(value))
+
+const goProcessPage = (page) => {
+  processPickerPage.value = Math.min(Math.max(1, page), totalPages.value)
+}
+
+const canEditProcessRate = (row) => (
+  props.enableProcessRateEdit
+  && props.type === 'process'
+  && row?.sourceType === 'process'
+  && row?.processDetailId
+)
+
+const processRateDraft = (row) => {
+  const key = keyOf(row)
+  return Object.prototype.hasOwnProperty.call(processRateDrafts.value, key)
+    ? processRateDrafts.value[key]
+    : row?.detailHourlyRate ?? null
+}
+
+const setProcessRateDraft = (row, value) => {
+  processRateDrafts.value = {
+    ...processRateDrafts.value,
+    [keyOf(row)]: value
+  }
+}
+
+const isInlineRateSaving = (row) => savingRateKeys.value.has(keyOf(row))
+
+const setInlineRateSaving = (row, saving) => {
+  const next = new Set(savingRateKeys.value)
+  if (saving) {
+    next.add(keyOf(row))
+  } else {
+    next.delete(keyOf(row))
+  }
+  savingRateKeys.value = next
+}
+
+const saveInlineProcessRate = async (row) => {
+  if (!canEditProcessRate(row)) return
+  const draft = processRateDraft(row)
+  const hourlyRate = draft === '' || draft == null ? null : Number(draft)
+  if (hourlyRate != null && (!Number.isFinite(hourlyRate) || hourlyRate < 0)) {
+    ElMessage.warning('具体小时价格不能小于 0。')
+    return
+  }
+  const payload = {
+    id: row.processDetailId,
+    categoryId: row.categoryId ?? row.processCategoryId,
+    detailName: row.detailName || row.processName,
+    detailRemarks: row.detailRemarks || '',
+    enabled: row.enabled !== false,
+    sortNo: row.sortNo ?? 0,
+    hourlyRate
+  }
+  setInlineRateSaving(row, true)
+  try {
+    const response = await saveProcessDetail(payload)
+    const updatedDetail = response?.data || {
+      ...row,
+      id: row.processDetailId,
+      categoryId: payload.categoryId,
+      detailHourlyRate: hourlyRate,
+      effectiveHourlyRate: hourlyRate ?? row.categoryHourlyRate,
+      hourlyRate: hourlyRate ?? row.categoryHourlyRate
+    }
+    setProcessRateDraft(row, updatedDetail.detailHourlyRate ?? null)
+    emit('process-rate-updated', updatedDetail)
+    ElMessage.success(response?.message || '具体小时价格已保存')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error?.message || '具体小时价格保存失败。')
+  } finally {
+    setInlineRateSaving(row, false)
+  }
+}
+
 watch(() => props.selectedKey, syncSelectedKey)
+watch(keyword, () => {
+  processPickerPage.value = 1
+})
+watch(filteredItems, () => {
+  if (processPickerPage.value > totalPages.value) {
+    processPickerPage.value = totalPages.value
+  }
+})
 </script>
 
 <style scoped>
@@ -276,6 +424,33 @@ watch(() => props.selectedKey, syncSelectedKey)
   color: var(--erp-text-secondary);
   font-size: 12px;
   line-height: 1.2;
+}
+
+.inline-rate-editor {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.inline-rate-input {
+  width: 104px;
+}
+
+.picker-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  color: var(--erp-text-secondary);
+  font-size: 13px;
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .picker-footer {

@@ -14,6 +14,7 @@ const toProcessCompatibilityRow = (item = {}) => ({
   id: item.id,
   processDetailId: item.id,
   processCategoryId: item.categoryId,
+  categoryId: item.categoryId,
   detailHourlyRate: item.detailHourlyRate,
   categoryHourlyRate: item.categoryHourlyRate,
   effectiveHourlyRate: item.effectiveHourlyRate,
@@ -47,9 +48,13 @@ export const useDictionaryStore = defineStore('dictionary', {
         optionKey: `process-detail-${item.id}`,
         processDetailId: item.id,
         processCategoryId: item.categoryId,
+        categoryId: item.categoryId,
         processCode: item.processCode,
         categoryName: item.categoryName,
         detailName: item.detailName,
+        detailRemarks: item.detailRemarks,
+        enabled: item.enabled,
+        sortNo: item.sortNo,
         detailHourlyRate: item.detailHourlyRate,
         categoryHourlyRate: item.categoryHourlyRate,
         effectiveHourlyRate: item.effectiveHourlyRate,
@@ -138,6 +143,26 @@ export const useDictionaryStore = defineStore('dictionary', {
         includeAllExtraFees: true,
         force: true
       })
+    },
+
+    upsertProcessDetail(detail = {}) {
+      const id = detail.id ?? detail.processDetailId
+      if (id == null) return
+      const normalizedDetail = {
+        ...detail,
+        id,
+        categoryId: detail.categoryId ?? detail.processCategoryId
+      }
+      const index = this.processDetails.findIndex(item => String(item.id) === String(id))
+      if (index >= 0) {
+        this.processDetails.splice(index, 1, {
+          ...this.processDetails[index],
+          ...normalizedDetail
+        })
+      } else {
+        this.processDetails.push(normalizedDetail)
+      }
+      this.processes = this.processDetails.map(toProcessCompatibilityRow)
     },
 
     applyPricingFallbackData() {

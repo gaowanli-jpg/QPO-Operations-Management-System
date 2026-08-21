@@ -17,12 +17,46 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     expect(source).toContain('label="大类编码"')
     expect(source).toContain('prop="categoryName"')
     expect(source).toContain('label="大类名称"')
-    expect(source).toContain('label="小时价格"')
+    expect(source).toContain('label="具体小时价格"')
+    expect(source).toContain('label="大类小时价格"')
+    expect(source).toContain('label="核价使用价格"')
     expect(source).toContain('formatHourlyRate')
     expect(source).toContain('item?.detailName')
     expect(source).toContain('item?.processCode')
     expect(source).toContain('item?.categoryName')
     expect(source).toContain('item?.hourlyRate')
+  })
+
+  test('process picker uses local ten-row pagination without the shared pagination component', () => {
+    const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
+
+    expect(source).toContain('const PROCESS_PICKER_PAGE_SIZE = 10')
+    expect(source).toContain(':data="pagedItems"')
+    expect(source).toContain('const pagedItems = computed(() =>')
+    expect(source).toContain('filteredItems.value.slice(start, start + PROCESS_PICKER_PAGE_SIZE)')
+    expect(source).toContain('picker-pagination')
+    expect(source).toContain('processPickerPage')
+    expect(source).not.toContain('<el-pagination')
+  })
+
+  test('process picker can update concrete detail hourly rate inline and notify pricing page', () => {
+    const picker = readSource('components', 'EngineeringOptionPickerDialog.vue')
+    const itemPricing = readSource('components', 'ItemPricing.vue')
+
+    expect(picker).toContain("import { saveProcessDetail } from '../services/dictApi'")
+    expect(picker).toContain('enableProcessRateEdit')
+    expect(picker).toContain('label="具体小时价格"')
+    expect(picker).toContain('label="大类小时价格"')
+    expect(picker).toContain('label="核价使用价格"')
+    expect(picker).toContain("v-permission=\"'engineer:dict:process-manage'\"")
+    expect(picker).toContain('saveInlineProcessRate(row)')
+    expect(picker).toContain("emit('process-rate-updated', updatedDetail)")
+    expect(picker).toContain(':value-on-clear="null"')
+
+    expect(itemPricing).toContain(':enable-process-rate-edit="true"')
+    expect(itemPricing).toContain('@process-rate-updated="handleProcessRateUpdated"')
+    expect(itemPricing).toContain('await dictionaryStore.reloadAfterMutation()')
+    expect(itemPricing).toContain('syncCurrentSelectedProcessRate(updatedDetail)')
   })
 
   test('global config normalization preserves processDetailId as stable identity', () => {
