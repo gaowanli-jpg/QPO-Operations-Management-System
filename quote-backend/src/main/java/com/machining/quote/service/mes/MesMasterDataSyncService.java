@@ -315,6 +315,7 @@ public class MesMasterDataSyncService {
             created.setCategoryId(category.getId());
             created.setDetailName(detailName);
             created.setDetailRemarks("");
+            // Detail hourlyRate is QPO-owned; MES sync must leave new rows inheriting the category rate.
             created.setEnabled(true);
             created.setSortNo(0);
             created.setCreatedAt(syncedAt);
@@ -323,6 +324,7 @@ public class MesMasterDataSyncService {
             return;
         }
         if (!Boolean.TRUE.equals(existing.getEnabled())) {
+            // Re-enable the MES detail identity without overwriting its QPO-maintained hourlyRate.
             existing.setEnabled(true);
             existing.setUpdatedAt(syncedAt);
             detailMapper.updateById(existing);

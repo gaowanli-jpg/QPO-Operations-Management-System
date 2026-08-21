@@ -304,6 +304,7 @@ class ProcessMasterBackendServiceTest {
         localMaintenance.setCategoryId(7L);
         localMaintenance.setDetailName("MES detail");
         localMaintenance.setDetailRemarks("QPO local remark");
+        localMaintenance.setHourlyRate(new BigDecimal("120.00"));
         localMaintenance.setEnabled(false);
         localMaintenance.setSortNo(20);
 
@@ -312,6 +313,8 @@ class ProcessMasterBackendServiceTest {
         assertThat(saved.getCategoryId()).isEqualTo(7L);
         assertThat(saved.getDetailName()).isEqualTo("MES detail");
         assertThat(saved.getDetailRemarks()).isEqualTo("QPO local remark");
+        assertThat(saved.getDetailHourlyRate()).isEqualByComparingTo("120.00");
+        assertThat(saved.getHourlyRate()).isEqualByComparingTo("120.00");
         assertThat(saved.getEnabled()).isFalse();
         assertThat(saved.getSortNo()).isEqualTo(20);
     }
