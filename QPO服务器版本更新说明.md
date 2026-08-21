@@ -89,7 +89,20 @@ grep '^ERP_CORS_ALLOWED_ORIGINS=' erp.env
 
 本次数据中心直连 QPO 数据库只读追踪方案要求 `POSTGRES_BIND=0.0.0.0`，并且 `POSTGRES_DATACENTER_RO_PASSWORD` 不能为空；缺少该密码时，新版本后端会在 Flyway V15 创建只读账号前停止启动。
 
-如果服务器 IP 或访问端口没有变，这些配置不用改。
+如果旧 `erp.env` 没有 `POSTGRES_DATACENTER_RO_PASSWORD`，或者 `POSTGRES_BIND` 仍是 `127.0.0.1`，先编辑当前新版本目录里的 `erp.env`：
+
+```bash
+nano erp.env
+```
+
+至少补齐或调整为：
+
+```env
+POSTGRES_BIND=0.0.0.0
+POSTGRES_DATACENTER_RO_PASSWORD=<数据中心只读账号强随机密码>
+```
+
+保存后再进入下一步加载镜像并启动新版本。如果服务器 IP、前端访问端口和 CORS 来源没有变，其他配置通常不用改。
 
 ### 5. 加载镜像并启动新版本
 

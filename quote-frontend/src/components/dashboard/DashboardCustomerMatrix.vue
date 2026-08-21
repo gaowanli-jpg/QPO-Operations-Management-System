@@ -27,7 +27,7 @@
           <small class="dashboard-muted" :title="row.customerCode">{{ row.customerCode }}</small>
         </span>
         <button
-          v-if="canOpenRfq"
+          v-if="canOpenUnpriced"
           type="button"
           class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.rfqUnpriced) }"
@@ -37,7 +37,7 @@
         </button>
         <span v-else class="dashboard-matrix-locked">--</span>
         <button
-          v-if="canOpenRfq"
+          v-if="canOpenPriced"
           type="button"
           class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.rfqPriced) }"
@@ -47,7 +47,7 @@
         </button>
         <span v-else class="dashboard-matrix-locked">--</span>
         <button
-          v-if="canOpenRfq"
+          v-if="canOpenQuoted"
           type="button"
           class="dashboard-matrix-value dashboard-matrix-button"
           :class="{ 'dashboard-number-muted': isZeroValue(row.rfqQuoted) }"
@@ -94,7 +94,9 @@ const props = defineProps({
 
 const emit = defineEmits(['rfq-select', 'u9-select'])
 
-const canOpenRfq = computed(() => canShowDashboardAction({ permission: 'market:order:view' }, props.authStore))
+const canOpenUnpriced = computed(() => canShowDashboardAction({ permission: 'engineer:setup:view' }, props.authStore))
+const canOpenPriced = computed(() => canShowDashboardAction({ permission: 'market:quote-process:view' }, props.authStore))
+const canOpenQuoted = computed(() => canShowDashboardAction({ permission: 'market:release:view' }, props.authStore))
 const canOpenU9 = computed(() => canShowDashboardAction({ permission: 'market:u9-sync:view' }, props.authStore))
 
 const isZeroValue = (value) => Number(value) === 0

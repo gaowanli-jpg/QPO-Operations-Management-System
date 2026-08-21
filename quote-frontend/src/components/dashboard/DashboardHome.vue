@@ -58,7 +58,7 @@
       <DashboardCustomerMatrix
         :rows="customerMatrix"
         :auth-store="authStore"
-        @rfq-select="goToOrders"
+        @rfq-select="goToRfqWorkflow"
         @u9-select="goToU9Sync"
       />
 
@@ -155,10 +155,16 @@ const compactQuery = (query) => Object.fromEntries(
   Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '')
 )
 
+const RFQ_WORKFLOW_TARGETS = {
+  未核价: '/engineering',
+  已核价: '/quote-process',
+  已报价: '/release'
+}
+
 const goToItem = (item) => goDashboardTarget(router, item)
 
-const goToOrders = (row, status) => goDashboardTarget(router, {
-  path: '/orders',
+const goToRfqWorkflow = (row, status) => goDashboardTarget(router, {
+  path: RFQ_WORKFLOW_TARGETS[status] || '/orders',
   query: compactQuery({
     status,
     customerId: row.customerId,

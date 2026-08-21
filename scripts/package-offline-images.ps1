@@ -86,6 +86,14 @@ function Resolve-DefaultImageTag() {
     return "local"
 }
 
+function Copy-PackageFile([string]$RelativePath, [string]$DestinationDirectory) {
+    $source = Join-Path $ProjectRoot $RelativePath
+    if (-not (Test-Path -LiteralPath $source)) {
+        throw "Required package file does not exist: $source"
+    }
+    Copy-Item -LiteralPath $source -Destination (Join-Path $DestinationDirectory (Split-Path -Leaf $RelativePath)) -Force
+}
+
 $ImageTag = Sanitize-ImageTag $(if ([string]::IsNullOrWhiteSpace($ImageTag)) { Resolve-DefaultImageTag } else { $ImageTag })
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
@@ -123,15 +131,14 @@ if (Test-Path $archivePath) {
 }
 Run-Checked "docker" (@("save", "-o", $archivePath) + $images)
 
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "docker-compose.yml") -Destination (Join-Path $OutputDir "docker-compose.yml") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "erp.env.example") -Destination (Join-Path $OutputDir "erp.env.example") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO部署说明.md") -Destination (Join-Path $OutputDir "QPO部署说明.md") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/load-offline-images.ps1") -Destination (Join-Path $scriptsOutputDir "load-offline-images.ps1") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/load-offline-images.sh") -Destination (Join-Path $scriptsOutputDir "load-offline-images.sh") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/backup-qpo.sh") -Destination (Join-Path $scriptsOutputDir "backup-qpo.sh") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts/restore-qpo.sh") -Destination (Join-Path $scriptsOutputDir "restore-qpo.sh") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO服务器备份说明.md") -Destination (Join-Path $OutputDir "QPO服务器备份说明.md") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "QPO服务器恢复说明.md") -Destination (Join-Path $OutputDir "QPO服务器恢复说明.md") -Force
+Copy-PackageFile "docker-compose.yml" $OutputDir
+Copy-PackageFile "erp.env.example" $OutputDir
+Get-ChildItem -LiteralPath $ProjectRoot -Filter "QPO*.md" -File |
+    Copy-Item -Destination $OutputDir -Force
+Copy-PackageFile "scripts/load-offline-images.ps1" $scriptsOutputDir
+Copy-PackageFile "scripts/load-offline-images.sh" $scriptsOutputDir
+Copy-PackageFile "scripts/backup-qpo.sh" $scriptsOutputDir
+Copy-PackageFile "scripts/restore-qpo.sh" $scriptsOutputDir
 
 @"
 QPO_IMAGE_TAG=$ImageTag

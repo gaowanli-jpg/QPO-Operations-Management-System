@@ -1,0 +1,39 @@
+以后每次更新最稳流程就是：
+cd /opt/qpo/qpo-offline-package-<版本>
+
+# 1. 复制旧 erp.env 后先补标签，别让它找 latest
+grep -q '^QPO_IMAGE_TAG=' erp.env \
+  && sed -i "s/^QPO_IMAGE_TAG=.*/QPO_IMAGE_TAG=<版本>/" erp.env \
+  || printf '\nQPO_IMAGE_TAG=<版本>\n' >> erp.env
+
+# 2. 确认必要配置
+grep -nE '^(QPO_IMAGE_TAG|POSTGRES_BIND|POSTGRES_DATACENTER_RO_PASSWORD|ERP_JWT_SECRET)=' erp.env
+
+# 3. 启动
+bash scripts/load-offline-images.sh
+如果又遇到 V1 checksum mismatch，你就按这套固定模板处理：
+mkdir -p ~/qpo-db-backups
+
+docker compose --env-file erp.env exec -T postgres sh -c \
+'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+> ~/qpo-db-backups/qpo-before-flyway-checksum-repair-$(date +%Y%m%d%H%M%S).sql
+
+docker compose --env-file erp.env exec -T postgres sh -c \
+'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
+进入 psql 后执行，注意把 yyy 换成日志里的 Resolved locally：
+BEGIN;
+
+SELECT version, description, script, checksum, success
+FROM flyway_schema_history
+WHERE version = '1';
+
+UPDATE flyway_schema_history
+SET checksum = yyy
+WHERE version = '1'
+  AND success = true;
+
+COMMIT;
+然后：
+docker compose --env-file erp.env up -d --no-build --force-recreate backend
+docker compose --env-file erp.env ps
+我的建议很现实：如果只卡 V1/V2 checksum，可以修；不会影响正常版本更新。 但如果每次新包都让 V1 Resolved locally 变一个新值，那说明我们的本地包还在改变 V1 文件，这个就不是部署问题了，是开发流程问题，应该立刻停止改 V1/V2，只允许新增 V16+。
