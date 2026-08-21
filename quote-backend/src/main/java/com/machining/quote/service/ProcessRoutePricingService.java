@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class ProcessRoutePricingService {
@@ -56,7 +57,8 @@ public class ProcessRoutePricingService {
             if (!Boolean.TRUE.equals(category.getEnabled())) {
                 throw new IllegalStateException("工艺大类已停用，请重新选择");
             }
-            double hourlyRate = number(category.getHourlyRate());
+            BigDecimal effectiveHourlyRate = effectiveHourlyRate(detail, category);
+            double hourlyRate = number(effectiveHourlyRate);
             double lineCost = unitWorkHours * hourlyRate;
 
             Map<String, Object> snapshot = new LinkedHashMap<>();
@@ -73,6 +75,9 @@ public class ProcessRoutePricingService {
             snapshot.put("unitWorkHours", unitWorkHours);
             snapshot.put("inputVal", unitWorkHours);
             snapshot.put("unitRate", hourlyRate);
+            snapshot.put("detailHourlyRate", detail.getHourlyRate());
+            snapshot.put("categoryHourlyRate", number(category.getHourlyRate()));
+            snapshot.put("hourlyRateSource", detail.getHourlyRate() == null ? "CATEGORY" : "DETAIL");
             snapshot.put("lineCost", lineCost);
             snapshot.put("sortNo", row.getSortNo());
             if (category.getRemarks() != null && !category.getRemarks().isBlank()) {
@@ -88,6 +93,13 @@ public class ProcessRoutePricingService {
 
     private Double unitWorkHours(QuoteSubmitReq.ProcessSubmitDTO row) {
         return row.getUnitWorkHours() != null ? row.getUnitWorkHours() : row.getInputVal();
+    }
+
+    private BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory category) {
+        if (detail.getHourlyRate() != null) {
+            return detail.getHourlyRate();
+        }
+        return Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);
     }
 
     private double number(BigDecimal value) {
