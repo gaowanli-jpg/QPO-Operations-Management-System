@@ -199,6 +199,45 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
     }
 
     @Test
+    void dispatchBatchAllowsAssemblyParentWithoutMaterialBomAndStillSendsRelations() {
+        MesProductionDispatchService service = new MesProductionDispatchService();
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
+        ItemAssemblyRelationMapper relationMapper = mock(ItemAssemblyRelationMapper.class);
+        ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
+        OrderDeliveryTicketAllocation allocation = allocation(14, "PRODUCTION_REQUIRED", "PENDING");
+        allocation.setSourceType("RFQ");
+        allocation.setSourceOrderId(214L);
+        allocation.setSourceItemId(1501L);
+        allocation.setItemType("组合件");
+        allocation.setPartNo("ASM-1501");
+        allocation.setVersion("B");
+        allocation.setEngineeringMaterialCode(null);
+        allocation.setMaterialGrossWeight(0.0);
+        ItemAssemblyRelation relation = new ItemAssemblyRelation();
+        relation.setParentItemId(1501);
+        relation.setChildItemId(1502);
+        relation.setChildQtyPerParent(2.0);
+        relation.setSortNo(3);
+        when(allocationMapper.selectById(14)).thenReturn(allocation);
+        when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
+        when(relationMapper.selectList(any())).thenReturn(List.of(relation));
+        when(itemMapper.selectById(1501)).thenReturn(rfqItem(1501, "ASM-1501", "B"));
+        when(itemMapper.selectById(1502)).thenReturn(rfqItem(1502, "CH-1502", "A"));
+        when(client.dispatch(any())).thenReturn(success("MES-PROD-ASM", "accepted"));
+        wireDispatchService(service, allocationMapper, null, client, null, null,
+                relationMapper, itemMapper, null, null);
+
+        Map<String, Object> result = service.dispatchBatch(List.of(14), 9114L);
+
+        assertThat(result).containsEntry("successCount", 1);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(client).dispatch(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getBom()).isEmpty();
+        assertThat(requestCaptor.getValue().getAssemblyRelations()).hasSize(1);
+    }
+
+    @Test
     void dispatchBatchPackagesSalesOrderAssemblyRelationsFromSourceItem() {
         MesProductionDispatchService service = new MesProductionDispatchService();
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);

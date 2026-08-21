@@ -785,6 +785,9 @@ public class MesProductionDispatchService {
         }
         String materialCode = trimToNull(allocation.getEngineeringMaterialCode());
         if (materialCode == null) {
+            if (isAssemblyItem(allocation)) {
+                return List.of();
+            }
             throw new RuntimeException("Engineering material code is required before MES production dispatch BOM");
         }
         Double grossWeightKg = allocation.getMaterialGrossWeight();
@@ -792,6 +795,14 @@ public class MesProductionDispatchService {
             throw new RuntimeException("Material gross weight kg must be greater than 0 before MES production dispatch BOM");
         }
         return List.of(new MesProductionBomDTO(materialCode, BigDecimal.valueOf(grossWeightKg)));
+    }
+
+    private boolean isAssemblyItem(OrderDeliveryTicketAllocation allocation) {
+        if (allocation == null || isBlank(allocation.getItemType())) {
+            return false;
+        }
+        String itemType = allocation.getItemType().trim();
+        return "ASSEMBLY".equalsIgnoreCase(itemType) || itemType.contains("\u7ec4\u5408");
     }
 
     private List<MesProductionAssemblyRelationDTO> buildRfqAssemblyRelations(OrderDeliveryTicketAllocation allocation) {

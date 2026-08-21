@@ -84,6 +84,7 @@
 - 下发内容包含组合件父子关系：
   - 普通件：`assemblyRelations = []`
   - 组合件有关系：返回父子关系数组。
+  - 组合件父件本身没有原材料 BOM 时：`bom = []`，不因父件缺少材料编码阻断下发。
   - 组合件无关系：`assemblyRelations = []`，不提示、不阻断。
 - 下发成功 / 失败状态回写到 allocation 行，便于页面筛选和重试。
 
@@ -103,6 +104,7 @@
 - 不把全部锁库结果行都下发给 MES。
 - 不下发 `IN_STOCK_LOCK` 和 `IN_PRODUCTION_LOCK` 行。
 - 不因为组合件关系缺失而阻断生产下发。
+- 不因为组合件父件没有自身原材料 BOM 而阻断生产下发。
 - 不改变 `order_delivery_ticket.qty`。
 - 不删除 `order_delivery_ticket_allocation`，不搬表。
 - 不新增 UI 库。

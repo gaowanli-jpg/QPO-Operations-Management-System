@@ -109,8 +109,8 @@ ERP_MES_TIMEOUT_MS=60000
 | --- | --- | --- |
 | `processRoute[].processTypeCode` | `processCode` | `processRoute[].processTypeCode = QPO processCode = MES code`。MES 工艺类型同步时把 MES `code` 写入 QPO 工艺大类 `processCode`。 |
 | `processRoute[].processName` | `detailName` | `processRoute[].processName = QPO detailName`。QPO 默认具体工艺由 MES 工艺名称生成，用户也可在该 MES 大类下维护更细的具体工艺。 |
-| `bom[].itemCode` | `engineeringMaterialCode` | `bom[].itemCode = QPO engineeringMaterialCode = MES material code`。报价完成时从材料字典快照材料编码。 |
-| `bom[].quantity` | `materialGrossWeight` | `bom[].quantity = QPO materialGrossWeight kg`。这里是材料毛重 kg，不是件数。 |
+| `bom[].itemCode` | `engineeringMaterialCode` | `bom[].itemCode = QPO engineeringMaterialCode = MES material code`。普通件报价完成时从材料字典快照材料编码；组合件父件本身没有原材料编码时传 `bom: []`，仍通过 `assemblyRelations` 下发父子关系。 |
+| `bom[].quantity` | `materialGrossWeight` | `bom[].quantity = QPO materialGrossWeight kg`。这里是材料毛重 kg，不是件数；组合件父件 `bom: []` 时不要求父件材料毛重。 |
 
 真实数据中心读取 MES 工艺/材料可以在普通回归中手动执行同步；真实写 MES 仍使用独立显式开关，不在普通回归中自动执行。
 
@@ -166,6 +166,7 @@ ERP_MES_TIMEOUT_MS=60000
 - RFQ 来源从 `item_assembly_relation` 查询。
 - 销售订单来源从 `sales_order_item_assembly_relation` 查询。
 - 普通件返回 `assemblyRelations: []`。
+- 组合件父件没有自身原材料 BOM 时返回 `bom: []`，不因父件缺少 `engineeringMaterialCode` 阻断下发。
 - 组合件无关系、关系未补全或关系表无记录时也返回 `assemblyRelations: []`，不阻断下发。
 - QPO 不在本接口里补建父子关系；父子关系由前置 RFQ 核价 / 销售匹配流程维护。
 
