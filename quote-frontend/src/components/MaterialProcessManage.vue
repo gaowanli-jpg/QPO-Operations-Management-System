@@ -27,7 +27,7 @@
             <div class="material-filter-bar">
               <el-input v-model="materialKeyword" clearable placeholder="搜索材料编码、名称、材料类型或材质分类" />
             </div>
-            <el-table :data="filteredMaterials" border stripe height="560" v-loading="loading">
+            <el-table :data="pagedMaterials" border stripe height="520" v-loading="loading">
               <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
               <el-table-column prop="materialName" label="材料名称" width="140" fixed show-overflow-tooltip />
               <el-table-column label="材料类型" width="170" show-overflow-tooltip>
@@ -91,6 +91,18 @@
                 </template>
               </el-table-column>
             </el-table>
+            <div v-if="filteredMaterialsTotal" class="erp-pagination material-dict-pagination">
+              <el-pagination
+                v-model:current-page="materialPagination.page"
+                v-model:page-size="materialPagination.pageSize"
+                :page-sizes="CLIENT_PAGE_SIZES"
+                :pager-count="7"
+                :total="filteredMaterialsTotal"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="resetMaterialPage"
+              />
+            </div>
           </el-tab-pane>
 
           <el-tab-pane label="材料类型" name="materialTypes">
@@ -109,7 +121,10 @@
 
           <el-tab-pane label="工艺大类" name="processCategories">
             <div class="process-master-grid">
-              <el-table :data="processCategories" border stripe height="560" v-loading="loading">
+              <div class="material-filter-bar">
+                <el-input v-model="processCategoryKeyword" clearable placeholder="搜索工艺编码、工艺名称、来源或备注" />
+              </div>
+              <el-table :data="pagedProcessCategories" border stripe height="520" v-loading="loading">
                 <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
                 <el-table-column prop="processCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
                 <el-table-column prop="categoryName" label="工艺名称" min-width="160" show-overflow-tooltip />
@@ -131,12 +146,27 @@
                 </el-table-column>
                 <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
               </el-table>
+              <div v-if="filteredProcessCategoryTotal" class="erp-pagination material-dict-pagination">
+                <el-pagination
+                  v-model:current-page="processCategoryPagination.page"
+                  v-model:page-size="processCategoryPagination.pageSize"
+                  :page-sizes="CLIENT_PAGE_SIZES"
+                  :pager-count="7"
+                  :total="filteredProcessCategoryTotal"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  background
+                  @size-change="resetProcessCategoryPage"
+                />
+              </div>
             </div>
           </el-tab-pane>
 
           <el-tab-pane label="具体工艺" name="processDetails">
             <div class="process-master-grid">
-              <el-table :data="processDetails" border stripe height="560" v-loading="loading">
+              <div class="material-filter-bar">
+                <el-input v-model="processDetailKeyword" clearable placeholder="搜索具体工艺、大类编码、大类名称或具体备注" />
+              </div>
+              <el-table :data="pagedProcessDetails" border stripe height="520" v-loading="loading">
                 <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
                 <el-table-column prop="detailName" label="具体工艺" min-width="160" fixed show-overflow-tooltip />
                 <el-table-column prop="processCode" label="大类编码" width="150" show-overflow-tooltip />
@@ -164,6 +194,18 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <div v-if="filteredProcessDetailTotal" class="erp-pagination material-dict-pagination">
+                <el-pagination
+                  v-model:current-page="processDetailPagination.page"
+                  v-model:page-size="processDetailPagination.pageSize"
+                  :page-sizes="CLIENT_PAGE_SIZES"
+                  :pager-count="7"
+                  :total="filteredProcessDetailTotal"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  background
+                  @size-change="resetProcessDetailPage"
+                />
+              </div>
             </div>
           </el-tab-pane>
 
@@ -471,7 +513,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   deleteAssemblyMarkupFee as deleteAssemblyMarkupFeeRequest,
@@ -491,6 +533,7 @@ import {
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
+import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, clampPage, paginateRows } from '../utils/clientPagination'
 
 const dictionaryStore = useDictionaryStore()
 const activeTab = ref('materials')
@@ -502,18 +545,64 @@ const markupFees = computed(() => dictionaryStore.markupFees)
 const assemblyMarkupFees = computed(() => dictionaryStore.assemblyMarkupFees)
 const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
 const materialKeyword = ref('')
+const processCategoryKeyword = ref('')
+const processDetailKeyword = ref('')
+const materialPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const processCategoryPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const processDetailPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+
+const containsKeyword = (item, fields, keyword) => fields
+  .some(field => String(typeof field === 'function' ? field(item) : item?.[field] || '').toLowerCase().includes(keyword))
+
 const filteredMaterials = computed(() => {
   const keyword = materialKeyword.value.trim().toLowerCase()
   if (!keyword) return materials.value
-  return materials.value.filter((item) => [
-    item.materialCode,
-    item.materialName,
-    item.materialTypeCode,
-    item.materialTypeName,
-    item.materialCategory,
-    item.remarks
-  ].some(value => String(value || '').toLowerCase().includes(keyword)))
+  return materials.value.filter(item => containsKeyword(item, [
+    'materialCode',
+    'materialName',
+    'materialTypeCode',
+    'materialTypeName',
+    'materialCategory',
+    'remarks'
+  ], keyword))
 })
+const filteredProcessCategories = computed(() => {
+  const keyword = processCategoryKeyword.value.trim().toLowerCase()
+  if (!keyword) return processCategories.value
+  return processCategories.value.filter(item => containsKeyword(item, [
+    'processCode',
+    'categoryName',
+    'remarks',
+    'hourlyRate',
+    'sourceType',
+    item => sourceTypeText(item.sourceType),
+    item => item.enabled ? '启用' : '停用'
+  ], keyword))
+})
+const filteredProcessDetails = computed(() => {
+  const keyword = processDetailKeyword.value.trim().toLowerCase()
+  if (!keyword) return processDetails.value
+  return processDetails.value.filter(item => containsKeyword(item, [
+    'detailName',
+    'processCode',
+    'categoryName',
+    'detailRemarks',
+    'detailHourlyRate',
+    'categoryHourlyRate',
+    'effectiveHourlyRate',
+    item => formatDetailHourlyRate(item.detailHourlyRate),
+    item => item.enabled ? '启用' : '停用'
+  ], keyword))
+})
+const filteredMaterialsTotal = computed(() => filteredMaterials.value.length)
+const filteredProcessCategoryTotal = computed(() => filteredProcessCategories.value.length)
+const filteredProcessDetailTotal = computed(() => filteredProcessDetails.value.length)
+const pagedMaterials = computed(() => paginateRows(filteredMaterials.value, materialPagination))
+const pagedProcessCategories = computed(() => paginateRows(filteredProcessCategories.value, processCategoryPagination))
+const pagedProcessDetails = computed(() => paginateRows(filteredProcessDetails.value, processDetailPagination))
+const resetMaterialPage = () => { materialPagination.page = 1 }
+const resetProcessCategoryPage = () => { processCategoryPagination.page = 1 }
+const resetProcessDetailPage = () => { processDetailPagination.page = 1 }
 const loading = ref(false)
 const { isPending, runAction } = usePendingAction()
 
@@ -896,6 +985,13 @@ const deleteExtraFee = async (row) => {
     await dictionaryStore.reloadAfterMutation()
   })
 }
+
+watch(materialKeyword, resetMaterialPage)
+watch(processCategoryKeyword, resetProcessCategoryPage)
+watch(processDetailKeyword, resetProcessDetailPage)
+watch(filteredMaterialsTotal, total => { materialPagination.page = clampPage(materialPagination, total) })
+watch(filteredProcessCategoryTotal, total => { processCategoryPagination.page = clampPage(processCategoryPagination, total) })
+watch(filteredProcessDetailTotal, total => { processDetailPagination.page = clampPage(processDetailPagination, total) })
 
 onMounted(loadAll)
 </script>
