@@ -338,6 +338,7 @@ public class AuditService {
             case "DICT_EXTRA_FEE_UPDATE" -> "更新非工时费用";
             case "DICT_EXTRA_FEE_DELETE" -> "删除非工时费用";
             case "ITEM_QUOTE_SAVE" -> "保存逐件核价";
+            case "ITEM_QUOTE_REMARK_UPDATE" -> "保存零件核价备注";
             case "ORDER_QUOTE_COMPLETE" -> "完成工程报价";
             case "PRICING_SHEET_EXPORT" -> "生成核价单";
             case "QUOTE_PROCESS_SAVE_QUOTE" -> "保存报价单";

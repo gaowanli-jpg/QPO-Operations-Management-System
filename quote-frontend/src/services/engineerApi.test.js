@@ -99,6 +99,15 @@ describe('engineerApi', () => {
     })
   })
 
+  test('savePricingItemRemark updates only the pricing item remark', async () => {
+    await engineerApi.savePricingItemRemark(34, 'needs deburring')
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/items/34/remark', {
+      method: 'PUT',
+      data: { remark: 'needs deburring' }
+    })
+  })
+
   test('downloadPricingSheet downloads engineering pricing sheet by rfq id', async () => {
     await engineerApi.downloadPricingSheet(12)
 

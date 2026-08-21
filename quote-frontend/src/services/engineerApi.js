@@ -39,3 +39,8 @@ export const submitQuote = (payload) => request('/api/engineer/submit-quote', {
   method: 'POST',
   data: payload
 })
+
+export const savePricingItemRemark = (itemId, remark) => request(`/api/engineer/pricing/items/${itemId}/remark`, {
+  method: 'PUT',
+  data: { remark }
+})

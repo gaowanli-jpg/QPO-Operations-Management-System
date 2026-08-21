@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PartVersionKey;
+import com.machining.quote.dto.PricingItemRemarkUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
@@ -83,6 +84,31 @@ public class EngineerService {
         }
         markAncestorAssembliesPending(item.getId(), new HashSet<>());
         auditService.record("ITEM_QUOTE_SAVE", "item_quote_version", item.getId(), before, itemMapper.selectById(item.getId()));
+    }
+
+    @Transactional
+    public ItemQuoteVersion updatePricingItemRemark(Integer itemId, PricingItemRemarkUpdateReq req) {
+        String normalizedRemark = normalizePricingRemark(req == null ? null : req.getRemark());
+        ItemQuoteVersion item = requireQuoteItemForUpdate(itemId);
+        Map<String, Object> before = pricingRemarkAuditSummary(item);
+
+        UpdateWrapper<ItemQuoteVersion> updateWrapper = new UpdateWrapper<>();
+        updateWrapper.eq("id", item.getId()).set("remark", normalizedRemark);
+        itemMapper.update(null, updateWrapper);
+
+        ItemQuoteVersion afterItem = itemMapper.selectById(item.getId());
+        if (afterItem == null) {
+            afterItem = copyItem(item);
+            afterItem.setRemark(normalizedRemark);
+        }
+        auditService.record(
+                "ITEM_QUOTE_REMARK_UPDATE",
+                "item_quote_version",
+                item.getId(),
+                before,
+                pricingRemarkAuditSummary(afterItem)
+        );
+        return afterItem;
     }
 
     @Transactional
@@ -1005,6 +1031,30 @@ public class EngineerService {
         copy.setStatus(source.getStatus());
         copy.setDrawingUrl(source.getDrawingUrl());
         return copy;
+    }
+
+    private String normalizePricingRemark(String value) {
+        String normalized = value == null ? null : value.trim();
+        if (normalized != null && normalized.isEmpty()) {
+            normalized = null;
+        }
+        if (normalized != null && normalized.length() > 500) {
+            throw new RuntimeException("remark must be no longer than 500 characters");
+        }
+        return normalized;
+    }
+
+    private Map<String, Object> pricingRemarkAuditSummary(ItemQuoteVersion item) {
+        if (item == null) {
+            return Map.of();
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("itemId", item.getId());
+        summary.put("rfqId", item.getRfqId());
+        summary.put("partNo", item.getPartNo());
+        summary.put("version", item.getVersion());
+        summary.put("remark", item.getRemark());
+        return summary;
     }
 
     private OrderRfq requireOrder(Integer rfqId) {

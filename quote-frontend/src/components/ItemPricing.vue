@@ -221,6 +221,34 @@
             </el-form>
           </section>
 
+          <section class="erp-dialog-section pricing-workbench-section pricing-item-note-section">
+            <div class="pricing-item-note-header">
+              <div class="form-section-title pricing-section-title">零件备注与信息</div>
+              <el-button type="primary" plain @click="itemInfoDialogVisible = true">查看零件信息</el-button>
+            </div>
+            <el-form label-width="100px" class="pricing-section-form pricing-item-note-form">
+              <el-form-item label="零件备注">
+                <div class="pricing-item-note-control">
+                  <el-input
+                    v-model="itemRemarkDraft"
+                    type="textarea"
+                    :rows="2"
+                    maxlength="500"
+                    show-word-limit
+                    placeholder="填写当前零件备注"
+                  />
+                  <el-button
+                    v-permission="'engineer:pricing:save-item'"
+                    type="success"
+                    :loading="itemRemarkSaving"
+                    :disabled="!currentRow?.id || itemRemarkSaving"
+                    @click="saveCurrentItemRemark"
+                  >保存备注</el-button>
+                </div>
+              </el-form-item>
+            </el-form>
+          </section>
+
           <template v-if="quoteMode === 'NORMAL'">
           <section class="erp-dialog-section pricing-workbench-section pricing-material-section">
             <!-- 模块A：材料 -->
@@ -479,6 +507,26 @@
     </el-dialog>
 
     <el-dialog
+      v-model="itemInfoDialogVisible"
+      title="零件信息"
+      width="520px"
+      class="pricing-item-info-dialog"
+      destroy-on-close
+    >
+      <div class="pricing-item-info-list">
+        <div v-for="row in currentItemInfoRows" :key="row.label" class="pricing-item-info-row">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value || '-' }}</strong>
+        </div>
+      </div>
+      <template #footer>
+        <div class="erp-dialog-footer pricing-dialog-footer">
+          <el-button type="primary" @click="itemInfoDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="assemblyPickerVisible"
       title="选择组合件子件"
       width="86vw"
@@ -630,6 +678,7 @@ import {
   listAssemblyRelations,
   listPricingItems,
   downloadPricingSheet,
+  savePricingItemRemark,
   saveOrderConfig,
   submitQuote
 } from '../services/engineerApi'
@@ -675,7 +724,8 @@ const pricingActionKeys = {
   refreshOrder: () => `engineer:pricing:refresh:${rfqId.value || 'none'}`,
   completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || 'none'}`,
   exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || 'none'}`,
-  saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`
+  saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`,
+  saveRemark: (itemId) => `engineer:pricing:save-remark:${itemId || 'none'}`
 }
 
 const quoteData = ref(null)
@@ -1033,7 +1083,10 @@ const currentRow = ref(null)
 const currentDrawingSrc = ref('')
 const currentDrawingLoading = ref(false)
 const submitLoading = computed(() => isPending(pricingActionKeys.saveItem(currentRow.value?.id)))
+const itemRemarkSaving = computed(() => isPending(pricingActionKeys.saveRemark(currentRow.value?.id)))
 const quoteMode = ref('NORMAL')
+const itemRemarkDraft = ref('')
+const itemInfoDialogVisible = ref(false)
 const assemblyFee = ref(null)
 const assemblyChildren = ref([])
 const assemblyPickerVisible = ref(false)
@@ -1047,6 +1100,12 @@ const assemblyChildLoading = ref(false)
 let assemblyChildSeq = 0
 let currentDrawingRequestSeq = 0
 let syncingAssemblyPickerSelection = false
+
+const currentItemInfoRows = computed(() => [
+  { label: '材料名称', value: currentRow.value?.materialName },
+  { label: '物料描述', value: currentRow.value?.description },
+  { label: '表面处理', value: currentRow.value?.surfaceTreatment }
+])
 
 const cleanupCurrentDrawingSrc = () => {
   revokeObjectUrl(currentDrawingSrc.value)
@@ -1089,6 +1148,7 @@ watch(dialogVisible, (visible) => {
     materialPickerVisible.value = false
     processPickerVisible.value = false
     editingProcessIndex.value = null
+    itemInfoDialogVisible.value = false
   }
 })
 
@@ -1609,9 +1669,40 @@ const loadAssemblyRelations = async (row) => {
   }
 }
 
+const updatePricingItemRemarkInMemory = (itemId, remark) => {
+  if (currentRow.value?.id === itemId) {
+    currentRow.value = { ...currentRow.value, remark }
+  }
+  const row = quoteData.value?.itemList?.find(item => item.id === itemId)
+  if (row) {
+    row.remark = remark
+  }
+}
+
+const saveCurrentItemRemark = async () => {
+  if (!currentRow.value?.id) {
+    return ElMessage.warning('缺失当前零件 ID，无法保存备注。')
+  }
+  const itemId = currentRow.value.id
+  return runAction(pricingActionKeys.saveRemark(itemId), async () => {
+    try {
+      const response = await savePricingItemRemark(itemId, itemRemarkDraft.value)
+      const hasReturnedRemark = Object.prototype.hasOwnProperty.call(response || {}, 'remark')
+      const savedRemark = hasReturnedRemark ? response.remark : itemRemarkDraft.value
+      itemRemarkDraft.value = savedRemark || ''
+      updatePricingItemRemarkInMemory(itemId, savedRemark || null)
+      ElMessage.success('备注已保存。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '备注保存失败，请检查后端服务。')
+    }
+  })
+}
+
 // 打开弹窗，继承全局配置
 const openQuoteDialog = async (row) => {
   currentRow.value = row
+  itemRemarkDraft.value = row?.remark || ''
   dialogVisible.value = true
   quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
   assemblyFee.value = numberOrNullForInput(row.assemblyFee)
@@ -2062,6 +2153,53 @@ const submitCurrentQuote = async () => {
   margin-top: 0;
 }
 
+.pricing-item-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pricing-item-note-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.pricing-item-note-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.pricing-item-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pricing-item-info-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 6px;
+  background: var(--erp-surface-muted);
+}
+
+.pricing-item-info-row span {
+  color: var(--erp-text-secondary);
+  font-size: var(--erp-font-size-sm);
+}
+
+.pricing-item-info-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
 .dimension-row,
 .weight-row {
   margin-top: 4px;
@@ -2405,6 +2543,13 @@ const submitCurrentQuote = async () => {
 
   .dialog-header-bar {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricing-item-note-header,
+  .pricing-item-note-control {
+    align-items: stretch;
+    grid-template-columns: 1fr;
     flex-direction: column;
   }
 }

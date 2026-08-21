@@ -67,6 +67,30 @@ describe('QPO Stage 6 item pricing workbench redesign', () => {
     expect(source).toContain('globalConfigStore')
   })
 
+  test('places editable item remark and read-only item info before module A', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('pricing-item-note-section')
+    expect(source).toContain('itemRemarkDraft')
+    expect(source).toContain('saveCurrentItemRemark')
+    expect(source).toContain('savePricingItemRemark')
+    expect(source).toContain('itemInfoDialogVisible')
+    expect(source).toContain('currentItemInfoRows')
+    expect(source).toContain('零件备注')
+    expect(source).toContain('查看零件信息')
+    expect(source).toContain('材料名称')
+    expect(source).toContain('物料描述')
+    expect(source).toContain('表面处理')
+
+    const modeIndex = source.indexOf('pricing-mode-section')
+    const itemNoteIndex = source.indexOf('pricing-item-note-section')
+    const moduleAIndex = source.indexOf('pricing-material-section')
+
+    expect(modeIndex).toBeGreaterThanOrEqual(0)
+    expect(itemNoteIndex).toBeGreaterThan(modeIndex)
+    expect(moduleAIndex).toBeGreaterThan(itemNoteIndex)
+  })
+
   test('returns to the current order global setup deterministically', () => {
     const source = readSource('components', 'ItemPricing.vue')
 

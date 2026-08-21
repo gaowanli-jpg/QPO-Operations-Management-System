@@ -6,6 +6,7 @@ import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.PricingItemRemarkUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -163,6 +164,19 @@ public class EngineerController {
     public Map<String, Object> submitQuote(@RequestBody QuoteSubmitReq req) {
         engineerService.calculateAndSaveQuote(req);
         return Map.of("success", true, "message", "核价成功，矩阵数据已入库。");
+    }
+
+    @PutMapping("/pricing/items/{itemId}/remark")
+    @RequirePermission("engineer:pricing:save-item")
+    public Map<String, Object> updatePricingItemRemark(
+            @PathVariable Integer itemId,
+            @RequestBody(required = false) PricingItemRemarkUpdateReq req) {
+        ItemQuoteVersion item = engineerService.updatePricingItemRemark(itemId, req);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("message", "备注已保存");
+        result.put("remark", item == null ? null : item.getRemark());
+        return result;
     }
 
     @PostMapping("/complete-order/{rfqId}")
