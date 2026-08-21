@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,6 +67,7 @@ class ProcessMasterBackendServiceTest {
                         "@TableName(\"dict_process_detail\")",
                         "private Long id;",
                         "private Long categoryId;",
+                        "private BigDecimal hourlyRate;",
                         "private String detailName;",
                         "private Boolean enabled;");
         assertThat(read("mapper/DictProcessCategoryMapper.java"))
@@ -75,7 +77,13 @@ class ProcessMasterBackendServiceTest {
         assertThat(read("dto/ProcessCategorySaveReq.java"))
                 .contains("private String processCode;", "private String categoryName;", "private BigDecimal hourlyRate;");
         assertThat(read("dto/ProcessDetailSaveReq.java"))
-                .contains("private Long categoryId;", "private String detailName;");
+                .contains("private Long categoryId;", "private String detailName;", "private BigDecimal hourlyRate;");
+        assertThat(read("dto/ProcessDetailDTO.java"))
+                .contains(
+                        "private BigDecimal hourlyRate;",
+                        "private BigDecimal detailHourlyRate;",
+                        "private BigDecimal categoryHourlyRate;",
+                        "private BigDecimal effectiveHourlyRate;");
 
         assertThat(AuditService.inferModule("DICT_PROCESS_CATEGORY_CREATE")).isEqualTo("DICT");
         assertThat(AuditService.labelForAction("DICT_PROCESS_CATEGORY_CREATE")).contains("工艺大类");
@@ -186,6 +194,9 @@ class ProcessMasterBackendServiceTest {
         assertThat(result.getProcessCode()).isEqualTo("PACKAGING");
         assertThat(result.getCategoryName()).isEqualTo("包装");
         assertThat(result.getHourlyRate()).isEqualByComparingTo("10.0000");
+        assertThat(result.getCategoryHourlyRate()).isEqualByComparingTo("10.0000");
+        assertThat(result.getEffectiveHourlyRate()).isEqualByComparingTo("10.0000");
+        assertThat(result.getDetailHourlyRate()).isNull();
         ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("DICT_PROCESS_DETAIL_CREATE"), eq("dict_process_detail"), eq(99L), isNull(), afterCaptor.capture());
         assertThat(String.valueOf(afterCaptor.getValue()))
@@ -201,6 +212,63 @@ class ProcessMasterBackendServiceTest {
         assertThatThrownBy(() -> service.saveDetail(null, underDisabled))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("已停用");
+    }
+
+    @Test
+    void detailHourlyRateOverridesCategoryRateOnlyWhenNonNullAndZeroIsValid() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
+        DictProcessCategory category = category(7L, true);
+        category.setHourlyRate(new BigDecimal("80.00"));
+        when(categoryMapper.selectById(7L)).thenReturn(category);
+
+        DictProcessDetail inherited = detail(1L, 7L, null);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(inherited));
+        var inheritedDto = service.listDetails(null, null).get(0);
+        assertThat(inheritedDto.getHourlyRate()).isEqualByComparingTo("80.00");
+        assertThat(inheritedDto.getEffectiveHourlyRate()).isEqualByComparingTo("80.00");
+        assertThat(inheritedDto.getCategoryHourlyRate()).isEqualByComparingTo("80.00");
+        assertThat(inheritedDto.getDetailHourlyRate()).isNull();
+
+        DictProcessDetail zero = detail(2L, 7L, new BigDecimal("0.00"));
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(zero));
+        var zeroDto = service.listDetails(null, null).get(0);
+        assertThat(zeroDto.getHourlyRate()).isEqualByComparingTo("0.00");
+        assertThat(zeroDto.getEffectiveHourlyRate()).isEqualByComparingTo("0.00");
+        assertThat(zeroDto.getDetailHourlyRate()).isEqualByComparingTo("0.00");
+
+        DictProcessDetail custom = detail(3L, 7L, new BigDecimal("125.50"));
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(custom));
+        var customDto = service.listDetails(null, null).get(0);
+        assertThat(customDto.getHourlyRate()).isEqualByComparingTo("125.50");
+        assertThat(customDto.getEffectiveHourlyRate()).isEqualByComparingTo("125.50");
+        assertThat(customDto.getDetailHourlyRate()).isEqualByComparingTo("125.50");
+    }
+
+    @Test
+    void saveDetailAllowsNullAndZeroHourlyRateButRejectsNegativeRate() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
+        when(categoryMapper.selectById(7L)).thenReturn(category(7L, true));
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        ProcessDetailSaveReq inherited = validDetailReq();
+        inherited.setHourlyRate(null);
+        assertThat(service.saveDetail(null, inherited).getDetailHourlyRate()).isNull();
+
+        ProcessDetailSaveReq zero = validDetailReq();
+        zero.setHourlyRate(BigDecimal.ZERO);
+        var zeroDto = service.saveDetail(null, zero);
+        assertThat(zeroDto.getDetailHourlyRate()).isEqualByComparingTo("0");
+        assertThat(zeroDto.getHourlyRate()).isEqualByComparingTo("0");
+
+        ProcessDetailSaveReq negative = validDetailReq();
+        negative.setHourlyRate(new BigDecimal("-0.01"));
+        assertThatThrownBy(() -> service.saveDetail(null, negative))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("具体小时价格");
     }
 
     @Test
@@ -265,6 +333,24 @@ class ProcessMasterBackendServiceTest {
         req.setCategoryName("包装");
         req.setHourlyRate(new BigDecimal("10.0000"));
         return req;
+    }
+
+    private static ProcessDetailSaveReq validDetailReq() {
+        ProcessDetailSaveReq req = new ProcessDetailSaveReq();
+        req.setCategoryId(7L);
+        req.setDetailName("精细包装");
+        return req;
+    }
+
+    private static DictProcessDetail detail(Long id, Long categoryId, BigDecimal hourlyRate) {
+        DictProcessDetail detail = new DictProcessDetail();
+        detail.setId(id);
+        detail.setCategoryId(categoryId);
+        detail.setDetailName("具体工艺" + id);
+        detail.setHourlyRate(hourlyRate);
+        detail.setEnabled(true);
+        detail.setSortNo(0);
+        return detail;
     }
 
     private static DictProcessCategory category(Long id, boolean enabled) {

@@ -158,6 +158,11 @@ public class ProcessMasterService {
         }
         DictProcessDetail entity = new DictProcessDetail();
         entity.setCategoryId(categoryId);
+        BigDecimal hourlyRate = req.getHourlyRate();
+        if (hourlyRate != null && hourlyRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("具体小时价格不能小于 0");
+        }
+        entity.setHourlyRate(hourlyRate);
         entity.setDetailName(limit(required(req.getDetailName(), "具体工艺名称"), "具体工艺名称", 120));
         entity.setDetailRemarks(limit(optional(req.getDetailRemarks()), "具体备注", 500));
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
@@ -253,9 +258,21 @@ public class ProcessMasterService {
         if (category != null) {
             dto.setProcessCode(category.getProcessCode());
             dto.setCategoryName(category.getCategoryName());
-            dto.setHourlyRate(category.getHourlyRate());
+            dto.setCategoryHourlyRate(category.getHourlyRate());
         }
+        dto.setDetailHourlyRate(entity.getHourlyRate());
+        BigDecimal effectiveHourlyRate = effectiveHourlyRate(entity, category);
+        dto.setEffectiveHourlyRate(effectiveHourlyRate);
+        dto.setHourlyRate(effectiveHourlyRate);
         return dto;
+    }
+
+    private BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory category) {
+        BigDecimal detailRate = detail == null ? null : detail.getHourlyRate();
+        if (detailRate != null) {
+            return detailRate;
+        }
+        return category == null ? BigDecimal.ZERO : Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);
     }
 
     private Map<String, Object> categoryAuditSummary(DictProcessCategory entity) {
@@ -275,6 +292,9 @@ public class ProcessMasterService {
         summary.put("processCode", category == null ? null : category.getProcessCode());
         summary.put("categoryName", category == null ? null : category.getCategoryName());
         summary.put("detailName", entity.getDetailName());
+        summary.put("detailHourlyRate", entity.getHourlyRate());
+        summary.put("categoryHourlyRate", category == null ? null : category.getHourlyRate());
+        summary.put("effectiveHourlyRate", effectiveHourlyRate(entity, category));
         summary.put("enabled", entity.getEnabled());
         return summary;
     }

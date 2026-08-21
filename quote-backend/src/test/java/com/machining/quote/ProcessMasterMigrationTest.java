@@ -14,6 +14,8 @@ class ProcessMasterMigrationTest {
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path BASELINE_SEED = Path.of(
             "src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path PROCESS_DETAIL_HOURLY_RATE_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V16__process_detail_hourly_rate.sql");
 
     @Test
     void baselineDefinesTwoLevelProcessMasterTablesConstraintsAndIndexes() throws IOException {
@@ -61,6 +63,23 @@ class ProcessMasterMigrationTest {
                         "INSERT INTO dict_process_detail",
                         "Baseline process category seed",
                         "Baseline process detail seed");
+    }
+
+    @Test
+    void processDetailHourlyRateIsAddedByAppendOnlyMigration() throws IOException {
+        String schema = read(BASELINE_SCHEMA);
+        String detailTable = tableDefinition(schema, "dict_process_detail");
+        String migration = read(PROCESS_DETAIL_HOURLY_RATE_MIGRATION);
+
+        assertThat(detailTable)
+                .doesNotContain("hourly_rate numeric")
+                .doesNotContain("hourly_rate NUMERIC");
+        assertThat(migration)
+                .contains(
+                        "ALTER TABLE dict_process_detail",
+                        "ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(18, 6)",
+                        "COMMENT ON COLUMN dict_process_detail.hourly_rate")
+                .doesNotContain("CREATE TABLE dict_process_detail");
     }
 
     private static String tableDefinition(String schema, String tableName) {

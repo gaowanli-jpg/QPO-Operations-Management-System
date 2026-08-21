@@ -38,7 +38,8 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                 .contains(
                         "@TableName(\"dict_process_detail\")",
                         "private Long categoryId;",
-                        "private String detailName;")
+                        "private String detailName;",
+                        "private BigDecimal hourlyRate;")
                 .doesNotContain("price1To5", "price3000Plus");
         assertThat(schema)
                 .contains(

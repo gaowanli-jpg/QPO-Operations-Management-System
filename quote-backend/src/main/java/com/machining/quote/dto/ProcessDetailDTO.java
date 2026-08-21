@@ -12,6 +12,9 @@ public class ProcessDetailDTO {
     private String processCode;
     private String categoryName;
     private BigDecimal hourlyRate;
+    private BigDecimal detailHourlyRate;
+    private BigDecimal categoryHourlyRate;
+    private BigDecimal effectiveHourlyRate;
     private String detailName;
     private String detailRemarks;
     private Boolean enabled;
