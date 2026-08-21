@@ -26,6 +26,8 @@ class ProcessMasterDocumentationCharacterizationTest {
                         "engineer:dict:process-manage",
                         "processRouteCount",
                         "processDetailId + processCode + categoryName + detailName",
+                        "按当前有效小时价格重新计算工艺金额",
+                        "复用时复制历史标准工艺路线快照，不按当前字典价格重算",
                         "MES 生产下发只对外传 `processCode / categoryName / detailName / unitWorkHours / sortNo`"
                 );
     }
@@ -108,12 +110,12 @@ class ProcessMasterDocumentationCharacterizationTest {
         assertThat(pricingDoc)
                 .contains(
                         "核价工艺选择使用 `processDetailId` 作为稳定身份",
-                        "小时价格来自工艺大类 `dict_process_category.hourly_rate`",
+                        "小时价格使用有效小时价格：具体工艺 `dict_process_detail.hourly_rate` 非空（含 0）优先，否则继承工艺大类 `dict_process_category.hourly_rate`",
                         "不再按数量档位取工艺价格"
                 );
         assertThat(repeatDoc)
                 .contains(
-                        "重复件复用复制历史路线中的 `processDetailId` 和 `unitWorkHours`",
+                        "重复件复用复制历史路线中的 `processDetailId`、`unitWorkHours`、`hourlyRate` 和 `lineCost` 快照",
                         "当前具体工艺或大类缺失、停用时不按名称模糊替代",
                         "复用成功后的新路线必须包含 `processCode / categoryName / detailName`"
                 );

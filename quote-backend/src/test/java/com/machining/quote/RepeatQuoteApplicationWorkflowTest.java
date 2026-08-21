@@ -181,7 +181,7 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
 
     @Test
     @SuppressWarnings("unchecked")
-    void repeatQuoteRepricesHistoricalProcessRouteWithCurrentCategoryRate() {
+    void repeatQuoteCopiesHistoricalProcessRouteSnapshotWithoutCurrentDictionaryRepricing() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-PROCESS-REPRICE-" + System.nanoTime());
         historicalOrder.setCustomerName("历史工艺重算客户");
@@ -193,6 +193,9 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         DictProcessCategory category = processCategoryMapper.selectById(((Number) historicalRoute.get("processCategoryId")).longValue());
         category.setHourlyRate(new BigDecimal("25.00"));
         processCategoryMapper.updateById(category);
+        DictProcessDetail detail = processDetailMapper.selectById(((Number) historicalRoute.get("processDetailId")).longValue());
+        detail.setHourlyRate(BigDecimal.ZERO);
+        processDetailMapper.updateById(detail);
 
         OrderRfq currentOrder = new OrderRfq();
         currentOrder.setRfqNo("CUR-PROCESS-REPRICE-" + System.nanoTime());
@@ -210,8 +213,8 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
             assertThat(route).containsEntry("routeType", "PROCESS");
             assertThat(route.get("processDetailId")).isEqualTo(historicalRoute.get("processDetailId"));
             assertThat((Double) route.get("unitWorkHours")).isEqualTo(1.0);
-            assertThat((Double) route.get("hourlyRate")).isEqualTo(25.0);
-            assertThat((Double) route.get("lineCost")).isEqualTo(25.0);
+            assertThat((Double) route.get("hourlyRate")).isEqualTo(10.0);
+            assertThat((Double) route.get("lineCost")).isEqualTo(10.0);
         });
     }
 

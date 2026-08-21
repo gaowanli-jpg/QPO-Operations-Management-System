@@ -57,7 +57,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
     }
 
     @Test
-    void pricingSaveUsesProcessDetailAndCurrentCategoryHourlyRate() throws IOException {
+    void pricingSaveUsesProcessDetailAndEffectiveHourlyRate() throws IOException {
         String submitReq = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "dto", "QuoteSubmitReq.java"));
         String engineerService = read(service("EngineerService.java"));
@@ -95,11 +95,17 @@ class ProcessRouteBaselineStage1CharacterizationTest {
                         "private DictProcessDetailMapper detailMapper;",
                         "private DictProcessCategoryMapper categoryMapper;",
                         "Long processDetailId = row.getProcessDetailId();",
-                        "double hourlyRate = number(category.getHourlyRate());",
+                        "BigDecimal effectiveHourlyRate = effectiveHourlyRate(detail, category);",
+                        "double hourlyRate = number(effectiveHourlyRate);",
                         "double lineCost = unitWorkHours * hourlyRate;",
+                        "private BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory category)",
+                        "return Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);",
                         "snapshot.put(\"processCode\", category.getProcessCode());",
                         "snapshot.put(\"categoryName\", category.getCategoryName());",
-                        "snapshot.put(\"detailName\", detail.getDetailName());");
+                        "snapshot.put(\"detailName\", detail.getDetailName());",
+                        "snapshot.put(\"detailHourlyRate\", detail.getHourlyRate());",
+                        "snapshot.put(\"categoryHourlyRate\", number(category.getHourlyRate()));",
+                        "snapshot.put(\"hourlyRateSource\", detail.getHourlyRate() == null ? \"CATEGORY\" : \"DETAIL\");");
         assertThat(engineerService)
                 .doesNotContain("getPrice1To5", "getPrice1000To3000", "getPrice3000Plus");
     }
