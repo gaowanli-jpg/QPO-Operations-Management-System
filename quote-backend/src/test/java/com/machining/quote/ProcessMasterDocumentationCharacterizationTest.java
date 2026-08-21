@@ -27,7 +27,7 @@ class ProcessMasterDocumentationCharacterizationTest {
                         "processRouteCount",
                         "processDetailId + processCode + categoryName + detailName",
                         "按当前有效小时价格重新计算工艺金额",
-                        "复用时复制历史标准工艺路线快照，不按当前字典价格重算",
+                        "复用时按当前有效小时价格重算",
                         "MES 生产下发只对外传 `processCode / categoryName / detailName / unitWorkHours / sortNo`"
                 );
     }
@@ -115,7 +115,7 @@ class ProcessMasterDocumentationCharacterizationTest {
                 );
         assertThat(repeatDoc)
                 .contains(
-                        "重复件复用复制历史路线中的 `processDetailId`、`unitWorkHours`、`hourlyRate` 和 `lineCost` 快照",
+                        "重复件复用复制历史路线中的 `processDetailId` 和 `unitWorkHours`，并按当前有效小时价格重新计算工艺金额",
                         "当前具体工艺或大类缺失、停用时不按名称模糊替代",
                         "复用成功后的新路线必须包含 `processCode / categoryName / detailName`"
                 );

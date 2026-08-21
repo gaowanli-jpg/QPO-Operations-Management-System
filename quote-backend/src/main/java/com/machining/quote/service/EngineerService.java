@@ -70,10 +70,6 @@ public class EngineerService {
     private SystemTaskGuardService taskGuardService;
     @Autowired(required = false)
     private ConfirmedMaterialNoReuseService confirmedMaterialNoReuseService = new ConfirmedMaterialNoReuseService();
-    @Autowired(required = false)
-    private JsonSnapshotCopyService jsonSnapshotCopyService = new JsonSnapshotCopyService();
-    @Autowired(required = false)
-    private ProcessRouteSnapshotService processRouteSnapshotService = new ProcessRouteSnapshotService();
 
     @Transactional
     public void calculateAndSaveQuote(QuoteSubmitReq req) {
@@ -838,58 +834,9 @@ public class EngineerService {
             return processRouteBlockedReason;
         }
         MaterialNoReuseResult materialNoResult = reuseConfirmedMaterialNo(currentItem, sourceItem);
-        copyRepeatNormalQuoteSnapshot(currentItem, sourceItem, materialData);
+        saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight());
         addAppliedRepeatItem(currentItem, source, materialNoResult, handledItemIds, appliedItems);
         return null;
-    }
-
-    private void copyRepeatNormalQuoteSnapshot(ItemQuoteVersion target,
-                                               ItemQuoteVersion source,
-                                               Map<String, Object> materialData) {
-        int qty = target.getQty() == null ? 0 : target.getQty();
-        target.setMaterialData(jsonSnapshotCopyService().deepCopySnapshot(materialData));
-        target.setEngineeringMaterialCode(source.getEngineeringMaterialCode());
-        target.setEngineeringMaterialName(source.getEngineeringMaterialName());
-        target.setEngineeringMaterialTypeCode(source.getEngineeringMaterialTypeCode());
-        target.setEngineeringMaterialTypeName(source.getEngineeringMaterialTypeName());
-        target.setEngineeringMaterialCategory(source.getEngineeringMaterialCategory());
-        target.setMaterialShape(source.getMaterialShape());
-        target.setProcessRoute(processRouteSnapshotService().copySnapshot(source.getProcessRoute()));
-        target.setFeeData(jsonSnapshotCopyService().deepCopySnapshot(source.getFeeData()));
-        target.setMaterialGrossWeight(source.getMaterialGrossWeight());
-        target.setPartNetWeight(source.getPartNetWeight());
-        target.setQuoteMode(QUOTE_MODE_NORMAL);
-        target.setAssemblyFee(0.0);
-        target.setBaseCost(source.getBaseCost());
-        target.setTaxIncludedUnitPrice(source.getTaxIncludedUnitPrice());
-        target.setTaxIncludedTotalPrice(totalFromUnit(source.getTaxIncludedUnitPrice(), source.getTaxIncludedTotalPrice(), qty));
-        target.setUntaxedUnitPrice(source.getUntaxedUnitPrice());
-        target.setUntaxedTotalPrice(totalFromUnit(source.getUntaxedUnitPrice(), source.getUntaxedTotalPrice(), qty));
-        target.setStatus(QuoteStatusWorkflow.PRICED);
-
-        deleteAssemblyRelations(target.getId());
-        itemMapper.updateById(target);
-    }
-
-    private Double totalFromUnit(Double unitPrice, Double fallbackTotal, int qty) {
-        if (unitPrice != null) {
-            return unitPrice * qty;
-        }
-        return fallbackTotal;
-    }
-
-    private JsonSnapshotCopyService jsonSnapshotCopyService() {
-        if (jsonSnapshotCopyService == null) {
-            jsonSnapshotCopyService = new JsonSnapshotCopyService();
-        }
-        return jsonSnapshotCopyService;
-    }
-
-    private ProcessRouteSnapshotService processRouteSnapshotService() {
-        if (processRouteSnapshotService == null) {
-            processRouteSnapshotService = new ProcessRouteSnapshotService(jsonSnapshotCopyService());
-        }
-        return processRouteSnapshotService;
     }
 
     private Map<String, Object> repeatQuoteMaterialData(ItemQuoteVersion sourceItem, String materialCode) {

@@ -176,7 +176,7 @@ BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory cat
 
 - 迁移后所有历史具体工艺 `hourly_rate` 为 `null`，自动继承大类价，历史行为不变。
 - 历史核价快照中的 `hourlyRate` 仍按快照值展示，不回溯重算。
-- 重复件复用、销售订单导入自动补全、提单和已提零件快照继续复制历史快照，不因为当前字典价格变化重写历史快照。
+- RFQ 重复件核价复用历史材料和工艺参数，并按当前有效小时价格重新计算；销售订单导入自动补全、提单和已提零件快照继续复制历史快照，不因为当前字典价格变化重写历史快照。
 - 只有新保存核价或重新保存的工艺路线才使用新的有效小时价格规则。
 
 ## 11. 测试计划
@@ -203,7 +203,8 @@ BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory cat
 
 ### 回归
 
-- 已有工艺模板、重复件复用、报价导出、提单表据展示继续读取旧 `hourlyRate` 快照。
+- 已有工艺模板、报价导出、提单表据展示继续读取旧 `hourlyRate` 快照。
+- RFQ 重复件复用读取历史材料和工艺输入参数，但按当前有效小时价格重新计算报价结果。
 - MES 主数据同步测试继续通过，证明具体工艺本地价不被同步覆盖。
 
 ## 12. 具体实施计划

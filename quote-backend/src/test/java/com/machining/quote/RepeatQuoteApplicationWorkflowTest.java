@@ -181,13 +181,16 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
 
     @Test
     @SuppressWarnings("unchecked")
-    void repeatQuoteCopiesHistoricalProcessRouteSnapshotWithoutCurrentDictionaryRepricing() {
+    void repeatQuoteRepricesHistoricalProcessRouteWithCurrentEffectiveHourlyRate() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-PROCESS-REPRICE-" + System.nanoTime());
         historicalOrder.setCustomerName("历史工艺重算客户");
         historicalOrder.setStatus(QuoteStatusWorkflow.RELEASED);
         orderMapper.insert(historicalOrder);
         ItemQuoteVersion historicalItem = releasedReusableItem(historicalOrder, "RFQ-PROCESS-REPRICE", "A", 20.0);
+        historicalItem.setTaxIncludedUnitPrice(888.0);
+        historicalItem.setTaxIncludedTotalPrice(888.0);
+        itemMapper.updateById(historicalItem);
 
         Map<String, Object> historicalRoute = ((List<Map<String, Object>>) historicalItem.getProcessRoute()).get(0);
         DictProcessCategory category = processCategoryMapper.selectById(((Number) historicalRoute.get("processCategoryId")).longValue());
@@ -209,12 +212,15 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         List<Map<String, Object>> routes = (List<Map<String, Object>>) saved.getProcessRoute();
         assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(saved.getTaxIncludedUnitPrice())
+                .as("RFQ 重复件复用应借历史输入参数重新计算，不照抄历史单价快照")
+                .isNotEqualTo(888.0);
         assertThat(routes).singleElement().satisfies(route -> {
             assertThat(route).containsEntry("routeType", "PROCESS");
             assertThat(route.get("processDetailId")).isEqualTo(historicalRoute.get("processDetailId"));
             assertThat((Double) route.get("unitWorkHours")).isEqualTo(1.0);
-            assertThat((Double) route.get("hourlyRate")).isEqualTo(10.0);
-            assertThat((Double) route.get("lineCost")).isEqualTo(10.0);
+            assertThat((Double) route.get("hourlyRate")).isEqualTo(0.0);
+            assertThat((Double) route.get("lineCost")).isEqualTo(0.0);
         });
     }
 
