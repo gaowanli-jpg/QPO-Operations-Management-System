@@ -83,7 +83,10 @@ class ProcessMasterBackendServiceTest {
                         "private BigDecimal hourlyRate;",
                         "private BigDecimal detailHourlyRate;",
                         "private BigDecimal categoryHourlyRate;",
-                        "private BigDecimal effectiveHourlyRate;");
+                        "private BigDecimal effectiveHourlyRate;",
+                        "private Boolean detailEnabled;",
+                        "private Boolean categoryEnabled;",
+                        "private Boolean effectiveEnabled;");
 
         assertThat(AuditService.inferModule("DICT_PROCESS_CATEGORY_CREATE")).isEqualTo("DICT");
         assertThat(AuditService.labelForAction("DICT_PROCESS_CATEGORY_CREATE")).contains("工艺大类");
@@ -169,7 +172,7 @@ class ProcessMasterBackendServiceTest {
     }
 
     @Test
-    void createDetailRequiresEnabledCategoryChecksNameUniquenessAndRecordsSummaryOnlyAudit() {
+    void createDetailChecksNameUniquenessAndRecordsSummaryOnlyAudit() {
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         AuditService auditService = mock(AuditService.class);
@@ -209,9 +212,10 @@ class ProcessMasterBackendServiceTest {
         underDisabled.setCategoryId(8L);
         underDisabled.setDetailName("不可启用");
         underDisabled.setEnabled(true);
-        assertThatThrownBy(() -> service.saveDetail(null, underDisabled))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("已停用");
+        var disabledCategoryDetail = service.saveDetail(null, underDisabled);
+        assertThat(disabledCategoryDetail.getDetailEnabled()).isTrue();
+        assertThat(disabledCategoryDetail.getCategoryEnabled()).isFalse();
+        assertThat(disabledCategoryDetail.getEffectiveEnabled()).isFalse();
     }
 
     @Test
@@ -244,6 +248,36 @@ class ProcessMasterBackendServiceTest {
         assertThat(customDto.getHourlyRate()).isEqualByComparingTo("125.50");
         assertThat(customDto.getEffectiveHourlyRate()).isEqualByComparingTo("125.50");
         assertThat(customDto.getDetailHourlyRate()).isEqualByComparingTo("125.50");
+    }
+
+    @Test
+    void listDetailsExposesEffectiveAvailabilityAndEnabledOnlyFiltersDisabledCategories() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
+        DictProcessCategory enabledCategory = category(7L, true);
+        DictProcessCategory disabledCategory = category(8L, false);
+        disabledCategory.setProcessCode("CNC");
+        disabledCategory.setCategoryName("CNC");
+        when(categoryMapper.selectById(7L)).thenReturn(enabledCategory);
+        when(categoryMapper.selectById(8L)).thenReturn(disabledCategory);
+        DictProcessDetail usableDetail = detail(1L, 7L, null);
+        DictProcessDetail blockedByCategory = detail(2L, 8L, null);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(usableDetail, blockedByCategory));
+
+        var allDetails = service.listDetails(null, false);
+
+        assertThat(allDetails).hasSize(2);
+        assertThat(allDetails.get(0).getDetailEnabled()).isTrue();
+        assertThat(allDetails.get(0).getCategoryEnabled()).isTrue();
+        assertThat(allDetails.get(0).getEffectiveEnabled()).isTrue();
+        assertThat(allDetails.get(1).getDetailEnabled()).isTrue();
+        assertThat(allDetails.get(1).getCategoryEnabled()).isFalse();
+        assertThat(allDetails.get(1).getEffectiveEnabled()).isFalse();
+
+        var enabledOnlyDetails = service.listDetails(null, true);
+
+        assertThat(enabledOnlyDetails).extracting("id").containsExactly(1L);
     }
 
     @Test

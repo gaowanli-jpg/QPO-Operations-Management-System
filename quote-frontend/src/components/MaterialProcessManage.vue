@@ -171,6 +171,21 @@
                 <el-table-column prop="detailName" label="具体工艺" min-width="160" fixed show-overflow-tooltip />
                 <el-table-column prop="processCode" label="大类编码" width="150" show-overflow-tooltip />
                 <el-table-column prop="categoryName" label="大类名称" min-width="150" show-overflow-tooltip />
+                <el-table-column label="大类状态" width="100" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.categoryEnabled !== false ? 'success' : 'info'" size="small">{{ scope.row.categoryEnabled !== false ? '启用' : '停用' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="具体状态" width="100" align="center">
+                  <template #default="scope">
+                    <el-tag :type="(scope.row.detailEnabled ?? scope.row.enabled) !== false ? 'success' : 'info'" size="small">{{ (scope.row.detailEnabled ?? scope.row.enabled) !== false ? '启用' : '停用' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="核价可用" width="100" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.effectiveEnabled !== false ? 'success' : 'danger'" size="small">{{ scope.row.effectiveEnabled !== false ? '可用' : '不可用' }}</el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column label="具体小时价格" width="150" align="right">
                   <template #default="scope">{{ formatDetailHourlyRate(scope.row.detailHourlyRate) }}</template>
                 </el-table-column>
@@ -181,11 +196,6 @@
                   <template #default="scope">{{ formatHourlyRate(scope.row.effectiveHourlyRate ?? scope.row.hourlyRate) }}</template>
                 </el-table-column>
                 <el-table-column prop="detailRemarks" label="具体备注" min-width="200" show-overflow-tooltip />
-                <el-table-column label="状态" width="90" align="center">
-                  <template #default="scope">
-                    <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
-                  </template>
-                </el-table-column>
                 <el-table-column label="操作" width="120" align="center" fixed="right">
                   <template #default="scope">
                     <div class="erp-table-actions">
@@ -590,8 +600,13 @@ const filteredProcessDetails = computed(() => {
     'detailHourlyRate',
     'categoryHourlyRate',
     'effectiveHourlyRate',
+    'detailEnabled',
+    'categoryEnabled',
+    'effectiveEnabled',
     item => formatDetailHourlyRate(item.detailHourlyRate),
-    item => item.enabled ? '启用' : '停用'
+    item => item.categoryEnabled !== false ? '大类启用' : '大类停用',
+    item => (item.detailEnabled ?? item.enabled) !== false ? '具体启用' : '具体停用',
+    item => item.effectiveEnabled !== false ? '核价可用' : '核价不可用'
   ], keyword))
 })
 const filteredMaterialsTotal = computed(() => filteredMaterials.value.length)

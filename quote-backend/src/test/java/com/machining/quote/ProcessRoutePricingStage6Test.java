@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -97,6 +98,22 @@ class ProcessRoutePricingStage6Test {
 
         assertThat(service.priceProcessRows(List.of(row)).get(0).get("hourlyRate")).isEqualTo(80.0);
         assertThat(service.priceProcessRows(List.of(row)).get(0).get("lineCost")).isEqualTo(100.0);
+    }
+
+    @Test
+    void rejectsProcessRowsWhenCategoryIsDisabledEvenIfDetailIsEnabled() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        ProcessRoutePricingService service = service(detailMapper, categoryMapper);
+        DictProcessDetail detail = detail(8L, 4L, "CNC finishing", null);
+        DictProcessCategory category = category(4L, "CNC", "CNC", "80.00");
+        category.setEnabled(false);
+        when(detailMapper.selectById(8L)).thenReturn(detail);
+        when(categoryMapper.selectById(4L)).thenReturn(category);
+
+        assertThatThrownBy(() -> service.priceProcessRows(List.of(row(10, 8L, 1.25))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("工艺大类");
     }
 
     private static ProcessRoutePricingService service(

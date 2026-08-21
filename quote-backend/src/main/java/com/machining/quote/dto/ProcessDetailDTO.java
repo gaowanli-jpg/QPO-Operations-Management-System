@@ -18,6 +18,9 @@ public class ProcessDetailDTO {
     private String detailName;
     private String detailRemarks;
     private Boolean enabled;
+    private Boolean detailEnabled;
+    private Boolean categoryEnabled;
+    private Boolean effectiveEnabled;
     private Integer sortNo;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

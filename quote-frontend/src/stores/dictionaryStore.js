@@ -19,10 +19,19 @@ const toProcessCompatibilityRow = (item = {}) => ({
   categoryHourlyRate: item.categoryHourlyRate,
   effectiveHourlyRate: item.effectiveHourlyRate,
   hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate,
+  detailEnabled: item.detailEnabled ?? item.enabled,
+  categoryEnabled: item.categoryEnabled,
+  effectiveEnabled: item.effectiveEnabled ?? ((item.detailEnabled ?? item.enabled) !== false && item.categoryEnabled !== false),
   processName: item.detailName,
   calcType: '工时',
   sourceType: 'process'
 })
+
+const isProcessDetailEffectivelyEnabled = (item = {}) => {
+  if (item.effectiveEnabled != null) return item.effectiveEnabled !== false
+  const detailEnabled = item.detailEnabled ?? item.enabled
+  return detailEnabled !== false && item.categoryEnabled !== false
+}
 
 const formatHourlyRate = (value) => Number(value ?? 0).toFixed(2)
 const processRateSourceText = (item = {}) => item.detailHourlyRate == null ? '继承大类' : '具体价'
@@ -44,7 +53,7 @@ export const useDictionaryStore = defineStore('dictionary', {
   }),
   getters: {
     combinedProcessOptions: (state) => [
-      ...state.processDetails.map(item => ({
+      ...state.processDetails.filter(isProcessDetailEffectivelyEnabled).map(item => ({
         optionKey: `process-detail-${item.id}`,
         processDetailId: item.id,
         processCategoryId: item.categoryId,
@@ -54,6 +63,9 @@ export const useDictionaryStore = defineStore('dictionary', {
         detailName: item.detailName,
         detailRemarks: item.detailRemarks,
         enabled: item.enabled,
+        detailEnabled: item.detailEnabled ?? item.enabled,
+        categoryEnabled: item.categoryEnabled,
+        effectiveEnabled: item.effectiveEnabled ?? ((item.detailEnabled ?? item.enabled) !== false && item.categoryEnabled !== false),
         sortNo: item.sortNo,
         detailHourlyRate: item.detailHourlyRate,
         categoryHourlyRate: item.categoryHourlyRate,
@@ -113,7 +125,7 @@ export const useDictionaryStore = defineStore('dictionary', {
         this.materials = materials || []
         this.processCategories = processCategories || []
         this.processDetails = processDetails || []
-        this.processes = this.processDetails.map(toProcessCompatibilityRow)
+        this.processes = this.processDetails.filter(isProcessDetailEffectivelyEnabled).map(toProcessCompatibilityRow)
         this.extraFeeItems = extraFeeItems || []
         if (includeMarkupFees) {
           this.markupFees = markupFees || []
@@ -162,7 +174,7 @@ export const useDictionaryStore = defineStore('dictionary', {
       } else {
         this.processDetails.push(normalizedDetail)
       }
-      this.processes = this.processDetails.map(toProcessCompatibilityRow)
+      this.processes = this.processDetails.filter(isProcessDetailEffectivelyEnabled).map(toProcessCompatibilityRow)
     },
 
     applyPricingFallbackData() {

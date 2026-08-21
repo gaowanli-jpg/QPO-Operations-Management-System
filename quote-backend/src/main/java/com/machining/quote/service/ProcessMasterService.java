@@ -50,7 +50,10 @@ public class ProcessMasterService {
             qw.eq("enabled", true);
         }
         qw.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
-        return detailMapper.selectList(qw).stream().map(this::toDetailDTO).toList();
+        return detailMapper.selectList(qw).stream()
+                .map(this::toDetailDTO)
+                .filter(dto -> !Boolean.TRUE.equals(enabledOnly) || Boolean.TRUE.equals(dto.getEffectiveEnabled()))
+                .toList();
     }
 
     @Transactional
@@ -94,9 +97,6 @@ public class ProcessMasterService {
         DictProcessCategory category = requireCategory(entity.getCategoryId());
         if (before == null && isMesSource(category.getSourceType())) {
             throw new IllegalArgumentException("MES process detail must be created by MES sync, not manually");
-        }
-        if (Boolean.TRUE.equals(entity.getEnabled()) && !Boolean.TRUE.equals(category.getEnabled())) {
-            throw new IllegalStateException("工艺大类已停用，不能启用具体工艺");
         }
         ensureDetailNameUnique(entity.getCategoryId(), entity.getDetailName(), id);
         if (id == null) {
@@ -252,6 +252,9 @@ public class ProcessMasterService {
         dto.setDetailName(entity.getDetailName());
         dto.setDetailRemarks(entity.getDetailRemarks());
         dto.setEnabled(entity.getEnabled());
+        dto.setDetailEnabled(entity.getEnabled());
+        dto.setCategoryEnabled(category != null && Boolean.TRUE.equals(category.getEnabled()));
+        dto.setEffectiveEnabled(effectiveEnabled(entity, category));
         dto.setSortNo(entity.getSortNo());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
@@ -275,6 +278,13 @@ public class ProcessMasterService {
         return category == null ? BigDecimal.ZERO : Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);
     }
 
+    private boolean effectiveEnabled(DictProcessDetail detail, DictProcessCategory category) {
+        return detail != null
+                && Boolean.TRUE.equals(detail.getEnabled())
+                && category != null
+                && Boolean.TRUE.equals(category.getEnabled());
+    }
+
     private Map<String, Object> categoryAuditSummary(DictProcessCategory entity) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("id", entity.getId());
@@ -296,6 +306,9 @@ public class ProcessMasterService {
         summary.put("categoryHourlyRate", category == null ? null : category.getHourlyRate());
         summary.put("effectiveHourlyRate", effectiveHourlyRate(entity, category));
         summary.put("enabled", entity.getEnabled());
+        summary.put("detailEnabled", entity.getEnabled());
+        summary.put("categoryEnabled", category != null && Boolean.TRUE.equals(category.getEnabled()));
+        summary.put("effectiveEnabled", effectiveEnabled(entity, category));
         return summary;
     }
 

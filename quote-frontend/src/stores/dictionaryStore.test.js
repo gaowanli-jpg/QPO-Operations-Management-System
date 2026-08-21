@@ -77,6 +77,30 @@ describe('dictionaryStore', () => {
     expect(store.combinedProcessOptions[0].label).not.toContain('80.00元/小时')
   })
 
+  test('combinedProcessOptions hides process details whose category is not effectively enabled', async () => {
+    listMaterialTypes.mockResolvedValue([])
+    listMaterials.mockResolvedValue([])
+    listProcessCategories.mockResolvedValue([])
+    listProcessDetails.mockResolvedValue([
+      { id: 2, categoryId: 10, processCode: 'CNC', categoryName: 'CNC', detailName: 'CNC1', enabled: true, detailEnabled: true, categoryEnabled: false, effectiveEnabled: false, hourlyRate: 80 },
+      { id: 3, categoryId: 11, processCode: 'MILL', categoryName: 'Milling', detailName: 'MILL1', enabled: true, detailEnabled: true, categoryEnabled: true, effectiveEnabled: true, hourlyRate: 60 }
+    ])
+    listExtraFeeItems.mockResolvedValue([])
+    listMarkupFees.mockResolvedValue([])
+    listAssemblyMarkupFees.mockResolvedValue([])
+    const store = useDictionaryStore()
+
+    await store.loadBaseDicts({ force: true })
+
+    expect(store.combinedProcessOptions.map(item => item.processDetailId)).toEqual([3])
+    expect(store.combinedProcessOptions[0]).toEqual(expect.objectContaining({
+      processDetailId: 3,
+      detailEnabled: true,
+      categoryEnabled: true,
+      effectiveEnabled: true
+    }))
+  })
+
   test('applyPricingFallbackData preserves ItemPricing fallback strategy', () => {
     const store = useDictionaryStore()
 
