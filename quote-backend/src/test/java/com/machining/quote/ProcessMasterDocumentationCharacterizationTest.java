@@ -42,12 +42,14 @@ class ProcessMasterDocumentationCharacterizationTest {
                         "本次不新增用户权限",
                         "不修改默认角色映射或数据范围",
                         "工艺大类和具体工艺查询继续复用 `engineer:dict:view`",
-                        "维护动作继续复用 `engineer:dict:process-manage`"
+                        "维护动作继续复用 `engineer:dict:process-manage`",
+                        "具体工艺小时价格维护继续复用 `engineer:dict:process-manage`，不新增权限点。"
                 );
         assertThat(logOpsDoc)
                 .contains(
                         "DICT_PROCESS_CATEGORY_CREATE",
                         "DICT_PROCESS_DETAIL_CREATE",
+                        "具体工艺价格保存走 `DICT_PROCESS_DETAIL_UPDATE`，读取和实时预估不记高频日志。",
                         "普通查询、工艺选择器加载、核价页读取和页面刷新不写操作日志",
                         "processRouteCount",
                         "不记录完整 `processRoute` JSON"
