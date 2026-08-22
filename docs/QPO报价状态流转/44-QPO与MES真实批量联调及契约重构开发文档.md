@@ -576,12 +576,11 @@ MES BOM 只接收：
 
 规则：
 
-- RFQ 或销售订单关系表只负责找到子件和 `qtyPerParent`。
-- `itemCode` 必须是子件已经确认的 MES 物料号，不是图号、零件 ID 或工程材料编码。
-- `quantity` 使用每个父件需要的子件数量，必须大于 0。
-- 子件关系存在但子件物料号为空时，阻断该父件生产下发；不能静默丢失 BOM。
-- 普通件或确实没有组装关系时发送空数组或不发送 `bom`。
-- 同一子件物料号重复出现时按物料号合并数量，使用 `BigDecimal`，不通过字符串拼接。
+- MES 生产下发只把 QPO 已确定的原材料 BOM 快照转成 `bom`；缺少 `engineeringMaterialCode` 或毛重时发送空数组或不发送 `bom`。
+- `itemCode` 使用 QPO 快照中的 `engineeringMaterialCode`，`quantity` 使用毛重 kg，且只有两个字段都有效时才发送该 BOM 行。
+- 普通件、组合件父件、销售订单未命中历史快照的零件都允许 `bom: []`，不因 BOM 资料缺失阻断生产下发。
+- 组合件父子关系由 `assemblyRelations` 独立表达；关系缺失、未补全或关系表无记录时返回空数组，不在生产下发接口临时补建关系。
+- 后端硬校验只保留 MES 必需的销售订单号、销售订单行号、物料号、数量和交期；BOM、工艺路线、组合件关系有值则传、无值则空。
 
 ### 5.8 工艺路线映射
 
@@ -1469,7 +1468,7 @@ docker compose --env-file erp.env ps
 17. 构造缺失或冲突销售订单关联的 allocation 时仅该行阻断，其他合法组继续。
 18. 每行销售订单号、行号、物料号、数量和交期正确，`requiredDate` 不带时区偏移。
 19. `demandQty = makeQty` 且 `buyQty = stockQty = 0`。
-20. BOM 使用子件物料号和每父件用量。
+20. BOM 有完整原材料快照时使用工程材料编码和毛重；缺失时允许为空。
 21. 工艺路线字段名和工时正确，不包含价格。
 22. MES 返回 planNo 后 QPO allocation 立即显示成功。
 23. 同一成功 bizId 不重复创建 MES demand。
@@ -1516,7 +1515,7 @@ docker compose --env-file erp.env ps
 - 使用 `QPO-MES-E2E-` 统一测试标识前缀创建直接导入销售订单、至少两条零件、直接导入待产 allocation，以及一条通过 `source_ticket_id` 解析的 RFQ 派生销售订单待产 allocation；完整编号由日期、时间和随机段保持唯一。
 - 物料准备链路按 `QPO -> 数据中心 -> MES` 发起，生产需求链路按同一数据中心出站口径发起；新物料完成后仍以 `MES -> 数据中心 -> QPO` 批量回调作为正常收口路径。
 - 两条 MES 出站 endpoint 固定为 `/api/v1/mes/openapi/material-preparation/create` 和 `/api/v1/mes/openapi/demand/create`，不回退旧平铺契约。
-- 生产需求验收继续要求 `demandQty = makeQty` 且 `buyQty = stockQty = 0`，`requiredDate` 不带时区偏移，BOM 使用子件物料号和每父件用量，工艺路线字段名和工时正确且不包含价格。
+- 生产需求验收继续要求 `demandQty = makeQty` 且 `buyQty = stockQty = 0`，`requiredDate` 不带时区偏移，BOM 有完整原材料快照时使用工程材料编码和毛重、缺失时允许为空，工艺路线字段名和工时正确且不包含价格。
 - 重复成功 bizId、`RESULT_UNKNOWN`、回调增量幂等、冲突整次拒绝、并发预约唯一性等矩阵项由阶段 2-6 单元测试和本阶段脚本的真实数据入口共同覆盖；真实写入复测必须每次生成新的销售订单号和 bizId。
 - U9、WMS、待产、锁库、销售订单和 RFQ 后续页面不回退；不新增用户权限，不新增 `common:*`。
 - QPO 与数据中心的操作日志、文件日志、`system_task` 和批次表不包含完整请求、响应、token、Authorization、Cookie、client secret 或服务器凭据。

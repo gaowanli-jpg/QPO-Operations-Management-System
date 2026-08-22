@@ -110,6 +110,33 @@ class MesProductionBatchDispatchIntegrationTest {
     }
 
     @Test
+    void dispatchesSalesOrderItemWithMaterialNoWhenBomSnapshotIsMissing() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation allocation = allocation(16, 116, "MAT-NO-BOM", 3, 9816L);
+        allocation.setEngineeringMaterialCode(null);
+        allocation.setMaterialGrossWeight(null);
+        allocation.setProcessRoute(null);
+        allocation.setSourceOrderId(3816L);
+        when(fixture.allocationMapper.selectById(16)).thenReturn(allocation);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9816L)).thenReturn(salesItem(9816L, 160, 3816L, null));
+        when(fixture.headerMapper.selectById(3816L)).thenReturn(header(3816L, "SO-DOC-NO-BOM"));
+        mockReserve(fixture, "QPO-DEM-NO-BOM", List.of(line(16, "QPO-DEML-NO-BOM", "MAT-NO-BOM")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-NO-BOM",
+                item("SO-DOC-NO-BOM", "160", "MAT-NO-BOM", "PLAN-NO-BOM")));
+
+        Map<String, Object> result = fixture.service.dispatchBatch(List.of(16), 9916L);
+
+        assertThat(result).containsEntry("successCount", 1).containsEntry("failedCount", 0);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(fixture.client).dispatch(requestCaptor.capture());
+        MesProductionDispatchReq.Item row = requestCaptor.getValue().getItems().get(0);
+        assertThat(row.getProductCode()).isEqualTo("MAT-NO-BOM");
+        assertThat(row.getDemandQty()).isEqualTo(3);
+        assertThat(row.getBom()).isEmpty();
+        assertThat(row.getProcessRoute()).isEmpty();
+    }
+
+    @Test
     void rfqDerivedAllocationResolvesOfficialSalesOrderBySourceTicketId() {
         Fixture fixture = fixture();
         OrderDeliveryTicketAllocation allocation = allocation(3, 203, "MAT-RFQ", 3, 501L);

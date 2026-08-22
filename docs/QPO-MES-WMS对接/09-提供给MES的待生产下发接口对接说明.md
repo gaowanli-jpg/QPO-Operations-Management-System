@@ -161,12 +161,12 @@ ERP_MES_TIMEOUT_MS=60000
 
 其中 `productionQty` 只表示本次需要 MES 生产的剩余数量，`ticketQty` 表示锁库前的原始提单数量。
 
-## 5. 组合件父子关系
+## 5. BOM 与组合件父子关系
 
 - RFQ 来源从 `item_assembly_relation` 查询。
 - 销售订单来源从 `sales_order_item_assembly_relation` 查询。
 - 普通件返回 `assemblyRelations: []`。
-- 组合件父件没有自身原材料 BOM 时返回 `bom: []`，不因父件缺少 `engineeringMaterialCode` 阻断下发。
+- 普通件或组合件缺少 BOM 来源字段时返回 `bom: []`，不因缺少 `engineeringMaterialCode` 或毛重阻断下发。
 - 组合件无关系、关系未补全或关系表无记录时也返回 `assemblyRelations: []`，不阻断下发。
 - QPO 不在本接口里补建父子关系；父子关系由前置 RFQ 核价 / 销售匹配流程维护。
 

@@ -238,6 +238,63 @@ class LockedItemMesProductionDispatchWorkflowTest extends LockedItemMesProductio
     }
 
     @Test
+    void dispatchBatchAllowsSalesOrderNormalItemWithMaterialNoButNoBomSnapshot() {
+        MesProductionDispatchService service = new MesProductionDispatchService();
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
+        OrderDeliveryTicketAllocation allocation = allocation(15, "PRODUCTION_REQUIRED", "PENDING");
+        allocation.setItemType("NORMAL");
+        allocation.setEngineeringMaterialCode(null);
+        allocation.setMaterialGrossWeight(null);
+        allocation.setMaterialData(null);
+        allocation.setProcessRoute(null);
+        when(allocationMapper.selectById(15)).thenReturn(allocation);
+        when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
+        when(client.dispatch(any())).thenReturn(success("MES-PROD-NORMAL", "accepted"));
+        wireDispatchService(service, allocationMapper, null, client, null, null);
+
+        Map<String, Object> result = service.dispatchBatch(List.of(15), 9115L);
+
+        assertThat(result).containsEntry("successCount", 1);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(client).dispatch(requestCaptor.capture());
+        MesProductionDispatchReq request = requestCaptor.getValue();
+        assertThat(request.getMaterialNo()).isEqualTo("MAT-001");
+        assertThat(request.getBom()).isEmpty();
+        assertThat(request.getProcessRoute()).isEmpty();
+        assertThat(request.getAssemblyRelations()).isEmpty();
+    }
+
+    @Test
+    void dispatchBatchAllowsSalesOrderAssemblyWithoutBomOrChildRelations() {
+        MesProductionDispatchService service = new MesProductionDispatchService();
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        MesProductionDispatchClient client = mock(MesProductionDispatchClient.class);
+        SalesOrderItemAssemblyRelationMapper relationMapper = mock(SalesOrderItemAssemblyRelationMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        OrderDeliveryTicketAllocation allocation = allocation(16, "PRODUCTION_REQUIRED", "PENDING");
+        allocation.setEngineeringMaterialCode(null);
+        allocation.setMaterialGrossWeight(null);
+        allocation.setProcessRoute(null);
+        when(allocationMapper.selectById(16)).thenReturn(allocation);
+        when(allocationMapper.update(any(OrderDeliveryTicketAllocation.class), any())).thenReturn(1);
+        when(relationMapper.selectList(any())).thenReturn(List.of());
+        when(client.dispatch(any())).thenReturn(success("MES-PROD-ASM-EMPTY", "accepted"));
+        wireDispatchService(service, allocationMapper, null, client, null, null,
+                null, null, relationMapper, itemMapper);
+
+        Map<String, Object> result = service.dispatchBatch(List.of(16), 9116L);
+
+        assertThat(result).containsEntry("successCount", 1);
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(client).dispatch(requestCaptor.capture());
+        MesProductionDispatchReq request = requestCaptor.getValue();
+        assertThat(request.getBom()).isEmpty();
+        assertThat(request.getProcessRoute()).isEmpty();
+        assertThat(request.getAssemblyRelations()).isEmpty();
+    }
+
+    @Test
     void dispatchBatchPackagesSalesOrderAssemblyRelationsFromSourceItem() {
         MesProductionDispatchService service = new MesProductionDispatchService();
         OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
