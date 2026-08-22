@@ -71,9 +71,12 @@ describe('QPO Stage 6 item pricing workbench redesign', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
     expect(source).toContain('pricing-item-note-section')
+    expect(source).toContain('pricing-item-info-inline-button')
     expect(source).toContain('itemRemarkDraft')
-    expect(source).toContain('saveCurrentItemRemark')
     expect(source).toContain('savePricingItemRemark')
+    expect(source).not.toContain('saveCurrentItemRemark')
+    expect(source).not.toContain('saveRemark:')
+    expect(source).not.toContain('保存备注')
     expect(source).toContain('itemInfoDialogVisible')
     expect(source).toContain('currentItemInfoRows')
     expect(source).toContain('零件备注')
@@ -89,6 +92,19 @@ describe('QPO Stage 6 item pricing workbench redesign', () => {
     expect(modeIndex).toBeGreaterThanOrEqual(0)
     expect(itemNoteIndex).toBeGreaterThan(modeIndex)
     expect(moduleAIndex).toBeGreaterThan(itemNoteIndex)
+  })
+
+  test('saves item remark through the pricing submit action', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+    const submitStart = source.indexOf('const submitCurrentQuote = async () =>')
+    const submitEnd = source.indexOf('</script>', submitStart)
+    expect(submitStart).toBeGreaterThanOrEqual(0)
+    expect(submitEnd).toBeGreaterThan(submitStart)
+    const submitBlock = source.slice(submitStart, submitEnd)
+
+    expect(submitBlock).toContain('await savePricingItemRemark(currentRow.value.id, itemRemarkDraft.value)')
+    expect(submitBlock).toContain('updatePricingItemRemarkInMemory(currentRow.value.id, savedRemark || null)')
+    expect(submitBlock.indexOf('await savePricingItemRemark')).toBeLessThan(submitBlock.indexOf('await submitQuote(payload)'))
   })
 
   test('returns to the current order global setup deterministically', () => {

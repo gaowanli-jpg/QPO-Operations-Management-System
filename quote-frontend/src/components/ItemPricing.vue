@@ -224,7 +224,6 @@
           <section class="erp-dialog-section pricing-workbench-section pricing-item-note-section">
             <div class="pricing-item-note-header">
               <div class="form-section-title pricing-section-title">零件备注与信息</div>
-              <el-button type="primary" plain @click="itemInfoDialogVisible = true">查看零件信息</el-button>
             </div>
             <el-form label-width="100px" class="pricing-section-form pricing-item-note-form">
               <el-form-item label="零件备注">
@@ -238,12 +237,12 @@
                     placeholder="填写当前零件备注"
                   />
                   <el-button
-                    v-permission="'engineer:pricing:save-item'"
-                    type="success"
-                    :loading="itemRemarkSaving"
-                    :disabled="!currentRow?.id || itemRemarkSaving"
-                    @click="saveCurrentItemRemark"
-                  >保存备注</el-button>
+                    class="pricing-item-info-inline-button"
+                    type="primary"
+                    plain
+                    :disabled="!currentRow?.id"
+                    @click="itemInfoDialogVisible = true"
+                  >查看零件信息</el-button>
                 </div>
               </el-form-item>
             </el-form>
@@ -724,8 +723,7 @@ const pricingActionKeys = {
   refreshOrder: () => `engineer:pricing:refresh:${rfqId.value || 'none'}`,
   completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || 'none'}`,
   exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || 'none'}`,
-  saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`,
-  saveRemark: (itemId) => `engineer:pricing:save-remark:${itemId || 'none'}`
+  saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`
 }
 
 const quoteData = ref(null)
@@ -1083,7 +1081,6 @@ const currentRow = ref(null)
 const currentDrawingSrc = ref('')
 const currentDrawingLoading = ref(false)
 const submitLoading = computed(() => isPending(pricingActionKeys.saveItem(currentRow.value?.id)))
-const itemRemarkSaving = computed(() => isPending(pricingActionKeys.saveRemark(currentRow.value?.id)))
 const quoteMode = ref('NORMAL')
 const itemRemarkDraft = ref('')
 const itemInfoDialogVisible = ref(false)
@@ -1679,26 +1676,6 @@ const updatePricingItemRemarkInMemory = (itemId, remark) => {
   }
 }
 
-const saveCurrentItemRemark = async () => {
-  if (!currentRow.value?.id) {
-    return ElMessage.warning('缺失当前零件 ID，无法保存备注。')
-  }
-  const itemId = currentRow.value.id
-  return runAction(pricingActionKeys.saveRemark(itemId), async () => {
-    try {
-      const response = await savePricingItemRemark(itemId, itemRemarkDraft.value)
-      const hasReturnedRemark = Object.prototype.hasOwnProperty.call(response || {}, 'remark')
-      const savedRemark = hasReturnedRemark ? response.remark : itemRemarkDraft.value
-      itemRemarkDraft.value = savedRemark || ''
-      updatePricingItemRemarkInMemory(itemId, savedRemark || null)
-      ElMessage.success('备注已保存。')
-    } catch (error) {
-      console.error(error)
-      ElMessage.error(error.response?.data?.message || '备注保存失败，请检查后端服务。')
-    }
-  })
-}
-
 // 打开弹窗，继承全局配置
 const openQuoteDialog = async (row) => {
   currentRow.value = row
@@ -1913,6 +1890,11 @@ const submitCurrentQuote = async () => {
 
   return runAction(pricingActionKeys.saveItem(currentRow.value.id), async () => {
     try {
+      const remarkResponse = await savePricingItemRemark(currentRow.value.id, itemRemarkDraft.value)
+      const hasReturnedRemark = Object.prototype.hasOwnProperty.call(remarkResponse || {}, 'remark')
+      const savedRemark = hasReturnedRemark ? remarkResponse.remark : itemRemarkDraft.value
+      itemRemarkDraft.value = savedRemark || ''
+      updatePricingItemRemarkInMemory(currentRow.value.id, savedRemark || null)
       await submitQuote(payload)
       let globalSynced = true
       let globalUpdated = false
@@ -1936,7 +1918,7 @@ const submitCurrentQuote = async () => {
       await fetchQuoteData({ keepScroll: true }) // 刷新大表格，保留当前滚动位置
     } catch (error) {
       console.error(error)
-      ElMessage.error(error.response?.data?.message || '核价提交失败，请检查后端服务。')
+      ElMessage.error(error.response?.data?.message || '核价或备注保存失败，请检查后端服务。')
     }
   })
 }
@@ -2169,7 +2151,14 @@ const submitCurrentQuote = async () => {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   width: 100%;
-  align-items: flex-start;
+  align-items: stretch;
+}
+
+.pricing-item-info-inline-button {
+  align-self: stretch;
+  min-width: 112px;
+  min-height: 54px;
+  height: auto;
 }
 
 .pricing-item-info-list {
