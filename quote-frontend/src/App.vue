@@ -119,6 +119,7 @@ const menuGroups = [
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
   { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/production-items', '/locked-items'] },
+  { key: 'change', title: '变更', paths: ['/sales-order-change'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
 ]
 
@@ -137,6 +138,7 @@ const menuMetaByPath = {
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
   '/production-items': { title: '待产零件', permission: 'market:production-item:view', icon: Files },
   '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
+  '/sales-order-change': { title: '销售变更', permission: 'change:sales-order:view', icon: Document },
   '/users': { title: '用户管理', permission: 'system:user:view', icon: User },
   '/roles': { title: '角色权限', permission: 'system:role:view', icon: User },
   '/organization': { title: '组织档案', permission: 'system:org:view', icon: Files },
@@ -237,6 +239,10 @@ const shellMetaByPath = {
   '/locked-items': {
     title: '锁库零件',
     description: '查看 WMS 返回后的库存锁定和在产锁定结果。'
+  },
+  '/sales-order-change': {
+    title: '销售变更',
+    description: '校正已同步 U9 销售订单的本地零件数据，不触发外部系统同步。'
   },
   '/users': {
     title: '用户管理',

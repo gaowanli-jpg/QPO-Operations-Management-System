@@ -16,6 +16,7 @@ const SalesOrderManage = () => import('../components/SalesOrderManage.vue')
 const DeliveredItemManage = () => import('../components/DeliveredItemManage.vue')
 const ProductionItemManage = () => import('../components/ProductionItemManage.vue')
 const LockedItemManage = () => import('../components/LockedItemManage.vue')
+const SalesOrderChangeManage = () => import('../components/SalesOrderChangeManage.vue')
 const UserManage = () => import('../components/UserManage.vue')
 const SystemRoleManage = () => import('../components/SystemRoleManage.vue')
 const SystemOrgManage = () => import('../components/SystemOrgManage.vue')
@@ -41,6 +42,7 @@ const routes = [
   { path: '/delivered-items', component: DeliveredItemManage, meta: { permission: 'market:delivered-item:view' } },
   { path: '/production-items', component: ProductionItemManage, meta: { permission: 'market:production-item:view' } },
   { path: '/locked-items', component: LockedItemManage, meta: { permission: 'market:locked-item:view' } },
+  { path: '/sales-order-change', component: SalesOrderChangeManage, meta: { permission: 'change:sales-order:view' } },
   { path: '/users', component: UserManage, meta: { permission: 'system:user:view' } },
   { path: '/roles', component: SystemRoleManage, meta: { permission: 'system:role:view' } },
   { path: '/organization', component: SystemOrgManage, meta: { permission: 'system:org:view' } },

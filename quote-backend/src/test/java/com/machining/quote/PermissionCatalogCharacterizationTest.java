@@ -128,6 +128,7 @@ class PermissionCatalogCharacterizationTest {
                         "/quote-template",
                         "/engineering",
                         "/material-process",
+                        "/sales-order-change",
                         "/users",
                         "/roles",
                         "/organization",
@@ -219,6 +220,7 @@ class PermissionCatalogCharacterizationTest {
                         "market:delivered-item:view",
                         "market:production-item:view",
                         "market:locked-item:view",
+                        "change:sales-order:view",
                         "market:delivery-document:view",
                         "engineer:setup:view",
                         "system:role:view"

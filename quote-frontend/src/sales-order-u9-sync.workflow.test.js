@@ -96,7 +96,7 @@ describe('sales order U9 sync module', () => {
     expect(picker).toContain('salesOrderId')
     expect(picker).toContain('v-if="showOrderSource"')
     expect(picker).toContain('prop="sourceLabel" label="订单来源"')
-    expect(picker).toContain("props.orderScope === 'u9-sync'")
+    expect(picker).toContain('SALES_ORDER_SCOPES.includes(props.orderScope)')
   })
 
   test('loads the sales order supplied by the release-result route query', () => {

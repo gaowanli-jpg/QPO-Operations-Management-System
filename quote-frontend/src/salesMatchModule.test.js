@@ -22,12 +22,13 @@ describe('retired manual sales match module', () => {
     expect(existsSync(resolve(currentDir, 'components', 'SalesMatch.vue'))).toBe(false)
   })
 
-  test('keeps sales order U9 as the only sales-order picker scope', () => {
+  test('keeps sales-order picker scopes explicit without restoring sales-match', () => {
     const picker = readSource('components', 'OrderPickerDialog.vue')
 
     expect(picker).not.toContain('sales-match')
     expect(picker).not.toContain('market:sales-match')
-    expect(picker).toContain("const SALES_ORDER_SCOPES = ['u9-sync']")
+    expect(picker).toContain("const SALES_ORDER_SCOPES = ['u9-sync', 'sales-order-change']")
     expect(picker).toContain("'u9-sync': 'market:u9-sync:customer-select'")
+    expect(picker).toContain("'sales-order-change': 'change:sales-order:customer-select'")
   })
 })
