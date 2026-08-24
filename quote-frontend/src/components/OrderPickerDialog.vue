@@ -126,6 +126,7 @@ import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listMarketOrders } from '../services/marketApi'
 import { listSetupOrders } from '../services/engineerApi'
+import { listSalesOrderChangeOrders } from '../services/salesOrderChangeApi'
 
 const CUSTOMER_PERMISSION_BY_SCOPE = {
   'market-rfq': 'market:rfq:customer-select',
@@ -359,7 +360,9 @@ const loadOrders = async () => {
     }
     const response = props.orderScope === 'engineer-setup'
       ? await listSetupOrders(params)
-      : await listMarketOrders(params, props.orderScope)
+      : props.orderScope === 'sales-order-change'
+        ? await listSalesOrderChangeOrders(params)
+        : await listMarketOrders(params, props.orderScope)
     orders.value = response.records || []
     total.value = response.total || 0
   } catch (error) {

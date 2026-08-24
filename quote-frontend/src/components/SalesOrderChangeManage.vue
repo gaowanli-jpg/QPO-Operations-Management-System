@@ -3,9 +3,10 @@
     <header class="erp-page-header sales-order-change-header">
       <div>
         <h1 class="erp-page-title">销售变更</h1>
-        <p class="erp-page-description">校正已同步 U9 后的 QPO 本地销售订单零件数据。</p>
+        <p class="erp-page-description">选择已同步 U9 销售订单，不调用 U9，只做本地校正。</p>
       </div>
       <div class="erp-page-actions sales-order-change-header-actions">
+        <el-tag v-if="!hasChangeUpdatePermission" type="info" effect="plain">只读查看</el-tag>
         <el-button
           v-permission="SALES_ORDER_CHANGE_ORDER_SELECT_PERMISSION"
           type="primary"
@@ -26,7 +27,7 @@
 
     <el-alert
       class="sales-order-change-warning"
-      title="本功能仅修改 QPO 本地销售订单零件数据，不会同步到 U9。请确认 U9 已完成对应调整后再保存。"
+      title="不调用 U9，只做本地校正：本功能仅修改 QPO 本地销售订单零件数据，不会同步到 U9。请确认 U9 已完成对应调整后再保存。"
       type="warning"
       show-icon
       :closable="false"
@@ -42,7 +43,7 @@
         <div class="selected-order-meta">
           <div class="meta-row">
             <span>客户</span>
-            <strong>{{ orderField('customerShortName') || orderField('customerName') }}</strong>
+            <strong>{{ customerDisplay }}</strong>
           </div>
           <div class="meta-row">
             <span>下单日期</span>
@@ -76,17 +77,17 @@
 
         <el-alert
           class="sales-order-change-side-tip"
-          title="本页面只做 QPO 本地校正，不会调用 U9。请确认 U9 已经完成对应人工调整。"
+          title="不调用 U9，只做本地校正。本页面用于记录 U9 已人工调整后的 QPO 本地校正结果。"
           type="info"
           :closable="false"
         />
       </aside>
 
-      <main class="sales-order-change-main">
+      <main class="erp-table-surface sales-order-change-main-panel">
         <div class="erp-section-title-row">
           <div>
             <h2 class="erp-section-title">零件明细</h2>
-            <p class="erp-section-description">第一阶段仅提供只读预览，保存和表格替换将在后续阶段开放。</p>
+            <p class="erp-section-description">主表格展示已同步 U9 销售订单的本地零件行，当前用于本地校正前核对。</p>
           </div>
           <el-tag type="info">{{ previewLines.length }} 行</el-tag>
         </div>
@@ -137,6 +138,7 @@
       title="选择销售变更订单"
       customer-scope="sales-order-change"
       order-scope="sales-order-change"
+      :allowed-statuses="SALES_ORDER_CHANGE_ALLOWED_STATUSES"
       @select="handleOrderSelected"
     />
   </section>
@@ -147,13 +149,17 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DocumentChecked } from '@element-plus/icons-vue'
+import { useAuthStore } from '../stores/authStore'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { listSalesOrderChangeOrders, previewSalesOrderChange } from '../services/salesOrderChangeApi'
+import { previewSalesOrderChange } from '../services/salesOrderChangeApi'
 
 const SALES_ORDER_CHANGE_VIEW_PERMISSION = 'change:sales-order:view'
 const SALES_ORDER_CHANGE_ORDER_SELECT_PERMISSION = 'change:sales-order:order-select'
+const SALES_ORDER_CHANGE_UPDATE_PERMISSION = 'change:sales-order:update'
+const SALES_ORDER_CHANGE_ALLOWED_STATUSES = ['已生成提单']
 
 const route = useRoute()
+const authStore = useAuthStore()
 const orderPickerVisible = ref(false)
 const previewLoading = ref(false)
 const selectedOrderId = ref(null)
@@ -161,8 +167,10 @@ const selectedOrderSummary = ref(null)
 const preview = ref(null)
 
 const previewLines = computed(() => preview.value?.lines || [])
+const hasChangeUpdatePermission = computed(() => authStore.hasPermission(SALES_ORDER_CHANGE_UPDATE_PERMISSION))
+const customerDisplay = computed(() => orderRawField('customerShortName') || orderRawField('customerName') || '-')
 const selectedOrderLabel = computed(() => (
-  orderField('salesOrderNo') || selectedOrderSummary.value?.salesOrderNo || '请选择销售订单'
+  orderRawField('salesOrderNo') || selectedOrderSummary.value?.salesOrderNo || '请选择销售订单'
 ))
 
 const openOrderPicker = () => {
@@ -212,9 +220,11 @@ watch(
 
 const resolveSalesOrderId = (order) => order?.salesOrderId ?? order?.sourceOrderId ?? order?.id ?? null
 
+const orderRawField = (field) => preview.value?.[field] ?? selectedOrderSummary.value?.[field] ?? ''
+
 const orderField = (field) => {
-  const value = preview.value?.[field] ?? selectedOrderSummary.value?.[field]
-  return value ?? '-'
+  const value = orderRawField(field)
+  return value === null || value === undefined || value === '' ? '-' : value
 }
 
 const formatDate = (value) => {
@@ -236,8 +246,6 @@ const orderStatusTagType = (status) => {
 }
 
 const u9StatusTagType = (status) => status === '已同步' ? 'success' : 'info'
-
-void listSalesOrderChangeOrders
 </script>
 
 <style scoped>
@@ -313,8 +321,9 @@ void listSalesOrderChangeOrders
   margin-top: var(--erp-space-4);
 }
 
-.sales-order-change-main {
+.sales-order-change-main-panel {
   min-width: 0;
+  padding: var(--erp-space-4);
 }
 
 .erp-section-title-row {
