@@ -85,6 +85,15 @@ services:
       ERP_AUTH_ENABLED: true
       ERP_JWT_SECRET: ${ERP_JWT_SECRET:?Set ERP_JWT_SECRET in erp.env before starting}
       ERP_JWT_TTL_MINUTES: ${ERP_JWT_TTL_MINUTES:-720}
+      # Data Center SSO login fallback. Active DB config from System Config > Data Center Login has priority.
+      # Keep ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET empty unless emergency fallback is required.
+      ERP_AUTH_DATA_CENTER_SSO_ENABLED: ${ERP_AUTH_DATA_CENTER_SSO_ENABLED:-true}
+      ERP_AUTH_DATA_CENTER_SSO_APP_CODE: ${ERP_AUTH_DATA_CENTER_SSO_APP_CODE:-QPO}
+      ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET: ${ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET:-}
+      ERP_AUTH_DATA_CENTER_SSO_TIMESTAMP_SKEW_SECONDS: ${ERP_AUTH_DATA_CENTER_SSO_TIMESTAMP_SKEW_SECONDS:-120}
+      ERP_AUTH_DATA_CENTER_SSO_NONCE_TTL_MINUTES: ${ERP_AUTH_DATA_CENTER_SSO_NONCE_TTL_MINUTES:-10}
+      ERP_AUTH_DATA_CENTER_SSO_DEFAULT_REDIRECT: ${ERP_AUTH_DATA_CENTER_SSO_DEFAULT_REDIRECT:-/dashboard}
+      ERP_AUTH_DATA_CENTER_SSO_ALLOWED_REDIRECT_PREFIXES: ${ERP_AUTH_DATA_CENTER_SSO_ALLOWED_REDIRECT_PREFIXES:-/,/dashboard,/orders}
       # Legacy APS compatibility. Backend uses this only for /api/aps/source token validation.
       # APS_ERP_* stays in env files for old local bridge tools and is not injected here.
       ERP_APS_SOURCE_TOKEN: ${ERP_APS_SOURCE_TOKEN:-}

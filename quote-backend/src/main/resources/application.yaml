@@ -51,6 +51,7 @@ erp:
     enabled: ${ERP_AUTH_ENABLED:true}
     jwt-secret: ${ERP_JWT_SECRET:change-this-secret-before-production}
     jwt-ttl-minutes: ${ERP_JWT_TTL_MINUTES:720}
+    # Data Center SSO fallback only. Runtime uses active DB config first.
     data-center-sso:
       enabled: ${ERP_AUTH_DATA_CENTER_SSO_ENABLED:true}
       app-code: ${ERP_AUTH_DATA_CENTER_SSO_APP_CODE:QPO}
