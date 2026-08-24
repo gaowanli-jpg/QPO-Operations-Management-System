@@ -108,6 +108,19 @@
                 </el-button>
               </span>
             </el-tooltip>
+            <el-tooltip :disabled="!itemDataReplacementDisabledReason" :content="itemDataReplacementDisabledReason" placement="top">
+              <span class="sales-order-change-action-wrap">
+                <el-button
+                  v-permission="SALES_ORDER_CHANGE_UPDATE_PERMISSION"
+                  plain
+                  :loading="itemDataReplacementBusy"
+                  :disabled="itemDataReplacementDisabled"
+                  @click="openItemDataReplacementDialog"
+                >
+                  表格数据替换
+                </el-button>
+              </span>
+            </el-tooltip>
           </div>
         </div>
 
@@ -293,6 +306,14 @@
       </template>
     </el-dialog>
 
+    <SalesOrderChangeDataReplacementDialog
+      v-model="itemDataReplacementVisible"
+      :sales-order-id="selectedOrderId"
+      :disabled="itemDataReplacementDisabled"
+      @busy-change="itemDataReplacementBusy = $event"
+      @confirmed="handleItemDataReplacementConfirmed"
+    />
+
     <OrderPickerDialog
       v-model="orderPickerVisible"
       title="选择销售变更订单"
@@ -311,6 +332,7 @@ import { ElMessage } from 'element-plus'
 import { DocumentChecked } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/authStore'
 import OrderPickerDialog from './OrderPickerDialog.vue'
+import SalesOrderChangeDataReplacementDialog from './sales-order-change/SalesOrderChangeDataReplacementDialog.vue'
 import { previewSalesOrderChange, saveSalesOrderChangeItems } from '../services/salesOrderChangeApi'
 
 const SALES_ORDER_CHANGE_VIEW_PERMISSION = 'change:sales-order:view'
@@ -343,6 +365,8 @@ const dirtyItemIds = ref(new Set())
 const itemEditSaving = ref(false)
 const reasonDialogVisible = ref(false)
 const changeReason = ref('')
+const itemDataReplacementVisible = ref(false)
+const itemDataReplacementBusy = ref(false)
 
 const previewLines = computed(() => preview.value?.lines || [])
 const hasChangeUpdatePermission = computed(() => authStore.hasPermission(SALES_ORDER_CHANGE_UPDATE_PERMISSION))
@@ -358,6 +382,16 @@ const itemEditSaveDisabledReason = computed(() => {
   return ''
 })
 const itemEditSaveDisabled = computed(() => itemEditSaving.value || previewLoading.value || itemEditReadOnly.value || dirtyItemCount.value === 0)
+const itemDataReplacementDisabledReason = computed(() => {
+  if (!selectedOrderId.value) return '请先选择销售订单'
+  if (!hasChangeUpdatePermission.value) return '当前账号无销售变更保存权限'
+  if (!changeEditable.value) return preview.value?.changeBlockedReason || '当前销售订单不可替换'
+  if (itemEditSaving.value) return '零件行修改正在保存，请稍后替换'
+  if (previewLoading.value) return '销售变更预览正在刷新，请稍后替换'
+  if (dirtyItemCount.value > 0) return '请先保存或放弃当前零件行修改'
+  return ''
+})
+const itemDataReplacementDisabled = computed(() => itemDataReplacementBusy.value || Boolean(itemDataReplacementDisabledReason.value))
 const customerDisplay = computed(() => orderRawField('customerShortName') || orderRawField('customerName') || '-')
 const selectedOrderLabel = computed(() => (
   orderRawField('salesOrderNo') || selectedOrderSummary.value?.salesOrderNo || '请选择销售订单'
@@ -530,6 +564,14 @@ const handleOpenSaveReasonDialog = () => {
   reasonDialogVisible.value = true
 }
 
+const openItemDataReplacementDialog = () => {
+  if (itemDataReplacementDisabled.value) {
+    ElMessage.warning(itemDataReplacementDisabledReason.value || '当前暂不可进行表格数据替换')
+    return
+  }
+  itemDataReplacementVisible.value = true
+}
+
 const handleConfirmSaveItemEdits = async () => {
   if (itemEditSaving.value) return
   const reason = changeReason.value.trim()
@@ -563,6 +605,20 @@ const handleConfirmSaveItemEdits = async () => {
     ElMessage.error(requestErrorMessage(error, '销售变更零件行保存失败。'))
   } finally {
     itemEditSaving.value = false
+  }
+}
+
+const handleItemDataReplacementConfirmed = async (response = {}) => {
+  try {
+    if (response?.preview) {
+      applyPreviewData(response.preview)
+    } else {
+      applyPreviewData(await previewSalesOrderChange(selectedOrderId.value))
+    }
+    dirtyItemIds.value = new Set()
+    itemDataReplacementVisible.value = false
+  } catch (error) {
+    ElMessage.error(requestErrorMessage(error, '表格数据替换后刷新预览失败。'))
   }
 }
 
