@@ -14,6 +14,9 @@
       <el-tab-pane label="出站接口" name="outbound">
         <SystemIntegrationConfigPanel />
       </el-tab-pane>
+      <el-tab-pane label="U9配置" name="u9">
+        <SystemU9ConfigPanel />
+      </el-tab-pane>
       <el-tab-pane label="入站接口" name="inbound">
         <SystemInboundCallbackConfigPanel />
       </el-tab-pane>
@@ -25,6 +28,7 @@
 import { ref } from 'vue'
 import SystemStorageConfigPanel from './system-config/SystemStorageConfigPanel.vue'
 import SystemIntegrationConfigPanel from './system-config/SystemIntegrationConfigPanel.vue'
+import SystemU9ConfigPanel from './system-config/SystemU9ConfigPanel.vue'
 import SystemInboundCallbackConfigPanel from './system-config/SystemInboundCallbackConfigPanel.vue'
 
 const activeTab = ref('storage')

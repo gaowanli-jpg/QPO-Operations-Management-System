@@ -15,7 +15,6 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -92,9 +91,8 @@ public class U9MasterDataSyncService {
     private U9MasterDataSyncRunMapper syncRunMapper;
     @Autowired
     private U9CustomerSyncScheduleConfigService customerSyncScheduleConfigService;
-
-    @Value("${erp.u9.org-code:101}")
-    private String orgCode = "101";
+    @Autowired(required = false)
+    private U9OrgCodeResolver u9OrgCodeResolver;
 
     private Clock clock = Clock.system(DISPLAY_ZONE);
     private LocalDateTime customerSyncSchedulerStartedAt;
@@ -641,7 +639,7 @@ public class U9MasterDataSyncService {
     }
 
     private String normalizeOrgCode() {
-        return firstNonBlank(orgCode, "101");
+        return firstNonBlank(u9OrgCodeResolver == null ? null : u9OrgCodeResolver.effectiveOrgCode(), "101");
     }
 
     private String firstNonBlank(String... values) {

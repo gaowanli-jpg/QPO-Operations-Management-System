@@ -58,8 +58,8 @@ public class U9SalesOrderReconciliationService {
 
     @Autowired
     private U9CommonEntityClient commonEntityClient;
-    @Value("${erp.u9.org-code:101}")
-    private String orgCode = "101";
+    @Autowired(required = false)
+    private U9OrgCodeResolver u9OrgCodeResolver;
     @Value("${erp.u9.reconciliation-grace-seconds:120}")
     private Long graceSeconds = 120L;
     private Clock clock = Clock.systemDefaultZone();
@@ -210,7 +210,7 @@ public class U9SalesOrderReconciliationService {
     }
 
     private String expectedOrg() {
-        return firstNonBlank(orgCode, "101");
+        return firstNonBlank(u9OrgCodeResolver == null ? null : u9OrgCodeResolver.effectiveOrgCode(), "101");
     }
 
     private BigDecimal decimal(Object value) {

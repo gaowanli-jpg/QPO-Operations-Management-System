@@ -14,11 +14,11 @@ import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.mapper.U9SyncDepartmentOptionCacheMapper;
 import com.machining.quote.mapper.U9SyncSellerOptionCacheMapper;
 import com.machining.quote.service.u9.U9CommonEntityClient;
+import com.machining.quote.service.u9.U9OrgCodeResolver;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator.ValidationResult;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,8 +51,8 @@ public class SalesOrderU9SyncStateService {
     private U9SalesOrderRequestAssembler requestAssembler = new U9SalesOrderRequestAssembler();
     @Autowired
     private U9SalesOrderContractValidator contractValidator = new U9SalesOrderContractValidator();
-    @Value("${erp.u9.org-code:101}")
-    private String orgCode = "101";
+    @Autowired(required = false)
+    private U9OrgCodeResolver u9OrgCodeResolver;
     private Clock clock = Clock.systemDefaultZone();
 
     @Transactional
@@ -211,7 +211,7 @@ public class SalesOrderU9SyncStateService {
     }
 
     private String effectiveOrgCode() {
-        String normalized = trimToNull(orgCode);
+        String normalized = trimToNull(u9OrgCodeResolver == null ? null : u9OrgCodeResolver.effectiveOrgCode());
         return normalized == null ? "101" : normalized;
     }
 

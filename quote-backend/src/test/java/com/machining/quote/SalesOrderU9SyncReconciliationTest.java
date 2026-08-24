@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.controller.SalesOrderU9SyncController;
 import com.machining.quote.domain.QuoteStatusWorkflow;
@@ -14,8 +15,14 @@ import com.machining.quote.dto.u9.U9SalesOrderHeadDTO;
 import com.machining.quote.dto.u9.U9SalesOrderLineDTO;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
+import com.machining.quote.entity.CustomerMaster;
+import com.machining.quote.entity.U9SyncDepartmentOptionCache;
+import com.machining.quote.entity.U9SyncSellerOptionCache;
+import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
+import com.machining.quote.mapper.U9SyncDepartmentOptionCacheMapper;
+import com.machining.quote.mapper.U9SyncSellerOptionCacheMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.DataScopeService;
 import com.machining.quote.service.SalesOrderU9SyncService;
@@ -23,6 +30,7 @@ import com.machining.quote.service.SalesOrderU9SyncStateService;
 import com.machining.quote.service.u9.U9CommonEntityClient;
 import com.machining.quote.service.u9.U9SalesOrderClient;
 import com.machining.quote.service.u9.U9SalesOrderContractValidator;
+import com.machining.quote.service.u9.U9OrgCodeResolver;
 import com.machining.quote.service.u9.U9SalesOrderReconciliationService;
 import com.machining.quote.service.u9.U9SalesOrderRequestAssembler;
 import org.junit.jupiter.api.Test;
@@ -48,6 +56,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -168,13 +177,86 @@ class SalesOrderU9SyncReconciliationTest {
     }
 
     @Test
+    void stateServiceValidatesSellerAndDepartmentAgainstConfiguredU9OrgCode() {
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        U9SyncSellerOptionCacheMapper sellerMapper = mock(U9SyncSellerOptionCacheMapper.class);
+        U9SyncDepartmentOptionCacheMapper departmentMapper = mock(U9SyncDepartmentOptionCacheMapper.class);
+        SalesOrderU9SyncStateService service = new SalesOrderU9SyncStateService();
+        ReflectionTestUtils.setField(service, "customerMapper", customerMapper);
+        ReflectionTestUtils.setField(service, "sellerOptionMapper", sellerMapper);
+        ReflectionTestUtils.setField(service, "departmentOptionMapper", departmentMapper);
+        U9OrgCodeResolver resolver = orgResolver("106");
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", resolver);
+
+        CustomerMaster customer = new CustomerMaster();
+        customer.setEnabled(true);
+        when(customerMapper.selectEnabledByCode("CUST-A")).thenReturn(customer);
+        when(sellerMapper.selectOne(any())).thenReturn(new U9SyncSellerOptionCache());
+        when(departmentMapper.selectOne(any())).thenReturn(new U9SyncDepartmentOptionCache());
+        SalesOrderHeader header = new SalesOrderHeader();
+        header.setCustomerCode("CUST-A");
+        header.setU9SellerCode("S106");
+        header.setU9SaleDepartmentCode("D106");
+
+        ReflectionTestUtils.invokeMethod(service, "assertActiveMasterData", header);
+
+        ArgumentCaptor<QueryWrapper<U9SyncSellerOptionCache>> sellerQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        ArgumentCaptor<QueryWrapper<U9SyncDepartmentOptionCache>> departmentQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(sellerMapper).selectOne(sellerQueryCaptor.capture());
+        verify(departmentMapper).selectOne(departmentQueryCaptor.capture());
+        verify(resolver, times(2)).effectiveOrgCode();
+        assertThat(sellerQueryCaptor.getValue().getSqlSegment()).contains("u9_org_code");
+        assertThat(departmentQueryCaptor.getValue().getSqlSegment()).contains("u9_org_code");
+    }
+
+    @Test
+    void reconciliationComparesU9HeadAgainstConfiguredOrgCode() {
+        U9CommonEntityClient commonEntityClient = mock(U9CommonEntityClient.class);
+        U9SalesOrderReconciliationService service = new U9SalesOrderReconciliationService();
+        ReflectionTestUtils.setField(service, "commonEntityClient", commonEntityClient);
+        ReflectionTestUtils.setField(service, "clock", FIXED_CLOCK);
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver("106"));
+        SalesOrderU9SyncStateService.PreparedOrder prepared = prepared(
+                header(9025L, "同步中"),
+                "ATT-106",
+                LocalDateTime.of(2026, 8, 11, 14, 30, 0)
+        );
+        when(commonEntityClient.query(any(U9CommonEntityQueryReq.class))).thenAnswer(invocation -> {
+            U9CommonEntityQueryReq req = invocation.getArgument(0);
+            if (U9SalesOrderReconciliationService.SO_ENTITY.equals(req.getEntityFullName())) {
+                return List.of(row(Map.of(
+                        "ID", "U9-SO-9025",
+                        "DocNo", prepared.request().getDocNo(),
+                        "OrderBy.Code", "CUST-A",
+                        "DocumentType.Code", "SO01",
+                        "Org.Code", "101"
+                )));
+            }
+            return List.of(row(Map.of(
+                    "ID", "U9-LINE-9025",
+                    "SO.ID", "U9-SO-9025",
+                    "DocLineNo", 1,
+                    "ItemInfo.ItemID.Code", "MAT-90250",
+                    "OrderByQtyTU", new BigDecimal("2"),
+                    "OrderByQtyPU", new BigDecimal("2"),
+                    "FinallyPriceTC", new BigDecimal("16.37")
+            )));
+        });
+
+        U9SalesOrderReconciliationService.Result result = service.checkExisting(prepared);
+
+        assertThat(result.code()).isEqualTo(U9SalesOrderReconciliationService.ResultCode.FOUND_CONFLICT);
+        assertThat(result.message()).contains("106").contains("101");
+    }
+
+    @Test
     void reconciliationNoOrderWaitsDuringGraceThenConfirmsFailedAfterGrace() {
         U9CommonEntityClient commonEntityClient = mock(U9CommonEntityClient.class);
         when(commonEntityClient.query(any(U9CommonEntityQueryReq.class))).thenReturn(List.of());
         U9SalesOrderReconciliationService service = new U9SalesOrderReconciliationService();
         ReflectionTestUtils.setField(service, "commonEntityClient", commonEntityClient);
         ReflectionTestUtils.setField(service, "clock", FIXED_CLOCK);
-        ReflectionTestUtils.setField(service, "orgCode", "101");
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver("101"));
         ReflectionTestUtils.setField(service, "graceSeconds", 120L);
 
         SalesOrderU9SyncStateService.PreparedOrder recent = prepared(
@@ -237,8 +319,15 @@ class SalesOrderU9SyncReconciliationTest {
         ReflectionTestUtils.setField(service, "dataScopeService", mock(DataScopeService.class));
         ReflectionTestUtils.setField(service, "requestAssembler", new U9SalesOrderRequestAssembler());
         ReflectionTestUtils.setField(service, "contractValidator", new U9SalesOrderContractValidator());
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver("101"));
         ReflectionTestUtils.setField(service, "clock", FIXED_CLOCK);
         return service;
+    }
+
+    private U9OrgCodeResolver orgResolver(String orgCode) {
+        U9OrgCodeResolver resolver = mock(U9OrgCodeResolver.class);
+        when(resolver.effectiveOrgCode()).thenReturn(orgCode);
+        return resolver;
     }
 
     private SalesOrderU9SyncStateService.PreparedOrder prepared(Long id, String attemptId) {

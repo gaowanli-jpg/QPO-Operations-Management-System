@@ -13,6 +13,7 @@ const readOptionalSource = (...segments) => {
 const systemConfigApi = readSource('services', 'systemConfigApi.js')
 const systemConfigManage = readSource('components', 'SystemConfigManage.vue')
 const integrationPanel = readOptionalSource('components', 'system-config', 'SystemIntegrationConfigPanel.vue')
+const u9ConfigPanel = readOptionalSource('components', 'system-config', 'SystemU9ConfigPanel.vue')
 const inboundPanel = readOptionalSource('components', 'system-config', 'SystemInboundCallbackConfigPanel.vue')
 
 describe('QPO system integration config frontend', () => {
@@ -33,20 +34,48 @@ describe('QPO system integration config frontend', () => {
     expect(systemConfigApi).toContain("export const listDataCenterEndpoints = () => request('/api/system/data-center-endpoints')")
     expect(systemConfigApi).toContain('export const saveDataCenterEndpoint = (endpointCode, payload) => request(`/api/system/data-center-endpoints/${endpointCode}`, {')
     expect(systemConfigApi).toContain('export const testDataCenterEndpoint = (endpointCode) => request(`/api/system/data-center-endpoints/${endpointCode}/test`, {')
+    expect(systemConfigApi).toContain("export const getU9RuntimeConfig = () => request('/api/system/u9-runtime-config')")
+    expect(systemConfigApi).toContain("export const saveU9RuntimeConfig = (payload) => request('/api/system/u9-runtime-config'")
   })
 
-  test('splits system config page into storage outbound and inbound tabs', () => {
+  test('splits system config page into storage outbound u9 and inbound tabs', () => {
     expect(systemConfigManage).toContain('el-tabs')
     expect(systemConfigManage).toContain('name="storage"')
     expect(systemConfigManage).toContain('name="outbound"')
+    expect(systemConfigManage).toContain('name="u9"')
     expect(systemConfigManage).toContain('name="inbound"')
     expect(systemConfigManage).toContain('<SystemStorageConfigPanel />')
     expect(systemConfigManage).toContain('<SystemIntegrationConfigPanel />')
+    expect(systemConfigManage).toContain('<SystemU9ConfigPanel />')
     expect(systemConfigManage).toContain('<SystemInboundCallbackConfigPanel />')
     expect(systemConfigManage).toContain('文件存储')
     expect(systemConfigManage).toContain('出站接口')
+    expect(systemConfigManage).toContain('U9配置')
     expect(systemConfigManage).toContain('入站接口')
     expect(systemConfigManage).not.toContain('name="integration"')
+  })
+
+  test('renders focused U9 runtime config panel for unified org code', () => {
+    expect(u9ConfigPanel).toContain('system-u9-config-panel')
+    expect(u9ConfigPanel).toContain('U9配置')
+    expect(u9ConfigPanel).toContain('组织编码')
+    expect(u9ConfigPanel).toContain('默认 101')
+    expect(u9ConfigPanel).toContain('getU9RuntimeConfig')
+    expect(u9ConfigPanel).toContain('saveU9RuntimeConfig')
+    expect(u9ConfigPanel).toContain('orgCode')
+    expect(u9ConfigPanel).toContain("v-permission=\"'system:config:integration:update'\"")
+    expect(u9ConfigPanel).not.toContain('Base URL')
+    expect(u9ConfigPanel).not.toContain('authLoginPath')
+    expect(u9ConfigPanel).not.toContain('salesOrderCreatePath')
+    expect(u9ConfigPanel).not.toContain('userCode')
+    expect(u9ConfigPanel).not.toContain('entCode')
+    expect(u9ConfigPanel).not.toContain('clientId')
+    expect(u9ConfigPanel).not.toContain('clientSecret')
+    expect(u9ConfigPanel).not.toContain('connectTimeoutMs')
+    expect(u9ConfigPanel).not.toContain('readTimeoutMs')
+    expect(u9ConfigPanel).not.toContain('testIntegrationConfig')
+    expect(u9ConfigPanel).not.toContain('activateIntegrationConfig')
+    expect(u9ConfigPanel).not.toContain('disableIntegrationConfig')
   })
 
   test('renders data center connection and endpoint workbench as the primary outbound layout', () => {

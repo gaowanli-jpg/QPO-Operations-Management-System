@@ -15,6 +15,7 @@ import com.machining.quote.mapper.U9SyncSellerOptionCacheMapper;
 import com.machining.quote.service.u9.U9CommonEntityClient;
 import com.machining.quote.service.u9.U9MasterDataService;
 import com.machining.quote.service.u9.U9MasterDataSyncService;
+import com.machining.quote.service.u9.U9OrgCodeResolver;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -112,6 +113,27 @@ class U9SyncOptionsCacheServiceTest {
     }
 
     @Test
+    void optionsReadsPersistentCacheForConfiguredU9OrgCode() {
+        U9SyncSellerOptionCacheMapper sellerMapper = mock(U9SyncSellerOptionCacheMapper.class);
+        U9SyncDepartmentOptionCacheMapper departmentMapper = mock(U9SyncDepartmentOptionCacheMapper.class);
+        U9MasterDataService service = masterDataService(sellerMapper, departmentMapper,
+                Clock.fixed(instant("2026-08-11T05:30:00Z"), ZoneId.of("Asia/Shanghai")));
+        U9OrgCodeResolver resolver = orgResolver("106");
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", resolver);
+        ArgumentCaptor<QueryWrapper<U9SyncSellerOptionCache>> sellerQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        ArgumentCaptor<QueryWrapper<U9SyncDepartmentOptionCache>> departmentQueryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        when(sellerMapper.selectList(sellerQueryCaptor.capture())).thenReturn(List.of());
+        when(departmentMapper.selectList(departmentQueryCaptor.capture())).thenReturn(List.of());
+
+        SalesOrderU9SyncOptionsResp options = service.options();
+
+        assertThat(options.getOrgCode()).isEqualTo("106");
+        verify(resolver).effectiveOrgCode();
+        assertThat(sellerQueryCaptor.getValue().getSqlSegment()).contains("u9_org_code");
+        assertThat(departmentQueryCaptor.getValue().getSqlSegment()).contains("u9_org_code");
+    }
+
+    @Test
     void refreshSyncsSellerAndDepartmentOptionsIntoPersistentCacheAndDisablesMissingRows() {
         U9CommonEntityClient client = mock(U9CommonEntityClient.class);
         U9SyncSellerOptionCacheMapper sellerMapper = mock(U9SyncSellerOptionCacheMapper.class);
@@ -176,6 +198,34 @@ class U9SyncOptionsCacheServiceTest {
                 });
     }
 
+    @Test
+    void refreshUsesConfiguredU9OrgCodeForSellerAndDepartmentQueries() {
+        U9CommonEntityClient client = mock(U9CommonEntityClient.class);
+        U9SyncSellerOptionCacheMapper sellerMapper = mock(U9SyncSellerOptionCacheMapper.class);
+        U9SyncDepartmentOptionCacheMapper departmentMapper = mock(U9SyncDepartmentOptionCacheMapper.class);
+        U9MasterDataSyncRunMapper syncRunMapper = mock(U9MasterDataSyncRunMapper.class);
+        U9MasterDataSyncService service = syncService(client, sellerMapper, departmentMapper, syncRunMapper,
+                Clock.fixed(instant("2026-08-11T04:00:00Z"), ZoneId.of("Asia/Shanghai")));
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver("106"));
+        ArgumentCaptor<U9CommonEntityQueryReq> requestCaptor = ArgumentCaptor.forClass(U9CommonEntityQueryReq.class);
+        when(client.query(requestCaptor.capture())).thenAnswer(invocation -> pageForOrg106(invocation.getArgument(0)));
+        when(sellerMapper.selectList(any())).thenReturn(List.of());
+        when(departmentMapper.selectList(any())).thenReturn(List.of());
+        when(syncRunMapper.insert(any())).thenAnswer(invocation -> {
+            U9MasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(8806L);
+            return 1;
+        });
+
+        U9MasterDataSyncService.SyncResult result = service.syncOptionsManual(106L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(requestCaptor.getAllValues()).allSatisfy(req -> assertThat(req.getFilters()).anySatisfy(filter -> {
+            assertThat(filter.getField()).isEqualTo("Org.Code");
+            assertThat(filter.getValue()).isEqualTo("106");
+        }));
+    }
+
     private U9MasterDataService masterDataService(
             U9SyncSellerOptionCacheMapper sellerMapper,
             U9SyncDepartmentOptionCacheMapper departmentMapper,
@@ -183,7 +233,7 @@ class U9SyncOptionsCacheServiceTest {
         U9MasterDataService service = new U9MasterDataService();
         ReflectionTestUtils.setField(service, "sellerOptionMapper", sellerMapper);
         ReflectionTestUtils.setField(service, "departmentOptionMapper", departmentMapper);
-        ReflectionTestUtils.setField(service, "orgCode", ORG_101);
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver(ORG_101));
         ReflectionTestUtils.setField(service, "clock", clock);
         return service;
     }
@@ -199,9 +249,15 @@ class U9SyncOptionsCacheServiceTest {
         ReflectionTestUtils.setField(service, "sellerOptionMapper", sellerMapper);
         ReflectionTestUtils.setField(service, "departmentOptionMapper", departmentMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", syncRunMapper);
-        ReflectionTestUtils.setField(service, "orgCode", ORG_101);
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver(ORG_101));
         ReflectionTestUtils.setField(service, "clock", clock);
         return service;
+    }
+
+    private U9OrgCodeResolver orgResolver(String orgCode) {
+        U9OrgCodeResolver resolver = mock(U9OrgCodeResolver.class);
+        when(resolver.effectiveOrgCode()).thenReturn(orgCode);
+        return resolver;
     }
 
     private List<U9CommonEntityRowDTO> pageFor(U9CommonEntityQueryReq req) {
@@ -210,6 +266,22 @@ class U9SyncOptionsCacheServiceTest {
         }
         if (U9MasterDataService.DEPARTMENT_ENTITY.equals(req.getEntityFullName())) {
             return departmentPage(req.getPageIndex());
+        }
+        return List.of();
+    }
+
+    private List<U9CommonEntityRowDTO> pageForOrg106(U9CommonEntityQueryReq req) {
+        if (U9MasterDataService.OPERATOR_ENTITY.equals(req.getEntityFullName())) {
+            return List.of(row(Map.of(
+                    "ID", "S106",
+                    "Code", "S106",
+                    "Name", "Seller 106",
+                    "Org.Code", "106",
+                    "Dept.Code", "D106",
+                    "Dept.Name", "Dept 106",
+                    "Effective.IsEffective", true,
+                    "OperatorLine.OperatorType", List.of(U9MasterDataService.SALES_OPERATOR_TYPE)
+            )));
         }
         return List.of();
     }

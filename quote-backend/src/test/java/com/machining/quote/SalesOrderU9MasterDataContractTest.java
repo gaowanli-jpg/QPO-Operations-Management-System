@@ -16,6 +16,7 @@ import com.machining.quote.service.DataCenterIntegrationClient;
 import com.machining.quote.service.DataCenterTokenService;
 import com.machining.quote.service.u9.U9CommonEntityClient;
 import com.machining.quote.service.u9.U9MasterDataService;
+import com.machining.quote.service.u9.U9OrgCodeResolver;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -149,9 +150,15 @@ class SalesOrderU9MasterDataContractTest {
     private U9MasterDataService masterDataService(U9CommonEntityClient client, Clock clock) {
         U9MasterDataService service = new U9MasterDataService();
         ReflectionTestUtils.setField(service, "commonEntityClient", client);
-        ReflectionTestUtils.setField(service, "orgCode", ORG_101);
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver(ORG_101));
         ReflectionTestUtils.setField(service, "clock", clock);
         return service;
+    }
+
+    private U9OrgCodeResolver orgResolver(String orgCode) {
+        U9OrgCodeResolver resolver = mock(U9OrgCodeResolver.class);
+        when(resolver.effectiveOrgCode()).thenReturn(orgCode);
+        return resolver;
     }
 
     private List<U9CommonEntityRowDTO> pageFor(U9CommonEntityQueryReq req) {

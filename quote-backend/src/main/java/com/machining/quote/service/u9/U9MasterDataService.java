@@ -9,7 +9,6 @@ import com.machining.quote.entity.U9SyncSellerOptionCache;
 import com.machining.quote.mapper.U9SyncDepartmentOptionCacheMapper;
 import com.machining.quote.mapper.U9SyncSellerOptionCacheMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -35,8 +34,8 @@ public class U9MasterDataService {
     private U9SyncSellerOptionCacheMapper sellerOptionMapper;
     @Autowired
     private U9SyncDepartmentOptionCacheMapper departmentOptionMapper;
-    @Value("${erp.u9.org-code:101}")
-    private String orgCode = "101";
+    @Autowired(required = false)
+    private U9OrgCodeResolver u9OrgCodeResolver;
     private Clock clock = Clock.system(DISPLAY_ZONE);
 
     public SalesOrderU9SyncOptionsResp options() {
@@ -138,7 +137,7 @@ public class U9MasterDataService {
     }
 
     private String normalizeOrgCode() {
-        return firstNonBlank(orgCode, "101");
+        return firstNonBlank(u9OrgCodeResolver == null ? null : u9OrgCodeResolver.effectiveOrgCode(), "101");
     }
 
     private String firstNonBlank(String... values) {

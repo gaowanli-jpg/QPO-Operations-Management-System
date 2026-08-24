@@ -81,6 +81,13 @@ export const testDataCenterEndpoint = (endpointCode) => request(`/api/system/dat
   method: 'POST'
 })
 
+export const getU9RuntimeConfig = () => request('/api/system/u9-runtime-config')
+
+export const saveU9RuntimeConfig = (payload) => request('/api/system/u9-runtime-config', {
+  method: 'PUT',
+  data: payload
+})
+
 export const listInboundCallbackConfigs = () => request('/api/system/inbound-callback-configs')
 
 export const getOpenApiTokenStatus = () => request('/api/system/inbound-callback-configs/open-api-token')

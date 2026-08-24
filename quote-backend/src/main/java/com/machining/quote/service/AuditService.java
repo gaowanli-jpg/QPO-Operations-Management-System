@@ -195,6 +195,7 @@ public class AuditService {
         if (startsWith(action, "SYSTEM_DATA_CENTER_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_DATA_CENTER_ENDPOINT_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INBOUND_CALLBACK_")) return "SYSTEM";
+        if (startsWith(action, "SYSTEM_U9_")) return "SYSTEM";
         if ("U9_CUSTOMER_SYNC".equalsIgnoreCase(action)) return "SYSTEM";
         if ("U9_CUSTOMER_SYNC_SCHEDULE_UPDATE".equalsIgnoreCase(action)) return "SYSTEM";
         if ("U9_SYNC_OPTIONS_REFRESH".equalsIgnoreCase(action)) return "MARKET";
@@ -295,6 +296,7 @@ public class AuditService {
             case "SYSTEM_INBOUND_CALLBACK_CONFIG_UPDATE" -> "保存入站接口配置";
             case "SYSTEM_INBOUND_CALLBACK_TOKEN_ROTATE" -> "轮换入站开放接口Token";
             case "SYSTEM_INBOUND_CALLBACK_CONFIG_VALIDATE" -> "校验入站接口配置";
+            case "SYSTEM_U9_ORG_CONFIG_UPDATE" -> "维护U9组织编码";
             case "QUOTE_TEMPLATE_UPLOAD" -> "上传报价模板";
             case "QUOTE_TEMPLATE_CONFIG_UPDATE" -> "保存报价模板配置";
             case "RFQ_IMPORT" -> "导入 RFQ";

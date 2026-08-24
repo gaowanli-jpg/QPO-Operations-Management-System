@@ -8,6 +8,7 @@ import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.U9MasterDataSyncRunMapper;
 import com.machining.quote.service.u9.U9CommonEntityClient;
 import com.machining.quote.service.u9.U9MasterDataSyncService;
+import com.machining.quote.service.u9.U9OrgCodeResolver;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -173,6 +174,45 @@ class U9CustomerMasterSyncServiceTest {
     }
 
     @Test
+    void customerSyncUsesConfiguredU9OrgCodeForFilterAndRunSummary() {
+        U9CommonEntityClient commonEntityClient = mock(U9CommonEntityClient.class);
+        CustomerMasterMapper customerMapper = mock(CustomerMasterMapper.class);
+        U9MasterDataSyncRunMapper runMapper = mock(U9MasterDataSyncRunMapper.class);
+        U9MasterDataSyncService service = service(commonEntityClient, customerMapper, runMapper);
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver("106"));
+
+        ArgumentCaptor<U9CommonEntityQueryReq> requestCaptor = ArgumentCaptor.forClass(U9CommonEntityQueryReq.class);
+        when(commonEntityClient.query(requestCaptor.capture())).thenReturn(List.of(row(Map.of(
+                "ID", "U9-NEW106",
+                "Code", "NEW106",
+                "Name", "Org 106 Customer",
+                "ShortName", "NEW106",
+                "Org.Code", "106",
+                "Org.Name", "QPO Org 106",
+                "Effective.IsEffective", true
+        ))));
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(customerMapper.insert(any(CustomerMaster.class))).thenReturn(1);
+        when(runMapper.insert(any(U9MasterDataSyncRun.class))).thenAnswer(invocation -> {
+            U9MasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(9006L);
+            return 1;
+        });
+        when(runMapper.updateById(any(U9MasterDataSyncRun.class))).thenReturn(1);
+
+        U9MasterDataSyncService.SyncResult result = service.syncCustomersManual(106L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(requestCaptor.getValue().getFilters()).singleElement().satisfies(filter -> {
+            assertThat(filter.getField()).isEqualTo("Org.Code");
+            assertThat(filter.getValue()).isEqualTo("106");
+        });
+        ArgumentCaptor<U9MasterDataSyncRun> runInsertCaptor = ArgumentCaptor.forClass(U9MasterDataSyncRun.class);
+        verify(runMapper).insert(runInsertCaptor.capture());
+        assertThat(runInsertCaptor.getValue().getU9OrgCode()).isEqualTo("106");
+    }
+
+    @Test
     void customerSyncSupportsManualScheduledAndDelayedStartupTriggers() throws Exception {
         assertThat(U9MasterDataSyncService.class.getMethod("syncCustomersManual", Long.class)).isNotNull();
 
@@ -191,9 +231,15 @@ class U9CustomerMasterSyncServiceTest {
         ReflectionTestUtils.setField(service, "commonEntityClient", commonEntityClient);
         ReflectionTestUtils.setField(service, "customerMapper", customerMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", runMapper);
-        ReflectionTestUtils.setField(service, "orgCode", ORG_101);
+        ReflectionTestUtils.setField(service, "u9OrgCodeResolver", orgResolver(ORG_101));
         ReflectionTestUtils.setField(service, "clock", Clock.fixed(Instant.parse("2026-08-11T04:00:00Z"), ZoneId.of("Asia/Shanghai")));
         return service;
+    }
+
+    private U9OrgCodeResolver orgResolver(String orgCode) {
+        U9OrgCodeResolver resolver = mock(U9OrgCodeResolver.class);
+        when(resolver.effectiveOrgCode()).thenReturn(orgCode);
+        return resolver;
     }
 
     private List<U9CommonEntityRowDTO> customerPage(U9CommonEntityQueryReq req) {
