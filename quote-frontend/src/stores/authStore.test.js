@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { changePassword, getCurrentUser, getPermissionInfo, login, logout, updateMyProfile } from '../services/authApi'
+import { changePassword, exchangeDataCenterSso, getCurrentUser, getPermissionInfo, login, logout, updateMyProfile } from '../services/authApi'
 import { useAuthStore } from './authStore'
 
 vi.mock('../services/authApi', () => ({
   login: vi.fn(),
+  exchangeDataCenterSso: vi.fn(),
   getCurrentUser: vi.fn(),
   getPermissionInfo: vi.fn(),
   changePassword: vi.fn(),
@@ -187,5 +188,52 @@ describe('authStore', () => {
 
     expect(authStore.token).toBe('')
     expect(authStore.user).toBeNull()
+  })
+
+  test('loginWithDataCenterSso persists token user roles permissions and menus', async () => {
+    const payload = {
+      appCode: 'QPO',
+      username: 'market',
+      timestamp: 1780000000000,
+      nonce: 'dc-sso-nonce-2',
+      redirect: '/dashboard',
+      signature: 'signed-ticket'
+    }
+    exchangeDataCenterSso.mockResolvedValue({
+      success: true,
+      token: 'sso-token-1',
+      user: { username: 'market', role: 'MARKET' },
+      roles: ['MARKET_USER'],
+      permissions: ['market:order:view'],
+      menus: [{ path: '/orders', title: '订单管理', permission: 'market:order:view' }]
+    })
+    const authStore = useAuthStore()
+
+    const result = await authStore.loginWithDataCenterSso(payload)
+
+    expect(exchangeDataCenterSso).toHaveBeenCalledWith(payload)
+    expect(result.token).toBe('sso-token-1')
+    expect(authStore.token).toBe('sso-token-1')
+    expect(authStore.user).toEqual({ username: 'market', role: 'MARKET' })
+    expect(authStore.roles).toEqual(['MARKET_USER'])
+    expect(authStore.permissions).toEqual(['market:order:view'])
+    expect(authStore.menus).toEqual([{ path: '/orders', title: '订单管理', permission: 'market:order:view' }])
+    expect(localStorage.setItem).toHaveBeenCalledWith('erp_token', 'sso-token-1')
+    expect(localStorage.setItem).toHaveBeenCalledWith('erp_user', JSON.stringify({ username: 'market', role: 'MARKET' }))
+    expect(localStorage.setItem).not.toHaveBeenCalledWith(expect.stringContaining('sso'), expect.anything())
+  })
+
+  test('loginWithDataCenterSso rejects failed exchange without mutating local auth', async () => {
+    exchangeDataCenterSso.mockResolvedValue({
+      success: false,
+      message: 'QPO账号未配置，请联系管理员'
+    })
+    const authStore = useAuthStore()
+
+    await expect(authStore.loginWithDataCenterSso({ username: 'missing' })).rejects.toThrow('QPO账号未配置，请联系管理员')
+
+    expect(authStore.token).toBe('')
+    expect(authStore.user).toBeNull()
+    expect(localStorage.setItem).not.toHaveBeenCalled()
   })
 })

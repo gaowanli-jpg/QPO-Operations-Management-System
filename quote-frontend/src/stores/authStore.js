@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import {
   changePassword as changePasswordRequest,
+  exchangeDataCenterSso as exchangeDataCenterSsoRequest,
   getCurrentUser,
   getPermissionInfo,
   login as loginRequest,
@@ -121,6 +122,15 @@ export const useAuthStore = defineStore('auth', {
       const response = await loginRequest(credentials)
       if (!response?.success) {
         throw new Error(response?.message || '登录失败')
+      }
+      this.setAuth(response.token, response.user, response)
+      return response
+    },
+
+    async loginWithDataCenterSso(payload) {
+      const response = await exchangeDataCenterSsoRequest(payload)
+      if (!response?.success) {
+        throw new Error(response?.message || '数据中心登录失败')
       }
       this.setAuth(response.token, response.user, response)
       return response

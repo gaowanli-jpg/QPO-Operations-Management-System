@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../components/LoginView.vue'
 import { useAuthStore } from '../stores/authStore'
 
+const DataCenterSsoCallback = () => import('../views/DataCenterSsoCallback.vue')
 const DashboardHome = () => import('../components/dashboard/DashboardHome.vue')
 const MarketDashboard = () => import('../components/MarketDashboard.vue')
 const MarketRelease = () => import('../components/MarketRelease.vue')
@@ -27,6 +28,7 @@ const SystemConfigManage = () => import('../components/SystemConfigManage.vue')
 
 const routes = [
   { path: '/login', component: LoginView },
+  { path: '/sso/datacenter/callback', component: DataCenterSsoCallback },
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', component: DashboardHome },
   { path: '/market', component: MarketDashboard, meta: { permission: 'market:rfq:view' } },
@@ -52,6 +54,8 @@ const routes = [
   { path: '/quote-template', component: QuoteTemplateManage, meta: { permission: 'market:template:view' } },
   { path: '/pricing', component: ItemPricing, meta: { permission: 'engineer:pricing:view' } }
 ]
+
+const PUBLIC_ROUTES = ['/login', '/sso/datacenter/callback']
 
 const router = createRouter({
   history: createWebHistory(),
@@ -81,7 +85,7 @@ const firstPermittedPath = (authStore) => {
 
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
-  if (to.path === '/login') {
+  if (PUBLIC_ROUTES.includes(to.path)) {
     return true
   }
   if (!authStore.token) {

@@ -48,4 +48,23 @@ describe('authApi', () => {
       data: payload
     })
   })
+
+  test('exchangeDataCenterSso posts signed data center login payload', async () => {
+    const payload = {
+      appCode: 'QPO',
+      username: 'market',
+      displayName: '市场用户',
+      timestamp: 1780000000000,
+      nonce: 'dc-sso-nonce-1',
+      redirect: '/dashboard',
+      signature: 'signed-ticket'
+    }
+
+    await authApi.exchangeDataCenterSso(payload)
+
+    expect(request).toHaveBeenCalledWith('/api/auth/datacenter-sso/exchange', {
+      method: 'POST',
+      data: payload
+    })
+  })
 })

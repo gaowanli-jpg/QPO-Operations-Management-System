@@ -3,7 +3,7 @@
     <header class="erp-page-header system-config-page-header">
       <div>
         <h1 class="erp-page-title">系统配置</h1>
-        <p class="erp-page-description">管理 QPO 文件存储、外部系统出站连接和入站回调入口配置。</p>
+        <p class="erp-page-description">管理 QPO 文件存储、外部系统出站连接、入站回调入口和数据中心统一登录配置。</p>
       </div>
     </header>
 
@@ -20,6 +20,9 @@
       <el-tab-pane label="入站接口" name="inbound">
         <SystemInboundCallbackConfigPanel />
       </el-tab-pane>
+      <el-tab-pane label="数据中心登录" name="dataCenterSso">
+        <SystemDataCenterSsoConfigPanel />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -30,6 +33,7 @@ import SystemStorageConfigPanel from './system-config/SystemStorageConfigPanel.v
 import SystemIntegrationConfigPanel from './system-config/SystemIntegrationConfigPanel.vue'
 import SystemU9ConfigPanel from './system-config/SystemU9ConfigPanel.vue'
 import SystemInboundCallbackConfigPanel from './system-config/SystemInboundCallbackConfigPanel.vue'
+import SystemDataCenterSsoConfigPanel from './system-config/SystemDataCenterSsoConfigPanel.vue'
 
 const activeTab = ref('storage')
 </script>

@@ -5,6 +5,11 @@ export const login = (credentials) => request('/api/auth/login', {
   data: credentials
 })
 
+export const exchangeDataCenterSso = (payload) => request('/api/auth/datacenter-sso/exchange', {
+  method: 'POST',
+  data: payload
+})
+
 export const getCurrentUser = () => request('/api/auth/me')
 
 export const getPermissionInfo = () => request('/api/auth/permission-info')

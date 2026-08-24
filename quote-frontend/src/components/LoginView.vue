@@ -25,7 +25,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
@@ -51,6 +51,13 @@ const roleHome = {
   MARKET: '/market',
   ENGINEER: '/engineering'
 }
+
+onMounted(() => {
+  const queryError = typeof route.query.error === 'string' ? route.query.error : ''
+  if (queryError) {
+    ElMessage.error(queryError)
+  }
+})
 
 const handleLogin = async () => {
   if (loading.value) return
