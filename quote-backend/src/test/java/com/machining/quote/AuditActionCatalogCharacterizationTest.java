@@ -52,6 +52,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DICT_PROCESS_MES_SYNC")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("DICT_MATERIAL_MES_SYNC")).isEqualTo("DICT");
+        assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("CHANGE");
+        assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SYSTEM_U9_ORG_CONFIG_UPDATE")).isEqualTo("SYSTEM");
 
         assertThat(AuditService.labelForAction("AUTH_ACCOUNT_LOCKED")).isNotEqualTo("AUTH_ACCOUNT_LOCKED");
@@ -83,6 +85,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isNotEqualTo("DELIVERY_PROCESS_SHEET_EXPORT");
         assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).isNotEqualTo("DICT_PROCESS_MES_SYNC");
         assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).isNotEqualTo("DICT_MATERIAL_MES_SYNC");
+        assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
+        assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SYSTEM_U9_ORG_CONFIG_UPDATE")).isNotEqualTo("SYSTEM_U9_ORG_CONFIG_UPDATE");
     }
 
@@ -145,6 +149,12 @@ class AuditActionCatalogCharacterizationTest {
     void quoteProcessLeadTimeAuditActionsExposeStableChineseLabels() {
         assertThat(AuditService.labelForAction("QUOTE_LEAD_TIME_BATCH_UPDATE")).isEqualTo("批量保存报价交期");
         assertThat(AuditService.labelForAction("QUOTE_LEAD_TIME_DATA_REPLACEMENT")).isEqualTo("报价处理表格数据替换");
+    }
+
+    @Test
+    void salesOrderChangeAuditActionsExposeStableChineseLabels() {
+        assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("销售变更保存零件行");
+        assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("销售变更表格数据替换");
     }
 
     @Test
