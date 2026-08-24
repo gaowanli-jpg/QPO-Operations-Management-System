@@ -47,7 +47,7 @@ public class SalesOrderQpoImportService {
     private static final String TARGET_TYPE = "sales_order_import_batch";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String IMPORT_MODE_QPO_INDEPENDENT = "QPO_INDEPENDENT";
-    private static final String DEFAULT_DOCUMENT_TYPE_CODE = "SO01";
+    private static final String DEFAULT_DOCUMENT_TYPE_CODE = "SO06";
     private static final String QUOTED = "已报价";
     private static final String UNMATCHED = "未匹配";
     private static final String MATERIAL_UNCONFIRMED = "未确认";

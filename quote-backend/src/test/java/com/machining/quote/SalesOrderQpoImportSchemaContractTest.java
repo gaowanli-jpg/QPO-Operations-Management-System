@@ -34,6 +34,8 @@ class SalesOrderQpoImportSchemaContractTest {
     private static final Path INDEPENDENT_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SCHEMA = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+    private static final Path DOCUMENT_TYPE_DEFAULT_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V17__sales_order_document_type_default_so06.sql");
     private static final Path ORDER_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "OrderRfq.java");
     private static final Path ITEM_ENTITY = Path.of("src", "main", "java", "com", "machining", "quote", "entity", "ItemQuoteVersion.java");
     private static final Path SALES_ORDER_HEADER_ENTITY = Path.of(
@@ -140,6 +142,18 @@ class SalesOrderQpoImportSchemaContractTest {
                 .contains("@Deprecated")
                 .contains("private Integer salesOrderLineNo;")
                 .contains("private Long salesOrderImportRecordId;");
+    }
+
+    @Test
+    void migrationMovesSalesOrderDocumentTypeDefaultToSo06WithoutEditingBaseline() throws IOException {
+        String baseline = read(SCHEMA);
+        String migration = read(DOCUMENT_TYPE_DEFAULT_MIGRATION);
+
+        assertThat(baseline)
+                .contains("document_type_code character varying(50) DEFAULT 'SO01'::character varying NOT NULL");
+        assertThat(migration)
+                .contains("ALTER TABLE sales_order_header")
+                .contains("ALTER COLUMN document_type_code SET DEFAULT 'SO06'::character varying");
     }
 
     @Test

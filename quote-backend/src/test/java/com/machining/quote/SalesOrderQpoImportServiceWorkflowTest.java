@@ -157,7 +157,7 @@ class SalesOrderQpoImportServiceWorkflowTest extends SalesOrderQpoImportTestSupp
         SalesOrderHeader firstHeader = headerCaptor.getAllValues().get(0);
         assertThat(firstHeader.getSalesOrderNo()).startsWith("SOQPO");
         assertThat(firstHeader.getDocumentNo()).isEqualTo(firstHeader.getSalesOrderNo());
-        assertThat(firstHeader.getDocumentTypeCode()).isEqualTo("SO01");
+        assertThat(firstHeader.getDocumentTypeCode()).isEqualTo("SO06");
         assertThat(firstHeader.getCustomerId()).isEqualTo(7L);
         assertThat(firstHeader.getCustomerCode()).isEqualTo("C001");
         assertThat(firstHeader.getCustomerShortName()).isEqualTo("ACME");

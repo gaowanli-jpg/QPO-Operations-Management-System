@@ -18,7 +18,7 @@
 
 - 销售订单入口仍放在市场 `新单导入` 页面下，不新增左侧模块。
 - 页面选择客户，客户来自客户主数据；QPO 保存客户名称快照，同时保留客户编码供后续 U9 使用。
-- 页面支持输入 / 选择单据类型编码，默认 `SO01`，不再要求 Excel 每行写单据类型编码。
+- 页面支持输入 / 选择单据类型编码，默认 `SO06`，不再要求 Excel 每行写单据类型编码。
 - 按市场实际 `销售订单模版.xlsx` 导入，生成 QPO `order_rfq` 和 `item_quote_version`。
 - 导入成功后订单状态为 `已报价`，零件状态为 `已报价`，零件价格按未税单价、未税总价、含税单价、含税总价四个口径保存。
 - 导入后执行一次历史重复件匹配，按 `图号 + 版本` 补齐材料、工艺、图纸、重量、组合件等生产快照。
@@ -112,7 +112,7 @@
 | `source_type` | `VARCHAR(30) NOT NULL DEFAULT 'RFQ'` | 区分 `RFQ` / `SALES_ORDER` |
 | `customer_code` | `VARCHAR(200)` | 客户主数据编码，后续 U9 `OrderBy` 来源 |
 | `customer_short_name` | `VARCHAR(200)` | 客户简称快照 |
-| `sales_document_type_code` | `VARCHAR(50)` | 单据类型编码，默认 `SO01` |
+| `sales_document_type_code` | `VARCHAR(50)` | 单据类型编码，默认 `SO06` |
 | `sales_order_date` | `DATE` | 下单日期 |
 | `customer_order_no` | `VARCHAR(120)` | 客户订单号 |
 | `customer_project_no` | `VARCHAR(120)` | 客户项目号 |
@@ -172,7 +172,7 @@
 销售订单页顶部输入：
 
 - 客户：必选，来自客户主数据，保存 `customerCode / customerShortName / customerName` 快照。
-- 单据类型编码：默认 `SO01`，可手动输入，后续可接入可维护下拉。
+- 单据类型编码：默认 `SO06`，可手动输入，后续可接入可维护下拉。
 - Excel 文件：按市场实际模板上传。
 
 ### 7.2 分组规则
@@ -229,7 +229,7 @@ Content-Type: multipart/form-data
 请求参数：
 
 - `customerId`：客户主数据 ID。
-- `documentTypeCode`：单据类型编码，空值使用 `SO01`。
+- `documentTypeCode`：单据类型编码，空值使用 `SO06`。
 - `excelFile`：市场实际销售订单模板。
 
 响应示例：
@@ -372,7 +372,7 @@ Content-Type: multipart/form-data
 销售订单页签调整为：
 
 - 顶部客户选择器。
-- 单据类型编码输入框，默认 `SO01`。
+- 单据类型编码输入框，默认 `SO06`。
 - 下载销售订单模板按钮，模板改为市场实际表头。
 - 上传销售订单 Excel。
 - 按钮文案改为 `导入销售订单` 或 `创建销售订单`，不再写 `同步 U9`。
@@ -537,7 +537,7 @@ Sales order QPO import failed batchNo={} durationMs={}
 修改：
 
 - `MarketDashboard.vue` 销售订单页签新增客户选择。
-- 新增单据类型编码输入 / 选择，默认 `SO01`。
+- 新增单据类型编码输入 / 选择，默认 `SO06`。
 - 导入按钮改为 QPO 导入接口。
 - 模板下载改为市场实际销售订单表头。
 - 结果表展示创建 RFQ 和匹配结果。

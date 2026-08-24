@@ -27,6 +27,7 @@ public class RfqReleaseBatchValidationService {
     private static final int MAX_DOCUMENT_TYPE_CODE_LENGTH = 50;
     private static final int MAX_TEXT_LENGTH = 120;
     private static final int MAX_TITLE_LENGTH = 255;
+    private static final String DEFAULT_DOCUMENT_TYPE_CODE = "SO06";
 
     @Autowired
     private OrderRfqMapper orderRfqMapper;
@@ -61,7 +62,7 @@ public class RfqReleaseBatchValidationService {
         }
         String releaseBatchKey = requireReleaseBatchKey(req);
         String documentTypeCode = normalizeRequired(
-                defaultText(req.getDocumentTypeCode(), "SO01"), "单据类型编码", MAX_DOCUMENT_TYPE_CODE_LENGTH);
+                defaultText(req.getDocumentTypeCode(), DEFAULT_DOCUMENT_TYPE_CODE), "单据类型编码", MAX_DOCUMENT_TYPE_CODE_LENGTH);
         LocalDate salesOrderDate = req.getSalesOrderDate();
         if (salesOrderDate == null) {
             throw new RuntimeException("下单日期不能为空");

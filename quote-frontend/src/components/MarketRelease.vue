@@ -909,7 +909,7 @@ const isInternalLeadTimeSaving = (row) => isPending(releaseActionKeys.internalLe
 
 const today = new Date().toISOString().slice(0, 10)
 const releaseForm = reactive({
-  documentTypeCode: 'SO01',
+  documentTypeCode: 'SO06',
   salesOrderDate: today,
   customerOrderTitle: '',
   orderType: '',
@@ -1095,7 +1095,7 @@ const fetchReleaseItemsBatch = async () => {
 }
 
 const resetReleaseFormForOrders = () => {
-  releaseForm.documentTypeCode = 'SO01'
+  releaseForm.documentTypeCode = 'SO06'
   releaseForm.salesOrderDate = today
   releaseForm.customerOrderTitle = ''
   releaseForm.orderType = ''

@@ -36,9 +36,10 @@ describe('sales order import panel', () => {
     expect(marketDashboard).toContain("v-permission=\"'market:rfq:import'\"")
   })
 
-  test('sales order mode requires customer master selection and defaults document type to SO01', () => {
+  test('sales order mode requires customer master selection and defaults document type to SO06', () => {
     expect(marketDashboard).toContain('salesOrderForm')
-    expect(marketDashboard).toContain("documentTypeCode: 'SO01'")
+    expect(marketDashboard).toContain("documentTypeCode: 'SO06'")
+    expect(salesOrderPane).toContain('placeholder="SO06"')
     expect(marketDashboard).toContain('openSalesOrderCustomerPicker')
     expect(marketDashboard).toContain('selectSalesOrderCustomer')
     expect(marketDashboard).toContain('customer-scope="market-rfq"')

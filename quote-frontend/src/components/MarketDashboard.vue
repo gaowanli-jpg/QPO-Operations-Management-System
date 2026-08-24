@@ -172,7 +172,7 @@
                       <el-form-item label="单据类型编码" required>
                         <el-input
                           v-model.trim="salesOrderForm.documentTypeCode"
-                          placeholder="SO01"
+                          placeholder="SO06"
                           maxlength="50"
                           clearable
                           :disabled="isPending(IMPORT_SALES_ORDER_ACTION_KEY)"
@@ -458,7 +458,7 @@ const salesOrderForm = reactive({
   customerCode: '',
   customerShortName: '',
   customerName: '',
-  documentTypeCode: 'SO01',
+  documentTypeCode: 'SO06',
   salesOrderDate: '',
   customerOrderNo: '',
   customerProjectNo: '',
@@ -672,7 +672,7 @@ const submitSalesOrderImport = async () => {
           salesOrderForm.customerCode = ''
           salesOrderForm.customerShortName = ''
           salesOrderForm.customerName = ''
-          salesOrderForm.documentTypeCode = 'SO01'
+          salesOrderForm.documentTypeCode = 'SO06'
           salesOrderForm.salesOrderDate = ''
           salesOrderForm.customerOrderNo = ''
           salesOrderForm.customerProjectNo = ''

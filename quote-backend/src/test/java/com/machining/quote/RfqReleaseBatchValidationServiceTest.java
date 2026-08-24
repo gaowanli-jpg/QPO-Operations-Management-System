@@ -55,6 +55,21 @@ class RfqReleaseBatchValidationServiceTest {
     }
 
     @Test
+    void defaultsMissingDocumentTypeCodeToSo06() {
+        OrderRfq first = order(101, "客户A", QuoteStatusWorkflow.QUOTED);
+        when(orderMapper.selectBatchIds(List.of(101))).thenReturn(List.of(first));
+
+        DeliveryGenerateReq req = request(
+                List.of(101),
+                List.of(line(101, 1001, 1)));
+        req.setDocumentTypeCode(" ");
+
+        RfqReleaseBatchValidationService.BatchContext context = service.validate(req);
+
+        assertThat(context.documentTypeCode()).isEqualTo("SO06");
+    }
+
+    @Test
     void rejectsCrossCustomerAndNonQuotedBatches() {
         OrderRfq first = order(101, "客户A", QuoteStatusWorkflow.QUOTED);
         OrderRfq second = order(102, "客户B", QuoteStatusWorkflow.QUOTED);

@@ -64,6 +64,7 @@ describe('market release stage 5 cleanup', () => {
       'releaseForm.customerOrderNo',
       'releaseForm.salesOrderDate',
       'releaseForm.documentTypeCode',
+      "documentTypeCode: 'SO06'",
       'releaseForm.customerOrderTitle',
       'releaseForm.arrangeType',
       '@click="submitTicket"',

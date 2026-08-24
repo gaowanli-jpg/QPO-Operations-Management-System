@@ -281,7 +281,7 @@ Permission: market:release:create
 ```json
 {
   "rfqIds": [101, 102],
-  "documentTypeCode": "SO01",
+  "documentTypeCode": "SO06",
   "salesOrderDate": "2026-08-07",
   "customerOrderTitle": "客户正式订单",
   "orderType": "正式订单",
@@ -316,7 +316,7 @@ Permission: market:release:create
 - `items` 至少一行，所有 `sourceType` 必须是 `RFQ`。
 - `releaseBatchKey` 由前端每次开始一次提交时生成，重试同一次请求必须沿用同一 key。
 - `sourceReleaseRequestHash` 不由前端传入；后端以客户、排序后的 RFQ / 零件 / 数量和全部订单头输入计算规范化 SHA-256。
-- `documentTypeCode` 必填，默认值和现有销售订单导入页面一致为 `SO01`。
+- `documentTypeCode` 必填，默认值和现有销售订单导入页面一致为 `SO06`。
 - `salesOrderDate` 必填，用户在议价提单页面选择，不由后端静默改成当前日期。
 - `customerOrderTitle` 可为空；填写时进入派生销售订单主表。
 - `customerOrderNo`、`orderType`、`internalProjectNo` 是必填订单级默认值；`customerProjectNo` 可为空。
@@ -642,7 +642,7 @@ U9 同步最终以 42 号文档的最小已验证契约为准：`IsPriceIncludeT
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| 单据类型编码 | 是 | 默认 `SO01`，只写派生销售订单头 |
+| 单据类型编码 | 是 | 默认 `SO06`，只写派生销售订单头 |
 | 下单日期 | 是 | 替代旧“开工日期”输入，作为零件空值 fallback |
 | 客户订单号 | 是 | 作为零件空值 fallback |
 | 客户项目号 | 否 | 作为零件空值 fallback |
