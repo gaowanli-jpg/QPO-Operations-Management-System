@@ -73,7 +73,7 @@ describe('market release workbench stage 7', () => {
     )
 
     expect(source).toContain('updateReleaseItemOrderFields')
-    expect(source).toContain('const canEditReleaseItemOrderFields = (row) => !isFullyReleasedReleaseItem(row)')
+    expect(source).toContain('const canEditReleaseItemOrderFields = (row) => row?.canSelect !== false')
     expect(source).toContain('orderField: (releaseItemKey, field) =>')
     expect(source).toContain('const isOrderFieldSaving = (row, field) =>')
     expect(saveBlock).toContain('const response = await updateReleaseItemOrderFields(row.id, {')

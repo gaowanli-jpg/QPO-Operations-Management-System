@@ -263,7 +263,6 @@
               class="release-selection-table"
               :data="pagedReleaseItems"
               :row-key="rowKey"
-              :row-class-name="releaseItemRowClassName"
               border
               stripe
               height="640"
@@ -363,8 +362,7 @@
                 <template #default="scope">
                   <el-input-number
                     v-model="acceptedQtyMap[rowKey(scope.row)]"
-                    :min="remainingQtyFor(scope.row) > 0 ? 1 : 0"
-                    :max="remainingQtyFor(scope.row)"
+                    :min="1"
                     :disabled="!canSelectItem(scope.row)"
                     controls-position="right"
                     class="qty-input"
@@ -855,7 +853,7 @@ let syncingReleaseItemSelection = false
 const router = useRouter()
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
 
-const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']
+const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']
 
 const toReleaseOrderSource = (order) => ({
   sourceType: 'RFQ',
@@ -892,7 +890,7 @@ const savingReleaseDrafts = computed(() => isPending(releaseActionKeys.bulkSave)
 const releaseDraftRowsForBulkSave = computed(() => collectReleaseRowsWithDraftChanges([
   ...Object.values(selectedItemIdMap),
   ...itemList.value
-], rowKey).filter(row => !isFullyReleasedReleaseItem(row)))
+], rowKey))
 const bulkSaveDisabled = computed(() => submitting.value || dataReplacementBusy.value || replacingDrawings.value || savingReleaseDrafts.value)
 const dataReplacementDisabled = computed(() => selectedOrders.value.length === 0 || dataReplacementBusy.value || submitting.value || selectedSourcesIncludeNonRfq.value)
 const dataReplacementDraftRowsByKey = computed(() => {
@@ -1112,9 +1110,9 @@ const setItemList = (rows) => {
   ))
   itemList.value.forEach(item => {
     const key = rowKey(item)
-    const remainingQty = remainingQtyFor(item)
-    if (!acceptedQtyMap[key] || acceptedQtyMap[key] > remainingQty) {
-      acceptedQtyMap[key] = remainingQty > 0 ? remainingQty : 0
+    const acceptedQty = Number(acceptedQtyMap[key] ?? 0)
+    if (!Number.isFinite(acceptedQty) || acceptedQty <= 0) {
+      acceptedQtyMap[key] = defaultAcceptedQtyFor(item)
     }
     if (selectedItemIdMap[key]) {
       selectedItemIdMap[key] = { ...selectedItemIdMap[key], ...item }
@@ -1127,31 +1125,18 @@ const remainingQtyFor = (row) => {
   return Number.isFinite(qty) ? Math.max(0, qty) : 0
 }
 
-const RELEASED_ITEM_STATUSES = new Set(['已生成提单', '已提单'])
-
-const isFullyReleasedReleaseItem = (row) => {
-  const status = String(row?.status || '').trim()
+const defaultAcceptedQtyFor = (row) => {
+  const remainingQty = remainingQtyFor(row)
+  if (remainingQty > 0) return remainingQty
   const sourceQty = Number(row?.qty ?? 0)
-  const ticketedQty = Number(row?.ticketedQty ?? 0)
-  const fullyTicketedByQty = Number.isFinite(sourceQty)
-    && sourceQty > 0
-    && Number.isFinite(ticketedQty)
-    && ticketedQty >= sourceQty
-  return RELEASED_ITEM_STATUSES.has(status) || remainingQtyFor(row) <= 0 || fullyTicketedByQty
-}
-
-const releaseItemRowClassName = ({ row }) => {
-  return isFullyReleasedReleaseItem(row) ? 'release-item-row--released' : ''
+  return Number.isFinite(sourceQty) && sourceQty > 0 ? sourceQty : 1
 }
 
 const canSelectItem = (row) => {
-  if (row?.canSelect === false) return false
-  return row.status !== '已生成提单'
-    && row.status !== '已提单'
-    && remainingQtyFor(row) > 0
+  return row?.canSelect !== false
 }
 
-const canEditReleaseItemOrderFields = (row) => !isFullyReleasedReleaseItem(row)
+const canEditReleaseItemOrderFields = (row) => row?.canSelect !== false
 
 const normalizeOrderFieldDraft = (value) => {
   if (value === null || value === undefined) return null
@@ -1295,7 +1280,7 @@ const persistReleaseItemOrderFields = async (row) => {
   requireReleaseRowId(row)
   const rowRfqId = requireReleaseRowRfqId(row)
   if (!canEditReleaseItemOrderFields(row)) {
-    throw new Error('已生成提单的零件不能修改订单信息。')
+    throw new Error('当前零件不能修改订单信息。')
   }
   const response = await updateReleaseItemOrderFields(row.id, {
     rfqId: rowRfqId,
@@ -1525,8 +1510,7 @@ const handleSelectionExcelChange = async (uploadFile) => {
       clearSelectedRows()
       ;(response?.data || []).forEach(row => {
         selectedItemIdMap[rowKey(row)] = row
-        const remainingQty = remainingQtyFor(row)
-        acceptedQtyMap[rowKey(row)] = remainingQty > 0 ? remainingQty : 0
+        acceptedQtyMap[rowKey(row)] = defaultAcceptedQtyFor(row)
       })
       await syncReleaseItemTableSelection()
 
@@ -1814,11 +1798,6 @@ const submitTicket = async () => {
     return ElMessage.warning(`仍有 ${unquoted.length} 个零件未报价，暂不生成提单。`)
   }
 
-  const overRemaining = orderedSelectedRows.filter(row => Number(acceptedQtyMap[rowKey(row)] || 0) > remainingQtyFor(row))
-  if (overRemaining.length > 0) {
-    return ElMessage.warning(`有 ${overRemaining.length} 个零件的通过数量超过剩余可提数量。`)
-  }
-
   if (batchRfqIds.length === 0) {
     return ElMessage.warning('已选零件缺少订单信息，无法生成正式提单。')
   }
@@ -1846,7 +1825,7 @@ const submitTicket = async () => {
           sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value),
           sourceItemId: Number(row?.sourceItemId ?? row?.id),
           itemId: row.id,
-          acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)
+          acceptedQty: acceptedQtyMap[rowKey(row)] || defaultAcceptedQtyFor(row)
         }))
       }
       const releaseBatchKey = nextReleaseBatchKey(payload)
@@ -2098,26 +2077,6 @@ const sourceTypeLabel = () => {
 
 .release-table-actions :deep(.el-button) {
   margin-left: 0;
-}
-
-.release-selection-table :deep(.release-item-row--released > td.el-table__cell) {
-  background: #fff7ed !important;
-}
-
-.release-selection-table :deep(.release-item-row--released:hover > td.el-table__cell) {
-  background: #ffedd5 !important;
-}
-
-.release-selection-table :deep(.release-item-row--released > td[class*="el-table-fixed-column--"]) {
-  background: #fff7ed !important;
-}
-
-.release-selection-table :deep(.release-item-row--released:hover > td[class*="el-table-fixed-column--"]) {
-  background: #ffedd5 !important;
-}
-
-.release-selection-table :deep(.release-item-row--released > td.el-table__cell:first-child) {
-  box-shadow: inset 3px 0 0 #f59e0b;
 }
 
 .source-order-cell {

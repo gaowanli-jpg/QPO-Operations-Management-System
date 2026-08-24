@@ -856,7 +856,9 @@ public class InternalTargetLeadTimeService {
         row.put("remark", value(raw, "remark"));
         row.put("quoteMode", value(raw, "quote_mode"));
         row.put("assemblyFee", value(raw, "assembly_fee"));
-        boolean canSelect = taxIncludedUnitPrice != null
+        boolean canSelect = ReleaseSourceType.RFQ.name().equals(sourceType)
+                ? taxIncludedUnitPrice != null
+                : taxIncludedUnitPrice != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
                 && !QuoteStatusWorkflow.RELEASED.equals(status)
@@ -1491,11 +1493,7 @@ public class InternalTargetLeadTimeService {
         row.put("remark", item.getRemark());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
-        boolean canSelect = item.getTaxIncludedUnitPrice() != null
-                && remainingQty > 0
-                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+        boolean canSelect = item.getTaxIncludedUnitPrice() != null;
         row.put("canSelect", canSelect);
         row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReason(item, remainingQty));
         return row;
@@ -1561,14 +1559,6 @@ public class InternalTargetLeadTimeService {
     private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
         if (item.getTaxIncludedUnitPrice() == null) {
             return "Item is not quoted";
-        }
-        if (remainingQty <= 0) {
-            return "Item is fully released";
-        }
-        if (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus())) {
-            return "Item is released";
         }
         return "";
     }
@@ -1858,7 +1848,7 @@ public class InternalTargetLeadTimeService {
     private void assertReleaseItemMutable(ItemQuoteVersion item, List<OrderDeliveryTicket> tickets) {
         int itemTicketedQty = ticketedQty(item, tickets == null ? List.of() : tickets);
         if (!isReleaseItemMutable(item, itemTicketedQty)) {
-            int remainingQty = Math.max(0, safeInt(item.getQty()) - itemTicketedQty);
+            int remainingQty = item == null ? 0 : Math.max(0, safeInt(item.getQty()) - itemTicketedQty);
             throw new RuntimeException(releaseMutationBlockedReason(item, remainingQty));
         }
     }
@@ -1867,22 +1857,10 @@ public class InternalTargetLeadTimeService {
         if (item == null) {
             return false;
         }
-        int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty);
-        return remainingQty > 0
-                && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+        return true;
     }
 
     private String releaseMutationBlockedReason(ItemQuoteVersion item, int remainingQty) {
-        if (remainingQty <= 0) {
-            return "Item is fully released";
-        }
-        if (item != null && (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus()))) {
-            return "Item is released";
-        }
         return "Item cannot be updated";
     }
 

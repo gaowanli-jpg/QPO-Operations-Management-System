@@ -224,11 +224,6 @@ public class RfqReleaseSalesOrderService {
             if (acceptedQty <= 0) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
             }
-            int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty(item));
-            if (acceptedQty > remainingQty) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + acceptedQty
-                        + " 超过剩余可提数量 " + remainingQty);
-            }
             result.add(new ReleaseLine(item, acceptedQty, effectiveFields(item, context)));
         }
         result.sort(Comparator

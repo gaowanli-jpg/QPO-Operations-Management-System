@@ -54,7 +54,7 @@ public final class QuoteStatusWorkflow {
     }
 
     public static boolean canGenerateDeliveryTicket(String status) {
-        return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status);
+        return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status) || RELEASED.equals(status);
     }
 
     public static boolean canReadReleaseWorkspace(String status) {

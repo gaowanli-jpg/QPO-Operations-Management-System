@@ -391,31 +391,31 @@ class ReleaseVersionDrawingStage1Test {
                 .containsEntry("success", true)
                 .containsEntry("uploadCount", 1)
                 .containsEntry("matchedCount", 3)
-                .containsEntry("replacedCount", 2)
+                .containsEntry("replacedCount", 3)
                 .containsEntry("unmatchedCount", 0)
-                .containsEntry("skippedCount", 1);
+                .containsEntry("skippedCount", 0);
         assertThat(rfqVersionA.getDrawingUrl()).isEqualTo("/uploads/ACME/RFQ-VERSION-001/P-300_A-new.pdf");
         assertThat(salesVersionA.getDrawingUrl()).isEqualTo("/uploads/ACME/SO-VERSION-001/P-300_A-new.pdf");
         assertThat(salesVersionA.getHasDrawing()).isTrue();
         assertThat(rfqVersionB.getDrawingUrl()).isEqualTo("/uploads/old-rfq-b.pdf");
         assertThat(salesVersionB.getDrawingUrl()).isEqualTo("/uploads/old-sales-b.pdf");
-        assertThat(releasedRfqVersionA.getDrawingUrl()).isEqualTo("/uploads/old-rfq-a-released.pdf");
-        assertThat(replacedItems).extracting(row -> row.get("sourceItemId")).containsExactlyInAnyOrder(401L, 5001L);
-        assertThat(skippedItems).extracting(row -> row.get("sourceItemId")).containsExactly(403L);
-        assertThat(skippedItems).extracting(row -> row.get("reason")).containsExactly("Item is released");
+        assertThat(releasedRfqVersionA.getDrawingUrl()).isEqualTo("/uploads/ACME/RFQ-VERSION-001/P-300_A-new.pdf");
+        assertThat(replacedItems).extracting(row -> row.get("sourceItemId")).containsExactlyInAnyOrder(401L, 403L, 5001L);
+        assertThat(skippedItems).isEmpty();
         verify(itemMapper).updateById(rfqVersionA);
+        verify(itemMapper).updateById(releasedRfqVersionA);
         verify(salesOrderItemMapper).updateById(salesVersionA);
         ArgumentCaptor<Object> afterDataCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("RELEASE_DRAWING_REPLACE"), eq("release_drawing_replace"), any(),
-                isNull(), afterDataCaptor.capture(), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=2"), isNull());
+                isNull(), afterDataCaptor.capture(), eq("MARKET"), eq("SUCCESS"), contains("replacedCount=3"), isNull());
         Map<String, Object> afterData = (Map<String, Object>) afterDataCaptor.getValue();
         assertThat(afterData)
                 .containsEntry("uploadCount", 1)
                 .containsEntry("versionUploadedDrawingCount", 1)
                 .containsEntry("matchedCount", 3)
-                .containsEntry("replacedCount", 2)
+                .containsEntry("replacedCount", 3)
                 .containsEntry("unmatchedCount", 0)
-                .containsEntry("skippedCount", 1);
+                .containsEntry("skippedCount", 0);
         assertThat((Map<String, Object>) afterData.get("drawingMatchModes"))
                 .containsEntry("partNo", 0)
                 .containsEntry("partNoVersion", 1);

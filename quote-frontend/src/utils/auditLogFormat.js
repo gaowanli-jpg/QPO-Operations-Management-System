@@ -34,7 +34,6 @@ export const FIELD_LABELS = {
   reason: '原因',
   failedLoginAttempts: '登录失败次数',
   lockedUntil: '锁定至',
-  forcePasswordChange: '强制改密',
   beforeData: '操作前数据',
   afterData: '操作后数据',
   processRoute: '工艺路线',

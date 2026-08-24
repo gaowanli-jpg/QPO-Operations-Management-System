@@ -22,16 +22,17 @@ describe('personal profile entry target contract', () => {
     expect(profilePlan).toContain('USER_PROFILE_UPDATE')
   })
 
-  test('keeps password-change blocking owned by App shell for now', () => {
-    expect(appVue).toContain('watch(mustChangePassword')
-    expect(appVue).toContain('openPasswordDialog(true)')
+  test('keeps manual password change without forced password blocking', () => {
+    expect(appVue).not.toContain('watch(mustChangePassword')
+    expect(appVue).not.toContain('openPasswordDialog(true)')
+    expect(appVue).not.toContain('forcePasswordMode')
     expect(appVue).toContain('changePassword')
   })
 
   test('App shell delegates the compact account entry to UserProfilePopover', () => {
     expect(appVue).toContain("import UserProfilePopover from './components/UserProfilePopover.vue'")
     expect(appVue).toContain('<UserProfilePopover')
-    expect(appVue).toContain('@change-password="openPasswordDialog(false)"')
+    expect(appVue).toContain('@change-password="openPasswordDialog"')
     expect(appVue).toContain('@logout="logout"')
     expect(appVue).not.toContain('<div class="user-card">')
     expect(appVue).not.toContain('<div class="header-actions">')

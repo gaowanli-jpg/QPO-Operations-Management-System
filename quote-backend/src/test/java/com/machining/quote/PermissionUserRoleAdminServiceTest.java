@@ -114,7 +114,6 @@ class PermissionUserRoleAdminServiceTest {
         legacyUser.setDisplayName("市场A");
         legacyUser.setRole("MARKET");
         legacyUser.setEnabled(true);
-        legacyUser.setForcePasswordChange(false);
         legacyUser.setFailedLoginAttempts(0);
         when(erpUserMapper.selectByIdForUpdate(7)).thenReturn(legacyUser);
 

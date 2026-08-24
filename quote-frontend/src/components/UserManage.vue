@@ -50,7 +50,6 @@
           <el-table-column label="安全状态" width="160">
             <template #default="{ row }">
               <el-tag v-if="isLocked(row)" type="danger" size="small">已锁定</el-tag>
-              <el-tag v-else-if="row.forcePasswordChange" type="warning" size="small">需改密</el-tag>
               <el-tag v-else type="success" size="small">正常</el-tag>
             </template>
           </el-table-column>
@@ -374,7 +373,7 @@ const resetPassword = async () => {
     await changeUserPassword(passwordTarget.value.id, {
       password: newPassword.value
     })
-    ElMessage.success('密码已重置，用户下次登录必须修改密码')
+    ElMessage.success('密码已重置')
     passwordVisible.value = false
     await loadUsers()
   })

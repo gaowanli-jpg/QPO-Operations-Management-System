@@ -167,7 +167,6 @@ class PermissionBootstrapServiceTest {
         user.setPasswordHash(passwordHash);
         user.setRole(role);
         user.setEnabled(true);
-        user.setForcePasswordChange(false);
         user.setFailedLoginAttempts(0);
         return user;
     }

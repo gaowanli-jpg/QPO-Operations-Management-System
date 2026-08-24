@@ -91,15 +91,21 @@ describe('QPO workflow page polish', () => {
     ])
   })
 
-  test('excludes fully released orders from release picker while keeping item selection guarded', () => {
+  test('keeps released orders and released items actionable in market release', () => {
     const source = readComponent('MarketRelease.vue')
 
     expectIncludes(source, 'MarketRelease.vue', [
       ':allowed-statuses="RELEASE_ALLOWED_STATUSES"',
-      "row.status !== '已生成提单'",
-      "remainingQtyFor(row) > 0"
+      "const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单', '已生成提单']",
+      'const canSelectItem = (row) =>',
+      'return row?.canSelect !== false'
     ])
-    expect(source).toContain("const RELEASE_ALLOWED_STATUSES = ['已报价', '部分已提单']")
+    expectExcludes(source, 'MarketRelease.vue', [
+      "row.status !== '已生成提单'",
+      "row.status !== '已提单'",
+      'remainingQtyFor(row) > 0',
+      '.filter(row => !isFullyReleasedReleaseItem(row))'
+    ])
   })
 
   test('lays out manual internal target date as one compact control row', () => {
@@ -222,15 +228,15 @@ describe('QPO workflow page polish', () => {
     ])
   })
 
-  test('freezes batched release quantity columns for partial delivery', () => {
+  test('keeps release quantity columns while removing accepted quantity maximum cap', () => {
     const source = readComponent('MarketRelease.vue')
 
     expectIncludes(source, 'MarketRelease.vue', [
       '已提单数量',
       '剩余可提数量',
-      ':max="remainingQtyFor(scope.row)"',
       'const remainingQtyFor = (row) =>'
     ])
+    expect(source).not.toContain(':max="remainingQtyFor(scope.row)"')
   })
 
   test('submits market release tickets in table item order instead of click order', () => {

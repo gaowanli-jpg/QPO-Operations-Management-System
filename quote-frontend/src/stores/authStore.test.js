@@ -117,10 +117,10 @@ describe('authStore', () => {
     expect(authStore.hasRole(['ENGINEER'])).toBe(true)
   })
 
-  test('changePassword clears forced password flag', async () => {
+  test('changePassword keeps auth usable without forced password state', async () => {
     changePassword.mockResolvedValue({ success: true })
     const authStore = useAuthStore()
-    authStore.setAuth('token-4', { username: 'admin', role: 'ADMIN', forcePasswordChange: true })
+    authStore.setAuth('token-4', { username: 'admin', role: 'ADMIN' })
 
     await authStore.changePassword({
       oldPassword: 'old-secret',
@@ -128,8 +128,8 @@ describe('authStore', () => {
       confirmPassword: 'new-secret'
     })
 
-    expect(authStore.mustChangePassword).toBe(false)
-    expect(authStore.user.forcePasswordChange).toBe(false)
+    expect('mustChangePassword' in authStore).toBe(false)
+    expect(authStore.user).toEqual({ username: 'admin', role: 'ADMIN' })
   })
 
   test('updateMyProfile updates cached user contact fields without touching permissions', async () => {

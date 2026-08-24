@@ -115,7 +115,7 @@ class RfqReleaseOrderFieldsStage2Test {
     }
 
     @Test
-    void partialReleaseRemainsEditableButFullReleaseIsRejected() {
+    void partialAndFullReleaseRemainEditableWithoutChangingTicketSnapshot() {
         TestContext partial = context();
         ItemQuoteVersion partialItem = item(201, 101, 10);
         when(partial.orderMapper.selectByIdForUpdate(101)).thenReturn(order(101));
@@ -130,14 +130,15 @@ class RfqReleaseOrderFieldsStage2Test {
         ItemQuoteVersion fullItem = item(202, 101, 10);
         when(full.orderMapper.selectByIdForUpdate(101)).thenReturn(order(101));
         when(full.itemMapper.selectByIdForUpdate(202)).thenReturn(fullItem);
+        when(full.itemMapper.selectById(202)).thenReturn(fullItem);
         OrderDeliveryTicket fullTicket = ticket(9002, 10);
         fullTicket.setItemId(202);
         when(full.ticketMapper.selectList(any())).thenReturn(List.of(fullTicket));
 
-        assertThatThrownBy(() -> full.service.updateReleaseItemOrderFields(202, validRequest()))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("fully released");
-        verify(full.itemMapper, never()).updateById(any());
+        full.service.updateReleaseItemOrderFields(202, validRequest());
+        verify(full.itemMapper).updateById(fullItem);
+        verify(full.ticketMapper, never()).updateById(any());
+        assertThat(fullTicket.getQty()).isEqualTo(10);
     }
 
     @Test

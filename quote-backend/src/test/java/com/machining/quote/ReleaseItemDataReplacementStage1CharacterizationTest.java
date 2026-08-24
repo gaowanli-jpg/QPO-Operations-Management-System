@@ -114,28 +114,35 @@ class ReleaseItemDataReplacementStage1CharacterizationTest {
     }
 
     @Test
-    void editablePartFieldsRejectFullyReleasedItemWithoutChangingMasterOrTicket() {
+    void editablePartFieldsRemainMutableAfterFullReleaseWithoutChangingTicketSnapshot() {
         TestContext context = context();
         OrderRfq order = order(101, QuoteStatusWorkflow.PARTIALLY_RELEASED);
         ItemQuoteVersion item = item(201, 101, 10);
         item.setDescription("old description");
+        item.setSurfaceTreatment("old surface");
+        item.setRemark("old remark");
         OrderDeliveryTicket historicalTicket = ticket(9001, 201, 10);
         historicalTicket.setDescription("released description");
+        historicalTicket.setSurfaceTreatment("released surface");
+        historicalTicket.setRemark("released remark");
 
         when(context.orderMapper.selectByIdForUpdate(101)).thenReturn(order);
         when(context.itemMapper.selectByIdForUpdate(201)).thenReturn(item);
+        when(context.itemMapper.selectById(201)).thenReturn(item);
         when(context.ticketMapper.selectList(any())).thenReturn(List.of(historicalTicket));
 
-        assertThatThrownBy(() -> context.service.updateReleaseItemFields(201L, fieldRequest()))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("fully released");
+        context.service.updateReleaseItemFields(201L, fieldRequest());
 
-        assertThat(item.getDescription()).isEqualTo("old description");
+        assertThat(item.getDescription()).isEqualTo("new description");
+        assertThat(item.getSurfaceTreatment()).isEqualTo("new surface");
+        assertThat(item.getRemark()).isEqualTo("new remark");
         assertThat(historicalTicket.getDescription()).isEqualTo("released description");
-        verify(context.itemMapper, never()).updateById(any());
+        assertThat(historicalTicket.getSurfaceTreatment()).isEqualTo("released surface");
+        assertThat(historicalTicket.getRemark()).isEqualTo("released remark");
+        verify(context.itemMapper).updateById(item);
         verify(context.ticketMapper, never()).updateById(any());
-        verify(context.auditService, never()).record(
-                eq("RELEASE_ITEM_FIELD_UPDATE"), any(), any(), any(), any());
+        verify(context.auditService).record(
+                eq("RELEASE_ITEM_FIELD_UPDATE"), any(), eq(201), any(), any());
     }
 
     @Test

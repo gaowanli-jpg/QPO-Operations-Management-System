@@ -9,12 +9,10 @@ export const apiClient = axios.create({
 
 let getAuthToken = () => ''
 let onUnauthorized = () => {}
-let onPasswordChangeRequired = () => {}
 
 export const configureApiAuth = (handlers = {}) => {
   getAuthToken = handlers.getToken || getAuthToken
   onUnauthorized = handlers.onUnauthorized || onUnauthorized
-  onPasswordChangeRequired = handlers.onPasswordChangeRequired || onPasswordChangeRequired
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -185,8 +183,5 @@ const normalizeRequestError = async (error) => {
 const handleApiStatus = (status) => {
   if (status === 401) {
     onUnauthorized()
-  }
-  if (status === 428) {
-    onPasswordChangeRequired()
   }
 }

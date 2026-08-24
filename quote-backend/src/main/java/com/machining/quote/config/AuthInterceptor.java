@@ -17,18 +17,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Set;
 
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final Set<String> PASSWORD_CHANGE_ALLOWED_PATHS = Set.of(
-            "/api/admin/users/me/password",
-            "/api/auth/change-password",
-            "/api/auth/logout",
-            "/api/auth/me",
-            "/api/auth/permission-info"
-    );
 
     @Value("${erp.auth.enabled:true}")
     private boolean authEnabled;
@@ -59,11 +51,6 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
         AuthContext.set(user);
-
-        if (authService.mustChangePassword(user.id()) && !isPasswordChangeAllowedPath(request.getRequestURI())) {
-            writeError(response, 428, "请先修改初始密码");
-            return false;
-        }
 
         RequirePermission requirePermission = resolveRequirePermission(handler);
         if (requirePermission != null && !hasPermission(user, requirePermission.value())) {
@@ -106,10 +93,6 @@ public class AuthInterceptor implements HandlerInterceptor {
         byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
         byte[] actualBytes = actual.trim().getBytes(StandardCharsets.UTF_8);
         return MessageDigest.isEqual(expectedBytes, actualBytes);
-    }
-
-    private boolean isPasswordChangeAllowedPath(String uri) {
-        return PASSWORD_CHANGE_ALLOWED_PATHS.contains(uri);
     }
 
     private String resolveToken(HttpServletRequest request) {

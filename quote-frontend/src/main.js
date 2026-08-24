@@ -28,8 +28,7 @@ configureApiAuth({
     if (router.currentRoute.value.path !== '/login') {
       router.replace({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
     }
-  },
-  onPasswordChangeRequired: () => authStore.updateUser({ forcePasswordChange: true })
+  }
 })
 
 

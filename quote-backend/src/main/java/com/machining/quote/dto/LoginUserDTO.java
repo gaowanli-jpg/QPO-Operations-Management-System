@@ -8,5 +8,4 @@ public class LoginUserDTO {
     private String username;
     private String displayName;
     private String role;
-    private Boolean forcePasswordChange;
 }

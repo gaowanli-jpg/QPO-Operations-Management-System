@@ -157,7 +157,7 @@ public class OrderManagementService {
         applyOrderDataScope(qw);
         applyOrderFilters(qw, customerCode, customerName, keyword, null);
         if (normalizedStatus == null) {
-            qw.in("status", QuoteStatusWorkflow.QUOTED, QuoteStatusWorkflow.PARTIALLY_RELEASED);
+            qw.in("status", QuoteStatusWorkflow.QUOTED, QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
         } else {
             qw.eq("status", normalizedStatus);
         }

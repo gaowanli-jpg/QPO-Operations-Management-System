@@ -228,6 +228,47 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(countHeaders(req.getReleaseBatchKey())).isEqualTo(1);
     }
 
+    @Test
+    void acceptedQtyMayExceedOriginalInquiryQtyAndPropagatesToTicketAndSalesOrderItem() {
+        String suffix = String.valueOf(System.nanoTime());
+        CustomerMaster customer = customer("超量提单客户-" + suffix, "OVER-QTY-" + suffix);
+        OrderRfq order = order(customer, "OVER-QTY-RFQ-" + suffix);
+        ItemQuoteVersion item = item(order, "OVER-QTY-PART-" + suffix, 1, 10);
+
+        DeliveryGenerateReq req = new DeliveryGenerateReq();
+        req.setRfqIds(List.of(order.getId()));
+        req.setDocumentTypeCode("SO06");
+        req.setSalesOrderDate(LocalDate.of(2026, 8, 24));
+        req.setCustomerOrderTitle("OVER-QTY-TITLE");
+        req.setOrderType("正式订单");
+        req.setInternalProjectNo("OVER-QTY-INTERNAL");
+        req.setCustomerOrderNo("OVER-QTY-CUSTOMER-ORDER");
+        req.setCustomerProjectNo("OVER-QTY-CUSTOMER-PROJECT");
+        req.setArrangeType("计划");
+        req.setReleaseBatchKey("over-original-inquiry-qty-" + suffix);
+        req.setItems(List.of(line(order.getId(), item.getId(), 3)));
+
+        DeliveryBatchResultDTO result = deliveryService.generateRfqReleaseBatch(req);
+
+        assertThat(result.isSuccess()).isTrue();
+        OrderDeliveryTicket ticket = ticketMapper.selectById(result.getTicketIds().get(0));
+        assertThat(ticket.getQty()).isEqualTo(3);
+        assertThat(ticket.getSourceItemId()).isEqualTo(item.getId().longValue());
+
+        SalesOrderItem salesItem = salesItemMapper.selectList(new QueryWrapper<SalesOrderItem>()
+                        .eq("sales_order_id", result.getSalesOrderId()))
+                .get(0);
+        assertThat(salesItem.getQty()).isEqualTo(3);
+        assertThat(salesItem.getReleasedQty()).isEqualTo(3);
+        assertThat(salesItem.getRemainingQty()).isZero();
+        assertThat(salesItem.getUnshippedQty()).isEqualTo(3);
+        assertThat(salesItem.getTaxIncludedTotalPrice()).isEqualByComparingTo("36.00");
+        assertThat(salesItem.getUntaxedTotalPrice()).isEqualByComparingTo("30.00");
+
+        assertThat(itemMapper.selectById(item.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.ITEM_RELEASED);
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
+    }
+
     @SuppressWarnings("unchecked")
     private void assertStandardProcessRoute(Object processRoute) {
         assertThat(processRoute).isInstanceOf(List.class);

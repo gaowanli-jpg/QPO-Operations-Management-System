@@ -300,14 +300,14 @@ describe('release item data replacement stage 6 state convergence', () => {
     expect(dialogSource).toContain(':page-sizes="CLIENT_PAGE_SIZES"')
   })
 
-  test('formal ticket generation keeps the existing final accepted quantity validation', () => {
+  test('formal ticket generation no longer caps accepted quantity by inquiry remaining quantity', () => {
     const submitBlock = blockBetween(
       marketReleaseSource,
       'const submitTicket = async () =>',
       'const resolveDeliveryLeadTime = (row) =>'
     )
-    expect(submitBlock).toContain('overRemaining')
+    expect(submitBlock).not.toContain('overRemaining')
     expect(submitBlock).toContain('acceptedQtyMap[rowKey(row)]')
-    expect(submitBlock).toContain('remainingQtyFor(row)')
+    expect(submitBlock).toContain('defaultAcceptedQtyFor(row)')
   })
 })

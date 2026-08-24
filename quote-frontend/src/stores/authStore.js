@@ -36,7 +36,6 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,
-    mustChangePassword: (state) => !!state.user?.forcePasswordChange,
     displayName: (state) => state.user?.displayName || state.user?.username || '未登录',
     isSuperAdmin: (state) => state.user?.role === 'ADMIN' || state.roles.includes('SUPER_ADMIN'),
     roleName: (state) => ({
@@ -183,7 +182,6 @@ export const useAuthStore = defineStore('auth', {
 
     async changePassword(payload) {
       const response = await changePasswordRequest(payload)
-      this.updateUser({ forcePasswordChange: false })
       return response
     },
 

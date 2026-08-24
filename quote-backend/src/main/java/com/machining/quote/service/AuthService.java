@@ -104,7 +104,6 @@ public class AuthService {
         userPayload.put("username", sessionUser.username());
         userPayload.put("displayName", sessionUser.displayName() == null ? sessionUser.username() : sessionUser.displayName());
         userPayload.put("role", sessionUser.role());
-        userPayload.put("forcePasswordChange", Boolean.TRUE.equals(user.getForcePasswordChange()));
 
         result.put("success", true);
         result.put("message", "登录成功");
@@ -144,14 +143,6 @@ public class AuthService {
                 user.getDisplayName(),
                 user.getRole()
         );
-    }
-
-    public boolean mustChangePassword(Integer userId) {
-        if (userId == null) {
-            return false;
-        }
-        ErpUser user = userMapper.selectById(userId);
-        return user != null && Boolean.TRUE.equals(user.getForcePasswordChange());
     }
 
     public void logout(String token) {
@@ -275,7 +266,6 @@ public class AuthService {
         payload.put("username", user.getUsername());
         payload.put("displayName", user.getDisplayName());
         payload.put("role", user.getRole());
-        payload.put("forcePasswordChange", user.getForcePasswordChange());
         return payload;
     }
 

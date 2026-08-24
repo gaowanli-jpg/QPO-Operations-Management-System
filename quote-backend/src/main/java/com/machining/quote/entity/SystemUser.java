@@ -24,7 +24,6 @@ public class SystemUser {
     private Long postId;
     private String legacyRole;
     private Boolean enabled;
-    private Boolean forcePasswordChange;
     private Integer failedLoginAttempts;
     private LocalDateTime lockedUntil;
     private LocalDateTime lastLoginAt;

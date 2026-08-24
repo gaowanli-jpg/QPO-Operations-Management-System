@@ -36,7 +36,7 @@ class PermissionAuthServiceTest {
         ErpUserMapper userMapper = mock(ErpUserMapper.class);
         JwtService jwtService = mock(JwtService.class);
         AuthService authService = authService(userMapper, jwtService, auditService);
-        ErpUser user = user("market", authService.hashPassword("correct-password"), "MARKET", true, true);
+        ErpUser user = user("market", authService.hashPassword("correct-password"), "MARKET", true);
         when(userMapper.selectByUsernameForUpdate("market")).thenReturn(user);
         when(jwtService.createToken(any(AuthContext.SessionUser.class))).thenReturn("token-market");
 
@@ -48,7 +48,7 @@ class PermissionAuthServiceTest {
                         .containsEntry("username", "market")
                         .containsEntry("displayName", "Market User")
                         .containsEntry("role", "MARKET")
-                        .containsEntry("forcePasswordChange", true));
+                        .doesNotContainKey("forcePasswordChange"));
         assertThat(user.getFailedLoginAttempts()).isZero();
         assertThat(user.getLockedUntil()).isNull();
         assertThat(user.getLastLoginAt()).isNotNull();
@@ -72,7 +72,7 @@ class PermissionAuthServiceTest {
         ErpUserMapper userMapper = mock(ErpUserMapper.class);
         JwtService jwtService = mock(JwtService.class);
         AuthService authService = authService(userMapper, jwtService, auditService);
-        ErpUser disabled = user("engineer", authService.hashPassword("correct-password"), "ENGINEER", false, false);
+        ErpUser disabled = user("engineer", authService.hashPassword("correct-password"), "ENGINEER", false);
         when(userMapper.selectByUsernameForUpdate("engineer")).thenReturn(disabled);
 
         assertThatThrownBy(() -> authService.login("engineer", "correct-password"))
@@ -97,7 +97,7 @@ class PermissionAuthServiceTest {
         ErpUserMapper userMapper = mock(ErpUserMapper.class);
         JwtService jwtService = mock(JwtService.class);
         AuthService authService = authService(userMapper, jwtService, auditService);
-        ErpUser user = user("legacy", sha256("legacy-password"), "ADMIN", true, false);
+        ErpUser user = user("legacy", sha256("legacy-password"), "ADMIN", true);
         when(userMapper.selectByUsernameForUpdate("legacy")).thenReturn(user);
         when(jwtService.createToken(any(AuthContext.SessionUser.class))).thenReturn("token-legacy");
 
@@ -116,7 +116,7 @@ class PermissionAuthServiceTest {
         return authService;
     }
 
-    private ErpUser user(String username, String passwordHash, String role, boolean enabled, boolean forcePasswordChange) {
+    private ErpUser user(String username, String passwordHash, String role, boolean enabled) {
         ErpUser user = new ErpUser();
         user.setId(7);
         user.setUsername(username);
@@ -124,7 +124,6 @@ class PermissionAuthServiceTest {
         user.setPasswordHash(passwordHash);
         user.setRole(role);
         user.setEnabled(enabled);
-        user.setForcePasswordChange(forcePasswordChange);
         user.setFailedLoginAttempts(3);
         return user;
     }

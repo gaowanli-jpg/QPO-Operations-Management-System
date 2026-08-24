@@ -85,7 +85,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
                         ReleaseItemDataReplacementRowStatus.CHANGED,
                         ReleaseItemDataReplacementRowStatus.QUANTITY_ONLY,
                         ReleaseItemDataReplacementRowStatus.UNCHANGED,
-                        ReleaseItemDataReplacementRowStatus.SKIPPED,
+                        ReleaseItemDataReplacementRowStatus.CHANGED,
                         ReleaseItemDataReplacementRowStatus.UNMATCHED);
 
         ReleaseItemDataReplacementRowDTO changedRow = result.getRows().get(0);
@@ -99,15 +99,19 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
             assertThat(change.getAfterValue()).isEqualTo("new description");
         });
         assertThat(result.getRows().get(1).getAcceptedQty()).isEqualTo(2);
-        assertThat(result.getRows().get(3).getReason()).isEqualTo("已全部提单，不能修改");
+        assertThat(result.getRows().get(3).getChanges()).singleElement().satisfies(change -> {
+            assertThat(change.getField()).isEqualTo("description");
+            assertThat(change.getAfterValue()).isEqualTo("ignored after release");
+        });
+        assertThat(result.getRows().get(3).getReason()).isEmpty();
         assertThat(result.getRows().get(4).getReason()).isEqualTo("当前所选询价单范围内未找到对应零件");
 
         assertThat(result.getSummary().getImportedCount()).isEqualTo(5);
         assertThat(result.getSummary().getMatchedCount()).isEqualTo(4);
-        assertThat(result.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(2);
         assertThat(result.getSummary().getQuantityOnlyCount()).isEqualTo(1);
         assertThat(result.getSummary().getUnchangedCount()).isEqualTo(1);
-        assertThat(result.getSummary().getSkippedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getSkippedCount()).isZero();
         assertThat(result.getSummary().getUnmatchedCount()).isEqualTo(1);
         assertThat(result.getSummary().getErrorCount()).isZero();
 
@@ -119,7 +123,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     }
 
     @Test
-    void parserAndQuantityErrorsRemainVisibleAndBlockConfirmation() {
+    void parserErrorsRemainVisibleButAcceptedQtyCanExceedInquiryRemainingQty() {
         ReleaseItemDataReplacementExcelRowDTO invalidDate = excelRow(
                 2, "P-001", "A", values());
         ReleaseItemDataReplacementExcelErrorDTO dateError = new ReleaseItemDataReplacementExcelErrorDTO();
@@ -148,12 +152,13 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
 
         assertThat(result.isCanConfirm()).isFalse();
         assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getStatus)
-                .containsExactly(ReleaseItemDataReplacementRowStatus.ERROR, ReleaseItemDataReplacementRowStatus.ERROR);
+                .containsExactly(ReleaseItemDataReplacementRowStatus.ERROR, ReleaseItemDataReplacementRowStatus.QUANTITY_ONLY);
         assertThat(result.getRows().get(0).getReason()).contains("第2行第3列").contains("下单日期");
         assertThat(result.getRows().get(1).getAcceptedQty()).isEqualTo(8);
-        assertThat(result.getRows().get(1).getReason()).contains("剩余可提数量 4");
+        assertThat(result.getRows().get(1).getReason()).isEmpty();
         assertThat(result.getSummary().getMatchedCount()).isEqualTo(1);
-        assertThat(result.getSummary().getErrorCount()).isEqualTo(2);
+        assertThat(result.getSummary().getQuantityOnlyCount()).isEqualTo(1);
+        assertThat(result.getSummary().getErrorCount()).isEqualTo(1);
     }
 
     @Test
@@ -182,7 +187,7 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
     }
 
     @Test
-    void allUnchangedUnmatchedOrSkippedRowsCannotBeConfirmed() {
+    void unchangedAndUnmatchedRowsCannotBeConfirmedButReleasedRowsRemainMutable() {
         ReleaseItemDataReplacementExcelParseResult parsed = parseResult(
                 List.of("remark"),
                 excelRow(2, "P-001", "A", values("remark", "same")),
@@ -190,23 +195,26 @@ class ReleaseItemDataReplacementStage3PreviewServiceTest {
                 excelRow(4, "P-999", "A", values("remark", "none")));
         ItemQuoteVersion unchanged = item(201, 101, "P-001", "A", 3, QuoteStatusWorkflow.QUOTED);
         unchanged.setRemark("same");
-        ItemQuoteVersion skipped = item(202, 101, "P-002", "A", 2, QuoteStatusWorkflow.QUOTED);
+        ItemQuoteVersion released = item(202, 101, "P-002", "A", 2, QuoteStatusWorkflow.ITEM_RELEASED);
         TestContext context = context(
                 parsed,
                 List.of(order(101, "RFQ-101", "ACME", QuoteStatusWorkflow.RELEASED)),
-                List.of(unchanged, skipped),
+                List.of(unchanged, released),
                 List.of(ticket(9001, 101, 202, 2)));
 
         ReleaseItemDataReplacementPreviewDTO result = context.service.preview(
                 List.of(ReleaseOrderSource.rfq(101)),
                 new ByteArrayInputStream(new byte[]{1}));
 
-        assertThat(result.isCanConfirm()).isFalse();
+        assertThat(result.isCanConfirm()).isTrue();
         assertThat(result.getRows()).extracting(ReleaseItemDataReplacementRowDTO::getStatus)
                 .containsExactly(
                         ReleaseItemDataReplacementRowStatus.UNCHANGED,
-                        ReleaseItemDataReplacementRowStatus.SKIPPED,
+                        ReleaseItemDataReplacementRowStatus.CHANGED,
                         ReleaseItemDataReplacementRowStatus.UNMATCHED);
+        assertThat(result.getRows().get(1).getReason()).isEmpty();
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getSkippedCount()).isZero();
     }
 
     @Test

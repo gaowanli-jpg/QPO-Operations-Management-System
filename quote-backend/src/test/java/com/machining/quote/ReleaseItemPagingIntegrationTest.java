@@ -12,9 +12,13 @@ import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderHeader;
+import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderHeaderMapper;
+import com.machining.quote.mapper.SalesOrderItemMapper;
 import com.machining.quote.service.DeliveryService;
 import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderItemPageService;
@@ -26,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,6 +40,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReleaseItemPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
+
+    @Autowired
+    private SalesOrderHeaderMapper salesOrderHeaderMapper;
+    @Autowired
+    private SalesOrderItemMapper salesOrderItemMapper;
 
     @Test
     void releaseItemPagingReturnsBackendRemainingQuantityForCurrentPage() {
@@ -67,7 +77,91 @@ class ReleaseItemPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
                 .containsEntry("id", second.getId())
                 .containsEntry("ticketedQty", 5)
                 .containsEntry("remainingQty", 0)
-                .containsEntry("canSelect", false);
+                .containsEntry("canSelect", true)
+                .containsEntry("releaseBlockedReason", "");
+    }
+
+    @Test
+    void releasedOrderAndReleasedItemRemainActionableForAdditionalRelease() {
+        OrderRfq order = createOrder("RELEASED-ACTIONABLE");
+        order.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.updateById(order);
+        ItemQuoteVersion item = createItem(order, "REL-ACTION-01", QuoteStatusWorkflow.ITEM_RELEASED, 18.0, "/released-action.pdf");
+        item.setQty(1);
+        itemMapper.updateById(item);
+        createTicket(order, item, 1);
+
+        ReleaseItemBatchQueryReq req = new ReleaseItemBatchQueryReq();
+        req.setSources(List.of(ReleaseOrderSource.rfq(order.getId())));
+        req.setPage(1);
+        req.setPageSize(10);
+        PageResult<Map<String, Object>> page = internalTargetLeadTimeService.pageItemRowsBatch(req);
+
+        assertThat(page.getRecords()).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("id", item.getId())
+                .containsEntry("orderStatus", QuoteStatusWorkflow.RELEASED)
+                .containsEntry("status", QuoteStatusWorkflow.ITEM_RELEASED)
+                .containsEntry("ticketedQty", 1)
+                .containsEntry("remainingQty", 0)
+                .containsEntry("canSelect", true)
+                .containsEntry("releaseBlockedReason", ""));
+    }
+
+    @Test
+    void mixedSourcePagingKeepsSalesOrderReleasedRowsBlockedWhileRfqReleasedRowsRemainActionable() {
+        OrderRfq rfqOrder = createOrder("MIXED-RFQ-RELEASED");
+        rfqOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        orderMapper.updateById(rfqOrder);
+        ItemQuoteVersion rfqItem = createItem(rfqOrder, "MIXED-RFQ-01", QuoteStatusWorkflow.ITEM_RELEASED, 18.0, "/mixed-rfq.pdf");
+        rfqItem.setQty(1);
+        itemMapper.updateById(rfqItem);
+        createTicket(rfqOrder, rfqItem, 1);
+
+        SalesOrderHeader salesOrder = new SalesOrderHeader();
+        salesOrder.setSalesOrderNo("SO-MIXED-" + System.nanoTime());
+        salesOrder.setDocumentNo("DOC-MIXED-" + System.nanoTime());
+        salesOrder.setDocumentTypeCode("SO06");
+        salesOrder.setCustomerName("MIXED-CUSTOMER");
+        salesOrder.setStatus(QuoteStatusWorkflow.RELEASED);
+        salesOrderHeaderMapper.insert(salesOrder);
+
+        SalesOrderItem salesItem = new SalesOrderItem();
+        salesItem.setSalesOrderId(salesOrder.getId());
+        salesItem.setPartNo("MIXED-SO-01");
+        salesItem.setVersion("A");
+        salesItem.setQty(1);
+        salesItem.setReleasedQty(1);
+        salesItem.setRemainingQty(0);
+        salesItem.setTaxIncludedUnitPrice(BigDecimal.TEN);
+        salesItem.setStatus(QuoteStatusWorkflow.RELEASED);
+        salesOrderItemMapper.insert(salesItem);
+
+        ReleaseItemBatchQueryReq req = new ReleaseItemBatchQueryReq();
+        req.setSources(List.of(ReleaseOrderSource.rfq(rfqOrder.getId()), ReleaseOrderSource.salesOrder(salesOrder.getId())));
+        req.setPage(1);
+        req.setPageSize(10);
+
+        PageResult<Map<String, Object>> page = internalTargetLeadTimeService.pageItemRowsBatch(req);
+
+        assertThat(page.getRecords()).hasSize(2);
+        Map<String, Object> rfqRow = page.getRecords().stream()
+                .filter(row -> "RFQ".equals(row.get("sourceType")))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> salesOrderRow = page.getRecords().stream()
+                .filter(row -> "SALES_ORDER".equals(row.get("sourceType")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(rfqRow)
+                .containsEntry("id", rfqItem.getId().longValue())
+                .containsEntry("remainingQty", 0)
+                .containsEntry("canSelect", true)
+                .containsEntry("releaseBlockedReason", "");
+        assertThat(salesOrderRow)
+                .containsEntry("id", salesItem.getId())
+                .containsEntry("remainingQty", 0)
+                .containsEntry("canSelect", false)
+                .containsEntry("releaseBlockedReason", "Item is fully released");
     }
 
     @Test

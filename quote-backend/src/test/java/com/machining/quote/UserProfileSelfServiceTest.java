@@ -53,15 +53,14 @@ class UserProfileSelfServiceTest {
     }
 
     @Test
-    void profileUpdateIsNotAllowedBeforeForcedPasswordChange() throws IOException {
+    void authInterceptorNoLongerHasForcedPasswordChangeGate() throws IOException {
         String source = Files.readString(AUTH_INTERCEPTOR, StandardCharsets.UTF_8);
-        String whitelist = extractPasswordChangeWhitelist(source);
 
-        assertThat(whitelist)
-                .contains("/api/auth/change-password")
-                .contains("/api/auth/me")
-                .contains("/api/auth/permission-info")
-                .doesNotContain("/api/auth/me/profile");
+        assertThat(source)
+                .doesNotContain("PASSWORD_CHANGE_ALLOWED_PATHS")
+                .doesNotContain("mustChangePassword")
+                .doesNotContain("428")
+                .doesNotContain("请先修改初始密码");
     }
 
     @Test
@@ -146,7 +145,6 @@ class UserProfileSelfServiceTest {
         legacyUser.setUsername("market01");
         legacyUser.setDisplayName("市场张三");
         legacyUser.setRole("MARKET");
-        legacyUser.setForcePasswordChange(false);
 
         SystemUser systemUser = new SystemUser();
         systemUser.setId(70L);
@@ -184,7 +182,7 @@ class UserProfileSelfServiceTest {
                 .containsEntry("email", "market01@example.com")
                 .containsEntry("deptName", "市场部")
                 .containsEntry("postName", "市场专员")
-                .containsEntry("forcePasswordChange", false);
+                .doesNotContainKey("forcePasswordChange");
         assertThat(profile.get("roleCodes")).isEqualTo(List.of("MARKET_USER"));
         assertThat(profile.get("roles")).isEqualTo(List.of("MARKET_USER"));
         assertThat(profile.get("roleNames")).isEqualTo(List.of("市场专员"));
@@ -203,7 +201,6 @@ class UserProfileSelfServiceTest {
         legacyUser.setUsername("admin");
         legacyUser.setDisplayName("管理员");
         legacyUser.setRole("ADMIN");
-        legacyUser.setForcePasswordChange(true);
 
         when(userMapper.selectById(1)).thenReturn(legacyUser);
         when(systemUserMapper.selectByLegacyUserId(1)).thenReturn(null);
@@ -216,7 +213,7 @@ class UserProfileSelfServiceTest {
                 .containsEntry("username", "admin")
                 .containsEntry("displayName", "管理员")
                 .containsEntry("role", "ADMIN")
-                .containsEntry("forcePasswordChange", true)
+                .doesNotContainKey("forcePasswordChange")
                 .containsEntry("phone", null)
                 .containsEntry("email", null)
                 .containsEntry("deptName", null)
@@ -344,7 +341,6 @@ class UserProfileSelfServiceTest {
         user.setDisplayName(username);
         user.setRole(role);
         user.setEnabled(true);
-        user.setForcePasswordChange(false);
         return user;
     }
 
@@ -361,14 +357,4 @@ class UserProfileSelfServiceTest {
         return user;
     }
 
-    private String extractPasswordChangeWhitelist(String source) {
-        Matcher matcher = Pattern.compile(
-                "PASSWORD_CHANGE_ALLOWED_PATHS\\s*=\\s*Set\\.of\\((.*?)\\);",
-                Pattern.DOTALL
-        ).matcher(source);
-        assertThat(matcher.find())
-                .as("AuthInterceptor should centralize paths allowed during forced password change")
-                .isTrue();
-        return matcher.group(1);
-    }
 }

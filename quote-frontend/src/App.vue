@@ -45,7 +45,7 @@
           <div class="header-right">
             <UserProfilePopover
               :logout-pending="logoutPending"
-              @change-password="openPasswordDialog(false)"
+              @change-password="openPasswordDialog"
               @logout="logout"
             />
           </div>
@@ -58,20 +58,9 @@
 
       <el-dialog
         v-model="passwordVisible"
-        :title="forcePasswordMode ? '首次使用请修改密码' : '修改密码'"
+        title="修改密码"
         width="440px"
-        :close-on-click-modal="!forcePasswordMode"
-        :close-on-press-escape="!forcePasswordMode"
-        :show-close="!forcePasswordMode"
       >
-        <el-alert
-          v-if="forcePasswordMode"
-          title="当前账号使用初始密码或管理员重置密码，必须修改后才能继续使用系统。"
-          type="warning"
-          show-icon
-          :closable="false"
-          class="password-alert"
-        />
         <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="96px">
           <el-form-item label="原密码" prop="oldPassword">
             <el-input v-model="passwordForm.oldPassword" type="password" show-password autocomplete="current-password" />
@@ -84,7 +73,7 @@
           </el-form-item>
         </el-form>
         <template #footer>
-          <el-button v-if="!forcePasswordMode" @click="passwordVisible = false">取消</el-button>
+          <el-button @click="passwordVisible = false">取消</el-button>
           <el-button type="primary" :loading="passwordSaving" :disabled="passwordSaving" @click="changePassword">保存</el-button>
         </template>
       </el-dialog>
@@ -93,7 +82,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataBoard, Document, Expand, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
@@ -111,7 +100,6 @@ const activeMenu = computed(() => {
 const isLoginPage = computed(() => route.path === '/login')
 const isSidebarCollapsed = ref(false)
 const sidebarWidth = computed(() => isSidebarCollapsed.value ? '72px' : '200px')
-const mustChangePassword = computed(() => authStore.mustChangePassword)
 
 
 const menuGroups = [
@@ -280,7 +268,6 @@ const shellMeta = computed(() => shellMetaByPath[route.path] || {
 })
 
 const passwordVisible = ref(false)
-const forcePasswordMode = ref(false)
 const passwordSaving = ref(false)
 const logoutPending = ref(false)
 const passwordFormRef = ref()
@@ -322,17 +309,10 @@ const resetPasswordForm = () => {
   passwordFormRef.value?.clearValidate()
 }
 
-const openPasswordDialog = (force = false) => {
-  forcePasswordMode.value = force
+const openPasswordDialog = () => {
   resetPasswordForm()
   passwordVisible.value = true
 }
-
-watch(mustChangePassword, (value) => {
-  if (value && !isLoginPage.value) {
-    openPasswordDialog(true)
-  }
-}, { immediate: true })
 
 const changePassword = async () => {
   if (passwordSaving.value) return
@@ -346,7 +326,6 @@ const changePassword = async () => {
     })
     ElMessage.success('密码已修改')
     passwordVisible.value = false
-    forcePasswordMode.value = false
     resetPasswordForm()
   } catch (error) {
     ElMessage.error(error.response?.data?.message || error.message || '密码修改失败')
@@ -614,10 +593,6 @@ html, body, #app {
   background: var(--erp-bg);
   padding: var(--erp-space-6);
   overflow-y: auto;
-}
-
-.password-alert {
-  margin-bottom: var(--erp-space-4);
 }
 
 @media (max-width: 960px) {

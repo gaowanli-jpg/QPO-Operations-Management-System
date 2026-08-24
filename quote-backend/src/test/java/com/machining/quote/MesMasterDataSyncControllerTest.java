@@ -238,7 +238,6 @@ class MesMasterDataSyncControllerTest {
         PermissionService permissionService = mock(PermissionService.class);
         AuthContext.SessionUser user = new AuthContext.SessionUser(7, "engineer", "Engineer", "ENGINEER");
         when(authService.findByToken("token")).thenReturn(user);
-        when(authService.mustChangePassword(7)).thenReturn(false);
         when(permissionService.getPermissionInfo(7, "ENGINEER")).thenReturn(permissionInfo);
 
         AuthInterceptor interceptor = new AuthInterceptor();

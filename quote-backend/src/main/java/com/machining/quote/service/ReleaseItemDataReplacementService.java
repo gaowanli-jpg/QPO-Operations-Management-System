@@ -647,13 +647,6 @@ public class ReleaseItemDataReplacementService {
             row.setReason(mutation.reason());
             return row;
         }
-        if (row.getAcceptedQty() != null && row.getAcceptedQty() > mutation.remainingQty()) {
-            row.setStatus(ReleaseItemDataReplacementRowStatus.ERROR);
-            row.setReason("通过数量 " + row.getAcceptedQty()
-                    + " 超过剩余可提数量 " + mutation.remainingQty());
-            return row;
-        }
-
         row.setChanges(changes(item, values));
         if (!row.getChanges().isEmpty()) {
             row.setStatus(ReleaseItemDataReplacementRowStatus.CHANGED);

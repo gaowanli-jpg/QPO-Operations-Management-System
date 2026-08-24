@@ -135,7 +135,6 @@ public class UserAdminService {
         user.setDisplayName(isBlank(req.getDisplayName()) ? username : req.getDisplayName().trim());
         user.setRole(legacyRole);
         user.setEnabled(req.getEnabled() == null || req.getEnabled());
-        user.setForcePasswordChange(true);
         user.setFailedLoginAttempts(0);
         userMapper.insert(user);
 
@@ -171,7 +170,6 @@ public class UserAdminService {
         if (!isBlank(req.getPassword())) {
             assertPasswordLength(req.getPassword());
             user.setPasswordHash(authService.hashPassword(req.getPassword()));
-            user.setForcePasswordChange(true);
             user.setFailedLoginAttempts(0);
             user.setLockedUntil(null);
         }
@@ -227,7 +225,6 @@ public class UserAdminService {
             throw new RuntimeException("两次输入的新密码不一致");
         }
         user.setPasswordHash(authService.hashPassword(req.getNewPassword()));
-        user.setForcePasswordChange(false);
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
         user.setPasswordChangedAt(LocalDateTime.now());
@@ -281,7 +278,6 @@ public class UserAdminService {
         systemUser.setDisplayName(user.getDisplayName());
         systemUser.setLegacyRole(user.getRole());
         systemUser.setEnabled(user.getEnabled());
-        systemUser.setForcePasswordChange(user.getForcePasswordChange());
         systemUser.setFailedLoginAttempts(user.getFailedLoginAttempts());
         systemUser.setLockedUntil(user.getLockedUntil());
         systemUser.setLastLoginAt(user.getLastLoginAt());
@@ -359,7 +355,6 @@ public class UserAdminService {
         row.put("roles", roleCodes);
         row.put("roleNames", roleNames);
         row.put("enabled", user.getEnabled());
-        row.put("forcePasswordChange", user.getForcePasswordChange());
         row.put("failedLoginAttempts", user.getFailedLoginAttempts());
         row.put("lockedUntil", user.getLockedUntil());
         row.put("lastLoginAt", user.getLastLoginAt());

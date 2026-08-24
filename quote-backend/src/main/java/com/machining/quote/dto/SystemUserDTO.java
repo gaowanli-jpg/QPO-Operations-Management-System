@@ -18,7 +18,6 @@ public class SystemUserDTO {
     private Long deptId;
     private Long postId;
     private Boolean enabled;
-    private Boolean forcePasswordChange;
     private LocalDateTime lastLoginAt;
     private List<String> roles = new ArrayList<>();
 }

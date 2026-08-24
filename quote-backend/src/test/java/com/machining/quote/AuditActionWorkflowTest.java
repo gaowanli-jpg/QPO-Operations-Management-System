@@ -356,7 +356,6 @@ class AuditActionWorkflowTest {
         user.setRole("ADMIN");
         user.setPasswordHash(passwordHash);
         user.setEnabled(true);
-        user.setForcePasswordChange(false);
         user.setFailedLoginAttempts(failedAttempts);
         return user;
     }

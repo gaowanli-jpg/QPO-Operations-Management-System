@@ -15,7 +15,7 @@ describe('release item data replacement stage 1 characterization', () => {
 
     expect(marketReleaseSource).toContain('const acceptedQtyMap = reactive({})')
     expect(marketReleaseSource).toContain('v-model="acceptedQtyMap[rowKey(scope.row)]"')
-    expect(submitBlock).toContain('acceptedQty: acceptedQtyMap[rowKey(row)] || remainingQtyFor(row)')
+    expect(submitBlock).toContain('acceptedQty: acceptedQtyMap[rowKey(row)] || defaultAcceptedQtyFor(row)')
   })
 
   test('does not send accepted quantity through any single-row master save API', () => {

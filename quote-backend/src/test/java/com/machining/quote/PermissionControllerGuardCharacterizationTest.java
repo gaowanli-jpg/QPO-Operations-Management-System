@@ -255,7 +255,6 @@ class PermissionControllerGuardCharacterizationTest {
         PermissionService permissionService = mock(PermissionService.class);
         AuthContext.SessionUser user = new AuthContext.SessionUser(7, "market", "Market", "MARKET");
         when(authService.findByToken("token")).thenReturn(user);
-        when(authService.mustChangePassword(7)).thenReturn(false);
         when(permissionService.getPermissionInfo(7, "MARKET")).thenReturn(permissionInfo);
 
         AuthInterceptor interceptor = new AuthInterceptor();
