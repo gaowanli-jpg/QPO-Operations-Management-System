@@ -26,6 +26,19 @@ class DataCenterSsoAuthServiceTest {
     }
 
     @Test
+    void rejectedSsoLoginAuditUsesRequiresNewTransaction() throws Exception {
+        String source = Files.readString(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "service", "auth", "DataCenterSsoAuthService.java"
+        ), StandardCharsets.UTF_8);
+
+        assertThat(source)
+                .contains("PlatformTransactionManager")
+                .contains("TransactionTemplate")
+                .contains("PROPAGATION_REQUIRES_NEW")
+                .contains("recordFailureInNewTransaction");
+    }
+
+    @Test
     void nonceHashDoesNotExposeRawNonce() {
         DataCenterSsoSignatureService service = new DataCenterSsoSignatureService();
 

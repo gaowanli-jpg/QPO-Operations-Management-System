@@ -1,5 +1,6 @@
 package com.machining.quote.config;
 
+import com.machining.quote.service.auth.DataCenterSsoLoginException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,6 +31,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataScopeAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleDataScopeAccessDenied(DataScopeAccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(DATA_SCOPE_DENIED_MESSAGE));
+    }
+
+    @ExceptionHandler(DataCenterSsoLoginException.class)
+    public ResponseEntity<Map<String, Object>> handleDataCenterSsoLogin(DataCenterSsoLoginException e) {
+        return ResponseEntity.status(e.status()).body(error(e.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

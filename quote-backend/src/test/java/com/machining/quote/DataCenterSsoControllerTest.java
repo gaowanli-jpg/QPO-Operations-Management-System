@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.machining.quote.config.AuthContext;
+import com.machining.quote.config.GlobalExceptionHandler;
 import com.machining.quote.dto.MenuTreeDTO;
 import com.machining.quote.dto.PermissionInfoDTO;
 import com.machining.quote.dto.auth.DataCenterSsoExchangeReq;
@@ -13,11 +14,15 @@ import com.machining.quote.service.JwtService;
 import com.machining.quote.service.PermissionService;
 import com.machining.quote.service.auth.DataCenterSsoAuthService;
 import com.machining.quote.service.auth.DataCenterSsoConfigResolver;
+import com.machining.quote.service.auth.DataCenterSsoLoginException;
 import com.machining.quote.service.auth.DataCenterSsoRuntimeConfig;
 import com.machining.quote.service.auth.DataCenterSsoSignatureService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,6 +33,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -36,6 +42,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 class DataCenterSsoControllerTest {
     private static final DataCenterSsoRuntimeConfig RUNTIME_CONFIG = new DataCenterSsoRuntimeConfig(
@@ -119,8 +126,8 @@ class DataCenterSsoControllerTest {
         when(missing.userMapper.selectByUsernameForUpdate("missing")).thenReturn(null);
 
         assertThatThrownBy(() -> missing.ssoService.exchange(signedRequest("missing", "nonce-missing")))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("user");
+                .isInstanceOf(DataCenterSsoLoginException.class)
+                .hasMessageContaining("account");
         verify(missing.auditService).record(eq("AUTH_DATACENTER_SSO_FAILED"), eq("auth"), isNull(), isNull(), any(Map.class), eq("AUTH"), eq("FAILED"), contains("missing"), any());
 
         Fixture disabled = fixture();
@@ -128,7 +135,7 @@ class DataCenterSsoControllerTest {
         when(disabled.userMapper.selectByUsernameForUpdate("disabled")).thenReturn(user("disabled", "MARKET", false));
 
         assertThatThrownBy(() -> disabled.ssoService.exchange(signedRequest("disabled", "nonce-disabled")))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(DataCenterSsoLoginException.class)
                 .hasMessageContaining("disabled");
 
         Fixture noPermission = fixture();
@@ -137,7 +144,7 @@ class DataCenterSsoControllerTest {
         when(noPermission.permissionService.getPermissionInfo(7, "READONLY")).thenReturn(new PermissionInfoDTO());
 
         assertThatThrownBy(() -> noPermission.ssoService.exchange(signedRequest("readonly", "nonce-no-permission")))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(DataCenterSsoLoginException.class)
                 .hasMessageContaining("permission");
         verify(noPermission.jwtService, never()).createToken(any());
     }
@@ -157,9 +164,66 @@ class DataCenterSsoControllerTest {
         when(duplicate.nonceMapper.insertIgnore(any())).thenReturn(0);
 
         assertThatThrownBy(() -> duplicate.ssoService.exchange(signedRequest("admin", "nonce-duplicate")))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("nonce");
+                .isInstanceOf(DataCenterSsoLoginException.class)
+                .hasMessageContaining("used");
         verify(duplicate.jwtService, never()).createToken(any());
+    }
+
+    @Test
+    void exchangeFailuresExposeClearSsoHttpStatusWithoutLeakingSensitiveValues() {
+        Fixture disabled = fixture();
+        when(disabled.nonceMapper.insertIgnore(any())).thenReturn(1);
+        when(disabled.userMapper.selectByUsernameForUpdate("disabled")).thenReturn(user("disabled", "MARKET", false));
+
+        assertSsoFailure(() -> disabled.ssoService.exchange(signedRequest("disabled", "nonce-disabled-status")),
+                HttpStatus.FORBIDDEN, "QPO account is disabled");
+
+        Fixture duplicate = fixture();
+        when(duplicate.nonceMapper.insertIgnore(any())).thenReturn(0);
+        assertSsoFailure(() -> duplicate.ssoService.exchange(signedRequest("admin", "nonce-duplicate-status")),
+                HttpStatus.UNAUTHORIZED, "SSO request already used");
+
+        Fixture badSignature = fixture();
+        DataCenterSsoExchangeReq bad = signedRequest("admin", "nonce-bad-signature-status");
+        bad.setSignature("bad-signature-value");
+        assertSsoFailure(() -> badSignature.ssoService.exchange(bad),
+                HttpStatus.UNAUTHORIZED, "SSO signature is invalid");
+
+        Fixture expired = fixture();
+        DataCenterSsoExchangeReq expiredReq = signedRequest("admin", "nonce-expired-status");
+        expiredReq.setTimestamp(Instant.now().minusSeconds(600).toEpochMilli());
+        expiredReq.setSignature(new DataCenterSsoSignatureService().sign(expiredReq, "shared-secret", "/dashboard"));
+        assertSsoFailure(() -> expired.ssoService.exchange(expiredReq),
+                HttpStatus.UNAUTHORIZED, "SSO request expired");
+
+        Fixture externalRedirect = fixture();
+        DataCenterSsoExchangeReq externalReq = signedRequest("admin", "nonce-external-status");
+        externalReq.setRedirect("https://evil.example/dashboard");
+        externalReq.setSignature(new DataCenterSsoSignatureService().sign(externalReq, "shared-secret", "/dashboard"));
+        assertSsoFailure(() -> externalRedirect.ssoService.exchange(externalReq),
+                HttpStatus.BAD_REQUEST, "SSO redirect is not allowed");
+        ArgumentCaptor<Map> externalAudit = ArgumentCaptor.forClass(Map.class);
+        verify(externalRedirect.auditService).record(eq("AUTH_DATACENTER_SSO_FAILED"), eq("auth"), isNull(), isNull(), externalAudit.capture(), eq("AUTH"), eq("FAILED"), contains("admin"), any());
+        assertThat(externalAudit.getValue())
+                .containsEntry("redirect", "[external-redirect]");
+        assertThat(externalAudit.getValue().toString()).doesNotContain("https://evil.example/dashboard");
+    }
+
+    private void assertSsoFailure(ThrowingCallable action, HttpStatus expectedStatus, String expectedMessage) {
+        Throwable thrown = catchThrowable(action);
+        assertThat(thrown)
+                .isInstanceOf(DataCenterSsoLoginException.class)
+                .hasMessage(expectedMessage);
+        DataCenterSsoLoginException error = (DataCenterSsoLoginException) thrown;
+        assertThat(error.status()).isEqualTo(expectedStatus);
+
+        ResponseEntity<Map<String, Object>> response = new GlobalExceptionHandler().handleDataCenterSsoLogin(error);
+        assertThat(response.getStatusCode()).isEqualTo(expectedStatus);
+        assertThat(response.getBody())
+                .containsEntry("success", false)
+                .containsEntry("message", expectedMessage);
+        assertThat(response.getBody().toString())
+                .doesNotContain("shared-secret", "bad-signature-value", "token", "Authorization");
     }
 
     private Fixture fixture() {
