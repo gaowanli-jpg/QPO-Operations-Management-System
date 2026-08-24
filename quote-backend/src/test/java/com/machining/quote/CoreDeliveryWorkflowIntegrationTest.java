@@ -340,7 +340,7 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         assertThat(deliveryService.listProcessSheets(order.getId())).hasSize(1);
         assertThatThrownBy(() -> deliveryService.generateTickets(deliveryReq(order, item, 1)))
                 .as("Opening the workspace for exports must not reopen ticket generation")
-                .hasMessageContaining("已报价");
+                .hasMessageContaining("已全部提单");
     }
 
     @Test

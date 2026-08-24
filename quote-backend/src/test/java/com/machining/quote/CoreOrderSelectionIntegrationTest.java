@@ -99,20 +99,20 @@ class CoreOrderSelectionIntegrationTest extends CoreWorkflowIntegrationTestSuppo
     void releaseOrderSelectionOnlyReturnsOrdersThatCanStillGenerateTickets() {
         String customerName = "提单候选客户-" + System.nanoTime();
         OrderRfq quoted = orderWithItemsTicketsAndSheets(customerName, "REL-A", "已报价", 1, 1, 0, 0, 0);
-        OrderRfq partial = orderWithItemsTicketsAndSheets(customerName, "REL-B", "部分已提单", 1, 1, 0, 1, 1);
-        orderWithItemsTicketsAndSheets(customerName, "REL-C", "已生成提单", 1, 1, 0, 1, 1);
+        OrderRfq partial = orderWithItemsTicketsAndSheets(customerName, "REL-B", QuoteStatusWorkflow.PARTIALLY_RELEASED, 1, 1, 0, 1, 1);
+        OrderRfq released = orderWithItemsTicketsAndSheets(customerName, "REL-C", QuoteStatusWorkflow.RELEASED, 1, 1, 0, 1, 1);
 
         PageResult<OrderRfq> candidates = orderManagementService.listReleaseCandidateOrders(
                 customerName, null, null, 1, 20);
 
         assertThat(candidates.getRecords())
                 .extracting(OrderRfq::getId)
-                .containsExactly(partial.getId(), quoted.getId());
+                .containsExactly(released.getId(), partial.getId(), quoted.getId());
 
         PageResult<OrderRfq> fullyReleased = orderManagementService.listReleaseCandidateOrders(
-                customerName, null, "已生成提单", 1, 20);
-        assertThat(fullyReleased.getTotal()).isZero();
-        assertThat(fullyReleased.getRecords()).isEmpty();
+                customerName, null, QuoteStatusWorkflow.RELEASED, 1, 20);
+        assertThat(fullyReleased.getTotal()).isEqualTo(1);
+        assertThat(fullyReleased.getRecords()).extracting(OrderRfq::getId).containsExactly(released.getId());
     }
 
     @Test

@@ -380,7 +380,7 @@ ERP_AUTH_DATA_CENTER_SSO_ALLOWED_REDIRECT_PREFIXES=/,/dashboard,/orders
 
 由于 AGENTS.md 明确要求 Flyway migration append-only，且 `V1__qpo_baseline_schema.sql`、`V2__qpo_baseline_seed_data.sql` 不可修改，本需求新增表必须使用下一个未使用版本。
 
-截至本文更新时，当前最新 migration 为 `V21__remove_force_password_change.sql`，建议新增：
+截至本文更新时，SSO 登录配置使用下一号 append-only migration，建议新增：
 
 ```text
 quote-backend/src/main/resources/db/migration/V22__data_center_sso_login_config.sql

@@ -220,9 +220,20 @@ public class RfqReleaseSalesOrderService {
             if (order == null) {
                 throw new RuntimeException("提单零件不属于本次询价单批次");
             }
-            int acceptedQty = requestLine.getAcceptedQty() == null ? safeInt(item.getQty()) : requestLine.getAcceptedQty();
+            int ticketedQty = ticketedQty(item);
+            int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty);
+            int acceptedQty = requestLine.getAcceptedQty() == null
+                    ? (ticketedQty > 0 ? remainingQty : safeInt(item.getQty()))
+                    : requestLine.getAcceptedQty();
             if (acceptedQty <= 0) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
+            }
+            if (ticketedQty > 0 && remainingQty <= 0) {
+                throw new RuntimeException("零件 " + itemLabel(item) + " 已全部提单，不能重复生成");
+            }
+            if (ticketedQty > 0 && acceptedQty > remainingQty) {
+                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + acceptedQty
+                        + " 超过剩余可提数量 " + remainingQty);
             }
             result.add(new ReleaseLine(item, acceptedQty, effectiveFields(item, context)));
         }
