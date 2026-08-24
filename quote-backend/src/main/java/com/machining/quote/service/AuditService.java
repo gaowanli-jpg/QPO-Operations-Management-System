@@ -39,6 +39,9 @@ public class AuditService {
             "clientsecret",
             "accesssecret",
             "secretkey",
+            "sharedsecret",
+            "sharedsecretcipher",
+            "signature",
             "miniosecret",
             "erpminiokey",
             "erpminiosecretkey",
@@ -192,6 +195,7 @@ public class AuditService {
         if (startsWith(action, "QUOTE_TEMPLATE_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_STORAGE_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INTEGRATION_CONFIG_")) return "SYSTEM";
+        if (startsWith(action, "SYSTEM_DATACENTER_SSO_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_DATA_CENTER_CONFIG_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_DATA_CENTER_ENDPOINT_")) return "SYSTEM";
         if (startsWith(action, "SYSTEM_INBOUND_CALLBACK_")) return "SYSTEM";
@@ -285,6 +289,12 @@ public class AuditService {
             case "SYSTEM_INTEGRATION_CONFIG_TEST_FAILED" -> "测试出站接口配置失败";
             case "SYSTEM_INTEGRATION_CONFIG_ACTIVATE" -> "激活出站接口配置";
             case "SYSTEM_INTEGRATION_CONFIG_DISABLE" -> "停用出站接口配置";
+            case "SYSTEM_DATACENTER_SSO_CONFIG_CREATE" -> "新增数据中心登录配置";
+            case "SYSTEM_DATACENTER_SSO_CONFIG_UPDATE" -> "编辑数据中心登录配置";
+            case "SYSTEM_DATACENTER_SSO_CONFIG_TEST" -> "测试数据中心登录配置";
+            case "SYSTEM_DATACENTER_SSO_CONFIG_TEST_FAILED" -> "测试数据中心登录配置失败";
+            case "SYSTEM_DATACENTER_SSO_CONFIG_ACTIVATE" -> "激活数据中心登录配置";
+            case "SYSTEM_DATACENTER_SSO_CONFIG_DISABLE" -> "停用数据中心登录配置";
             case "SYSTEM_DATA_CENTER_CONFIG_CREATE" -> "新增数据中心连接配置";
             case "SYSTEM_DATA_CENTER_CONFIG_UPDATE" -> "编辑数据中心连接配置";
             case "SYSTEM_DATA_CENTER_CONFIG_TEST" -> "测试数据中心Token获取";

@@ -51,6 +51,14 @@ erp:
     enabled: ${ERP_AUTH_ENABLED:true}
     jwt-secret: ${ERP_JWT_SECRET:change-this-secret-before-production}
     jwt-ttl-minutes: ${ERP_JWT_TTL_MINUTES:720}
+    data-center-sso:
+      enabled: ${ERP_AUTH_DATA_CENTER_SSO_ENABLED:true}
+      app-code: ${ERP_AUTH_DATA_CENTER_SSO_APP_CODE:QPO}
+      shared-secret: ${ERP_AUTH_DATA_CENTER_SSO_SHARED_SECRET:}
+      timestamp-skew-seconds: ${ERP_AUTH_DATA_CENTER_SSO_TIMESTAMP_SKEW_SECONDS:120}
+      nonce-ttl-minutes: ${ERP_AUTH_DATA_CENTER_SSO_NONCE_TTL_MINUTES:10}
+      default-redirect: ${ERP_AUTH_DATA_CENTER_SSO_DEFAULT_REDIRECT:/dashboard}
+      allowed-redirect-prefixes: ${ERP_AUTH_DATA_CENTER_SSO_ALLOWED_REDIRECT_PREFIXES:/,/dashboard,/orders}
   # Legacy APS source outlet only; new downstream integrations use MES/WMS/U9.
   aps:
     source-token: ${ERP_APS_SOURCE_TOKEN:}
