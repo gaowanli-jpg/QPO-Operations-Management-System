@@ -3,8 +3,10 @@ package com.machining.quote.controller;
 import com.machining.quote.dto.LoginReq;
 import com.machining.quote.dto.MyProfileUpdateReq;
 import com.machining.quote.dto.PasswordChangeReq;
+import com.machining.quote.dto.auth.DataCenterSsoExchangeReq;
 import com.machining.quote.service.AuthService;
 import com.machining.quote.service.UserAdminService;
+import com.machining.quote.service.auth.DataCenterSsoAuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,10 +25,17 @@ public class AuthController {
     private AuthService authService;
     @Autowired
     private UserAdminService userAdminService;
+    @Autowired
+    private DataCenterSsoAuthService dataCenterSsoAuthService;
 
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody LoginReq req) {
         return authService.login(req.getUsername(), req.getPassword());
+    }
+
+    @PostMapping("/datacenter-sso/exchange")
+    public Map<String, Object> exchangeDataCenterSso(@RequestBody DataCenterSsoExchangeReq req) {
+        return dataCenterSsoAuthService.exchange(req);
     }
 
     @PostMapping("/logout")

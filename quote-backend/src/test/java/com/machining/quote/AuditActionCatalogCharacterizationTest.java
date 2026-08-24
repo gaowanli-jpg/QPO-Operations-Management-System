@@ -23,6 +23,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("AUTH_LOGIN_FAILED")).isEqualTo("AUTH");
         assertThat(AuditService.inferModule("AUTH_ACCOUNT_LOCKED")).isEqualTo("AUTH");
         assertThat(AuditService.inferModule("AUTH_LOGOUT")).isEqualTo("AUTH");
+        assertThat(AuditService.inferModule("AUTH_DATACENTER_SSO_SUCCESS")).isEqualTo("AUTH");
+        assertThat(AuditService.inferModule("AUTH_DATACENTER_SSO_FAILED")).isEqualTo("AUTH");
         assertThat(AuditService.inferModule("QUOTE_TEMPLATE_UPLOAD")).isEqualTo("SYSTEM");
         assertThat(AuditService.inferModule("RFQ_IMPORT")).isEqualTo("MARKET");
         assertThat(AuditService.inferModule("QUOTE_EXPORT_TASK_SUBMIT")).isEqualTo("MARKET");
@@ -88,6 +90,8 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SYSTEM_U9_ORG_CONFIG_UPDATE")).isNotEqualTo("SYSTEM_U9_ORG_CONFIG_UPDATE");
+        assertThat(AuditService.labelForAction("AUTH_DATACENTER_SSO_SUCCESS")).contains("数据中心SSO");
+        assertThat(AuditService.labelForAction("AUTH_DATACENTER_SSO_FAILED")).contains("数据中心SSO");
     }
 
     @Test

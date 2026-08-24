@@ -243,6 +243,8 @@ public class AuditService {
             case "AUTH_LOGIN_SUCCESS" -> "登录成功";
             case "AUTH_LOGIN_FAILED" -> "登录失败";
             case "AUTH_ACCOUNT_LOCKED" -> "账号锁定";
+            case "AUTH_DATACENTER_SSO_SUCCESS" -> "数据中心SSO登录成功";
+            case "AUTH_DATACENTER_SSO_FAILED" -> "数据中心SSO登录失败";
             case "AUTH_LOGOUT" -> "登出";
             case "USER_CREATE" -> "新增用户";
             case "USER_UPDATE" -> "编辑用户";

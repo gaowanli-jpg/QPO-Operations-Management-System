@@ -115,6 +115,44 @@ public class AuthService {
         return result;
     }
 
+    public Map<String, Object> issueLoginToken(ErpUser user, String auditAction, Map<String, Object> auditPayload) {
+        if (user == null || user.getId() == null) {
+            throw new IllegalArgumentException("Login user cannot be null");
+        }
+        String action = auditAction == null || auditAction.isBlank() ? "AUTH_LOGIN_SUCCESS" : auditAction;
+        AuthContext.SessionUser sessionUser = new AuthContext.SessionUser(
+                user.getId(),
+                user.getUsername(),
+                user.getDisplayName(),
+                user.getRole()
+        );
+        String token = jwtService.createToken(sessionUser);
+        recordAuthAudit(
+                action,
+                "erp_user",
+                user.getId(),
+                null,
+                auditPayload == null ? publicUser(user) : auditPayload,
+                "SUCCESS",
+                action + " " + user.getUsername()
+        );
+        PermissionInfoDTO permissionInfo = permissionInfo(sessionUser);
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        Map<String, Object> userPayload = new java.util.LinkedHashMap<>();
+        userPayload.put("username", sessionUser.username());
+        userPayload.put("displayName", sessionUser.displayName() == null ? sessionUser.username() : sessionUser.displayName());
+        userPayload.put("role", sessionUser.role());
+
+        result.put("success", true);
+        result.put("message", "登录成功");
+        result.put("token", token);
+        result.put("user", userPayload);
+        result.put("roles", permissionInfo.getRoles());
+        result.put("permissions", permissionInfo.getPermissions());
+        result.put("menus", permissionInfo.getMenus());
+        return result;
+    }
+
     public PermissionInfoDTO permissionInfo(AuthContext.SessionUser user) {
         if (user == null || permissionService == null) {
             return new PermissionInfoDTO();
