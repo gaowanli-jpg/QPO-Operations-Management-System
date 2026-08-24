@@ -72,11 +72,66 @@ describe('sales order change module stage 1', () => {
     expect(api).toContain("request('/api/change/sales-orders'")
     expect(api).toContain('previewSalesOrderChange')
     expect(api).toContain('/api/change/sales-orders/${salesOrderId}/preview')
+    expect(api).toContain('saveSalesOrderChangeItems')
+    expect(api).toContain('/api/change/sales-orders/${salesOrderId}/items')
+    expect(api).toContain("method: 'PUT'")
     expect(picker).toContain("import { listSalesOrderChangeOrders } from '../services/salesOrderChangeApi'")
     expect(picker).toContain("props.orderScope === 'sales-order-change'")
     expect(picker).toContain('await listSalesOrderChangeOrders(params)')
     expect(picker).toContain("'sales-order-change': 'change:sales-order:customer-select'")
     expect(picker).toContain("'sales-order-change': ['已生成提单']")
     expect(picker).toContain("'sales-order-change': '销售订单'")
+  })
+
+  test('supports stage 6 line editing with required change reason', () => {
+    const component = readSource('components', 'SalesOrderChangeManage.vue')
+
+    expect(component).toContain('saveSalesOrderChangeItems')
+    expect(component).toContain('const SALES_ORDER_CHANGE_ITEM_EDITABLE_FIELDS = [')
+    ;[
+      'qty',
+      'customerDeliveryDate',
+      'internalDeliveryDate',
+      'untaxedUnitPrice',
+      'customerOrderNo',
+      'customerProjectNo',
+      'internalProjectNo',
+      'remark'
+    ].forEach(field => expect(component).toContain(`'${field}'`))
+
+    expect(component).toContain('itemDrafts')
+    expect(component).toContain('savedItemDrafts')
+    expect(component).toContain('dirtyItemIds')
+    expect(component).toContain('dirtyItemCount')
+    expect(component).toContain('handleItemDraftChange')
+    expect(component).toContain('buildDirtyItemPayload')
+    expect(component).toContain('itemEditReadOnly')
+    expect(component).toContain(':disabled="itemEditReadOnly"')
+    expect(component).toContain('保存修改')
+    expect(component).toContain('itemEditSaving')
+    expect(component).toContain('reasonDialogVisible')
+    expect(component).toContain('changeReason')
+    expect(component).toContain('变更原因')
+    expect(component).toContain('handleOpenSaveReasonDialog')
+    expect(component).toContain('handleConfirmSaveItemEdits')
+    expect(component).toContain('变更原因不能为空')
+    expect(component).toContain('reason: changeReason.value.trim()')
+    expect(component).toContain('applyPreviewData(response.preview)')
+    expect(component).toContain('dirtyItemIds.value = new Set()')
+    expect(component).toContain('changeReason.value =')
+    expect(component).toContain('v-permission="SALES_ORDER_CHANGE_UPDATE_PERMISSION"')
+
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].qty"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].untaxedUnitPrice"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerDeliveryDate"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalDeliveryDate"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerOrderNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].customerProjectNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].internalProjectNo"')
+    expect(component).toContain('v-model="itemDrafts[row.salesOrderItemId].remark"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].materialNo"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].partNo"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].version"')
+    expect(component).not.toContain('v-model="itemDrafts[row.salesOrderItemId].lineNo"')
   })
 })
