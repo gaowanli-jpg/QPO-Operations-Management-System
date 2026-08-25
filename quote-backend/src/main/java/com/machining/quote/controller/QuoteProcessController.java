@@ -43,8 +43,10 @@ public class QuoteProcessController {
 
     @GetMapping("/{rfqId}/summary")
     @RequirePermission("market:quote-process:view")
-    public Map<String, Object> getQuoteProcessSummary(@PathVariable Integer rfqId) {
-        return quoteProcessService.getQuoteProcessSummary(rfqId);
+    public Map<String, Object> getQuoteProcessSummary(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "scope", required = false) String scope) {
+        return quoteProcessService.getQuoteProcessSummary(rfqId, scope);
     }
 
     @GetMapping("/{rfqId}/items")
@@ -56,7 +58,8 @@ public class QuoteProcessController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "partNo", required = false) String partNo,
-            @RequestParam(value = "version", required = false) String version) {
+            @RequestParam(value = "version", required = false) String version,
+            @RequestParam(value = "scope", required = false) String scope) {
         OrderItemPageReq req = new OrderItemPageReq();
         req.setRfqId(rfqId);
         req.setPage(page);
@@ -65,6 +68,7 @@ public class QuoteProcessController {
         req.setStatus(status);
         req.setPartNo(partNo);
         req.setVersion(version);
+        req.setScope(scope);
         return quoteProcessService.listQuoteProcessItems(req);
     }
 
@@ -104,10 +108,11 @@ public class QuoteProcessController {
     @RequirePermission("market:quote-process:update-lead-time")
     public QuoteLeadTimeReplacementPreviewDTO previewLeadTimeReplacement(
             @PathVariable Integer rfqId,
-            @RequestParam("excelFile") MultipartFile excelFile) {
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "scope", required = false) String scope) {
         validateExcelFile(excelFile);
         try (InputStream inputStream = excelFile.getInputStream()) {
-            return quoteProcessService.previewLeadTimeReplacement(rfqId, inputStream);
+            return quoteProcessService.previewLeadTimeReplacement(rfqId, inputStream, scope);
         } catch (IOException e) {
             throw new RuntimeException("读取报价处理表格数据替换文件失败", e);
         }
@@ -118,10 +123,11 @@ public class QuoteProcessController {
     public QuoteLeadTimeReplacementConfirmDTO confirmLeadTimeReplacement(
             @PathVariable Integer rfqId,
             @RequestParam("previewFingerprint") String previewFingerprint,
-            @RequestParam("excelFile") MultipartFile excelFile) {
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "scope", required = false) String scope) {
         validateExcelFile(excelFile);
         try (InputStream inputStream = excelFile.getInputStream()) {
-            return quoteProcessService.confirmLeadTimeReplacement(rfqId, inputStream, previewFingerprint);
+            return quoteProcessService.confirmLeadTimeReplacement(rfqId, inputStream, previewFingerprint, scope);
         } catch (IOException e) {
             throw new RuntimeException("读取报价处理表格数据替换文件失败", e);
         }
@@ -131,6 +137,12 @@ public class QuoteProcessController {
     @RequirePermission("market:quote-process:save-quote")
     public Map<String, Object> saveQuoteSheet(@PathVariable Integer rfqId) {
         return quoteProcessService.saveQuoteSheet(rfqId);
+    }
+
+    @PostMapping("/{rfqId}/save-supplemental-quote")
+    @RequirePermission("market:quote-process:save-quote")
+    public Map<String, Object> saveSupplementalQuoteSheet(@PathVariable Integer rfqId) {
+        return quoteProcessService.saveSupplementalQuoteSheet(rfqId);
     }
 
     private void validateExcelFile(MultipartFile excelFile) {

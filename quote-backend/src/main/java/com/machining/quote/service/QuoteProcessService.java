@@ -17,8 +17,10 @@ import com.machining.quote.dto.QuoteLeadTimeSetReq;
 import com.machining.quote.dto.QuoteLeadTimeShiftReq;
 import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.entity.ItemQuoteVersion;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.DrawingPartNoResolver;
 import com.machining.quote.util.MaterialDataResolver;
@@ -36,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +54,8 @@ public class QuoteProcessService {
     private OrderRfqMapper orderRfqMapper;
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
+    @Autowired
+    private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
     private LeadTimeService leadTimeService;
     @Autowired
@@ -75,13 +80,17 @@ public class QuoteProcessService {
     }
 
     public Map<String, Object> getQuoteProcessSummary(Integer rfqId) {
-        OrderRfq order = requireQuoteProcessReadableOrder(rfqId);
+        return getQuoteProcessSummary(rfqId, null);
+    }
+
+    public Map<String, Object> getQuoteProcessSummary(Integer rfqId, String scope) {
+        OrderRfq order = requireQuoteProcessReadableOrder(rfqId, scope);
         OrderItemSummaryDTO summary = orderItemPageService.summarizeItems(rfqId);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("orderInfo", order);
         result.put("summary", summary);
         result.put("itemCount", summary.getItemCount());
-        result.put("missingLeadTimeCount", countMissingQuoteLeadTimes(rfqId));
+        result.put("missingLeadTimeCount", countMissingQuoteLeadTimes(rfqId, scope));
         result.put("quotedCount", summary.getQuotedCount());
         return result;
     }
@@ -90,7 +99,7 @@ public class QuoteProcessService {
         if (req == null || req.getRfqId() == null) {
             throw new RuntimeException("RFQ ID 不能为空");
         }
-        requireQuoteProcessReadableOrder(req.getRfqId());
+        requireQuoteProcessReadableOrder(req.getRfqId(), req.getScope());
         OrderItemPageDTO page = orderItemPageService.pageItems(req);
         List<Map<String, Object>> rows = page.getRecords().stream().map(this::buildItemRow).toList();
         return PageResult.of(rows, page.getTotal(), page.getPage(), page.getPageSize());
@@ -131,7 +140,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> shiftLeadTimes(QuoteLeadTimeShiftReq req) {
-        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId(), req.getScope());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -148,6 +157,10 @@ public class QuoteProcessService {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
                 continue;
             }
+            if (!isItemEditableInScope(item, req.getScope())) {
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "零件不属于补充报价待确认范围"));
+                continue;
+            }
 
             String effectiveLeadTime = leadTimeService.effectiveLeadTime(item);
             try {
@@ -161,7 +174,7 @@ public class QuoteProcessService {
             }
         }
 
-        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped);
+        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped, req.getScope());
         log.info("Quote lead time shifted rfqId={} itemCount={} adjustedCount={} skippedCount={} days={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), days);
         if (!skipped.isEmpty()) {
@@ -173,7 +186,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> setLeadTimes(QuoteLeadTimeSetReq req) {
-        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId(), req.getScope());
         if (req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new RuntimeException("请至少选择一个零件");
         }
@@ -187,6 +200,10 @@ public class QuoteProcessService {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
                 continue;
             }
+            if (!isItemEditableInScope(item, req.getScope())) {
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "零件不属于补充报价待确认范围"));
+                continue;
+            }
 
             Object before = buildItemRow(item);
             item.setQuoteLeadTime(normalizedDate);
@@ -195,7 +212,7 @@ public class QuoteProcessService {
             adjustedCount++;
         }
 
-        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped);
+        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped, req.getScope());
         log.info("Quote lead time set rfqId={} itemCount={} adjustedCount={} skippedCount={} targetLeadTime={}",
                 req.getRfqId(), req.getItemIds().size(), adjustedCount, skipped.size(), normalizedDate);
         if (!skipped.isEmpty()) {
@@ -207,7 +224,7 @@ public class QuoteProcessService {
 
     @Transactional
     public Map<String, Object> updateLeadTime(QuoteLeadTimeUpdateReq req) {
-        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId(), req.getScope());
         if (req.getItemId() == null) {
             throw new RuntimeException("零件 ID 不能为空");
         }
@@ -215,6 +232,9 @@ public class QuoteProcessService {
         ItemQuoteVersion item = itemMapper.selectByIdForUpdate(req.getItemId());
         if (item == null || !req.getRfqId().equals(item.getRfqId())) {
             throw new RuntimeException("零件不存在或不属于当前 RFQ");
+        }
+        if (!isItemEditableInScope(item, req.getScope())) {
+            throw new RuntimeException("零件不属于补充报价待确认范围");
         }
 
         Object before = buildItemRow(item);
@@ -237,7 +257,7 @@ public class QuoteProcessService {
         if (req == null || req.getRfqId() == null) {
             throw new RuntimeException("RFQ ID 不能为空");
         }
-        requireQuoteProcessEditableOrderForUpdate(req.getRfqId());
+        requireQuoteProcessEditableOrderForUpdate(req.getRfqId(), req.getScope());
         List<QuoteLeadTimeBatchUpdateReq.ItemUpdate> updates = safeList(req.getItems());
         if (updates.isEmpty()) {
             throw new RuntimeException("没有需要保存的报价交期修改");
@@ -255,6 +275,10 @@ public class QuoteProcessService {
             ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
             if (item == null || !req.getRfqId().equals(item.getRfqId())) {
                 skipped.add(skipRow(itemId, "", "", "零件不存在或不属于当前 RFQ"));
+                continue;
+            }
+            if (!isItemEditableInScope(item, req.getScope())) {
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "零件不属于补充报价待确认范围"));
                 continue;
             }
 
@@ -282,7 +306,7 @@ public class QuoteProcessService {
                     "QUOTE_PROCESS", "SUCCESS", "批量保存报价交期：更新 " + adjustedCount + " 个零件", null);
         }
 
-        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped);
+        Map<String, Object> result = quoteLeadTimeMutationSummary(req.getRfqId(), adjustedCount, skipped, req.getScope());
         result.put("updatedCount", adjustedCount);
         result.put("affectedRows", affectedRows);
         log.info("Quote lead time batch saved rfqId={} requestedCount={} updatedItemCount={} skippedCount={}",
@@ -291,9 +315,13 @@ public class QuoteProcessService {
     }
 
     public QuoteLeadTimeReplacementPreviewDTO previewLeadTimeReplacement(Integer rfqId, InputStream inputStream) {
-        OrderRfq order = requireQuoteProcessEditableOrder(rfqId);
+        return previewLeadTimeReplacement(rfqId, inputStream, null);
+    }
+
+    public QuoteLeadTimeReplacementPreviewDTO previewLeadTimeReplacement(Integer rfqId, InputStream inputStream, String scope) {
+        OrderRfq order = requireQuoteProcessEditableOrder(rfqId, scope);
         QuoteLeadTimeReplacementExcelParser.ParseResult parsed = leadTimeReplacementExcelParser.parse(inputStream);
-        List<ItemQuoteVersion> items = listItems(rfqId);
+        List<ItemQuoteVersion> items = listItems(rfqId, scope);
         QuoteLeadTimeReplacementPreviewDTO preview = buildLeadTimeReplacementPreview(order, parsed, items);
         preview.setPreviewFingerprint(leadTimeReplacementFingerprint(rfqId, parsed, preview.getRows(), items, order.getStatus()));
         return preview;
@@ -304,12 +332,21 @@ public class QuoteProcessService {
             Integer rfqId,
             InputStream inputStream,
             String previewFingerprint) {
+        return confirmLeadTimeReplacement(rfqId, inputStream, previewFingerprint, null);
+    }
+
+    @Transactional
+    public QuoteLeadTimeReplacementConfirmDTO confirmLeadTimeReplacement(
+            Integer rfqId,
+            InputStream inputStream,
+            String previewFingerprint,
+            String scope) {
         if (isBlank(previewFingerprint)) {
             throw new IllegalArgumentException("预览指纹不能为空");
         }
-        OrderRfq order = requireQuoteProcessEditableOrderForUpdate(rfqId);
+        OrderRfq order = requireQuoteProcessEditableOrderForUpdate(rfqId, scope);
         QuoteLeadTimeReplacementExcelParser.ParseResult parsed = leadTimeReplacementExcelParser.parse(inputStream);
-        List<ItemQuoteVersion> items = listItems(rfqId);
+        List<ItemQuoteVersion> items = listItems(rfqId, scope);
         QuoteLeadTimeReplacementPreviewDTO preview = buildLeadTimeReplacementPreview(order, parsed, items);
         String currentFingerprint = leadTimeReplacementFingerprint(rfqId, parsed, preview.getRows(), items, order.getStatus());
         if (!previewFingerprint.trim().equals(currentFingerprint)) {
@@ -430,6 +467,68 @@ public class QuoteProcessService {
         }
     }
 
+    @Transactional
+    public Map<String, Object> saveSupplementalQuoteSheet(Integer rfqId) {
+        long startedAt = System.currentTimeMillis();
+        log.info("Supplemental quote sheet save started rfqId={}", rfqId);
+        try {
+            OrderRfq order = requireSupplementalQuoteOrderForUpdate(rfqId);
+            String orderStatusBefore = order.getStatus();
+            List<ItemQuoteVersion> items = listItems(rfqId, OrderItemPageReq.SCOPE_SUPPLEMENTAL_DRAWING_QUOTE);
+            if (items.isEmpty()) {
+                throw new RuntimeException("没有补充报价待确认零件，不能保存补充报价单");
+            }
+
+            List<String> missingLeadTimes = items.stream()
+                    .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
+                    .map(this::itemLabel)
+                    .toList();
+            if (!missingLeadTimes.isEmpty()) {
+                throw new RuntimeException("以下补图零件缺少报价交期，不能保存补充报价单：" + String.join("、", missingLeadTimes));
+            }
+
+            Map<String, Object> before = supplementalQuoteSheetSummary(order, items, missingLeadTimes.size(), 0);
+            int itemStatusUpdatedCount = markSupplementalItemsAsQuoted(items);
+            OrderRfq savedOrder = refreshReleasedOrderStatus(order.getId());
+            Map<String, Object> after = supplementalQuoteSheetSummary(savedOrder, items, 0, itemStatusUpdatedCount);
+            auditService.record(
+                    "QUOTE_PROCESS_SAVE_QUOTE",
+                    "order_rfq",
+                    order.getId(),
+                    before,
+                    after,
+                    "QUOTE_PROCESS",
+                    "SUCCESS",
+                    "保存补充报价单：RFQ " + safe(savedOrder.getRfqNo()) + "，补图零件 " + items.size()
+                            + " 个，状态更新 " + itemStatusUpdatedCount + " 个",
+                    null
+            );
+            log.info("Supplemental quote sheet save completed rfqId={} orderStatusBefore={} orderStatusAfter={} supplementalItemCount={} itemStatusUpdatedCount={} durationMs={}",
+                    rfqId, orderStatusBefore, savedOrder.getStatus(), items.size(), itemStatusUpdatedCount,
+                    System.currentTimeMillis() - startedAt);
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", true);
+            result.put("supplemental", true);
+            result.put("orderInfo", savedOrder);
+            result.put("summary", after);
+            result.put("supplementalItemCount", items.size());
+            result.put("itemStatusUpdatedCount", itemStatusUpdatedCount);
+            result.put("orderStatusBefore", orderStatusBefore);
+            result.put("orderStatusAfter", savedOrder.getStatus());
+            return result;
+        } catch (RuntimeException e) {
+            long durationMs = System.currentTimeMillis() - startedAt;
+            if (isBusinessRejection(e)) {
+                log.warn("Supplemental quote sheet save rejected rfqId={} reason={} durationMs={}",
+                        rfqId, safeLogMessage(e), durationMs);
+            } else {
+                log.error("Supplemental quote sheet save failed rfqId={} durationMs={}", rfqId, durationMs, e);
+            }
+            throw e;
+        }
+    }
+
     public void assertQuoteExportable(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
         if (!QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())) {
@@ -472,6 +571,13 @@ public class QuoteProcessService {
         return order;
     }
 
+    private OrderRfq requireQuoteProcessReadableOrder(Integer rfqId, String scope) {
+        if (isSupplementalQuoteScope(scope)) {
+            return requireSupplementalQuoteOrder(rfqId);
+        }
+        return requireQuoteProcessReadableOrder(rfqId);
+    }
+
     private OrderRfq requireQuoteProcessEditableOrder(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())
@@ -488,6 +594,13 @@ public class QuoteProcessService {
         return order;
     }
 
+    private OrderRfq requireQuoteProcessEditableOrder(Integer rfqId, String scope) {
+        if (isSupplementalQuoteScope(scope)) {
+            return requireSupplementalQuoteOrder(rfqId);
+        }
+        return requireQuoteProcessEditableOrder(rfqId);
+    }
+
     private OrderRfq requireQuoteProcessEditableOrderForUpdate(Integer rfqId) {
         OrderRfq order = requireOrderForUpdate(rfqId);
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())
@@ -502,6 +615,13 @@ public class QuoteProcessService {
             throw new RuntimeException("只有已核价订单可以维护报价交期");
         }
         return order;
+    }
+
+    private OrderRfq requireQuoteProcessEditableOrderForUpdate(Integer rfqId, String scope) {
+        if (isSupplementalQuoteScope(scope)) {
+            return requireSupplementalQuoteOrderForUpdate(rfqId);
+        }
+        return requireQuoteProcessEditableOrderForUpdate(rfqId);
     }
 
     private OrderRfq requireQuoteProcessSavableOrderForUpdate(Integer rfqId) {
@@ -522,6 +642,25 @@ public class QuoteProcessService {
             throw new RuntimeException("只有已核价订单可以保存报价单");
         }
         return order;
+    }
+
+    private OrderRfq requireSupplementalQuoteOrder(Integer rfqId) {
+        OrderRfq order = requireOrder(rfqId);
+        assertSupplementalQuoteOrderStatus(order);
+        return order;
+    }
+
+    private OrderRfq requireSupplementalQuoteOrderForUpdate(Integer rfqId) {
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        assertNoActiveRefreshQuotesTask(rfqId);
+        assertSupplementalQuoteOrderStatus(order);
+        return order;
+    }
+
+    private void assertSupplementalQuoteOrderStatus(OrderRfq order) {
+        if (order == null || !QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())) {
+            throw new RuntimeException("只有部分已提单或已生成提单订单可以处理补充报价");
+        }
     }
 
     private void assertNoActiveRefreshQuotesTask(Integer rfqId) {
@@ -689,10 +828,19 @@ public class QuoteProcessService {
 
     private Map<String, Object> quoteLeadTimeMutationSummary(Integer rfqId, int adjustedCount,
                                                              List<Map<String, Object>> skipped) {
+        return quoteLeadTimeMutationSummary(rfqId, adjustedCount, skipped, null);
+    }
+
+    private Map<String, Object> quoteLeadTimeMutationSummary(Integer rfqId, int adjustedCount,
+                                                             List<Map<String, Object>> skipped,
+                                                             String scope) {
         OrderItemSummaryDTO summary = orderItemPageService.summarizeItems(rfqId);
-        long missingLeadTimeCount = countMissingQuoteLeadTimes(rfqId);
+        long missingLeadTimeCount = countMissingQuoteLeadTimes(rfqId, scope);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", true);
+        if (isSupplementalQuoteScope(scope)) {
+            result.put("supplemental", true);
+        }
         result.put("adjustedCount", adjustedCount);
         result.put("skippedCount", skipped == null ? 0 : skipped.size());
         result.put("skippedItems", skipped == null ? List.of() : skipped);
@@ -704,10 +852,17 @@ public class QuoteProcessService {
     }
 
     private long countMissingQuoteLeadTimes(Integer rfqId) {
+        return countMissingQuoteLeadTimes(rfqId, null);
+    }
+
+    private long countMissingQuoteLeadTimes(Integer rfqId, String scope) {
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.eq("rfq_id", rfqId)
                 .apply("(quote_lead_time IS NULL OR BTRIM(quote_lead_time) = '')")
                 .apply("(lead_time IS NULL OR BTRIM(lead_time) = '')");
+        if (isSupplementalQuoteScope(scope)) {
+            applySupplementalQuoteItemFilter(query);
+        }
         Long count = itemMapper.selectCount(query);
         return count == null ? 0L : count;
     }
@@ -716,6 +871,37 @@ public class QuoteProcessService {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId).orderByAsc("id");
         return itemMapper.selectList(qw);
+    }
+
+    private List<ItemQuoteVersion> listItems(Integer rfqId, String scope) {
+        if (!isSupplementalQuoteScope(scope)) {
+            return listItems(rfqId);
+        }
+        QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
+        query.eq("rfq_id", rfqId);
+        applySupplementalQuoteItemFilter(query);
+        query.orderByAsc("id");
+        return itemMapper.selectList(query);
+    }
+
+    private void applySupplementalQuoteItemFilter(QueryWrapper<ItemQuoteVersion> query) {
+        query.apply("NULLIF(BTRIM(drawing_url), '') IS NOT NULL")
+                .isNotNull("tax_included_unit_price")
+                .eq("status", QuoteStatusWorkflow.PRICED);
+    }
+
+    private boolean isItemEditableInScope(ItemQuoteVersion item, String scope) {
+        return !isSupplementalQuoteScope(scope) || isSupplementalQuoteItem(item);
+    }
+
+    private boolean isSupplementalQuoteItem(ItemQuoteVersion item) {
+        return hasDrawing(item)
+                && item.getTaxIncludedUnitPrice() != null
+                && QuoteStatusWorkflow.PRICED.equals(item.getStatus());
+    }
+
+    private boolean isSupplementalQuoteScope(String scope) {
+        return scope != null && OrderItemPageReq.SCOPE_SUPPLEMENTAL_DRAWING_QUOTE.equalsIgnoreCase(scope.trim());
     }
 
     private int markPricedItemsAsQuoted(List<ItemQuoteVersion> items) {
@@ -739,6 +925,56 @@ public class QuoteProcessService {
         return updated;
     }
 
+    private int markSupplementalItemsAsQuoted(List<ItemQuoteVersion> items) {
+        int updated = 0;
+        for (ItemQuoteVersion item : safeList(items)) {
+            if (!isSupplementalQuoteItem(item)) {
+                continue;
+            }
+            item.setStatus(QuoteStatusWorkflow.QUOTED);
+            itemMapper.updateById(item);
+            updated++;
+        }
+        return updated;
+    }
+
+    private OrderRfq refreshReleasedOrderStatus(Integer rfqId) {
+        OrderRfq order = orderRfqMapper.selectByIdForUpdate(rfqId);
+        if (order == null || !QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())) {
+            return order;
+        }
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        List<OrderDeliveryTicket> tickets = ticketMapper.selectList(new QueryWrapper<OrderDeliveryTicket>()
+                .eq("rfq_id", rfqId));
+        if (tickets.isEmpty()) {
+            return order;
+        }
+
+        Map<Integer, Integer> qtyByItem = new HashMap<>();
+        for (OrderDeliveryTicket ticket : tickets) {
+            if (ticket.getItemId() != null) {
+                qtyByItem.merge(ticket.getItemId(), safeInt(ticket.getQty()), Integer::sum);
+            }
+        }
+        List<ItemQuoteVersion> releasableItems = items.stream()
+                .filter(item -> QuoteStatusWorkflow.isRfqReleaseEligibleItem(
+                        item.getStatus(), hasDrawing(item), item.getTaxIncludedUnitPrice() != null))
+                .toList();
+        if (releasableItems.isEmpty()) {
+            return order;
+        }
+        boolean allReleasableItemsTicketed = releasableItems.stream()
+                .allMatch(item -> qtyByItem.getOrDefault(item.getId(), 0) >= safeInt(item.getQty()));
+        String refreshedStatus = allReleasableItemsTicketed
+                ? QuoteStatusWorkflow.RELEASED
+                : QuoteStatusWorkflow.PARTIALLY_RELEASED;
+        if (!Objects.equals(order.getStatus(), refreshedStatus)) {
+            order.setStatus(refreshedStatus);
+            orderRfqMapper.updateById(order);
+        }
+        return orderRfqMapper.selectById(order.getId());
+    }
+
     private Map<String, Object> quoteSheetSummary(OrderRfq order, List<ItemQuoteVersion> items, int missingLeadTimeCount,
                                                   int itemStatusUpdatedCount) {
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -747,6 +983,17 @@ public class QuoteProcessService {
         summary.put("itemCount", items == null ? 0 : items.size());
         summary.put("missingLeadTimeCount", missingLeadTimeCount);
         summary.put("itemStatusUpdatedCount", itemStatusUpdatedCount);
+        return summary;
+    }
+
+    private Map<String, Object> supplementalQuoteSheetSummary(
+            OrderRfq order,
+            List<ItemQuoteVersion> items,
+            int missingLeadTimeCount,
+            int itemStatusUpdatedCount) {
+        Map<String, Object> summary = quoteSheetSummary(order, items, missingLeadTimeCount, itemStatusUpdatedCount);
+        summary.put("supplemental", true);
+        summary.put("supplementalItemCount", items == null ? 0 : items.size());
         return summary;
     }
 
@@ -815,6 +1062,10 @@ public class QuoteProcessService {
 
     private String normalizeVersion(String version) {
         return version == null ? "" : version.trim().toUpperCase();
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private boolean isBusinessRejection(RuntimeException e) {

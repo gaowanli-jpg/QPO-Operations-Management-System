@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class OrderItemPageReq {
     public static final String SCOPE_SUPPLEMENTAL_DRAWING = "SUPPLEMENTAL_DRAWING";
+    public static final String SCOPE_SUPPLEMENTAL_DRAWING_QUOTE = "SUPPLEMENTAL_DRAWING_QUOTE";
 
     private Integer rfqId;
     private Integer page;

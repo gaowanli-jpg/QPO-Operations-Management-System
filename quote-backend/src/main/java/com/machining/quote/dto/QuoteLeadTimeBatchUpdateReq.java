@@ -8,6 +8,7 @@ import java.util.List;
 public class QuoteLeadTimeBatchUpdateReq {
     private Integer rfqId;
     private List<ItemUpdate> items;
+    private String scope;
 
     @Data
     public static class ItemUpdate {

@@ -133,6 +133,18 @@ public class MarketController {
         return orderManagementService.listQuoteProcessCandidateOrders(customerCode, customerName, keyword, status, page, pageSize);
     }
 
+    @GetMapping("/quote-process/supplemental-drawing/orders")
+    @RequirePermission("market:quote-process:order-select")
+    public PageResult<OrderRfq> listQuoteProcessSupplementalOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.listQuoteProcessSupplementalCandidateOrders(customerCode, customerName, keyword, status, page, pageSize);
+    }
+
     @GetMapping("/release/customers")
     @RequirePermission("market:release:customer-select")
     public PageResult<CustomerOptionDTO> listReleaseCustomers(

@@ -141,6 +141,43 @@ public class OrderManagementService {
         return PageResult.of(orderMapper.selectList(qw), total, safePage, safePageSize);
     }
 
+    public PageResult<OrderRfq> listQuoteProcessSupplementalCandidateOrders(
+            String customerCode,
+            String customerName,
+            String keyword,
+            String status,
+            Integer page,
+            Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        String normalizedStatus = isBlank(status) ? null : status.trim();
+        if (normalizedStatus != null && !QuoteStatusWorkflow.isReleasedOrderStatus(normalizedStatus)) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+
+        QueryWrapper<OrderRfq> qw = new QueryWrapper<>();
+        applyOrderDataScope(qw);
+        applyOrderFilters(qw, customerCode, customerName, keyword, null);
+        if (normalizedStatus == null) {
+            qw.in("status", QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
+        } else {
+            qw.eq("status", normalizedStatus);
+        }
+        qw.apply("EXISTS (SELECT 1 FROM item_quote_version item "
+                + "WHERE item.rfq_id = order_rfq.id "
+                + "AND NULLIF(BTRIM(item.drawing_url), '') IS NOT NULL "
+                + "AND item.tax_included_unit_price IS NOT NULL "
+                + "AND item.status = {0})", QuoteStatusWorkflow.PRICED);
+
+        Long total = orderMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByDesc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(orderMapper.selectList(qw), total, safePage, safePageSize);
+    }
+
     public PageResult<OrderRfq> listReleaseCandidateOrders(String customerName, String keyword, String status, Integer page, Integer pageSize) {
         return listReleaseCandidateOrders(null, customerName, keyword, status, page, pageSize);
     }

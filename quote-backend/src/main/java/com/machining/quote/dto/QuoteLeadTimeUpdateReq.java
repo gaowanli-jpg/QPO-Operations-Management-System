@@ -7,4 +7,5 @@ public class QuoteLeadTimeUpdateReq {
     private Integer rfqId;
     private Integer itemId;
     private String quoteLeadTime;
+    private String scope;
 }

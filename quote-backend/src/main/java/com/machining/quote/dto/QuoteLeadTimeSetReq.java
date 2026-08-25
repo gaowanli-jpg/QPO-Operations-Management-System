@@ -9,4 +9,5 @@ public class QuoteLeadTimeSetReq {
     private Integer rfqId;
     private List<Integer> itemIds;
     private String quoteLeadTime;
+    private String scope;
 }
