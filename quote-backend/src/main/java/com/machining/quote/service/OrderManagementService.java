@@ -343,6 +343,7 @@ public class OrderManagementService {
         List<Map<String, Object>> alreadyBoundItems = new ArrayList<>();
         List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
         List<Map<String, Object>> skippedFiles = new ArrayList<>();
+        int restoredUnpricedCount = 0;
 
         if (versionDrawings != null) {
             for (MultipartFile drawing : versionDrawings) {
@@ -377,12 +378,21 @@ public class OrderManagementService {
                         .saveDrawing(order, drawing, "ORDER_SUPPLEMENT_DRAWING", String.valueOf(rfqId))
                         .publicPath();
                 for (ItemQuoteVersion item : matchedItems) {
-                    if (!isBlank(item.getDrawingUrl())) {
+                    boolean hadDrawingBefore = !isBlank(item.getDrawingUrl());
+                    if (hadDrawingBefore) {
                         alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
                         continue;
                     }
+                    String oldStatus = item.getStatus();
+                    String nextStatus = QuoteStatusWorkflow.statusAfterSupplementDrawing(
+                            oldStatus,
+                            hadDrawingBefore,
+                            item.getTaxIncludedUnitPrice() != null);
                     item.setDrawingUrl(fileUrl);
-                    item.setStatus(QuoteStatusWorkflow.UNPRICED);
+                    item.setStatus(nextStatus);
+                    if (QuoteStatusWorkflow.UNPRICED.equals(nextStatus) && !QuoteStatusWorkflow.UNPRICED.equals(oldStatus)) {
+                        restoredUnpricedCount++;
+                    }
                     itemMapper.updateById(item);
                     boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
                 }
@@ -414,12 +424,21 @@ public class OrderManagementService {
                         .saveDrawing(order, drawing, "ORDER_SUPPLEMENT_DRAWING", String.valueOf(rfqId))
                         .publicPath();
                 for (ItemQuoteVersion item : matchedItems) {
-                    if (!isBlank(item.getDrawingUrl())) {
+                    boolean hadDrawingBefore = !isBlank(item.getDrawingUrl());
+                    if (hadDrawingBefore) {
                         alreadyBoundItems.add(buildItemResult(item, cleanFileName, "该零件已有图纸，未覆盖"));
                         continue;
                     }
+                    String oldStatus = item.getStatus();
+                    String nextStatus = QuoteStatusWorkflow.statusAfterSupplementDrawing(
+                            oldStatus,
+                            hadDrawingBefore,
+                            item.getTaxIncludedUnitPrice() != null);
                     item.setDrawingUrl(fileUrl);
-                    item.setStatus(QuoteStatusWorkflow.UNPRICED);
+                    item.setStatus(nextStatus);
+                    if (QuoteStatusWorkflow.UNPRICED.equals(nextStatus) && !QuoteStatusWorkflow.UNPRICED.equals(oldStatus)) {
+                        restoredUnpricedCount++;
+                    }
                     itemMapper.updateById(item);
                     boundItems.add(buildItemResult(item, cleanFileName, "已绑定"));
                 }
@@ -439,7 +458,8 @@ public class OrderManagementService {
                             boundItems,
                             alreadyBoundItems,
                             unmatchedDrawings,
-                            skippedFiles));
+                            skippedFiles,
+                            restoredUnpricedCount));
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -449,12 +469,13 @@ public class OrderManagementService {
         result.put("alreadyBoundCount", alreadyBoundItems.size());
         result.put("unmatchedCount", unmatchedDrawings.size());
         result.put("skippedCount", skippedFiles.size());
+        result.put("restoredUnpricedCount", restoredUnpricedCount);
         result.put("boundItems", boundItems);
         result.put("alreadyBoundItems", alreadyBoundItems);
         result.put("unmatchedDrawings", unmatchedDrawings);
         result.put("skippedFiles", skippedFiles);
-        log.info("Order supplement drawings completed rfqId={} uploadCount={} boundCount={} alreadyBoundCount={} unmatchedCount={} skippedCount={}",
-                rfqId, fileCount(drawings) + fileCount(versionDrawings), boundItems.size(), alreadyBoundItems.size(), unmatchedDrawings.size(), skippedFiles.size());
+        log.info("Order supplement drawings completed rfqId={} uploadCount={} boundCount={} alreadyBoundCount={} unmatchedCount={} skippedCount={} restoredUnpricedCount={}",
+                rfqId, fileCount(drawings) + fileCount(versionDrawings), boundItems.size(), alreadyBoundItems.size(), unmatchedDrawings.size(), skippedFiles.size(), restoredUnpricedCount);
         if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty()) {
             log.warn("Order supplement drawings completed with warnings rfqId={} unmatchedCount={} skippedCount={}",
                     rfqId, unmatchedDrawings.size(), skippedFiles.size());
@@ -697,7 +718,8 @@ public class OrderManagementService {
             List<Map<String, Object>> boundItems,
             List<Map<String, Object>> alreadyBoundItems,
             List<Map<String, Object>> unmatchedDrawings,
-            List<Map<String, Object>> skippedFiles) {
+            List<Map<String, Object>> skippedFiles,
+            int restoredUnpricedCount) {
         int uploadedDrawingCount = fileCount(drawings);
         int versionUploadedDrawingCount = fileCount(versionDrawings);
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -709,6 +731,7 @@ public class OrderManagementService {
         summary.put("alreadyBoundCount", alreadyBoundItems.size());
         summary.put("unmatchedCount", unmatchedDrawings.size());
         summary.put("skippedCount", skippedFiles.size());
+        summary.put("restoredUnpricedCount", restoredUnpricedCount);
         summary.put("drawingMatchModes", Map.of(
                 "partNo", uploadedDrawingCount,
                 "partNoVersion", versionUploadedDrawingCount

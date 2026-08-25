@@ -116,6 +116,39 @@ class QuoteStatusWorkflowTest {
     }
 
     @Test
+    void supplementDrawingRestoresOnlyMissingDrawingItemsWithoutPriceToUnpriced() {
+        assertThat(QuoteStatusWorkflow.statusAfterSupplementDrawing(QuoteStatusWorkflow.NO_DRAWING, false, false))
+                .isEqualTo(QuoteStatusWorkflow.UNPRICED);
+
+        assertThat(QuoteStatusWorkflow.statusAfterSupplementDrawing(QuoteStatusWorkflow.NO_DRAWING, false, true))
+                .isEqualTo(QuoteStatusWorkflow.NO_DRAWING);
+        assertThat(QuoteStatusWorkflow.statusAfterSupplementDrawing(QuoteStatusWorkflow.NO_DRAWING, true, false))
+                .isEqualTo(QuoteStatusWorkflow.NO_DRAWING);
+        assertThat(QuoteStatusWorkflow.statusAfterSupplementDrawing(QuoteStatusWorkflow.PRICED, false, false))
+                .isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(QuoteStatusWorkflow.statusAfterSupplementDrawing(QuoteStatusWorkflow.QUOTED, false, false))
+                .isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(QuoteStatusWorkflow.statusAfterSupplementDrawing(QuoteStatusWorkflow.ITEM_RELEASED, false, false))
+                .isEqualTo(QuoteStatusWorkflow.ITEM_RELEASED);
+    }
+
+    @Test
+    void rfqReleaseEligibleItemsRequireMarketConfirmedStatusDrawingAndPrice() {
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.QUOTED, true, true)).isTrue();
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.ITEM_RELEASED, true, true)).isTrue();
+
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.PRICED, true, true)).isFalse();
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.QUOTED, false, true)).isFalse();
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.QUOTED, true, false)).isFalse();
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.PARTIALLY_RELEASED, true, true)).isFalse();
+        assertThat(QuoteStatusWorkflow.isRfqReleaseEligibleItem(QuoteStatusWorkflow.RELEASED, true, true)).isFalse();
+
+        assertThat(QuoteStatusWorkflow.isMarketConfirmedItemStatus(QuoteStatusWorkflow.QUOTED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isMarketConfirmedItemStatus(QuoteStatusWorkflow.ITEM_RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.isMarketConfirmedItemStatus(QuoteStatusWorkflow.PRICED)).isFalse();
+    }
+
+    @Test
     void customerLeadTimeQuoteExportIsNotExposedAsASeparateExportPath() throws IOException {
         String marketController = source("controller/MarketController.java");
         String excelExportService = source("service/ExcelExportService.java");

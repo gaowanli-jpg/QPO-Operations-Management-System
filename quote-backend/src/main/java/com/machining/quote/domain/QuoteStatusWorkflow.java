@@ -60,6 +60,21 @@ public final class QuoteStatusWorkflow {
         return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status) || RELEASED.equals(status);
     }
 
+    public static String statusAfterSupplementDrawing(String currentStatus, boolean hadDrawingBefore, boolean hasPrice) {
+        if (NO_DRAWING.equals(currentStatus) && !hadDrawingBefore && !hasPrice) {
+            return UNPRICED;
+        }
+        return currentStatus;
+    }
+
+    public static boolean isRfqReleaseEligibleItem(String status, boolean hasDrawing, boolean hasPrice) {
+        return hasDrawing && hasPrice && isMarketConfirmedItemStatus(status);
+    }
+
+    public static boolean isMarketConfirmedItemStatus(String status) {
+        return QUOTED.equals(status) || ITEM_RELEASED.equals(status);
+    }
+
     public static List<String> orderManagementStatuses() {
         return List.of(UNPRICED, PRICED, QUOTED, PARTIALLY_RELEASED, RELEASED, DISCARDED);
     }
