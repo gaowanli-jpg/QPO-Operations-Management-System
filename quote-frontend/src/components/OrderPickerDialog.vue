@@ -147,13 +147,15 @@ const STATUS_OPTIONS_BY_SCOPE = {
   'u9-sync': ['已生成提单'],
   'sales-order-change': ['已生成提单'],
   'engineer-setup': ['未核价'],
-  'engineer-supplemental-pricing': ['部分已提单', '已生成提单']
+  'engineer-supplemental-pricing': ['部分已提单', '已生成提单'],
+  'quote-process-supplemental': ['部分已提单', '已生成提单']
 }
 
 const ORDER_TYPE_LABEL_BY_SCOPE = {
   'u9-sync': '销售订单',
   'sales-order-change': '销售订单',
-  'engineer-supplemental-pricing': '补图待核价 RFQ 订单'
+  'engineer-supplemental-pricing': '补图待核价 RFQ 订单',
+  'quote-process-supplemental': '补充报价待确认 RFQ 订单'
 }
 
 const SALES_ORDER_SCOPES = ['u9-sync', 'sales-order-change']

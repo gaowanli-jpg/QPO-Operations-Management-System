@@ -19,8 +19,15 @@ describe('quote status stage 4 quote process frontend flow', () => {
   test('locks edit save and export actions by quote status', () => {
     const source = readSource('components', 'QuoteProcess.vue')
 
-    expect(source).toContain('const canEditQuoteLeadTime = computed(() => orderInfo.value.status === \'已核价\')')
-    expect(source).toContain('const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)')
+    expect(source).toContain("const QUOTE_PROCESS_RELEASED_STATUSES = ['部分已提单', '已生成提单']")
+    expect(source).toContain("const SUPPLEMENTAL_DRAWING_QUOTE_SCOPE = 'SUPPLEMENTAL_DRAWING_QUOTE'")
+    expect(source).toContain('const isSupplementalQuoteProcessScope = computed(() => currentQuoteProcessScope.value === SUPPLEMENTAL_DRAWING_QUOTE_SCOPE)')
+    expect(source).toContain('const canEditQuoteLeadTime = computed(() => (')
+    expect(source).toContain('? QUOTE_PROCESS_RELEASED_STATUSES.includes(orderInfo.value.status)')
+    expect(source).toContain(": orderInfo.value.status === '已核价'")
+    expect(source).toContain('const canSaveQuoteSheet = computed(() => (')
+    expect(source).toContain('? canEditQuoteLeadTime.value && quoteProcessItemTotal.value > 0')
+    expect(source).toContain(': canEditQuoteLeadTime.value')
     expect(source).toContain("const QUOTE_PROCESS_EXPORTABLE_STATUSES = ['已报价', '部分已提单', '已生成提单']")
     expect(source).toContain('const canExportQuoteSheet = computed(() => QUOTE_PROCESS_EXPORTABLE_STATUSES.includes(orderInfo.value.status))')
     expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"')
@@ -36,9 +43,11 @@ describe('quote status stage 4 quote process frontend flow', () => {
     expect(source).toContain('v-permission="QUOTE_PROCESS_SAVE_QUOTE_PERMISSION"')
     expect(source).toContain('@click="saveMarketQuoteSheet"')
     expect(source).toContain('const saveMarketQuoteSheet = async () =>')
-    expect(source).toContain('const response = await saveQuoteSheetApi(selectedRfqId.value)')
+    expect(source).toContain('response = await saveQuoteSheetApi(selectedRfqId.value)')
     expect(source).toContain('orderInfo.value = response.orderInfo || orderInfo.value')
-    expect(source).toContain("ElMessage.success('报价单已保存，可导出。')")
+    expect(source).toContain("ElMessage.success(isSupplementalQuoteProcessScope.value")
+    expect(source).toContain("? '补充报价已确认，可进入议价提单追加提单。'")
+    expect(source).toContain(": '报价单已保存，可导出。'")
   })
 
   test('locks engineering pricing sheet export to priced orders', () => {

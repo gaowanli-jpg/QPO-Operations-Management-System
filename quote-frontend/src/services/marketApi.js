@@ -23,6 +23,7 @@ export const downloadSalesOrderImportTemplate = () => downloadFile('/api/market/
 
 const MARKET_ORDER_ENDPOINTS = {
   'quote-process': '/api/market/quote-process/orders',
+  'quote-process-supplemental': '/api/market/quote-process/supplemental-drawing/orders',
   release: '/api/market/release/orders',
   'delivery-document': '/api/market/delivery-documents/orders',
   'u9-sync': '/api/market/u9-sync/orders',
@@ -118,7 +119,14 @@ export const updateReleaseItemOrderFields = (itemId, payload) => postJson(`/api/
 
 export const generateTicket = (payload) => postJson('/api/market/generate-ticket', payload)
 
-export const getQuoteProcessSummary = (rfqId) => request(`/api/market/quote-process/${rfqId}/summary`)
+const scopedPath = (path, scope) => (
+  scope ? `${path}?scope=${encodeURIComponent(scope)}` : path
+)
+
+export const getQuoteProcessSummary = (rfqId, scope) => {
+  const path = `/api/market/quote-process/${rfqId}/summary`
+  return scope ? request(path, { params: { scope } }) : request(path)
+}
 
 export const listQuoteProcessItems = (rfqId, params = {}) => request(`/api/market/quote-process/${rfqId}/items`, { params })
 
@@ -135,17 +143,19 @@ export const updateQuoteProcessLeadTime = (payload) => postJson('/api/market/quo
 
 export const batchUpdateQuoteProcessLeadTime = (payload) => postJson('/api/market/quote-process/lead-time/batch-update', payload)
 
-export const previewQuoteProcessLeadTimeReplacement = (rfqId, formData) => multipartPost(
-  `/api/market/quote-process/${rfqId}/lead-time-replacement/preview`,
+export const previewQuoteProcessLeadTimeReplacement = (rfqId, formData, scope) => multipartPost(
+  scopedPath(`/api/market/quote-process/${rfqId}/lead-time-replacement/preview`, scope),
   formData
 )
 
-export const confirmQuoteProcessLeadTimeReplacement = (rfqId, formData) => multipartPost(
-  `/api/market/quote-process/${rfqId}/lead-time-replacement/confirm`,
+export const confirmQuoteProcessLeadTimeReplacement = (rfqId, formData, scope) => multipartPost(
+  scopedPath(`/api/market/quote-process/${rfqId}/lead-time-replacement/confirm`, scope),
   formData
 )
 
 export const saveQuoteSheet = (rfqId) => postJson(`/api/market/quote-process/${rfqId}/save-quote`)
+
+export const saveSupplementalQuoteSheet = (rfqId) => postJson(`/api/market/quote-process/${rfqId}/save-supplemental-quote`)
 
 export const downloadMarketExport = (path, rfqId, fallbackName = `${path}-${rfqId}.xlsx`) => downloadFile(
   `/api/market/export/${path}/${rfqId}`,

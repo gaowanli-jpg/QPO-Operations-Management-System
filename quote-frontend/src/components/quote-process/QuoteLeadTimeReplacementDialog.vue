@@ -190,7 +190,8 @@ import {
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   rfqId: { type: [Number, String], default: null },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  scope: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update:modelValue', 'busy-change', 'confirmed'])
@@ -324,7 +325,7 @@ const submitPreview = async () => {
     try {
       previewError.value = ''
       confirmResult.value = null
-      const response = await previewQuoteProcessLeadTimeReplacement(props.rfqId, formData)
+      const response = await previewQuoteProcessLeadTimeReplacement(props.rfqId, formData, props.scope || undefined)
       if (requestVersion !== replacementStateVersion.value || !visible.value) return
       previewResult.value = response || null
       previewPagination.page = 1
@@ -353,7 +354,7 @@ const submitConfirm = async () => {
   const confirmedFingerprint = previewFingerprint.value
   return runAction(actionKeys.confirm, async () => {
     try {
-      const response = await confirmQuoteProcessLeadTimeReplacement(props.rfqId, formData)
+      const response = await confirmQuoteProcessLeadTimeReplacement(props.rfqId, formData, props.scope || undefined)
       if (requestVersion !== replacementStateVersion.value || !visible.value) return
       confirmResult.value = response || null
       confirmedPreviewFingerprint.value = confirmedFingerprint

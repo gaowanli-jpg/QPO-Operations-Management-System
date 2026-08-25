@@ -88,14 +88,16 @@ describe('marketApi', () => {
     const params = { customerName: 'ACME', status: 'PRICED' }
 
     await marketApi.listMarketOrders(params, 'quote-process')
+    await marketApi.listMarketOrders(params, 'quote-process-supplemental')
     await marketApi.listMarketOrders(params, 'release')
     await marketApi.listMarketOrders(params, 'delivery-document')
     await marketApi.listMarketOrders(params, 'u9-sync')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(2, '/api/market/release/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(3, '/api/market/delivery-documents/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(4, '/api/market/u9-sync/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/supplemental-drawing/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/release/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/delivery-documents/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/market/u9-sync/orders', { params })
   })
 
   test('delivery document helpers use the independent backend namespace', async () => {
@@ -391,6 +393,35 @@ describe('marketApi', () => {
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/18/summary')
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/18/items', { params })
+  })
+
+  test('quote process supplemental helpers pass scope and use supplemental save endpoint', async () => {
+    const scope = 'SUPPLEMENTAL_DRAWING_QUOTE'
+    const previewFormData = new FormData()
+    const confirmFormData = new FormData()
+
+    await marketApi.getQuoteProcessSummary(18, scope)
+    await marketApi.previewQuoteProcessLeadTimeReplacement(18, previewFormData, scope)
+    await marketApi.confirmQuoteProcessLeadTimeReplacement(18, confirmFormData, scope)
+    await marketApi.saveSupplementalQuoteSheet(18)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/18/summary', {
+      params: { scope }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/18/lead-time-replacement/preview?scope=SUPPLEMENTAL_DRAWING_QUOTE', {
+      method: 'POST',
+      data: previewFormData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/market/quote-process/18/lead-time-replacement/confirm?scope=SUPPLEMENTAL_DRAWING_QUOTE', {
+      method: 'POST',
+      data: confirmFormData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/quote-process/18/save-supplemental-quote', {
+      method: 'POST',
+      data: undefined
+    })
   })
 
   test('parseQuoteProcessPartSelection uploads quote process lock form data by rfq id', async () => {

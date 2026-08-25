@@ -7,6 +7,7 @@
           </div>
           <div class="erp-page-actions header-actions">
             <el-button v-permission="'market:quote-process:order-select'" :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
+            <el-button v-permission="'market:quote-process:order-select'" :icon="DocumentChecked" plain @click="openSupplementalQuoteOrderPicker">补充报价待确认</el-button>
           </div>
 
     </header>
@@ -26,6 +27,14 @@
                 <el-tag type="primary">{{ orderInfo.status || '-' }}</el-tag>
               </el-descriptions-item>
             </el-descriptions>
+            <el-alert
+              v-if="isSupplementalQuoteProcessScope"
+              class="supplemental-quote-alert"
+              title="补充报价待确认只处理本次补图零件，不重置整单历史报价单或历史提单。"
+              type="warning"
+              :closable="false"
+              show-icon
+            />
 
             <div class="workflow-batch-panel batch-box">
               <div class="panel-title compact">交期调整</div>
@@ -198,7 +207,7 @@
                 </el-upload>
               </div>
             </div>
-            <el-empty v-if="!selectedRfqId" description="请选择已核价、已报价或已提单订单" />
+            <el-empty v-if="!selectedRfqId" :description="emptyOrderDescription" />
             <el-table
               ref="quoteProcessTableRef"
               v-else
@@ -302,10 +311,18 @@
       order-scope="quote-process"
       @select="handleOrderSelected"
     />
+    <OrderPickerDialog
+      v-model="supplementalQuoteOrderPickerVisible"
+      title="补充报价待确认"
+      customer-scope="quote-process"
+      order-scope="quote-process-supplemental"
+      @select="handleSupplementalQuoteOrderSelected"
+    />
     <QuoteLeadTimeReplacementDialog
       v-model="leadTimeReplacementVisible"
       :rfq-id="selectedRfqId"
       :disabled="leadTimeReplacementDisabled"
+      :scope="currentQuoteProcessScope"
       @busy-change="leadTimeReplacementBusy = $event"
       @confirmed="handleLeadTimeReplacementConfirmed"
     />
@@ -328,6 +345,7 @@ import {
   listQuoteProcessItems,
   parseQuoteProcessPartSelection,
   saveQuoteSheet as saveQuoteSheetApi,
+  saveSupplementalQuoteSheet as saveSupplementalQuoteSheetApi,
   setQuoteProcessLeadTime,
   shiftQuoteProcessLeadTime,
   updateQuoteProcessLeadTime
@@ -340,6 +358,8 @@ import { usePendingAction } from '../composables/usePendingAction'
 
 const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价', '部分已提单', '已生成提单']
 const QUOTE_PROCESS_EXPORTABLE_STATUSES = ['已报价', '部分已提单', '已生成提单']
+const QUOTE_PROCESS_RELEASED_STATUSES = ['部分已提单', '已生成提单']
+const SUPPLEMENTAL_DRAWING_QUOTE_SCOPE = 'SUPPLEMENTAL_DRAWING_QUOTE'
 const QUOTE_PROCESS_SAVE_QUOTE_PERMISSION = 'market:quote-process:save-quote'
 const QUOTE_PROCESS_LOCKED_MESSAGE = '当前订单交期已锁定'
 
@@ -352,9 +372,11 @@ const quoteProcessTableRef = ref(null)
 const selectionUploadRef = ref(null)
 const quoteProcessPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const orderPickerVisible = ref(false)
+const supplementalQuoteOrderPickerVisible = ref(false)
 const leadTimeReplacementVisible = ref(false)
 const leadTimeReplacementBusy = ref(false)
 const quoteLeadTimeDraftCache = ref(new Map())
+const currentQuoteProcessScope = ref('')
 const shiftDays = ref(0)
 const manualQuoteDate = ref('')
 
@@ -389,11 +411,27 @@ const selectedOrderLabel = computed(() => (
 
 const pagedQuoteProcessItems = computed(() => itemList.value)
 
+const isSupplementalQuoteProcessScope = computed(() => currentQuoteProcessScope.value === SUPPLEMENTAL_DRAWING_QUOTE_SCOPE)
+
+const emptyOrderDescription = computed(() => (
+  isSupplementalQuoteProcessScope.value
+    ? '请选择补充报价待确认订单'
+    : '请选择已核价、已报价或已提单订单'
+))
+
 const selectedQuoteProcessIdsForSubmit = () => Array.from(selectedQuoteProcessItemIds.value)
 
-const canEditQuoteLeadTime = computed(() => orderInfo.value.status === '已核价')
+const canEditQuoteLeadTime = computed(() => (
+  isSupplementalQuoteProcessScope.value
+    ? QUOTE_PROCESS_RELEASED_STATUSES.includes(orderInfo.value.status)
+    : orderInfo.value.status === '已核价'
+))
 
-const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)
+const canSaveQuoteSheet = computed(() => (
+  isSupplementalQuoteProcessScope.value
+    ? canEditQuoteLeadTime.value && quoteProcessItemTotal.value > 0
+    : canEditQuoteLeadTime.value
+))
 
 const canExportQuoteSheet = computed(() => QUOTE_PROCESS_EXPORTABLE_STATUSES.includes(orderInfo.value.status))
 
@@ -438,14 +476,24 @@ const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
+const openSupplementalQuoteOrderPicker = () => {
+  supplementalQuoteOrderPickerVisible.value = true
+}
+
 const handleOrderSelected = async (order) => {
+  currentQuoteProcessScope.value = ''
   selectedRfqId.value = order.id
   await loadQuoteProcess(order.id)
 }
 
+const handleSupplementalQuoteOrderSelected = async (order) => {
+  currentQuoteProcessScope.value = SUPPLEMENTAL_DRAWING_QUOTE_SCOPE
+  selectedRfqId.value = order.id
+  await loadQuoteProcess(order.id)
+}
 
 const fetchQuoteProcessSummary = async (rfqId = selectedRfqId.value) => {
-  const response = await getQuoteProcessSummary(rfqId)
+  const response = await getQuoteProcessSummary(rfqId, currentQuoteProcessScope.value)
   orderInfo.value = response.orderInfo || {}
   quoteProcessItemTotal.value = Number(response.itemCount ?? response.summary?.itemCount ?? quoteProcessItemTotal.value)
   return response
@@ -455,7 +503,8 @@ const fetchQuoteProcessItems = async () => {
   if (!selectedRfqId.value) return
   const response = await listQuoteProcessItems(selectedRfqId.value, {
     page: quoteProcessPagination.page,
-    pageSize: quoteProcessPagination.pageSize
+    pageSize: quoteProcessPagination.pageSize,
+    scope: currentQuoteProcessScope.value || undefined
   })
   itemList.value = response.records || []
   itemList.value = normalizeRows(itemList.value)
@@ -594,7 +643,8 @@ const applyShift = async (direction) => {
       const response = await shiftQuoteProcessLeadTime({
         rfqId: selectedRfqId.value,
         itemIds: selectedQuoteProcessIdsForSubmit(),
-        days
+        days,
+        scope: currentQuoteProcessScope.value || undefined
       })
       await refreshQuoteProcessWorkspace({ clearSelection: true })
       const adjusted = response.adjustedCount || 0
@@ -622,7 +672,8 @@ const setQuoteLeadTime = async () => {
       const response = await setQuoteProcessLeadTime({
         rfqId: selectedRfqId.value,
         itemIds: selectedQuoteProcessIdsForSubmit(),
-        quoteLeadTime: manualQuoteDate.value
+        quoteLeadTime: manualQuoteDate.value,
+        scope: currentQuoteProcessScope.value || undefined
       })
       await refreshQuoteProcessWorkspace({ clearSelection: true })
       const adjusted = response.adjustedCount || 0
@@ -647,7 +698,8 @@ const saveLeadTime = async (row) => {
       const response = await updateQuoteProcessLeadTime({
         rfqId: selectedRfqId.value,
         itemId: row.id,
-        quoteLeadTime: row.quoteLeadTimeDraft
+        quoteLeadTime: row.quoteLeadTimeDraft,
+        scope: currentQuoteProcessScope.value || undefined
       })
       const saved = normalizeRows([response.data || {}])[0]
       const index = itemList.value.findIndex(item => item.id === row.id)
@@ -676,7 +728,8 @@ const saveAllQuoteLeadTimeDrafts = async () => {
       const items = changedQuoteLeadTimeDrafts.value
       const response = await batchUpdateQuoteProcessLeadTime({
         rfqId: selectedRfqId.value,
-        items: changedQuoteLeadTimeDrafts.value
+        items: changedQuoteLeadTimeDrafts.value,
+        scope: currentQuoteProcessScope.value || undefined
       })
       quoteLeadTimeDraftCache.value = new Map()
       await refreshQuoteProcessWorkspace({ clearSelection: false })
@@ -691,14 +744,25 @@ const saveAllQuoteLeadTimeDrafts = async () => {
 
 const saveMarketQuoteSheet = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canSaveQuoteSheet.value) return ElMessage.warning('只有已核价订单可以保存报价单。')
+  if (!canSaveQuoteSheet.value) {
+    return ElMessage.warning(isSupplementalQuoteProcessScope.value
+      ? '没有补充报价待确认零件，不能保存补充报价。'
+      : '只有已核价订单可以保存报价单。')
+  }
 
   return runAction(quoteProcessActionKeys.saveQuote(), async () => {
     try {
-      const response = await saveQuoteSheetApi(selectedRfqId.value)
+      let response
+      if (isSupplementalQuoteProcessScope.value) {
+        response = await saveSupplementalQuoteSheetApi(selectedRfqId.value)
+      } else {
+        response = await saveQuoteSheetApi(selectedRfqId.value)
+      }
       orderInfo.value = response.orderInfo || orderInfo.value
       await refreshQuoteProcessWorkspace({ clearSelection: true })
-      ElMessage.success('报价单已保存，可导出。')
+      ElMessage.success(isSupplementalQuoteProcessScope.value
+        ? '补充报价已确认，可进入议价提单追加提单。'
+        : '报价单已保存，可导出。')
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '保存报价单失败。')
