@@ -96,12 +96,24 @@ public class EngineerController {
         return result;
     }
 
+    @GetMapping("/pricing/supplemental-drawing/orders")
+    @RequirePermission("engineer:pricing:view")
+    public PageResult<OrderRfq> listSupplementalDrawingPricingOrders(
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return engineerService.listSupplementalPricingOrders(customerName, keyword, status, page, pageSize);
+    }
+
     @GetMapping("/pricing/items/{rfqId}")
     @RequirePermission("engineer:pricing:view")
     public PageResult<ItemQuoteVersion> listPricingItems(
             @PathVariable Integer rfqId,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "scope", required = false) String scope,
             @RequestParam(value = "partNo", required = false) String partNo,
             @RequestParam(value = "version", required = false) String version,
             @RequestParam(value = "page", required = false) Integer page,
@@ -110,6 +122,7 @@ public class EngineerController {
         req.setRfqId(rfqId);
         req.setKeyword(keyword);
         req.setStatus(status);
+        req.setScope(scope);
         req.setPartNo(partNo);
         req.setVersion(version);
         req.setPage(page);
@@ -184,6 +197,15 @@ public class EngineerController {
     public Map<String, Object> completeOrderQuote(@PathVariable Integer rfqId) {
         engineerService.completeOrderQuote(rfqId);
         return Map.of("success", true, "message", "订单核价已完成，已进入报价处理");
+    }
+
+    @PostMapping("/pricing/supplemental-drawing/complete-order/{rfqId}")
+    @RequirePermission("engineer:pricing:complete-order")
+    public Map<String, Object> completeSupplementalDrawingQuote(@PathVariable Integer rfqId) {
+        Map<String, Object> result = new HashMap<>(engineerService.completeSupplementalDrawingQuote(rfqId));
+        result.put("success", true);
+        result.put("message", "补图待核价已完成，订单状态保持不变");
+        return result;
     }
 
     @GetMapping("/pricing/export-sheet/{rfqId}")

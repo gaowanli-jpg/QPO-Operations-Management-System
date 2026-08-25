@@ -3,6 +3,7 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PartVersionKey;
 import com.machining.quote.dto.PricingItemRemarkUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
@@ -182,6 +183,55 @@ public class EngineerService {
                 rfqId, refreshedCount, normalCount, assemblyCount, skippedItems.size(),
                 System.currentTimeMillis() - startedAt);
         return result;
+    }
+
+    public PageResult<OrderRfq> listSupplementalPricingOrders(
+            String customerName,
+            String keyword,
+            String status,
+            Integer page,
+            Integer pageSize) {
+        int safePage = safePage(page);
+        int safePageSize = safePageSize(pageSize);
+        String normalizedStatus = isBlank(status) ? null : status.trim();
+        if (normalizedStatus != null && !QuoteStatusWorkflow.isReleasedOrderStatus(normalizedStatus)) {
+            return PageResult.of(List.of(), 0L, safePage, safePageSize);
+        }
+
+        QueryWrapper<OrderRfq> query = new QueryWrapper<>();
+        applyOrderDataScope(query);
+        if (normalizedStatus == null) {
+            query.in("status", QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
+        } else {
+            query.eq("status", normalizedStatus);
+        }
+        if (!isBlank(customerName)) {
+            query.like("customer_name", customerName.trim());
+        }
+        if (!isBlank(keyword)) {
+            String normalizedKeyword = keyword.trim();
+            query.and(wrapper -> wrapper
+                    .like("rfq_no", normalizedKeyword)
+                    .or()
+                    .like("customer_name", normalizedKeyword)
+                    .or()
+                    .like("project_name", normalizedKeyword));
+        }
+        query.apply("EXISTS (SELECT 1 FROM item_quote_version item "
+                + "WHERE item.rfq_id = order_rfq.id "
+                + "AND NULLIF(BTRIM(item.drawing_url), '') IS NOT NULL "
+                + "AND item.tax_included_unit_price IS NULL "
+                + "AND item.status IN ({0}, {1}))",
+                QuoteStatusWorkflow.UNPRICED,
+                QuoteStatusWorkflow.NO_DRAWING);
+
+        Long total = orderMapper.selectCount(query);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0L, safePage, safePageSize);
+        }
+        query.orderByDesc("id");
+        query.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(orderMapper.selectList(query), total, safePage, safePageSize);
     }
 
     private void saveCalculatedQuote(ItemQuoteVersion item, Map<String, Object> materialData,
@@ -619,8 +669,56 @@ public class EngineerService {
                 rfqId, items.size(), noDrawingCount, order.getStatus(), System.currentTimeMillis() - startedAt);
     }
 
+    @Transactional
+    public Map<String, Object> completeSupplementalDrawingQuote(Integer rfqId) {
+        long startedAt = System.currentTimeMillis();
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        if (!QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())) {
+            throw new RuntimeException("只有部分已提单或已生成提单订单可以完成补图补核价");
+        }
+        String orderStatusBefore = order.getStatus();
+        List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);
+        List<String> pendingSupplementalItems = items.stream()
+                .filter(this::isSupplementalPricingPendingItem)
+                .map(this::itemLabel)
+                .toList();
+        if (!pendingSupplementalItems.isEmpty()) {
+            throw new RuntimeException("尚未完成补核价的补图零件：" + String.join("、", pendingSupplementalItems));
+        }
+
+        int pricedSupplementalItemCount = (int) items.stream()
+                .filter(this::isSupplementalPricingCompletedItem)
+                .count();
+        if (pricedSupplementalItemCount == 0) {
+            throw new RuntimeException("没有已保存核价的补图零件，不能完成补充核价");
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("supplemental", true);
+        result.put("pricedSupplementalItemCount", pricedSupplementalItemCount);
+        result.put("orderStatusBefore", orderStatusBefore);
+        result.put("orderStatusAfter", order.getStatus());
+        auditService.record("ORDER_QUOTE_COMPLETE", "order_rfq", order.getId(), null, result);
+        log.info("Supplemental drawing quote completed rfqId={} pricedSupplementalItemCount={} orderStatusBefore={} orderStatusAfter={} durationMs={}",
+                rfqId, pricedSupplementalItemCount, orderStatusBefore, order.getStatus(), System.currentTimeMillis() - startedAt);
+        return result;
+    }
+
     private boolean hasDrawing(ItemQuoteVersion item) {
         return item != null && !isBlank(item.getDrawingUrl());
+    }
+
+    private boolean isSupplementalPricingPendingItem(ItemQuoteVersion item) {
+        return hasDrawing(item)
+                && item.getTaxIncludedUnitPrice() == null
+                && (QuoteStatusWorkflow.UNPRICED.equals(item.getStatus())
+                || QuoteStatusWorkflow.NO_DRAWING.equals(item.getStatus()));
+    }
+
+    private boolean isSupplementalPricingCompletedItem(ItemQuoteVersion item) {
+        return hasDrawing(item)
+                && item.getTaxIncludedUnitPrice() != null
+                && QuoteStatusWorkflow.PRICED.equals(item.getStatus());
     }
 
     public Map<String, Object> analyzeRepeatOrder(Integer rfqId) {
@@ -1101,6 +1199,17 @@ public class EngineerService {
         if (dataScopeService != null) {
             dataScopeService.applyOrderScope(qw);
         }
+    }
+
+    private int safePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int safePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 50;
+        }
+        return Math.min(pageSize, 100);
     }
 
     private void assertOrderDataScope(OrderRfq order) {

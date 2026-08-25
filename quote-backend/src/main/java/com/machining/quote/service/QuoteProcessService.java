@@ -474,6 +474,11 @@ public class QuoteProcessService {
 
     private OrderRfq requireQuoteProcessEditableOrder(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
+        if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())
+                && QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())
+                && order.getStatus() != null) {
+            throw new RuntimeException("当前订单状态" + order.getStatus() + "，交期已锁定，不能修改报价交期");
+        }
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
             if (QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())) {
                 throw new RuntimeException("当前订单交期已锁定，不能修改报价交期");
@@ -485,6 +490,11 @@ public class QuoteProcessService {
 
     private OrderRfq requireQuoteProcessEditableOrderForUpdate(Integer rfqId) {
         OrderRfq order = requireOrderForUpdate(rfqId);
+        if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())
+                && QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())
+                && order.getStatus() != null) {
+            throw new RuntimeException("当前订单状态" + order.getStatus() + "，交期已锁定，不能修改报价交期");
+        }
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
             if (QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())) {
                 throw new RuntimeException("当前订单交期已锁定，不能修改报价交期");
