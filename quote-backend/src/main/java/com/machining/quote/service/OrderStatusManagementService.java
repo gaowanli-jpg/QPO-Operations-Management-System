@@ -176,8 +176,7 @@ public class OrderStatusManagementService {
     }
 
     private boolean isReleasedItem(String status) {
-        return QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
-                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(status);
+        return QuoteStatusWorkflow.ITEM_RELEASED.equals(status);
     }
 
     private Map<String, Long> statusSummary(List<ItemQuoteVersion> items) {

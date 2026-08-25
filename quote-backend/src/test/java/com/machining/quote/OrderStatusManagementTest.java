@@ -120,6 +120,30 @@ class OrderStatusManagementTest {
     }
 
     @Test
+    void rollbackQuotedTreatsOnlyCurrentItemReleasedStatusAsProtected() {
+        ItemQuoteVersion currentReleased = item(107, QuoteStatusWorkflow.ITEM_RELEASED);
+        ItemQuoteVersion legacyGeneratedOrderStatus = item(108, "\u5df2\u751f\u6210\u63d0\u5355");
+        ItemQuoteVersion legacyPartialItemStatus = item(109, "\u5df2\u90e8\u5206\u63d0\u5355");
+        Fixture fixture = fixture(
+                order(16, QuoteStatusWorkflow.QUOTED),
+                List.of(currentReleased, legacyGeneratedOrderStatus, legacyPartialItemStatus),
+                0L);
+
+        OrderStatusChangeResult result = fixture.service.rollbackQuoted(16, req("cleanup legacy item statuses"));
+
+        assertThat(result.getUpdatedItemCount()).isEqualTo(2);
+        ArgumentCaptor<ItemQuoteVersion> itemCaptor = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper, times(2)).updateById(itemCaptor.capture());
+        assertThat(itemCaptor.getAllValues())
+                .extracting(ItemQuoteVersion::getId)
+                .containsExactly(108, 109);
+        assertThat(itemCaptor.getAllValues())
+                .extracting(ItemQuoteVersion::getStatus)
+                .containsExactly(QuoteStatusWorkflow.PRICED, QuoteStatusWorkflow.PRICED);
+        assertThat(currentReleased.getStatus()).isEqualTo(QuoteStatusWorkflow.ITEM_RELEASED);
+    }
+
+    @Test
     void rollbackPricedUpdatesOrderAndItemsToUnpriced() {
         Fixture fixture = fixture(order(11, QuoteStatusWorkflow.PRICED), List.of(item(102, QuoteStatusWorkflow.PRICED)), 0L);
 

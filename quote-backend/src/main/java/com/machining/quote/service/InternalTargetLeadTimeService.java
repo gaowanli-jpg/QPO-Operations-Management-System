@@ -861,8 +861,7 @@ public class InternalTargetLeadTimeService {
                 : taxIncludedUnitPrice != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
-                && !QuoteStatusWorkflow.RELEASED.equals(status)
-                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(status);
+                && !QuoteStatusWorkflow.RELEASED.equals(status);
         row.put("canSelect", canSelect);
         row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(taxIncludedUnitPrice, remainingQty, status));
         return row;
@@ -1550,8 +1549,7 @@ public class InternalTargetLeadTimeService {
         boolean canSelect = item.getTaxIncludedUnitPrice() != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus());
         row.put("canSelect", canSelect);
         row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(item.getTaxIncludedUnitPrice(), remainingQty, item.getStatus()));
         return row;
@@ -1571,8 +1569,7 @@ public class InternalTargetLeadTimeService {
             return "Item is fully released";
         }
         if (QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
-                || QuoteStatusWorkflow.RELEASED.equals(status)
-                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(status)) {
+                || QuoteStatusWorkflow.RELEASED.equals(status)) {
             return "Item is released";
         }
         return "";
@@ -1870,8 +1867,7 @@ public class InternalTargetLeadTimeService {
         }
         return salesOrderReleaseRemainingQty(item) > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                && !QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus());
+                && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus());
     }
 
     private int salesOrderReleaseRemainingQty(SalesOrderItem item) {
@@ -1889,8 +1885,7 @@ public class InternalTargetLeadTimeService {
             return "Item is fully released";
         }
         if (item != null && (QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
-                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus())
-                || QuoteStatusWorkflow.isLegacyItemReleasedStatus(item.getStatus()))) {
+                || QuoteStatusWorkflow.RELEASED.equals(item.getStatus()))) {
             return "Item is released";
         }
         return "Item cannot be updated";
