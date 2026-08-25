@@ -320,6 +320,16 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="可选状态" width="150" align="center">
+                <template #default="{ row }">
+                  <el-tag v-if="canSelectItem(row)" type="success" size="small">可提单</el-tag>
+                  <el-tooltip v-else :content="releaseBlockedReasonText(row)" placement="top">
+                    <el-tag type="warning" size="small" class="release-status-tag">
+                      {{ releaseBlockedReasonText(row) }}
+                    </el-tag>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
               <el-table-column prop="qty" label="询价数量" width="90" align="center" />
               <el-table-column prop="ticketedQty" label="已提单数量" width="105" align="center" />
               <el-table-column prop="remainingQty" label="剩余可提数量" width="110" align="center" />
@@ -1134,6 +1144,13 @@ const defaultAcceptedQtyFor = (row) => {
 
 const canSelectItem = (row) => {
   return row?.canSelect !== false
+}
+
+const releaseBlockedReasonText = (row) => {
+  if (!row) return '不可提单'
+  if (row.releaseBlockedReason) return row.releaseBlockedReason
+  if (row?.status === '已核价' && row?.taxIncludedUnitPrice != null) return '补充报价尚未确认'
+  return '不可提单'
 }
 
 const canEditReleaseItemOrderFields = (row) => row?.canSelect !== false
@@ -2105,6 +2122,16 @@ const sourceTypeLabel = () => {
 
 .qty-input {
   width: 105px;
+}
+
+.release-status-tag {
+  max-width: 128px;
+}
+
+.release-status-tag :deep(.el-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .internal-lead-panel {

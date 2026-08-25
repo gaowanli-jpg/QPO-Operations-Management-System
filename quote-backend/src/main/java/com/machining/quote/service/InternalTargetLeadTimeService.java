@@ -856,14 +856,16 @@ public class InternalTargetLeadTimeService {
         row.put("remark", value(raw, "remark"));
         row.put("quoteMode", value(raw, "quote_mode"));
         row.put("assemblyFee", value(raw, "assembly_fee"));
+        boolean hasDrawing = !isBlank(drawingUrl);
         boolean canSelect = ReleaseSourceType.RFQ.name().equals(sourceType)
-                ? taxIncludedUnitPrice != null
+                ? QuoteStatusWorkflow.isRfqReleaseEligibleItem(status, hasDrawing, taxIncludedUnitPrice != null)
                 : taxIncludedUnitPrice != null
                 && remainingQty > 0
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(status)
                 && !QuoteStatusWorkflow.RELEASED.equals(status);
         row.put("canSelect", canSelect);
-        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(taxIncludedUnitPrice, remainingQty, status));
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(
+                sourceType, taxIncludedUnitPrice, remainingQty, status, hasDrawing));
         return row;
     }
 
@@ -1492,7 +1494,8 @@ public class InternalTargetLeadTimeService {
         row.put("remark", item.getRemark());
         row.put("quoteMode", item.getQuoteMode());
         row.put("assemblyFee", item.getAssemblyFee());
-        boolean canSelect = item.getTaxIncludedUnitPrice() != null;
+        boolean canSelect = QuoteStatusWorkflow.isRfqReleaseEligibleItem(
+                item.getStatus(), hasDrawing(item), item.getTaxIncludedUnitPrice() != null);
         row.put("canSelect", canSelect);
         row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReason(item, remainingQty));
         return row;
@@ -1551,17 +1554,41 @@ public class InternalTargetLeadTimeService {
                 && !QuoteStatusWorkflow.ITEM_RELEASED.equals(item.getStatus())
                 && !QuoteStatusWorkflow.RELEASED.equals(item.getStatus());
         row.put("canSelect", canSelect);
-        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(item.getTaxIncludedUnitPrice(), remainingQty, item.getStatus()));
+        row.put("releaseBlockedReason", canSelect ? "" : releaseBlockedReasonFromValues(
+                "SALES_ORDER", item.getTaxIncludedUnitPrice(), remainingQty, item.getStatus(), Boolean.TRUE.equals(row.get("hasDrawing"))));
         return row;
     }
     private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
+        if (!hasDrawing(item)) {
+            return "Item has no drawing";
+        }
         if (item.getTaxIncludedUnitPrice() == null) {
             return "Item is not quoted";
+        }
+        if (QuoteStatusWorkflow.PRICED.equals(item.getStatus())) {
+            return "补充报价尚未确认";
         }
         return "";
     }
 
-    private String releaseBlockedReasonFromValues(Object taxIncludedUnitPrice, int remainingQty, String status) {
+    private String releaseBlockedReasonFromValues(
+            String sourceType,
+            Object taxIncludedUnitPrice,
+            int remainingQty,
+            String status,
+            boolean hasDrawing) {
+        if (ReleaseSourceType.RFQ.name().equals(sourceType)) {
+            if (!hasDrawing) {
+                return "Item has no drawing";
+            }
+            if (taxIncludedUnitPrice == null) {
+                return "Item is not quoted";
+            }
+            if (QuoteStatusWorkflow.PRICED.equals(status)) {
+                return "补充报价尚未确认";
+            }
+            return "";
+        }
         if (taxIncludedUnitPrice == null) {
             return "Item is not quoted";
         }
@@ -1573,6 +1600,10 @@ public class InternalTargetLeadTimeService {
             return "Item is released";
         }
         return "";
+    }
+
+    private boolean hasDrawing(ItemQuoteVersion item) {
+        return item != null && !isBlank(item.getDrawingUrl());
     }
 
     private String placeholders(List<Object> params, Iterable<?> values) {

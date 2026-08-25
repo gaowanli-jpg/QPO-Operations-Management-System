@@ -220,20 +220,15 @@ public class RfqReleaseSalesOrderService {
             if (order == null) {
                 throw new RuntimeException("提单零件不属于本次询价单批次");
             }
-            int ticketedQty = ticketedQty(item);
-            int remainingQty = Math.max(0, safeInt(item.getQty()) - ticketedQty);
             int acceptedQty = requestLine.getAcceptedQty() == null
-                    ? (ticketedQty > 0 ? remainingQty : safeInt(item.getQty()))
+                    ? safeInt(item.getQty())
                     : requestLine.getAcceptedQty();
+            if (!QuoteStatusWorkflow.isRfqReleaseEligibleItem(
+                    item.getStatus(), hasDrawing(item), item.getTaxIncludedUnitPrice() != null)) {
+                throw new RuntimeException("零件 " + itemLabel(item) + " " + releaseEligibilityFailureReason(item));
+            }
             if (acceptedQty <= 0) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
-            }
-            if (ticketedQty > 0 && remainingQty <= 0) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 已全部提单，不能重复生成");
-            }
-            if (ticketedQty > 0 && acceptedQty > remainingQty) {
-                throw new RuntimeException("零件 " + itemLabel(item) + " 的提单数量 " + acceptedQty
-                        + " 超过剩余可提数量 " + remainingQty);
             }
             result.add(new ReleaseLine(item, acceptedQty, effectiveFields(item, context)));
         }
@@ -557,13 +552,31 @@ public class RfqReleaseSalesOrderService {
                 qtyByItem.merge(ticket.getItemId(), safeInt(ticket.getQty()), Integer::sum);
             }
         }
-        List<ItemQuoteVersion> quotedItems = items.stream()
-                .filter(item -> item.getTaxIncludedUnitPrice() != null)
+        List<ItemQuoteVersion> releasableItems = items.stream()
+                .filter(item -> QuoteStatusWorkflow.isRfqReleaseEligibleItem(
+                        item.getStatus(), hasDrawing(item), item.getTaxIncludedUnitPrice() != null))
                 .toList();
-        boolean allQuotedItemsTicketed = !quotedItems.isEmpty() && quotedItems.stream()
+        boolean allReleasableItemsTicketed = !releasableItems.isEmpty() && releasableItems.stream()
                 .allMatch(item -> qtyByItem.getOrDefault(item.getId(), 0) >= safeInt(item.getQty()));
-        order.setStatus(allQuotedItemsTicketed ? HEADER_RELEASED : "部分已提单");
+        order.setStatus(allReleasableItemsTicketed ? HEADER_RELEASED : QuoteStatusWorkflow.PARTIALLY_RELEASED);
         orderMapper.updateById(order);
+    }
+
+    private String releaseEligibilityFailureReason(ItemQuoteVersion item) {
+        if (!hasDrawing(item)) {
+            return "缺少图纸，不能提单";
+        }
+        if (item.getTaxIncludedUnitPrice() == null) {
+            return "尚未报价，不能提单";
+        }
+        if (QuoteStatusWorkflow.PRICED.equals(item.getStatus())) {
+            return "补充报价尚未确认";
+        }
+        return "尚未满足提单条件";
+    }
+
+    private boolean hasDrawing(ItemQuoteVersion item) {
+        return item != null && !isBlank(item.getDrawingUrl());
     }
 
     private String resolveQuoteStatus(List<ItemQuoteVersion> items) {
