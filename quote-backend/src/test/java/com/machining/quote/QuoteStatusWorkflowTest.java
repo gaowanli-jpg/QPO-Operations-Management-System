@@ -59,6 +59,12 @@ class QuoteStatusWorkflowTest {
     void freezesQuoteProcessReadEditAndExportGates() {
         assertThat(QuoteStatusWorkflow.canReadQuoteProcess(QuoteStatusWorkflow.PRICED)).isTrue();
         assertThat(QuoteStatusWorkflow.canReadQuoteProcess(QuoteStatusWorkflow.QUOTED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canReadQuoteProcess(QuoteStatusWorkflow.PARTIALLY_RELEASED))
+                .as("部分已提单订单允许回到报价处理只读导出")
+                .isTrue();
+        assertThat(QuoteStatusWorkflow.canReadQuoteProcess(QuoteStatusWorkflow.RELEASED))
+                .as("已生成提单订单允许回到报价处理只读导出")
+                .isTrue();
         assertThat(QuoteStatusWorkflow.canReadQuoteProcess(QuoteStatusWorkflow.UNPRICED)).isFalse();
 
         assertThat(QuoteStatusWorkflow.canEditQuoteLeadTime(QuoteStatusWorkflow.PRICED))
@@ -67,14 +73,24 @@ class QuoteStatusWorkflowTest {
         assertThat(QuoteStatusWorkflow.canEditQuoteLeadTime(QuoteStatusWorkflow.QUOTED))
                 .as("已报价订单交期锁定")
                 .isFalse();
+        assertThat(QuoteStatusWorkflow.canEditQuoteLeadTime(QuoteStatusWorkflow.PARTIALLY_RELEASED))
+                .as("已提单订单交期锁定")
+                .isFalse();
+        assertThat(QuoteStatusWorkflow.canEditQuoteLeadTime(QuoteStatusWorkflow.RELEASED))
+                .as("已提单订单交期锁定")
+                .isFalse();
 
         assertThat(QuoteStatusWorkflow.canSaveQuoteSheet(QuoteStatusWorkflow.PRICED)).isTrue();
         assertThat(QuoteStatusWorkflow.canSaveQuoteSheet(QuoteStatusWorkflow.QUOTED)).isFalse();
+        assertThat(QuoteStatusWorkflow.canSaveQuoteSheet(QuoteStatusWorkflow.PARTIALLY_RELEASED)).isFalse();
+        assertThat(QuoteStatusWorkflow.canSaveQuoteSheet(QuoteStatusWorkflow.RELEASED)).isFalse();
 
         assertThat(QuoteStatusWorkflow.canExportQuoteSheet(QuoteStatusWorkflow.PRICED))
                 .as("已核价订单必须先保存报价单，不能直接导出")
                 .isFalse();
         assertThat(QuoteStatusWorkflow.canExportQuoteSheet(QuoteStatusWorkflow.QUOTED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canExportQuoteSheet(QuoteStatusWorkflow.PARTIALLY_RELEASED)).isTrue();
+        assertThat(QuoteStatusWorkflow.canExportQuoteSheet(QuoteStatusWorkflow.RELEASED)).isTrue();
 
         assertThat(QuoteStatusWorkflow.canExportPricingSheet(QuoteStatusWorkflow.PRICED))
                 .as("工程核价单只代表工程侧核价结果，应允许已核价订单生成")

@@ -3,7 +3,7 @@
     <header class="erp-page-header quote-process-page-header">
           <div>
             <h2>报价处理</h2>
-            <p>维护已核价订单的报价交期，生成并导出客户报价单。</p>
+            <p>维护已核价订单的报价交期，已报价/已提单订单只读导出客户报价单。</p>
           </div>
           <div class="erp-page-actions header-actions">
             <el-button v-permission="'market:quote-process:order-select'" :icon="DocumentChecked" type="primary" @click="openOrderPicker">选择订单</el-button>
@@ -198,7 +198,7 @@
                 </el-upload>
               </div>
             </div>
-            <el-empty v-if="!selectedRfqId" description="请选择已核价或已报价订单" />
+            <el-empty v-if="!selectedRfqId" description="请选择已核价、已报价或已提单订单" />
             <el-table
               ref="quoteProcessTableRef"
               v-else
@@ -296,7 +296,7 @@
 
     <OrderPickerDialog
       v-model="orderPickerVisible"
-      title="选择已核价 / 已报价 RFQ 订单"
+      title="选择已核价 / 已报价 / 已提单 RFQ 订单"
       :allowed-statuses="QUOTE_PROCESS_ALLOWED_STATUSES"
       customer-scope="quote-process"
       order-scope="quote-process"
@@ -338,8 +338,10 @@ import {
 } from '../utils/clientPagination'
 import { usePendingAction } from '../composables/usePendingAction'
 
-const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价']
+const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价', '部分已提单', '已生成提单']
+const QUOTE_PROCESS_EXPORTABLE_STATUSES = ['已报价', '部分已提单', '已生成提单']
 const QUOTE_PROCESS_SAVE_QUOTE_PERMISSION = 'market:quote-process:save-quote'
+const QUOTE_PROCESS_LOCKED_MESSAGE = '当前订单交期已锁定'
 
 const selectedRfqId = ref(null)
 const orderInfo = ref({})
@@ -393,7 +395,7 @@ const canEditQuoteLeadTime = computed(() => orderInfo.value.status === '已核�
 
 const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)
 
-const canExportQuoteSheet = computed(() => orderInfo.value.status === '已报价')
+const canExportQuoteSheet = computed(() => QUOTE_PROCESS_EXPORTABLE_STATUSES.includes(orderInfo.value.status))
 
 const changedQuoteLeadTimeDrafts = computed(() => Array.from(quoteLeadTimeDraftCache.value.values()))
 
@@ -530,7 +532,7 @@ const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
   const file = uploadFile?.raw
   selectionUploadRef.value?.clearFiles()
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能导入表格选定。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning(`${QUOTE_PROCESS_LOCKED_MESSAGE}，不能导入表格选定。`)
   if (!file) return
 
   const fileName = String(file.name || '').toLowerCase()
@@ -571,7 +573,7 @@ const handleQuoteProcessSelectionExcelChange = async (uploadFile) => {
 
 const openLeadTimeReplacementDialog = () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能进行表格数据替换。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning(`${QUOTE_PROCESS_LOCKED_MESSAGE}，不能进行表格数据替换。`)
   leadTimeReplacementVisible.value = true
 }
 
@@ -582,7 +584,7 @@ const handleLeadTimeReplacementConfirmed = async () => {
 
 const applyShift = async (direction) => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再调整。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning(`${QUOTE_PROCESS_LOCKED_MESSAGE}，不能再调整。`)
   if (selectedQuoteProcessItemIds.value.size === 0) return ElMessage.warning('请至少选择一个零件。')
   const days = Math.abs(Number(shiftDays.value || 0)) * direction
   if (!days) return ElMessage.warning('调整天数为 0，不需要调整。')
@@ -611,7 +613,7 @@ const applyShift = async (direction) => {
 
 const setQuoteLeadTime = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再调整。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning(`${QUOTE_PROCESS_LOCKED_MESSAGE}，不能再调整。`)
   if (selectedQuoteProcessItemIds.value.size === 0) return ElMessage.warning('请至少选择一个零件。')
   if (!manualQuoteDate.value) return ElMessage.warning('请先选择报价交期。')
 
@@ -639,7 +641,7 @@ const setQuoteLeadTime = async () => {
 
 const saveLeadTime = async (row) => {
   if (!selectedRfqId.value || !row?.id) return
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再保存。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning(`${QUOTE_PROCESS_LOCKED_MESSAGE}，不能再保存。`)
   return runAction(quoteProcessActionKeys.leadTimeRow(row.id), async () => {
     try {
       const response = await updateQuoteProcessLeadTime({
@@ -666,7 +668,7 @@ const saveLeadTime = async (row) => {
 
 const saveAllQuoteLeadTimeDrafts = async () => {
   if (!selectedRfqId.value) return ElMessage.warning('请先选择 RFQ 订单。')
-  if (!canEditQuoteLeadTime.value) return ElMessage.warning('已报价订单交期已锁定，不能再保存。')
+  if (!canEditQuoteLeadTime.value) return ElMessage.warning(`${QUOTE_PROCESS_LOCKED_MESSAGE}，不能再保存。`)
   if (!hasQuoteLeadTimeDraftChanges.value) return ElMessage.warning('没有需要保存的报价交期修改。')
 
   return runAction(quoteProcessActionKeys.leadTimeBulkSave(), async () => {

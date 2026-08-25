@@ -40,7 +40,11 @@ describe('QPO workflow page polish', () => {
       'workflow-muted-actions',
       'workflow-soft-button',
       'workflow-primary-action',
-      '维护已核价订单的报价交期，生成并导出客户报价单。'
+      '维护已核价订单的报价交期，已报价/已提单订单只读导出客户报价单。',
+      "const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价', '部分已提单', '已生成提单']",
+      "const QUOTE_PROCESS_EXPORTABLE_STATUSES = ['已报价', '部分已提单', '已生成提单']",
+      'QUOTE_PROCESS_EXPORTABLE_STATUSES.includes(orderInfo.value.status)',
+      '当前订单交期已锁定'
     ])
   })
 

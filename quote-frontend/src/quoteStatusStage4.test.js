@@ -7,13 +7,13 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 describe('quote status stage 4 quote process frontend flow', () => {
-  test('allows selecting priced and quoted orders in quote process', () => {
+  test('allows selecting priced quoted and released orders in quote process', () => {
     const source = readSource('components', 'QuoteProcess.vue')
 
-    expect(source).toContain("const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价']")
+    expect(source).toContain("const QUOTE_PROCESS_ALLOWED_STATUSES = ['已核价', '已报价', '部分已提单', '已生成提单']")
     expect(source).toContain(':allowed-statuses="QUOTE_PROCESS_ALLOWED_STATUSES"')
-    expect(source).toContain('选择已核价 / 已报价 RFQ 订单')
-    expect(source).toContain('请选择已核价或已报价订单')
+    expect(source).toContain('选择已核价 / 已报价 / 已提单 RFQ 订单')
+    expect(source).toContain('请选择已核价、已报价或已提单订单')
   })
 
   test('locks edit save and export actions by quote status', () => {
@@ -21,7 +21,8 @@ describe('quote status stage 4 quote process frontend flow', () => {
 
     expect(source).toContain('const canEditQuoteLeadTime = computed(() => orderInfo.value.status === \'已核价\')')
     expect(source).toContain('const canSaveQuoteSheet = computed(() => canEditQuoteLeadTime.value)')
-    expect(source).toContain('const canExportQuoteSheet = computed(() => orderInfo.value.status === \'已报价\')')
+    expect(source).toContain("const QUOTE_PROCESS_EXPORTABLE_STATUSES = ['已报价', '部分已提单', '已生成提单']")
+    expect(source).toContain('const canExportQuoteSheet = computed(() => QUOTE_PROCESS_EXPORTABLE_STATUSES.includes(orderInfo.value.status))')
     expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"')
     expect(source).toContain(':disabled="!canEditQuoteLeadTime || selectedQuoteProcessItemIds.size === 0 || !manualQuoteDate || quoteLeadTimeBatchPending || savingQuoteSheet || importSelecting || savingQuoteLeadTimeDrafts || leadTimeReplacementBusy"')
     expect(source).toContain(':disabled="!canEditQuoteLeadTime"')

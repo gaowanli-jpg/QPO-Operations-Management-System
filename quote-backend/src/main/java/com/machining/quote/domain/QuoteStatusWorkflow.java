@@ -34,7 +34,7 @@ public final class QuoteStatusWorkflow {
     }
 
     public static boolean canReadQuoteProcess(String status) {
-        return PRICED.equals(status) || QUOTED.equals(status);
+        return PRICED.equals(status) || canExportQuoteSheet(status);
     }
 
     public static boolean canEditQuoteLeadTime(String status) {
@@ -46,7 +46,7 @@ public final class QuoteStatusWorkflow {
     }
 
     public static boolean canExportQuoteSheet(String status) {
-        return QUOTED.equals(status);
+        return QUOTED.equals(status) || PARTIALLY_RELEASED.equals(status) || RELEASED.equals(status);
     }
 
     public static boolean canExportPricingSheet(String status) {

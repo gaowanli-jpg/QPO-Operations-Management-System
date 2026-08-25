@@ -436,7 +436,7 @@ public class QuoteProcessService {
             if (QuoteStatusWorkflow.PRICED.equals(order.getStatus())) {
                 throw new RuntimeException("请先在报价处理模块保存报价单后再导出");
             }
-            throw new RuntimeException("只有已报价订单可以导出报价单");
+            throw new RuntimeException("只有已报价或已提单订单可以导出报价单");
         }
     }
 
@@ -467,7 +467,7 @@ public class QuoteProcessService {
     private OrderRfq requireQuoteProcessReadableOrder(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
         if (!QuoteStatusWorkflow.canReadQuoteProcess(order.getStatus())) {
-            throw new RuntimeException("只有已核价或已报价订单可以处理报价单");
+            throw new RuntimeException("只有已核价、已报价或已提单订单可以处理报价单");
         }
         return order;
     }
@@ -475,8 +475,8 @@ public class QuoteProcessService {
     private OrderRfq requireQuoteProcessEditableOrder(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
-            if (QuoteStatusWorkflow.QUOTED.equals(order.getStatus())) {
-                throw new RuntimeException("已报价订单交期已锁定，不能修改报价交期");
+            if (QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())) {
+                throw new RuntimeException("当前订单交期已锁定，不能修改报价交期");
             }
             throw new RuntimeException("只有已核价订单可以维护报价交期");
         }
@@ -486,8 +486,8 @@ public class QuoteProcessService {
     private OrderRfq requireQuoteProcessEditableOrderForUpdate(Integer rfqId) {
         OrderRfq order = requireOrderForUpdate(rfqId);
         if (!QuoteStatusWorkflow.canEditQuoteLeadTime(order.getStatus())) {
-            if (QuoteStatusWorkflow.QUOTED.equals(order.getStatus())) {
-                throw new RuntimeException("已报价订单交期已锁定，不能修改报价交期");
+            if (QuoteStatusWorkflow.canExportQuoteSheet(order.getStatus())) {
+                throw new RuntimeException("当前订单交期已锁定，不能修改报价交期");
             }
             throw new RuntimeException("只有已核价订单可以维护报价交期");
         }
