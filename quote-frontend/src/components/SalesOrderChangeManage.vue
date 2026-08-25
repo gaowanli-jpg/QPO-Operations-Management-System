@@ -25,14 +25,6 @@
       </div>
     </header>
 
-    <el-alert
-      class="sales-order-change-warning"
-      title="不调用 U9，只做本地校正：本功能仅修改 QPO 本地销售订单零件数据，不会同步到 U9。请确认 U9 已完成对应调整后再保存。"
-      type="warning"
-      show-icon
-      :closable="false"
-    />
-
     <section class="erp-surface workflow-workspace sales-order-change-workspace">
       <aside class="erp-surface sales-order-change-side-panel">
         <div class="panel-title">销售订单</div>
@@ -664,10 +656,6 @@ const u9StatusTagType = (status) => status === '已同步' ? 'success' : 'info'
 
 .sales-order-change-header-actions {
   flex-wrap: wrap;
-}
-
-.sales-order-change-warning {
-  margin-bottom: var(--erp-space-4);
 }
 
 .sales-order-change-workspace {

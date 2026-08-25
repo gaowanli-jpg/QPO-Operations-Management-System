@@ -15,7 +15,7 @@
 
 | 配置项 | 示例 | 说明 |
 | --- | --- | --- |
-| QPO 前端地址 | `https://qpo.example.com` | 由部署环境提供。 |
+| QPO 前端地址 | `http://10.2.25.100:8088` | 由部署环境提供。 |
 | SSO 回调路径 | `/sso/datacenter/callback` | 数据中心按钮跳转到该前端路径。 |
 | App Code | `QPO` | 必须与 QPO 系统配置中的 App Code 一致。 |
 | Shared Secret | 线下交付 | HMAC-SHA256 共享密钥，不得写入普通文档或日志。 |

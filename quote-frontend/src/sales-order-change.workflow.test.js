@@ -38,7 +38,7 @@ describe('sales order change module stage 1', () => {
     const component = readSource('components', 'SalesOrderChangeManage.vue')
     expect(component).toContain('class="erp-page sales-order-change-page"')
     expect(component).toContain('销售变更')
-    expect(component).toContain('本功能仅修改 QPO 本地销售订单零件数据，不会同步到 U9')
+    expect(component).not.toContain('sales-order-change-warning')
     expect(component).toContain('customer-scope="sales-order-change"')
     expect(component).toContain('order-scope="sales-order-change"')
     expect(component).toContain('previewSalesOrderChange')
