@@ -201,6 +201,34 @@ class PermissionControllerGuardCharacterizationTest {
     }
 
     @Test
+    void supplementalDrawingWorkflowReusesExistingPermissionPoints() throws Exception {
+        String permissionDoc = Files.readString(Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md"), StandardCharsets.UTF_8);
+        String engineer = source("EngineerController.java");
+        String market = source("MarketController.java");
+        String quoteProcess = source("QuoteProcessController.java");
+        String internalLeadTime = source("InternalTargetLeadTimeController.java");
+
+        assertThat(permissionDoc)
+                .contains("补图待核价入口复用 `engineer:pricing:view`、`engineer:pricing:save-item` 和 `engineer:pricing:complete-order`，不新增权限点。")
+                .contains("补充报价待确认入口复用 `market:quote-process:view`、`market:quote-process:order-select`、`market:quote-process:update-lead-time` 和 `market:quote-process:save-quote`，不新增权限点。")
+                .contains("补图零件追加议价提单复用 `market:release:create`，不新增权限点。");
+        assertThat(engineer)
+                .contains("@RequirePermission(\"engineer:pricing:view\")")
+                .contains("@RequirePermission(\"engineer:pricing:complete-order\")")
+                .doesNotContain("engineer:pricing:supplemental");
+        assertThat(market)
+                .contains("@RequirePermission(\"market:quote-process:order-select\")")
+                .contains("@RequirePermission(\"market:release:create\")")
+                .doesNotContain("market:quote-process:supplemental");
+        assertThat(quoteProcess)
+                .contains("@RequirePermission(\"market:quote-process:save-quote\")")
+                .doesNotContain("market:quote-process:supplemental");
+        assertThat(internalLeadTime)
+                .contains("@RequirePermission(\"market:release:create\")")
+                .doesNotContain("market:release:supplemental");
+    }
+
+    @Test
     void interceptorRejectsAuthenticatedUserWhenPermissionIsMissing() throws Exception {
         AuthInterceptor interceptor = interceptor(permissionInfo(false, "market:rfq:view"));
         MockHttpServletRequest request = request();

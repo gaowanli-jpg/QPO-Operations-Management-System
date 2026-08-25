@@ -124,6 +124,37 @@ class AuditActionCatalogCharacterizationTest {
     }
 
     @Test
+    void supplementalDrawingWorkflowGovernanceUsesExistingAuditActionsAndSafeSummaries() throws Exception {
+        String logDoc = Files.readString(Path.of("..", "docs", "QPO日志模块", "03-日志运维说明.md"), StandardCharsets.UTF_8);
+        String engineerService = Files.readString(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "service", "EngineerService.java"), StandardCharsets.UTF_8);
+        String quoteProcessService = Files.readString(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "service", "QuoteProcessService.java"), StandardCharsets.UTF_8);
+        String rfqReleaseService = Files.readString(Path.of(
+                "src", "main", "java", "com", "machining", "quote", "service", "RfqReleaseSalesOrderService.java"), StandardCharsets.UTF_8);
+
+        assertThat(logDoc)
+                .contains("补图补核价追加提单阶段 7 收口")
+                .contains("补图、补核价、补充报价和追加提单沿用 `ORDER_SUPPLEMENT_DRAWINGS`、`ORDER_QUOTE_COMPLETE`、`ITEM_QUOTE_SAVE`、`QUOTE_PROCESS_SAVE_QUOTE`、`DELIVERY_TICKET_GENERATE` 等现有审计动作")
+                .contains("摘要只允许记录 `statusBefore/statusAfter`、`restoredUnpricedCount`、`supplemental=true`、`supplementalItemCount`、`pricedSupplementalItemCount`、`orderStatusBefore/orderStatusAfter`、`ticketCount` 等治理字段")
+                .contains("不得记录完整图纸、完整报价快照、完整工艺路线 JSON、token、Authorization、Cookie 或外部系统密钥");
+        assertThat(engineerService)
+                .contains("auditService.record(\"ITEM_QUOTE_SAVE\"")
+                .contains("auditService.record(\"ORDER_QUOTE_COMPLETE\"")
+                .contains("pricedSupplementalItemCount")
+                .doesNotContain("ORDER_SUPPLEMENTAL_QUOTE_COMPLETE");
+        assertThat(quoteProcessService)
+                .contains("auditService.record(", "\"QUOTE_PROCESS_SAVE_QUOTE\"")
+                .contains("supplementalItemCount")
+                .contains("orderStatusBefore")
+                .doesNotContain("SUPPLEMENTAL_QUOTE_PROCESS_SAVE_QUOTE");
+        assertThat(rfqReleaseService)
+                .contains("auditService.record(\"DELIVERY_TICKET_GENERATE\"")
+                .contains("ticketCount")
+                .doesNotContain("SUPPLEMENTAL_DELIVERY_TICKET_GENERATE");
+    }
+
+    @Test
     void mesWmsAuditActionsExposeStableChineseLabels() {
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUBMIT")).isEqualTo("提交MES物料号同步");
         assertThat(AuditService.labelForAction("DELIVERY_MES_MATERIAL_SYNC_SUCCESS")).isEqualTo("MES物料号同步成功");
