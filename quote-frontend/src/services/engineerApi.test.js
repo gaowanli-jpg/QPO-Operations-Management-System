@@ -38,6 +38,14 @@ describe('engineerApi', () => {
     expect(request).toHaveBeenCalledWith('/api/engineer/setup/orders', { params })
   })
 
+  test('listSupplementalPricingOrders forwards supplemental drawing order picker params', async () => {
+    const params = { customerName: 'ACME', status: '已生成提单', page: 1, pageSize: 20 }
+
+    await engineerApi.listSupplementalPricingOrders(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/supplemental-drawing/orders', { params })
+  })
+
   test('getSetupSummary loads engineer setup order summary by rfq id', async () => {
     await engineerApi.getSetupSummary(12)
 
@@ -78,6 +86,14 @@ describe('engineerApi', () => {
     await engineerApi.completeOrderQuote(12)
 
     expect(request).toHaveBeenCalledWith('/api/engineer/complete-order/12', {
+      method: 'POST'
+    })
+  })
+
+  test('completeSupplementalDrawingQuote posts supplemental completion by rfq id', async () => {
+    await engineerApi.completeSupplementalDrawingQuote(12)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/supplemental-drawing/complete-order/12', {
       method: 'POST'
     })
   })

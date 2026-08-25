@@ -125,7 +125,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import { listMarketOrders } from '../services/marketApi'
-import { listSetupOrders } from '../services/engineerApi'
+import { listSetupOrders, listSupplementalPricingOrders } from '../services/engineerApi'
 import { listSalesOrderChangeOrders } from '../services/salesOrderChangeApi'
 
 const CUSTOMER_PERMISSION_BY_SCOPE = {
@@ -136,6 +136,7 @@ const CUSTOMER_PERMISSION_BY_SCOPE = {
   'u9-sync': 'market:u9-sync:customer-select',
   'sales-order-change': 'change:sales-order:customer-select',
   'engineer-setup': 'engineer:setup:customer-select',
+  'engineer-pricing': 'engineer:pricing:view',
   'market-order': 'market:order:customer-select'
 }
 
@@ -145,12 +146,14 @@ const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
   'u9-sync': ['已生成提单'],
   'sales-order-change': ['已生成提单'],
-  'engineer-setup': ['未核价']
+  'engineer-setup': ['未核价'],
+  'engineer-supplemental-pricing': ['部分已提单', '已生成提单']
 }
 
 const ORDER_TYPE_LABEL_BY_SCOPE = {
   'u9-sync': '销售订单',
-  'sales-order-change': '销售订单'
+  'sales-order-change': '销售订单',
+  'engineer-supplemental-pricing': '补图待核价 RFQ 订单'
 }
 
 const SALES_ORDER_SCOPES = ['u9-sync', 'sales-order-change']
@@ -360,6 +363,8 @@ const loadOrders = async () => {
     }
     const response = props.orderScope === 'engineer-setup'
       ? await listSetupOrders(params)
+      : props.orderScope === 'engineer-supplemental-pricing'
+        ? await listSupplementalPricingOrders(params)
       : props.orderScope === 'sales-order-change'
         ? await listSalesOrderChangeOrders(params)
         : await listMarketOrders(params, props.orderScope)

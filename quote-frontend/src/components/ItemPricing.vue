@@ -9,6 +9,7 @@
       </div>
       <div class="erp-page-actions pricing-page-actions">
         <el-tag type="success" size="large" v-if="rfqId">询价单 ID: {{ rfqId }}</el-tag>
+        <el-tag type="warning" size="large" v-if="isSupplementalDrawingScope">补图待核价</el-tag>
         <el-tag size="large" v-if="quoteData?.orderInfo?.status">订单状态：{{ quoteData.orderInfo.status }}</el-tag>
       </div>
     </header>
@@ -17,7 +18,8 @@
       <div class="pricing-context-copy">
         <span class="pricing-context-kicker">当前核价任务</span>
         <strong>RFQ {{ rfqId || '-' }}</strong>
-        <p>继承工程全局配置后，在这里完成每个零件的材料与工艺核价。</p>
+        <p v-if="isSupplementalDrawingScope">补图待核价完成后进入市场补充报价待确认，不改变整单历史提单状态。</p>
+        <p v-else>继承工程全局配置后，在这里完成每个零件的材料与工艺核价。</p>
       </div>
       <div class="pricing-metric-grid">
         <div class="pricing-metric">
@@ -45,6 +47,14 @@
         <small>先处理有图纸零件，再提交到市场报价处理。</small>
       </div>
       <div class="erp-toolbar-group pricing-toolbar-actions">
+        <el-button
+          v-permission="'engineer:pricing:view'"
+          type="primary"
+          plain
+          @click="openSupplementalDrawingOrderPicker"
+        >
+          补图待核价
+        </el-button>
         <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
         <el-button
           v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION"
@@ -640,6 +650,14 @@
       @process-rate-updated="handleProcessRateUpdated"
     />
 
+    <OrderPickerDialog
+      v-model="supplementalDrawingOrderPickerVisible"
+      title="补图待核价"
+      customer-scope="engineer-pricing"
+      order-scope="engineer-supplemental-pricing"
+      @select="handleSupplementalDrawingOrderSelected"
+    />
+
     <!-- 图纸预览 -->
     <el-dialog
       v-model="pdfVisible"
@@ -668,9 +686,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus, Top } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
+import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   applyRepeatQuotes,
   completeOrderQuote as completeOrderQuoteRequest,
+  completeSupplementalDrawingQuote as completeSupplementalDrawingQuoteRequest,
   getPricingSummary,
   getRepeatAnalysis,
   listAssemblyChildCandidates,
@@ -699,6 +719,7 @@ import { usePendingAction } from '../composables/usePendingAction'
 
 const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
 const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'
+const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'
 
 const route = useRoute()
 const router = useRouter()
@@ -706,6 +727,7 @@ const authStore = useAuthStore()
 const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
+const pricingScope = ref('')
 const globalConfig = ref({
   materialCode: '',
   materialName: '',
@@ -747,8 +769,10 @@ const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
 const repeatAnalysis = ref(null)
+const supplementalDrawingOrderPickerVisible = ref(false)
 
 const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
+const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)
 
 const defaultGlobalConfig = () => ({
   materialCode: '',
@@ -829,6 +853,11 @@ const canExportPricingSheet = computed(() => !!rfqId.value
   && pricingItemTotal.value > 0)
 
 const canCompleteQuote = computed(() => {
+  if (isSupplementalDrawingScope.value) {
+    return !!rfqId.value
+      && !refreshLoading.value
+      && pricingItemTotal.value > 0
+  }
   return !!rfqId.value
     && !refreshLoading.value
     && quoteData.value?.orderInfo?.status === '未核价'
@@ -863,6 +892,7 @@ watch(
 // 页面加载时自动拉取数据
 onMounted(async () => {
   rfqId.value = route.query.rfqId
+  pricingScope.value = route.query.scope === SUPPLEMENTAL_DRAWING_SCOPE ? SUPPLEMENTAL_DRAWING_SCOPE : ''
   await fetchDicts()
 
   // 1. 读取全局缓存
@@ -905,7 +935,8 @@ const fetchPricingItems = async (options = {}) => {
   const scrollTop = options.keepScroll ? getPricingTableScrollTop() : 0
   const response = await listPricingItems(rfqId.value, {
     page: pricingListPagination.page,
-    pageSize: pricingListPagination.pageSize
+    pageSize: pricingListPagination.pageSize,
+    scope: isSupplementalDrawingScope.value ? SUPPLEMENTAL_DRAWING_SCOPE : undefined
   })
   if (!quoteData.value) {
     quoteData.value = { itemList: [] }
@@ -987,6 +1018,18 @@ const exportPricingSheet = async () => {
 }
 
 const completeOrderQuote = async () => {
+  if (isSupplementalDrawingScope.value) {
+    return runAction(pricingActionKeys.completeOrder(), async () => {
+      try {
+        const response = await completeSupplementalDrawingQuoteRequest(rfqId.value)
+        ElMessage.success(response.message || '补图待核价已完成，已进入市场补充报价待确认。')
+        await fetchQuoteData()
+      } catch (error) {
+        console.error(error)
+        ElMessage.error(error.response?.data?.message || '补图待核价完成提交失败。')
+      }
+    })
+  }
   if (!canCompleteQuote.value) {
     return ElMessage.warning('只有未核价订单在所有有图零件完成核价后，才能提交到市场报价处理。')
   }
@@ -1306,6 +1349,22 @@ const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
       proc.unitRate = hourlyRate
     }
   })
+}
+
+const openSupplementalDrawingOrderPicker = () => {
+  supplementalDrawingOrderPickerVisible.value = true
+}
+
+const handleSupplementalDrawingOrderSelected = async (order) => {
+  rfqId.value = order?.id || ''
+  pricingScope.value = SUPPLEMENTAL_DRAWING_SCOPE
+  repeatApplyAttempted.value = false
+  pricingListPagination.page = 1
+  await router.push({
+    path: '/pricing',
+    query: { rfqId: rfqId.value, scope: SUPPLEMENTAL_DRAWING_SCOPE }
+  })
+  await fetchQuoteData()
 }
 
 const handleProcessRateUpdated = async (updatedDetail) => {

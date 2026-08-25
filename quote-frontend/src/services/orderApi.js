@@ -6,6 +6,7 @@ const CUSTOMER_ENDPOINTS = {
   release: '/api/market/release/customers',
   'delivery-document': '/api/market/delivery-documents/customers',
   'engineer-setup': '/api/engineer/setup/customers',
+  'engineer-pricing': '/api/engineer/pricing/customers',
   'market-order': '/api/order-management/customers',
   'sales-order': '/api/market/sales-order-management/customers',
   'sales-order-change': '/api/change/sales-orders/customers',

@@ -96,6 +96,16 @@ public class EngineerController {
         return result;
     }
 
+    @GetMapping("/pricing/customers")
+    @RequirePermission("engineer:pricing:view")
+    public PageResult<CustomerOptionDTO> listPricingCustomers(
+            @RequestParam(value = "field", required = false) String field,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return orderManagementService.pageCustomerOptions(field, keyword, page, pageSize);
+    }
+
     @GetMapping("/pricing/supplemental-drawing/orders")
     @RequirePermission("engineer:pricing:view")
     public PageResult<OrderRfq> listSupplementalDrawingPricingOrders(

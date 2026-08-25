@@ -2,6 +2,11 @@ import { downloadFile, request } from '../api'
 
 export const listSetupOrders = (params = {}) => request('/api/engineer/setup/orders', { params })
 
+export const listSupplementalPricingOrders = (params = {}) => request(
+  '/api/engineer/pricing/supplemental-drawing/orders',
+  { params }
+)
+
 export const getSetupSummary = (rfqId) => request(`/api/engineer/setup/summary/${rfqId}`)
 
 export const getPricingSummary = (rfqId) => request(`/api/engineer/pricing/summary/${rfqId}`)
@@ -32,6 +37,11 @@ export const getRepeatAnalysis = (rfqId) => request(`/api/engineer/repeat-analys
 export const completeOrderQuote = (rfqId) => request(`/api/engineer/complete-order/${rfqId}`, {
   method: 'POST'
 })
+
+export const completeSupplementalDrawingQuote = (rfqId) => request(
+  `/api/engineer/pricing/supplemental-drawing/complete-order/${rfqId}`,
+  { method: 'POST' }
+)
 
 export const listAssemblyRelations = (itemId) => request(`/api/engineer/assembly-relations/${itemId}`)
 
