@@ -138,9 +138,9 @@ public class WmsReservationPlanService {
             failures.add(new RowFailure(ticket.getId(), "sales order header not found"));
             return null;
         }
-        String saleNo = firstText(header.getDocumentNo(), header.getSalesOrderNo());
-        if (saleNo == null) {
-            failures.add(new RowFailure(ticket.getId(), "sales order number not found"));
+        String customerOrderNo = firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo(), ticket.getCustomerOrderNo());
+        if (customerOrderNo == null) {
+            failures.add(new RowFailure(ticket.getId(), "customerOrderNo is required"));
             return null;
         }
         String productCode = text(ticket.getMaterialNo());
@@ -160,13 +160,13 @@ public class WmsReservationPlanService {
         PreparedTicket prepared = new PreparedTicket();
         prepared.setTicket(ticket);
         prepared.setSaleOrderId(header.getId());
-        prepared.setSaleNo(saleNo);
+        prepared.setSaleNo(customerOrderNo);
         prepared.setSalesOrderItemId(sourceItem.getId());
         prepared.setSalesOrderLineNo(sourceItem.getLineNo());
         prepared.setProductCode(productCode);
         prepared.setReserveCount(BigDecimal.valueOf(ticket.getQty()));
         prepared.setFallbackRemark(fallbackRemark);
-        prepared.setCustomerOrderNo(firstText(sourceItem.getCustomerOrderNo(), header.getCustomerOrderNo(), ticket.getCustomerOrderNo()));
+        prepared.setCustomerOrderNo(customerOrderNo);
         prepared.setCustomerProjectNo(firstText(sourceItem.getCustomerProjectNo(), header.getCustomerProjectNo(), ticket.getCustomerProjectNo()));
         return prepared;
     }

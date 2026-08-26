@@ -22,7 +22,7 @@
 ```json
 {
   "externalBizId": "QPO-WMS-20260814-01KZZ08THK316WKM13FFENVJD0",
-  "saleNo": "SO-20260814-001",
+  "saleNo": "CO-0814-001",
   "items": [
     {
       "productCode": "500901000700",
@@ -47,15 +47,15 @@
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `externalBizId` | 是 | QPO 生成的外部业务 ID；同一批次重放必须复用。 |
-| `saleNo` | 是 | 正式销售订单号。 |
+| `saleNo` | 是 | 客户订单号；字段名沿用 WMS 现有接口，QPO 不再传自生成销售订单号。 |
 | `items` | 是 | 同一 `saleNo` 下的聚合物料数组，单个零件也必须发送数组。 |
 | `items[].productCode` | 是 | MES 物料号。 |
-| `items[].reserveCount` | 是 | 同销售订单同物料需求数量合计。 |
+| `items[].reserveCount` | 是 | 同客户订单号同物料需求数量合计。 |
 | `items[].remark` | 是 | WMS 支持的正式备注字段，QPO 必须传递。 |
 | `items[].customerProjectNo` | 否 | 客户项目号，QPO 按销售订单行、销售订单头、提单行快照依次兜底。 |
-| `items[].customerOrderNo` | 否 | 客户订单号，QPO 按销售订单行、销售订单头、提单行快照依次兜底。 |
+| `items[].customerOrderNo` | 是 | 客户订单号，与外层 `saleNo` 使用同一解析结果。 |
 
-同一请求中 `productCode` 不允许重复；QPO 在发送前已经按 `productCode ASC` 规范化排序并生成 SHA-256 指纹。若同一销售订单、同一物料被多个 ticket 聚合，但解析出的 `customerProjectNo` 或 `customerOrderNo` 不一致，QPO 不发送该物料，按行级失败返回给页面。
+同一请求中 `productCode` 不允许重复；QPO 在发送前已经按 `productCode ASC` 规范化排序并生成 SHA-256 指纹。若同一客户订单号、同一物料被多个 ticket 聚合，但解析出的 `customerProjectNo` 或 `customerOrderNo` 不一致，QPO 不发送该物料，按行级失败返回给页面。
 
 ## 3. 响应体
 

@@ -22,7 +22,28 @@ import static org.mockito.Mockito.when;
 
 class WmsReservationPlanServiceTest {
     @Test
-    void prepareResolvesSalesOrderBySourceTicketThenDirectFallbackAndSaleNoPriority() {
+    void prepareUsesCustomerOrderNumberAsOutboundSaleNoForWmsContract() {
+        Fixture fixture = fixture();
+        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
+        SalesOrderItem sourceItem = item(1001L, 501L, 10);
+        sourceItem.setCustomerOrderNo("CO-LINE-501");
+        fixture.sourceTicketItem(101, sourceItem);
+        fixture.header(header(501L, "SO-501", "DOC-501", "CO-HEADER-501", "CP-HEADER-501"));
+
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101));
+
+        assertThat(plan.getFailures()).isEmpty();
+        assertThat(plan.getGroups()).singleElement().satisfies(group -> {
+            assertThat(group.getSaleNo()).isEqualTo("CO-LINE-501");
+            assertThat(group.getRequest().getSaleNo()).isEqualTo("CO-LINE-501");
+            assertThat(group.getRequest().getItems()).singleElement()
+                    .extracting(com.machining.quote.dto.wms.WmsSaleLadingReserveReq.Item::getCustomerOrderNo)
+                    .isEqualTo("CO-LINE-501");
+        });
+    }
+
+    @Test
+    void prepareResolvesSalesOrderBySourceTicketThenDirectFallbackAndUsesCustomerOrderNoAsSaleNo() {
         Fixture fixture = fixture();
         fixture.ticket(ticket(101, "MAT-A", 2, null, null));
         fixture.sourceTicketItem(101, item(1001L, 501L, 10));
@@ -37,7 +58,23 @@ class WmsReservationPlanServiceTest {
         assertThat(plan.getFailures()).isEmpty();
         assertThat(plan.getGroups())
                 .extracting(WmsReservationPlanService.ReservationGroup::getSaleNo)
-                .containsExactly("DOC-501", "SO-502");
+                .containsExactly("CO-501", "CO-502");
+    }
+
+    @Test
+    void prepareFailsWhenCustomerOrderNumberCannotBeResolvedForOutboundSaleNo() {
+        Fixture fixture = fixture();
+        fixture.ticket(ticket(101, "MAT-A", 2, null, null));
+        fixture.sourceTicketItem(101, item(1001L, 501L, 10));
+        fixture.header(header(501L, "SO-501", "DOC-501", null, "CP-501"));
+
+        WmsReservationPlanService.ReservationPlan plan = fixture.service.prepare(List.of(101));
+
+        assertThat(plan.getGroups()).isEmpty();
+        assertThat(plan.getFailures()).singleElement().satisfies(failure -> {
+            assertThat(failure.getTicketId()).isEqualTo(101);
+            assertThat(failure.getMessage()).contains("customerOrderNo is required");
+        });
     }
 
     @Test
@@ -84,14 +121,14 @@ class WmsReservationPlanServiceTest {
         assertThat(plan.getGroups()).hasSize(2);
         WmsReservationPlanService.ReservationGroup first = plan.getGroups().get(0);
         WmsReservationPlanService.ReservationGroup second = plan.getGroups().get(1);
-        assertThat(first.getSaleNo()).isEqualTo("DOC-501");
+        assertThat(first.getSaleNo()).isEqualTo("CO-501");
         assertThat(first.getRequest().getItems())
                 .extracting(item -> item.getProductCode() + ":" + item.getReserveCount().stripTrailingZeros().toPlainString())
                 .containsExactly("MAT-A:6", "MAT-B:3");
         assertThat(first.getTickets())
                 .extracting(WmsReservationPlanService.TicketReservation::getTicketId)
                 .containsExactly(102, 101, 103);
-        assertThat(second.getSaleNo()).isEqualTo("DOC-502");
+        assertThat(second.getSaleNo()).isEqualTo("CO-502");
         assertThat(second.getRequest().getItems())
                 .extracting(item -> item.getProductCode() + ":" + item.getReserveCount().stripTrailingZeros().toPlainString())
                 .containsExactly("MAT-A:5");
@@ -239,7 +276,7 @@ class WmsReservationPlanServiceTest {
 
         List<WmsReservationPlanService.TicketAllocationSplit> splits = fixture.service.split(
                 group,
-                responseData("DOC-501", "QPO-WMS-1", responseItem("MAT-A", "7", "3", "2", "5", "2"))
+                responseData("CO-501", "QPO-WMS-1", responseItem("MAT-A", "7", "3", "2", "5", "2"))
         );
 
         assertThat(splits).extracting(WmsReservationPlanService.TicketAllocationSplit::getTicketId)
@@ -263,7 +300,7 @@ class WmsReservationPlanServiceTest {
 
         assertThatThrownBy(() -> fixture.service.split(
                 group,
-                responseData("DOC-501", "QPO-WMS-1", responseItem("MAT-A", "5", "3", "1", "4", "1"))
+                responseData("CO-501", "QPO-WMS-1", responseItem("MAT-A", "5", "3", "1", "4", "1"))
         )).hasMessageContaining("bucket");
     }
 
@@ -307,7 +344,7 @@ class WmsReservationPlanServiceTest {
     }
 
     private SalesOrderHeader header(Long id, String salesOrderNo, String documentNo) {
-        return header(id, salesOrderNo, documentNo, null, null);
+        return header(id, salesOrderNo, documentNo, "CO-" + id, "CP-" + id);
     }
 
     private SalesOrderHeader header(Long id, String salesOrderNo, String documentNo, String customerOrderNo, String customerProjectNo) {

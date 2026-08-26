@@ -6,7 +6,7 @@
 ## 1. 当前结论
 
 - 已提零件模块不再存在单条 WMS 直连任务；用户单选、多选都提交同一个批量入口。
-- 后端按正式销售订单拆组，每个销售订单组生成一个 WMS reserve 请求，同一个销售订单内按 `productCode` 聚合。
+- 后端先解析正式销售订单关联，再按客户订单号拆组；发给 WMS 的字段名仍为 `saleNo`，但取值为客户订单号，同一个客户订单号内按 `productCode` 聚合。
 - 请求 DTO 为 `WmsSaleLadingReserveReq`，响应 DTO 为 `WmsSaleLadingReserveResp`；adapter 固定为 `WMS_SALE_LADING_RESERVE_V1` / `WMS_SALE_LADING_RESERVE_RESPONSE_V1`。
 - `externalBizId` 在本地入库后再发送；网络结果未知时只允许复用同一个 `externalBizId` 和原始 request snapshot 重放。
 - `remark` 是 WMS 支持的正式字段，QPO 每个 item 都必须传。
@@ -17,7 +17,7 @@
 ```json
 {
   "externalBizId": "QPO-WMS-20260814-01KZZ08THK316WKM13FFENVJD0",
-  "saleNo": "SO-20260814-001",
+  "saleNo": "CO-0814-001",
   "items": [
     {
       "productCode": "500901000700",
@@ -33,14 +33,14 @@
 | 字段 | 规则 |
 | --- | --- |
 | `externalBizId` | 全局唯一，同一批重放必须复用原值。 |
-| `saleNo` | 优先取销售订单 `documentNo`，兜底 `salesOrderNo`。 |
+| `saleNo` | 客户订单号，按销售订单行、销售订单头、提单行快照依次兜底；为空时该 ticket 行级失败，不使用 QPO 自生成销售订单号兜底。 |
 | `items[].productCode` | 已提零件 MES 物料号 `materialNo`，同一请求内唯一。 |
-| `items[].reserveCount` | 同销售订单同物料有效 ticket 数量求和，使用 `BigDecimal`。 |
+| `items[].reserveCount` | 同客户订单号同物料有效 ticket 数量求和，使用 `BigDecimal`。 |
 | `items[].remark` | 按 `sales_order_item.line_no ASC, ticket.id ASC` 取首个非空备注，兜底材料名、描述、图号。 |
 | `items[].customerProjectNo` | 客户项目号，按销售订单行、销售订单头、提单行快照依次兜底。 |
-| `items[].customerOrderNo` | 客户订单号，按销售订单行、销售订单头、提单行快照依次兜底。 |
+| `items[].customerOrderNo` | 客户订单号，与外层 `saleNo` 使用同一解析结果。 |
 
-同一销售订单、同一 `productCode` 聚合时，`customerProjectNo` 和 `customerOrderNo` 必须一致；不一致的 ticket 作为行级失败，不进入 WMS 请求。
+同一客户订单号、同一 `productCode` 聚合时，`customerProjectNo` 和 `customerOrderNo` 必须一致；不一致的 ticket 作为行级失败，不进入 WMS 请求。
 
 ## 3. 响应契约
 
