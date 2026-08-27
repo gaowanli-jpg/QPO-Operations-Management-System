@@ -18,6 +18,8 @@ class MesMasterDataMigrationTest {
             "src", "main", "resources", "db", "migration", "V8__mes_master_data_sync.sql");
     private static final Path DELETED_COUNT_MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V24__mes_master_data_sync_deleted_count.sql");
+    private static final Path ASYNC_SCHEDULE_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V25__mes_master_data_async_schedule.sql");
     private static final Path PROCESS_CATEGORY_ENTITY = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessCategory.java");
 
@@ -60,6 +62,22 @@ class MesMasterDataMigrationTest {
 
         assertThat(migration)
                 .contains("ALTER TABLE mes_master_data_sync_run ADD COLUMN IF NOT EXISTS deleted_count INTEGER NOT NULL DEFAULT 0")
+                .doesNotContain("DROP TABLE")
+                .doesNotContain("CREATE TABLE mes_master_data_sync_run");
+    }
+
+    @Test
+    void appendOnlyMigrationAddsAsyncScheduleModeAndActiveRunGuard() throws IOException {
+        String migration = read(ASYNC_SCHEDULE_MIGRATION);
+
+        assertThat(migration)
+                .contains("ALTER TABLE mes_master_data_sync_schedule_config ADD COLUMN IF NOT EXISTS schedule_mode")
+                .contains("ALTER TABLE mes_master_data_sync_schedule_config ADD COLUMN IF NOT EXISTS daily_run_time")
+                .contains("CREATE UNIQUE INDEX IF NOT EXISTS uk_mes_master_data_sync_run_active_type")
+                .contains("ON mes_master_data_sync_run (sync_type)")
+                .contains("WHERE status = 'RUNNING'")
+                .contains("FIXED_DELAY")
+                .contains("02:00:00")
                 .doesNotContain("DROP TABLE")
                 .doesNotContain("CREATE TABLE mes_master_data_sync_run");
     }

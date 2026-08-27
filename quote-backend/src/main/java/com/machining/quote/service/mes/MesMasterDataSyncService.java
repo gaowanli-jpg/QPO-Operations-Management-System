@@ -121,12 +121,11 @@ public class MesMasterDataSyncService {
             return;
         }
         try {
-            SyncResult result = SYNC_TYPE_MATERIAL.equals(syncType)
-                    ? syncMaterialsManual(null)
-                    : syncProcessTypesManual(null);
-            scheduleConfigService.updateScheduledResult(syncType, result);
+            SyncSubmitResult result = submitScheduled(syncType);
             if (!result.success()) {
-                log.warn("MES master data scheduled sync failed syncType={} syncRunId={} message={}",
+                scheduleConfigService.updateScheduledResult(syncType,
+                        new SyncResult(false, result.syncRunId(), 0, 0, 0, 0, 0, 0, 0, result.message()));
+                log.warn("MES master data scheduled sync submit failed syncType={} syncRunId={} message={}",
                         syncType, result.syncRunId(), result.message());
             }
         } catch (RuntimeException error) {
@@ -140,19 +139,30 @@ public class MesMasterDataSyncService {
     }
 
     public SyncSubmitResult submitProcessTypesManual(Long createdBy) {
-        return submitManualSync(
+        return submitSync(
                 SYNC_TYPE_PROCESS_TYPE,
                 createdBy,
                 "MES工艺主数据同步已提交",
-                "已有MES工艺主数据同步正在执行");
+                "已有MES工艺主数据同步正在执行",
+                false);
     }
 
     public SyncSubmitResult submitMaterialsManual(Long createdBy) {
-        return submitManualSync(
+        return submitSync(
                 SYNC_TYPE_MATERIAL,
                 createdBy,
                 "MES材料主数据同步已提交",
-                "已有MES材料主数据同步正在执行");
+                "已有MES材料主数据同步正在执行",
+                false);
+    }
+
+    public SyncSubmitResult submitScheduled(String syncType) {
+        return submitSync(
+                syncType,
+                null,
+                "MES master data scheduled sync submitted",
+                "MES master data sync already running",
+                true);
     }
 
     public MesMasterDataSyncRun getLatestRun(String syncType) {
@@ -174,7 +184,12 @@ public class MesMasterDataSyncService {
         return run;
     }
 
-    private SyncSubmitResult submitManualSync(String syncType, Long createdBy, String submittedMessage, String runningMessage) {
+    private SyncSubmitResult submitSync(
+            String syncType,
+            Long createdBy,
+            String submittedMessage,
+            String runningMessage,
+            boolean scheduled) {
         String normalizedType = validateSyncType(syncType);
         MesMasterDataSyncRun activeRun = findActiveRun(normalizedType);
         if (activeRun != null) {
@@ -197,9 +212,9 @@ public class MesMasterDataSyncService {
             if (taskExecutor == null) {
                 throw new IllegalStateException("MES master data sync executor unavailable");
             }
-            log.info("MES master data sync submitted taskId={} syncRunId={} syncType={} triggerSource=MANUAL",
-                    run.getId(), run.getId(), normalizedType);
-            taskExecutor.execute(() -> runSubmittedSync(normalizedType, run, false));
+            log.info("MES master data sync submitted taskId={} syncRunId={} syncType={} triggerSource={}",
+                    run.getId(), run.getId(), normalizedType, scheduled ? "SCHEDULED" : "MANUAL");
+            taskExecutor.execute(() -> runSubmittedSync(normalizedType, run, scheduled));
             return submitResult(true, true, false, run, submittedMessage);
         } catch (RuntimeException error) {
             String message = safeMessage("MES master data sync task submit failed: " + error.getMessage());
