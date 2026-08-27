@@ -169,6 +169,23 @@ export const useDictionaryStore = defineStore('dictionary', {
       }
     },
 
+    async loadPricingFeeDicts({ force = false } = {}) {
+      if (this.loadedAt && this.lastIncludePricingMarkupFees && !force) {
+        return { pricingMarkupFees: this.pricingMarkupFees }
+      }
+
+      this.loading = true
+      try {
+        const pricingMarkupFees = await loadPricingMarkupFeeRows()
+        this.pricingMarkupFees = pricingMarkupFees || []
+        this.loadedAt = Date.now()
+        this.lastIncludePricingMarkupFees = true
+        return { pricingMarkupFees: this.pricingMarkupFees }
+      } finally {
+        this.loading = false
+      }
+    },
+
     async reloadAfterMutation() {
       return this.loadBaseDicts({
         includePricingMarkupFees: true,

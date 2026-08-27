@@ -18,6 +18,10 @@ export const listAssemblyChildCandidates = (rfqId, params = {}) => request(
   { params }
 )
 
+export const pagePricingMaterialOptions = (params = {}) => request('/api/engineer/pricing/options/materials', { params })
+
+export const pagePricingProcessOptions = (params = {}) => request('/api/engineer/pricing/options/processes', { params })
+
 export const downloadPricingSheet = (rfqId, fallbackName = `pricing-sheet-${rfqId}.xlsx`) => downloadFile(
   `/api/engineer/pricing/export-sheet/${rfqId}`,
   fallbackName

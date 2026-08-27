@@ -33,7 +33,8 @@ describe('Stage 38 phase 6 item pricing process route payload', () => {
     )
 
     expect(source).toContain('processDetailId: source.processDetailId ?? null')
-    expect(source).toContain('proc.processDetailId = selected.processDetailId')
+    expect(source).toContain("const processDetailId = sourceType === 'process' ? (selected.processDetailId ?? selected.id ?? null) : null")
+    expect(source).toContain('proc.processDetailId = processDetailId')
     expect(buildQuoteBlock).toContain('processDetailId: p.processDetailId')
     expect(buildQuoteBlock).toContain('processName: p.processName')
     expect(comparableBlock).toContain('processDetailId: sourceType === \'process\' ? (p.processDetailId ?? null) : null')

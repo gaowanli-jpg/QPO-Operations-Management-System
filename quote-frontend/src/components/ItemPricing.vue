@@ -733,12 +733,21 @@ const globalConfigStore = useGlobalConfigStore()
 const rfqId = ref('')
 const pricingScope = ref('')
 const globalConfig = ref({
+  materialId: null,
   materialCode: '',
   materialName: '',
   materialTypeId: null,
   materialTypeCode: '',
   materialTypeName: '',
   materialCategory: '',
+  density: null,
+  plateDensity: null,
+  platePrice: null,
+  barDensity: null,
+  barPrice: null,
+  tubeDensity: null,
+  tubePrice: null,
+  remarks: '',
   shape: '板材',
   processRoute: [],
   legacyMaterialIdentity: false
@@ -775,12 +784,21 @@ const supplementalDrawingOrderPickerVisible = ref(false)
 const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)
 
 const defaultGlobalConfig = () => ({
+  materialId: null,
   materialCode: '',
   materialName: '',
   materialTypeId: null,
   materialTypeCode: '',
   materialTypeName: '',
   materialCategory: '',
+  density: null,
+  plateDensity: null,
+  platePrice: null,
+  barDensity: null,
+  barPrice: null,
+  tubeDensity: null,
+  tubePrice: null,
+  remarks: '',
   shape: '板材',
   processRoute: [],
   legacyMaterialIdentity: false
@@ -792,18 +810,35 @@ const normalizeVersion = (value) => {
 }
 const itemIdentityKey = (item) => `${normalizePartNo(item?.partNo)}||${normalizeVersion(item?.version)}`
 
+const numberOrNullForSnapshot = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
 const normalizeGlobalConfig = (config) => {
   const defaults = defaultGlobalConfig()
   if (!config || typeof config !== 'object') return defaults
   const materialCode = String(config.materialCode || '').trim()
   const materialName = config.materialName || config.name || defaults.materialName || ''
+  const density = numberOrNullForSnapshot(config.density ?? defaults.density)
+  const unitPrice = numberOrNullForSnapshot(config.unitPrice ?? defaults.unitPrice)
   return {
+    materialId: config.materialId ?? config.id ?? defaults.materialId,
     materialCode,
     materialName,
     materialTypeId: config.materialTypeId ?? defaults.materialTypeId,
     materialTypeCode: config.materialTypeCode || defaults.materialTypeCode,
     materialTypeName: config.materialTypeName || defaults.materialTypeName,
     materialCategory: config.materialCategory || defaults.materialCategory,
+    density,
+    plateDensity: numberOrNullForSnapshot(config.plateDensity ?? density ?? defaults.plateDensity),
+    platePrice: numberOrNullForSnapshot(config.platePrice ?? unitPrice ?? defaults.platePrice),
+    barDensity: numberOrNullForSnapshot(config.barDensity ?? density ?? defaults.barDensity),
+    barPrice: numberOrNullForSnapshot(config.barPrice ?? unitPrice ?? defaults.barPrice),
+    tubeDensity: numberOrNullForSnapshot(config.tubeDensity ?? density ?? defaults.tubeDensity),
+    tubePrice: numberOrNullForSnapshot(config.tubePrice ?? unitPrice ?? defaults.tubePrice),
+    remarks: config.remarks || defaults.remarks || '',
     shape: config.shape || defaults.shape,
     legacyMaterialIdentity: !materialCode && Boolean(materialName),
     processRoute: normalizeRouteList(config.processRoute)
@@ -977,11 +1012,11 @@ onMounted(async () => {
 
 const fetchDicts = async () => {
   try {
-    await dictionaryStore.loadBaseDicts({ includePricingMarkupFees: true })
+    await dictionaryStore.loadPricingFeeDicts()
   } catch (error) {
     console.error(error)
     dictionaryStore.applyPricingFallbackData()
-    ElMessage.warning('基础字典加载失败，已启用本地兜底数据。')
+    ElMessage.warning('费用字典加载失败，已启用本地兜底数据。')
   }
 }
 
@@ -1281,12 +1316,21 @@ onBeforeUnmount(() => {
 })
 
 const matForm = reactive({
+  materialId: null,
   materialCode: '',
   materialName: '',
   materialTypeId: null,
   materialTypeCode: '',
   materialTypeName: '',
   materialCategory: '',
+  density: null,
+  plateDensity: null,
+  platePrice: null,
+  barDensity: null,
+  barPrice: null,
+  tubeDensity: null,
+  tubePrice: null,
+  remarks: '',
   shape: '',
   L: null,
   W: null,
@@ -1298,6 +1342,24 @@ const matForm = reactive({
 const processRoute = ref([])
 let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
+
+const applyMaterialIdentityToMatForm = (source = {}) => {
+  matForm.materialId = source.materialId ?? source.id ?? null
+  matForm.materialCode = source.materialCode || ''
+  matForm.materialName = source.materialName || source.name || ''
+  matForm.materialTypeId = source.materialTypeId ?? null
+  matForm.materialTypeCode = source.materialTypeCode || ''
+  matForm.materialTypeName = source.materialTypeName || ''
+  matForm.materialCategory = source.materialCategory || ''
+  matForm.density = source.density ?? null
+  matForm.plateDensity = source.plateDensity ?? source.density ?? null
+  matForm.platePrice = source.platePrice ?? source.unitPrice ?? null
+  matForm.barDensity = source.barDensity ?? source.density ?? null
+  matForm.barPrice = source.barPrice ?? source.unitPrice ?? null
+  matForm.tubeDensity = source.tubeDensity ?? source.density ?? null
+  matForm.tubePrice = source.tubePrice ?? source.unitPrice ?? null
+  matForm.remarks = source.remarks || ''
+}
 
 const formatMaterialLabel = (material) => {
   if (!material) return ''
@@ -1311,44 +1373,67 @@ const formatMaterialLabel = (material) => {
 }
 
 const selectedMaterialLabel = computed(() => {
-  const material = materialOptions.value.find(item => item.materialCode === matForm.materialCode)
-  if (material) return formatMaterialLabel(material)
+  if (matForm.materialCode) return formatMaterialLabel(matForm)
   if (!matForm.materialCode && matForm.materialName) return `${matForm.materialName}（旧材料模板缺少材料编码，请重新选择）`
   return matForm.materialName || matForm.materialCode || '请选择材质'
 })
 
 const applyMaterialToMatForm = (material) => {
   if (!material?.materialCode) return
-  matForm.materialCode = material.materialCode
-  matForm.materialName = material.materialName || ''
-  matForm.materialTypeId = material.materialTypeId ?? null
-  matForm.materialTypeCode = material.materialTypeCode || ''
-  matForm.materialTypeName = material.materialTypeName || ''
-  matForm.materialCategory = material.materialCategory || ''
+  applyMaterialIdentityToMatForm(material)
 }
 
 const applyMaterialSnapshotToMatForm = (source = {}) => {
   const normalized = normalizeGlobalConfig(source)
-  matForm.materialCode = normalized.materialCode
-  matForm.materialName = normalized.materialName
-  matForm.materialTypeId = normalized.materialTypeId
-  matForm.materialTypeCode = normalized.materialTypeCode
-  matForm.materialTypeName = normalized.materialTypeName
-  matForm.materialCategory = normalized.materialCategory
+  applyMaterialIdentityToMatForm(normalized)
   matForm.shape = normalized.shape || '板材'
+}
+
+const formatProcessRateText = (value) => {
+  const hourlyRate = Number(value)
+  return Number.isFinite(hourlyRate) ? `${hourlyRate.toFixed(2)}元/小时` : '-'
+}
+
+const buildProcessSnapshotOption = (proc) => {
+  if (!proc) return null
+  const sourceType = resolveProcessSourceType(proc)
+  if (sourceType === 'extra') {
+    const processName = proc.processName || proc.feeName || ''
+    if (!processName && !proc.optionKey) return null
+    return {
+      ...proc,
+      optionKey: proc.optionKey || (proc.feeItemId ? `extra:${proc.feeItemId}` : ''),
+      processName,
+      label: proc.label || (processName ? `${processName}（非工时费用）` : ''),
+      calcType: '非工时费用',
+      sourceType
+    }
+  }
+
+  const processDetailId = proc.processDetailId ?? proc.id ?? null
+  const detailName = proc.detailName || proc.processName || ''
+  if (!processDetailId && !proc.optionKey && !detailName && !proc.processCode && !proc.categoryName) return null
+  const hourlyRate = proc.hourlyRate ?? proc.effectiveHourlyRate ?? proc.unitRate ?? null
+  const processCode = proc.processCode || '-'
+  const categoryName = proc.categoryName || '-'
+  return {
+    ...proc,
+    optionKey: proc.optionKey || (processDetailId ? `process:${processDetailId}` : ''),
+    processDetailId,
+    processCategoryId: proc.processCategoryId ?? proc.categoryId ?? null,
+    categoryId: proc.categoryId ?? proc.processCategoryId ?? null,
+    detailName,
+    processName: detailName,
+    hourlyRate,
+    label: proc.label || (detailName ? `${detailName}（${processCode} / ${categoryName} / ${formatProcessRateText(hourlyRate)}）` : ''),
+    calcType: '工时',
+    sourceType
+  }
 }
 
 const findProcessOption = (proc) => {
   if (!proc) return null
-  const sourceType = resolveProcessSourceType(proc)
-  if (sourceType === 'process') {
-    return combinedProcessOptions.value.find(item => item.sourceType === 'process' && String(item.processDetailId) === String(proc.processDetailId))
-      || combinedProcessOptions.value.find(item => item.sourceType === 'process' && item.optionKey === proc.optionKey && proc.optionKey)
-      || null
-  }
-  return combinedProcessOptions.value.find(item => item.sourceType === sourceType && item.optionKey === proc.optionKey && proc.optionKey)
-    || combinedProcessOptions.value.find(item => item.sourceType === 'extra' && item.processName === proc.processName)
-    || null
+  return buildProcessSnapshotOption(proc)
 }
 
 const selectedProcessOptionKey = computed(() => {
@@ -1374,16 +1459,33 @@ const formatProcessLabel = (proc, fallback = '请选择工序') => {
 
 const applyProcessSelection = (proc, selected) => {
   if (!proc || !selected) return
-  proc.optionKey = selected.optionKey
-  proc.processDetailId = selected.processDetailId
-  proc.processCategoryId = selected.processCategoryId
-  proc.processCode = selected.processCode
-  proc.categoryName = selected.categoryName
-  proc.detailName = selected.detailName
-  proc.hourlyRate = selected.hourlyRate
-  proc.processName = selected.detailName || selected.processName
-  proc.calcType = selected.calcType
-  proc.sourceType = selected.sourceType
+  const sourceType = selected.sourceType || resolveProcessSourceType(selected)
+  const processDetailId = sourceType === 'process' ? (selected.processDetailId ?? selected.id ?? null) : null
+  const processCategoryId = sourceType === 'process' ? (selected.processCategoryId ?? selected.categoryId ?? null) : null
+  const processName = sourceType === 'extra'
+    ? (selected.processName || selected.feeName || '')
+    : (selected.detailName || selected.processName || '')
+  const hourlyRate = sourceType === 'process'
+    ? (selected.hourlyRate ?? selected.effectiveHourlyRate ?? selected.unitRate ?? null)
+    : null
+  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId ? `process:${processDetailId}` : '')
+  proc.processDetailId = processDetailId
+  proc.processCategoryId = processCategoryId
+  proc.categoryId = processCategoryId
+  proc.processCode = sourceType === 'process' ? (selected.processCode || '') : ''
+  proc.categoryName = sourceType === 'process' ? (selected.categoryName || '') : ''
+  proc.detailName = sourceType === 'process' ? processName : ''
+  proc.detailHourlyRate = sourceType === 'process' ? (selected.detailHourlyRate ?? null) : null
+  proc.categoryHourlyRate = sourceType === 'process' ? (selected.categoryHourlyRate ?? null) : null
+  proc.effectiveHourlyRate = sourceType === 'process' ? (selected.effectiveHourlyRate ?? hourlyRate) : null
+  proc.hourlyRate = hourlyRate
+  proc.unitRate = hourlyRate
+  proc.feeItemId = sourceType === 'extra' ? (selected.feeItemId ?? selected.id ?? null) : null
+  proc.feeName = sourceType === 'extra' ? (selected.feeName || processName) : ''
+  proc.processName = processName
+  proc.label = selected.label || ''
+  proc.calcType = sourceType === 'extra' ? '非工时费用' : '工时'
+  proc.sourceType = sourceType
 }
 
 const selectMaterial = (material) => {
@@ -1413,6 +1515,9 @@ const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
     proc.categoryName = updatedDetail.categoryName ?? proc.categoryName
     proc.detailName = updatedDetail.detailName ?? proc.detailName
     proc.processName = updatedDetail.detailName ?? proc.processName
+    proc.detailHourlyRate = updatedDetail.detailHourlyRate ?? proc.detailHourlyRate
+    proc.categoryHourlyRate = updatedDetail.categoryHourlyRate ?? proc.categoryHourlyRate
+    proc.effectiveHourlyRate = updatedDetail.effectiveHourlyRate ?? proc.effectiveHourlyRate
     if (hasHourlyRate) {
       proc.hourlyRate = hourlyRate
       proc.unitRate = hourlyRate
@@ -1436,16 +1541,9 @@ const handleSupplementalDrawingOrderSelected = async (order) => {
   await fetchQuoteData()
 }
 
-const handleProcessRateUpdated = async (updatedDetail) => {
+const handleProcessRateUpdated = (updatedDetail) => {
   dictionaryStore.upsertProcessDetail(updatedDetail)
   syncCurrentSelectedProcessRate(updatedDetail)
-  try {
-    await dictionaryStore.reloadAfterMutation()
-    syncCurrentSelectedProcessRate(updatedDetail)
-  } catch (error) {
-    console.error(error)
-    ElMessage.warning('具体小时价格已保存，字典缓存刷新失败，请重新打开页面确认。')
-  }
 }
 
 const isAssemblyItem = (item) => String(item?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
@@ -1516,10 +1614,18 @@ const createProcessRow = (source = {}) => ({
   optionKey: source.optionKey || '',
   processDetailId: source.processDetailId ?? null,
   processCategoryId: source.processCategoryId ?? source.categoryId ?? null,
+  categoryId: source.categoryId ?? source.processCategoryId ?? null,
   processCode: source.processCode || '',
   categoryName: source.categoryName || '',
   detailName: source.detailName || '',
-  hourlyRate: source.hourlyRate ?? null,
+  detailHourlyRate: source.detailHourlyRate ?? null,
+  categoryHourlyRate: source.categoryHourlyRate ?? null,
+  effectiveHourlyRate: source.effectiveHourlyRate ?? source.hourlyRate ?? source.unitRate ?? null,
+  hourlyRate: source.hourlyRate ?? source.effectiveHourlyRate ?? source.unitRate ?? null,
+  unitRate: source.unitRate ?? source.hourlyRate ?? source.effectiveHourlyRate ?? null,
+  feeItemId: source.feeItemId ?? null,
+  feeName: source.feeName || '',
+  label: source.label || '',
   calcType: source.calcType || '工时',
   sourceType: source.sourceType || (source.calcType === '非工时费用' ? 'extra' : 'process'),
   inputVal: numberOrNullForInput(source.unitWorkHours ?? source.inputVal),
@@ -1645,22 +1751,8 @@ const removeProcess = (index) => {
   assignProcessSortNos()
 }
 
-const syncProcessMeta = (proc) => {
-  const selected = findProcessOption(proc)
-  if (!selected) return
-  applyProcessSelection(proc, selected)
-}
-
 const hydrateRouteItem = (proc) => {
-  if (isSelectableProcessRoute(proc) && !proc.processDetailId) {
-    return proc
-  }
-  if (proc.optionKey || proc.processDetailId) {
-    syncProcessMeta(proc)
-    return proc
-  }
-  if (!isExtraFeeRoute(proc)) return proc
-  const selected = combinedProcessOptions.value.find(item => item.sourceType === 'extra' && item.processName === proc.processName)
+  const selected = buildProcessSnapshotOption(proc)
   if (selected) {
     applyProcessSelection(proc, selected)
   }
@@ -1815,12 +1907,22 @@ const openQuoteDialog = async (row) => {
   const hasSavedMaterialSnapshot = Boolean(savedMaterialData.materialCode || savedMaterialData.materialName || savedMaterialData.name)
   applyMaterialSnapshotToMatForm(hasSavedMaterialSnapshot
     ? {
+        materialId: savedMaterialData.materialId,
         materialCode: savedMaterialData.materialCode,
         materialName: savedMaterialData.materialName || savedMaterialData.name,
         materialTypeId: savedMaterialData.materialTypeId,
         materialTypeCode: savedMaterialData.materialTypeCode,
         materialTypeName: savedMaterialData.materialTypeName,
         materialCategory: savedMaterialData.materialCategory,
+        density: savedMaterialData.density,
+        unitPrice: savedMaterialData.unitPrice,
+        plateDensity: savedMaterialData.plateDensity,
+        platePrice: savedMaterialData.platePrice,
+        barDensity: savedMaterialData.barDensity,
+        barPrice: savedMaterialData.barPrice,
+        tubeDensity: savedMaterialData.tubeDensity,
+        tubePrice: savedMaterialData.tubePrice,
+        remarks: savedMaterialData.remarks,
         shape: savedMaterialData.shape || globalConfig.value.shape || '板材'
       }
     : globalConfig.value)
@@ -1856,14 +1958,16 @@ const openQuoteDialog = async (row) => {
 }
 
 // 智能计算材料费
-const currentMatInfo = computed(() => {
-  return materialOptions.value.find(item => item.materialCode === matForm.materialCode) || {
-    density: 0,
-    platePrice: 0,
-    barPrice: 0,
-    tubePrice: 0
-  }
-})
+const currentMatInfo = computed(() => ({
+  id: matForm.materialId,
+  density: numberOrZero(matForm.density),
+  plateDensity: numberOrZero(matForm.plateDensity ?? matForm.density),
+  platePrice: numberOrZero(matForm.platePrice),
+  barDensity: numberOrZero(matForm.barDensity ?? matForm.density),
+  barPrice: numberOrZero(matForm.barPrice),
+  tubeDensity: numberOrZero(matForm.tubeDensity ?? matForm.density),
+  tubePrice: numberOrZero(matForm.tubePrice)
+}))
 const currentUnitPrice = computed(() => {
   if (matForm.shape === '棒材') return currentMatInfo.value.barPrice || 0
   if (matForm.shape === '管材') return currentMatInfo.value.tubePrice || 0

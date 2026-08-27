@@ -74,6 +74,22 @@ describe('engineerApi', () => {
     expect(request).toHaveBeenCalledWith('/api/engineer/pricing/assembly-child-candidates/12', { params })
   })
 
+  test('pagePricingMaterialOptions forwards remote material picker params', async () => {
+    const params = { keyword: '45#', page: 2, pageSize: 50 }
+
+    await engineerApi.pagePricingMaterialOptions(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/materials', { params })
+  })
+
+  test('pagePricingProcessOptions forwards remote process picker params', async () => {
+    const params = { keyword: 'CNC', page: 3, pageSize: 100 }
+
+    await engineerApi.pagePricingProcessOptions(params)
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/processes', { params })
+  })
+
   test('applyRepeatQuotes posts repeat quote application by order id', async () => {
     await engineerApi.applyRepeatQuotes(12)
 

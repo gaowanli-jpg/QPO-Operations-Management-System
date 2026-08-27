@@ -111,6 +111,31 @@ describe('dictionaryStore', () => {
     }))
   })
 
+  test('loadPricingFeeDicts loads only pricing fee dictionaries', async () => {
+    listPricingMarkupFees.mockImplementation((pricingScope, feeCategory) => Promise.resolve([{
+      id: `${pricingScope}-${feeCategory}`,
+      pricingScope,
+      feeCategory,
+      feeName: `${pricingScope}-${feeCategory}`,
+      ratePercent: feeCategory === 'TAX' ? 13 : 0,
+      enabled: true
+    }]))
+    const store = useDictionaryStore()
+
+    await store.loadPricingFeeDicts({ force: true })
+
+    expect(store.pricingMarkupFees).toHaveLength(6)
+    expect(store.getPricingMarkupFees('NORMAL', 'TAX')).toEqual([
+      expect.objectContaining({ pricingScope: 'NORMAL', feeCategory: 'TAX' })
+    ])
+    expect(listPricingMarkupFees).toHaveBeenCalledTimes(6)
+    expect(listMaterialTypes).not.toHaveBeenCalled()
+    expect(listMaterials).not.toHaveBeenCalled()
+    expect(listProcessCategories).not.toHaveBeenCalled()
+    expect(listProcessDetails).not.toHaveBeenCalled()
+    expect(listExtraFeeItems).not.toHaveBeenCalled()
+  })
+
   test('applyPricingFallbackData preserves ItemPricing fallback strategy', () => {
     const store = useDictionaryStore()
 

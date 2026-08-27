@@ -72,8 +72,9 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
 
     expect(itemPricing).toContain(':enable-process-rate-edit="true"')
     expect(itemPricing).toContain('@process-rate-updated="handleProcessRateUpdated"')
-    expect(itemPricing).toContain('await dictionaryStore.reloadAfterMutation()')
+    expect(itemPricing).toContain('dictionaryStore.upsertProcessDetail(updatedDetail)')
     expect(itemPricing).toContain('syncCurrentSelectedProcessRate(updatedDetail)')
+    expect(itemPricing).not.toContain('dictionaryStore.reloadAfterMutation')
   })
 
   test('global config normalization preserves processDetailId as stable identity', () => {
