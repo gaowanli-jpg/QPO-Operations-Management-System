@@ -7,22 +7,24 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8').replace(/\r\n/g, '\n')
 
 describe('engineering option picker remote paging mode', () => {
-  test('keeps local item mode while adding remote mode props and state', () => {
+  test('uses remote paging as the only option source without legacy local ten-row paging', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 
-    expect(source).toContain('remote: {')
     expect(source).toContain('remoteLoader: {')
     expect(source).toContain('pageSizeOptions: {')
     expect(source).toContain('defaultPageSize: {')
-    expect(source).toContain('const remotePage = ref(1)')
+    expect(source).toContain('const page = ref(1)')
     expect(source).toContain('const remotePageSize = ref(normalizeRemotePageSize(props.defaultPageSize))')
     expect(source).toContain('const remoteTotal = ref(0)')
     expect(source).toContain('const remoteRecords = ref([])')
     expect(source).toContain('const remoteLoading = ref(false)')
     expect(source).toContain('const remoteError = ref(\'\')')
-    expect(source).toContain('const displayItems = computed(() => (props.remote ? remoteRecords.value : props.items))')
-    expect(source).toContain('if (props.remote) return remoteRecords.value')
-    expect(source).toContain('filteredItems.value.slice(start, start + PROCESS_PICKER_PAGE_SIZE)')
+    expect(source).toContain('const pagedItems = computed(() => remoteRecords.value)')
+    expect(source).not.toContain('const PROCESS_PICKER_PAGE_SIZE = 10')
+    expect(source).not.toContain('processPickerPage')
+    expect(source).not.toContain('filteredItems.value.slice')
+    expect(source).not.toContain('props.items')
+    expect(source).not.toContain('remote: {')
   })
 
   test('loads the first remote page on open and reloads on paging changes', () => {
@@ -33,7 +35,6 @@ describe('engineering option picker remote paging mode', () => {
     expect(source).toContain('loadRemotePage(1)')
     expect(source).toContain('const handleRemotePageSizeChange = () => loadRemotePage(1)')
     expect(source).toContain('const goPickerPage = (page) => {')
-    expect(source).toContain('if (props.remote) {')
     expect(source).toContain('loadRemotePage(page)')
     expect(source).toContain('v-model="remotePageSize"')
     expect(source).toContain('@change="handleRemotePageSizeChange"')

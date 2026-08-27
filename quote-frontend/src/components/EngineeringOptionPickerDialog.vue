@@ -146,7 +146,6 @@
       <div class="page-size-control">
         <span>每页</span>
         <el-select
-          v-if="remote"
           v-model="remotePageSize"
           size="small"
           class="page-size-select"
@@ -159,7 +158,6 @@
             :value="size"
           />
         </el-select>
-        <span v-else>{{ PROCESS_PICKER_PAGE_SIZE }} 条</span>
       </div>
       <div class="pagination-actions">
         <el-button size="small" :disabled="currentPage <= 1 || remoteLoading" @click="goPickerPage(currentPage - 1)">上一页</el-button>
@@ -186,8 +184,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { saveProcessDetail } from '../services/dictApi'
 
-const PROCESS_PICKER_PAGE_SIZE = 10
-
 const props = defineProps({
   modelValue: {
     type: Boolean,
@@ -201,10 +197,6 @@ const props = defineProps({
     type: String,
     default: 'material'
   },
-  items: {
-    type: Array,
-    default: () => []
-  },
   selectedKey: {
     type: [String, Number],
     default: ''
@@ -214,10 +206,6 @@ const props = defineProps({
     default: '暂无可选数据'
   },
   enableProcessRateEdit: {
-    type: Boolean,
-    default: false
-  },
-  remote: {
     type: Boolean,
     default: false
   },
@@ -249,8 +237,7 @@ const visible = computed({
 
 const keyword = ref('')
 const activeKey = ref('')
-const processPickerPage = ref(1)
-const remotePage = ref(1)
+const page = ref(1)
 const remotePageSize = ref(normalizeRemotePageSize(props.defaultPageSize))
 const remoteTotal = ref(0)
 const remoteRecords = ref([])
@@ -291,65 +278,28 @@ const labelOf = (item) => {
   return item.label || item.detailName || item.processName || item.feeName || ''
 }
 
-const searchTextOf = (item) => [
-  item?.materialCode,
-  item?.materialName,
-  item?.materialTypeCode,
-  item?.materialTypeName,
-  item?.materialCategory,
-  item?.remarks,
-  item?.detailName,
-  item?.processCode,
-  item?.categoryName,
-  item?.hourlyRate,
-  item?.processName,
-  item?.feeName,
-  item?.label,
-  item?.calcType,
-  item?.sourceType
-].filter(Boolean).join(' ').toLowerCase()
-
-const displayItems = computed(() => (props.remote ? remoteRecords.value : props.items))
-
-const filteredItems = computed(() => {
-  if (props.remote) return remoteRecords.value
-  const text = keyword.value.trim().toLowerCase()
-  if (!text) return props.items
-  return props.items.filter(item => searchTextOf(item).includes(text))
-})
-
-const totalItemCount = computed(() => (props.remote ? remoteTotal.value : filteredItems.value.length))
-const currentPage = computed(() => (props.remote ? remotePage.value : processPickerPage.value))
+const totalItemCount = computed(() => remoteTotal.value)
+const currentPage = computed(() => page.value)
 const remoteEmptyText = computed(() => (remoteLoading.value ? '正在加载可选数据...' : emptyTextForDisplay()))
 const totalPages = computed(() => {
-  const size = props.remote ? remotePageSize.value : PROCESS_PICKER_PAGE_SIZE
-  const total = props.remote ? remoteTotal.value : filteredItems.value.length
+  const size = remotePageSize.value
+  const total = remoteTotal.value
   return Math.max(1, Math.ceil(total / size))
 })
-const showPagination = computed(() => (
-  props.remote
-    ? remoteTotal.value > remotePageSize.value || remotePage.value > 1
-    : isProcessPicker.value && totalPages.value > 1
-))
+const showPagination = computed(() => remoteTotal.value > remotePageSize.value || page.value > 1)
 
-const pagedItems = computed(() => {
-  if (props.remote) return remoteRecords.value
-  if (!isProcessPicker.value) return filteredItems.value
-  const start = (processPickerPage.value - 1) * PROCESS_PICKER_PAGE_SIZE
-  return filteredItems.value.slice(start, start + PROCESS_PICKER_PAGE_SIZE)
-})
+const pagedItems = computed(() => remoteRecords.value)
 
 const selectedItem = computed(() => {
   const currentKey = String(activeKey.value || '')
   if (!currentKey) return null
-  return displayItems.value.find(item => keyOf(item) === currentKey)
+  return remoteRecords.value.find(item => keyOf(item) === currentKey)
     || (selectedItemSnapshot.value && keyOf(selectedItemSnapshot.value) === currentKey ? selectedItemSnapshot.value : null)
 })
 
 const selectedLabel = computed(() => labelOf(selectedItem.value) || '未选择')
 
 function emptyTextForDisplay() {
-  if (!props.remote) return props.emptyText
   return remoteError.value ? '加载失败，请调整关键词或重试' : props.emptyText
 }
 
@@ -364,14 +314,13 @@ function syncSelectedSnapshotFromRows(rows) {
 
 const syncSelectedKey = () => {
   activeKey.value = props.selectedKey == null ? '' : String(props.selectedKey)
-  syncSelectedSnapshotFromRows(displayItems.value)
+  syncSelectedSnapshotFromRows(remoteRecords.value)
 }
 
 const resetPicker = () => {
   clearRemoteSearchTimer()
   keyword.value = ''
-  processPickerPage.value = 1
-  remotePage.value = 1
+  page.value = 1
   remotePageSize.value = normalizeRemotePageSize(props.defaultPageSize)
   remoteTotal.value = 0
   remoteRecords.value = []
@@ -415,24 +364,14 @@ const formatHourlyRate = (value) => {
 
 const formatDetailHourlyRate = (value) => (value == null ? '继承大类' : formatHourlyRate(value))
 
-const goProcessPage = (page) => {
-  processPickerPage.value = Math.min(Math.max(1, page), totalPages.value)
-}
-
 const goPickerPage = (page) => {
-  if (props.remote) {
-    loadRemotePage(page)
-    return
-  }
-  goProcessPage(page)
+  loadRemotePage(page)
 }
 
 const handleOpened = () => {
   syncSelectedKey()
-  if (props.remote) {
-    remotePageSize.value = normalizeRemotePageSize(remotePageSize.value)
-    loadRemotePage(1)
-  }
+  remotePageSize.value = normalizeRemotePageSize(remotePageSize.value)
+  loadRemotePage(1)
 }
 
 const handleRemotePageSizeChange = () => loadRemotePage(1)
@@ -449,13 +388,12 @@ const scheduleRemoteSearch = () => {
   remoteSearchTimer.value = window.setTimeout(() => loadRemotePage(1), 300)
 }
 
-const loadRemotePage = async (page = remotePage.value) => {
-  if (!props.remote) return
+const loadRemotePage = async (nextPage = page.value) => {
   if (typeof props.remoteLoader !== 'function') {
     remoteError.value = '远程选项加载器未配置。'
     return
   }
-  const safePage = Math.max(1, Number(page) || 1)
+  const safePage = Math.max(1, Number(nextPage) || 1)
   const safePageSize = normalizeRemotePageSize(remotePageSize.value)
   const requestSeq = remoteRequestSeq.value + 1
   remoteRequestSeq.value = requestSeq
@@ -472,7 +410,7 @@ const loadRemotePage = async (page = remotePage.value) => {
     const records = Array.isArray(pageData.records) ? pageData.records : []
     remoteRecords.value = records
     remoteTotal.value = Number(pageData.total ?? records.length) || 0
-    remotePage.value = Number(pageData.page ?? safePage) || safePage
+    page.value = Number(pageData.page ?? safePage) || safePage
     remotePageSize.value = normalizeRemotePageSize(pageData.pageSize ?? safePageSize)
     syncSelectedSnapshotFromRows(records)
   } catch (error) {
@@ -558,19 +496,7 @@ const saveInlineProcessRate = async (row) => {
 }
 
 watch(() => props.selectedKey, syncSelectedKey)
-watch(keyword, () => {
-  if (props.remote) {
-    scheduleRemoteSearch()
-    return
-  }
-  processPickerPage.value = 1
-})
-watch(filteredItems, () => {
-  if (props.remote) return
-  if (processPickerPage.value > totalPages.value) {
-    processPickerPage.value = totalPages.value
-  }
-})
+watch(keyword, scheduleRemoteSearch)
 onBeforeUnmount(clearRemoteSearchTimer)
 </script>
 

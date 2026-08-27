@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class EngineeringPricingOptionService {
-    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int DEFAULT_PAGE_SIZE = 10;
 
     @Autowired
     private DictMaterialMapper materialMapper;
@@ -291,10 +291,10 @@ public class EngineeringPricingOptionService {
         if (pageSize == null) {
             return DEFAULT_PAGE_SIZE;
         }
-        if (pageSize == 20 || pageSize == 50 || pageSize == 100) {
+        if (pageSize == 10 || pageSize == 20 || pageSize == 50 || pageSize == 100) {
             return pageSize;
         }
-        throw new IllegalArgumentException("pageSize 只允许 20 / 50 / 100");
+        throw new IllegalArgumentException("pageSize 只允许 10 / 20 / 50 / 100");
     }
 
     private boolean hasText(String value) {

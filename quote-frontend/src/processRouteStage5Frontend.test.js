@@ -38,21 +38,25 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     expect(source).toContain('label="大类小时价格"')
     expect(source).toContain('label="核价使用价格"')
     expect(source).toContain('formatHourlyRate')
-    expect(source).toContain('item?.detailName')
-    expect(source).toContain('item?.processCode')
-    expect(source).toContain('item?.categoryName')
-    expect(source).toContain('item?.hourlyRate')
+    expect(source).toContain('row.detailName || row.processName || row.feeName')
+    expect(source).toContain('row.processCode ||')
+    expect(source).toContain('row.categoryName ||')
+    expect(source).toContain('row.effectiveHourlyRate ?? row.hourlyRate')
   })
 
-  test('process picker uses local ten-row pagination without the shared pagination component', () => {
+  test('process picker uses remote paging only and removes legacy local ten-row pagination', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 
-    expect(source).toContain('const PROCESS_PICKER_PAGE_SIZE = 10')
     expect(source).toContain(':data="pagedItems"')
     expect(source).toContain('const pagedItems = computed(() =>')
-    expect(source).toContain('filteredItems.value.slice(start, start + PROCESS_PICKER_PAGE_SIZE)')
     expect(source).toContain('picker-pagination')
-    expect(source).toContain('processPickerPage')
+    expect(source).toContain('pageSizeOptions: {')
+    expect(source).toContain('remoteLoader: {')
+    expect(source).toContain('loadRemotePage(page)')
+    expect(source).not.toContain('const PROCESS_PICKER_PAGE_SIZE = 10')
+    expect(source).not.toContain('filteredItems.value.slice')
+    expect(source).not.toContain('processPickerPage')
+    expect(source).not.toContain('props.items')
     expect(source).not.toContain('<el-pagination')
   })
 

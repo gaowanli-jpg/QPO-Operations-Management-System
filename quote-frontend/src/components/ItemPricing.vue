@@ -632,8 +632,9 @@
       v-model="materialPickerVisible"
       title="选择材料"
       type="material"
-      remote
       :remote-loader="pagePricingMaterialOptions"
+      :page-size-options="[10, 20, 50, 100]"
+      :default-page-size="10"
       :selected-key="matForm.materialCode"
       empty-text="暂无材料字典数据"
       @confirm="selectMaterial"
@@ -643,8 +644,9 @@
       v-model="processPickerVisible"
       title="选择工艺"
       type="process"
-      remote
       :remote-loader="pagePricingProcessOptions"
+      :page-size-options="[10, 20, 50, 100]"
+      :default-page-size="10"
       :selected-key="selectedProcessOptionKey"
       :enable-process-rate-edit="true"
       empty-text="暂无工艺字典数据"

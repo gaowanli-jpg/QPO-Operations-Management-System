@@ -44,7 +44,7 @@ describe('material master picker workflow and global defaults', () => {
     expect(hasLegacyMaterialIdentity(legacy)).toBe(true)
   })
 
-  test('material picker identifies and searches materials by material code', () => {
+  test('material picker identifies materials by material code and renders remote material fields', () => {
     expect(optionPicker).toContain('prop="materialCode"')
     expect(optionPicker).toContain('label="材料编码"')
     expect(optionPicker).toContain('prop="materialName"')
@@ -53,10 +53,15 @@ describe('material master picker workflow and global defaults', () => {
     expect(optionPicker).toContain('materialTypeCode')
     expect(optionPicker).toContain('materialCategory')
     expect(optionPicker).toContain('item?.materialCode')
-    expect(optionPicker).toContain('item?.materialName')
-    expect(optionPicker).toContain('item?.materialTypeName')
-    expect(optionPicker).toContain('item?.materialCategory')
+    expect(optionPicker).toContain('item.materialName')
+    expect(optionPicker).toContain('item.materialTypeName')
+    expect(optionPicker).toContain('item.materialCategory')
+    expect(optionPicker).toContain('row.remarks')
+    expect(optionPicker).toContain('const pagedItems = computed(() => remoteRecords.value)')
     expect(optionPicker).not.toContain('item?.materialName ?? item?.id')
+    expect(optionPicker).not.toContain('searchTextOf')
+    expect(optionPicker).not.toContain('filteredItems')
+    expect(optionPicker).not.toContain('props.items')
   })
 
   test('GlobalSetup saves default material by material code and refuses legacy name-only defaults', () => {

@@ -89,7 +89,7 @@ class EngineeringPricingOptionServiceTest {
     }
 
     @Test
-    void pageMaterialOptionsDefaultsToPageOneAndRejectsUnsupportedPageSize() {
+    void pageMaterialOptionsDefaultsToTenRowsAndRejectsUnsupportedPageSize() {
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialTypeMapper.class),
                 mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
@@ -97,14 +97,18 @@ class EngineeringPricingOptionServiceTest {
 
         PageResult<PricingMaterialOptionDTO> defaulted = service.pageMaterialOptions(new PricingOptionPageReq());
         assertThat(defaulted.getPage()).isEqualTo(1);
-        assertThat(defaulted.getPageSize()).isEqualTo(20);
+        assertThat(defaulted.getPageSize()).isEqualTo(10);
+
+        PricingOptionPageReq tenRows = new PricingOptionPageReq();
+        tenRows.setPageSize(10);
+        assertThat(service.pageMaterialOptions(tenRows).getPageSize()).isEqualTo(10);
 
         PricingOptionPageReq req = new PricingOptionPageReq();
         req.setPageSize(30);
         assertThatThrownBy(() -> service.pageMaterialOptions(req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("pageSize")
-                .hasMessageContaining("20 / 50 / 100");
+                .hasMessageContaining("10 / 20 / 50 / 100");
     }
 
     @Test

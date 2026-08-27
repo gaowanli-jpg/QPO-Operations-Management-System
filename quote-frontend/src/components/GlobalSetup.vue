@@ -245,7 +245,6 @@
       v-model="materialPickerVisible"
       title="选择默认材质"
       type="material"
-      remote
       :remote-loader="pagePricingMaterialOptions"
       :selected-key="config.materialCode"
       empty-text="暂无匹配材料"
@@ -256,7 +255,6 @@
       v-model="processPickerVisible"
       title="选择通用工序"
       type="process"
-      remote
       :remote-loader="pagePricingProcessOptions"
       :selected-key="selectedProcessOptionKey"
       empty-text="暂无匹配工艺"
