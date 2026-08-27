@@ -89,6 +89,40 @@ class MesMasterDataDocumentationCharacterizationTest {
 
         assertThat(masterData)
                 .contains(
+                        "异步提交",
+                        "syncRunId",
+                        "状态查询",
+                        "submitted",
+                        "alreadyRunning",
+                        "GET /api/dict/materials/sync-runs/latest",
+                        "GET /api/dict/materials/sync-runs/{syncRunId}",
+                        "GET /api/dict/process-categories/sync-runs/latest",
+                        "GET /api/dict/process-categories/sync-runs/{syncRunId}",
+                        "FIXED_DELAY",
+                        "DAILY_TIME",
+                        "Asia/Shanghai",
+                        "disabledCount");
+        assertThat(logOps)
+                .contains(
+                        "submitted",
+                        "started",
+                        "completed",
+                        "failed",
+                        "taskId",
+                        "disabledCount",
+                        "deletedCount");
+        assertThat(fileLog)
+                .contains(
+                        "MES master data sync submitted",
+                        "MES master data sync started",
+                        "MES master data sync completed",
+                        "MES master data sync failed",
+                        "taskId",
+                        "disabledCount",
+                        "deletedCount");
+
+        assertThat(masterData)
+                .contains(
                         "MES 无材料单价",
                         "QPO 继续维护材料单价",
                         "材料单价缺失时禁止完成核价",

@@ -4,6 +4,8 @@
 
 > 2026-08-13 定时同步策略补充：材料费用页签“从 MES 同步材料”旁新增“定时同步策略”，工艺大类页签“从 MES 同步工艺”旁新增“定时同步策略”。两套策略分别保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE`，默认关闭；后台巡检到点后复用现有同步服务，不覆盖 QPO 材料单价和板/棒/管密度，不改变 MES 生产下发 payload 合同。
 
+> 2026-08-27 异步提交补充：手动同步接口保持原 POST 路径，但只负责提交后台同步批次并立即返回 `submitted`、`alreadyRunning`、`syncRunId` 和 `status`；页面通过状态查询接口轮询 `mes_master_data_sync_run`，同步完成后再刷新材料/工艺列表。
+
 ## 1. 总体口径
 
 MES 主数据同步用于让 QPO 报价和后续 MES 下发使用 MES 编码体系，但 QPO 仍然保留本地核价治理能力：
@@ -49,8 +51,14 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 | --- | --- | --- |
 | `POST /api/dict/process-categories/sync-mes` | `engineer:dict:process-manage` | `DICT_PROCESS_MES_SYNC` |
 | `POST /api/dict/materials/sync-mes` | `engineer:dict:material-manage` | `DICT_MATERIAL_MES_SYNC` |
+| `GET /api/dict/process-categories/sync-runs/latest` | `engineer:dict:process-manage` | 无，状态查询。 |
+| `GET /api/dict/process-categories/sync-runs/{syncRunId}` | `engineer:dict:process-manage` | 无，状态查询。 |
+| `GET /api/dict/materials/sync-runs/latest` | `engineer:dict:material-manage` | 无，状态查询。 |
+| `GET /api/dict/materials/sync-runs/{syncRunId}` | `engineer:dict:material-manage` | 无，状态查询。 |
 
-同步运行记录写入 `mes_master_data_sync_run`，记录 `syncRunId`、同步类型、状态、抓取数、有效数、无效数、重复数、upsert 数、停用数、删除数、执行人和脱敏消息。
+手动 POST 是异步提交，不等待 MES 拉取和入库完成。提交响应包含 `success`、`submitted`、`alreadyRunning`、`syncRunId`、`syncType`、`status`、`message`；如果同类同步已有 `RUNNING` 批次，返回 `alreadyRunning=true` 和该批次 `syncRunId`，不重复创建后台任务。
+
+同步运行记录写入 `mes_master_data_sync_run`，记录 `syncRunId`、同步类型、状态、抓取数、有效数、无效数、重复数、upsert 数、`disabledCount`、`deletedCount`、执行人和脱敏消息。页面或运维排查时以 `syncRunId` 状态查询为准，状态为 `SUCCESS` 后刷新列表，状态为 `FAILED` 时展示脱敏失败原因。
 
 ## 3.1 QPO 定时同步策略
 
@@ -58,7 +66,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 
 - 材料费用页签：“从 MES 同步材料”旁的“定时同步策略”按钮，维护 `MES_MATERIAL` 定时策略。
 - 工艺大类页签：“从 MES 同步工艺”旁的“定时同步策略”按钮，维护 `MES_PROCESS_TYPE` 定时策略。
-- 策略默认关闭；启动后首次执行默认延迟 30 秒，同步完成后再次执行默认间隔 30 分钟，后台巡检默认每 60 秒检查一次是否到点。
+- 策略默认关闭；`FIXED_DELAY` 维持原间隔模式，启动后首次执行默认延迟 30 秒，同步完成后再次执行默认间隔 30 分钟；`DAILY_TIME` 表示每天固定本地时间执行一次，默认 `dailyRunTime=02:00:00`，按 `Asia/Shanghai` 计算自然日。
 
 后端 API：
 
@@ -69,7 +77,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 | `GET /api/dict/process-categories/sync-schedule` | `engineer:dict:process-manage` | 无，仅读取策略。 |
 | `PUT /api/dict/process-categories/sync-schedule` | `engineer:dict:process-manage` | `DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE` |
 
-策略保存到 `mes_master_data_sync_schedule_config`。环境变量 `erp.mes.master-data-sync.enabled/startup-delay-ms/fixed-delay-ms/check-ms` 只作为配置缺失时的兜底默认值；运行时以数据库策略为准。定时同步执行时写入 `mes_master_data_sync_run` 批次记录，保存策略只记录启停、间隔和上次状态安全摘要；后台巡检、读取策略和未到点跳过不写操作日志。
+策略保存到 `mes_master_data_sync_schedule_config`，核心字段包含 `scheduleMode`、`dailyRunTime`、`startupDelayMs`、`fixedDelayMs`。环境变量 `erp.mes.master-data-sync.enabled/startup-delay-ms/fixed-delay-ms/check-ms` 只作为配置缺失时的兜底默认值；运行时以数据库策略为准。定时同步到点后也走异步提交，写入 `mes_master_data_sync_run` 批次记录；保存策略只记录启停、模式、时间/间隔和上次状态安全摘要，后台巡检、读取策略和未到点跳过不写操作日志。
 
 ## 4. 字段映射
 
