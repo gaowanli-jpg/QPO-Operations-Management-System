@@ -11,4 +11,7 @@ public class SalesOrderSyncItemRow {
     private String description;
     private String surfaceTreatment;
     private String remark;
+    private String internalProjectNo;
+    private String customerOrderNo;
+    private String customerProjectNo;
 }

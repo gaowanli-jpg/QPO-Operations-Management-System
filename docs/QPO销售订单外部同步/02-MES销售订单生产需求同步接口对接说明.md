@@ -41,7 +41,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 
 ## 4. 响应结构
 
-响应字段集合固定；字段没有业务值时仍返回字段，值为 `null`，不会省略字段。典型场景包括 `status`、`orderType`、`internalProjectNo`、`materialNo`、`description`、`surfaceTreatment`、`remark` 和 `nextCursor`。
+响应字段集合固定；字段没有业务值时仍返回字段，值为 `null`，不会省略字段。典型场景包括 `status`、`orderType`、明细级 `internalProjectNo`、`customerOrderNo`、`customerProjectNo`、`materialNo`、`description`、`surfaceTreatment`、`remark` 和 `nextCursor`。
 
 ### 4.1 成功响应
 
@@ -58,7 +58,6 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
         "changedAt": "2026-08-17T10:30:00",
         "status": "APPROVED",
         "orderType": "正式订单",
-        "internalProjectNo": "IP-20260817-001",
         "items": [
           {
             "saleOrderItemNo": "10",
@@ -66,7 +65,10 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
             "releasedQty": 5,
             "description": "零件描述",
             "surfaceTreatment": "阳极氧化",
-            "remark": "明细备注"
+            "remark": "明细备注",
+            "internalProjectNo": "IP-20260817-001-LINE",
+            "customerOrderNo": "PO-20260817-001",
+            "customerProjectNo": "CP-20260817-001"
           }
         ]
       }
@@ -105,7 +107,6 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 | `changedAt` | datetime | 是 | 订单头或任意明细最后变更时间，用于增量同步水位。 |
 | `status` | string | 否 | 销售订单状态，仅用于展示和查询，不限制 MES 创建生产需求。 |
 | `orderType` | string | 否 | 销售订单类型，例如备货订单、正式订单、预测订单。 |
-| `internalProjectNo` | string | 否 | QPO 内部项目号。 |
 | `items` | array | 是 | 当前订单命中的有效明细集合。 |
 
 ### 5.2 明细字段
@@ -118,6 +119,9 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 | `description` | string | 否 | 明细描述。 |
 | `surfaceTreatment` | string | 否 | 表面处理要求。 |
 | `remark` | string | 否 | 明细级备注。 |
+| `internalProjectNo` | string | 否 | 零件级内部项目号，来自 QPO 销售订单明细。 |
+| `customerOrderNo` | string | 否 | 零件级客户订单号，来自 QPO 销售订单明细。 |
+| `customerProjectNo` | string | 否 | 零件级客户项目号，来自 QPO 销售订单明细。 |
 
 ## 6. 幂等键
 

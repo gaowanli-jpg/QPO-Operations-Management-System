@@ -15,6 +15,5 @@ public class SalesOrderSyncOrderDTO {
     private LocalDateTime changedAt;
     private String status;
     private String orderType;
-    private String internalProjectNo;
     private List<SalesOrderSyncItemDTO> items = new ArrayList<>();
 }

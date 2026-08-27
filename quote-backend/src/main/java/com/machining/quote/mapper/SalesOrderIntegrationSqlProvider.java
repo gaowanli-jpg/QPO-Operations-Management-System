@@ -77,6 +77,9 @@ public class SalesOrderIntegrationSqlProvider {
                   soi.material_no,
                   soi.surface_treatment,
                   soi.remark,
+                  soi.internal_project_no,
+                  soi.customer_order_no,
+                  soi.customer_project_no,
                   GREATEST(COALESCE(soi.released_qty, 0), 0) AS released_qty
                 FROM sales_order_item soi
                 WHERE soi.sales_order_id IN

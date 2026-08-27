@@ -32,8 +32,6 @@ class SalesOrderIntegrationContractTest {
             "customerName",
             "customerShortName",
             "salesOrderDate",
-            "customerOrderNo",
-            "customerProjectNo",
             "customerOrderTitle",
             "updatedAt",
             "saleOrderNo\":\"SO-20260814-001\",\"saleOrderItemNo",
@@ -81,9 +79,18 @@ class SalesOrderIntegrationContractTest {
     @Test
     void responseDtosExposeOnlyMesDemandContractFields() {
         assertThat(declaredFieldNames(SalesOrderSyncOrderDTO.class))
-                .containsExactlyInAnyOrder("saleOrderNo", "createdAt", "changedAt", "status", "orderType", "internalProjectNo", "items");
+                .containsExactlyInAnyOrder("saleOrderNo", "createdAt", "changedAt", "status", "orderType", "items");
         assertThat(declaredFieldNames(SalesOrderSyncItemDTO.class))
-                .containsExactlyInAnyOrder("saleOrderItemNo", "materialNo", "releasedQty", "description", "surfaceTreatment", "remark");
+                .containsExactlyInAnyOrder(
+                        "saleOrderItemNo",
+                        "materialNo",
+                        "releasedQty",
+                        "description",
+                        "surfaceTreatment",
+                        "remark",
+                        "internalProjectNo",
+                        "customerOrderNo",
+                        "customerProjectNo");
     }
 
     @Test
@@ -109,7 +116,6 @@ class SalesOrderIntegrationContractTest {
         SalesOrderSyncOrderDTO order = resp.getData().getRecords().get(0);
         assertThat(order.getSaleOrderNo()).isEqualTo("SO-20260814-001");
         assertThat(order.getOrderType()).isEqualTo("FORMAL");
-        assertThat(order.getInternalProjectNo()).isEqualTo("IP-001");
         assertThat(order.getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 8, 14, 9, 0));
         assertThat(order.getChangedAt()).isEqualTo(changedAt);
 
@@ -120,10 +126,16 @@ class SalesOrderIntegrationContractTest {
         assertThat(firstItem.getReleasedQty()).isEqualTo(1);
         assertThat(firstItem.getDescription()).isEqualTo("Part description");
         assertThat(firstItem.getSurfaceTreatment()).isEqualTo("Anodized");
+        assertThat(firstItem.getInternalProjectNo()).isEqualTo("IP-LINE-001");
+        assertThat(firstItem.getCustomerOrderNo()).isEqualTo("PO-001");
+        assertThat(firstItem.getCustomerProjectNo()).isEqualTo("CP-001");
         assertThat(objectMapper.writeValueAsString(firstItem))
                 .contains("\"surfaceTreatment\":\"Anodized\"")
                 .contains("\"releasedQty\":1")
-                .contains("\"remark\":\"MES demand remark\"");
+                .contains("\"remark\":\"MES demand remark\"")
+                .contains("\"internalProjectNo\":\"IP-LINE-001\"")
+                .contains("\"customerOrderNo\":\"PO-001\"")
+                .contains("\"customerProjectNo\":\"CP-001\"");
 
         SalesOrderSyncItemDTO secondItem = order.getItems().get(1);
         assertThat(secondItem.getSaleOrderItemNo()).isEqualTo("20");
@@ -131,9 +143,18 @@ class SalesOrderIntegrationContractTest {
         String json = objectMapper.writeValueAsString(resp);
         assertThat(json).doesNotContain(FORBIDDEN_RESPONSE_FIELDS.toArray(String[]::new));
         assertThat(fieldNames(objectMapper.valueToTree(order)))
-                .containsExactlyInAnyOrder("saleOrderNo", "createdAt", "changedAt", "status", "orderType", "internalProjectNo", "items");
+                .containsExactlyInAnyOrder("saleOrderNo", "createdAt", "changedAt", "status", "orderType", "items");
         assertThat(fieldNames(objectMapper.valueToTree(firstItem)))
-                .containsExactlyInAnyOrder("saleOrderItemNo", "materialNo", "releasedQty", "description", "surfaceTreatment", "remark");
+                .containsExactlyInAnyOrder(
+                        "saleOrderItemNo",
+                        "materialNo",
+                        "releasedQty",
+                        "description",
+                        "surfaceTreatment",
+                        "remark",
+                        "internalProjectNo",
+                        "customerOrderNo",
+                        "customerProjectNo");
     }
 
     @Test
@@ -153,7 +174,10 @@ class SalesOrderIntegrationContractTest {
                 .contains("saleOrderItemNo")
                 .contains("orderType")
                 .contains("releasedQty")
-                .contains("remark");
+                .contains("remark")
+                .contains("internalProjectNo")
+                .contains("customerOrderNo")
+                .contains("customerProjectNo");
         assertThat(json).doesNotContain(FORBIDDEN_RESPONSE_FIELDS.toArray(String[]::new));
     }
 
@@ -200,13 +224,15 @@ class SalesOrderIntegrationContractTest {
         SalesOrderSyncQueryReq req = req(100);
         SalesOrderSyncOrderRow order = order(1L, "SO-20260814-001", null, LocalDateTime.of(2026, 8, 14, 10, 30));
         order.setStatus(null);
-        order.setInternalProjectNo(null);
         when(mapper.selectOrderPage(eq(req), eq(null), eq(null), eq(101)))
                 .thenReturn(List.of(order));
         SalesOrderSyncItemRow item = item(1L, "SO-20260814-001", 10, "P-001", "A", null, null);
         item.setDescription(null);
         item.setSurfaceTreatment(null);
         item.setRemark(null);
+        ReflectionTestUtils.setField(item, "internalProjectNo", null);
+        ReflectionTestUtils.setField(item, "customerOrderNo", null);
+        ReflectionTestUtils.setField(item, "customerProjectNo", null);
         when(mapper.selectItemsByOrderIds(eq(List.of(1L)), eq(req)))
                 .thenReturn(List.of(item));
 
@@ -215,12 +241,19 @@ class SalesOrderIntegrationContractTest {
         assertThat(json)
                 .contains("\"status\":null")
                 .contains("\"orderType\":null")
-                .contains("\"internalProjectNo\":null")
                 .contains("\"materialNo\":null")
                 .contains("\"description\":null")
                 .contains("\"surfaceTreatment\":null")
                 .contains("\"remark\":null")
+                .contains("\"internalProjectNo\":null")
+                .contains("\"customerOrderNo\":null")
+                .contains("\"customerProjectNo\":null")
                 .contains("\"nextCursor\":null");
+        com.fasterxml.jackson.databind.JsonNode orderNode = objectMapper.readTree(json).path("data").path("records").get(0);
+        assertThat(orderNode.has("internalProjectNo")).isFalse();
+        assertThat(orderNode.path("items").get(0).has("internalProjectNo")).isTrue();
+        assertThat(orderNode.path("items").get(0).has("customerOrderNo")).isTrue();
+        assertThat(orderNode.path("items").get(0).has("customerProjectNo")).isTrue();
     }
 
     private SalesOrderIntegrationSyncService service(SalesOrderIntegrationMapper mapper) {
@@ -267,6 +300,9 @@ class SalesOrderIntegrationContractTest {
         ReflectionTestUtils.setField(row, "surfaceTreatment", "Anodized");
         ReflectionTestUtils.setField(row, "releasedQty", 1);
         ReflectionTestUtils.setField(row, "remark", "MES demand remark");
+        ReflectionTestUtils.setField(row, "internalProjectNo", "IP-LINE-001");
+        ReflectionTestUtils.setField(row, "customerOrderNo", "PO-001");
+        ReflectionTestUtils.setField(row, "customerProjectNo", "CP-001");
     }
 
     private List<String> fieldNames(Object node) {

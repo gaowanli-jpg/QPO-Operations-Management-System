@@ -98,7 +98,6 @@ public class SalesOrderIntegrationSyncService {
         record.setChangedAt(order.getChangedAt());
         record.setStatus(order.getStatus());
         record.setOrderType(order.getOrderType());
-        record.setInternalProjectNo(order.getInternalProjectNo());
         record.setItems(items.stream()
                 .map(this::toItemRecord)
                 .toList());
@@ -116,6 +115,9 @@ public class SalesOrderIntegrationSyncService {
         record.setDescription(item.getDescription());
         record.setSurfaceTreatment(item.getSurfaceTreatment());
         record.setRemark(item.getRemark());
+        record.setInternalProjectNo(item.getInternalProjectNo());
+        record.setCustomerOrderNo(item.getCustomerOrderNo());
+        record.setCustomerProjectNo(item.getCustomerProjectNo());
         return record;
     }
 
