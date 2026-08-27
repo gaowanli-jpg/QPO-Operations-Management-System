@@ -66,4 +66,21 @@ describe('Stage 38 phase 15 documentation and frontend closure', () => {
     expect(formatter).toContain('unitWorkHours')
     expect(existsSync(resolve(currentDir, 'components', 'MaterialProcessManage.vue'))).toBe(true)
   })
+
+  test('pricing markup fee docs and preview close the categorized multiplicative formula', () => {
+    const permissionDoc = readSource('docs', 'QPO权限用户体系', '02-权限点清单与现有角色映射.md')
+    const logDoc = readSource('docs', 'QPO日志模块', '03-日志运维说明.md')
+    const realtimeDoc = readSource('docs', 'QPO报价状态流转', '45-零件核价实时价格预估开发文档.md')
+    const itemPricing = readSource('quote-frontend', 'src', 'components', 'ItemPricing.vue')
+
+    expect(permissionDoc).toContain('统一百分比费用阶段 6 收口')
+    expect(permissionDoc).toContain('统一百分比费用维护继续复用 `engineer:dict:view` 和 `engineer:dict:fee-manage`，不新增权限点。')
+    expect(logDoc).toContain('统一百分比费用 CRUD 使用 `DICT_PRICING_MARKUP_FEE_CREATE`、`DICT_PRICING_MARKUP_FEE_UPDATE`、`DICT_PRICING_MARKUP_FEE_DELETE`')
+    expect(logDoc).toContain('读取和实时预估不记高频日志')
+    expect(realtimeDoc).toContain('未税单价 = 基础成本 * 客户权重因子 * 基础百分比费用因子')
+    expect(realtimeDoc).toContain('含税单价 = 基础成本 * 客户权重因子 * 基础百分比费用因子 * 税率因子')
+    expect(realtimeDoc).toContain('不再通过费用名称包含 `税 / tax / vat` 判断税率')
+    expect(itemPricing).toContain('TAX_INCLUDED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT, TAX]')
+    expect(itemPricing).not.toContain('isTaxFeeName')
+  })
 })

@@ -67,6 +67,44 @@ class ProcessMasterDocumentationCharacterizationTest {
     }
 
     @Test
+    void pricingMarkupFeeDocsCloseUnifiedPermissionsLogsAndMultiplicativeFormula() throws IOException {
+        String permissionDoc = read(doc("QPO权限用户体系", "02-"));
+        String logOpsDoc = read(doc("QPO日志模块", "03-"));
+        String realtimePreviewDoc = read(doc("QPO报价状态流转", "45-"));
+        String pricingMarkupPlan = read(doc("QPO报价状态流转", "49-"));
+
+        assertThat(permissionDoc)
+                .contains(
+                        "统一百分比费用阶段 6 收口",
+                        "统一百分比费用维护继续复用 `engineer:dict:view` 和 `engineer:dict:fee-manage`，不新增权限点。",
+                        "普通件核价保存继续复用 `engineer:pricing:save-item`",
+                        "组合件核价保存继续复用 `engineer:pricing:save-item`"
+                );
+        assertThat(logOpsDoc)
+                .contains(
+                        "统一百分比费用 CRUD 使用 `DICT_PRICING_MARKUP_FEE_CREATE`、`DICT_PRICING_MARKUP_FEE_UPDATE`、`DICT_PRICING_MARKUP_FEE_DELETE`",
+                        "读取和实时预估不记高频日志",
+                        "不得记录完整报价快照、token、Authorization、Cookie 或外部系统密钥"
+                );
+        assertThat(realtimePreviewDoc)
+                .contains(
+                        "客户权重因子 = Π(1 + CUSTOMER_WEIGHT.ratePercent / 100)",
+                        "基础百分比费用因子 = Π(1 + BASIC_PERCENT.ratePercent / 100)",
+                        "税率因子 = Π(1 + TAX.ratePercent / 100)",
+                        "未税单价 = 基础成本 * 客户权重因子 * 基础百分比费用因子",
+                        "含税单价 = 基础成本 * 客户权重因子 * 基础百分比费用因子 * 税率因子",
+                        "不再通过费用名称包含 `税 / tax / vat` 判断税率"
+                )
+                .doesNotContain(
+                        "dictionaryStore.markupFees",
+                        "includeMarkupFees",
+                        "const isTaxFeeName"
+                );
+        assertThat(pricingMarkupPlan)
+                .contains("阶段 6：权限日志文档和端到端收口");
+    }
+
+    @Test
     void integrationDocsKeepSnapshotsInternalAndSendOnlyStructuredMesProductionRoute() throws IOException {
         String demandDoc = read(doc("QPO-MES-WMS", "01-"));
         String deliveredDoc = read(doc("QPO-MES-WMS", "02-"));
