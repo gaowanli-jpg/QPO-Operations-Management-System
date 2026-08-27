@@ -27,7 +27,7 @@
             <div class="material-filter-bar">
               <el-input v-model="materialKeyword" clearable placeholder="搜索材料编码、名称、材料类型或材质分类" />
             </div>
-            <el-table :data="pagedMaterials" border stripe height="520" v-loading="loading">
+            <el-table :data="materials" border stripe height="520" v-loading="loading">
               <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
               <el-table-column prop="materialName" label="材料名称" width="140" fixed show-overflow-tooltip />
               <el-table-column label="材料类型" width="170" show-overflow-tooltip>
@@ -91,13 +91,13 @@
                 </template>
               </el-table-column>
             </el-table>
-            <div v-if="filteredMaterialsTotal" class="erp-pagination material-dict-pagination">
+            <div v-if="materialPagination.total" class="erp-pagination material-dict-pagination">
               <el-pagination
                 v-model:current-page="materialPagination.page"
                 v-model:page-size="materialPagination.pageSize"
                 :page-sizes="CLIENT_PAGE_SIZES"
                 :pager-count="7"
-                :total="filteredMaterialsTotal"
+                :total="materialPagination.total"
                 layout="total, sizes, prev, pager, next, jumper"
                 background
                 @size-change="resetMaterialPage"
@@ -124,7 +124,7 @@
               <div class="material-filter-bar">
                 <el-input v-model="processCategoryKeyword" clearable placeholder="搜索工艺编码、工艺名称、来源或备注" />
               </div>
-              <el-table :data="pagedProcessCategories" border stripe height="520" v-loading="loading">
+              <el-table :data="processCategories" border stripe height="520" v-loading="loading">
                 <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
                 <el-table-column prop="processCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
                 <el-table-column prop="categoryName" label="工艺名称" min-width="160" show-overflow-tooltip />
@@ -146,13 +146,13 @@
                 </el-table-column>
                 <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
               </el-table>
-              <div v-if="filteredProcessCategoryTotal" class="erp-pagination material-dict-pagination">
+              <div v-if="processCategoryPagination.total" class="erp-pagination material-dict-pagination">
                 <el-pagination
                   v-model:current-page="processCategoryPagination.page"
                   v-model:page-size="processCategoryPagination.pageSize"
                   :page-sizes="CLIENT_PAGE_SIZES"
                   :pager-count="7"
-                  :total="filteredProcessCategoryTotal"
+                  :total="processCategoryPagination.total"
                   layout="total, sizes, prev, pager, next, jumper"
                   background
                   @size-change="resetProcessCategoryPage"
@@ -166,7 +166,7 @@
               <div class="material-filter-bar">
                 <el-input v-model="processDetailKeyword" clearable placeholder="搜索具体工艺、大类编码、大类名称或具体备注" />
               </div>
-              <el-table :data="pagedProcessDetails" border stripe height="520" v-loading="loading">
+              <el-table :data="processDetails" border stripe height="520" v-loading="loading">
                 <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
                 <el-table-column prop="detailName" label="具体工艺" min-width="160" fixed show-overflow-tooltip />
                 <el-table-column prop="processCode" label="大类编码" width="150" show-overflow-tooltip />
@@ -204,13 +204,13 @@
                   </template>
                 </el-table-column>
               </el-table>
-              <div v-if="filteredProcessDetailTotal" class="erp-pagination material-dict-pagination">
+              <div v-if="processDetailPagination.total" class="erp-pagination material-dict-pagination">
                 <el-pagination
                   v-model:current-page="processDetailPagination.page"
                   v-model:page-size="processDetailPagination.pageSize"
                   :page-sizes="CLIENT_PAGE_SIZES"
                   :pager-count="7"
-                  :total="filteredProcessDetailTotal"
+                  :total="processDetailPagination.total"
                   layout="total, sizes, prev, pager, next, jumper"
                   background
                   @size-change="resetProcessDetailPage"
@@ -366,7 +366,7 @@
         </el-form-item>
         <el-form-item label="工艺大类" required>
           <el-select v-model="processDetailForm.categoryId" filterable disabled class="dialog-select" placeholder="选择工艺大类">
-            <el-option v-for="category in processCategories" :key="category.id" :label="categoryLabel(category)" :value="category.id" />
+            <el-option v-for="category in processCategoryOptions" :key="category.id" :label="categoryLabel(category)" :value="category.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="具体工艺" required>
@@ -531,6 +531,13 @@ import {
   deleteMarkupFee as deleteMarkupFeeRequest,
   getMesMaterialSyncSchedule,
   getMesProcessSyncSchedule,
+  listAssemblyMarkupFees,
+  listExtraFeeItems,
+  listMarkupFees,
+  listMaterialTypes,
+  pageMaterials,
+  pageProcessCategories,
+  pageProcessDetails,
   saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
   saveExtraFeeItem,
   saveMarkupFee as saveMarkupFeeRequest,
@@ -543,81 +550,53 @@ import {
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
-import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, clampPage, paginateRows } from '../utils/clientPagination'
+import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'
 
 const dictionaryStore = useDictionaryStore()
 const activeTab = ref('materials')
-const materialTypes = computed(() => dictionaryStore.materialTypes)
-const materials = computed(() => dictionaryStore.materials)
-const processCategories = computed(() => dictionaryStore.processCategories)
-const processDetails = computed(() => dictionaryStore.processDetails)
-const markupFees = computed(() => dictionaryStore.markupFees)
-const assemblyMarkupFees = computed(() => dictionaryStore.assemblyMarkupFees)
-const extraFeeItems = computed(() => dictionaryStore.extraFeeItems)
+const materialTypes = ref([])
+const materials = ref([])
+const processCategories = ref([])
+const processDetails = ref([])
+const markupFees = ref([])
+const assemblyMarkupFees = ref([])
+const extraFeeItems = ref([])
 const materialKeyword = ref('')
 const processCategoryKeyword = ref('')
 const processDetailKeyword = ref('')
-const materialPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
-const processCategoryPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
-const processDetailPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
-
-const containsKeyword = (item, fields, keyword) => fields
-  .some(field => String(typeof field === 'function' ? field(item) : item?.[field] || '').toLowerCase().includes(keyword))
-
-const filteredMaterials = computed(() => {
-  const keyword = materialKeyword.value.trim().toLowerCase()
-  if (!keyword) return materials.value
-  return materials.value.filter(item => containsKeyword(item, [
-    'materialCode',
-    'materialName',
-    'materialTypeCode',
-    'materialTypeName',
-    'materialCategory',
-    'remarks'
-  ], keyword))
+const createPagination = () => reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE, total: 0 })
+const materialPagination = createPagination()
+const processCategoryPagination = createPagination()
+const processDetailPagination = createPagination()
+const processCategoryOptions = computed(() => {
+  const options = new Map()
+  for (const category of processCategories.value) {
+    options.set(String(category.id), category)
+  }
+  for (const detail of processDetails.value) {
+    const id = detail?.categoryId
+    if (id != null && !options.has(String(id))) {
+      options.set(String(id), {
+        id,
+        processCode: detail.processCode,
+        categoryName: detail.categoryName,
+        hourlyRate: detail.categoryHourlyRate,
+        enabled: detail.categoryEnabled
+      })
+    }
+  }
+  return Array.from(options.values())
 })
-const filteredProcessCategories = computed(() => {
-  const keyword = processCategoryKeyword.value.trim().toLowerCase()
-  if (!keyword) return processCategories.value
-  return processCategories.value.filter(item => containsKeyword(item, [
-    'processCode',
-    'categoryName',
-    'remarks',
-    'hourlyRate',
-    'sourceType',
-    item => sourceTypeText(item.sourceType),
-    item => item.enabled ? '启用' : '停用'
-  ], keyword))
-})
-const filteredProcessDetails = computed(() => {
-  const keyword = processDetailKeyword.value.trim().toLowerCase()
-  if (!keyword) return processDetails.value
-  return processDetails.value.filter(item => containsKeyword(item, [
-    'detailName',
-    'processCode',
-    'categoryName',
-    'detailRemarks',
-    'detailHourlyRate',
-    'categoryHourlyRate',
-    'effectiveHourlyRate',
-    'detailEnabled',
-    'categoryEnabled',
-    'effectiveEnabled',
-    item => formatDetailHourlyRate(item.detailHourlyRate),
-    item => item.categoryEnabled !== false ? '大类启用' : '大类停用',
-    item => (item.detailEnabled ?? item.enabled) !== false ? '具体启用' : '具体停用',
-    item => item.effectiveEnabled !== false ? '核价可用' : '核价不可用'
-  ], keyword))
-})
-const filteredMaterialsTotal = computed(() => filteredMaterials.value.length)
-const filteredProcessCategoryTotal = computed(() => filteredProcessCategories.value.length)
-const filteredProcessDetailTotal = computed(() => filteredProcessDetails.value.length)
-const pagedMaterials = computed(() => paginateRows(filteredMaterials.value, materialPagination))
-const pagedProcessCategories = computed(() => paginateRows(filteredProcessCategories.value, processCategoryPagination))
-const pagedProcessDetails = computed(() => paginateRows(filteredProcessDetails.value, processDetailPagination))
 const resetMaterialPage = () => { materialPagination.page = 1 }
 const resetProcessCategoryPage = () => { processCategoryPagination.page = 1 }
 const resetProcessDetailPage = () => { processDetailPagination.page = 1 }
+const resetPageAndLoad = (pagination, loader) => {
+  if (pagination.page === 1) {
+    loadPageWithLoading(loader)
+    return
+  }
+  pagination.page = 1
+}
 const loading = ref(false)
 const { isPending, runAction } = usePendingAction()
 
@@ -775,16 +754,85 @@ function createEmptyExtraFee() {
   }
 }
 
-const loadAll = async () => {
+const pageParams = (pagination, keyword) => ({
+  keyword: keyword.value.trim(),
+  page: pagination.page,
+  pageSize: pagination.pageSize
+})
+
+const applyPageResult = (pagination, response = {}) => {
+  pagination.total = Number(response.total || 0)
+  pagination.page = Number(response.page || pagination.page)
+  pagination.pageSize = Number(response.pageSize || pagination.pageSize)
+  return response.records || []
+}
+
+const invalidateDictionaryCache = () => {
+  dictionaryStore.$patch({
+    loadedAt: null,
+    lastIncludeMarkupFees: false,
+    lastIncludeAllExtraFees: false
+  })
+}
+
+const loadLookupDictionaries = async () => {
+  const [types, markup, assemblyMarkup, extraFees] = await Promise.all([
+    listMaterialTypes(),
+    listMarkupFees(),
+    listAssemblyMarkupFees(),
+    listExtraFeeItems({ includeDisabled: true })
+  ])
+  materialTypes.value = types || []
+  markupFees.value = markup || []
+  assemblyMarkupFees.value = assemblyMarkup || []
+  extraFeeItems.value = extraFees || []
+}
+
+const loadMaterialPage = async () => {
+  const response = await pageMaterials({
+    ...pageParams(materialPagination, materialKeyword)
+  })
+  materials.value = applyPageResult(materialPagination, response)
+}
+
+const loadProcessCategoryPage = async () => {
+  const response = await pageProcessCategories({
+    ...pageParams(processCategoryPagination, processCategoryKeyword)
+  })
+  processCategories.value = applyPageResult(processCategoryPagination, response)
+}
+
+const loadProcessDetailPage = async () => {
+  const response = await pageProcessDetails({
+    ...pageParams(processDetailPagination, processDetailKeyword)
+  })
+  processDetails.value = applyPageResult(processDetailPagination, response)
+}
+
+const loadPageWithLoading = async (loader) => {
   loading.value = true
   try {
-    await dictionaryStore.loadBaseDicts({ includeMarkupFees: true, includeAllExtraFees: true, force: true })
+    await loader()
   } catch (error) {
     console.error(error)
     ElMessage.error('材料或工艺数据加载失败，请检查后端服务。')
   } finally {
     loading.value = false
   }
+}
+
+const loadAll = async () => loadPageWithLoading(async () => {
+  await Promise.all([
+    loadLookupDictionaries(),
+    loadMaterialPage(),
+    loadProcessCategoryPage(),
+    loadProcessDetailPage()
+  ])
+})
+
+const reloadAfterMutation = async () => {
+  invalidateDictionaryCache()
+  await loadAll()
 }
 
 const openMaterialDialog = (row) => {
@@ -821,7 +869,7 @@ const syncMesMaterials = async () => {
     try {
       const response = await syncMesMaterialsRequest()
       ElMessage.success(response.message || 'MES 材料同步完成')
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('MES 材料同步失败。')
@@ -835,7 +883,7 @@ const syncMesProcessTypes = async () => {
     try {
       const response = await syncMesProcessTypesRequest()
       ElMessage.success(response.message || 'MES 工艺同步完成')
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('MES 工艺同步失败。')
@@ -902,7 +950,7 @@ const saveMaterial = async () => {
       const response = await saveMaterialRequest(payload)
       ElMessage.success(response.message || '保存成功')
       materialDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('材料保存失败。')
@@ -921,7 +969,7 @@ const saveProcessDetail = async () => {
       const response = await saveProcessDetailRequest({ ...processDetailForm, hourlyRate })
       ElMessage.success(response.message || '保存成功')
       processDetailDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('具体工艺保存失败。')
@@ -936,7 +984,7 @@ const saveMarkupFee = async () => {
       const response = await saveMarkupFeeRequest(markupFeeForm)
       ElMessage.success(response.message || '保存成功')
       markupFeeDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('费用类保存失败。')
@@ -951,7 +999,7 @@ const saveAssemblyMarkupFee = async () => {
       const response = await saveAssemblyMarkupFeeRequest(assemblyMarkupFeeForm)
       ElMessage.success(response.message || '保存成功')
       assemblyMarkupFeeDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('组装件费用类保存失败。')
@@ -966,7 +1014,7 @@ const saveExtraFee = async () => {
       const response = await saveExtraFeeItem(extraFeeForm)
       ElMessage.success(response.message || '保存成功')
       extraFeeDialogVisible.value = false
-      await dictionaryStore.reloadAfterMutation()
+      await reloadAfterMutation()
     } catch (error) {
       console.error(error)
       ElMessage.error('非工时费用工艺保存失败。')
@@ -979,7 +1027,7 @@ const deleteMarkupFee = async (row) => {
     await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
     await deleteMarkupFeeRequest(row.id)
     ElMessage.success('费用类已删除')
-    await dictionaryStore.reloadAfterMutation()
+    await reloadAfterMutation()
   })
 }
 
@@ -988,7 +1036,7 @@ const deleteAssemblyMarkupFee = async (row) => {
     await ElMessageBox.confirm(`确认删除组装件费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
     await deleteAssemblyMarkupFeeRequest(row.id)
     ElMessage.success('组装件费用类已删除')
-    await dictionaryStore.reloadAfterMutation()
+    await reloadAfterMutation()
   })
 }
 
@@ -997,16 +1045,31 @@ const deleteExtraFee = async (row) => {
     await ElMessageBox.confirm(`确认删除非工时费用工艺「${row.feeName}」？`, '删除确认', { type: 'warning' })
     await deleteExtraFeeItem(row.id)
     ElMessage.success('非工时费用工艺已删除')
-    await dictionaryStore.reloadAfterMutation()
+    await reloadAfterMutation()
   })
 }
 
-watch(materialKeyword, resetMaterialPage)
-watch(processCategoryKeyword, resetProcessCategoryPage)
-watch(processDetailKeyword, resetProcessDetailPage)
-watch(filteredMaterialsTotal, total => { materialPagination.page = clampPage(materialPagination, total) })
-watch(filteredProcessCategoryTotal, total => { processCategoryPagination.page = clampPage(processCategoryPagination, total) })
-watch(filteredProcessDetailTotal, total => { processDetailPagination.page = clampPage(processDetailPagination, total) })
+watch(materialKeyword, () => {
+  resetPageAndLoad(materialPagination, loadMaterialPage)
+})
+watch(processCategoryKeyword, () => {
+  resetPageAndLoad(processCategoryPagination, loadProcessCategoryPage)
+})
+watch(processDetailKeyword, () => {
+  resetPageAndLoad(processDetailPagination, loadProcessDetailPage)
+})
+watch(
+  () => [materialPagination.page, materialPagination.pageSize],
+  () => loadPageWithLoading(loadMaterialPage)
+)
+watch(
+  () => [processCategoryPagination.page, processCategoryPagination.pageSize],
+  () => loadPageWithLoading(loadProcessCategoryPage)
+)
+watch(
+  () => [processDetailPagination.page, processDetailPagination.pageSize],
+  () => loadPageWithLoading(loadProcessDetailPage)
+)
 
 onMounted(loadAll)
 </script>

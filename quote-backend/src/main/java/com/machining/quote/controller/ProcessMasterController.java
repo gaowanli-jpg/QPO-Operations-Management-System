@@ -4,6 +4,7 @@ import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigDTO;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessCategoryDTO;
 import com.machining.quote.dto.ProcessCategorySaveReq;
 import com.machining.quote.dto.ProcessDetailDTO;
@@ -40,6 +41,16 @@ public class ProcessMasterController {
     public List<ProcessCategoryDTO> listProcessCategories(
             @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly) {
         return processMasterService.listCategories(enabledOnly);
+    }
+
+    @GetMapping("/process-categories/page")
+    @RequirePermission("engineer:dict:view")
+    public PageResult<ProcessCategoryDTO> pageProcessCategories(
+            @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return processMasterService.pageCategories(enabledOnly, keyword, page, pageSize);
     }
 
     @PostMapping("/process-categories")
@@ -86,6 +97,17 @@ public class ProcessMasterController {
             @RequestParam(value = "categoryId", required = false) Long categoryId,
             @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly) {
         return processMasterService.listDetails(categoryId, enabledOnly);
+    }
+
+    @GetMapping("/process-details/page")
+    @RequirePermission("engineer:dict:view")
+    public PageResult<ProcessDetailDTO> pageProcessDetails(
+            @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return processMasterService.pageDetails(categoryId, enabledOnly, keyword, page, pageSize);
     }
 
     @PostMapping("/process-details")

@@ -5,6 +5,7 @@ import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
 import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.mapper.DictMaterialMapper;
@@ -45,11 +46,27 @@ public class MaterialMasterService {
 
     public List<MaterialMasterDTO> listMaterials(Boolean enabledOnly) {
         QueryWrapper<DictMaterial> query = new QueryWrapper<>();
-        if (Boolean.TRUE.equals(enabledOnly)) {
-            query.eq("enabled", true);
-        }
+        applyMaterialFilters(query, enabledOnly, null);
         query.orderByAsc("material_type_id").orderByAsc("sort_no").orderByAsc("id");
         List<DictMaterial> materials = materialMapper.selectList(query);
+        return toMaterialDTOs(materials);
+    }
+
+    public PageResult<MaterialMasterDTO> pageMaterials(Boolean enabledOnly, String keyword, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        applyMaterialFilters(query, enabledOnly, keyword);
+        Long total = materialMapper.selectCount(query);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        query.orderByAsc("material_type_id").orderByAsc("sort_no").orderByAsc("id");
+        query.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(toMaterialDTOs(materialMapper.selectList(query)), total, safePage, safePageSize);
+    }
+
+    private List<MaterialMasterDTO> toMaterialDTOs(List<DictMaterial> materials) {
         if (materials.isEmpty()) {
             return List.of();
         }
@@ -65,6 +82,26 @@ public class MaterialMasterService {
         return materials.stream()
                 .map(material -> toMaterialDTO(material, typeById.get(material.getMaterialTypeId())))
                 .toList();
+    }
+
+    private void applyMaterialFilters(QueryWrapper<DictMaterial> query, Boolean enabledOnly, String keyword) {
+        if (Boolean.TRUE.equals(enabledOnly)) {
+            query.eq("enabled", true);
+        }
+        if (!hasText(keyword)) {
+            return;
+        }
+        String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+        query.and(wrapper -> wrapper
+                .apply("LOWER(material_code) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(material_name) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(material_category) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(remarks) LIKE {0}", pattern)
+                .or()
+                .apply("EXISTS (SELECT 1 FROM dict_material_type mt WHERE mt.id = dict_material.material_type_id AND (LOWER(mt.type_code) LIKE {0} OR LOWER(mt.type_name) LIKE {0}))", pattern));
     }
 
     @Transactional
@@ -459,6 +496,21 @@ public class MaterialMasterService {
 
     private String optional(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private boolean isBlank(String value) {

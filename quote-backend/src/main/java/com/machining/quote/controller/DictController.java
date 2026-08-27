@@ -9,6 +9,7 @@ import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigDTO;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PricingMarkupFeeSaveReq;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictPricingMarkupFee;
@@ -54,6 +55,16 @@ public class DictController {
     public List<MaterialMasterDTO> listMaterials(
             @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly) {
         return materialMasterService.listMaterials(enabledOnly);
+    }
+
+    @GetMapping("/materials/page")
+    @RequirePermission("engineer:dict:view")
+    public PageResult<MaterialMasterDTO> pageMaterials(
+            @RequestParam(value = "enabledOnly", required = false) Boolean enabledOnly,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return materialMasterService.pageMaterials(enabledOnly, keyword, page, pageSize);
     }
 
     @PostMapping("/materials")

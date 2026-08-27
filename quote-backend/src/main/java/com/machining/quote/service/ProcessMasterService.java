@@ -1,6 +1,7 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessCategoryDTO;
 import com.machining.quote.dto.ProcessCategorySaveReq;
 import com.machining.quote.dto.ProcessDetailDTO;
@@ -34,26 +35,88 @@ public class ProcessMasterService {
 
     public List<ProcessCategoryDTO> listCategories(Boolean enabledOnly) {
         QueryWrapper<DictProcessCategory> qw = new QueryWrapper<>();
-        if (Boolean.TRUE.equals(enabledOnly)) {
-            qw.eq("enabled", true);
-        }
+        applyCategoryFilters(qw, enabledOnly, null);
         qw.orderByAsc("sort_no").orderByAsc("id");
         return categoryMapper.selectList(qw).stream().map(this::toCategoryDTO).toList();
     }
 
+    public PageResult<ProcessCategoryDTO> pageCategories(Boolean enabledOnly, String keyword, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<DictProcessCategory> qw = new QueryWrapper<>();
+        applyCategoryFilters(qw, enabledOnly, keyword);
+        Long total = categoryMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(categoryMapper.selectList(qw).stream().map(this::toCategoryDTO).toList(), total, safePage, safePageSize);
+    }
+
     public List<ProcessDetailDTO> listDetails(Long categoryId, Boolean enabledOnly) {
         QueryWrapper<DictProcessDetail> qw = new QueryWrapper<>();
-        if (categoryId != null) {
-            qw.eq("category_id", categoryId);
-        }
-        if (Boolean.TRUE.equals(enabledOnly)) {
-            qw.eq("enabled", true);
-        }
+        applyDetailFilters(qw, categoryId, enabledOnly, null);
         qw.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
         return detailMapper.selectList(qw).stream()
                 .map(this::toDetailDTO)
                 .filter(dto -> !Boolean.TRUE.equals(enabledOnly) || Boolean.TRUE.equals(dto.getEffectiveEnabled()))
                 .toList();
+    }
+
+    public PageResult<ProcessDetailDTO> pageDetails(Long categoryId, Boolean enabledOnly, String keyword, Integer page, Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<DictProcessDetail> qw = new QueryWrapper<>();
+        applyDetailFilters(qw, categoryId, enabledOnly, keyword);
+        Long total = detailMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        List<ProcessDetailDTO> records = detailMapper.selectList(qw).stream()
+                .map(this::toDetailDTO)
+                .toList();
+        return PageResult.of(records, total, safePage, safePageSize);
+    }
+
+    private void applyCategoryFilters(QueryWrapper<DictProcessCategory> qw, Boolean enabledOnly, String keyword) {
+        if (Boolean.TRUE.equals(enabledOnly)) {
+            qw.eq("enabled", true);
+        }
+        if (!hasText(keyword)) {
+            return;
+        }
+        String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+        qw.and(wrapper -> wrapper
+                .apply("LOWER(process_code) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(category_name) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(source_type) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(remarks) LIKE {0}", pattern));
+    }
+
+    private void applyDetailFilters(QueryWrapper<DictProcessDetail> qw, Long categoryId, Boolean enabledOnly, String keyword) {
+        if (categoryId != null) {
+            qw.eq("category_id", categoryId);
+        }
+        if (Boolean.TRUE.equals(enabledOnly)) {
+            qw.eq("enabled", true)
+                    .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND c.enabled = TRUE)");
+        }
+        if (!hasText(keyword)) {
+            return;
+        }
+        String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+        qw.and(wrapper -> wrapper
+                .apply("LOWER(detail_name) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(detail_remarks) LIKE {0}", pattern)
+                .or()
+                .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND (LOWER(c.process_code) LIKE {0} OR LOWER(c.category_name) LIKE {0}))", pattern));
     }
 
     @Transactional
@@ -322,6 +385,21 @@ public class ProcessMasterService {
 
     private String optional(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private String limit(String value, String label, int maxLength) {

@@ -31,6 +31,10 @@ export const listMaterials = ({ enabledOnly } = {}) => request(
   `/api/dict/materials${buildQuery({ enabledOnly })}`
 )
 
+export const pageMaterials = ({ enabledOnly, keyword, page, pageSize } = {}) => request(
+  `/api/dict/materials/page${buildQuery({ enabledOnly, keyword, page, pageSize })}`
+)
+
 export const saveMaterial = (payload) => {
   const id = payload?.id
   return request(id ? `/api/dict/materials/${id}` : '/api/dict/materials', {
@@ -58,6 +62,10 @@ export const listProcessCategories = ({ enabledOnly } = {}) => request(
   `/api/dict/process-categories${buildQuery({ enabledOnly })}`
 )
 
+export const pageProcessCategories = ({ enabledOnly, keyword, page, pageSize } = {}) => request(
+  `/api/dict/process-categories/page${buildQuery({ enabledOnly, keyword, page, pageSize })}`
+)
+
 export const saveProcessCategory = (payload) => {
   const id = payload?.id
   return request(id ? `/api/dict/process-categories/${id}` : '/api/dict/process-categories', {
@@ -79,6 +87,10 @@ export const saveMesProcessSyncSchedule = (payload) => request('/api/dict/proces
 
 export const listProcessDetails = ({ categoryId, enabledOnly } = {}) => request(
   `/api/dict/process-details${buildQuery({ categoryId, enabledOnly })}`
+)
+
+export const pageProcessDetails = ({ categoryId, enabledOnly, keyword, page, pageSize } = {}) => request(
+  `/api/dict/process-details/page${buildQuery({ categoryId, enabledOnly, keyword, page, pageSize })}`
 )
 
 export const saveProcessDetail = (payload) => {

@@ -48,7 +48,7 @@ describe('MES master data sync frontend guard', () => {
     expect(materialProcess).toContain('return runAction(dictActionKeys.syncMesMaterials, async () =>')
     expect(materialProcess).toContain('return runAction(dictActionKeys.syncMesProcessTypes, async () =>')
     expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度')
-    expect(materialProcess).toContain('await dictionaryStore.reloadAfterMutation()')
+    expect(materialProcess).toContain('await reloadAfterMutation()')
   })
 
   test('material process page exposes MES timed sync schedule buttons and dialog', () => {

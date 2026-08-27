@@ -7,6 +7,7 @@ import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
 import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.mapper.DictMaterialMapper;
@@ -81,6 +82,36 @@ class MaterialMasterBackendServiceTest {
         assertThat(row.getMesWeight()).isEqualTo("12.34");
         assertThat(row.getMesDensityRaw()).isEqualTo("7.93");
         assertThat(row.getMesSyncedAt()).isEqualTo(syncedAt);
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageMaterialsSupportsServerSidePaginationAndKeywordSearch() throws Exception {
+        MaterialMasterService service = service();
+        DictMaterialMapper materialMapper = mapper(service, "materialMapper");
+        DictMaterialTypeMapper materialTypeMapper = mapper(service, "materialTypeMapper");
+        AuditService auditService = mapper(service, "auditService");
+
+        DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L, true);
+        DictMaterialType type = materialType(1L, "RAW_MATERIAL", "原材料", true);
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(25L);
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(material));
+        when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(type));
+
+        Method pageMaterials = MaterialMasterService.class.getMethod(
+                "pageMaterials", Boolean.class, String.class, Integer.class, Integer.class);
+        PageResult<MaterialMasterDTO> page = (PageResult<MaterialMasterDTO>) pageMaterials.invoke(
+                service, true, "raw", 2, 20);
+
+        assertThat(page.getTotal()).isEqualTo(25);
+        assertThat(page.getPage()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getMaterialCode()).isEqualTo("MAT-000010");
+            assertThat(row.getMaterialTypeCode()).isEqualTo("RAW_MATERIAL");
+            assertThat(row.getMaterialTypeName()).isEqualTo("原材料");
+        });
         verifyNoInteractions(auditService);
     }
 
@@ -253,6 +284,7 @@ class MaterialMasterBackendServiceTest {
         assertRoute("updateMaterialType", new Class<?>[]{Long.class, MaterialTypeSaveReq.class}, PutMapping.class, "/material-types/{id}", "engineer:dict:material-manage");
         assertRoute("deleteMaterialType", new Class<?>[]{Long.class}, DeleteMapping.class, "/material-types/{id}", "engineer:dict:material-manage");
         assertRoute("listMaterials", new Class<?>[]{Boolean.class}, GetMapping.class, "/materials", "engineer:dict:view");
+        assertRoute("pageMaterials", new Class<?>[]{Boolean.class, String.class, Integer.class, Integer.class}, GetMapping.class, "/materials/page", "engineer:dict:view");
         assertRoute("createMaterial", new Class<?>[]{MaterialMasterSaveReq.class}, PostMapping.class, "/materials", "engineer:dict:material-manage");
         assertRoute("updateMaterial", new Class<?>[]{Long.class, MaterialMasterSaveReq.class}, PutMapping.class, "/materials/{id}", "engineer:dict:material-manage");
         assertRoute("deleteMaterial", new Class<?>[]{Long.class}, DeleteMapping.class, "/materials/{id}", "engineer:dict:material-manage");

@@ -18,6 +18,8 @@ describe('material master management workflow refactor', () => {
     expect(dictApi).toContain('deleteMaterialType')
     expect(dictApi).toContain('listMaterials = ({ enabledOnly } = {})')
     expect(dictApi).toContain('/api/dict/materials${buildQuery({ enabledOnly })}')
+    expect(dictApi).toContain('pageMaterials')
+    expect(dictApi).toContain('/api/dict/materials/page')
   })
 
   test('dictionary store caches material types with base dictionaries', () => {
@@ -63,16 +65,18 @@ describe('material master management workflow refactor', () => {
 
   test('material list can search code, name, type and category with responsive layout', () => {
     expect(materialProcess).toContain('materialKeyword')
-    expect(materialProcess).toContain('filteredMaterials')
-    expect(materialProcess).toContain(':data="pagedMaterials"')
+    expect(materialProcess).toContain('loadMaterialPage')
+    expect(materialProcess).toContain(':data="materials"')
     expect(materialProcess).toContain('materialPagination')
-    expect(materialProcess).toContain('filteredMaterialsTotal')
+    expect(materialProcess).toContain('materialPagination.total')
+    expect(materialProcess).toContain('pageMaterials({')
     expect(materialProcess).toContain('materialCode')
     expect(materialProcess).toContain('materialTypeCode')
     expect(materialProcess).toContain('materialTypeName')
     expect(materialProcess).toContain('materialCategory')
     expect(materialProcess).toContain('material-filter-bar')
     expect(materialProcess).toContain('resetMaterialPage')
+    expect(materialProcess).not.toContain('paginateRows(filteredMaterials')
     expect(materialProcess).toContain('@media (max-width: 900px)')
   })
 })

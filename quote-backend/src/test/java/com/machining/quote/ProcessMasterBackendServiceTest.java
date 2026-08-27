@@ -1,6 +1,9 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.ProcessCategoryDTO;
+import com.machining.quote.dto.ProcessDetailDTO;
 import com.machining.quote.dto.ProcessCategorySaveReq;
 import com.machining.quote.dto.ProcessDetailSaveReq;
 import com.machining.quote.entity.DictProcessCategory;
@@ -14,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,6 +129,60 @@ class ProcessMasterBackendServiceTest {
         assertThat(String.valueOf(afterCaptor.getValue()))
                 .contains("processCode=PACKAGING", "categoryName=包装")
                 .doesNotContain("完整长备注不应进入审计摘要");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageCategoriesSupportsServerSidePaginationAndKeywordSearchWithoutAuditLog() throws Exception {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        ProcessMasterService service = service(categoryMapper, mock(DictProcessDetailMapper.class), auditService);
+        DictProcessCategory category = category(7L, true);
+        when(categoryMapper.selectCount(any(QueryWrapper.class))).thenReturn(31L);
+        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(category));
+
+        Method pageCategories = ProcessMasterService.class.getMethod(
+                "pageCategories", Boolean.class, String.class, Integer.class, Integer.class);
+        PageResult<ProcessCategoryDTO> page = (PageResult<ProcessCategoryDTO>) pageCategories.invoke(
+                service, true, "pack", 2, 20);
+
+        assertThat(page.getTotal()).isEqualTo(31);
+        assertThat(page.getPage()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getProcessCode()).isEqualTo("PACKAGING");
+            assertThat(row.getCategoryName()).isEqualTo("包装");
+        });
+        verify(auditService, never()).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageDetailsSupportsServerSidePaginationCategoryFilterAndKeywordSearchWithoutAuditLog() throws Exception {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
+        DictProcessCategory category = category(7L, true);
+        DictProcessDetail detail = detail(10L, 7L, null);
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(22L);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(detail));
+        when(categoryMapper.selectById(7L)).thenReturn(category);
+
+        Method pageDetails = ProcessMasterService.class.getMethod(
+                "pageDetails", Long.class, Boolean.class, String.class, Integer.class, Integer.class);
+        PageResult<ProcessDetailDTO> page = (PageResult<ProcessDetailDTO>) pageDetails.invoke(
+                service, 7L, true, "包装", 3, 10);
+
+        assertThat(page.getTotal()).isEqualTo(22);
+        assertThat(page.getPage()).isEqualTo(3);
+        assertThat(page.getPageSize()).isEqualTo(10);
+        assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getDetailName()).isEqualTo("具体工艺10");
+            assertThat(row.getProcessCode()).isEqualTo("PACKAGING");
+            assertThat(row.getCategoryName()).isEqualTo("包装");
+        });
+        verify(auditService, never()).record(any(), any(), any(), any(), any());
     }
 
     @Test
