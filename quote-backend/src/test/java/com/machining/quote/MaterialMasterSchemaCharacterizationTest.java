@@ -97,15 +97,21 @@ class MaterialMasterSchemaCharacterizationTest {
 
         assertThat(itemPricing)
                 .contains(
+                        "pagePricingMaterialOptions",
+                        ":remote-loader=\"pagePricingMaterialOptions\"",
                         ":selected-key=\"matForm.materialCode\"",
                         "materialCode: '',",
-                        "matForm.materialName = material.materialName",
-                        "matForm.materialCode = material.materialCode",
-                        "materialOptions.value.find(item => item.materialCode === matForm.materialCode)",
+                        "matForm.materialId = source.materialId ?? source.id ?? null",
+                        "matForm.materialCode = source.materialCode || ''",
+                        "matForm.materialName = source.materialName || source.name || ''",
+                        "const currentMatInfo = computed(() => ({",
                         "materialCode: matForm.materialCode",
                         "materialTypeCode: matForm.materialTypeCode",
                         "name: matForm.materialName")
-                .doesNotContain("item.materialName === matForm.materialName");
+                .doesNotContain(
+                        "item.materialName === matForm.materialName",
+                        "materialOptions.value.find(item => item.materialCode === matForm.materialCode)",
+                        "dictionaryStore.materials");
         assertThat(materialPicker)
                 .contains(
                         "prop=\"materialCode\" label=\"材料编码\"",
