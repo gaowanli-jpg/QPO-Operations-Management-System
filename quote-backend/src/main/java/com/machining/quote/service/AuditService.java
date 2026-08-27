@@ -351,6 +351,9 @@ public class AuditService {
             case "DICT_ASSEMBLY_MARKUP_FEE_CREATE" -> "新增组装件百分比费用";
             case "DICT_ASSEMBLY_MARKUP_FEE_UPDATE" -> "更新组装件百分比费用";
             case "DICT_ASSEMBLY_MARKUP_FEE_DELETE" -> "删除组装件百分比费用";
+            case "DICT_PRICING_MARKUP_FEE_CREATE" -> "Create pricing markup fee";
+            case "DICT_PRICING_MARKUP_FEE_UPDATE" -> "Update pricing markup fee";
+            case "DICT_PRICING_MARKUP_FEE_DELETE" -> "Delete pricing markup fee";
             case "DICT_EXTRA_FEE_CREATE" -> "新增非工时费用";
             case "DICT_EXTRA_FEE_UPDATE" -> "更新非工时费用";
             case "DICT_EXTRA_FEE_DELETE" -> "删除非工时费用";

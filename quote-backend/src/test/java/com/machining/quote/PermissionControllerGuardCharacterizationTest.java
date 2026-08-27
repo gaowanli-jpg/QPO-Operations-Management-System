@@ -119,7 +119,20 @@ class PermissionControllerGuardCharacterizationTest {
         assertThat(dict)
                 .contains("@RequirePermission(\"engineer:dict:view\")")
                 .contains("@RequirePermission(\"engineer:dict:material-manage\")")
-                .contains("@RequirePermission(\"engineer:dict:fee-manage\")");
+                .contains("@RequirePermission(\"engineer:dict:fee-manage\")")
+                .contains("@GetMapping(\"/pricing-markup-fees\")")
+                .contains("@PostMapping(\"/pricing-markup-fees\")")
+                .contains("@PutMapping(\"/pricing-markup-fees/{id}\")")
+                .contains("@DeleteMapping(\"/pricing-markup-fees/{id}\")")
+                .doesNotContain(
+                        "@GetMapping(\"/markup-fees\")",
+                        "@PostMapping(\"/markup-fees\")",
+                        "@PutMapping(\"/markup-fees/{id}\")",
+                        "@DeleteMapping(\"/markup-fees/{id}\")",
+                        "@GetMapping(\"/assembly-markup-fees\")",
+                        "@PostMapping(\"/assembly-markup-fees\")",
+                        "@PutMapping(\"/assembly-markup-fees/{id}\")",
+                        "@DeleteMapping(\"/assembly-markup-fees/{id}\")");
         assertThat(processMaster)
                 .contains("@RequirePermission(\"engineer:dict:view\")")
                 .contains("@RequirePermission(\"engineer:dict:process-manage\")");

@@ -14,6 +14,8 @@ class AuditActionCatalogCharacterizationTest {
             "src", "main", "java", "com", "machining", "quote", "service", "SystemTaskService.java");
     private static final Path AUTO_MES_MATERIAL_SYNC_SERVICE = Path.of(
             "src", "main", "java", "com", "machining", "quote", "service", "DeliveryAutoMesMaterialSyncService.java");
+    private static final Path AUDIT_LOG_QUERY_SERVICE = Path.of(
+            "src", "main", "java", "com", "machining", "quote", "service", "AuditLogQueryService.java");
     private static final Path WMS_ALLOCATION_PLAN = Path.of(
             "..", "docs", "QPO-MES-WMS对接", "04-WMS锁库分配与锁库零件模块开发文档.md");
 
@@ -54,6 +56,9 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.inferModule("DELIVERY_PROCESS_SHEET_EXPORT")).isEqualTo("DELIVERY");
         assertThat(AuditService.inferModule("DICT_PROCESS_MES_SYNC")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("DICT_MATERIAL_MES_SYNC")).isEqualTo("DICT");
+        assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_CREATE")).isEqualTo("DICT");
+        assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_UPDATE")).isEqualTo("DICT");
+        assertThat(AuditService.inferModule("DICT_PRICING_MARKUP_FEE_DELETE")).isEqualTo("DICT");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_UPDATE")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isEqualTo("CHANGE");
         assertThat(AuditService.inferModule("SYSTEM_U9_ORG_CONFIG_UPDATE")).isEqualTo("SYSTEM");
@@ -87,6 +92,9 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DELIVERY_PROCESS_SHEET_EXPORT")).isNotEqualTo("DELIVERY_PROCESS_SHEET_EXPORT");
         assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).isNotEqualTo("DICT_PROCESS_MES_SYNC");
         assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).isNotEqualTo("DICT_MATERIAL_MES_SYNC");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_CREATE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_CREATE");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_UPDATE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_UPDATE");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_DELETE")).isNotEqualTo("DICT_PRICING_MARKUP_FEE_DELETE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_UPDATE")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_UPDATE");
         assertThat(AuditService.labelForAction("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT")).isNotEqualTo("SALES_ORDER_CHANGE_ITEM_DATA_REPLACEMENT");
         assertThat(AuditService.labelForAction("SYSTEM_U9_ORG_CONFIG_UPDATE")).isNotEqualTo("SYSTEM_U9_ORG_CONFIG_UPDATE");
@@ -100,6 +108,21 @@ class AuditActionCatalogCharacterizationTest {
         assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("工艺");
         assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).contains("MES");
         assertThat(AuditService.labelForAction("DICT_MATERIAL_MES_SYNC")).contains("材料");
+    }
+
+    @Test
+    void pricingMarkupFeeAuditActionsAndTargetTypeAreQueryable() throws Exception {
+        String queryService = Files.readString(AUDIT_LOG_QUERY_SERVICE, StandardCharsets.UTF_8);
+
+        assertThat(queryService)
+                .contains("dict_pricing_markup_fee")
+                .doesNotContain("dict_markup_fee", "dict_assembly_markup_fee");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_CREATE"))
+                .contains("pricing markup fee");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_UPDATE"))
+                .contains("pricing markup fee");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_DELETE"))
+                .contains("pricing markup fee");
     }
 
     @Test

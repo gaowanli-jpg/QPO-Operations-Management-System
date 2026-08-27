@@ -9,14 +9,13 @@ import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigDTO;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigReq;
-import com.machining.quote.entity.DictAssemblyMarkupFee;
+import com.machining.quote.dto.PricingMarkupFeeSaveReq;
 import com.machining.quote.entity.DictExtraFeeItem;
-import com.machining.quote.entity.DictMarkupFee;
-import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
+import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
-import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.MaterialMasterService;
+import com.machining.quote.service.PricingMarkupFeeService;
 import com.machining.quote.service.mes.MesMasterDataSyncScheduleConfigService;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,9 +39,7 @@ public class DictController {
     @Autowired
     private MaterialMasterService materialMasterService;
     @Autowired
-    private DictMarkupFeeMapper markupFeeMapper;
-    @Autowired
-    private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
+    private PricingMarkupFeeService pricingMarkupFeeService;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired
@@ -130,78 +127,33 @@ public class DictController {
         return Map.of("success", true, "message", "材料类型已删除或停用");
     }
 
-    @GetMapping("/markup-fees")
+    @GetMapping("/pricing-markup-fees")
     @RequirePermission("engineer:dict:view")
-    public List<DictMarkupFee> listMarkupFees() {
-        QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
-        qw.orderByAsc("sort_no").orderByAsc("id");
-        return markupFeeMapper.selectList(qw);
+    public List<DictPricingMarkupFee> listPricingMarkupFees(
+            @RequestParam("pricingScope") String pricingScope,
+            @RequestParam("feeCategory") String feeCategory) {
+        return pricingMarkupFeeService.listFees(pricingScope, feeCategory);
     }
 
-    @PostMapping("/markup-fees")
+    @PostMapping("/pricing-markup-fees")
     @RequirePermission("engineer:dict:fee-manage")
-    public Map<String, Object> createMarkupFee(@RequestBody DictMarkupFee fee) {
-        normalizeMarkupFee(fee);
-        markupFeeMapper.insert(fee);
-        auditService.record("DICT_MARKUP_FEE_CREATE", "dict_markup_fee", fee.getId(), null, fee);
-        return Map.of("success", true, "message", "费用类已新增", "data", fee);
+    public Map<String, Object> createPricingMarkupFee(@RequestBody PricingMarkupFeeSaveReq req) {
+        DictPricingMarkupFee data = pricingMarkupFeeService.saveFee(null, req);
+        return Map.of("success", true, "message", "pricing markup fee created", "data", data);
     }
 
-    @PutMapping("/markup-fees/{id}")
+    @PutMapping("/pricing-markup-fees/{id}")
     @RequirePermission("engineer:dict:fee-manage")
-    public Map<String, Object> updateMarkupFee(@PathVariable Integer id, @RequestBody DictMarkupFee fee) {
-        DictMarkupFee before = markupFeeMapper.selectById(id);
-        fee.setId(id);
-        normalizeMarkupFee(fee);
-        markupFeeMapper.updateById(fee);
-        auditService.record("DICT_MARKUP_FEE_UPDATE", "dict_markup_fee", id, before, fee);
-        return Map.of("success", true, "message", "费用类已更新", "data", fee);
+    public Map<String, Object> updatePricingMarkupFee(@PathVariable Long id, @RequestBody PricingMarkupFeeSaveReq req) {
+        DictPricingMarkupFee data = pricingMarkupFeeService.saveFee(id, req);
+        return Map.of("success", true, "message", "pricing markup fee updated", "data", data);
     }
 
-    @DeleteMapping("/markup-fees/{id}")
+    @DeleteMapping("/pricing-markup-fees/{id}")
     @RequirePermission("engineer:dict:fee-manage")
-    public Map<String, Object> deleteMarkupFee(@PathVariable Integer id) {
-        DictMarkupFee before = markupFeeMapper.selectById(id);
-        markupFeeMapper.deleteById(id);
-        auditService.record("DICT_MARKUP_FEE_DELETE", "dict_markup_fee", id, before, null);
-        return Map.of("success", true, "message", "费用类已删除");
-    }
-
-    @GetMapping("/assembly-markup-fees")
-    @RequirePermission("engineer:dict:view")
-    public List<DictAssemblyMarkupFee> listAssemblyMarkupFees() {
-        QueryWrapper<DictAssemblyMarkupFee> qw = new QueryWrapper<>();
-        qw.orderByAsc("sort_no").orderByAsc("id");
-        return assemblyMarkupFeeMapper.selectList(qw);
-    }
-
-    @PostMapping("/assembly-markup-fees")
-    @RequirePermission("engineer:dict:fee-manage")
-    public Map<String, Object> createAssemblyMarkupFee(@RequestBody DictAssemblyMarkupFee fee) {
-        normalizeAssemblyMarkupFee(fee);
-        assemblyMarkupFeeMapper.insert(fee);
-        auditService.record("DICT_ASSEMBLY_MARKUP_FEE_CREATE", "dict_assembly_markup_fee", fee.getId(), null, fee);
-        return Map.of("success", true, "message", "组装件费用类已新增", "data", fee);
-    }
-
-    @PutMapping("/assembly-markup-fees/{id}")
-    @RequirePermission("engineer:dict:fee-manage")
-    public Map<String, Object> updateAssemblyMarkupFee(@PathVariable Integer id, @RequestBody DictAssemblyMarkupFee fee) {
-        DictAssemblyMarkupFee before = assemblyMarkupFeeMapper.selectById(id);
-        fee.setId(id);
-        normalizeAssemblyMarkupFee(fee);
-        assemblyMarkupFeeMapper.updateById(fee);
-        auditService.record("DICT_ASSEMBLY_MARKUP_FEE_UPDATE", "dict_assembly_markup_fee", id, before, fee);
-        return Map.of("success", true, "message", "组装件费用类已更新", "data", fee);
-    }
-
-    @DeleteMapping("/assembly-markup-fees/{id}")
-    @RequirePermission("engineer:dict:fee-manage")
-    public Map<String, Object> deleteAssemblyMarkupFee(@PathVariable Integer id) {
-        DictAssemblyMarkupFee before = assemblyMarkupFeeMapper.selectById(id);
-        assemblyMarkupFeeMapper.deleteById(id);
-        auditService.record("DICT_ASSEMBLY_MARKUP_FEE_DELETE", "dict_assembly_markup_fee", id, before, null);
-        return Map.of("success", true, "message", "组装件费用类已删除");
+    public Map<String, Object> deletePricingMarkupFee(@PathVariable Long id) {
+        pricingMarkupFeeService.deleteFee(id);
+        return Map.of("success", true, "message", "pricing markup fee deleted");
     }
 
     @GetMapping("/extra-fee-items")
@@ -247,38 +199,6 @@ public class DictController {
         extraFeeItemMapper.deleteById(id);
         auditService.record("DICT_EXTRA_FEE_DELETE", "dict_extra_fee_item", id, before, null);
         return Map.of("success", true, "message", "非工时费用工艺已删除");
-    }
-
-    private void normalizeMarkupFee(DictMarkupFee fee) {
-        if (isBlank(fee.getFeeName())) {
-            throw new RuntimeException("费用名称不能为空");
-        }
-        fee.setFeeName(fee.getFeeName().trim());
-        if (fee.getRatePercent() == null) {
-            fee.setRatePercent(0.0);
-        }
-        if (fee.getSortNo() == null) {
-            fee.setSortNo(0);
-        }
-        if (fee.getEnabled() == null) {
-            fee.setEnabled(true);
-        }
-    }
-
-    private void normalizeAssemblyMarkupFee(DictAssemblyMarkupFee fee) {
-        if (isBlank(fee.getFeeName())) {
-            throw new RuntimeException("费用名称不能为空");
-        }
-        fee.setFeeName(fee.getFeeName().trim());
-        if (fee.getRatePercent() == null) {
-            fee.setRatePercent(0.0);
-        }
-        if (fee.getSortNo() == null) {
-            fee.setSortNo(0);
-        }
-        if (fee.getEnabled() == null) {
-            fee.setEnabled(true);
-        }
     }
 
     private void normalizeExtraFeeItem(DictExtraFeeItem item) {
