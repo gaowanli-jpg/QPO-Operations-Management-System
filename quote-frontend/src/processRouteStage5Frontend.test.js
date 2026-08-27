@@ -8,6 +8,23 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
 describe('Stage 38 phase 5 process picker and global template refactor', () => {
+  test('assembly preview applies ASSEMBLY scoped percentage factors only to assembly fee', () => {
+    const itemPricing = readSource('components', 'ItemPricing.vue')
+
+    expect(itemPricing).toContain("const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))")
+    expect(itemPricing).toContain('const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(')
+    expect(itemPricing).toContain('numberOrZero(assemblyFee.value),')
+    expect(itemPricing).toContain('assemblyMarkupFeeOptions.value,')
+    expect(itemPricing).toContain("'ASSEMBLY'")
+    expect(itemPricing).toContain('const assemblyFeeMarkupRows = computed(() => assemblyPreviewPricingResult.value.feeRows)')
+    expect(itemPricing).toContain('const assemblyFeeMarkupTotal = computed(() => assemblyFeeMarkupRows.value.reduce((sum, row) => sum + numberOrZero(row.cost), 0))')
+    expect(itemPricing).toContain('const assemblyTaxIncludedUnitPrice = computed(() => assemblyChildrenTotal.value + assemblyPreviewPricingResult.value.taxIncludedUnitPrice)')
+    expect(itemPricing).toContain("fee.feeCategory === feeCategory")
+    expect(itemPricing).toContain("fee.pricingScope === pricingScope")
+    expect(itemPricing).not.toContain('assemblyChildrenTotal.value + numberOrZero(assemblyFee.value) + assemblyFeeMarkupTotal.value')
+    expect(itemPricing).not.toContain('numberOrZero(assemblyFee.value) * ratePercent / 100')
+  })
+
   test('process picker shows detail process with category identity and hourly rate', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 

@@ -632,7 +632,8 @@
       v-model="materialPickerVisible"
       title="选择材料"
       type="material"
-      :items="materialOptions"
+      remote
+      :remote-loader="pagePricingMaterialOptions"
       :selected-key="matForm.materialCode"
       empty-text="暂无材料字典数据"
       @confirm="selectMaterial"
@@ -642,7 +643,8 @@
       v-model="processPickerVisible"
       title="选择工艺"
       type="process"
-      :items="combinedProcessOptions"
+      remote
+      :remote-loader="pagePricingProcessOptions"
       :selected-key="selectedProcessOptionKey"
       :enable-process-rate-edit="true"
       empty-text="暂无工艺字典数据"
@@ -696,6 +698,8 @@ import {
   listAssemblyChildCandidates,
   listAssemblyRelations,
   listPricingItems,
+  pagePricingMaterialOptions,
+  pagePricingProcessOptions,
   downloadPricingSheet,
   savePricingItemRemark,
   saveOrderConfig,
@@ -760,9 +764,6 @@ const isItemQuoteSaving = (row) => isPending(pricingActionKeys.saveItem(row?.id)
 const pricingTableRef = ref(null)
 const pricingListPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const pricingItemTotal = ref(0)
-const materialOptions = computed(() => dictionaryStore.materials)
-const processOptions = computed(() => dictionaryStore.processes)
-const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
 const markupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('NORMAL'))
 const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))
 const materialPickerVisible = ref(false)
@@ -771,7 +772,6 @@ const editingProcessIndex = ref(null)
 const repeatAnalysis = ref(null)
 const supplementalDrawingOrderPickerVisible = ref(false)
 
-const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
 const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)
 
 const defaultGlobalConfig = () => ({
@@ -813,6 +813,75 @@ const normalizeGlobalConfig = (config) => {
 const numberOrZero = (value) => {
   const numericValue = Number(value || 0)
   return Number.isFinite(numericValue) ? numericValue : 0
+}
+const CUSTOMER_WEIGHT = 'CUSTOMER_WEIGHT'
+const BASIC_PERCENT = 'BASIC_PERCENT'
+const TAX = 'TAX'
+const UNTAXED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT]
+const TAX_INCLUDED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT, TAX]
+const TAX_ONLY_PRICING_FEE_SEQUENCE = TAX_INCLUDED_PRICING_FEE_SEQUENCE.filter(
+  feeCategory => !UNTAXED_PRICING_FEE_SEQUENCE.includes(feeCategory)
+)
+
+const pricingFeeSortValue = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+
+const enabledPricingFeesByCategory = (fees = [], feeCategory, pricingScope) => (fees || [])
+  .filter(fee => fee.enabled !== false && fee.feeCategory === feeCategory && fee.pricingScope === pricingScope)
+  .slice()
+  .sort((left, right) => (
+    pricingFeeSortValue(left.sortNo) - pricingFeeSortValue(right.sortNo)
+    || pricingFeeSortValue(left.id) - pricingFeeSortValue(right.id)
+  ))
+
+const applyPreviewPricingSequence = (baseAmount, fees, pricingScope, feeCategorySequence) => {
+  const feeRows = []
+  let currentAmount = numberOrZero(baseAmount)
+  feeCategorySequence.forEach((feeCategory) => {
+    enabledPricingFeesByCategory(fees, feeCategory, pricingScope).forEach((fee) => {
+      const ratePercent = numberOrZero(fee.ratePercent)
+      const factor = 1 + ratePercent / 100
+      const rowBaseAmount = currentAmount
+      const cost = rowBaseAmount * ratePercent / 100
+      const amountAfter = rowBaseAmount * factor
+      currentAmount = amountAfter
+      feeRows.push({
+        feeName: fee.feeName,
+        pricingScope: fee.pricingScope,
+        feeCategory: fee.feeCategory,
+        ratePercent,
+        factor,
+        baseAmount: rowBaseAmount,
+        cost,
+        amountAfter,
+        includedInUntaxedPrice: feeCategory !== TAX,
+        includedInTaxIncludedPrice: true
+      })
+    })
+  })
+  return { amount: currentAmount, feeRows }
+}
+
+const calculatePreviewPriceByFeeCategory = (baseAmount, fees, pricingScope) => {
+  const untaxedResult = applyPreviewPricingSequence(
+    baseAmount,
+    fees,
+    pricingScope,
+    UNTAXED_PRICING_FEE_SEQUENCE
+  )
+  const taxIncludedResult = applyPreviewPricingSequence(
+    untaxedResult.amount,
+    fees,
+    pricingScope,
+    TAX_ONLY_PRICING_FEE_SEQUENCE
+  )
+  return {
+    untaxedUnitPrice: untaxedResult.amount,
+    taxIncludedUnitPrice: taxIncludedResult.amount,
+    feeRows: [...untaxedResult.feeRows, ...taxIncludedResult.feeRows]
+  }
 }
 const numberOrNullForInput = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -1420,21 +1489,17 @@ const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum,
   return Number.isFinite(unitPrice) ? sum + unitPrice * qty : sum
 }, 0))
 
-const assemblyFeeMarkupRows = computed(() => assemblyMarkupFeeOptions.value
-  .filter(fee => fee.enabled !== false)
-  .map(fee => {
-    const ratePercent = Number(fee.ratePercent || 0)
-    const cost = numberOrZero(assemblyFee.value) * ratePercent / 100
-    return {
-      feeName: fee.feeName,
-      ratePercent,
-      cost
-    }
-  }))
+const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(
+  numberOrZero(assemblyFee.value),
+  assemblyMarkupFeeOptions.value,
+  'ASSEMBLY'
+))
+
+const assemblyFeeMarkupRows = computed(() => assemblyPreviewPricingResult.value.feeRows)
 
 const assemblyFeeMarkupTotal = computed(() => assemblyFeeMarkupRows.value.reduce((sum, row) => sum + numberOrZero(row.cost), 0))
 
-const assemblyTaxIncludedUnitPrice = computed(() => assemblyChildrenTotal.value + numberOrZero(assemblyFee.value) + assemblyFeeMarkupTotal.value)
+const assemblyTaxIncludedUnitPrice = computed(() => assemblyChildrenTotal.value + assemblyPreviewPricingResult.value.taxIncludedUnitPrice)
 
 const numericSortNo = (value) => {
   const numericValue = Number(value)
@@ -1845,31 +1910,14 @@ const normalProcessCostPreview = computed(() => processRoute.value.reduce((sum, 
 }, 0))
 
 const normalBaseCostPreview = computed(() => calculatedMaterialCost.value + normalProcessCostPreview.value)
-const normalMarkupFeeRowsPreview = computed(() => markupFeeOptions.value
-  .filter(fee => fee.enabled !== false)
-  .map(fee => {
-    const ratePercent = numberOrZero(fee.ratePercent)
-    const cost = normalBaseCostPreview.value * ratePercent / 100
-    return {
-      feeName: fee.feeName,
-      ratePercent,
-      cost
-    }
-  }))
-const normalMarkupCostPreview = computed(() => normalMarkupFeeRowsPreview.value
-  .reduce((sum, row) => sum + numberOrZero(row.cost), 0))
-const isTaxFeeName = (feeName) => {
-  const text = String(feeName || '').toLowerCase()
-  return text.includes('税') || text.includes('tax') || text.includes('vat')
-}
-const normalTaxFeeCostPreview = computed(() => normalMarkupFeeRowsPreview.value
-  .filter(row => isTaxFeeName(row.feeName))
-  .reduce((sum, row) => sum + numberOrZero(row.cost), 0))
-const normalTaxIncludedUnitPricePreview = computed(() => normalBaseCostPreview.value + normalMarkupCostPreview.value)
-const normalUntaxedUnitPricePreview = computed(() => Math.max(
-  0,
-  normalTaxIncludedUnitPricePreview.value - normalTaxFeeCostPreview.value
+const normalPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(
+  normalBaseCostPreview.value,
+  markupFeeOptions.value,
+  'NORMAL'
 ))
+const normalMarkupFeeRowsPreview = computed(() => normalPreviewPricingResult.value.feeRows)
+const normalTaxIncludedUnitPricePreview = computed(() => normalPreviewPricingResult.value.taxIncludedUnitPrice)
+const normalUntaxedUnitPricePreview = computed(() => normalPreviewPricingResult.value.untaxedUnitPrice)
 const normalTaxIncludedTotalPricePreview = computed(() => normalTaxIncludedUnitPricePreview.value * currentItemQty.value)
 const normalUntaxedTotalPricePreview = computed(() => normalUntaxedUnitPricePreview.value * currentItemQty.value)
 

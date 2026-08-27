@@ -25,7 +25,11 @@ describe('assembly pricing fee dictionary', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
     expect(source).toContain("const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))")
-    expect(source).toContain('const assemblyFeeMarkupRows = computed(() => assemblyMarkupFeeOptions.value')
+    expect(source).toContain('const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(')
+    expect(source).toContain('numberOrZero(assemblyFee.value),')
+    expect(source).toContain('assemblyMarkupFeeOptions.value,')
+    expect(source).toContain("'ASSEMBLY'")
+    expect(source).toContain('const assemblyFeeMarkupRows = computed(() => assemblyPreviewPricingResult.value.feeRows)')
     expect(source).not.toContain('isTransportMarkupFee')
     expect(source).not.toContain("title=\"组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装费对应的管理费/利润/税费；组装费不收运输费。\"")
   })

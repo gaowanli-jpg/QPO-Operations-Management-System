@@ -57,4 +57,20 @@ describe('pricing markup fees frontend contract', () => {
       oldTokens.forEach((token) => expect(source, fullPath).not.toContain(token))
     }
   })
+
+  test('item pricing preview uses fee categories instead of fee names for tax handling', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain("const CUSTOMER_WEIGHT = 'CUSTOMER_WEIGHT'")
+    expect(source).toContain("const BASIC_PERCENT = 'BASIC_PERCENT'")
+    expect(source).toContain("const TAX = 'TAX'")
+    expect(source).toContain('TAX_INCLUDED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT, TAX]')
+    expect(source).toContain('UNTAXED_PRICING_FEE_SEQUENCE = [CUSTOMER_WEIGHT, BASIC_PERCENT]')
+    expect(source).toContain('calculatePreviewPriceByFeeCategory')
+    expect(source).toContain('fee.feeCategory === feeCategory')
+    expect(source).not.toContain('isTaxFeeName')
+    expect(source).not.toContain("includes('税')")
+    expect(source).not.toContain("includes('tax')")
+    expect(source).not.toContain("includes('vat')")
+  })
 })
