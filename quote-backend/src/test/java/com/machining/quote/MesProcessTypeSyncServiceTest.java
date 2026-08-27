@@ -13,9 +13,11 @@ import com.machining.quote.service.mes.MesMasterDataClient;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +32,34 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MesProcessTypeSyncServiceTest {
+
+    @Test
+    void submitProcessTypesManualCreatesRunningRunAndReturnsBeforeWorkerExecutes() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        CapturingTaskExecutor taskExecutor = new CapturingTaskExecutor();
+        MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class), taskExecutor);
+        when(syncRunMapper.selectOne(any(QueryWrapper.class))).thenReturn(null);
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(9801L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncSubmitResult result = service.submitProcessTypesManual(7L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.alreadyRunning()).isFalse();
+        assertThat(result.syncRunId()).isEqualTo(9801L);
+        assertThat(result.syncType()).isEqualTo("MES_PROCESS_TYPE");
+        assertThat(result.status()).isEqualTo("RUNNING");
+        assertThat(result.message()).contains("已提交");
+        assertThat(taskExecutor.tasks).hasSize(1);
+        verify(client, never()).listProcessTypes();
+    }
 
     @Test
     void syncProcessTypesUpsertsMesCategoryCreatesDefaultDetailAndAuditsCounts() {
@@ -306,12 +336,25 @@ class MesProcessTypeSyncServiceTest {
             DictProcessDetailMapper detailMapper,
             MesMasterDataSyncRunMapper syncRunMapper,
             AuditService auditService) {
+        return service(client, categoryMapper, detailMapper, syncRunMapper, auditService, null);
+    }
+
+    private static MesMasterDataSyncService service(
+            MesMasterDataClient client,
+            DictProcessCategoryMapper categoryMapper,
+            DictProcessDetailMapper detailMapper,
+            MesMasterDataSyncRunMapper syncRunMapper,
+            AuditService auditService,
+            TaskExecutor taskExecutor) {
         MesMasterDataSyncService service = new MesMasterDataSyncService();
         ReflectionTestUtils.setField(service, "client", client);
         ReflectionTestUtils.setField(service, "categoryMapper", categoryMapper);
         ReflectionTestUtils.setField(service, "detailMapper", detailMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", syncRunMapper);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        if (taskExecutor != null) {
+            ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
+        }
         return service;
     }
 
@@ -345,5 +388,14 @@ class MesProcessTypeSyncServiceTest {
         detail.setEnabled(enabled);
         detail.setSortNo(0);
         return detail;
+    }
+
+    private static class CapturingTaskExecutor implements TaskExecutor {
+        private final List<Runnable> tasks = new ArrayList<>();
+
+        @Override
+        public void execute(Runnable task) {
+            tasks.add(task);
+        }
     }
 }

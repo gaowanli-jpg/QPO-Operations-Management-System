@@ -18,6 +18,8 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -85,6 +87,9 @@ public class MesMasterDataSyncService {
     private MesMasterDataSyncScheduleConfigService scheduleConfigService;
     @Autowired(required = false)
     private PlatformTransactionManager transactionManager;
+    @Autowired(required = false)
+    @Qualifier("systemTaskExecutor")
+    private TaskExecutor taskExecutor;
 
     private LocalDateTime mesMasterDataSyncSchedulerStartedAt;
     private final AtomicBoolean scheduledMaterialSyncRunning = new AtomicBoolean(false);
@@ -134,11 +139,126 @@ public class MesMasterDataSyncService {
         }
     }
 
+    public SyncSubmitResult submitProcessTypesManual(Long createdBy) {
+        return submitManualSync(
+                SYNC_TYPE_PROCESS_TYPE,
+                createdBy,
+                "MES工艺主数据同步已提交",
+                "已有MES工艺主数据同步正在执行");
+    }
+
+    public SyncSubmitResult submitMaterialsManual(Long createdBy) {
+        return submitManualSync(
+                SYNC_TYPE_MATERIAL,
+                createdBy,
+                "MES材料主数据同步已提交",
+                "已有MES材料主数据同步正在执行");
+    }
+
+    public MesMasterDataSyncRun getLatestRun(String syncType) {
+        String normalizedType = validateSyncType(syncType);
+        QueryWrapper<MesMasterDataSyncRun> query = new QueryWrapper<>();
+        query.eq("sync_type", normalizedType).orderByDesc("started_at").orderByDesc("id").last("LIMIT 1");
+        return syncRunMapper.selectOne(query);
+    }
+
+    public MesMasterDataSyncRun getRun(String syncType, Long syncRunId) {
+        String normalizedType = validateSyncType(syncType);
+        if (syncRunId == null) {
+            throw new IllegalArgumentException("syncRunId is required");
+        }
+        MesMasterDataSyncRun run = syncRunMapper.selectById(syncRunId);
+        if (run == null || !normalizedType.equals(run.getSyncType())) {
+            throw new IllegalArgumentException("MES master data sync run not found");
+        }
+        return run;
+    }
+
+    private SyncSubmitResult submitManualSync(String syncType, Long createdBy, String submittedMessage, String runningMessage) {
+        String normalizedType = validateSyncType(syncType);
+        MesMasterDataSyncRun activeRun = findActiveRun(normalizedType);
+        if (activeRun != null) {
+            return submitResult(true, false, true, activeRun, runningMessage);
+        }
+        LocalDateTime startedAt = LocalDateTime.now();
+        MesMasterDataSyncRun run;
+        try {
+            run = executeInTransaction(
+                    TransactionDefinition.PROPAGATION_REQUIRES_NEW,
+                    () -> startRun(normalizedType, startedAt, createdBy));
+        } catch (RuntimeException error) {
+            MesMasterDataSyncRun concurrentRun = findActiveRun(normalizedType);
+            if (concurrentRun != null) {
+                return submitResult(true, false, true, concurrentRun, runningMessage);
+            }
+            throw error;
+        }
+        try {
+            if (taskExecutor == null) {
+                throw new IllegalStateException("MES master data sync executor unavailable");
+            }
+            log.info("MES master data sync submitted taskId={} syncRunId={} syncType={} triggerSource=MANUAL",
+                    run.getId(), run.getId(), normalizedType);
+            taskExecutor.execute(() -> runSubmittedSync(normalizedType, run, false));
+            return submitResult(true, true, false, run, submittedMessage);
+        } catch (RuntimeException error) {
+            String message = safeMessage("MES master data sync task submit failed: " + error.getMessage());
+            Counters counters = new Counters();
+            executeInTransaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW,
+                    () -> finishRun(run, STATUS_FAILED, startedAt, counters, message));
+            log.error("MES master data sync failed taskId={} syncRunId={} syncType={} durationMs=0",
+                    run.getId(), run.getId(), normalizedType, error);
+            return new SyncSubmitResult(false, false, false, run.getId(), normalizedType, STATUS_FAILED, message);
+        }
+    }
+
+    private MesMasterDataSyncRun findActiveRun(String syncType) {
+        QueryWrapper<MesMasterDataSyncRun> query = new QueryWrapper<>();
+        query.eq("sync_type", syncType).eq("status", STATUS_RUNNING)
+                .orderByDesc("started_at").orderByDesc("id").last("LIMIT 1");
+        return syncRunMapper.selectOne(query);
+    }
+
+    private SyncSubmitResult submitResult(
+            boolean success,
+            boolean submitted,
+            boolean alreadyRunning,
+            MesMasterDataSyncRun run,
+            String message) {
+        return new SyncSubmitResult(
+                success,
+                submitted,
+                alreadyRunning,
+                run == null ? null : run.getId(),
+                run == null ? null : run.getSyncType(),
+                run == null ? null : run.getStatus(),
+                message);
+    }
+
+    private void runSubmittedSync(String syncType, MesMasterDataSyncRun run, boolean scheduled) {
+        long startedMillis = System.currentTimeMillis();
+        log.info("MES master data sync started taskId={} syncRunId={} syncType={} triggerSource={}",
+                run.getId(), run.getId(), syncType, scheduled ? "SCHEDULED" : "MANUAL");
+        SyncResult result = SYNC_TYPE_MATERIAL.equals(syncType)
+                ? executeMaterialsSync(run, run.getStartedAt() == null ? LocalDateTime.now() : run.getStartedAt())
+                : executeProcessTypesSync(run, run.getStartedAt() == null ? LocalDateTime.now() : run.getStartedAt());
+        log.info("MES master data sync worker finished taskId={} syncRunId={} syncType={} status={} durationMs={}",
+                run.getId(), run.getId(), syncType, result.success() ? STATUS_SUCCESS : STATUS_FAILED,
+                System.currentTimeMillis() - startedMillis);
+        if (scheduled && scheduleConfigService != null) {
+            scheduleConfigService.updateScheduledResult(syncType, result);
+        }
+    }
+
     public SyncResult syncProcessTypesManual(Long createdBy) {
         LocalDateTime startedAt = LocalDateTime.now();
         MesMasterDataSyncRun run = executeInTransaction(
                 TransactionDefinition.PROPAGATION_REQUIRES_NEW,
                 () -> startRun(SYNC_TYPE_PROCESS_TYPE, startedAt, createdBy));
+        return executeProcessTypesSync(run, startedAt);
+    }
+
+    private SyncResult executeProcessTypesSync(MesMasterDataSyncRun run, LocalDateTime startedAt) {
         Counters counters = new Counters();
         try {
             List<MesProcessTypeListResp.Row> rows = client.listProcessTypes();
@@ -179,6 +299,10 @@ public class MesMasterDataSyncService {
         MesMasterDataSyncRun run = executeInTransaction(
                 TransactionDefinition.PROPAGATION_REQUIRES_NEW,
                 () -> startRun(SYNC_TYPE_MATERIAL, startedAt, createdBy));
+        return executeMaterialsSync(run, startedAt);
+    }
+
+    private SyncResult executeMaterialsSync(MesMasterDataSyncRun run, LocalDateTime startedAt) {
         Counters counters = new Counters();
         try {
             List<MesMaterialPageResp.Row> rows = fetchAllMaterialRows(counters);
@@ -709,6 +833,14 @@ public class MesMasterDataSyncService {
         return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 
+    private String validateSyncType(String syncType) {
+        String value = trimToNull(syncType);
+        if (!SYNC_TYPE_MATERIAL.equals(value) && !SYNC_TYPE_PROCESS_TYPE.equals(value)) {
+            throw new IllegalArgumentException("Unsupported MES sync type: " + syncType);
+        }
+        return value;
+    }
+
     private String safeMessage(String value) {
         if (value == null || value.isBlank()) {
             return "MES master data sync failed";
@@ -739,6 +871,16 @@ public class MesMasterDataSyncService {
             int upsertedCount,
             int disabledCount,
             int deletedCount,
+            String message) {
+    }
+
+    public record SyncSubmitResult(
+            boolean success,
+            boolean submitted,
+            boolean alreadyRunning,
+            Long syncRunId,
+            String syncType,
+            String status,
             String message) {
     }
 

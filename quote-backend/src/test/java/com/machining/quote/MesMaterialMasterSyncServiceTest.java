@@ -13,12 +13,14 @@ import com.machining.quote.service.mes.MesMasterDataClient;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +35,104 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MesMaterialMasterSyncServiceTest {
+
+    @Test
+    void submitMaterialsManualCreatesRunningRunAndReturnsBeforeWorkerExecutes() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        CapturingTaskExecutor taskExecutor = new CapturingTaskExecutor();
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class), taskExecutor);
+        when(syncRunMapper.selectOne(any(QueryWrapper.class))).thenReturn(null);
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(9901L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncSubmitResult result = service.submitMaterialsManual(7L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.submitted()).isTrue();
+        assertThat(result.alreadyRunning()).isFalse();
+        assertThat(result.syncRunId()).isEqualTo(9901L);
+        assertThat(result.syncType()).isEqualTo("MES_MATERIAL");
+        assertThat(result.status()).isEqualTo("RUNNING");
+        assertThat(result.message()).contains("已提交");
+        assertThat(taskExecutor.tasks).hasSize(1);
+        verify(client, never()).pageMaterials(any(Integer.class), any(Integer.class));
+
+        ArgumentCaptor<MesMasterDataSyncRun> runCaptor = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
+        verify(syncRunMapper).insert(runCaptor.capture());
+        assertThat(runCaptor.getValue()).satisfies(run -> {
+            assertThat(run.getSyncType()).isEqualTo("MES_MATERIAL");
+            assertThat(run.getStatus()).isEqualTo("RUNNING");
+            assertThat(run.getCreatedBy()).isEqualTo(7L);
+            assertThat(run.getFetchedCount()).isZero();
+            assertThat(run.getDeletedCount()).isZero();
+        });
+    }
+
+    @Test
+    void submitMaterialsManualReusesActiveRunWithoutDispatchingDuplicateWorker() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        CapturingTaskExecutor taskExecutor = new CapturingTaskExecutor();
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class), taskExecutor);
+        MesMasterDataSyncRun active = new MesMasterDataSyncRun();
+        active.setId(9902L);
+        active.setSyncType("MES_MATERIAL");
+        active.setStatus("RUNNING");
+        when(syncRunMapper.selectOne(any(QueryWrapper.class))).thenReturn(active);
+
+        MesMasterDataSyncService.SyncSubmitResult result = service.submitMaterialsManual(8L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.submitted()).isFalse();
+        assertThat(result.alreadyRunning()).isTrue();
+        assertThat(result.syncRunId()).isEqualTo(9902L);
+        assertThat(result.status()).isEqualTo("RUNNING");
+        assertThat(result.message()).contains("正在执行");
+        assertThat(taskExecutor.tasks).isEmpty();
+        verify(syncRunMapper, never()).insert(any(MesMasterDataSyncRun.class));
+        verify(client, never()).pageMaterials(any(Integer.class), any(Integer.class));
+    }
+
+    @Test
+    void submitMaterialsManualMarksRunFailedWhenExecutorRejectsWorker() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class), command -> {
+            throw new RuntimeException("queue full");
+        });
+        when(syncRunMapper.selectOne(any(QueryWrapper.class))).thenReturn(null);
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(9903L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncSubmitResult result = service.submitMaterialsManual(9L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.submitted()).isFalse();
+        assertThat(result.alreadyRunning()).isFalse();
+        assertThat(result.syncRunId()).isEqualTo(9903L);
+        assertThat(result.status()).isEqualTo("FAILED");
+        assertThat(result.message()).contains("submit failed");
+
+        ArgumentCaptor<MesMasterDataSyncRun> failedRun = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
+        verify(syncRunMapper).updateById(failedRun.capture());
+        assertThat(failedRun.getValue()).satisfies(run -> {
+            assertThat(run.getStatus()).isEqualTo("FAILED");
+            assertThat(run.getMessage()).contains("submit failed");
+        });
+    }
 
     @Test
     void syncMaterialsUpsertsThreeMesTypesPreservesExistingPricesAndAuditsCounts() {
@@ -461,12 +561,25 @@ class MesMaterialMasterSyncServiceTest {
             DictMaterialTypeMapper materialTypeMapper,
             MesMasterDataSyncRunMapper syncRunMapper,
             AuditService auditService) {
+        return service(client, materialMapper, materialTypeMapper, syncRunMapper, auditService, null);
+    }
+
+    private static MesMasterDataSyncService service(
+            MesMasterDataClient client,
+            DictMaterialMapper materialMapper,
+            DictMaterialTypeMapper materialTypeMapper,
+            MesMasterDataSyncRunMapper syncRunMapper,
+            AuditService auditService,
+            TaskExecutor taskExecutor) {
         MesMasterDataSyncService service = new MesMasterDataSyncService();
         ReflectionTestUtils.setField(service, "client", client);
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
         ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", syncRunMapper);
         ReflectionTestUtils.setField(service, "auditService", auditService);
+        if (taskExecutor != null) {
+            ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
+        }
         return service;
     }
 
@@ -528,5 +641,14 @@ class MesMaterialMasterSyncServiceTest {
         type.setEnabled(true);
         type.setSortNo(0);
         return type;
+    }
+
+    private static class CapturingTaskExecutor implements TaskExecutor {
+        private final List<Runnable> tasks = new ArrayList<>();
+
+        @Override
+        public void execute(Runnable task) {
+            tasks.add(task);
+        }
     }
 }
