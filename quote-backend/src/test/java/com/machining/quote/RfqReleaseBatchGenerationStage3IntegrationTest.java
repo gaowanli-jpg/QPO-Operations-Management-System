@@ -102,6 +102,7 @@ class RfqReleaseBatchGenerationStage3IntegrationTest {
         item.setTaxIncludedUnitPrice(10.0);
         item.setTaxIncludedTotalPrice(10.0 * qty);
         item.setLeadTime("2026-08-20");
+        item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         itemMapper.insert(item);
         return item;

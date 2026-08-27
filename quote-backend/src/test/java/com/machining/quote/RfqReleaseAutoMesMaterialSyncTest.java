@@ -162,6 +162,7 @@ class RfqReleaseAutoMesMaterialSyncTest {
         item.setUntaxedUnitPrice(10.0);
         item.setUntaxedTotalPrice(10.0 * qty);
         item.setLeadTime("5");
+        item.setDrawingUrl("/uploads/test/PART-" + suffix + ".pdf");
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         itemMapper.insert(item);
 

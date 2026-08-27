@@ -299,6 +299,7 @@ class U9CustomerLinkIntegrationTest {
         item.setQty(1);
         item.setTaxIncludedUnitPrice(113.0);
         item.setUntaxedUnitPrice(100.0);
+        item.setDrawingUrl("/uploads/test/" + order.getRfqNo() + "-P-STAGE7.pdf");
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         itemMapper.insert(item);
         return item;

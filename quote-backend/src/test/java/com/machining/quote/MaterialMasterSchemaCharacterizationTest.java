@@ -119,8 +119,8 @@ class MaterialMasterSchemaCharacterizationTest {
                         "materialTypeCode",
                         "? (item?.materialCode ?? item?.id ?? '')",
                         "item?.materialCode",
-                        "item?.materialName",
-                        "item?.materialTypeName");
+                        "item.materialName",
+                        "item.materialTypeName");
         assertThat(engineerService)
                 .contains(
                         "String materialCode = stringValue(materialData.get(\"materialCode\"));",

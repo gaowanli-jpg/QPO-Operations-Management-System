@@ -177,7 +177,7 @@ class OperationalWorkflowIntegrationTests {
         item.setVersion("A");
         item.setDescription("补图不改订单状态零件");
         item.setQty(1);
-        item.setStatus(QuoteStatusWorkflow.PRICED);
+        item.setStatus(QuoteStatusWorkflow.NO_DRAWING);
         itemMapper.insert(item);
 
         MockMultipartFile drawing = new MockMultipartFile(

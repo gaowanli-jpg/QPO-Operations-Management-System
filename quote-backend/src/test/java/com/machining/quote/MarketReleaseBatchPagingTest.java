@@ -310,6 +310,7 @@ class MarketReleaseBatchPagingTest {
         item.setVersion(version);
         item.setQty(1);
         item.setTaxIncludedUnitPrice(10.0);
+        item.setDrawingUrl("/uploads/test/" + partNo + ".pdf");
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         return item;
     }

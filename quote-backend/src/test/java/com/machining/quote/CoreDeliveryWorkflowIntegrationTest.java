@@ -52,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSupport {
@@ -163,7 +162,7 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         OrderRfq order = new OrderRfq();
         order.setRfqNo("APS-MAT-" + System.nanoTime());
         order.setCustomerName("APS-MAT-CUSTOMER");
-        order.setStatus(QuoteStatusWorkflow.QUOTED);
+        order.setStatus(QuoteStatusWorkflow.UNPRICED);
         orderMapper.insert(order);
 
         String engineeringMaterial = "ENG-MATERIAL-" + System.nanoTime();
@@ -210,6 +209,8 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         process.setUnitWorkHours(2.0);
         quoteReq.setProcessRoute(List.of(process));
         engineerService.calculateAndSaveQuote(quoteReq);
+        engineerService.completeOrderQuote(order.getId());
+        quoteProcessService.saveQuoteSheet(order.getId());
 
         ItemQuoteVersion savedItem = itemMapper.selectById(item.getId());
         assertThat(savedItem.getMaterialName()).isEqualTo("IMPORTED-MATERIAL-DESCRIPTION");
@@ -317,7 +318,7 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
     }
 
     @Test
-    void releasedOrderCanOpenReleaseWorkspaceForExportsButCannotGenerateAgain() {
+    void releasedOrderCanOpenReleaseWorkspaceForExportsAndReplaySameRequest() {
         OrderRfq order = new OrderRfq();
         order.setRfqNo("RELEASED-WORKSPACE-" + System.nanoTime());
         order.setCustomerName("Released workspace customer");
@@ -326,7 +327,8 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
 
         ItemQuoteVersion item = quotedItem(order, "RELEASED-WORKSPACE-100");
         ensureCustomer(order.getCustomerName());
-        deliveryService.generateTickets(deliveryReq(order, item, 1));
+        DeliveryGenerateReq req = deliveryReq(order, item, 1);
+        List<OrderDeliveryTicket> firstTickets = deliveryService.generateTickets(req);
         assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
 
         assertThat(internalTargetLeadTimeService.listItemRows(order.getId()))
@@ -338,9 +340,12 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
 
         assertThat(deliveryService.listTickets(order.getId())).hasSize(1);
         assertThat(deliveryService.listProcessSheets(order.getId())).hasSize(1);
-        assertThatThrownBy(() -> deliveryService.generateTickets(deliveryReq(order, item, 1)))
-                .as("Opening the workspace for exports must not reopen ticket generation")
-                .hasMessageContaining("已全部提单");
+        List<OrderDeliveryTicket> replayTickets = deliveryService.generateTickets(req);
+        assertThat(replayTickets)
+                .as("Repeating the same RFQ release request replays the existing sales order and tickets")
+                .extracting(OrderDeliveryTicket::getId)
+                .containsExactlyElementsOf(firstTickets.stream().map(OrderDeliveryTicket::getId).toList());
+        assertThat(deliveryService.listTickets(order.getId())).hasSize(1);
     }
 
     @Test

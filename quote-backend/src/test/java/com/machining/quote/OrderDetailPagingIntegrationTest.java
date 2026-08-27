@@ -128,10 +128,13 @@ class OrderDetailPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
 
         assertThat(service)
                 .contains("public Map<String, Object> getQuoteProcessSummary(Integer rfqId)")
+                .contains("public Map<String, Object> getQuoteProcessSummary(Integer rfqId, String scope)")
                 .contains("public PageResult<Map<String, Object>> listQuoteProcessItems(OrderItemPageReq req)")
                 .contains("public Map<String, Object> matchPartSelection(Integer rfqId, List<Map<String, String>> importedItems)")
                 .contains("orderItemPageService.pageItems(req)");
-        assertThat(javaMethod(service, "getQuoteProcessSummary"))
+        String summaryMethod = service.substring(service.indexOf(
+                "public Map<String, Object> getQuoteProcessSummary(Integer rfqId, String scope)"));
+        assertThat(javaMethod(summaryMethod, "getQuoteProcessSummary"))
                 .contains("orderItemPageService.summarizeItems(rfqId)")
                 .doesNotContain("listItems(rfqId)")
                 .doesNotContain("itemList");

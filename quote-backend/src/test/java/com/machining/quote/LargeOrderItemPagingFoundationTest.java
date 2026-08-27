@@ -178,7 +178,7 @@ class LargeOrderItemPagingFoundationTest extends LargeOrderItemPagingTestSupport
                 .contains("partSelectionImportService.readPartSelectionRows(excelFile)")
                 .contains("quoteProcessService.matchPartSelection(rfqId");
         assertThat(method(quoteProcessController, "getQuoteProcessSummary"))
-                .contains("quoteProcessService.getQuoteProcessSummary(rfqId)")
+                .contains("quoteProcessService.getQuoteProcessSummary(rfqId, scope)")
                 .doesNotContain("quoteProcessService.getQuoteProcess(rfqId)")
                 .doesNotContain("itemList");
         assertThat(method(quoteProcessController, "listQuoteProcessItems"))

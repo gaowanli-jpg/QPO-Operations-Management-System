@@ -114,6 +114,7 @@ class RfqReleaseSalesOrderRollbackIntegrationTest {
         item.setTaxIncludedUnitPrice(10.0);
         item.setTaxIncludedTotalPrice(20.0);
         item.setLeadTime("5");
+        item.setDrawingUrl("/uploads/test/" + item.getPartNo() + ".pdf");
         item.setStatus(QuoteStatusWorkflow.QUOTED);
         itemMapper.insert(item);
         itemId = item.getId();
