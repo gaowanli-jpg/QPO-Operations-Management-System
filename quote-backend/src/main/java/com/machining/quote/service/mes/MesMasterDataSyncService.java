@@ -20,7 +20,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -32,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -80,6 +83,8 @@ public class MesMasterDataSyncService {
     private AuditService auditService;
     @Autowired
     private MesMasterDataSyncScheduleConfigService scheduleConfigService;
+    @Autowired(required = false)
+    private PlatformTransactionManager transactionManager;
 
     private LocalDateTime mesMasterDataSyncSchedulerStartedAt;
     private final AtomicBoolean scheduledMaterialSyncRunning = new AtomicBoolean(false);
@@ -129,10 +134,11 @@ public class MesMasterDataSyncService {
         }
     }
 
-    @Transactional
     public SyncResult syncProcessTypesManual(Long createdBy) {
         LocalDateTime startedAt = LocalDateTime.now();
-        MesMasterDataSyncRun run = startRun(SYNC_TYPE_PROCESS_TYPE, startedAt, createdBy);
+        MesMasterDataSyncRun run = executeInTransaction(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW,
+                () -> startRun(SYNC_TYPE_PROCESS_TYPE, startedAt, createdBy));
         Counters counters = new Counters();
         try {
             List<MesProcessTypeListResp.Row> rows = client.listProcessTypes();
@@ -140,12 +146,16 @@ public class MesMasterDataSyncService {
             if (sources.isEmpty()) {
                 throw new SyncFailure("MES process type sync returned no valid process types", counters);
             }
-            PersistResult persisted = persistProcessTypes(sources, startedAt);
+            PersistResult persisted = executeInTransaction(
+                    TransactionDefinition.PROPAGATION_REQUIRED,
+                    () -> persistProcessTypes(sources, startedAt));
             counters.upsertedCount = persisted.upsertedCount();
             counters.disabledCount = persisted.disabledCount();
             counters.deletedCount = persisted.deletedCount();
-            finishRun(run, STATUS_SUCCESS, startedAt, counters, null);
-            audit(run, counters, true, null, SYNC_TYPE_PROCESS_TYPE, AUDIT_ACTION_PROCESS_SYNC);
+            executeInTransaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW, () -> {
+                finishRun(run, STATUS_SUCCESS, startedAt, counters, null);
+                audit(run, counters, true, null, SYNC_TYPE_PROCESS_TYPE, AUDIT_ACTION_PROCESS_SYNC);
+            });
             log.info("MES process type sync completed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} upsertedCount={} disabledCount={} deletedCount={}",
                     run.getId(), counters.fetchedCount, counters.validCount, counters.invalidCount,
                     counters.duplicateCount, counters.upsertedCount, counters.disabledCount, counters.deletedCount);
@@ -153,8 +163,10 @@ public class MesMasterDataSyncService {
         } catch (RuntimeException error) {
             Counters failureCounters = error instanceof SyncFailure syncFailure ? syncFailure.counters() : counters;
             String message = safeMessage(error.getMessage());
-            finishRun(run, STATUS_FAILED, startedAt, failureCounters, message);
-            audit(run, failureCounters, false, message, SYNC_TYPE_PROCESS_TYPE, AUDIT_ACTION_PROCESS_SYNC);
+            executeInTransaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW, () -> {
+                finishRun(run, STATUS_FAILED, startedAt, failureCounters, message);
+                audit(run, failureCounters, false, message, SYNC_TYPE_PROCESS_TYPE, AUDIT_ACTION_PROCESS_SYNC);
+            });
             log.warn("MES process type sync failed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} message={}",
                     run.getId(), failureCounters.fetchedCount, failureCounters.validCount,
                     failureCounters.invalidCount, failureCounters.duplicateCount, message);
@@ -162,10 +174,11 @@ public class MesMasterDataSyncService {
         }
     }
 
-    @Transactional
     public SyncResult syncMaterialsManual(Long createdBy) {
         LocalDateTime startedAt = LocalDateTime.now();
-        MesMasterDataSyncRun run = startRun(SYNC_TYPE_MATERIAL, startedAt, createdBy);
+        MesMasterDataSyncRun run = executeInTransaction(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW,
+                () -> startRun(SYNC_TYPE_MATERIAL, startedAt, createdBy));
         Counters counters = new Counters();
         try {
             List<MesMaterialPageResp.Row> rows = fetchAllMaterialRows(counters);
@@ -173,12 +186,16 @@ public class MesMasterDataSyncService {
             if (sources.isEmpty()) {
                 throw new SyncFailure("MES material sync returned no valid materials", counters);
             }
-            PersistResult persisted = persistMaterials(sources, startedAt);
+            PersistResult persisted = executeInTransaction(
+                    TransactionDefinition.PROPAGATION_REQUIRED,
+                    () -> persistMaterials(sources, startedAt));
             counters.upsertedCount = persisted.upsertedCount();
             counters.disabledCount = persisted.disabledCount();
             counters.deletedCount = persisted.deletedCount();
-            finishRun(run, STATUS_SUCCESS, startedAt, counters, null);
-            audit(run, counters, true, null, SYNC_TYPE_MATERIAL, AUDIT_ACTION_MATERIAL_SYNC);
+            executeInTransaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW, () -> {
+                finishRun(run, STATUS_SUCCESS, startedAt, counters, null);
+                audit(run, counters, true, null, SYNC_TYPE_MATERIAL, AUDIT_ACTION_MATERIAL_SYNC);
+            });
             log.info("MES material sync completed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} upsertedCount={} disabledCount={} deletedCount={}",
                     run.getId(), counters.fetchedCount, counters.validCount, counters.invalidCount,
                     counters.duplicateCount, counters.upsertedCount, counters.disabledCount, counters.deletedCount);
@@ -186,8 +203,10 @@ public class MesMasterDataSyncService {
         } catch (RuntimeException error) {
             Counters failureCounters = error instanceof SyncFailure syncFailure ? syncFailure.counters() : counters;
             String message = safeMessage(error.getMessage());
-            finishRun(run, STATUS_FAILED, startedAt, failureCounters, message);
-            audit(run, failureCounters, false, message, SYNC_TYPE_MATERIAL, AUDIT_ACTION_MATERIAL_SYNC);
+            executeInTransaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW, () -> {
+                finishRun(run, STATUS_FAILED, startedAt, failureCounters, message);
+                audit(run, failureCounters, false, message, SYNC_TYPE_MATERIAL, AUDIT_ACTION_MATERIAL_SYNC);
+            });
             log.warn("MES material sync failed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} message={}",
                     run.getId(), failureCounters.fetchedCount, failureCounters.validCount,
                     failureCounters.invalidCount, failureCounters.duplicateCount, message);
@@ -389,7 +408,7 @@ public class MesMasterDataSyncService {
                     name,
                     materialTypeCode,
                     materialTypeName(materialTypeCode, row.getMaterialType()),
-                    firstNonBlank(row.getStandard(), row.getAttribute(), row.getCategoryId()),
+                    firstNonBlank(row.getAttribute(), row.getCategoryId()),
                     toDouble(row.getDensity()),
                     decimalText(row.getDensity()),
                     trimToNull(row.getStandard()),
@@ -609,6 +628,22 @@ public class MesMasterDataSyncService {
                 counters.disabledCount,
                 counters.deletedCount,
                 message);
+    }
+
+    private <T> T executeInTransaction(int propagationBehavior, Supplier<T> action) {
+        if (transactionManager == null) {
+            return action.get();
+        }
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(propagationBehavior);
+        return transactionTemplate.execute(status -> action.get());
+    }
+
+    private void executeInTransaction(int propagationBehavior, Runnable action) {
+        executeInTransaction(propagationBehavior, () -> {
+            action.run();
+            return null;
+        });
     }
 
     private BigDecimal safeRate(BigDecimal value) {

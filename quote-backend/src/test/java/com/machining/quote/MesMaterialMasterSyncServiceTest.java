@@ -14,6 +14,9 @@ import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -310,6 +313,80 @@ class MesMaterialMasterSyncServiceTest {
         ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
         verify(materialMapper).insert(materialCaptor.capture());
         assertThat(materialCaptor.getValue().getEnabled()).isFalse();
+    }
+
+    @Test
+    void syncMaterialsKeepsLongMesStandardOutOfMaterialCategory() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        String longStandard = "Three phase 220V 550W ratio 1:8 shaft 22mm key 7mm brake option without shield length marker";
+        when(client.pageMaterials(1, 200)).thenReturn(page(1,
+                row("mes-long-standard", "MAT-LONG-STANDARD", "Long standard material", "MATERIAL", null, null,
+                        longStandard, null, null, "7.85", "ENABLE")));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(materialType(501L, "MATERIAL", "Material")));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(917L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(14L);
+
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
+        verify(materialMapper).insert(materialCaptor.capture());
+        assertThat(materialCaptor.getValue()).satisfies(material -> {
+            assertThat(material.getMaterialCategory()).isNull();
+            assertThat(material.getMesStandard()).isEqualTo(longStandard);
+        });
+    }
+
+    @Test
+    void syncMaterialsRecordsFailedRunOutsidePersistenceTransaction() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        ReflectionTestUtils.setField(service, "transactionManager", transactionManager);
+        when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+                .thenAnswer(invocation -> new SimpleTransactionStatus());
+        when(client.pageMaterials(1, 200)).thenReturn(page(1,
+                row("mes-fail", "MAT-FAIL", "Failing material", "MATERIAL", null, null,
+                        null, null, null, "7.85", "ENABLE")));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(materialType(502L, "MATERIAL", "Material")));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(918L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+        when(materialMapper.insert(any(DictMaterial.class)))
+                .thenThrow(new RuntimeException("value too long for type character varying(80)"));
+
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(15L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.syncRunId()).isEqualTo(918L);
+        assertThat(result.message()).contains("value too long");
+        ArgumentCaptor<MesMasterDataSyncRun> runCaptor = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
+        verify(syncRunMapper).updateById(runCaptor.capture());
+        assertThat(runCaptor.getValue()).satisfies(run -> {
+            assertThat(run.getStatus()).isEqualTo("FAILED");
+            assertThat(run.getMessage()).contains("value too long");
+        });
+        ArgumentCaptor<TransactionDefinition> transactionDefinitionCaptor = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager, org.mockito.Mockito.atLeastOnce()).getTransaction(transactionDefinitionCaptor.capture());
+        assertThat(transactionDefinitionCaptor.getAllValues())
+                .extracting(TransactionDefinition::getPropagationBehavior)
+                .contains(TransactionDefinition.PROPAGATION_REQUIRED, TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        verify(transactionManager, org.mockito.Mockito.atLeast(2)).commit(any());
+        verify(transactionManager).rollback(any());
     }
 
     @Test
