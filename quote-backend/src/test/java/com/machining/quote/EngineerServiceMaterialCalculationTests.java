@@ -2,20 +2,23 @@ package com.machining.quote;
 
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialType;
+import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
-import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
+import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.service.EngineerService;
+import com.machining.quote.service.PricingFeeCalculator;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Constructor;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -239,7 +242,7 @@ class EngineerServiceMaterialCalculationTests {
                 .thenReturn(List.of(material("MAT-000005", "45#", 1L, "钢铁", 7850.0, 7.1)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
-        ReflectionTestUtils.setField(service, "markupFeeMapper", emptyMarkupMapper());
+        ReflectionTestUtils.setField(service, "pricingFeeCalculator", emptyPricingCalculator());
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());
         ReflectionTestUtils.setField(service, "assemblyRelationMapper", mock(ItemAssemblyRelationMapper.class));
         ReflectionTestUtils.setField(service, "itemMapper", mock(ItemQuoteVersionMapper.class));
@@ -276,6 +279,82 @@ class EngineerServiceMaterialCalculationTests {
                 .containsEntry("materialTypeName", "原材料")
                 .containsEntry("materialCategory", "钢铁")
                 .containsEntry("shape", "板材");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void saveCalculatedQuoteUsesMultiplicativeMarkupFactorsFromCategories() throws Exception {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        when(materialMapper.selectList(any()))
+                .thenReturn(List.of(material("MAT-PRICE", "Price Material", 1L, "Steel", 1.0, 100.0)));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+        ReflectionTestUtils.setField(service, "pricingFeeCalculator", pricingCalculator(
+                pricingFee(1L, "NORMAL", "CUSTOMER_WEIGHT", "Customer weight", "10", 1),
+                pricingFee(2L, "NORMAL", "BASIC_PERCENT", "Freight", "5", 1),
+                pricingFee(3L, "NORMAL", "BASIC_PERCENT", "tax word but basic", "5", 2),
+                pricingFee(4L, "NORMAL", "BASIC_PERCENT", "Profit", "15", 3),
+                pricingFee(5L, "NORMAL", "TAX", "Category rate", "13", 4)));
+        ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());
+        ReflectionTestUtils.setField(service, "assemblyRelationMapper", mock(ItemAssemblyRelationMapper.class));
+        ReflectionTestUtils.setField(service, "itemMapper", mock(ItemQuoteVersionMapper.class));
+
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setId(1002);
+        item.setRfqId(2002);
+        item.setPartNo("P-PRICE");
+        item.setQty(2);
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MAT-PRICE");
+        materialData.put("shape", "PLATE");
+        materialData.put("weight", 1.0);
+
+        ReflectionTestUtils.invokeMethod(service, "saveCalculatedQuote", item, materialData, List.of(), 0.5);
+
+        assertThat(item.getUntaxedUnitPrice()).isCloseTo(139.46625, within(0.000001));
+        assertThat(item.getTaxIncludedUnitPrice()).isCloseTo(157.5968625, within(0.000001));
+        assertThat(item.getUntaxedTotalPrice()).isCloseTo(278.9325, within(0.000001));
+        assertThat(item.getTaxIncludedTotalPrice()).isCloseTo(315.193725, within(0.000001));
+        List<Map<String, Object>> feeRows = (List<Map<String, Object>>) item.getFeeData();
+        assertThat(feeRows).hasSize(5);
+        assertThat(feeRows).extracting(row -> row.get("feeCategory"))
+                .containsExactly("CUSTOMER_WEIGHT", "BASIC_PERCENT", "BASIC_PERCENT", "BASIC_PERCENT", "TAX");
+        assertThat(feeRows).last().satisfies(row -> {
+            assertThat(row).containsEntry("feeName", "Category rate");
+            assertThat(row).containsEntry("pricingScope", "NORMAL");
+            assertThat(row).containsEntry("includedInUntaxedPrice", false);
+            assertThat(row).containsEntry("includedInTaxIncludedPrice", true);
+        });
+    }
+
+    @Test
+    void pricingCalculatorUsesTaxCategoryEvenWhenFeeNameHasNoTaxWords() {
+        PricingFeeCalculator calculator = pricingCalculator(pricingFee(1L, "NORMAL", "TAX", "Category rate", "13", 1));
+
+        PricingFeeCalculator.PricingResult result = calculator.calculate(100.0, "NORMAL");
+
+        assertThat(result.getUntaxedUnitPrice()).isCloseTo(100.0, within(0.000001));
+        assertThat(result.getTaxIncludedUnitPrice()).isCloseTo(113.0, within(0.000001));
+        assertThat(result.getTaxFactor()).isCloseTo(1.13, within(0.000001));
+        assertThat(result.getFeeRows()).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("feeCategory", "TAX")
+                .containsEntry("feeName", "Category rate"));
+    }
+
+    @Test
+    void pricingCalculatorTreatsBasicPercentNameContainingTaxAsBasicFee() {
+        PricingFeeCalculator calculator = pricingCalculator(pricingFee(1L, "NORMAL", "BASIC_PERCENT", "tax word but basic", "13", 1));
+
+        PricingFeeCalculator.PricingResult result = calculator.calculate(100.0, "NORMAL");
+
+        assertThat(result.getUntaxedUnitPrice()).isCloseTo(113.0, within(0.000001));
+        assertThat(result.getTaxIncludedUnitPrice()).isCloseTo(113.0, within(0.000001));
+        assertThat(result.getBasicPercentFactor()).isCloseTo(1.13, within(0.000001));
+        assertThat(result.getTaxFactor()).isCloseTo(1.0, within(0.000001));
+        assertThat(result.getFeeRows()).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("feeCategory", "BASIC_PERCENT")
+                .containsEntry("feeName", "tax word but basic"));
     }
 
     @Test
@@ -372,7 +451,7 @@ class EngineerServiceMaterialCalculationTests {
                 .thenReturn(List.of(material(code, name, 1L, category, density, unitPrice)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
-        ReflectionTestUtils.setField(service, "markupFeeMapper", emptyMarkupMapper());
+        ReflectionTestUtils.setField(service, "pricingFeeCalculator", emptyPricingCalculator());
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());
         ReflectionTestUtils.setField(service, "assemblyRelationMapper", mock(ItemAssemblyRelationMapper.class));
         ReflectionTestUtils.setField(service, "itemMapper", mock(ItemQuoteVersionMapper.class));
@@ -422,10 +501,29 @@ class EngineerServiceMaterialCalculationTests {
         return mapper;
     }
 
-    private DictMarkupFeeMapper emptyMarkupMapper() {
-        DictMarkupFeeMapper mapper = mock(DictMarkupFeeMapper.class);
-        when(mapper.selectList(any())).thenReturn(List.of());
-        return mapper;
+    private PricingFeeCalculator emptyPricingCalculator() {
+        return pricingCalculator();
+    }
+
+    private PricingFeeCalculator pricingCalculator(DictPricingMarkupFee... fees) {
+        DictPricingMarkupFeeMapper mapper = mock(DictPricingMarkupFeeMapper.class);
+        when(mapper.selectList(any())).thenReturn(List.of(fees));
+        PricingFeeCalculator calculator = new PricingFeeCalculator();
+        ReflectionTestUtils.setField(calculator, "pricingMarkupFeeMapper", mapper);
+        return calculator;
+    }
+
+    private DictPricingMarkupFee pricingFee(Long id, String scope, String category, String name, String ratePercent, int sortNo) {
+        DictPricingMarkupFee fee = new DictPricingMarkupFee();
+        fee.setId(id);
+        fee.setPricingScope(scope);
+        fee.setFeeCategory(category);
+        fee.setFeeName(name);
+        fee.setRatePercent(new BigDecimal(ratePercent));
+        fee.setSortNo(sortNo);
+        fee.setEnabled(true);
+        fee.setSystemRequired(false);
+        return fee;
     }
 
     private DictExtraFeeItemMapper emptyExtraFeeMapper() {

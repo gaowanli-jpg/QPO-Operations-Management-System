@@ -5,9 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
-import com.machining.quote.entity.DictAssemblyMarkupFee;
-import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -16,9 +15,8 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
-import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
-import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -29,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,9 +50,7 @@ class AssemblyWorkflowIntegrationTests {
     @Autowired
     private ItemAssemblyRelationMapper assemblyRelationMapper;
     @Autowired
-    private DictMarkupFeeMapper markupFeeMapper;
-    @Autowired
-    private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
+    private DictPricingMarkupFeeMapper pricingMarkupFeeMapper;
     @Autowired
     private DictMaterialMapper materialMapper;
     @Autowired
@@ -67,9 +64,9 @@ class AssemblyWorkflowIntegrationTests {
 
     @Test
     @SuppressWarnings("unchecked")
-    void assemblyQuoteUsesAssemblyMarkupFeeDictionary() {
+    void assemblyQuoteUsesAssemblyScopeMarkupOnlyOnAssemblyFeeMultiplicatively() {
         resetMarkupFeesForAssemblyTest();
-        upsertMarkupFee("普通件专用费", 100.0, 9);
+        upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Normal only fee", 100.0, 9);
         OrderRfq order = createOrder("ASSY-PRICE");
         ItemQuoteVersion childA = createQuotedItem(order, "A-1", 2, 10.0);
         ItemQuoteVersion childB = createQuotedItem(order, "B-1", 1, 20.0);
@@ -81,16 +78,20 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(saved.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(saved.getAssemblyFee()).isEqualTo(50.0);
         assertThat(saved.getBaseCost()).isEqualTo(90.0);
-        assertThat(saved.getTaxIncludedUnitPrice()).isEqualTo(106.5);
-        assertThat(saved.getTaxIncludedTotalPrice()).isEqualTo(319.5);
+        assertThat(saved.getUntaxedUnitPrice()).isCloseTo(100.38, within(0.000001));
+        assertThat(saved.getTaxIncludedUnitPrice()).isCloseTo(108.22, within(0.000001));
+        assertThat(saved.getTaxIncludedTotalPrice()).isCloseTo(324.67, within(0.000001));
         List<Map<String, Object>> feeRows = (List<Map<String, Object>>) saved.getFeeData();
         assertThat(feeRows).hasSize(3);
         assertThat(feeRows)
                 .extracting(row -> row.get("feeName"))
-                .containsExactly("组装管理费", "组装利润", "组装税费");
+                .containsExactly("Assembly management", "Assembly profit", "Assembly tax");
         assertThat(feeRows)
-                .extracting(row -> row.get("cost"))
-                .containsExactly(2.5, 7.5, 6.5);
+                .extracting(row -> row.get("feeCategory"))
+                .containsExactly("BASIC_PERCENT", "BASIC_PERCENT", "TAX");
+        assertThat((Double) feeRows.get(0).get("cost")).isCloseTo(2.5, within(0.000001));
+        assertThat((Double) feeRows.get(1).get("cost")).isCloseTo(7.875, within(0.000001));
+        assertThat((Double) feeRows.get(2).get("cost")).isCloseTo(7.84875, within(0.000001));
 
         QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
         qw.eq("parent_item_id", parent.getId());
@@ -104,14 +105,14 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion child = createPendingItem(order, "REF-CHILD", 2);
         submitNormalQuoteWithBaseCost(child, 100.0);
         child = itemMapper.selectById(child.getId());
-        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(143.0, within(0.000001));
+        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(150.09, within(0.000001));
 
         ItemQuoteVersion parent = createPendingItem(order, "REF-PARENT", 1);
         submitAssembly(parent, 50.0, child(parent, child, 1));
         parent = itemMapper.selectById(parent.getId());
-        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(209.5, within(0.000001));
+        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(218.31, within(0.000001));
 
-        upsertMarkupFee("管理费", 10.0, 2);
+        upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Management", 10.0, 2);
 
         Map<String, Object> result = engineerService.refreshOrderQuotes(order.getId());
 
@@ -120,8 +121,8 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(result.get("refreshedCount")).isEqualTo(2);
         assertThat(result.get("normalCount")).isEqualTo(1);
         assertThat(result.get("assemblyCount")).isEqualTo(1);
-        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(148.0, within(0.000001));
-        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(214.5, within(0.000001));
+        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(157.24, within(0.000001));
+        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(225.46, within(0.000001));
     }
 
     @Test
@@ -179,6 +180,9 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion child = createQuotedItem(order, "CHILD", 4, 10.0);
         ItemQuoteVersion parent = createPendingItem(order, "PARENT", 2);
         submitAssembly(parent, 5.0, child(parent, child, 2));
+        parent = itemMapper.selectById(parent.getId());
+        parent.setStatus(QuoteStatusWorkflow.QUOTED);
+        itemMapper.updateById(parent);
 
         DeliveryGenerateReq req = new DeliveryGenerateReq();
         req.setRfqIds(List.of(order.getId()));
@@ -560,55 +564,36 @@ class AssemblyWorkflowIntegrationTests {
     }
 
     private void resetMarkupFeesForAssemblyTest() {
-        UpdateWrapper<DictMarkupFee> disableAll = new UpdateWrapper<>();
+        UpdateWrapper<DictPricingMarkupFee> disableAll = new UpdateWrapper<>();
         disableAll.set("enabled", false);
-        markupFeeMapper.update(null, disableAll);
-        upsertMarkupFee("运输费", 10.0, 1);
-        upsertMarkupFee("管理费", 5.0, 2);
-        upsertMarkupFee("利润", 15.0, 3);
-        upsertMarkupFee("税费", 13.0, 4);
-
-        UpdateWrapper<DictAssemblyMarkupFee> disableAssemblyAll = new UpdateWrapper<>();
-        disableAssemblyAll.set("enabled", false);
-        assemblyMarkupFeeMapper.update(null, disableAssemblyAll);
-        upsertAssemblyMarkupFee("组装管理费", 5.0, 1);
-        upsertAssemblyMarkupFee("组装利润", 15.0, 2);
-        upsertAssemblyMarkupFee("组装税费", 13.0, 3);
+        pricingMarkupFeeMapper.update(null, disableAll);
+        upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Freight", 10.0, 1);
+        upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Management", 5.0, 2);
+        upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Profit", 15.0, 3);
+        upsertPricingMarkupFee("NORMAL", "TAX", "Normal category tax", 13.0, 4);
+        upsertPricingMarkupFee("ASSEMBLY", "BASIC_PERCENT", "Assembly management", 5.0, 1);
+        upsertPricingMarkupFee("ASSEMBLY", "BASIC_PERCENT", "Assembly profit", 15.0, 2);
+        upsertPricingMarkupFee("ASSEMBLY", "TAX", "Assembly tax", 13.0, 3);
     }
 
-    private void upsertMarkupFee(String feeName, double ratePercent, int sortNo) {
-        QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
-        qw.eq("fee_name", feeName);
-        DictMarkupFee fee = markupFeeMapper.selectOne(qw);
+    private void upsertPricingMarkupFee(String scope, String category, String feeName, double ratePercent, int sortNo) {
+        QueryWrapper<DictPricingMarkupFee> qw = new QueryWrapper<>();
+        qw.eq("pricing_scope", scope).eq("fee_category", category).eq("fee_name", feeName);
+        DictPricingMarkupFee fee = pricingMarkupFeeMapper.selectOne(qw);
         if (fee == null) {
-            fee = new DictMarkupFee();
+            fee = new DictPricingMarkupFee();
         }
+        fee.setPricingScope(scope);
+        fee.setFeeCategory(category);
         fee.setFeeName(feeName);
-        fee.setRatePercent(ratePercent);
+        fee.setRatePercent(BigDecimal.valueOf(ratePercent));
         fee.setSortNo(sortNo);
         fee.setEnabled(true);
+        fee.setSystemRequired("TAX".equals(category) || "CUSTOMER_WEIGHT".equals(category));
         if (fee.getId() == null) {
-            markupFeeMapper.insert(fee);
+            pricingMarkupFeeMapper.insert(fee);
         } else {
-            markupFeeMapper.updateById(fee);
-        }
-    }
-
-    private void upsertAssemblyMarkupFee(String feeName, double ratePercent, int sortNo) {
-        QueryWrapper<DictAssemblyMarkupFee> qw = new QueryWrapper<>();
-        qw.eq("fee_name", feeName);
-        DictAssemblyMarkupFee fee = assemblyMarkupFeeMapper.selectOne(qw);
-        if (fee == null) {
-            fee = new DictAssemblyMarkupFee();
-        }
-        fee.setFeeName(feeName);
-        fee.setRatePercent(ratePercent);
-        fee.setSortNo(sortNo);
-        fee.setEnabled(true);
-        if (fee.getId() == null) {
-            assemblyMarkupFeeMapper.insert(fee);
-        } else {
-            assemblyMarkupFeeMapper.updateById(fee);
+            pricingMarkupFeeMapper.updateById(fee);
         }
     }
 }

@@ -2,22 +2,19 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.domain.PricingScope;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PartVersionKey;
 import com.machining.quote.dto.PricingItemRemarkUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
-import com.machining.quote.entity.DictAssemblyMarkupFee;
 import com.machining.quote.entity.DictExtraFeeItem;
-import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
-import com.machining.quote.mapper.DictAssemblyMarkupFeeMapper;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
-import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
@@ -57,9 +54,7 @@ public class EngineerService {
     @Autowired
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
-    private DictMarkupFeeMapper markupFeeMapper;
-    @Autowired
-    private DictAssemblyMarkupFeeMapper assemblyMarkupFeeMapper;
+    private PricingFeeCalculator pricingFeeCalculator;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired
@@ -279,13 +274,11 @@ public class EngineerService {
         }
 
         double baseCost = materialCost + totalProcessCost;
-        List<Map<String, Object>> feeBreakdown = calculateMarkupFees(baseCost);
-        double markupCost = feeBreakdown.stream()
-                .mapToDouble(row -> doubleValue(row.get("cost")) == null ? 0.0 : doubleValue(row.get("cost")))
-                .sum();
-        double taxIncludedUnitPrice = baseCost + markupCost;
+        PricingFeeCalculator.PricingResult pricing = pricingFeeCalculator.calculate(baseCost, PricingScope.NORMAL);
+        List<Map<String, Object>> feeBreakdown = pricing.getFeeRows();
+        double taxIncludedUnitPrice = pricing.getTaxIncludedUnitPrice();
         double taxIncludedTotalPrice = taxIncludedUnitPrice * qty;
-        double untaxedUnitPrice = untaxedUnitPrice(taxIncludedUnitPrice, feeBreakdown);
+        double untaxedUnitPrice = pricing.getUntaxedUnitPrice();
         double untaxedTotalPrice = untaxedUnitPrice * qty;
 
         item.setMaterialData(materialData);
@@ -347,13 +340,14 @@ public class EngineerService {
         }
 
         double safeAssemblyFee = nonNegativeOrZero(assemblyFee);
-        List<Map<String, Object>> assemblyFeeBreakdown = calculateAssemblyFeeMarkupFees(safeAssemblyFee);
-        double assemblyFeeMarkupCost = sumFeeCosts(assemblyFeeBreakdown);
+        PricingFeeCalculator.PricingResult assemblyFeePricing = pricingFeeCalculator.calculate(safeAssemblyFee, PricingScope.ASSEMBLY);
+        List<Map<String, Object>> assemblyFeeBreakdown = assemblyFeePricing.getFeeRows();
+        double assemblyFeeMarkupCost = assemblyFeePricing.getTaxIncludedMarkupCost();
         double baseCost = childrenTotal + safeAssemblyFee;
-        double taxIncludedUnitPrice = baseCost + assemblyFeeMarkupCost;
+        double taxIncludedUnitPrice = childrenTotal + assemblyFeePricing.getTaxIncludedUnitPrice();
         int parentQty = parent.getQty() == null ? 0 : parent.getQty();
         double taxIncludedTotalPrice = taxIncludedUnitPrice * parentQty;
-        double untaxedUnitPrice = untaxedUnitPrice(taxIncludedUnitPrice, assemblyFeeBreakdown);
+        double untaxedUnitPrice = childrenTotal + assemblyFeePricing.getUntaxedUnitPrice();
         double untaxedTotalPrice = untaxedUnitPrice * parentQty;
 
         Map<String, Object> materialData = new LinkedHashMap<>();
@@ -1570,85 +1564,6 @@ public class EngineerService {
                 || "非工时费用".equals(process.getCalcType())
                 || (!isBlank(process.getProcessName())
                 && extraFeeNames.contains(process.getProcessName().trim())));
-    }
-
-    private List<Map<String, Object>> calculateMarkupFees(double baseCost) {
-        QueryWrapper<DictMarkupFee> qw = new QueryWrapper<>();
-        qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
-        List<DictMarkupFee> fees = markupFeeMapper.selectList(qw);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (DictMarkupFee fee : fees) {
-            rows.add(markupFeeRow(baseCost, fee.getFeeName(), fee.getRatePercent()));
-        }
-        return rows;
-    }
-
-    private List<Map<String, Object>> calculateAssemblyFeeMarkupFees(double assemblyFee) {
-        QueryWrapper<DictAssemblyMarkupFee> qw = new QueryWrapper<>();
-        qw.eq("enabled", true).orderByAsc("sort_no").orderByAsc("id");
-        List<DictAssemblyMarkupFee> fees = assemblyMarkupFeeMapper.selectList(qw);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (DictAssemblyMarkupFee fee : fees) {
-            rows.add(markupFeeRow(assemblyFee, fee.getFeeName(), fee.getRatePercent()));
-        }
-        return rows;
-    }
-
-    private Map<String, Object> markupFeeRow(double baseCost, String feeName, Double ratePercentValue) {
-        double ratePercent = ratePercentValue == null ? 0.0 : ratePercentValue;
-        double cost = baseCost * ratePercent / 100.0;
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("feeName", feeName);
-        row.put("ratePercent", ratePercent);
-        row.put("cost", cost);
-        return row;
-    }
-
-    private double sumFeeCosts(List<Map<String, Object>> feeRows) {
-        if (feeRows == null) {
-            return 0.0;
-        }
-        return feeRows.stream()
-                .mapToDouble(row -> {
-                    Double cost = doubleValue(row.get("cost"));
-                    return cost == null ? 0.0 : cost;
-                })
-                .sum();
-    }
-
-    private double untaxedUnitPrice(double taxIncludedUnitPrice, List<Map<String, Object>> feeRows) {
-        double taxCost = sumTaxFeeCosts(feeRows);
-        if (taxCost <= 0) {
-            return taxIncludedUnitPrice;
-        }
-        return Math.max(0.0, taxIncludedUnitPrice - taxCost);
-    }
-
-    private double sumTaxFeeCosts(List<Map<String, Object>> feeRows) {
-        if (feeRows == null) {
-            return 0.0;
-        }
-        return feeRows.stream()
-                .filter(this::isTaxFeeRow)
-                .mapToDouble(row -> {
-                    Double cost = doubleValue(row.get("cost"));
-                    return cost == null ? 0.0 : cost;
-                })
-                .sum();
-    }
-
-    private boolean isTaxFeeRow(Map<String, Object> row) {
-        if (row == null) {
-            return false;
-        }
-        String feeName = stringValue(row.get("feeName"));
-        if (feeName == null) {
-            return false;
-        }
-        String normalized = feeName.toLowerCase(Locale.ROOT);
-        return normalized.contains("税")
-                || normalized.contains("tax")
-                || normalized.contains("vat");
     }
 
     private double calculateMaterialCost(Map<String, Object> materialData) {

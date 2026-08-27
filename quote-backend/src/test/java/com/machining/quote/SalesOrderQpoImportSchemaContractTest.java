@@ -1,21 +1,23 @@
 package com.machining.quote;
 
 import com.machining.quote.dto.QuoteSubmitReq;
-import com.machining.quote.entity.DictMarkupFee;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialType;
+import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
-import com.machining.quote.mapper.DictMarkupFeeMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
+import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.service.EngineerService;
+import com.machining.quote.service.PricingFeeCalculator;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -163,17 +165,21 @@ class SalesOrderQpoImportSchemaContractTest {
         ItemAssemblyRelationMapper assemblyRelationMapper = mock(ItemAssemblyRelationMapper.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
-        DictMarkupFeeMapper markupFeeMapper = mock(DictMarkupFeeMapper.class);
+        DictPricingMarkupFeeMapper pricingMarkupFeeMapper = mock(DictPricingMarkupFeeMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        PricingFeeCalculator pricingFeeCalculator = new PricingFeeCalculator();
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "assemblyRelationMapper", assemblyRelationMapper);
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
         ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
-        ReflectionTestUtils.setField(service, "markupFeeMapper", markupFeeMapper);
+        ReflectionTestUtils.setField(service, "pricingFeeCalculator", pricingFeeCalculator);
+        ReflectionTestUtils.setField(pricingFeeCalculator, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", extraFeeItemMapper);
         when(materialMapper.selectList(any())).thenReturn(List.of(material()));
         when(materialTypeMapper.selectById(1L)).thenReturn(materialType());
-        when(markupFeeMapper.selectList(any())).thenReturn(List.of(markup("\u5229\u6da6", 10.0), markup("\u7a0e\u8d39", 13.0)));
+        when(pricingMarkupFeeMapper.selectList(any())).thenReturn(List.of(
+                markup("NORMAL", "BASIC_PERCENT", "profit", 10.0, 1),
+                markup("NORMAL", "TAX", "category rate", 13.0, 2)));
         when(extraFeeItemMapper.selectList(any())).thenReturn(List.of());
 
         ItemQuoteVersion item = new ItemQuoteVersion();
@@ -195,8 +201,8 @@ class SalesOrderQpoImportSchemaContractTest {
                 0.5
         );
 
-        assertThat((Double) ReflectionTestUtils.getField(item, "taxIncludedUnitPrice")).isCloseTo(123.0, within(0.000001));
-        assertThat((Double) ReflectionTestUtils.getField(item, "taxIncludedTotalPrice")).isCloseTo(246.0, within(0.000001));
+        assertThat((Double) ReflectionTestUtils.getField(item, "taxIncludedUnitPrice")).isCloseTo(124.3, within(0.000001));
+        assertThat((Double) ReflectionTestUtils.getField(item, "taxIncludedTotalPrice")).isCloseTo(248.6, within(0.000001));
         assertThat((Double) ReflectionTestUtils.getField(item, "untaxedUnitPrice")).isCloseTo(110.0, within(0.000001));
         assertThat((Double) ReflectionTestUtils.getField(item, "untaxedTotalPrice")).isCloseTo(220.0, within(0.000001));
         verify(itemMapper).updateById(item);
@@ -223,10 +229,13 @@ class SalesOrderQpoImportSchemaContractTest {
                 .contains("\u9500\u552e\u8ba2\u5355\u5bfc\u5165\u4e0d\u518d\u521b\u5efa `item_quote_version`");
     }
 
-    private DictMarkupFee markup(String name, double ratePercent) {
-        DictMarkupFee fee = new DictMarkupFee();
+    private DictPricingMarkupFee markup(String scope, String category, String name, double ratePercent, int sortNo) {
+        DictPricingMarkupFee fee = new DictPricingMarkupFee();
+        fee.setPricingScope(scope);
+        fee.setFeeCategory(category);
         fee.setFeeName(name);
-        fee.setRatePercent(ratePercent);
+        fee.setRatePercent(BigDecimal.valueOf(ratePercent));
+        fee.setSortNo(sortNo);
         fee.setEnabled(true);
         return fee;
     }

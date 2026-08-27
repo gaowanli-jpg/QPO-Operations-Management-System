@@ -13,83 +13,62 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AssemblyMarkupFeeDictionarySourceTest {
     private static final Path MAIN_JAVA = Path.of("src", "main", "java", "com", "machining", "quote");
     private static final Path MAIN_RESOURCES = Path.of("src", "main", "resources");
-    private static final Path DOCS_ROOT = Path.of("..", "docs");
+    private static final Path PRICING_MARKUP_DOC = Path.of(
+            "..", "docs", "QPO报价状态流转", "49-百分比费用分类与乘法加权价格公式开发文档.md");
 
     @Test
-    void migrationAndSchemaCreateAssemblyMarkupFeeDictionary() throws IOException {
+    void migrationCreatesUnifiedPricingMarkupFeeDictionaryAndRetiresOldTables() throws IOException {
         String migration = Files.readString(
-                MAIN_RESOURCES.resolve("db/migration/V2__qpo_baseline_seed_data.sql"),
+                MAIN_RESOURCES.resolve("db/migration/V23__pricing_markup_fee_category_scope.sql"),
                 StandardCharsets.UTF_8
-        );
-        String schema = Files.readString(
-                MAIN_RESOURCES.resolve(Path.of("db", "migration", "V1__qpo_baseline_schema.sql")),
-                StandardCharsets.UTF_8
-        );
-        String assemblyFeeSeed = section(
-                migration,
-                "-- Data for Name: dict_assembly_markup_fee",
-                "-- Data for Name: dict_extra_fee_item"
         );
 
-        assertThat(assemblyFeeSeed)
-                .contains("INSERT INTO dict_assembly_markup_fee")
-                .contains("'管理费'", "'利润'", "'税费'")
-                .doesNotContain("'运输费'");
-        assertThat(migration).contains("INSERT INTO dict_markup_fee", "'运输费'");
-        assertThat(schema).contains("CREATE TABLE dict_assembly_markup_fee");
+        assertThat(migration)
+                .contains("CREATE TABLE dict_pricing_markup_fee")
+                .contains("pricing_scope")
+                .contains("fee_category")
+                .contains("system_required")
+                .contains("FROM dict_markup_fee")
+                .contains("FROM dict_assembly_markup_fee")
+                .contains("DROP TABLE IF EXISTS dict_markup_fee")
+                .contains("DROP TABLE IF EXISTS dict_assembly_markup_fee");
     }
 
     @Test
-    void dictControllerExposesAssemblyMarkupFeeEndpointsWithExistingFeePermissions() throws IOException {
+    void dictControllerExposesUnifiedPricingMarkupFeeEndpointsOnly() throws IOException {
         String source = source("controller/DictController.java");
 
         assertThat(source)
-                .contains("@GetMapping(\"/assembly-markup-fees\")")
-                .contains("@PostMapping(\"/assembly-markup-fees\")")
-                .contains("@PutMapping(\"/assembly-markup-fees/{id}\")")
-                .contains("@DeleteMapping(\"/assembly-markup-fees/{id}\")")
+                .contains("@GetMapping(\"/pricing-markup-fees\")")
+                .contains("@PostMapping(\"/pricing-markup-fees\")")
+                .contains("@PutMapping(\"/pricing-markup-fees/{id}\")")
+                .contains("@DeleteMapping(\"/pricing-markup-fees/{id}\")")
                 .contains("@RequirePermission(\"engineer:dict:view\")")
                 .contains("@RequirePermission(\"engineer:dict:fee-manage\")")
-                .contains("DICT_ASSEMBLY_MARKUP_FEE_CREATE")
-                .contains("DICT_ASSEMBLY_MARKUP_FEE_UPDATE")
-                .contains("DICT_ASSEMBLY_MARKUP_FEE_DELETE");
+                .doesNotContain("/markup-fees")
+                .doesNotContain("/assembly-markup-fees")
+                .doesNotContain("DICT_MARKUP_FEE_CREATE")
+                .doesNotContain("DICT_ASSEMBLY_MARKUP_FEE_CREATE");
     }
 
     @Test
-    void auditAndDocumentationCoverAssemblyMarkupFeeDictionary() throws IOException {
-        assertThat(AuditService.labelForAction("DICT_ASSEMBLY_MARKUP_FEE_CREATE"))
-                .isEqualTo("新增组装件百分比费用");
-        assertThat(AuditService.labelForAction("DICT_ASSEMBLY_MARKUP_FEE_UPDATE"))
-                .isEqualTo("更新组装件百分比费用");
-        assertThat(AuditService.labelForAction("DICT_ASSEMBLY_MARKUP_FEE_DELETE"))
-                .isEqualTo("删除组装件百分比费用");
+    void auditAndDevelopmentDocCoverUnifiedPricingMarkupFeeDictionary() throws IOException {
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_CREATE"))
+                .contains("pricing markup fee");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_UPDATE"))
+                .contains("pricing markup fee");
+        assertThat(AuditService.labelForAction("DICT_PRICING_MARKUP_FEE_DELETE"))
+                .contains("pricing markup fee");
 
-        String permissionDoc = Files.readString(
-                DOCS_ROOT.resolve("QPO权限用户体系/02-权限点清单与现有角色映射.md"),
-                StandardCharsets.UTF_8
-        );
-        String logDoc = Files.readString(
-                DOCS_ROOT.resolve("QPO日志模块/03-日志运维说明.md"),
-                StandardCharsets.UTF_8
-        );
-
-        assertThat(permissionDoc)
-                .contains("组装件百分比费用类")
+        String doc = Files.readString(PRICING_MARKUP_DOC, StandardCharsets.UTF_8);
+        assertThat(doc)
+                .contains("dict_pricing_markup_fee")
+                .contains("pricingScope = NORMAL / ASSEMBLY")
+                .contains("feeCategory")
                 .contains("engineer:dict:fee-manage");
-        assertThat(logDoc)
-                .contains("DICT_ASSEMBLY_MARKUP_FEE_CREATE")
-                .contains("组装件百分比费用类");
     }
 
     private String source(String relativePath) throws IOException {
         return Files.readString(MAIN_JAVA.resolve(relativePath), StandardCharsets.UTF_8);
-    }
-
-    private String section(String source, String startMarker, String endMarker) {
-        int start = source.indexOf(startMarker);
-        int end = source.indexOf(endMarker, start + startMarker.length());
-        assertThat(start).isGreaterThanOrEqualTo(0);
-        assertThat(end).isGreaterThan(start);
-        return source.substring(start, end);
     }
 }
