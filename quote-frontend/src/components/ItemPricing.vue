@@ -763,8 +763,8 @@ const pricingItemTotal = ref(0)
 const materialOptions = computed(() => dictionaryStore.materials)
 const processOptions = computed(() => dictionaryStore.processes)
 const extraFeeOptions = computed(() => dictionaryStore.extraFeeItems)
-const markupFeeOptions = computed(() => dictionaryStore.markupFees)
-const assemblyMarkupFeeOptions = computed(() => dictionaryStore.assemblyMarkupFees)
+const markupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('NORMAL'))
+const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
@@ -908,7 +908,7 @@ onMounted(async () => {
 
 const fetchDicts = async () => {
   try {
-    await dictionaryStore.loadBaseDicts({ includeMarkupFees: true })
+    await dictionaryStore.loadBaseDicts({ includePricingMarkupFees: true })
   } catch (error) {
     console.error(error)
     dictionaryStore.applyPricingFallbackData()

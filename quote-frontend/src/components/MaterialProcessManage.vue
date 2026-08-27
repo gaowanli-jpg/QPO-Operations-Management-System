@@ -14,8 +14,7 @@
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" plain :loading="scheduleLoading && scheduleTarget === 'MES_MATERIAL'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesMaterialScheduleDialog">定时同步策略</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" plain :loading="scheduleLoading && scheduleTarget === 'MES_PROCESS_TYPE'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesProcessScheduleDialog">定时同步策略</el-button>
-        <el-button v-permission="'engineer:dict:fee-manage'" v-if="activeTab === 'markupFees'" type="primary" @click="openMarkupFeeDialog()">新增费用类</el-button>
-        <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'assemblyMarkupFees'" type="primary" @click="openAssemblyMarkupFeeDialog()">新增组装件费用类</el-button>
+        <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'pricingMarkupFees' && pricingMarkupFeeCategory === 'BASIC_PERCENT'" type="primary" @click="openPricingMarkupFeeDialog()">新增基础百分比费用</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'extraFees'" type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
       </div>
     </section>
@@ -219,50 +218,67 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="百分比费用类" name="markupFees">
-            <el-table :data="markupFees" border stripe height="560" v-loading="loading">
-              <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-              <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
-              <el-table-column label="费率" width="120" align="right">
-                <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
-              </el-table-column>
-              <el-table-column label="启用" width="90" align="center">
-                <template #default="scope">
-                  <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="160" align="center" fixed="right">
-                <template #default="scope">
-                  <div class="erp-table-actions">
-                    <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isMarkupFeeDeletePending(scope.row)" @click="openMarkupFeeDialog(scope.row)">编辑</el-button>
-                    <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isMarkupFeeDeletePending(scope.row)" :disabled="isMarkupFeeDeletePending(scope.row)" @click="deleteMarkupFee(scope.row)">删除</el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-tab-pane>
-
-          <el-tab-pane label="组装件百分比费用类" name="assemblyMarkupFees">
-            <el-table :data="assemblyMarkupFees" border stripe height="560" v-loading="loading">
-              <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-              <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
-              <el-table-column label="费率" width="120" align="right">
-                <template #default="scope">{{ Number(scope.row.ratePercent || 0).toFixed(2) }}%</template>
-              </el-table-column>
-              <el-table-column label="启用" width="90" align="center">
-                <template #default="scope">
-                  <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="160" align="center" fixed="right">
-                <template #default="scope">
-                  <div class="erp-table-actions">
-                    <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="openAssemblyMarkupFeeDialog(scope.row)">编辑</el-button>
-                    <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isAssemblyMarkupFeeDeletePending(scope.row)" :disabled="isAssemblyMarkupFeeDeletePending(scope.row)" @click="deleteAssemblyMarkupFee(scope.row)">删除</el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
+          <el-tab-pane label="百分比费用" name="pricingMarkupFees">
+            <div class="pricing-markup-panel">
+              <div class="pricing-markup-controls">
+                <div class="pricing-markup-control-group">
+                  <span class="pricing-markup-control-label">适用范围</span>
+                  <el-radio-group v-model="pricingMarkupScope" size="small">
+                    <el-radio-button v-for="option in pricingMarkupScopeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
+                  </el-radio-group>
+                </div>
+                <div class="pricing-markup-control-group">
+                  <span class="pricing-markup-control-label">费用分类</span>
+                  <el-radio-group v-model="pricingMarkupFeeCategory" size="small">
+                    <el-radio-button v-for="option in pricingMarkupFeeCategoryOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
+                  </el-radio-group>
+                </div>
+                <el-input v-model="pricingMarkupKeyword" clearable placeholder="搜索费用名称、适用范围、分类或状态" />
+              </div>
+              <el-table :data="pagedPricingMarkupFees" border stripe height="520" v-loading="loading">
+                <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+                <el-table-column prop="feeName" label="费用名称" min-width="150" fixed show-overflow-tooltip />
+                <el-table-column label="费率" width="120" align="right">
+                  <template #default="{ row }">{{ Number(row.ratePercent || 0).toFixed(2) }}%</template>
+                </el-table-column>
+                <el-table-column prop="pricingScope" label="适用范围" width="120" align="center">
+                  <template #default="{ row }">{{ pricingScopeText(row.pricingScope) }}</template>
+                </el-table-column>
+                <el-table-column prop="feeCategory" label="分类" width="140" align="center">
+                  <template #default="{ row }">{{ pricingMarkupFeeCategoryText(row.feeCategory) }}</template>
+                </el-table-column>
+                <el-table-column label="启用" width="90" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="systemRequired" label="系统项" width="100" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.systemRequired ? 'warning' : 'info'" size="small">{{ row.systemRequired ? '系统项' : '普通项' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="180" align="center" fixed="right">
+                  <template #default="{ row }">
+                    <div class="erp-table-actions">
+                      <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isPricingMarkupFeeDeletePending(row)" @click="openPricingMarkupFeeDialog(row)">编辑</el-button>
+                      <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isPricingMarkupFeeDeletePending(row)" :disabled="row.systemRequired || isPricingMarkupFeeDeletePending(row)" @click="deletePricingMarkupFee(row)">删除</el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-if="filteredPricingMarkupFees.length" class="erp-pagination material-dict-pagination">
+                <el-pagination
+                  v-model:current-page="pricingMarkupPagination.page"
+                  v-model:page-size="pricingMarkupPagination.pageSize"
+                  :page-sizes="CLIENT_PAGE_SIZES"
+                  :pager-count="7"
+                  :total="filteredPricingMarkupFees.length"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  background
+                  @size-change="resetPricingMarkupFeePage"
+                />
+              </div>
+            </div>
           </el-tab-pane>
 
           <el-tab-pane label="非工时费用工艺" name="extraFees">
@@ -394,48 +410,38 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="markupFeeDialogVisible" :title="markupFeeForm.id ? '编辑费用类' : '新增费用类'" width="520px">
-      <el-form :model="markupFeeForm" label-width="100px" class="erp-dialog-form">
+    <el-dialog v-model="pricingMarkupFeeDialogVisible" :title="pricingMarkupFeeForm.id ? '编辑百分比费用' : '新增基础百分比费用'" width="620px">
+      <el-form :model="pricingMarkupFeeForm" label-width="110px" class="erp-dialog-form process-dialog-grid">
+        <el-form-item label="适用范围" required>
+          <el-select v-model="pricingMarkupFeeForm.pricingScope" disabled class="dialog-select">
+            <el-option v-for="option in pricingMarkupScopeOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="费用分类" required>
+          <el-select v-model="pricingMarkupFeeForm.feeCategory" disabled class="dialog-select">
+            <el-option v-for="option in pricingMarkupFeeCategoryOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="序号">
-          <el-input-number v-model="markupFeeForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
+          <el-input-number v-model="pricingMarkupFeeForm.sortNo" :min="0" :disabled="!pricingMarkupIdentityEditable" controls-position="right" class="dialog-number-input" />
         </el-form-item>
         <el-form-item label="费用名称" required>
-          <el-input v-model="markupFeeForm.feeName" placeholder="例如：运输费、管理费、利润、税费" />
+          <el-input v-model="pricingMarkupFeeForm.feeName" :disabled="!pricingMarkupIdentityEditable" placeholder="例如：运输费、管理费、利润" />
         </el-form-item>
         <el-form-item label="费率(%)" required>
-          <el-input-number v-model="markupFeeForm.ratePercent" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
+          <el-input-number v-model="pricingMarkupFeeForm.ratePercent" :precision="2" :min="0" controls-position="right" class="dialog-number-input" />
         </el-form-item>
         <el-form-item label="启用">
-          <el-switch v-model="markupFeeForm.enabled" />
+          <el-switch v-model="pricingMarkupFeeForm.enabled" />
+        </el-form-item>
+        <el-form-item label="系统项">
+          <el-tag :type="pricingMarkupFeeForm.systemRequired ? 'warning' : 'info'">{{ pricingMarkupFeeForm.systemRequired ? '不可删除' : '可删除' }}</el-tag>
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="erp-dialog-footer">
-          <el-button @click="markupFeeDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="isPending(dictActionKeys.saveMarkupFeeDialog)" :disabled="isPending(dictActionKeys.saveMarkupFeeDialog)" @click="saveMarkupFee">保存</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="assemblyMarkupFeeDialogVisible" :title="assemblyMarkupFeeForm.id ? '编辑组装件费用类' : '新增组装件费用类'" width="520px">
-      <el-form :model="assemblyMarkupFeeForm" label-width="100px" class="erp-dialog-form">
-        <el-form-item label="序号">
-          <el-input-number v-model="assemblyMarkupFeeForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
-        </el-form-item>
-        <el-form-item label="费用名称" required>
-          <el-input v-model="assemblyMarkupFeeForm.feeName" placeholder="例如：组装管理费、组装利润、组装税费" />
-        </el-form-item>
-        <el-form-item label="费率(%)" required>
-          <el-input-number v-model="assemblyMarkupFeeForm.ratePercent" :precision="2" :min="0" controls-position="right" style="width: 100%;" />
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="assemblyMarkupFeeForm.enabled" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="erp-dialog-footer">
-          <el-button @click="assemblyMarkupFeeDialogVisible = false">取消</el-button>
-          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="isPending(dictActionKeys.saveAssemblyMarkupFeeDialog)" :disabled="isPending(dictActionKeys.saveAssemblyMarkupFeeDialog)" @click="saveAssemblyMarkupFee">保存</el-button>
+          <el-button @click="pricingMarkupFeeDialogVisible = false">取消</el-button>
+          <el-button v-permission="'engineer:dict:fee-manage'" type="primary" :loading="isPending(dictActionKeys.savePricingMarkupFeeDialog)" :disabled="isPending(dictActionKeys.savePricingMarkupFeeDialog)" @click="savePricingMarkupFee">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -526,48 +532,58 @@
 import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  deleteAssemblyMarkupFee as deleteAssemblyMarkupFeeRequest,
   deleteExtraFeeItem,
-  deleteMarkupFee as deleteMarkupFeeRequest,
+  deletePricingMarkupFee as deletePricingMarkupFeeRequest,
   getMesMaterialSyncSchedule,
   getMesProcessSyncSchedule,
-  listAssemblyMarkupFees,
   listExtraFeeItems,
-  listMarkupFees,
   listMaterialTypes,
+  listPricingMarkupFees,
   pageMaterials,
   pageProcessCategories,
   pageProcessDetails,
-  saveAssemblyMarkupFee as saveAssemblyMarkupFeeRequest,
+  createPricingMarkupFee,
   saveExtraFeeItem,
-  saveMarkupFee as saveMarkupFeeRequest,
   saveMaterial as saveMaterialRequest,
   saveMesMaterialSyncSchedule,
   saveMesProcessSyncSchedule,
   saveProcessDetail as saveProcessDetailRequest,
   syncMesMaterials as syncMesMaterialsRequest,
-  syncMesProcessTypes as syncMesProcessTypesRequest
+  syncMesProcessTypes as syncMesProcessTypesRequest,
+  updatePricingMarkupFee
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
-import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE } from '../utils/clientPagination'
+import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, paginateRows } from '../utils/clientPagination'
 
 const dictionaryStore = useDictionaryStore()
+const pricingMarkupScopeOptions = [
+  { value: 'NORMAL', label: '普通件' },
+  { value: 'ASSEMBLY', label: '组装件' }
+]
+const pricingMarkupFeeCategoryOptions = [
+  { value: 'BASIC_PERCENT', label: '基础百分比费用' },
+  { value: 'TAX', label: '税率' },
+  { value: 'CUSTOMER_WEIGHT', label: '客户权重' }
+]
 const activeTab = ref('materials')
 const materialTypes = ref([])
 const materials = ref([])
 const processCategories = ref([])
 const processDetails = ref([])
-const markupFees = ref([])
-const assemblyMarkupFees = ref([])
+const pricingMarkupFees = ref([])
 const extraFeeItems = ref([])
 const materialKeyword = ref('')
 const processCategoryKeyword = ref('')
 const processDetailKeyword = ref('')
+const pricingMarkupKeyword = ref('')
+const pricingMarkupScope = ref('NORMAL')
+const pricingMarkupFeeCategory = ref('BASIC_PERCENT')
 const createPagination = () => reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE, total: 0 })
 const materialPagination = createPagination()
 const processCategoryPagination = createPagination()
 const processDetailPagination = createPagination()
+const pricingMarkupPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const processCategoryOptions = computed(() => {
   const options = new Map()
   for (const category of processCategories.value) {
@@ -590,6 +606,7 @@ const processCategoryOptions = computed(() => {
 const resetMaterialPage = () => { materialPagination.page = 1 }
 const resetProcessCategoryPage = () => { processCategoryPagination.page = 1 }
 const resetProcessDetailPage = () => { processDetailPagination.page = 1 }
+const resetPricingMarkupFeePage = () => { pricingMarkupPagination.page = 1 }
 const resetPageAndLoad = (pagination, loader) => {
   if (pagination.page === 1) {
     loadPageWithLoading(loader)
@@ -606,22 +623,18 @@ const dictActionKeys = {
   syncMesProcessTypes: 'engineer:dict:process-sync-mes',
   saveMesSchedule: 'engineer:dict:mes-master-data-schedule-save',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
-  saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog',
-  saveAssemblyMarkupFeeDialog: 'engineer:dict:assembly-markup-fee-save-dialog',
+  savePricingMarkupFeeDialog: 'engineer:dict:pricing-markup-fee-save-dialog',
   saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
-  deleteMarkupFee: (feeId) => `engineer:dict:markup-fee-delete:${feeId || 'none'}`,
-  deleteAssemblyMarkupFee: (feeId) => `engineer:dict:assembly-markup-fee-delete:${feeId || 'none'}`,
+  deletePricingMarkupFee: (feeId) => `engineer:dict:pricing-markup-fee-delete:${feeId || 'none'}`,
   deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`
 }
 
-const isMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteMarkupFee(row?.id))
-const isAssemblyMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deleteAssemblyMarkupFee(row?.id))
+const isPricingMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deletePricingMarkupFee(row?.id))
 const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
 const materialDialogVisible = ref(false)
 const processDetailDialogVisible = ref(false)
-const markupFeeDialogVisible = ref(false)
-const assemblyMarkupFeeDialogVisible = ref(false)
+const pricingMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
 const scheduleDialogVisible = ref(false)
 const scheduleLoading = ref(false)
@@ -629,8 +642,7 @@ const scheduleTarget = ref('MES_MATERIAL')
 
 const materialForm = reactive(createEmptyMaterial())
 const processDetailForm = reactive(createEmptyProcessDetail())
-const markupFeeForm = reactive(createEmptyMarkupFee())
-const assemblyMarkupFeeForm = reactive(createEmptyMarkupFee())
+const pricingMarkupFeeForm = reactive(createEmptyPricingMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
 const scheduleForm = reactive({
   enabled: false,
@@ -696,6 +708,8 @@ const materialPriceStatusType = (row = {}) => (materialPriceStatusText(row) === 
 const formatSyncTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '-')
 const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
 const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
+const pricingScopeText = (value) => pricingMarkupScopeOptions.find((item) => item.value === value)?.label || value || '-'
+const pricingMarkupFeeCategoryText = (value) => pricingMarkupFeeCategoryOptions.find((item) => item.value === value)?.label || value || '-'
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
 const scheduleStatusLabel = (status) => ({
   SUCCESS: '成功',
@@ -734,13 +748,16 @@ function createEmptyProcessDetail() {
   }
 }
 
-function createEmptyMarkupFee() {
+function createEmptyPricingMarkupFee() {
   return {
     id: null,
     sortNo: 0,
+    pricingScope: pricingMarkupScope.value,
+    feeCategory: pricingMarkupFeeCategory.value,
     feeName: '',
     ratePercent: 0,
-    enabled: true
+    enabled: true,
+    systemRequired: false
   }
 }
 
@@ -767,24 +784,61 @@ const applyPageResult = (pagination, response = {}) => {
   return response.records || []
 }
 
+const normalizePricingMarkupFee = (row = {}, pricingScope, feeCategory) => ({
+  ...row,
+  pricingScope: row.pricingScope || pricingScope,
+  feeCategory: row.feeCategory || feeCategory,
+  enabled: row.enabled !== false,
+  systemRequired: row.systemRequired === true
+})
+
+const loadPricingMarkupFeeRows = async () => {
+  const groups = await Promise.all(pricingMarkupScopeOptions.flatMap((scope) => (
+    pricingMarkupFeeCategoryOptions.map((category) => (
+      listPricingMarkupFees(scope.value, category.value)
+        .then((rows) => (rows || []).map((row) => normalizePricingMarkupFee(row, scope.value, category.value)))
+    ))
+  )))
+  return groups.flat()
+}
+
+const filteredPricingMarkupFees = computed(() => {
+  const keyword = pricingMarkupKeyword.value.trim().toLowerCase()
+  return pricingMarkupFees.value.filter((row) => {
+    if (row.pricingScope !== pricingMarkupScope.value || row.feeCategory !== pricingMarkupFeeCategory.value) {
+      return false
+    }
+    if (!keyword) return true
+    return [
+      row.feeName,
+      pricingScopeText(row.pricingScope),
+      pricingMarkupFeeCategoryText(row.feeCategory),
+      row.enabled ? '启用' : '停用',
+      row.systemRequired ? '系统项' : '普通项'
+    ].some((value) => String(value || '').toLowerCase().includes(keyword))
+  })
+})
+const pagedPricingMarkupFees = computed(() => paginateRows(filteredPricingMarkupFees.value, pricingMarkupPagination))
+const pricingMarkupIdentityEditable = computed(() => (
+  pricingMarkupFeeForm.feeCategory === 'BASIC_PERCENT' && !pricingMarkupFeeForm.systemRequired
+))
+
 const invalidateDictionaryCache = () => {
   dictionaryStore.$patch({
     loadedAt: null,
-    lastIncludeMarkupFees: false,
+    lastIncludePricingMarkupFees: false,
     lastIncludeAllExtraFees: false
   })
 }
 
 const loadLookupDictionaries = async () => {
-  const [types, markup, assemblyMarkup, extraFees] = await Promise.all([
+  const [types, pricingFees, extraFees] = await Promise.all([
     listMaterialTypes(),
-    listMarkupFees(),
-    listAssemblyMarkupFees(),
+    loadPricingMarkupFeeRows(),
     listExtraFeeItems({ includeDisabled: true })
   ])
   materialTypes.value = types || []
-  markupFees.value = markup || []
-  assemblyMarkupFees.value = assemblyMarkup || []
+  pricingMarkupFees.value = pricingFees || []
   extraFeeItems.value = extraFees || []
 }
 
@@ -848,14 +902,13 @@ const openProcessDetailDialog = (row) => {
   processDetailDialogVisible.value = true
 }
 
-const openMarkupFeeDialog = (row) => {
-  Object.assign(markupFeeForm, createEmptyMarkupFee(), row || {})
-  markupFeeDialogVisible.value = true
-}
-
-const openAssemblyMarkupFeeDialog = (row) => {
-  Object.assign(assemblyMarkupFeeForm, createEmptyMarkupFee(), row || {})
-  assemblyMarkupFeeDialogVisible.value = true
+const openPricingMarkupFeeDialog = (row) => {
+  Object.assign(pricingMarkupFeeForm, createEmptyPricingMarkupFee(), row || {})
+  pricingMarkupFeeForm.pricingScope = row?.pricingScope || pricingMarkupScope.value
+  pricingMarkupFeeForm.feeCategory = row?.feeCategory || pricingMarkupFeeCategory.value
+  pricingMarkupFeeForm.enabled = pricingMarkupFeeForm.enabled !== false
+  pricingMarkupFeeForm.systemRequired = pricingMarkupFeeForm.systemRequired === true
+  pricingMarkupFeeDialogVisible.value = true
 }
 
 const openExtraFeeDialog = (row) => {
@@ -977,32 +1030,27 @@ const saveProcessDetail = async () => {
   })
 }
 
-const saveMarkupFee = async () => {
-  if (!markupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
-  return runAction(dictActionKeys.saveMarkupFeeDialog, async () => {
+const savePricingMarkupFee = async () => {
+  if (!pricingMarkupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
+  return runAction(dictActionKeys.savePricingMarkupFeeDialog, async () => {
     try {
-      const response = await saveMarkupFeeRequest(markupFeeForm)
+      const payload = {
+        pricingScope: pricingMarkupFeeForm.pricingScope,
+        feeCategory: pricingMarkupFeeForm.feeCategory,
+        feeName: pricingMarkupFeeForm.feeName,
+        ratePercent: Number(pricingMarkupFeeForm.ratePercent || 0),
+        sortNo: Number(pricingMarkupFeeForm.sortNo || 0),
+        enabled: pricingMarkupFeeForm.enabled !== false
+      }
+      const response = pricingMarkupFeeForm.id
+        ? await updatePricingMarkupFee(pricingMarkupFeeForm.id, payload)
+        : await createPricingMarkupFee(payload)
       ElMessage.success(response.message || '保存成功')
-      markupFeeDialogVisible.value = false
+      pricingMarkupFeeDialogVisible.value = false
       await reloadAfterMutation()
     } catch (error) {
       console.error(error)
-      ElMessage.error('费用类保存失败。')
-    }
-  })
-}
-
-const saveAssemblyMarkupFee = async () => {
-  if (!assemblyMarkupFeeForm.feeName) return ElMessage.warning('请填写费用名称。')
-  return runAction(dictActionKeys.saveAssemblyMarkupFeeDialog, async () => {
-    try {
-      const response = await saveAssemblyMarkupFeeRequest(assemblyMarkupFeeForm)
-      ElMessage.success(response.message || '保存成功')
-      assemblyMarkupFeeDialogVisible.value = false
-      await reloadAfterMutation()
-    } catch (error) {
-      console.error(error)
-      ElMessage.error('组装件费用类保存失败。')
+      ElMessage.error(requestErrorMessage(error, '百分比费用保存失败。'))
     }
   })
 }
@@ -1022,20 +1070,12 @@ const saveExtraFee = async () => {
   })
 }
 
-const deleteMarkupFee = async (row) => {
-  return runAction(dictActionKeys.deleteMarkupFee(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
-    await deleteMarkupFeeRequest(row.id)
-    ElMessage.success('费用类已删除')
-    await reloadAfterMutation()
-  })
-}
-
-const deleteAssemblyMarkupFee = async (row) => {
-  return runAction(dictActionKeys.deleteAssemblyMarkupFee(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除组装件费用类「${row.feeName}」？`, '删除确认', { type: 'warning' })
-    await deleteAssemblyMarkupFeeRequest(row.id)
-    ElMessage.success('组装件费用类已删除')
+const deletePricingMarkupFee = async (row) => {
+  if (row.systemRequired) return ElMessage.warning('系统项不可删除，只能修改百分率或启停。')
+  return runAction(dictActionKeys.deletePricingMarkupFee(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除百分比费用「${row.feeName}」？`, '删除确认', { type: 'warning' })
+    await deletePricingMarkupFeeRequest(row.id)
+    ElMessage.success('百分比费用已删除')
     await reloadAfterMutation()
   })
 }
@@ -1058,6 +1098,9 @@ watch(processCategoryKeyword, () => {
 watch(processDetailKeyword, () => {
   resetPageAndLoad(processDetailPagination, loadProcessDetailPage)
 })
+watch(pricingMarkupKeyword, resetPricingMarkupFeePage)
+watch(pricingMarkupScope, resetPricingMarkupFeePage)
+watch(pricingMarkupFeeCategory, resetPricingMarkupFeePage)
 watch(
   () => [materialPagination.page, materialPagination.pageSize],
   () => loadPageWithLoading(loadMaterialPage)
@@ -1092,6 +1135,37 @@ onMounted(loadAll)
 
 .material-filter-bar .el-input {
   max-width: 360px;
+  width: 100%;
+}
+
+.pricing-markup-panel {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.pricing-markup-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pricing-markup-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pricing-markup-control-label {
+  color: #606266;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.pricing-markup-controls .el-input {
+  max-width: 340px;
   width: 100%;
 }
 
@@ -1202,6 +1276,16 @@ onMounted(loadAll)
 
   .material-filter-bar {
     justify-content: flex-start;
+  }
+
+  .pricing-markup-controls,
+  .pricing-markup-control-group {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pricing-markup-controls .el-input {
+    max-width: 100%;
   }
 
   .process-dialog-grid {

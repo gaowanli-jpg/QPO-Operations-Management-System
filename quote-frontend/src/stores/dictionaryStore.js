@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import {
-  listAssemblyMarkupFees,
   listExtraFeeItems,
-  listMarkupFees,
   listMaterialTypes,
   listMaterials,
+  listPricingMarkupFees,
   listProcessCategories,
   listProcessDetails
 } from '../services/dictApi'
+
+const PRICING_MARKUP_SCOPES = ['NORMAL', 'ASSEMBLY']
+const PRICING_MARKUP_FEE_CATEGORIES = ['BASIC_PERCENT', 'TAX', 'CUSTOMER_WEIGHT']
 
 const toProcessCompatibilityRow = (item = {}) => ({
   ...item,
@@ -36,6 +38,24 @@ const isProcessDetailEffectivelyEnabled = (item = {}) => {
 const formatHourlyRate = (value) => Number(value ?? 0).toFixed(2)
 const processRateSourceText = (item = {}) => item.detailHourlyRate == null ? '继承大类' : '具体价'
 
+const normalizePricingMarkupFee = (item = {}, pricingScope, feeCategory) => ({
+  ...item,
+  pricingScope: item.pricingScope || pricingScope,
+  feeCategory: item.feeCategory || feeCategory,
+  enabled: item.enabled !== false,
+  systemRequired: item.systemRequired === true
+})
+
+const loadPricingMarkupFeeRows = async () => {
+  const groups = await Promise.all(PRICING_MARKUP_SCOPES.flatMap((pricingScope) => (
+    PRICING_MARKUP_FEE_CATEGORIES.map((feeCategory) => (
+      listPricingMarkupFees(pricingScope, feeCategory)
+        .then((rows) => (rows || []).map((item) => normalizePricingMarkupFee(item, pricingScope, feeCategory)))
+    ))
+  )))
+  return groups.flat()
+}
+
 export const useDictionaryStore = defineStore('dictionary', {
   state: () => ({
     materialTypes: [],
@@ -44,14 +64,18 @@ export const useDictionaryStore = defineStore('dictionary', {
     processCategories: [],
     processDetails: [],
     extraFeeItems: [],
-    markupFees: [],
-    assemblyMarkupFees: [],
+    pricingMarkupFees: [],
     loadedAt: null,
     loading: false,
-    lastIncludeMarkupFees: false,
+    lastIncludePricingMarkupFees: false,
     lastIncludeAllExtraFees: false
   }),
   getters: {
+    getPricingMarkupFees: (state) => (pricingScope, feeCategory) => state.pricingMarkupFees.filter((item) => {
+      const scopeMatches = !pricingScope || item.pricingScope === pricingScope
+      const categoryMatches = !feeCategory || item.feeCategory === feeCategory
+      return scopeMatches && categoryMatches
+    }),
     combinedProcessOptions: (state) => [
       ...state.processDetails.filter(isProcessDetailEffectivelyEnabled).map(item => ({
         optionKey: `process-detail-${item.id}`,
@@ -87,12 +111,12 @@ export const useDictionaryStore = defineStore('dictionary', {
   },
   actions: {
     async loadBaseDicts({
-      includeMarkupFees = false,
+      includePricingMarkupFees = false,
       includeAllExtraFees = false,
       force = false
     } = {}) {
       const hasRequiredCache = this.loadedAt
-        && (!includeMarkupFees || this.lastIncludeMarkupFees)
+        && (!includePricingMarkupFees || this.lastIncludePricingMarkupFees)
         && (!includeAllExtraFees || this.lastIncludeAllExtraFees)
       if (hasRequiredCache && !force) {
         return {
@@ -102,8 +126,7 @@ export const useDictionaryStore = defineStore('dictionary', {
           processCategories: this.processCategories,
           processDetails: this.processDetails,
           extraFeeItems: this.extraFeeItems,
-          markupFees: this.markupFees,
-          assemblyMarkupFees: this.assemblyMarkupFees
+          pricingMarkupFees: this.pricingMarkupFees
         }
       }
 
@@ -116,23 +139,21 @@ export const useDictionaryStore = defineStore('dictionary', {
           listProcessDetails(),
           listExtraFeeItems({ includeDisabled: includeAllExtraFees })
         ]
-        if (includeMarkupFees) {
-          requests.push(listMarkupFees())
-          requests.push(listAssemblyMarkupFees())
+        if (includePricingMarkupFees) {
+          requests.push(loadPricingMarkupFeeRows())
         }
-        const [materialTypes, materials, processCategories, processDetails, extraFeeItems, markupFees, assemblyMarkupFees] = await Promise.all(requests)
+        const [materialTypes, materials, processCategories, processDetails, extraFeeItems, pricingMarkupFees] = await Promise.all(requests)
         this.materialTypes = materialTypes || []
         this.materials = materials || []
         this.processCategories = processCategories || []
         this.processDetails = processDetails || []
         this.processes = this.processDetails.filter(isProcessDetailEffectivelyEnabled).map(toProcessCompatibilityRow)
         this.extraFeeItems = extraFeeItems || []
-        if (includeMarkupFees) {
-          this.markupFees = markupFees || []
-          this.assemblyMarkupFees = assemblyMarkupFees || []
+        if (includePricingMarkupFees) {
+          this.pricingMarkupFees = pricingMarkupFees || []
         }
         this.loadedAt = Date.now()
-        this.lastIncludeMarkupFees = this.lastIncludeMarkupFees || includeMarkupFees
+        this.lastIncludePricingMarkupFees = this.lastIncludePricingMarkupFees || includePricingMarkupFees
         this.lastIncludeAllExtraFees = this.lastIncludeAllExtraFees || includeAllExtraFees
         return {
           materialTypes: this.materialTypes,
@@ -141,8 +162,7 @@ export const useDictionaryStore = defineStore('dictionary', {
           processCategories: this.processCategories,
           processDetails: this.processDetails,
           extraFeeItems: this.extraFeeItems,
-          markupFees: this.markupFees,
-          assemblyMarkupFees: this.assemblyMarkupFees
+          pricingMarkupFees: this.pricingMarkupFees
         }
       } finally {
         this.loading = false
@@ -151,7 +171,7 @@ export const useDictionaryStore = defineStore('dictionary', {
 
     async reloadAfterMutation() {
       return this.loadBaseDicts({
-        includeMarkupFees: true,
+        includePricingMarkupFees: true,
         includeAllExtraFees: true,
         force: true
       })
@@ -197,19 +217,19 @@ export const useDictionaryStore = defineStore('dictionary', {
         { id: 'fallback-cnc1', categoryId: 'fallback-cnc', processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', hourlyRate: 0, enabled: true }
       ]
       this.extraFeeItems = []
-      this.markupFees = [
-        { id: 'fallback-freight', feeName: '运输费', ratePercent: 5, enabled: true },
-        { id: 'fallback-management', feeName: '管理费', ratePercent: 5, enabled: true },
-        { id: 'fallback-profit', feeName: '利润', ratePercent: 15, enabled: true },
-        { id: 'fallback-tax', feeName: '税费', ratePercent: 13, enabled: true }
-      ]
-      this.assemblyMarkupFees = [
-        { id: 'fallback-assembly-management', feeName: '组装管理费', ratePercent: 5, enabled: true },
-        { id: 'fallback-assembly-profit', feeName: '组装利润', ratePercent: 15, enabled: true },
-        { id: 'fallback-assembly-tax', feeName: '组装税费', ratePercent: 13, enabled: true }
+      this.pricingMarkupFees = [
+        { id: 'fallback-freight', pricingScope: 'NORMAL', feeCategory: 'BASIC_PERCENT', feeName: '运输费', ratePercent: 5, sortNo: 10, enabled: true, systemRequired: false },
+        { id: 'fallback-management', pricingScope: 'NORMAL', feeCategory: 'BASIC_PERCENT', feeName: '管理费', ratePercent: 5, sortNo: 20, enabled: true, systemRequired: false },
+        { id: 'fallback-profit', pricingScope: 'NORMAL', feeCategory: 'BASIC_PERCENT', feeName: '利润', ratePercent: 15, sortNo: 30, enabled: true, systemRequired: false },
+        { id: 'fallback-tax', pricingScope: 'NORMAL', feeCategory: 'TAX', feeName: '税率', ratePercent: 13, sortNo: 40, enabled: true, systemRequired: true },
+        { id: 'fallback-customer-weight', pricingScope: 'NORMAL', feeCategory: 'CUSTOMER_WEIGHT', feeName: '客户权重', ratePercent: 0, sortNo: 50, enabled: false, systemRequired: true },
+        { id: 'fallback-assembly-management', pricingScope: 'ASSEMBLY', feeCategory: 'BASIC_PERCENT', feeName: '组装管理费', ratePercent: 5, sortNo: 10, enabled: true, systemRequired: false },
+        { id: 'fallback-assembly-profit', pricingScope: 'ASSEMBLY', feeCategory: 'BASIC_PERCENT', feeName: '组装利润', ratePercent: 15, sortNo: 20, enabled: true, systemRequired: false },
+        { id: 'fallback-assembly-tax', pricingScope: 'ASSEMBLY', feeCategory: 'TAX', feeName: '税率', ratePercent: 13, sortNo: 30, enabled: true, systemRequired: true },
+        { id: 'fallback-assembly-customer-weight', pricingScope: 'ASSEMBLY', feeCategory: 'CUSTOMER_WEIGHT', feeName: '客户权重', ratePercent: 0, sortNo: 40, enabled: false, systemRequired: true }
       ]
       this.loadedAt = Date.now()
-      this.lastIncludeMarkupFees = true
+      this.lastIncludePricingMarkupFees = true
     }
   }
 })

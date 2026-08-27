@@ -72,7 +72,8 @@ describe('admin duplicate click guards', () => {
     expect(sources.dict).toContain("syncMesMaterials: 'engineer:dict:material-sync-mes'")
     expect(sources.dict).toContain("syncMesProcessTypes: 'engineer:dict:process-sync-mes'")
     expect(sources.dict).toContain("saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog'")
-    expect(sources.dict).toContain("saveMarkupFeeDialog: 'engineer:dict:markup-fee-save-dialog'")
+    expect(sources.dict).toContain("savePricingMarkupFeeDialog: 'engineer:dict:pricing-markup-fee-save-dialog'")
+    expect(sources.dict).toContain("deletePricingMarkupFee: (feeId) => `engineer:dict:pricing-markup-fee-delete:${feeId || 'none'}`")
     expect(sources.dict).toContain("deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`")
 
     expect(sources.template).toContain("upload: 'market:template:upload'")

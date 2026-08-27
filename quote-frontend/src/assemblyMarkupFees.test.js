@@ -6,23 +6,25 @@ import { dirname, resolve } from 'node:path'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const readSource = (...segments) => readFileSync(resolve(currentDir, ...segments), 'utf8')
 
-describe('assembly markup fee dictionary', () => {
-  test('material process page exposes a dedicated assembly markup fee tab', () => {
+describe('assembly pricing fee dictionary', () => {
+  test('material process page exposes assembly scope inside unified pricing fee tab', () => {
     const source = readSource('components', 'MaterialProcessManage.vue')
 
-    expect(source).toContain('label="组装件百分比费用类"')
-    expect(source).toContain('name="assemblyMarkupFees"')
-    expect(source).toContain(':data="assemblyMarkupFees"')
-    expect(source).toContain('openAssemblyMarkupFeeDialog')
-    expect(source).toContain('saveAssemblyMarkupFee')
-    expect(source).toContain('deleteAssemblyMarkupFee')
+    expect(source).toContain('label="百分比费用"')
+    expect(source).toContain('name="pricingMarkupFees"')
+    expect(source).toContain("{ value: 'ASSEMBLY', label: '组装件' }")
+    expect(source).toContain('pricingMarkupScope')
+    expect(source).toContain('pricingMarkupFeeCategory')
+    expect(source).toContain('openPricingMarkupFeeDialog')
+    expect(source).toContain('savePricingMarkupFee')
+    expect(source).toContain('deletePricingMarkupFee')
     expect(source).toContain("v-permission=\"'engineer:dict:fee-manage'\"")
   })
 
-  test('item pricing preview uses assembly markup fees without transport-name filtering', () => {
+  test('item pricing preview uses assembly-scoped pricing fees without transport-name filtering', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
-    expect(source).toContain('const assemblyMarkupFeeOptions = computed(() => dictionaryStore.assemblyMarkupFees)')
+    expect(source).toContain("const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))")
     expect(source).toContain('const assemblyFeeMarkupRows = computed(() => assemblyMarkupFeeOptions.value')
     expect(source).not.toContain('isTransportMarkupFee')
     expect(source).not.toContain("title=\"组合件父件价格 = 子件含税单价汇总 + 组装费 + 组装费对应的管理费/利润/税费；组装费不收运输费。\"")

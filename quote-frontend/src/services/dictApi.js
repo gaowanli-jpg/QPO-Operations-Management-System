@@ -101,31 +101,21 @@ export const saveProcessDetail = (payload) => {
   })
 }
 
-export const listMarkupFees = () => request('/api/dict/markup-fees')
+export const listPricingMarkupFees = (pricingScope, feeCategory) => request(
+  `/api/dict/pricing-markup-fees${buildQuery({ pricingScope, feeCategory })}`
+)
 
-export const saveMarkupFee = (payload) => {
-  const id = payload?.id
-  return request(id ? `/api/dict/markup-fees/${id}` : '/api/dict/markup-fees', {
-    method: id ? 'PUT' : 'POST',
-    data: payload
-  })
-}
-
-export const deleteMarkupFee = (id) => request(`/api/dict/markup-fees/${id}`, {
-  method: 'DELETE'
+export const createPricingMarkupFee = (payload) => request('/api/dict/pricing-markup-fees', {
+  method: 'POST',
+  data: payload
 })
 
-export const listAssemblyMarkupFees = () => request('/api/dict/assembly-markup-fees')
+export const updatePricingMarkupFee = (id, payload) => request(`/api/dict/pricing-markup-fees/${id}`, {
+  method: 'PUT',
+  data: payload
+})
 
-export const saveAssemblyMarkupFee = (payload) => {
-  const id = payload?.id
-  return request(id ? `/api/dict/assembly-markup-fees/${id}` : '/api/dict/assembly-markup-fees', {
-    method: id ? 'PUT' : 'POST',
-    data: payload
-  })
-}
-
-export const deleteAssemblyMarkupFee = (id) => request(`/api/dict/assembly-markup-fees/${id}`, {
+export const deletePricingMarkupFee = (id) => request(`/api/dict/pricing-markup-fees/${id}`, {
   method: 'DELETE'
 })
 

@@ -48,9 +48,9 @@ describe('QPO Stage 4 dialog, form, and table action normalization', () => {
   test('normalizes material/process dialogs, forms, footers, and destructive table actions', () => {
     const source = readSource('components', 'MaterialProcessManage.vue')
 
-    expect(countOccurrences(source, 'class="erp-dialog-form"')).toBeGreaterThanOrEqual(4)
+    expect(countOccurrences(source, 'erp-dialog-form')).toBeGreaterThanOrEqual(4)
     expect(countOccurrences(source, 'class="erp-dialog-footer"')).toBeGreaterThanOrEqual(4)
     expect(countOccurrences(source, 'class="erp-table-actions"')).toBeGreaterThanOrEqual(4)
-    expect(countOccurrences(source, 'erp-danger-action')).toBeGreaterThanOrEqual(3)
+    expect(countOccurrences(source, 'erp-danger-action')).toBeGreaterThanOrEqual(2)
   })
 })

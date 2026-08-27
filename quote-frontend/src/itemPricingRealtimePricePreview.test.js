@@ -24,7 +24,7 @@ describe('ItemPricing realtime normal price preview', () => {
     expect(materialSummary).toContain('normalUntaxedTotalPricePreview.toFixed(2)')
     expect(materialSummary).toContain('normalTaxIncludedTotalPricePreview.toFixed(2)')
 
-    expect(source).toContain('const markupFeeOptions = computed(() => dictionaryStore.markupFees)')
+    expect(source).toContain("const markupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('NORMAL'))")
     expect(source).toContain('const currentItemQty = computed(() => numberOrZero(currentRow.value?.qty))')
     expect(source).toContain('const normalProcessCostPreview = computed(() =>')
     expect(source).toContain('processRoute.value.reduce')

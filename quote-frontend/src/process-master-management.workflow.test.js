@@ -90,8 +90,13 @@ describe('process master management frontend workflow', () => {
 
   test('process page keeps other dictionary tabs and removes tier price editing from process master', () => {
     expect(materialProcess).toContain('name="materials"')
-    expect(materialProcess).toContain('name="markupFees"')
-    expect(materialProcess).toContain('name="assemblyMarkupFees"')
+    expect(materialProcess).toContain('name="pricingMarkupFees"')
+    expect(materialProcess).toContain('基础百分比费用')
+    expect(materialProcess).toContain('税率')
+    expect(materialProcess).toContain('客户权重')
+    expect(materialProcess).toContain('pricingScope')
+    expect(materialProcess).toContain('feeCategory')
+    expect(materialProcess).toContain('systemRequired')
     expect(materialProcess).toContain('name="extraFees"')
     expect(materialProcess).not.toContain('processPriceFields')
     expect(materialProcess).not.toContain('price1To5')

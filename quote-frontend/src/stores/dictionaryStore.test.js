@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import {
-  listAssemblyMarkupFees,
   listExtraFeeItems,
-  listMarkupFees,
   listMaterialTypes,
   listMaterials,
+  listPricingMarkupFees,
   listProcessCategories,
   listProcessDetails
 } from '../services/dictApi'
@@ -17,8 +16,7 @@ vi.mock('../services/dictApi', () => ({
   listProcessCategories: vi.fn(),
   listProcessDetails: vi.fn(),
   listExtraFeeItems: vi.fn(),
-  listMarkupFees: vi.fn(),
-  listAssemblyMarkupFees: vi.fn()
+  listPricingMarkupFees: vi.fn()
 }))
 
 beforeEach(() => {
@@ -27,17 +25,26 @@ beforeEach(() => {
 })
 
 describe('dictionaryStore', () => {
-  test('loadBaseDicts loads materials, processes, extra fees, and markup fees when requested', async () => {
+  test('loadBaseDicts loads materials, processes, extra fees, and categorized pricing markup fees when requested', async () => {
     listMaterialTypes.mockResolvedValue([{ id: 6, typeCode: 'RAW_MATERIAL', typeName: '原材料' }])
     listMaterials.mockResolvedValue([{ id: 1, materialCode: 'MAT-000001', materialName: '45#', materialTypeId: 6, materialTypeCode: 'RAW_MATERIAL', materialTypeName: '原材料' }])
     listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'PACKAGING', categoryName: '包装', hourlyRate: 10 }])
     listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, processCode: 'PACKAGING', categoryName: '包装', detailName: '精细包装', hourlyRate: 10 }])
     listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: 'Heat Treat' }])
-    listMarkupFees.mockResolvedValue([{ id: 4, feeName: '利润', ratePercent: 15 }])
-    listAssemblyMarkupFees.mockResolvedValue([{ id: 5, feeName: '组装管理费', ratePercent: 5 }])
+    listPricingMarkupFees.mockImplementation((pricingScope, feeCategory) => Promise.resolve([
+      {
+        id: `${pricingScope}-${feeCategory}`,
+        pricingScope,
+        feeCategory,
+        feeName: `${pricingScope}-${feeCategory}`,
+        ratePercent: feeCategory === 'TAX' ? 13 : 0,
+        systemRequired: feeCategory !== 'BASIC_PERCENT',
+        enabled: true
+      }
+    ]))
     const store = useDictionaryStore()
 
-    await store.loadBaseDicts({ includeMarkupFees: true, force: true })
+    await store.loadBaseDicts({ includePricingMarkupFees: true, force: true })
 
     expect(store.materialTypes).toHaveLength(1)
     expect(store.materials).toHaveLength(1)
@@ -47,11 +54,18 @@ describe('dictionaryStore', () => {
     expect(store.processDetails).toHaveLength(1)
     expect(store.processes[0]).toEqual(expect.objectContaining({ processName: '精细包装', processDetailId: 2, processCode: 'PACKAGING' }))
     expect(store.extraFeeItems).toHaveLength(1)
-    expect(store.markupFees).toHaveLength(1)
-    expect(store.assemblyMarkupFees).toHaveLength(1)
+    expect(store.pricingMarkupFees).toHaveLength(6)
+    expect(store.getPricingMarkupFees('NORMAL', 'TAX')).toEqual([
+      expect.objectContaining({ pricingScope: 'NORMAL', feeCategory: 'TAX', systemRequired: true })
+    ])
+    expect(store.getPricingMarkupFees('ASSEMBLY', 'BASIC_PERCENT')).toEqual([
+      expect.objectContaining({ pricingScope: 'ASSEMBLY', feeCategory: 'BASIC_PERCENT' })
+    ])
     expect(listExtraFeeItems).toHaveBeenCalledWith({ includeDisabled: false })
     expect(listMaterialTypes).toHaveBeenCalledWith()
-    expect(listAssemblyMarkupFees).toHaveBeenCalled()
+    expect(listPricingMarkupFees).toHaveBeenCalledTimes(6)
+    expect(listPricingMarkupFees).toHaveBeenCalledWith('NORMAL', 'BASIC_PERCENT')
+    expect(listPricingMarkupFees).toHaveBeenCalledWith('ASSEMBLY', 'CUSTOMER_WEIGHT')
   })
 
   test('combinedProcessOptions combines process and extra fee records', async () => {
@@ -62,8 +76,6 @@ describe('dictionaryStore', () => {
       { id: 2, categoryId: 10, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', detailHourlyRate: 0, categoryHourlyRate: 80, effectiveHourlyRate: 0, hourlyRate: 0 }
     ])
     listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: 'Heat Treat' }])
-    listMarkupFees.mockResolvedValue([])
-    listAssemblyMarkupFees.mockResolvedValue([])
     const store = useDictionaryStore()
 
     await store.loadBaseDicts({ force: true })
@@ -86,8 +98,6 @@ describe('dictionaryStore', () => {
       { id: 3, categoryId: 11, processCode: 'MILL', categoryName: 'Milling', detailName: 'MILL1', enabled: true, detailEnabled: true, categoryEnabled: true, effectiveEnabled: true, hourlyRate: 60 }
     ])
     listExtraFeeItems.mockResolvedValue([])
-    listMarkupFees.mockResolvedValue([])
-    listAssemblyMarkupFees.mockResolvedValue([])
     const store = useDictionaryStore()
 
     await store.loadBaseDicts({ force: true })
@@ -109,7 +119,7 @@ describe('dictionaryStore', () => {
     expect(store.materialTypes[0]).toEqual(expect.objectContaining({ typeCode: 'RAW_MATERIAL', typeName: '原材料' }))
     expect(store.materials[0]).toEqual(expect.objectContaining({ materialCode: 'MAT-FALLBACK-45', materialTypeCode: 'RAW_MATERIAL', materialTypeName: '原材料', materialCategory: '钢铁' }))
     expect(store.materials[0].materialName).toBe('45#')
-    expect(store.markupFees.map(item => item.feeName)).toEqual(['运输费', '管理费', '利润', '税费'])
-    expect(store.assemblyMarkupFees.map(item => item.feeName)).toEqual(['组装管理费', '组装利润', '组装税费'])
+    expect(store.getPricingMarkupFees('NORMAL').map(item => item.feeName)).toEqual(['运输费', '管理费', '利润', '税率', '客户权重'])
+    expect(store.getPricingMarkupFees('ASSEMBLY').map(item => item.feeName)).toEqual(['组装管理费', '组装利润', '税率', '客户权重'])
   })
 })

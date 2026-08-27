@@ -61,27 +61,31 @@ describe('dictApi', () => {
     expect(request).toHaveBeenNthCalledWith(3, '/api/dict/process-details/page?categoryId=9&enabledOnly=true&keyword=cnc&page=4&pageSize=100')
   })
 
-  test('deletes markup fee by id', async () => {
-    await dictApi.deleteMarkupFee(9)
+  test('manages unified pricing markup fees with categorized endpoints', async () => {
+    const payload = {
+      id: 11,
+      pricingScope: 'ASSEMBLY',
+      feeCategory: 'BASIC_PERCENT',
+      feeName: '组装管理费',
+      ratePercent: 5,
+      enabled: true
+    }
 
-    expect(request).toHaveBeenCalledWith('/api/dict/markup-fees/9', {
-      method: 'DELETE'
+    await dictApi.listPricingMarkupFees('ASSEMBLY', 'BASIC_PERCENT')
+    await dictApi.createPricingMarkupFee(payload)
+    await dictApi.updatePricingMarkupFee(11, payload)
+    await dictApi.deletePricingMarkupFee(11)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/pricing-markup-fees?pricingScope=ASSEMBLY&feeCategory=BASIC_PERCENT')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/dict/pricing-markup-fees', {
+      method: 'POST',
+      data: payload
     })
-  })
-
-  test('manages assembly markup fees with dedicated endpoints', async () => {
-    const payload = { id: 11, feeName: '组装管理费', ratePercent: 5 }
-
-    await dictApi.listAssemblyMarkupFees()
-    await dictApi.saveAssemblyMarkupFee(payload)
-    await dictApi.deleteAssemblyMarkupFee(11)
-
-    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/assembly-markup-fees')
-    expect(request).toHaveBeenNthCalledWith(2, '/api/dict/assembly-markup-fees/11', {
+    expect(request).toHaveBeenNthCalledWith(3, '/api/dict/pricing-markup-fees/11', {
       method: 'PUT',
       data: payload
     })
-    expect(request).toHaveBeenNthCalledWith(3, '/api/dict/assembly-markup-fees/11', {
+    expect(request).toHaveBeenNthCalledWith(4, '/api/dict/pricing-markup-fees/11', {
       method: 'DELETE'
     })
   })
