@@ -6,13 +6,17 @@ import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.PricingMaterialOptionDTO;
 import com.machining.quote.dto.PricingItemRemarkUpdateReq;
+import com.machining.quote.dto.PricingOptionPageReq;
+import com.machining.quote.dto.PricingProcessOptionDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.DataScopeService;
+import com.machining.quote.service.EngineeringPricingOptionService;
 import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.service.OrderItemPageService;
@@ -52,6 +56,9 @@ public class EngineerController {
 
     @Autowired
     private ExcelExportService excelExportService;
+
+    @Autowired
+    private EngineeringPricingOptionService pricingOptionService;
 
     // ---------------------------------------------
 
@@ -115,6 +122,18 @@ public class EngineerController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         return engineerService.listSupplementalPricingOrders(customerName, keyword, status, page, pageSize);
+    }
+
+    @GetMapping("/pricing/options/materials")
+    @RequirePermission("engineer:pricing:view")
+    public PageResult<PricingMaterialOptionDTO> pagePricingMaterialOptions(@ModelAttribute PricingOptionPageReq req) {
+        return pricingOptionService.pageMaterialOptions(req);
+    }
+
+    @GetMapping("/pricing/options/processes")
+    @RequirePermission("engineer:pricing:view")
+    public PageResult<PricingProcessOptionDTO> pagePricingProcessOptions(@ModelAttribute PricingOptionPageReq req) {
+        return pricingOptionService.pageProcessOptions(req);
     }
 
     @GetMapping("/pricing/items/{rfqId}")

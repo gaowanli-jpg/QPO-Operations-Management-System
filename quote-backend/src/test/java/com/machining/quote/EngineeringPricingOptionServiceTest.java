@@ -1,0 +1,248 @@
+package com.machining.quote;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.PricingMaterialOptionDTO;
+import com.machining.quote.dto.PricingOptionPageReq;
+import com.machining.quote.dto.PricingProcessOptionDTO;
+import com.machining.quote.entity.DictExtraFeeItem;
+import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialType;
+import com.machining.quote.entity.DictProcessCategory;
+import com.machining.quote.entity.DictProcessDetail;
+import com.machining.quote.mapper.DictExtraFeeItemMapper;
+import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialTypeMapper;
+import com.machining.quote.mapper.DictProcessCategoryMapper;
+import com.machining.quote.mapper.DictProcessDetailMapper;
+import com.machining.quote.service.EngineeringPricingOptionService;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class EngineeringPricingOptionServiceTest {
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageMaterialOptionsReturnsEnabledRowsWithTypeFieldsAndStrictPaging() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, materialTypeMapper,
+                mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
+        DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L);
+        material.setMaterialCategory("不锈钢");
+        material.setDensity(7.93);
+        material.setPlateDensity(7.93);
+        material.setPlatePrice(11.5);
+        material.setBarDensity(7.90);
+        material.setBarPrice(12.2);
+        material.setTubeDensity(7.91);
+        material.setTubePrice(13.3);
+        material.setRemarks("raw remark");
+        DictMaterialType type = materialType(1L, "RAW", "原材料");
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(25L);
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(material));
+        when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(type));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setKeyword("raw");
+        req.setPage(2);
+        req.setPageSize(20);
+
+        PageResult<PricingMaterialOptionDTO> page = service.pageMaterialOptions(req);
+
+        assertThat(page.getTotal()).isEqualTo(25);
+        assertThat(page.getPage()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getId()).isEqualTo(10L);
+            assertThat(row.getMaterialCode()).isEqualTo("MAT-000010");
+            assertThat(row.getMaterialName()).isEqualTo("SUS304");
+            assertThat(row.getMaterialTypeId()).isEqualTo(1L);
+            assertThat(row.getMaterialTypeCode()).isEqualTo("RAW");
+            assertThat(row.getMaterialTypeName()).isEqualTo("原材料");
+            assertThat(row.getMaterialCategory()).isEqualTo("不锈钢");
+            assertThat(row.getPlatePrice()).isEqualTo(11.5);
+            assertThat(row.getRemarks()).isEqualTo("raw remark");
+        });
+        ArgumentCaptor<QueryWrapper<DictMaterial>> countCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        ArgumentCaptor<QueryWrapper<DictMaterial>> listCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectCount(countCaptor.capture());
+        verify(materialMapper).selectList(listCaptor.capture());
+        assertThat(sql(countCaptor.getValue()))
+                .contains("enabled", "material_code", "material_name", "material_category", "remarks", "dict_material_type");
+        assertThat(sql(listCaptor.getValue()))
+                .contains("order by", "material_type_id", "sort_no", "id", "limit 20 offset 20");
+    }
+
+    @Test
+    void pageMaterialOptionsDefaultsToPageOneAndRejectsUnsupportedPageSize() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialTypeMapper.class),
+                mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        PageResult<PricingMaterialOptionDTO> defaulted = service.pageMaterialOptions(new PricingOptionPageReq());
+        assertThat(defaulted.getPage()).isEqualTo(1);
+        assertThat(defaulted.getPageSize()).isEqualTo(20);
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setPageSize(30);
+        assertThatThrownBy(() -> service.pageMaterialOptions(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("pageSize")
+                .hasMessageContaining("20 / 50 / 100");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageProcessOptionsCombinesEnabledProcessDetailsAndEnabledExtraFees() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialTypeMapper.class),
+                detailMapper, categoryMapper, extraFeeItemMapper);
+        DictProcessCategory category = category(7L, "CNC", "数控加工", new BigDecimal("60.00"));
+        DictProcessDetail detail = detail(10L, 7L, "CNC 精加工", new BigDecimal("80.00"));
+        DictExtraFeeItem extra = extraFeeItem(5, "喷砂");
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(extraFeeItemMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(detail));
+        when(extraFeeItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(extra));
+        when(categoryMapper.selectBatchIds(any())).thenReturn(List.of(category));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setKeyword("cnc");
+        req.setPage(1);
+        req.setPageSize(20);
+
+        PageResult<PricingProcessOptionDTO> page = service.pageProcessOptions(req);
+
+        assertThat(page.getTotal()).isEqualTo(2);
+        assertThat(page.getPage()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getRecords()).hasSize(2);
+        PricingProcessOptionDTO process = page.getRecords().get(0);
+        assertThat(process.getOptionKey()).isEqualTo("process:10");
+        assertThat(process.getSourceType()).isEqualTo("process");
+        assertThat(process.getProcessDetailId()).isEqualTo(10L);
+        assertThat(process.getProcessCategoryId()).isEqualTo(7L);
+        assertThat(process.getProcessCode()).isEqualTo("CNC");
+        assertThat(process.getCategoryName()).isEqualTo("数控加工");
+        assertThat(process.getDetailName()).isEqualTo("CNC 精加工");
+        assertThat(process.getProcessName()).isEqualTo("CNC 精加工");
+        assertThat(process.getCalcType()).isEqualTo("工时");
+        assertThat(process.getEffectiveHourlyRate()).isEqualByComparingTo("80.00");
+        assertThat(process.getLabel()).contains("CNC 精加工", "CNC", "数控加工", "80.00元/小时");
+        PricingProcessOptionDTO fee = page.getRecords().get(1);
+        assertThat(fee.getOptionKey()).isEqualTo("extra:5");
+        assertThat(fee.getSourceType()).isEqualTo("extra");
+        assertThat(fee.getFeeItemId()).isEqualTo(5);
+        assertThat(fee.getFeeName()).isEqualTo("喷砂");
+        assertThat(fee.getProcessName()).isEqualTo("喷砂");
+        assertThat(fee.getCalcType()).isEqualTo("非工时费用");
+
+        ArgumentCaptor<QueryWrapper<DictProcessDetail>> detailCountCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        ArgumentCaptor<QueryWrapper<DictExtraFeeItem>> extraCountCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(detailMapper).selectCount(detailCountCaptor.capture());
+        verify(extraFeeItemMapper).selectCount(extraCountCaptor.capture());
+        assertThat(sql(detailCountCaptor.getValue()))
+                .contains("enabled", "dict_process_category", "detail_name", "detail_remarks", "process_code", "category_name");
+        assertThat(sql(extraCountCaptor.getValue()))
+                .contains("enabled", "fee_name", "remarks");
+    }
+
+    @Test
+    void optionServiceDoesNotDependOnAuditService() throws Exception {
+        Path path = Path.of("src", "main", "java", "com", "machining", "quote", "service", "EngineeringPricingOptionService.java");
+        assertThat(path).exists();
+        String source = Files.readString(path, StandardCharsets.UTF_8);
+        assertThat(source)
+                .doesNotContain("AuditService")
+                .doesNotContain(".record(");
+    }
+
+    private static EngineeringPricingOptionService service(
+            DictMaterialMapper materialMapper,
+            DictMaterialTypeMapper materialTypeMapper,
+            DictProcessDetailMapper detailMapper,
+            DictProcessCategoryMapper categoryMapper,
+            DictExtraFeeItemMapper extraFeeItemMapper) {
+        EngineeringPricingOptionService service = new EngineeringPricingOptionService();
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
+        ReflectionTestUtils.setField(service, "processDetailMapper", detailMapper);
+        ReflectionTestUtils.setField(service, "processCategoryMapper", categoryMapper);
+        ReflectionTestUtils.setField(service, "extraFeeItemMapper", extraFeeItemMapper);
+        return service;
+    }
+
+    private static DictMaterial material(Long id, String code, String name, Long typeId) {
+        DictMaterial material = new DictMaterial();
+        material.setId(id);
+        material.setMaterialCode(code);
+        material.setMaterialName(name);
+        material.setMaterialTypeId(typeId);
+        material.setEnabled(true);
+        material.setSortNo(1);
+        return material;
+    }
+
+    private static DictMaterialType materialType(Long id, String code, String name) {
+        DictMaterialType type = new DictMaterialType();
+        type.setId(id);
+        type.setTypeCode(code);
+        type.setTypeName(name);
+        type.setEnabled(true);
+        return type;
+    }
+
+    private static DictProcessCategory category(Long id, String code, String name, BigDecimal hourlyRate) {
+        DictProcessCategory category = new DictProcessCategory();
+        category.setId(id);
+        category.setProcessCode(code);
+        category.setCategoryName(name);
+        category.setHourlyRate(hourlyRate);
+        category.setEnabled(true);
+        category.setSortNo(1);
+        return category;
+    }
+
+    private static DictProcessDetail detail(Long id, Long categoryId, String name, BigDecimal hourlyRate) {
+        DictProcessDetail detail = new DictProcessDetail();
+        detail.setId(id);
+        detail.setCategoryId(categoryId);
+        detail.setDetailName(name);
+        detail.setHourlyRate(hourlyRate);
+        detail.setEnabled(true);
+        detail.setSortNo(2);
+        return detail;
+    }
+
+    private static DictExtraFeeItem extraFeeItem(Integer id, String name) {
+        DictExtraFeeItem item = new DictExtraFeeItem();
+        item.setId(id);
+        item.setFeeName(name);
+        item.setEnabled(true);
+        item.setSortNo(3);
+        item.setRemarks("fee remark");
+        return item;
+    }
+
+    private static String sql(QueryWrapper<?> wrapper) {
+        return wrapper.getCustomSqlSegment().replaceAll("\\s+", " ").toLowerCase();
+    }
+}
