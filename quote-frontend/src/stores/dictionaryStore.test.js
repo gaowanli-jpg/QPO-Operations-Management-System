@@ -81,7 +81,7 @@ describe('dictionaryStore', () => {
     await store.loadBaseDicts({ force: true })
 
     expect(store.combinedProcessOptions).toEqual([
-      expect.objectContaining({ optionKey: 'process-detail-2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', hourlyRate: 0, sourceType: 'process' }),
+      expect.objectContaining({ optionKey: 'process:2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', hourlyRate: 0, sourceType: 'process' }),
       expect.objectContaining({ optionKey: 'extra-3', processName: 'Heat Treat', sourceType: 'extra' })
     ])
     expect(store.combinedProcessOptions[0].label).toContain('0.00元/小时')
@@ -134,6 +134,36 @@ describe('dictionaryStore', () => {
     expect(listProcessCategories).not.toHaveBeenCalled()
     expect(listProcessDetails).not.toHaveBeenCalled()
     expect(listExtraFeeItems).not.toHaveBeenCalled()
+  })
+
+  test('loadPricingFeeDicts does not make base dictionary cache look loaded', async () => {
+    listPricingMarkupFees.mockImplementation((pricingScope, feeCategory) => Promise.resolve([{
+      id: `${pricingScope}-${feeCategory}`,
+      pricingScope,
+      feeCategory,
+      feeName: `${pricingScope}-${feeCategory}`,
+      ratePercent: 0,
+      enabled: true
+    }]))
+    listMaterialTypes.mockResolvedValue([{ id: 6, typeCode: 'RAW_MATERIAL', typeName: '原材料' }])
+    listMaterials.mockResolvedValue([{ id: 1, materialCode: 'MAT-000001', materialName: '45#' }])
+    listProcessCategories.mockResolvedValue([{ id: 10, processCode: 'CNC', categoryName: '数控', hourlyRate: 80 }])
+    listProcessDetails.mockResolvedValue([{ id: 2, categoryId: 10, detailName: 'CNC1', hourlyRate: 80 }])
+    listExtraFeeItems.mockResolvedValue([{ id: 3, feeName: '喷砂' }])
+    const store = useDictionaryStore()
+
+    await store.loadPricingFeeDicts({ force: true })
+    vi.clearAllMocks()
+    await store.loadBaseDicts()
+
+    expect(listMaterialTypes).toHaveBeenCalledTimes(1)
+    expect(listMaterials).toHaveBeenCalledTimes(1)
+    expect(listProcessCategories).toHaveBeenCalledTimes(1)
+    expect(listProcessDetails).toHaveBeenCalledTimes(1)
+    expect(listExtraFeeItems).toHaveBeenCalledWith({ includeDisabled: false })
+    expect(listPricingMarkupFees).not.toHaveBeenCalled()
+    expect(store.materials).toEqual([expect.objectContaining({ materialCode: 'MAT-000001' })])
+    expect(store.processDetails).toEqual([expect.objectContaining({ detailName: 'CNC1' })])
   })
 
   test('applyPricingFallbackData preserves ItemPricing fallback strategy', () => {

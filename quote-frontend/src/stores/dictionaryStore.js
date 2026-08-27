@@ -66,6 +66,8 @@ export const useDictionaryStore = defineStore('dictionary', {
     extraFeeItems: [],
     pricingMarkupFees: [],
     loadedAt: null,
+    baseLoadedAt: null,
+    pricingMarkupFeesLoadedAt: null,
     loading: false,
     lastIncludePricingMarkupFees: false,
     lastIncludeAllExtraFees: false
@@ -78,7 +80,7 @@ export const useDictionaryStore = defineStore('dictionary', {
     }),
     combinedProcessOptions: (state) => [
       ...state.processDetails.filter(isProcessDetailEffectivelyEnabled).map(item => ({
-        optionKey: `process-detail-${item.id}`,
+        optionKey: `process:${item.id}`,
         processDetailId: item.id,
         processCategoryId: item.categoryId,
         categoryId: item.categoryId,
@@ -116,6 +118,7 @@ export const useDictionaryStore = defineStore('dictionary', {
       force = false
     } = {}) {
       const hasRequiredCache = this.loadedAt
+        && this.baseLoadedAt
         && (!includePricingMarkupFees || this.lastIncludePricingMarkupFees)
         && (!includeAllExtraFees || this.lastIncludeAllExtraFees)
       if (hasRequiredCache && !force) {
@@ -151,8 +154,10 @@ export const useDictionaryStore = defineStore('dictionary', {
         this.extraFeeItems = extraFeeItems || []
         if (includePricingMarkupFees) {
           this.pricingMarkupFees = pricingMarkupFees || []
+          this.pricingMarkupFeesLoadedAt = Date.now()
         }
         this.loadedAt = Date.now()
+        this.baseLoadedAt = this.loadedAt
         this.lastIncludePricingMarkupFees = this.lastIncludePricingMarkupFees || includePricingMarkupFees
         this.lastIncludeAllExtraFees = this.lastIncludeAllExtraFees || includeAllExtraFees
         return {
@@ -170,7 +175,7 @@ export const useDictionaryStore = defineStore('dictionary', {
     },
 
     async loadPricingFeeDicts({ force = false } = {}) {
-      if (this.loadedAt && this.lastIncludePricingMarkupFees && !force) {
+      if (this.pricingMarkupFeesLoadedAt && this.lastIncludePricingMarkupFees && !force) {
         return { pricingMarkupFees: this.pricingMarkupFees }
       }
 
@@ -179,6 +184,7 @@ export const useDictionaryStore = defineStore('dictionary', {
         const pricingMarkupFees = await loadPricingMarkupFeeRows()
         this.pricingMarkupFees = pricingMarkupFees || []
         this.loadedAt = Date.now()
+        this.pricingMarkupFeesLoadedAt = this.loadedAt
         this.lastIncludePricingMarkupFees = true
         return { pricingMarkupFees: this.pricingMarkupFees }
       } finally {
@@ -246,6 +252,8 @@ export const useDictionaryStore = defineStore('dictionary', {
         { id: 'fallback-assembly-customer-weight', pricingScope: 'ASSEMBLY', feeCategory: 'CUSTOMER_WEIGHT', feeName: '客户权重', ratePercent: 0, sortNo: 40, enabled: false, systemRequired: true }
       ]
       this.loadedAt = Date.now()
+      this.baseLoadedAt = this.loadedAt
+      this.pricingMarkupFeesLoadedAt = this.loadedAt
       this.lastIncludePricingMarkupFees = true
     }
   }
