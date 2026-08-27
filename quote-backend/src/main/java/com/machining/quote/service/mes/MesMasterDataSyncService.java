@@ -122,7 +122,7 @@ public class MesMasterDataSyncService {
         } catch (RuntimeException error) {
             String message = safeMessage(error.getMessage());
             scheduleConfigService.updateScheduledResult(syncType,
-                    new SyncResult(false, null, 0, 0, 0, 0, 0, 0, message));
+                    new SyncResult(false, null, 0, 0, 0, 0, 0, 0, 0, message));
             log.warn("MES master data scheduled sync failed before run record syncType={} message={}", syncType, message, error);
         } finally {
             runningGuard.set(false);
@@ -143,11 +143,12 @@ public class MesMasterDataSyncService {
             PersistResult persisted = persistProcessTypes(sources, startedAt);
             counters.upsertedCount = persisted.upsertedCount();
             counters.disabledCount = persisted.disabledCount();
+            counters.deletedCount = persisted.deletedCount();
             finishRun(run, STATUS_SUCCESS, startedAt, counters, null);
             audit(run, counters, true, null, SYNC_TYPE_PROCESS_TYPE, AUDIT_ACTION_PROCESS_SYNC);
-            log.info("MES process type sync completed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} upsertedCount={} disabledCount={}",
+            log.info("MES process type sync completed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} upsertedCount={} disabledCount={} deletedCount={}",
                     run.getId(), counters.fetchedCount, counters.validCount, counters.invalidCount,
-                    counters.duplicateCount, counters.upsertedCount, counters.disabledCount);
+                    counters.duplicateCount, counters.upsertedCount, counters.disabledCount, counters.deletedCount);
             return result(true, run.getId(), counters, null);
         } catch (RuntimeException error) {
             Counters failureCounters = error instanceof SyncFailure syncFailure ? syncFailure.counters() : counters;
@@ -175,11 +176,12 @@ public class MesMasterDataSyncService {
             PersistResult persisted = persistMaterials(sources, startedAt);
             counters.upsertedCount = persisted.upsertedCount();
             counters.disabledCount = persisted.disabledCount();
+            counters.deletedCount = persisted.deletedCount();
             finishRun(run, STATUS_SUCCESS, startedAt, counters, null);
             audit(run, counters, true, null, SYNC_TYPE_MATERIAL, AUDIT_ACTION_MATERIAL_SYNC);
-            log.info("MES material sync completed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} upsertedCount={} disabledCount={}",
+            log.info("MES material sync completed syncRunId={} fetchedCount={} validCount={} invalidCount={} duplicateCount={} upsertedCount={} disabledCount={} deletedCount={}",
                     run.getId(), counters.fetchedCount, counters.validCount, counters.invalidCount,
-                    counters.duplicateCount, counters.upsertedCount, counters.disabledCount);
+                    counters.duplicateCount, counters.upsertedCount, counters.disabledCount, counters.deletedCount);
             return result(true, run.getId(), counters, null);
         } catch (RuntimeException error) {
             Counters failureCounters = error instanceof SyncFailure syncFailure ? syncFailure.counters() : counters;
@@ -204,6 +206,7 @@ public class MesMasterDataSyncService {
         run.setDuplicateCount(0);
         run.setUpsertedCount(0);
         run.setDisabledCount(0);
+        run.setDeletedCount(0);
         run.setCreatedBy(createdBy);
         run.setCreatedAt(startedAt);
         syncRunMapper.insert(run);
@@ -247,6 +250,7 @@ public class MesMasterDataSyncService {
                         LinkedHashMap::new));
 
         int upsertedCount = 0;
+        int disabledCount = 0;
         for (ProcessTypeSource source : sources) {
             DictProcessCategory existing = existingByCode.get(source.code());
             if (existing != null && !SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))) {
@@ -261,23 +265,34 @@ public class MesMasterDataSyncService {
                 categoryMapper.updateById(category);
             }
             upsertedCount++;
+            if (!source.enabled()) {
+                disabledCount++;
+            }
             ensureDefaultDetail(category, source.name(), syncedAt);
         }
 
         Set<String> returnedCodes = sources.stream().map(ProcessTypeSource::code).collect(Collectors.toSet());
-        int disabledCount = 0;
+        int deletedCount = 0;
         for (DictProcessCategory existing : existingByCode.values()) {
             if (SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))
-                    && !returnedCodes.contains(trimToNull(existing.getProcessCode()))
-                    && Boolean.TRUE.equals(existing.getEnabled())) {
-                existing.setEnabled(false);
-                existing.setMesSyncedAt(syncedAt);
-                existing.setUpdatedAt(syncedAt);
-                categoryMapper.updateById(existing);
-                disabledCount++;
+                    && !returnedCodes.contains(trimToNull(existing.getProcessCode()))) {
+                if (deleteProcessCategoryWithDetails(existing)) {
+                    deletedCount++;
+                }
             }
         }
-        return new PersistResult(upsertedCount, disabledCount);
+        return new PersistResult(upsertedCount, disabledCount, deletedCount);
+    }
+
+    private boolean deleteProcessCategoryWithDetails(DictProcessCategory category) {
+        if (category == null || category.getId() == null) {
+            return false;
+        }
+        QueryWrapper<DictProcessDetail> detailDelete = new QueryWrapper<>();
+        detailDelete.eq("category_id", category.getId());
+        detailMapper.delete(detailDelete);
+        categoryMapper.deleteById(category.getId());
+        return true;
     }
 
     private void applyProcessSource(
@@ -400,6 +415,7 @@ public class MesMasterDataSyncService {
                         LinkedHashMap::new));
 
         int upsertedCount = 0;
+        int disabledCount = 0;
         for (MaterialSource source : sources) {
             DictMaterial existing = existingByCode.get(source.lookupCode());
             DictMaterial material = existing == null ? new DictMaterial() : existing;
@@ -411,22 +427,22 @@ public class MesMasterDataSyncService {
                 materialMapper.updateById(material);
             }
             upsertedCount++;
-        }
-
-        Set<String> returnedCodes = sources.stream().map(MaterialSource::lookupCode).collect(Collectors.toSet());
-        int disabledCount = 0;
-        for (DictMaterial existing : existingByCode.values()) {
-            if (SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))
-                    && !returnedCodes.contains(keyCode(existing.getMaterialCode()))
-                    && Boolean.TRUE.equals(existing.getEnabled())) {
-                existing.setEnabled(false);
-                existing.setMesSyncedAt(syncedAt);
-                existing.setUpdatedAt(syncedAt);
-                materialMapper.updateById(existing);
+            if (!source.enabled()) {
                 disabledCount++;
             }
         }
-        return new PersistResult(upsertedCount, disabledCount);
+
+        Set<String> returnedCodes = sources.stream().map(MaterialSource::lookupCode).collect(Collectors.toSet());
+        int deletedCount = 0;
+        for (DictMaterial existing : existingByCode.values()) {
+            if (SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))
+                    && !returnedCodes.contains(keyCode(existing.getMaterialCode()))
+                    && existing.getId() != null) {
+                materialMapper.deleteById(existing.getId());
+                deletedCount++;
+            }
+        }
+        return new PersistResult(upsertedCount, disabledCount, deletedCount);
     }
 
     private Map<String, Long> ensureMaterialTypes(List<MaterialSource> sources, LocalDateTime syncedAt) {
@@ -538,6 +554,7 @@ public class MesMasterDataSyncService {
         run.setDuplicateCount(counters.duplicateCount);
         run.setUpsertedCount(counters.upsertedCount);
         run.setDisabledCount(counters.disabledCount);
+        run.setDeletedCount(counters.deletedCount);
         run.setMessage(message == null ? "OK" : safeMessage(message));
         syncRunMapper.updateById(run);
     }
@@ -573,6 +590,7 @@ public class MesMasterDataSyncService {
         summary.put("duplicateCount", counters.duplicateCount);
         summary.put("upsertedCount", counters.upsertedCount);
         summary.put("disabledCount", counters.disabledCount);
+        summary.put("deletedCount", counters.deletedCount);
         if (trimToNull(message) != null) {
             summary.put("message", safeMessage(message));
         }
@@ -589,6 +607,7 @@ public class MesMasterDataSyncService {
                 counters.duplicateCount,
                 counters.upsertedCount,
                 counters.disabledCount,
+                counters.deletedCount,
                 message);
     }
 
@@ -684,6 +703,7 @@ public class MesMasterDataSyncService {
             int duplicateCount,
             int upsertedCount,
             int disabledCount,
+            int deletedCount,
             String message) {
     }
 
@@ -694,6 +714,7 @@ public class MesMasterDataSyncService {
         private int duplicateCount;
         private int upsertedCount;
         private int disabledCount;
+        private int deletedCount;
     }
 
     private record ProcessTypeSource(
@@ -722,7 +743,7 @@ public class MesMasterDataSyncService {
             boolean enabled) {
     }
 
-    private record PersistResult(int upsertedCount, int disabledCount) {
+    private record PersistResult(int upsertedCount, int disabledCount, int deletedCount) {
     }
 
     private static class SyncFailure extends RuntimeException {

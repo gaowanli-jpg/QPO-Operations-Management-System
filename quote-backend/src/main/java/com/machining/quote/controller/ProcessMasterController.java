@@ -143,6 +143,7 @@ public class ProcessMasterController {
         summary.put("duplicateCount", result.duplicateCount());
         summary.put("upsertedCount", result.upsertedCount());
         summary.put("disabledCount", result.disabledCount());
+        summary.put("deletedCount", result.deletedCount());
         return summary;
     }
 }

@@ -23,6 +23,7 @@ public class MesMasterDataSyncRun {
     private Integer duplicateCount;
     private Integer upsertedCount;
     private Integer disabledCount;
+    private Integer deletedCount;
     private String message;
     private Long createdBy;
     private LocalDateTime createdAt;

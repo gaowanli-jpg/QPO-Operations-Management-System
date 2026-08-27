@@ -214,7 +214,8 @@ public class MesMasterDataSyncScheduleConfigService {
                 + " invalid=" + result.invalidCount()
                 + " duplicate=" + result.duplicateCount()
                 + " upserted=" + result.upsertedCount()
-                + " disabled=" + result.disabledCount(), 500);
+                + " disabled=" + result.disabledCount()
+                + " deleted=" + result.deletedCount(), 500);
     }
 
     private String validateSyncType(String syncType) {

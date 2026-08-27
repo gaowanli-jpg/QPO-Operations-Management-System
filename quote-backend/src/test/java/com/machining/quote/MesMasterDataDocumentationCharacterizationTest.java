@@ -83,6 +83,10 @@ class MesMasterDataDocumentationCharacterizationTest {
         String logOps = read(LOG_OPS_DOC);
         String fileLog = read(FILE_LOG_DOC);
 
+        assertThat(masterData).contains("deletedCount");
+        assertThat(logOps).contains("deletedCount");
+        assertThat(fileLog).contains("deletedCount");
+
         assertThat(masterData)
                 .contains(
                         "MES 无材料单价",

@@ -16,6 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MesMasterDataMigrationTest {
     private static final Path MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V8__mes_master_data_sync.sql");
+    private static final Path DELETED_COUNT_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V24__mes_master_data_sync_deleted_count.sql");
     private static final Path PROCESS_CATEGORY_ENTITY = Path.of(
             "src", "main", "java", "com", "machining", "quote", "entity", "DictProcessCategory.java");
 
@@ -53,6 +55,16 @@ class MesMasterDataMigrationTest {
     }
 
     @Test
+    void appendOnlyMigrationAddsDeletedCountToMesSyncRun() throws IOException {
+        String migration = read(DELETED_COUNT_MIGRATION);
+
+        assertThat(migration)
+                .contains("ALTER TABLE mes_master_data_sync_run ADD COLUMN IF NOT EXISTS deleted_count INTEGER NOT NULL DEFAULT 0")
+                .doesNotContain("DROP TABLE")
+                .doesNotContain("CREATE TABLE mes_master_data_sync_run");
+    }
+
+    @Test
     void mesSyncRunEntityAndMapperExposeBatchCounters() {
         MesMasterDataSyncRun run = new MesMasterDataSyncRun();
         LocalDateTime now = LocalDateTime.of(2026, 8, 13, 12, 0);
@@ -68,6 +80,7 @@ class MesMasterDataMigrationTest {
         run.setDuplicateCount(1);
         run.setUpsertedCount(17);
         run.setDisabledCount(2);
+        run.setDeletedCount(3);
         run.setMessage("safe summary only");
         run.setCreatedBy(7L);
         run.setCreatedAt(now);
@@ -83,6 +96,7 @@ class MesMasterDataMigrationTest {
         assertThat(run.getDuplicateCount()).isEqualTo(1);
         assertThat(run.getUpsertedCount()).isEqualTo(17);
         assertThat(run.getDisabledCount()).isEqualTo(2);
+        assertThat(run.getDeletedCount()).isEqualTo(3);
         assertThat(run.getMessage()).isEqualTo("safe summary only");
         assertThat(run.getCreatedBy()).isEqualTo(7L);
         assertThat(run.getCreatedAt()).isEqualTo(now);

@@ -99,6 +99,7 @@ class MesProcessTypeSyncServiceTest {
             assertThat(run.getValidCount()).isEqualTo(1);
             assertThat(run.getUpsertedCount()).isEqualTo(1);
             assertThat(run.getDisabledCount()).isZero();
+            assertThat(run.getDeletedCount()).isZero();
             assertThat(run.getMessage()).isEqualTo("OK");
             assertThat(run.getCreatedBy()).isEqualTo(7L);
         });
@@ -112,6 +113,7 @@ class MesProcessTypeSyncServiceTest {
         assertThat(audit.get("validCount")).isEqualTo(1);
         assertThat(audit.get("upsertedCount")).isEqualTo(1);
         assertThat(audit.get("disabledCount")).isEqualTo(0);
+        assertThat(audit.get("deletedCount")).isEqualTo(0);
         assertThat(audit.containsKey("rows")).isFalse();
         assertThat(audit.containsKey("response")).isFalse();
         assertThat(audit.containsKey("rawResponse")).isFalse();
@@ -153,7 +155,7 @@ class MesProcessTypeSyncServiceTest {
     }
 
     @Test
-    void syncDisablesMissingMesCategoriesButLeavesLocalCategoriesUntouched() {
+    void syncDeletesMissingMesCategoriesAndDetailsButLeavesLocalCategoriesUntouched() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
@@ -173,21 +175,18 @@ class MesProcessTypeSyncServiceTest {
 
         MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(8L);
 
-        assertThat(result.disabledCount()).isEqualTo(1);
+        assertThat(result.disabledCount()).isZero();
+        assertThat(result.deletedCount()).isEqualTo(1);
         ArgumentCaptor<DictProcessCategory> updates = ArgumentCaptor.forClass(DictProcessCategory.class);
-        verify(categoryMapper, org.mockito.Mockito.times(2)).updateById(updates.capture());
-        assertThat(updates.getAllValues())
-                .extracting(DictProcessCategory::getId)
-                .containsExactlyInAnyOrder(10L, 11L)
-                .doesNotContain(12L);
-        DictProcessCategory staleUpdate = updates.getAllValues().stream()
-                .filter(category -> Long.valueOf(11L).equals(category.getId()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(staleUpdate.getEnabled()).isFalse();
+        verify(categoryMapper).updateById(updates.capture());
+        assertThat(updates.getValue().getId()).isEqualTo(10L);
+        verify(detailMapper).delete(any(QueryWrapper.class));
+        verify(categoryMapper).deleteById(11L);
+        org.mockito.InOrder deletionOrder = org.mockito.Mockito.inOrder(detailMapper, categoryMapper);
+        deletionOrder.verify(detailMapper).delete(any(QueryWrapper.class));
+        deletionOrder.verify(categoryMapper).deleteById(11L);
         assertThat(local.getEnabled()).isTrue();
-        verify(categoryMapper, never()).deleteById(any(java.io.Serializable.class));
-        verify(detailMapper, never()).deleteById(any(java.io.Serializable.class));
+        verify(categoryMapper, never()).deleteById(12L);
     }
 
     @Test
@@ -233,7 +232,10 @@ class MesProcessTypeSyncServiceTest {
             return 1;
         }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
 
-        service.syncProcessTypesManual(10L);
+        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(10L);
+
+        assertThat(result.disabledCount()).isEqualTo(1);
+        assertThat(result.deletedCount()).isZero();
 
         ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
         verify(categoryMapper).insert(categoryCaptor.capture());
@@ -256,7 +258,10 @@ class MesProcessTypeSyncServiceTest {
             return 1;
         }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
 
-        service.syncProcessTypesManual(11L);
+        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(11L);
+
+        assertThat(result.disabledCount()).isZero();
+        assertThat(result.deletedCount()).isZero();
 
         ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
         verify(categoryMapper).insert(categoryCaptor.capture());
@@ -279,7 +284,10 @@ class MesProcessTypeSyncServiceTest {
             return 1;
         }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
 
-        service.syncProcessTypesManual(12L);
+        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(12L);
+
+        assertThat(result.disabledCount()).isEqualTo(1);
+        assertThat(result.deletedCount()).isZero();
 
         ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
         verify(categoryMapper).insert(categoryCaptor.capture());

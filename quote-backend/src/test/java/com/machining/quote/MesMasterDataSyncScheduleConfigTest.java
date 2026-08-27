@@ -133,7 +133,7 @@ class MesMasterDataSyncScheduleConfigTest {
         MesMasterDataSyncScheduleConfigMapper mapper = mock(MesMasterDataSyncScheduleConfigMapper.class);
         MesMasterDataSyncScheduleConfigService service = service(mapper, mock(AuditService.class));
         MesMasterDataSyncService.SyncResult result = new MesMasterDataSyncService.SyncResult(
-                true, 991L, 20, 20, 0, 0, 20, 0, null);
+                true, 991L, 20, 20, 0, 0, 20, 0, 2, null);
 
         service.updateScheduledResult("MES_MATERIAL", result);
 
@@ -142,7 +142,7 @@ class MesMasterDataSyncScheduleConfigTest {
         assertThat(captor.getValue().getSyncType()).isEqualTo("MES_MATERIAL");
         assertThat(captor.getValue().getLastScheduledSyncRunId()).isEqualTo(991L);
         assertThat(captor.getValue().getLastScheduledStatus()).isEqualTo("SUCCESS");
-        assertThat(captor.getValue().getLastScheduledMessage()).contains("fetched=20", "valid=20", "upserted=20");
+        assertThat(captor.getValue().getLastScheduledMessage()).contains("fetched=20", "valid=20", "upserted=20", "deleted=2");
     }
 
     @Test

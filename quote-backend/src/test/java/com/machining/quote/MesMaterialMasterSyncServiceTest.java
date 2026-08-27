@@ -145,6 +145,8 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(run.getFetchedCount()).isEqualTo(3);
             assertThat(run.getValidCount()).isEqualTo(3);
             assertThat(run.getUpsertedCount()).isEqualTo(3);
+            assertThat(run.getDisabledCount()).isZero();
+            assertThat(run.getDeletedCount()).isZero();
             assertThat(run.getCreatedBy()).isEqualTo(7L);
         });
 
@@ -155,6 +157,8 @@ class MesMaterialMasterSyncServiceTest {
         assertThat(audit.get("fetchedCount")).isEqualTo(3);
         assertThat(audit.get("validCount")).isEqualTo(3);
         assertThat(audit.get("upsertedCount")).isEqualTo(3);
+        assertThat(audit.get("disabledCount")).isEqualTo(0);
+        assertThat(audit.get("deletedCount")).isEqualTo(0);
         assertThat(audit.containsKey("rows")).isFalse();
         assertThat(audit.containsKey("response")).isFalse();
         assertThat(audit.containsKey("rawResponse")).isFalse();
@@ -271,7 +275,10 @@ class MesMaterialMasterSyncServiceTest {
             return 1;
         }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
 
-        service.syncMaterialsManual(12L);
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(12L);
+
+        assertThat(result.disabledCount()).isZero();
+        assertThat(result.deletedCount()).isZero();
 
         ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
         verify(materialMapper).insert(materialCaptor.capture());
@@ -295,7 +302,10 @@ class MesMaterialMasterSyncServiceTest {
             return 1;
         }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
 
-        service.syncMaterialsManual(13L);
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(13L);
+
+        assertThat(result.disabledCount()).isEqualTo(1);
+        assertThat(result.deletedCount()).isZero();
 
         ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
         verify(materialMapper).insert(materialCaptor.capture());
@@ -330,7 +340,7 @@ class MesMaterialMasterSyncServiceTest {
     }
 
     @Test
-    void syncMaterialsDisablesMissingMesMaterialsButLeavesLocalMaterialsUntouched() {
+    void syncMaterialsDeletesMissingMesMaterialsButLeavesLocalMaterialsUntouched() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
@@ -352,18 +362,13 @@ class MesMaterialMasterSyncServiceTest {
 
         MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(10L);
 
-        assertThat(result.disabledCount()).isEqualTo(1);
+        assertThat(result.disabledCount()).isZero();
+        assertThat(result.deletedCount()).isEqualTo(1);
         ArgumentCaptor<DictMaterial> updates = ArgumentCaptor.forClass(DictMaterial.class);
-        verify(materialMapper, org.mockito.Mockito.times(2)).updateById(updates.capture());
-        assertThat(updates.getAllValues())
-                .extracting(DictMaterial::getId)
-                .containsExactlyInAnyOrder(31L, 32L)
-                .doesNotContain(33L);
-        DictMaterial staleUpdate = updates.getAllValues().stream()
-                .filter(material -> Long.valueOf(32L).equals(material.getId()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(staleUpdate.getEnabled()).isFalse();
+        verify(materialMapper).updateById(updates.capture());
+        assertThat(updates.getValue().getId()).isEqualTo(31L);
+        verify(materialMapper).deleteById(32L);
+        verify(materialMapper, never()).deleteById(33L);
         assertThat(local.getEnabled()).isTrue();
     }
 

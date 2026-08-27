@@ -52,7 +52,7 @@ class MesMasterDataSyncControllerTest {
 
         MesMasterDataSyncService syncService = mock(MesMasterDataSyncService.class);
         when(syncService.syncProcessTypesManual(88L))
-                .thenReturn(new MesMasterDataSyncService.SyncResult(true, 9001L, 5, 4, 1, 0, 4, 0, null));
+                .thenReturn(new MesMasterDataSyncService.SyncResult(true, 9001L, 5, 4, 1, 0, 4, 0, 2, null));
         ProcessMasterController controller = new ProcessMasterController();
         ReflectionTestUtils.setField(controller, "mesMasterDataSyncService", syncService);
 
@@ -67,7 +67,8 @@ class MesMasterDataSyncControllerTest {
                 .containsEntry("validCount", 4)
                 .containsEntry("invalidCount", 1)
                 .containsEntry("upsertedCount", 4)
-                .containsEntry("disabledCount", 0);
+                .containsEntry("disabledCount", 0)
+                .containsEntry("deletedCount", 2);
         verify(syncService).syncProcessTypesManual(88L);
     }
 
@@ -82,7 +83,7 @@ class MesMasterDataSyncControllerTest {
 
         MesMasterDataSyncService syncService = mock(MesMasterDataSyncService.class);
         when(syncService.syncMaterialsManual(89L))
-                .thenReturn(new MesMasterDataSyncService.SyncResult(false, 9002L, 2, 0, 2, 0, 0, 0, "safe failure"));
+                .thenReturn(new MesMasterDataSyncService.SyncResult(false, 9002L, 2, 0, 2, 0, 0, 0, 0, "safe failure"));
         DictController controller = new DictController();
         ReflectionTestUtils.setField(controller, "mesMasterDataSyncService", syncService);
 
@@ -96,6 +97,7 @@ class MesMasterDataSyncControllerTest {
                 .containsEntry("fetchedCount", 2)
                 .containsEntry("validCount", 0)
                 .containsEntry("invalidCount", 2)
+                .containsEntry("deletedCount", 0)
                 .containsEntry("message", "safe failure");
         verify(syncService).syncMaterialsManual(89L);
     }
@@ -227,6 +229,7 @@ class MesMasterDataSyncControllerTest {
                 .contains("summary.put(\"duplicateCount\"")
                 .contains("summary.put(\"upsertedCount\"")
                 .contains("summary.put(\"disabledCount\"")
+                .contains("summary.put(\"deletedCount\"")
                 .doesNotContain("summary.put(\"response")
                 .doesNotContain("summary.put(\"body")
                 .doesNotContain("summary.put(\"token")

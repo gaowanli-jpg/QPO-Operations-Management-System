@@ -1,6 +1,6 @@
 # MES 工艺/材料主数据同步说明
 
-> 2026-08-13 MES 主数据同步阶段 9 收口：QPO 通过数据中心只读获取 MES 工艺类型和材料分页数据，同步到现有材料工艺字典。QPO 不删除材料费用、材料类型、工艺大类、具体工艺四个页签，也不删除 `dict_material`、`dict_material_type`、`dict_process_category`、`dict_process_detail` 四张字典表。
+> 2026-08-27 MES 主数据同步删除口径收口：QPO 通过数据中心只读获取 MES 工艺类型和材料分页数据，同步到现有材料工艺字典。QPO 不删除材料费用、材料类型、工艺大类、具体工艺四个页签，也不删除 `dict_material`、`dict_material_type`、`dict_process_category`、`dict_process_detail` 四张字典表结构；同步时，MES 返回但状态为停用的材料/工艺大类在 QPO 置为停用，MES 本次全量不再返回的 MES 来源材料/工艺大类在 QPO 硬删除，工艺大类硬删除前先删除其下具体工艺。
 
 > 2026-08-13 定时同步策略补充：材料费用页签“从 MES 同步材料”旁新增“定时同步策略”，工艺大类页签“从 MES 同步工艺”旁新增“定时同步策略”。两套策略分别保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE`，默认关闭；后台巡检到点后复用现有同步服务，不覆盖 QPO 材料单价和板/棒/管密度，不改变 MES 生产下发 payload 合同。
 
@@ -13,6 +13,9 @@ MES 主数据同步用于让 QPO 报价和后续 MES 下发使用 MES 编码体�
 - MES 材料进入 QPO 材料字典；MES `code` 写入 QPO `materialCode` / 后续报价快照 `engineeringMaterialCode`。
 - MES 无材料单价，QPO 继续维护材料单价。材料单价缺失时禁止完成核价，不能按 0 元/kg 静默计算。
 - MES 来源字段只维护主数据身份、类型、MES 密度和追踪信息；QPO 本地继续维护板/棒/管密度、价格、必要例外、排序和备注。
+- MES 返回且状态映射为停用时，只更新 QPO 启停状态并计入 `disabledCount`；MES 返回正常状态时可重新启用该 MES 来源记录。
+- MES 全量同步成功但不再返回某个 MES 来源材料或工艺大类时，QPO 删除该材料或工艺大类并计入 `deletedCount`；工艺大类删除前先删除其下 `dict_process_detail` 具体工艺，`LOCAL` 来源记录不受影响。
+- MES 返回空有效数据视为同步失败，不执行缺失删除，避免 MES 异常或接口配置错误导致 QPO 字典被误清理。
 
 ## 2. 数据中心 endpoint
 
@@ -47,7 +50,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 | `POST /api/dict/process-categories/sync-mes` | `engineer:dict:process-manage` | `DICT_PROCESS_MES_SYNC` |
 | `POST /api/dict/materials/sync-mes` | `engineer:dict:material-manage` | `DICT_MATERIAL_MES_SYNC` |
 
-同步运行记录写入 `mes_master_data_sync_run`，记录 `syncRunId`、同步类型、状态、抓取数、有效数、无效数、重复数、upsert 数、停用数、执行人和脱敏消息。
+同步运行记录写入 `mes_master_data_sync_run`，记录 `syncRunId`、同步类型、状态、抓取数、有效数、无效数、重复数、upsert 数、停用数、删除数、执行人和脱敏消息。
 
 ## 3.1 QPO 定时同步策略
 
