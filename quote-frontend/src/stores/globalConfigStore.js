@@ -6,12 +6,21 @@ const PROCESS_SORT_STEP = 10
 const ASSEMBLY_FEE_PROCESS_NAME = '组装费'
 
 export const defaultGlobalConfig = () => ({
+  materialId: null,
   materialCode: '',
   materialName: '',
   materialTypeId: null,
   materialTypeCode: '',
   materialTypeName: '',
   materialCategory: '',
+  density: null,
+  plateDensity: null,
+  platePrice: null,
+  barDensity: null,
+  barPrice: null,
+  tubeDensity: null,
+  tubePrice: null,
+  remarks: '',
   shape: '板材',
   processRoute: [],
   legacyMaterialIdentity: false
@@ -31,7 +40,7 @@ const numericOrOriginal = (value) => {
 }
 
 const parseProcessDetailIdFromOptionKey = (optionKey) => {
-  const match = String(optionKey || '').match(/^process-detail-(.+)$/)
+  const match = String(optionKey || '').match(/^process(?::|-detail-)(.+)$/)
   return match?.[1] ? numericOrOriginal(match[1]) : null
 }
 
@@ -50,7 +59,7 @@ const isAssemblyFeeRoute = (item = {}) => {
 const normalizeProcessOptionKey = (item = {}, sourceType = resolveSourceType(item)) => {
   if (sourceType === 'process') {
     const processDetailId = resolveProcessDetailId(item)
-    return hasValue(processDetailId) ? `process-detail-${processDetailId}` : ''
+    return hasValue(processDetailId) ? `process:${processDetailId}` : ''
   }
   return item.optionKey || ''
 }
@@ -69,10 +78,18 @@ const normalizeRouteItem = (item = {}, index = 0) => {
     optionKey: normalizeProcessOptionKey(item, sourceType),
     processDetailId,
     processCategoryId: sourceType === 'process' ? numericOrOriginal(item.processCategoryId ?? item.categoryId) : null,
+    categoryId: sourceType === 'process' ? numericOrOriginal(item.categoryId ?? item.processCategoryId) : null,
     processCode: sourceType === 'process' ? (item.processCode || '') : '',
     categoryName: sourceType === 'process' ? (item.categoryName || '') : '',
     detailName: sourceType === 'process' ? detailName : '',
-    hourlyRate: sourceType === 'process' ? numericOrOriginal(item.hourlyRate) : null,
+    detailHourlyRate: sourceType === 'process' ? numericOrOriginal(item.detailHourlyRate) : null,
+    categoryHourlyRate: sourceType === 'process' ? numericOrOriginal(item.categoryHourlyRate) : null,
+    effectiveHourlyRate: sourceType === 'process' ? numericOrOriginal(item.effectiveHourlyRate ?? item.hourlyRate ?? item.unitRate) : null,
+    hourlyRate: sourceType === 'process' ? numericOrOriginal(item.hourlyRate ?? item.effectiveHourlyRate ?? item.unitRate) : null,
+    unitRate: sourceType === 'process' ? numericOrOriginal(item.unitRate ?? item.hourlyRate ?? item.effectiveHourlyRate) : null,
+    feeItemId: sourceType === 'extra' ? numericOrOriginal(item.feeItemId ?? item.id) : null,
+    feeName: sourceType === 'extra' ? (item.feeName || processName) : '',
+    label: item.label || '',
     processName,
     calcType: sourceType === 'extra' ? (item.calcType || '非工时费用') : '工时',
     sourceType,
@@ -122,13 +139,24 @@ export const hasLegacyProcessIdentity = (configOrRoutes) => {
 const normalizeMaterialIdentity = (config = {}, defaults = defaultGlobalConfig()) => {
   const materialCode = String(config.materialCode || '').trim()
   const materialName = config.materialName || config.name || defaults.materialName || ''
+  const density = numericOrOriginal(config.density ?? defaults.density)
+  const unitPrice = numericOrOriginal(config.unitPrice ?? defaults.unitPrice)
   return {
+    materialId: config.materialId ?? config.id ?? defaults.materialId ?? null,
     materialCode,
     materialName,
     materialTypeId: config.materialTypeId ?? defaults.materialTypeId ?? null,
     materialTypeCode: config.materialTypeCode || defaults.materialTypeCode || '',
     materialTypeName: config.materialTypeName || defaults.materialTypeName || '',
     materialCategory: config.materialCategory || defaults.materialCategory || '',
+    density,
+    plateDensity: numericOrOriginal(config.plateDensity ?? density ?? defaults.plateDensity),
+    platePrice: numericOrOriginal(config.platePrice ?? unitPrice ?? defaults.platePrice),
+    barDensity: numericOrOriginal(config.barDensity ?? density ?? defaults.barDensity),
+    barPrice: numericOrOriginal(config.barPrice ?? unitPrice ?? defaults.barPrice),
+    tubeDensity: numericOrOriginal(config.tubeDensity ?? density ?? defaults.tubeDensity),
+    tubePrice: numericOrOriginal(config.tubePrice ?? unitPrice ?? defaults.tubePrice),
+    remarks: config.remarks || defaults.remarks || '',
     legacyMaterialIdentity: !materialCode && Boolean(materialName)
   }
 }

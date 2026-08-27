@@ -94,7 +94,7 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     expect(normalized).toEqual([
       expect.objectContaining({
         sortNo: 20,
-        optionKey: 'process-detail-7',
+        optionKey: 'process:7',
         processDetailId: 7,
         processCategoryId: 3,
         processCode: 'PACKAGING',
@@ -128,11 +128,12 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
   test('GlobalSetup saves and validates templates by processDetailId instead of processName', () => {
     const source = readSource('components', 'GlobalSetup.vue')
 
-    expect(source).toContain('proc.processDetailId = selected.processDetailId')
-    expect(source).toContain('proc.processCode = selected.processCode')
-    expect(source).toContain('proc.categoryName = selected.categoryName')
-    expect(source).toContain('proc.detailName = selected.detailName')
-    expect(source).toContain('proc.hourlyRate = selected.hourlyRate')
+    expect(source).toContain('const processDetailId = sourceType === \'process\' ? (selected.processDetailId ?? selected.id ?? null) : null')
+    expect(source).toContain('proc.processDetailId = processDetailId')
+    expect(source).toContain('proc.processCode = sourceType === \'process\' ? (selected.processCode || \'\') : \'\'')
+    expect(source).toContain('proc.categoryName = sourceType === \'process\' ? (selected.categoryName || \'\') : \'\'')
+    expect(source).toContain('proc.detailName = sourceType === \'process\' ? processName : \'\'')
+    expect(source).toContain('proc.hourlyRate = hourlyRate')
     expect(source).toContain('hasUnresolvedProcessRoute')
     expect(source).toContain('hasLegacyProcessIdentity')
     expect(source).toContain('hasSavedEngineerConfig')

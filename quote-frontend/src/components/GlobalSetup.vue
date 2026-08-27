@@ -245,9 +245,10 @@
       v-model="materialPickerVisible"
       title="选择默认材质"
       type="material"
-      :items="materialOptions"
+      remote
+      :remote-loader="pagePricingMaterialOptions"
       :selected-key="config.materialCode"
-      empty-text="暂无材料字典数据"
+      empty-text="暂无匹配材料"
       @confirm="selectMaterial"
     />
 
@@ -255,9 +256,10 @@
       v-model="processPickerVisible"
       title="选择通用工序"
       type="process"
-      :items="combinedProcessOptions"
+      remote
+      :remote-loader="pagePricingProcessOptions"
       :selected-key="selectedProcessOptionKey"
-      empty-text="暂无工艺字典数据"
+      empty-text="暂无匹配工艺"
       @confirm="selectProcess"
     />
 
@@ -271,8 +273,7 @@ import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { getRepeatAnalysis, getSetupSummary, saveOrderConfig } from '../services/engineerApi'
-import { useDictionaryStore } from '../stores/dictionaryStore'
+import { getRepeatAnalysis, getSetupSummary, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
 import { defaultGlobalConfig, hasLegacyMaterialIdentity, hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeGlobalConfig, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
@@ -284,7 +285,6 @@ import {
 
 const router = useRouter()
 const route = useRoute()
-const dictionaryStore = useDictionaryStore()
 const globalConfigStore = useGlobalConfigStore()
 const { isPending, runAction } = usePendingAction()
 
@@ -306,7 +306,6 @@ const orderInfo = ref({})
 const itemList = ref([])
 const itemCount = ref(0)
 const previewLimit = ref(10)
-const materialOptions = computed(() => dictionaryStore.materials)
 const repeatAnalysis = ref(null)
 const engineeringSetupActionKeys = {
   saveSetup: () => `engineer:setup:save-config:${orderInfo.value.id || 'none'}`
@@ -353,10 +352,18 @@ const normalizeRouteRow = (item, index) => ({
   optionKey: item.optionKey || '',
   processDetailId: item.processDetailId ?? null,
   processCategoryId: item.processCategoryId ?? null,
+  categoryId: item.categoryId ?? item.processCategoryId ?? null,
   processCode: item.processCode || '',
   categoryName: item.categoryName || '',
   detailName: item.detailName || '',
-  hourlyRate: item.hourlyRate ?? null,
+  detailHourlyRate: item.detailHourlyRate ?? null,
+  categoryHourlyRate: item.categoryHourlyRate ?? null,
+  effectiveHourlyRate: item.effectiveHourlyRate ?? item.hourlyRate ?? item.unitRate ?? null,
+  hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate ?? item.unitRate ?? null,
+  unitRate: item.unitRate ?? item.hourlyRate ?? item.effectiveHourlyRate ?? null,
+  feeItemId: item.feeItemId ?? null,
+  feeName: item.feeName || '',
+  label: item.label || '',
   processName: item.processName || item.detailName || '',
   calcType: item.calcType || '工时',
   sourceType: item.sourceType || (item.calcType === '非工时费用' ? 'extra' : 'process'),
@@ -368,9 +375,17 @@ const createBlankProcessRoute = () => ({
   detailName: '',
   processCode: '',
   categoryName: '',
+  detailHourlyRate: null,
+  categoryHourlyRate: null,
+  effectiveHourlyRate: null,
   hourlyRate: null,
+  unitRate: null,
   processDetailId: null,
   processCategoryId: null,
+  categoryId: null,
+  feeItemId: null,
+  feeName: '',
+  label: '',
   calcType: '工时',
   sourceType: 'process',
   optionKey: '',
@@ -398,23 +413,41 @@ const notifyLegacyMaterialTemplate = () => {
 
 const applyMaterialSelectionToConfig = (material) => {
   if (!material?.materialCode) return
+  config.materialId = material.materialId ?? material.id ?? null
   config.materialCode = material.materialCode
   config.materialName = material.materialName || ''
   config.materialTypeId = material.materialTypeId ?? null
   config.materialTypeCode = material.materialTypeCode || ''
   config.materialTypeName = material.materialTypeName || ''
   config.materialCategory = material.materialCategory || ''
+  config.density = material.density ?? null
+  config.plateDensity = material.plateDensity ?? material.density ?? null
+  config.platePrice = material.platePrice ?? material.unitPrice ?? null
+  config.barDensity = material.barDensity ?? material.density ?? null
+  config.barPrice = material.barPrice ?? material.unitPrice ?? null
+  config.tubeDensity = material.tubeDensity ?? material.density ?? null
+  config.tubePrice = material.tubePrice ?? material.unitPrice ?? null
+  config.remarks = material.remarks || ''
   config.legacyMaterialIdentity = false
 }
 
 const assignMaterialConfig = (source) => {
   const normalized = normalizeGlobalConfig(source)
+  config.materialId = normalized.materialId
   config.materialCode = normalized.materialCode
   config.materialName = normalized.materialName
   config.materialTypeId = normalized.materialTypeId
   config.materialTypeCode = normalized.materialTypeCode
   config.materialTypeName = normalized.materialTypeName
   config.materialCategory = normalized.materialCategory
+  config.density = normalized.density
+  config.plateDensity = normalized.plateDensity
+  config.platePrice = normalized.platePrice
+  config.barDensity = normalized.barDensity
+  config.barPrice = normalized.barPrice
+  config.tubeDensity = normalized.tubeDensity
+  config.tubePrice = normalized.tubePrice
+  config.remarks = normalized.remarks
   config.legacyMaterialIdentity = normalized.legacyMaterialIdentity
 }
 
@@ -439,8 +472,6 @@ const assignConfig = (source) => {
   }
 }
 
-const combinedProcessOptions = computed(() => dictionaryStore.combinedProcessOptions)
-
 const formatMaterialLabel = (material) => {
   if (!material) return ''
   const code = material.materialCode || '-'
@@ -453,8 +484,7 @@ const formatMaterialLabel = (material) => {
 }
 
 const selectedMaterialLabel = computed(() => {
-  const material = materialOptions.value.find(item => item.materialCode === config.materialCode)
-  if (material) return formatMaterialLabel(material)
+  if (config.materialCode) return formatMaterialLabel(config)
   if (config.legacyMaterialIdentity && config.materialName) return `${config.materialName}（旧材料模板缺少材料编码，请重新选择）`
   return config.materialName || config.materialCode || '请选择默认材质'
 })
@@ -462,14 +492,32 @@ const selectedMaterialLabel = computed(() => {
 const findProcessOption = (proc) => {
   if (!proc) return null
   const sourceType = proc.sourceType || 'process'
-  if (sourceType === 'process') {
-    return combinedProcessOptions.value.find(item => item.sourceType === 'process' && String(item.processDetailId) === String(proc.processDetailId))
-      || combinedProcessOptions.value.find(item => item.sourceType === 'process' && item.optionKey === proc.optionKey && proc.optionKey)
-      || null
+  if (sourceType === 'extra') {
+    const processName = proc.processName || proc.feeName || ''
+    if (!processName && !proc.optionKey) return null
+    return {
+      ...proc,
+      optionKey: proc.optionKey || (proc.feeItemId ? `extra:${proc.feeItemId}` : ''),
+      processName,
+      label: proc.label || (processName ? `${processName}（非工时费用）` : ''),
+      calcType: '非工时费用',
+      sourceType
+    }
   }
-  return combinedProcessOptions.value.find(item => item.sourceType === sourceType && item.optionKey === proc.optionKey && proc.optionKey)
-    || combinedProcessOptions.value.find(item => item.sourceType === 'extra' && item.processName === proc.processName)
-    || null
+  if (!proc.processDetailId && !proc.optionKey && !proc.processName && !proc.detailName) return null
+  const hourlyRate = proc.hourlyRate ?? proc.effectiveHourlyRate ?? proc.unitRate ?? null
+  return {
+    ...proc,
+    optionKey: proc.optionKey || (proc.processDetailId ? `process:${proc.processDetailId}` : ''),
+    processDetailId: proc.processDetailId ?? null,
+    processCategoryId: proc.processCategoryId ?? proc.categoryId ?? null,
+    processName: proc.detailName || proc.processName || '',
+    detailName: proc.detailName || proc.processName || '',
+    hourlyRate,
+    label: proc.label || '',
+    calcType: '工时',
+    sourceType: 'process'
+  }
 }
 
 const selectedProcessOptionKey = computed(() => {
@@ -495,16 +543,33 @@ const formatProcessLabel = (proc, fallback = '请选择工序') => {
 
 const applyProcessSelection = (proc, selected) => {
   if (!proc || !selected) return
-  proc.optionKey = selected.optionKey
-  proc.processDetailId = selected.processDetailId
-  proc.processCategoryId = selected.processCategoryId
-  proc.processCode = selected.processCode
-  proc.categoryName = selected.categoryName
-  proc.detailName = selected.detailName
-  proc.hourlyRate = selected.hourlyRate
-  proc.processName = selected.detailName || selected.processName
-  proc.calcType = selected.calcType
-  proc.sourceType = selected.sourceType
+  const sourceType = selected.sourceType || (selected.calcType === '非工时费用' ? 'extra' : 'process')
+  const processDetailId = sourceType === 'process' ? (selected.processDetailId ?? selected.id ?? null) : null
+  const processCategoryId = sourceType === 'process' ? (selected.processCategoryId ?? selected.categoryId ?? null) : null
+  const processName = sourceType === 'extra'
+    ? (selected.processName || selected.feeName || '')
+    : (selected.detailName || selected.processName || '')
+  const hourlyRate = sourceType === 'process'
+    ? (selected.hourlyRate ?? selected.effectiveHourlyRate ?? selected.unitRate ?? null)
+    : null
+  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId ? `process:${processDetailId}` : '')
+  proc.processDetailId = processDetailId
+  proc.processCategoryId = processCategoryId
+  proc.categoryId = processCategoryId
+  proc.processCode = sourceType === 'process' ? (selected.processCode || '') : ''
+  proc.categoryName = sourceType === 'process' ? (selected.categoryName || '') : ''
+  proc.detailName = sourceType === 'process' ? processName : ''
+  proc.detailHourlyRate = sourceType === 'process' ? (selected.detailHourlyRate ?? null) : null
+  proc.categoryHourlyRate = sourceType === 'process' ? (selected.categoryHourlyRate ?? null) : null
+  proc.effectiveHourlyRate = sourceType === 'process' ? (selected.effectiveHourlyRate ?? hourlyRate) : null
+  proc.hourlyRate = hourlyRate
+  proc.unitRate = hourlyRate
+  proc.feeItemId = sourceType === 'extra' ? (selected.feeItemId ?? selected.id ?? null) : null
+  proc.feeName = sourceType === 'extra' ? (selected.feeName || processName) : ''
+  proc.label = selected.label || ''
+  proc.processName = processName
+  proc.calcType = sourceType === 'extra' ? '非工时费用' : '工时'
+  proc.sourceType = sourceType
   proc.legacyProcessIdentity = false
 }
 
@@ -532,54 +597,28 @@ const removeProcess = (index) => {
   assignProcessSortNos()
 }
 
-const syncProcessMeta = (proc) => {
-  const selected = findProcessOption(proc)
-  if (!selected) return
-  applyProcessSelection(proc, selected)
-}
-
 const hydrateProcessRoute = () => {
   config.processRoute.forEach(proc => {
     if ((proc.sourceType || 'process') === 'process' && !proc.processDetailId) {
       proc.legacyProcessIdentity = Boolean(proc.processName || proc.optionKey)
       return
     }
-    if (proc.optionKey || proc.processDetailId) {
-      syncProcessMeta(proc)
-    }
+    proc.legacyProcessIdentity = false
   })
 }
 
 const fetchDicts = async () => {
   try {
-    await dictionaryStore.loadBaseDicts()
-    if (!config.materialCode && !config.legacyMaterialIdentity && materialOptions.value.length > 0) {
-      applyMaterialSelectionToConfig(materialOptions.value[0])
-    }
     if (hasLegacyMaterialIdentity(config)) {
       notifyLegacyMaterialTemplate()
     }
     hydrateProcessRoute()
-    if (config.processRoute.length === 0) {
-      const defaultProcessOptions = combinedProcessOptions.value.filter(item => item.sourceType === 'process')
-      config.processRoute.splice(
-        0,
-        config.processRoute.length,
-        ...defaultProcessOptions.slice(0, 2).map((item, index) => ({
-          sortNo: (index + 1) * PROCESS_SORT_STEP,
-          optionKey: item.optionKey,
-          processName: item.processName,
-          calcType: item.calcType,
-          sourceType: item.sourceType
-        }))
-      )
-      config.processRoute.forEach(syncProcessMeta)
-    } else if (hasUnresolvedProcessRoute.value) {
+    if (hasUnresolvedProcessRoute.value) {
       notifyLegacyProcessTemplate()
     }
   } catch (error) {
     console.error(error)
-    ElMessage.warning('基础字典加载失败，工程部页面仍可手动填写。')
+    ElMessage.warning('工程部默认设定检查失败，请手动重新选择材料或工艺。')
   }
 }
 

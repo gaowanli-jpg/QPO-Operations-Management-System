@@ -41,11 +41,11 @@ describe('Stage 38 process route frontend contract', () => {
     })
 
     expect(config.processRoute).toEqual([
-      expect.objectContaining({ sortNo: 10, optionKey: 'process-detail-1', processDetailId: 1, processCode: 'MILLING', categoryName: '铣削', detailName: '精铣', processName: '精铣', legacyProcessIdentity: false }),
-      expect.objectContaining({ sortNo: 20, optionKey: 'process-detail-2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', legacyProcessIdentity: false })
+      expect.objectContaining({ sortNo: 10, optionKey: 'process:1', processDetailId: 1, processCode: 'MILLING', categoryName: '铣削', detailName: '精铣', processName: '精铣', legacyProcessIdentity: false }),
+      expect.objectContaining({ sortNo: 20, optionKey: 'process:2', processDetailId: 2, processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', processName: 'CNC1', legacyProcessIdentity: false })
     ])
     expect(localStorage.setItem).toHaveBeenCalledWith('erp_global_config_38', expect.stringContaining('processDetailId'))
-    expect(localStorage.setItem).not.toHaveBeenCalledWith('erp_global_config', expect.stringContaining('process-detail-1'))
+    expect(localStorage.setItem).not.toHaveBeenCalledWith('erp_global_config', expect.stringContaining('process:1'))
   })
 
   test('normalizeRouteList sorts routes and marks old processName-only identities', () => {
@@ -82,7 +82,8 @@ describe('Stage 38 process route frontend contract', () => {
     expect(itemPricing).not.toContain('mergeRoutesByGlobalOrder')
 
     expect(globalSetup).toContain('processDetailId: item.processDetailId ?? null')
-    expect(globalSetup).toContain('proc.processDetailId = selected.processDetailId')
+    expect(globalSetup).toContain('const processDetailId = sourceType === \'process\' ? (selected.processDetailId ?? selected.id ?? null) : null')
+    expect(globalSetup).toContain('proc.processDetailId = processDetailId')
     expect(globalSetup).toContain('hasUnresolvedProcessRoute')
     expect(globalSetup).not.toContain('item.processName === proc.processName && item.sourceType')
   })
