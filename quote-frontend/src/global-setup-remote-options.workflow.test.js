@@ -19,6 +19,21 @@ describe('global setup remote material and process options', () => {
     expect(source).not.toContain(':items="combinedProcessOptions"')
   })
 
+  test('global setup uses the same enhanced option picker mode as item pricing', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
+
+    expect(source).toContain(':page-size-options="[10, 20, 50, 100]"')
+    expect(source).toContain(':default-page-size="10"')
+    expect(source).toContain(':enable-material-price-edit="true"')
+    expect(source).toContain('@material-price-updated="handleMaterialPriceUpdated"')
+    expect(source).toContain(':enable-process-rate-edit="true"')
+    expect(source).toContain('@process-rate-updated="handleProcessRateUpdated"')
+    expect(source).toContain('const handleMaterialPriceUpdated = (updatedMaterial) => {')
+    expect(source).toContain('applyMaterialSelectionToConfig(updatedMaterial)')
+    expect(source).toContain('const handleProcessRateUpdated = (updatedDetail) => {')
+    expect(source).toContain('syncCurrentSelectedProcessRate(updatedDetail)')
+  })
+
   test('global setup startup does not load full material or process dictionaries', () => {
     const source = readSource('components', 'GlobalSetup.vue')
 

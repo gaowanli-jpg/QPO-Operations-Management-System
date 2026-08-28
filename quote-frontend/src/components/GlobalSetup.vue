@@ -246,9 +246,13 @@
       title="选择默认材质"
       type="material"
       :remote-loader="pagePricingMaterialOptions"
+      :page-size-options="[10, 20, 50, 100]"
+      :default-page-size="10"
       :selected-key="config.materialCode"
+      :enable-material-price-edit="true"
       empty-text="暂无匹配材料"
       @confirm="selectMaterial"
+      @material-price-updated="handleMaterialPriceUpdated"
     />
 
     <EngineeringOptionPickerDialog
@@ -256,9 +260,13 @@
       title="选择通用工序"
       type="process"
       :remote-loader="pagePricingProcessOptions"
+      :page-size-options="[10, 20, 50, 100]"
+      :default-page-size="10"
       :selected-key="selectedProcessOptionKey"
+      :enable-process-rate-edit="true"
       empty-text="暂无匹配工艺"
       @confirm="selectProcess"
+      @process-rate-updated="handleProcessRateUpdated"
     />
 
   </div>
@@ -577,6 +585,13 @@ const selectMaterial = (material) => {
   applyMaterialSelectionToConfig(material)
 }
 
+const materialCodeKey = (value) => String(value || '').trim().toUpperCase()
+
+const handleMaterialPriceUpdated = (updatedMaterial) => {
+  if (materialCodeKey(updatedMaterial?.materialCode) !== materialCodeKey(config.materialCode)) return
+  applyMaterialSelectionToConfig(updatedMaterial)
+}
+
 const openProcessPicker = (index) => {
   editingProcessIndex.value = index
   processPickerVisible.value = true
@@ -586,6 +601,34 @@ const selectProcess = (selected) => {
   const proc = config.processRoute[editingProcessIndex.value]
   applyProcessSelection(proc, selected)
   editingProcessIndex.value = null
+}
+
+const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
+  const detailId = updatedDetail.id ?? updatedDetail.processDetailId
+  if (detailId == null) return
+  const hourlyRate = Number(updatedDetail.hourlyRate ?? updatedDetail.effectiveHourlyRate)
+  const hasHourlyRate = Number.isFinite(hourlyRate)
+  config.processRoute.forEach((proc) => {
+    if (String(proc?.processDetailId ?? '') !== String(detailId)) return
+    proc.processCategoryId = updatedDetail.categoryId ?? updatedDetail.processCategoryId ?? proc.processCategoryId
+    proc.categoryId = updatedDetail.categoryId ?? updatedDetail.processCategoryId ?? proc.categoryId
+    proc.processCode = updatedDetail.processCode ?? proc.processCode
+    proc.categoryName = updatedDetail.categoryName ?? proc.categoryName
+    proc.detailName = updatedDetail.detailName ?? proc.detailName
+    proc.processName = updatedDetail.detailName ?? proc.processName
+    proc.detailHourlyRate = updatedDetail.detailHourlyRate ?? proc.detailHourlyRate
+    proc.categoryHourlyRate = updatedDetail.categoryHourlyRate ?? proc.categoryHourlyRate
+    proc.effectiveHourlyRate = updatedDetail.effectiveHourlyRate ?? proc.effectiveHourlyRate
+    if (hasHourlyRate) {
+      proc.hourlyRate = hourlyRate
+      proc.unitRate = hourlyRate
+    }
+    proc.legacyProcessIdentity = false
+  })
+}
+
+const handleProcessRateUpdated = (updatedDetail) => {
+  syncCurrentSelectedProcessRate(updatedDetail)
 }
 
 const addProcess = () => {
