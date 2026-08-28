@@ -24,6 +24,8 @@ class ProcessMasterDocumentationCharacterizationTest {
                         "不新增用户权限",
                         "engineer:dict:view",
                         "engineer:dict:process-manage",
+                        "具体工艺维护收口",
+                        "删除具体工艺为硬删除",
                         "processRouteCount",
                         "processDetailId + processCode + categoryName + detailName",
                         "按当前有效小时价格重新计算工艺金额",
@@ -51,6 +53,7 @@ class ProcessMasterDocumentationCharacterizationTest {
                 .contains(
                         "DICT_PROCESS_CATEGORY_CREATE",
                         "DICT_PROCESS_DETAIL_CREATE",
+                        "DICT_PROCESS_DETAIL_DELETE",
                         "具体工艺价格保存走 `DICT_PROCESS_DETAIL_UPDATE`，读取和实时预估不记高频日志。",
                         "普通查询、工艺选择器加载、核价页读取和页面刷新不写操作日志",
                         "processRouteCount",

@@ -49,6 +49,7 @@ class ProcessMasterBackendServiceTest {
                         "@GetMapping(\"/process-details\")",
                         "@PostMapping(\"/process-details\")",
                         "@PutMapping(\"/process-details/{id}\")",
+                        "@DeleteMapping(\"/process-details/{id}\")",
                         "@RequirePermission(\"engineer:dict:view\")",
                         "@RequirePermission(\"engineer:dict:process-manage\")");
         assertThat(controller)
@@ -95,6 +96,7 @@ class ProcessMasterBackendServiceTest {
         assertThat(AuditService.inferModule("DICT_PROCESS_CATEGORY_CREATE")).isEqualTo("DICT");
         assertThat(AuditService.labelForAction("DICT_PROCESS_CATEGORY_CREATE")).contains("工艺大类");
         assertThat(AuditService.labelForAction("DICT_PROCESS_DETAIL_CREATE")).contains("具体工艺");
+        assertThat(AuditService.labelForAction("DICT_PROCESS_DETAIL_DELETE")).contains("具体工艺");
     }
 
     @Test
@@ -274,6 +276,58 @@ class ProcessMasterBackendServiceTest {
         assertThat(disabledCategoryDetail.getDetailEnabled()).isTrue();
         assertThat(disabledCategoryDetail.getCategoryEnabled()).isFalse();
         assertThat(disabledCategoryDetail.getEffectiveEnabled()).isFalse();
+    }
+
+    @Test
+    void createDetailAllowsCustomNamesUnderMesSourcedCategory() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
+        DictProcessCategory category = category(7L, true);
+        category.setSourceType("MES");
+        when(categoryMapper.selectById(7L)).thenReturn(category);
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+        doAnswer(invocation -> {
+            DictProcessDetail entity = invocation.getArgument(0);
+            entity.setId(100L);
+            return 1;
+        }).when(detailMapper).insert(any(DictProcessDetail.class));
+
+        ProcessDetailSaveReq req = validDetailReq();
+        req.setDetailName("精细包装-客户A");
+
+        ProcessDetailDTO result = service.saveDetail(null, req);
+
+        assertThat(result.getId()).isEqualTo(100L);
+        assertThat(result.getCategoryId()).isEqualTo(7L);
+        assertThat(result.getDetailName()).isEqualTo("精细包装-客户A");
+        verify(detailMapper).insert(any(DictProcessDetail.class));
+        verify(auditService).record(eq("DICT_PROCESS_DETAIL_CREATE"), eq("dict_process_detail"), eq(100L), isNull(), any());
+    }
+
+    @Test
+    void deleteDetailHardDeletesAnyDetailAndRecordsSummaryOnlyAudit() {
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        AuditService auditService = mock(AuditService.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
+        DictProcessCategory category = category(7L, true);
+        category.setSourceType("MES");
+        DictProcessDetail before = detail(99L, 7L, new BigDecimal("120.00"));
+        before.setDetailName("包装-临时客户名");
+        before.setDetailRemarks("完整删除备注不应该进入审计摘要");
+        when(detailMapper.selectById(99L)).thenReturn(before);
+        when(categoryMapper.selectById(7L)).thenReturn(category);
+
+        service.deleteDetail(99L);
+
+        verify(detailMapper).deleteById(99L);
+        ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).record(eq("DICT_PROCESS_DETAIL_DELETE"), eq("dict_process_detail"), eq(99L), beforeCaptor.capture(), isNull());
+        assertThat(String.valueOf(beforeCaptor.getValue()))
+                .contains("detailName=包装-临时客户名", "processCode=PACKAGING", "effectiveHourlyRate=120.00")
+                .doesNotContain("完整删除备注不应该进入审计摘要");
     }
 
     @Test

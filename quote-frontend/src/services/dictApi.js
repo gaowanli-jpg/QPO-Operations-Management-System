@@ -109,6 +109,10 @@ export const saveProcessDetail = (payload) => {
   })
 }
 
+export const deleteProcessDetail = (id) => request(`/api/dict/process-details/${id}`, {
+  method: 'DELETE'
+})
+
 export const listPricingMarkupFees = (pricingScope, feeCategory) => request(
   `/api/dict/pricing-markup-fees${buildQuery({ pricingScope, feeCategory })}`
 )

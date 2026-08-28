@@ -14,6 +14,7 @@
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" plain :loading="scheduleLoading && scheduleTarget === 'MES_MATERIAL'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesMaterialScheduleDialog">定时同步策略</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isMesSyncRunning('MES_PROCESS_TYPE') || isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isMesSyncRunning('MES_PROCESS_TYPE') || isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" plain :loading="scheduleLoading && scheduleTarget === 'MES_PROCESS_TYPE'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesProcessScheduleDialog">定时同步策略</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processDetails'" type="primary" @click="openProcessDetailDialog()">新增具体工艺</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'pricingMarkupFees' && pricingMarkupFeeCategory === 'BASIC_PERCENT'" type="primary" @click="openPricingMarkupFeeDialog()">新增基础百分比费用</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'extraFees'" type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
       </div>
@@ -195,10 +196,11 @@
                   <template #default="scope">{{ formatHourlyRate(scope.row.effectiveHourlyRate ?? scope.row.hourlyRate) }}</template>
                 </el-table-column>
                 <el-table-column prop="detailRemarks" label="具体备注" min-width="200" show-overflow-tooltip />
-                <el-table-column label="操作" width="120" align="center" fixed="right">
+                <el-table-column label="操作" width="180" align="center" fixed="right">
                   <template #default="scope">
                     <div class="erp-table-actions">
-                      <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" @click="openProcessDetailDialog(scope.row)">编辑</el-button>
+                      <el-button v-permission="'engineer:dict:process-manage'" type="primary" size="small" :disabled="isProcessDetailDeletePending(scope.row)" @click="openProcessDetailDialog(scope.row)">编辑</el-button>
+                      <el-button v-permission="'engineer:dict:process-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isProcessDetailDeletePending(scope.row)" :disabled="isProcessDetailDeletePending(scope.row)" @click="deleteProcessDetail(scope.row)">删除</el-button>
                     </div>
                   </template>
                 </el-table-column>
@@ -381,12 +383,12 @@
           <el-input-number v-model="processDetailForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
         </el-form-item>
         <el-form-item label="工艺大类" required>
-          <el-select v-model="processDetailForm.categoryId" filterable disabled class="dialog-select" placeholder="选择工艺大类">
+          <el-select v-model="processDetailForm.categoryId" filterable :disabled="!!processDetailForm.id" class="dialog-select" placeholder="选择工艺大类">
             <el-option v-for="category in processCategoryOptions" :key="category.id" :label="categoryLabel(category)" :value="category.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="具体工艺" required>
-          <el-input v-model="processDetailForm.detailName" readonly placeholder="例如：精细包装" />
+          <el-input v-model="processDetailForm.detailName" :readonly="!!processDetailForm.id" placeholder="例如：精细包装" />
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="processDetailForm.enabled" />
@@ -551,6 +553,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   deleteExtraFeeItem,
   deletePricingMarkupFee as deletePricingMarkupFeeRequest,
+  deleteProcessDetail as deleteProcessDetailRequest,
   getLatestMesMaterialSyncRun,
   getLatestMesProcessSyncRun,
   getMesMaterialSyncRun,
@@ -559,6 +562,7 @@ import {
   getMesProcessSyncSchedule,
   listExtraFeeItems,
   listMaterialTypes,
+  listProcessCategories,
   listPricingMarkupFees,
   pageMaterials,
   pageProcessCategories,
@@ -591,6 +595,7 @@ const activeTab = ref('materials')
 const materialTypes = ref([])
 const materials = ref([])
 const processCategories = ref([])
+const processCategoryLookupRows = ref([])
 const processDetails = ref([])
 const pricingMarkupFees = ref([])
 const extraFeeItems = ref([])
@@ -607,6 +612,9 @@ const processDetailPagination = createPagination()
 const pricingMarkupPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const processCategoryOptions = computed(() => {
   const options = new Map()
+  for (const category of processCategoryLookupRows.value) {
+    options.set(String(category.id), category)
+  }
   for (const category of processCategories.value) {
     options.set(String(category.id), category)
   }
@@ -644,12 +652,14 @@ const dictActionKeys = {
   syncMesProcessTypes: 'engineer:dict:process-sync-mes',
   saveMesSchedule: 'engineer:dict:mes-master-data-schedule-save',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
+  deleteProcessDetail: (detailId) => `engineer:dict:process-detail-delete:${detailId || 'none'}`,
   savePricingMarkupFeeDialog: 'engineer:dict:pricing-markup-fee-save-dialog',
   saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
   deletePricingMarkupFee: (feeId) => `engineer:dict:pricing-markup-fee-delete:${feeId || 'none'}`,
   deleteExtraFee: (feeId) => `engineer:dict:extra-fee-delete:${feeId || 'none'}`
 }
 
+const isProcessDetailDeletePending = (row) => isPending(dictActionKeys.deleteProcessDetail(row?.id))
 const isPricingMarkupFeeDeletePending = (row) => isPending(dictActionKeys.deletePricingMarkupFee(row?.id))
 const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
@@ -920,12 +930,14 @@ const invalidateDictionaryCache = () => {
 }
 
 const loadLookupDictionaries = async () => {
-  const [types, pricingFees, extraFees] = await Promise.all([
+  const [types, categories, pricingFees, extraFees] = await Promise.all([
     listMaterialTypes(),
+    listProcessCategories({ enabledOnly: false }),
     loadPricingMarkupFeeRows(),
     listExtraFeeItems({ includeDisabled: true })
   ])
   materialTypes.value = types || []
+  processCategoryLookupRows.value = categories || []
   pricingMarkupFees.value = pricingFees || []
   extraFeeItems.value = extraFees || []
 }
@@ -1264,6 +1276,15 @@ const saveExtraFee = async () => {
       console.error(error)
       ElMessage.error('非工时费用工艺保存失败。')
     }
+  })
+}
+
+const deleteProcessDetail = async (row) => {
+  return runAction(dictActionKeys.deleteProcessDetail(row.id), async () => {
+    await ElMessageBox.confirm(`确认删除具体工艺「${row.detailName}」？如果它是 MES 同名保底项，下次工艺同步会自动补回。`, '删除确认', { type: 'warning' })
+    await deleteProcessDetailRequest(row.id)
+    ElMessage.success('具体工艺已删除')
+    await reloadAfterMutation()
   })
 }
 

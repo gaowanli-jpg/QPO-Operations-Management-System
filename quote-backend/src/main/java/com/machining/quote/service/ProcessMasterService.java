@@ -158,9 +158,6 @@ public class ProcessMasterService {
         DictProcessDetail entity = normalizeDetail(req, before);
         entity.setId(id);
         DictProcessCategory category = requireCategory(entity.getCategoryId());
-        if (before == null && isMesSource(category.getSourceType())) {
-            throw new IllegalArgumentException("MES process detail must be created by MES sync, not manually");
-        }
         ensureDetailNameUnique(entity.getCategoryId(), entity.getDetailName(), id);
         if (id == null) {
             detailMapper.insert(entity);
@@ -182,6 +179,20 @@ public class ProcessMasterService {
             );
         }
         return toDetailDTO(entity, category);
+    }
+
+    @Transactional
+    public void deleteDetail(Long id) {
+        DictProcessDetail before = requireDetail(id);
+        DictProcessCategory category = requireCategory(before.getCategoryId());
+        detailMapper.deleteById(id);
+        auditService.record(
+                "DICT_PROCESS_DETAIL_DELETE",
+                "dict_process_detail",
+                id,
+                detailAuditSummary(before, category),
+                null
+        );
     }
 
     private DictProcessCategory normalizeCategory(ProcessCategorySaveReq req) {

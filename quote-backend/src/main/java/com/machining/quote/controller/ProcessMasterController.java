@@ -14,6 +14,7 @@ import com.machining.quote.service.ProcessMasterService;
 import com.machining.quote.service.mes.MesMasterDataSyncScheduleConfigService;
 import com.machining.quote.service.mes.MesMasterDataSyncService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -137,6 +138,13 @@ public class ProcessMasterController {
             @RequestBody ProcessDetailSaveReq req) {
         ProcessDetailDTO data = processMasterService.saveDetail(id, req);
         return Map.of("success", true, "message", "具体工艺已更新", "data", data);
+    }
+
+    @DeleteMapping("/process-details/{id}")
+    @RequirePermission("engineer:dict:process-manage")
+    public Map<String, Object> deleteProcessDetail(@PathVariable Long id) {
+        processMasterService.deleteDetail(id);
+        return Map.of("success", true, "message", "具体工艺已删除");
     }
 
     private Long currentUserId() {

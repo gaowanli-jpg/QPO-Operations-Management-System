@@ -185,6 +185,40 @@ class MesProcessTypeSyncServiceTest {
     }
 
     @Test
+    void syncProcessTypesRecreatesMissingDefaultDetailAndPreservesCustomDetails() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
+        DictProcessCategory existingCategory = category(10L, "P001", "Turning", "MES", true);
+        DictProcessDetail customDetail = detail(88L, 10L, "Turning - customer A", true);
+        when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", "P001", "Turning", "80.00", "ENABLE")));
+        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existingCategory));
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(customDetail));
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(907L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(14L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.deletedCount()).isZero();
+        ArgumentCaptor<DictProcessDetail> detailCaptor = ArgumentCaptor.forClass(DictProcessDetail.class);
+        verify(detailMapper).insert(detailCaptor.capture());
+        assertThat(detailCaptor.getValue()).satisfies(detail -> {
+            assertThat(detail.getCategoryId()).isEqualTo(10L);
+            assertThat(detail.getDetailName()).isEqualTo("Turning");
+            assertThat(detail.getHourlyRate()).isNull();
+            assertThat(detail.getEnabled()).isTrue();
+        });
+        verify(detailMapper, never()).delete(any(QueryWrapper.class));
+        verify(detailMapper, never()).deleteById(88L);
+    }
+
+    @Test
     void syncDeletesMissingMesCategoriesAndDetailsButLeavesLocalCategoriesUntouched() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);

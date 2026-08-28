@@ -22,6 +22,8 @@ describe('process master management frontend workflow', () => {
     expect(dictApi).toContain('pageProcessDetails')
     expect(dictApi).toContain('/api/dict/process-details/page')
     expect(dictApi).toContain('saveProcessDetail')
+    expect(dictApi).toContain('deleteProcessDetail')
+    expect(dictApi).toContain("method: 'DELETE'")
   })
 
   test('dictionary store caches process categories and detail options', () => {
@@ -44,7 +46,7 @@ describe('process master management frontend workflow', () => {
     expect(dictionaryStore).toContain("calcType: '工时'")
   })
 
-  test('material process page keeps MES-owned process category read-only and detail identity locked', () => {
+  test('material process page supports custom detail create/delete while keeping process category read-only', () => {
     expect(materialProcess).toContain('工艺大类')
     expect(materialProcess).toContain('具体工艺')
     expect(materialProcess).toContain('processCategoryKeyword')
@@ -80,11 +82,13 @@ describe('process master management frontend workflow', () => {
     expect(materialProcess).toContain('备注')
     expect(materialProcess).toContain('具体备注')
     expect(materialProcess).not.toContain('@click="openProcessCategoryDialog')
-    expect(materialProcess).not.toContain('@click="openProcessDetailDialog()"')
+    expect(materialProcess).toContain('@click="openProcessDetailDialog()"')
     expect(materialProcess).toContain('@click="openProcessDetailDialog(scope.row)"')
-    expect(materialProcess).toContain('v-model="processDetailForm.categoryId" filterable disabled')
-    expect(materialProcess).toContain('v-model="processDetailForm.detailName" readonly')
+    expect(materialProcess).toContain(':disabled="!!processDetailForm.id"')
+    expect(materialProcess).toContain(':readonly="!!processDetailForm.id"')
     expect(materialProcess).toContain('saveProcessDetail')
+    expect(materialProcess).toContain('deleteProcessDetail')
+    expect(materialProcess).toContain('isProcessDetailDeletePending(scope.row)')
     expect(materialProcess).toContain("v-permission=\"'engineer:dict:process-manage'\"")
   })
 
