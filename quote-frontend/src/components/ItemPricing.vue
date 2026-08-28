@@ -866,30 +866,40 @@ const enabledPricingFeesByCategory = (fees = [], feeCategory, pricingScope) => (
     || pricingFeeSortValue(left.id) - pricingFeeSortValue(right.id)
   ))
 
+const sumPricingFeeRatePercent = (fees = []) => fees.reduce(
+  (sum, fee) => sum + numberOrZero(fee.ratePercent),
+  0
+)
+
 const applyPreviewPricingSequence = (baseAmount, fees, pricingScope, feeCategorySequence) => {
   const feeRows = []
   let currentAmount = numberOrZero(baseAmount)
   feeCategorySequence.forEach((feeCategory) => {
-    enabledPricingFeesByCategory(fees, feeCategory, pricingScope).forEach((fee) => {
+    const categoryFees = enabledPricingFeesByCategory(fees, feeCategory, pricingScope)
+    if (categoryFees.length === 0) return
+    const categoryBaseAmount = currentAmount
+    const categoryRatePercent = sumPricingFeeRatePercent(categoryFees)
+    let cumulativeRatePercent = 0
+    categoryFees.forEach((fee) => {
       const ratePercent = numberOrZero(fee.ratePercent)
+      cumulativeRatePercent += ratePercent
       const factor = 1 + ratePercent / 100
-      const rowBaseAmount = currentAmount
-      const cost = rowBaseAmount * ratePercent / 100
-      const amountAfter = rowBaseAmount * factor
-      currentAmount = amountAfter
+      const cost = categoryBaseAmount * ratePercent / 100
+      const amountAfter = categoryBaseAmount * (1 + cumulativeRatePercent / 100)
       feeRows.push({
         feeName: fee.feeName,
         pricingScope: fee.pricingScope,
         feeCategory: fee.feeCategory,
         ratePercent,
         factor,
-        baseAmount: rowBaseAmount,
+        baseAmount: categoryBaseAmount,
         cost,
         amountAfter,
         includedInUntaxedPrice: feeCategory !== TAX,
         includedInTaxIncludedPrice: true
       })
     })
+    currentAmount = categoryBaseAmount * (1 + categoryRatePercent / 100)
   })
   return { amount: currentAmount, feeRows }
 }
@@ -1831,6 +1841,42 @@ const buildGlobalProcessRoute = () => processRoute.value
     }
   })
 
+const buildGlobalMaterialConfig = () => ({
+  materialId: matForm.materialId,
+  materialCode: matForm.materialCode,
+  materialName: matForm.materialName,
+  materialTypeId: matForm.materialTypeId,
+  materialTypeCode: matForm.materialTypeCode,
+  materialTypeName: matForm.materialTypeName,
+  materialCategory: matForm.materialCategory,
+  density: matForm.density,
+  platePrice: matForm.platePrice,
+  barPrice: matForm.barPrice,
+  tubePrice: matForm.tubePrice,
+  remarks: matForm.remarks,
+  shape: matForm.shape,
+  legacyMaterialIdentity: false
+})
+
+const comparableMaterialConfig = (config) => {
+  const normalized = normalizeGlobalConfig(config)
+  return {
+    materialId: normalized.materialId ?? null,
+    materialCode: normalized.materialCode || '',
+    materialName: normalized.materialName || '',
+    materialTypeId: normalized.materialTypeId ?? null,
+    materialTypeCode: normalized.materialTypeCode || '',
+    materialTypeName: normalized.materialTypeName || '',
+    materialCategory: normalized.materialCategory || '',
+    density: numberOrNullForSnapshot(normalized.density),
+    platePrice: numberOrNullForSnapshot(normalized.platePrice),
+    barPrice: numberOrNullForSnapshot(normalized.barPrice),
+    tubePrice: numberOrNullForSnapshot(normalized.tubePrice),
+    remarks: normalized.remarks || '',
+    shape: normalized.shape || '板材'
+  }
+}
+
 const comparableProcessRoute = (route) => normalizeRouteList(route)
   .filter(p => isSelectableProcessRoute(p) ? p.processDetailId : p.processName)
   .map((p, index) => {
@@ -1844,16 +1890,23 @@ const comparableProcessRoute = (route) => normalizeRouteList(route)
     }
   })
 
-const syncCurrentRouteToGlobalConfig = async () => {
+const comparableGlobalConfig = (config) => ({
+  ...comparableMaterialConfig(config),
+  processRoute: comparableProcessRoute(config?.processRoute)
+})
+
+const syncCurrentSelectionToGlobalConfig = async () => {
   const nextProcessRoute = buildGlobalProcessRoute()
-  if (JSON.stringify(comparableProcessRoute(globalConfig.value.processRoute)) === JSON.stringify(comparableProcessRoute(nextProcessRoute))) {
+  const nextConfig = normalizeGlobalConfig({
+    ...normalizeGlobalConfig(globalConfig.value),
+    ...buildGlobalMaterialConfig(),
+    processRoute: nextProcessRoute
+  })
+
+  if (JSON.stringify(comparableGlobalConfig(globalConfig.value)) === JSON.stringify(comparableGlobalConfig(nextConfig))) {
     return { updated: false }
   }
 
-  const nextConfig = {
-    ...normalizeGlobalConfig(globalConfig.value),
-    processRoute: nextProcessRoute
-  }
   globalConfig.value = globalConfigStore.setConfig(rfqId.value, nextConfig)
   await saveOrderConfig(rfqId.value, JSON.parse(JSON.stringify(nextConfig)))
   return { updated: true }
@@ -2092,7 +2145,7 @@ const submitCurrentQuote = async () => {
       let globalUpdated = false
       if (quoteMode.value === 'NORMAL') {
         try {
-          const syncResult = await syncCurrentRouteToGlobalConfig()
+          const syncResult = await syncCurrentSelectionToGlobalConfig()
           globalUpdated = !!syncResult.updated
         } catch (syncError) {
           console.error(syncError)
@@ -2103,7 +2156,7 @@ const submitCurrentQuote = async () => {
         quoteMode.value === 'ASSEMBLY'
           ? '组合件核价成功。'
           : globalSynced
-          ? (globalUpdated ? '核价成功，当前工艺路线已同步为订单全局设定。' : '核价成功，工艺路线未变化。')
+          ? (globalUpdated ? '核价成功，当前材料、形态和工艺路线已同步为订单全局设定。' : '核价成功，订单全局设定未变化。')
           : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
       )
       dialogVisible.value = false

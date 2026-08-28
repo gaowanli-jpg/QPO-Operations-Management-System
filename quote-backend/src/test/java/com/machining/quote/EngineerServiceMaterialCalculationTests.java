@@ -305,7 +305,7 @@ class EngineerServiceMaterialCalculationTests {
 
     @Test
     @SuppressWarnings("unchecked")
-    void saveCalculatedQuoteUsesMultiplicativeMarkupFactorsFromCategories() throws Exception {
+    void saveCalculatedQuoteAddsRatesWithinEachMarkupFeeCategory() throws Exception {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         when(materialMapper.selectList(any()))
@@ -334,14 +334,29 @@ class EngineerServiceMaterialCalculationTests {
 
         ReflectionTestUtils.invokeMethod(service, "saveCalculatedQuote", item, materialData, List.of(), 0.5);
 
-        assertThat(item.getUntaxedUnitPrice()).isCloseTo(139.46625, within(0.000001));
-        assertThat(item.getTaxIncludedUnitPrice()).isCloseTo(157.5968625, within(0.000001));
-        assertThat(item.getUntaxedTotalPrice()).isCloseTo(278.9325, within(0.000001));
-        assertThat(item.getTaxIncludedTotalPrice()).isCloseTo(315.193725, within(0.000001));
+        assertThat(item.getUntaxedUnitPrice()).isCloseTo(137.5, within(0.000001));
+        assertThat(item.getTaxIncludedUnitPrice()).isCloseTo(155.375, within(0.000001));
+        assertThat(item.getUntaxedTotalPrice()).isCloseTo(275.0, within(0.000001));
+        assertThat(item.getTaxIncludedTotalPrice()).isCloseTo(310.75, within(0.000001));
         List<Map<String, Object>> feeRows = (List<Map<String, Object>>) item.getFeeData();
         assertThat(feeRows).hasSize(5);
         assertThat(feeRows).extracting(row -> row.get("feeCategory"))
                 .containsExactly("CUSTOMER_WEIGHT", "BASIC_PERCENT", "BASIC_PERCENT", "BASIC_PERCENT", "TAX");
+        assertFeeRowAmount(feeRows.get(0), "baseAmount", 100.0);
+        assertFeeRowAmount(feeRows.get(1), "baseAmount", 110.0);
+        assertFeeRowAmount(feeRows.get(2), "baseAmount", 110.0);
+        assertFeeRowAmount(feeRows.get(3), "baseAmount", 110.0);
+        assertFeeRowAmount(feeRows.get(4), "baseAmount", 137.5);
+        assertFeeRowAmount(feeRows.get(0), "cost", 10.0);
+        assertFeeRowAmount(feeRows.get(1), "cost", 5.5);
+        assertFeeRowAmount(feeRows.get(2), "cost", 5.5);
+        assertFeeRowAmount(feeRows.get(3), "cost", 16.5);
+        assertFeeRowAmount(feeRows.get(4), "cost", 17.875);
+        assertFeeRowAmount(feeRows.get(0), "amountAfter", 110.0);
+        assertFeeRowAmount(feeRows.get(1), "amountAfter", 115.5);
+        assertFeeRowAmount(feeRows.get(2), "amountAfter", 121.0);
+        assertFeeRowAmount(feeRows.get(3), "amountAfter", 137.5);
+        assertFeeRowAmount(feeRows.get(4), "amountAfter", 155.375);
         assertThat(feeRows).last().satisfies(row -> {
             assertThat(row).containsEntry("feeName", "Category rate");
             assertThat(row).containsEntry("pricingScope", "NORMAL");
@@ -545,6 +560,10 @@ class EngineerServiceMaterialCalculationTests {
         fee.setEnabled(true);
         fee.setSystemRequired(false);
         return fee;
+    }
+
+    private static void assertFeeRowAmount(Map<String, Object> row, String key, double expected) {
+        assertThat((Double) row.get(key)).isCloseTo(expected, within(0.000001));
     }
 
     private DictExtraFeeItemMapper emptyExtraFeeMapper() {

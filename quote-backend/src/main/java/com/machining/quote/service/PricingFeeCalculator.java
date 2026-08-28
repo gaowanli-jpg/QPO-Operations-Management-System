@@ -28,50 +28,82 @@ public class PricingFeeCalculator {
         List<DictPricingMarkupFee> fees = loadEnabledFees(pricingScope);
         List<Map<String, Object>> feeRows = new ArrayList<>();
 
-        double untaxedAmount = safeBaseAmount;
-        double taxIncludedAmount = safeBaseAmount;
-        double customerWeightFactor = 1.0;
-        double basicPercentFactor = 1.0;
-        double taxFactor = 1.0;
+        CategoryApplication customerWeight = applyCategory(
+                pricingScope,
+                feeRows,
+                safeBaseAmount,
+                feesByCategory(fees, PricingFeeCategory.CUSTOMER_WEIGHT),
+                true,
+                true
+        );
+        double untaxedAmount = customerWeight.amountAfter;
+        double taxIncludedAmount = untaxedAmount;
 
-        for (DictPricingMarkupFee fee : feesByCategory(fees, PricingFeeCategory.CUSTOMER_WEIGHT)) {
-            double before = untaxedAmount;
-            double rate = ratePercent(fee);
-            double factor = factor(rate);
-            untaxedAmount *= factor;
-            taxIncludedAmount = untaxedAmount;
-            customerWeightFactor *= factor;
-            feeRows.add(feeRow(pricingScope, fee, before, untaxedAmount, factor, true, true));
-        }
+        CategoryApplication basicPercent = applyCategory(
+                pricingScope,
+                feeRows,
+                untaxedAmount,
+                feesByCategory(fees, PricingFeeCategory.BASIC_PERCENT),
+                true,
+                true
+        );
+        untaxedAmount = basicPercent.amountAfter;
+        taxIncludedAmount = untaxedAmount;
 
-        for (DictPricingMarkupFee fee : feesByCategory(fees, PricingFeeCategory.BASIC_PERCENT)) {
-            double before = untaxedAmount;
-            double rate = ratePercent(fee);
-            double factor = factor(rate);
-            untaxedAmount *= factor;
-            taxIncludedAmount = untaxedAmount;
-            basicPercentFactor *= factor;
-            feeRows.add(feeRow(pricingScope, fee, before, untaxedAmount, factor, true, true));
-        }
-
-        for (DictPricingMarkupFee fee : feesByCategory(fees, PricingFeeCategory.TAX)) {
-            double before = taxIncludedAmount;
-            double rate = ratePercent(fee);
-            double factor = factor(rate);
-            taxIncludedAmount *= factor;
-            taxFactor *= factor;
-            feeRows.add(feeRow(pricingScope, fee, before, taxIncludedAmount, factor, false, true));
-        }
+        CategoryApplication tax = applyCategory(
+                pricingScope,
+                feeRows,
+                taxIncludedAmount,
+                feesByCategory(fees, PricingFeeCategory.TAX),
+                false,
+                true
+        );
+        taxIncludedAmount = tax.amountAfter;
 
         return new PricingResult(
                 safeBaseAmount,
                 untaxedAmount,
                 taxIncludedAmount,
                 feeRows,
-                customerWeightFactor,
-                basicPercentFactor,
-                taxFactor
+                customerWeight.factor,
+                basicPercent.factor,
+                tax.factor
         );
+    }
+
+    private CategoryApplication applyCategory(
+            PricingScope pricingScope,
+            List<Map<String, Object>> feeRows,
+            double categoryBaseAmount,
+            List<DictPricingMarkupFee> categoryFees,
+            boolean includedInUntaxedPrice,
+            boolean includedInTaxIncludedPrice) {
+        if (categoryFees.isEmpty()) {
+            return new CategoryApplication(categoryBaseAmount, 1.0);
+        }
+
+        double categoryRatePercent = categoryFees.stream()
+                .mapToDouble(this::ratePercent)
+                .sum();
+        double categoryFactor = factor(categoryRatePercent);
+        double cumulativeRatePercent = 0.0;
+        for (DictPricingMarkupFee fee : categoryFees) {
+            double rate = ratePercent(fee);
+            cumulativeRatePercent += rate;
+            double amountAfterFee = categoryBaseAmount * factor(cumulativeRatePercent);
+            double cost = categoryBaseAmount * rate / 100.0;
+            feeRows.add(feeRow(
+                    pricingScope,
+                    fee,
+                    categoryBaseAmount,
+                    cost,
+                    amountAfterFee,
+                    factor(rate),
+                    includedInUntaxedPrice,
+                    includedInTaxIncludedPrice
+            ));
+        }
+        return new CategoryApplication(categoryBaseAmount * categoryFactor, categoryFactor);
     }
 
     private List<DictPricingMarkupFee> loadEnabledFees(PricingScope pricingScope) {
@@ -93,6 +125,7 @@ public class PricingFeeCalculator {
             PricingScope pricingScope,
             DictPricingMarkupFee fee,
             double baseAmount,
+            double cost,
             double amountAfter,
             double factor,
             boolean includedInUntaxedPrice,
@@ -105,7 +138,7 @@ public class PricingFeeCalculator {
         row.put("ratePercent", ratePercent(fee));
         row.put("factor", factor);
         row.put("baseAmount", baseAmount);
-        row.put("cost", amountAfter - baseAmount);
+        row.put("cost", cost);
         row.put("amountAfter", amountAfter);
         row.put("includedInUntaxedPrice", includedInUntaxedPrice);
         row.put("includedInTaxIncludedPrice", includedInTaxIncludedPrice);
@@ -123,6 +156,16 @@ public class PricingFeeCalculator {
 
     private double finiteOrZero(double value) {
         return Double.isFinite(value) ? value : 0.0;
+    }
+
+    private static class CategoryApplication {
+        private final double amountAfter;
+        private final double factor;
+
+        private CategoryApplication(double amountAfter, double factor) {
+            this.amountAfter = amountAfter;
+            this.factor = factor;
+        }
     }
 
     public static class PricingResult {

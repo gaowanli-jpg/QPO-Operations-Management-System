@@ -91,9 +91,9 @@ class ProcessMasterDocumentationCharacterizationTest {
                 );
         assertThat(realtimePreviewDoc)
                 .contains(
-                        "客户权重因子 = Π(1 + CUSTOMER_WEIGHT.ratePercent / 100)",
-                        "基础百分比费用因子 = Π(1 + BASIC_PERCENT.ratePercent / 100)",
-                        "税率因子 = Π(1 + TAX.ratePercent / 100)",
+                        "客户权重因子 = 1 + Σ(CUSTOMER_WEIGHT.ratePercent) / 100",
+                        "基础百分比费用因子 = 1 + Σ(BASIC_PERCENT.ratePercent) / 100",
+                        "税率因子 = 1 + Σ(TAX.ratePercent) / 100",
                         "未税单价 = 基础成本 * 客户权重因子 * 基础百分比费用因子",
                         "含税单价 = 基础成本 * 客户权重因子 * 基础百分比费用因子 * 税率因子",
                         "不再通过费用名称包含 `税 / tax / vat` 判断税率"

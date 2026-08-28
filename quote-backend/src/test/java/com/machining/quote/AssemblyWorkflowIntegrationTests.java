@@ -64,7 +64,7 @@ class AssemblyWorkflowIntegrationTests {
 
     @Test
     @SuppressWarnings("unchecked")
-    void assemblyQuoteUsesAssemblyScopeMarkupOnlyOnAssemblyFeeMultiplicatively() {
+    void assemblyQuoteUsesAssemblyScopeMarkupOnlyOnAssemblyFeeWithAdditiveCategoryRates() {
         resetMarkupFeesForAssemblyTest();
         upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Normal only fee", 100.0, 9);
         OrderRfq order = createOrder("ASSY-PRICE");
@@ -78,9 +78,9 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(saved.getQuoteMode()).isEqualTo("ASSEMBLY");
         assertThat(saved.getAssemblyFee()).isEqualTo(50.0);
         assertThat(saved.getBaseCost()).isEqualTo(90.0);
-        assertThat(saved.getUntaxedUnitPrice()).isCloseTo(100.38, within(0.000001));
-        assertThat(saved.getTaxIncludedUnitPrice()).isCloseTo(108.22, within(0.000001));
-        assertThat(saved.getTaxIncludedTotalPrice()).isCloseTo(324.67, within(0.000001));
+        assertThat(saved.getUntaxedUnitPrice()).isCloseTo(100.0, within(0.000001));
+        assertThat(saved.getTaxIncludedUnitPrice()).isCloseTo(107.8, within(0.000001));
+        assertThat(saved.getTaxIncludedTotalPrice()).isCloseTo(323.4, within(0.000001));
         List<Map<String, Object>> feeRows = (List<Map<String, Object>>) saved.getFeeData();
         assertThat(feeRows).hasSize(3);
         assertThat(feeRows)
@@ -90,8 +90,8 @@ class AssemblyWorkflowIntegrationTests {
                 .extracting(row -> row.get("feeCategory"))
                 .containsExactly("BASIC_PERCENT", "BASIC_PERCENT", "TAX");
         assertThat((Double) feeRows.get(0).get("cost")).isCloseTo(2.5, within(0.000001));
-        assertThat((Double) feeRows.get(1).get("cost")).isCloseTo(7.875, within(0.000001));
-        assertThat((Double) feeRows.get(2).get("cost")).isCloseTo(7.84875, within(0.000001));
+        assertThat((Double) feeRows.get(1).get("cost")).isCloseTo(7.5, within(0.000001));
+        assertThat((Double) feeRows.get(2).get("cost")).isCloseTo(7.8, within(0.000001));
 
         QueryWrapper<ItemAssemblyRelation> qw = new QueryWrapper<>();
         qw.eq("parent_item_id", parent.getId());
@@ -105,12 +105,12 @@ class AssemblyWorkflowIntegrationTests {
         ItemQuoteVersion child = createPendingItem(order, "REF-CHILD", 2);
         submitNormalQuoteWithBaseCost(child, 100.0);
         child = itemMapper.selectById(child.getId());
-        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(150.09, within(0.000001));
+        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(146.9, within(0.000001));
 
         ItemQuoteVersion parent = createPendingItem(order, "REF-PARENT", 1);
         submitAssembly(parent, 50.0, child(parent, child, 1));
         parent = itemMapper.selectById(parent.getId());
-        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(218.31, within(0.000001));
+        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(214.7, within(0.000001));
 
         upsertPricingMarkupFee("NORMAL", "BASIC_PERCENT", "Management", 10.0, 2);
 
@@ -121,8 +121,8 @@ class AssemblyWorkflowIntegrationTests {
         assertThat(result.get("refreshedCount")).isEqualTo(2);
         assertThat(result.get("normalCount")).isEqualTo(1);
         assertThat(result.get("assemblyCount")).isEqualTo(1);
-        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(157.24, within(0.000001));
-        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(225.46, within(0.000001));
+        assertThat(child.getTaxIncludedUnitPrice()).isCloseTo(152.55, within(0.000001));
+        assertThat(parent.getTaxIncludedUnitPrice()).isCloseTo(220.35, within(0.000001));
     }
 
     @Test
