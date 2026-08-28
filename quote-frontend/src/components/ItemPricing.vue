@@ -636,8 +636,10 @@
       :page-size-options="[10, 20, 50, 100]"
       :default-page-size="10"
       :selected-key="matForm.materialCode"
+      :enable-material-price-edit="true"
       empty-text="暂无材料字典数据"
       @confirm="selectMaterial"
+      @material-price-updated="handleMaterialPriceUpdated"
     />
 
     <EngineeringOptionPickerDialog
@@ -826,7 +828,14 @@ const numberOrNullForSnapshot = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
-const effectiveMaterialDensity = (material = {}) => numberOrNullForSnapshot(material.density ?? material.mesDensityRaw)
+const positiveNumberOrNullForSnapshot = (value) => {
+  const numericValue = numberOrNullForSnapshot(value)
+  return numericValue != null && numericValue > 0 ? numericValue : null
+}
+
+const effectiveMaterialDensity = (material = {}) => (
+  positiveNumberOrNullForSnapshot(material.density) ?? positiveNumberOrNullForSnapshot(material.mesDensityRaw)
+)
 
 const normalizeGlobalConfig = (config) => {
   const defaults = defaultGlobalConfig()
@@ -1564,6 +1573,12 @@ const applyProcessSelection = (proc, selected) => {
 const selectMaterial = (material) => {
   cachePricingMaterialOptions(material ? [material] : [])
   applyMaterialToMatForm(material)
+}
+
+const handleMaterialPriceUpdated = (updatedMaterial) => {
+  cachePricingMaterialOptions(updatedMaterial ? [updatedMaterial] : [])
+  if (materialCodeKey(updatedMaterial?.materialCode) !== materialCodeKey(matForm.materialCode)) return
+  applyMaterialIdentityToMatForm(updatedMaterial)
 }
 
 const openProcessPicker = (index) => {

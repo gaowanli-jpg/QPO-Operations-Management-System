@@ -64,7 +64,7 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     const picker = readSource('components', 'EngineeringOptionPickerDialog.vue')
     const itemPricing = readSource('components', 'ItemPricing.vue')
 
-    expect(picker).toContain("import { saveProcessDetail } from '../services/dictApi'")
+    expect(picker).toContain("import { saveMaterial, saveProcessDetail } from '../services/dictApi'")
     expect(picker).toContain('enableProcessRateEdit')
     expect(picker).toContain('label="具体小时价格"')
     expect(picker).toContain('label="大类小时价格"')

@@ -52,8 +52,9 @@ describe('Stage 38 phase 6 item pricing process route payload', () => {
 
     expect(openDialogBlock).toContain('const savedProcessRoutes = normalizeRouteList(row.processRoute)')
     expect(openDialogBlock).toContain("const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0")
+    expect(openDialogBlock).toContain('const processSnapshotSource = shouldUseSavedProcessRoutes')
     expect(openDialogBlock).toContain('if (shouldUseSavedProcessRoutes)')
-    expect(openDialogBlock).toContain('processRoute.value = assignProcessSortNos(savedProcessRoutes.map(route => hydrateRouteItem(createProcessRow(route))))')
+    expect(openDialogBlock).toContain('processRoute.value = assignProcessSortNos(processSnapshotSource.map(route => hydrateRouteItem(createProcessRow(route))))')
     expect(openDialogBlock.indexOf('if (shouldUseSavedProcessRoutes)')).toBeLessThan(
       openDialogBlock.indexOf('loadGlobalProcessRouteDefaults()')
     )

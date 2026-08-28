@@ -66,17 +66,98 @@
         <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.materialCategory || '-' }}</template>
         </el-table-column>
-        <el-table-column label="密度" width="100" align="right">
-          <template #default="{ row }">{{ formatEffectiveDensity(row) }}</template>
+        <el-table-column label="具体密度" width="150" align="right">
+          <template #default="{ row }">
+            <el-input-number
+              v-if="canEditMaterialPrice(row)"
+              :model-value="materialPriceDraft(row, 'density')"
+              :min="0"
+              :precision="4"
+              :value-on-clear="null"
+              clearable
+              controls-position="right"
+              size="small"
+              class="inline-material-input density-input"
+              @click.stop
+              @update:model-value="value => setMaterialPriceDraft(row, 'density', value)"
+            />
+            <span v-else>{{ formatSpecificDensity(row.density) }}</span>
+          </template>
         </el-table-column>
-        <el-table-column label="板材价" width="100" align="right">
-          <template #default="{ row }">{{ formatNumber(row.platePrice) }}</template>
+        <el-table-column label="MES密度" width="110" align="right">
+          <template #default="{ row }">{{ formatMesDensity(row.mesDensityRaw) }}</template>
         </el-table-column>
-        <el-table-column label="棒材价" width="100" align="right">
-          <template #default="{ row }">{{ formatNumber(row.barPrice) }}</template>
+        <el-table-column label="实际使用密度" width="130" align="right">
+          <template #default="{ row }">{{ formatEffectiveMaterialDensity(row) }}</template>
         </el-table-column>
-        <el-table-column label="管材价" width="100" align="right">
-          <template #default="{ row }">{{ formatNumber(row.tubePrice) }}</template>
+        <el-table-column label="板材价" width="130" align="right">
+          <template #default="{ row }">
+            <el-input-number
+              v-if="canEditMaterialPrice(row)"
+              :model-value="materialPriceDraft(row, 'platePrice')"
+              :min="0"
+              :precision="2"
+              :value-on-clear="null"
+              clearable
+              controls-position="right"
+              size="small"
+              class="inline-material-input"
+              @click.stop
+              @update:model-value="value => setMaterialPriceDraft(row, 'platePrice', value)"
+            />
+            <span v-else>{{ formatNumber(row.platePrice) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="棒材价" width="130" align="right">
+          <template #default="{ row }">
+            <el-input-number
+              v-if="canEditMaterialPrice(row)"
+              :model-value="materialPriceDraft(row, 'barPrice')"
+              :min="0"
+              :precision="2"
+              :value-on-clear="null"
+              clearable
+              controls-position="right"
+              size="small"
+              class="inline-material-input"
+              @click.stop
+              @update:model-value="value => setMaterialPriceDraft(row, 'barPrice', value)"
+            />
+            <span v-else>{{ formatNumber(row.barPrice) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="管材价" width="130" align="right">
+          <template #default="{ row }">
+            <el-input-number
+              v-if="canEditMaterialPrice(row)"
+              :model-value="materialPriceDraft(row, 'tubePrice')"
+              :min="0"
+              :precision="2"
+              :value-on-clear="null"
+              clearable
+              controls-position="right"
+              size="small"
+              class="inline-material-input"
+              @click.stop
+              @update:model-value="value => setMaterialPriceDraft(row, 'tubePrice', value)"
+            />
+            <span v-else>{{ formatNumber(row.tubePrice) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="enableMaterialPriceEdit" label="保存" width="92" align="center">
+          <template #default="{ row }">
+            <el-button
+              v-permission="'engineer:dict:material-manage'"
+              type="primary"
+              plain
+              size="small"
+              :disabled="!canEditMaterialPrice(row)"
+              :loading="isInlineMaterialSaving(row)"
+              @click.stop="saveInlineMaterialPrice(row)"
+            >
+              保存
+            </el-button>
+          </template>
         </el-table-column>
         <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remarks || '-' }}</template>
@@ -181,7 +262,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { saveProcessDetail } from '../services/dictApi'
+import { saveMaterial, saveProcessDetail } from '../services/dictApi'
 
 const props = defineProps({
   modelValue: {
@@ -208,6 +289,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  enableMaterialPriceEdit: {
+    type: Boolean,
+    default: false
+  },
   remoteLoader: {
     type: Function,
     default: null
@@ -222,7 +307,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'confirm', 'process-rate-updated'])
+const emit = defineEmits(['update:modelValue', 'confirm', 'process-rate-updated', 'material-price-updated'])
 
 function normalizeRemotePageSize(value) {
   const numericValue = Number(value)
@@ -247,8 +332,12 @@ const remoteRequestSeq = ref(0)
 const selectedItemSnapshot = ref(null)
 const processRateDrafts = ref({})
 const savingRateKeys = ref(new Set())
+const materialPriceDrafts = ref({})
+const savingMaterialKeys = ref(new Set())
 
-const dialogWidth = computed(() => '1180px')
+const dialogWidth = computed(() => (
+  props.type === 'material' && props.enableMaterialPriceEdit ? '1320px' : '1180px'
+))
 
 const searchPlaceholder = computed(() => (
   props.type === 'material'
@@ -328,6 +417,8 @@ const resetPicker = () => {
   selectedItemSnapshot.value = null
   processRateDrafts.value = {}
   savingRateKeys.value = new Set()
+  materialPriceDrafts.value = {}
+  savingMaterialKeys.value = new Set()
 }
 
 const selectRow = (row) => {
@@ -355,7 +446,31 @@ const formatNumber = (value) => {
   return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '-'
 }
 
-const formatEffectiveDensity = (row) => formatNumber(row?.density ?? row?.mesDensityRaw)
+const numberOrNull = (value) => {
+  if (value === '' || value == null) return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+const positiveNumberOrNull = (value) => {
+  const numericValue = numberOrNull(value)
+  return numericValue != null && numericValue > 0 ? numericValue : null
+}
+
+const resolveMaterialEffectiveDensity = (row = {}) => (
+  positiveNumberOrNull(materialPriceDraft(row, 'density')) ?? positiveNumberOrNull(row.mesDensityRaw)
+)
+
+const formatDensityNumber = (value) => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(4) : '-'
+}
+
+const formatSpecificDensity = (value) => formatDensityNumber(value)
+
+const formatMesDensity = (value) => formatDensityNumber(value)
+
+const formatEffectiveMaterialDensity = (row) => formatDensityNumber(resolveMaterialEffectiveDensity(row))
 
 const formatHourlyRate = (value) => {
   const text = formatNumber(value)
@@ -429,6 +544,131 @@ const canEditProcessRate = (row) => (
   && row?.sourceType === 'process'
   && row?.processDetailId
 )
+
+const canEditMaterialPrice = (row) => (
+  props.enableMaterialPriceEdit
+  && props.type === 'material'
+  && (row?.id || row?.materialId)
+  && row?.materialCode
+  && row?.materialName
+  && row?.materialTypeId
+)
+
+const materialPriceDraft = (row, field) => {
+  const key = keyOf(row)
+  const rowDraft = materialPriceDrafts.value[key] || {}
+  return Object.prototype.hasOwnProperty.call(rowDraft, field)
+    ? rowDraft[field]
+    : row?.[field] ?? null
+}
+
+const setMaterialPriceDraft = (row, field, value) => {
+  const key = keyOf(row)
+  materialPriceDrafts.value = {
+    ...materialPriceDrafts.value,
+    [key]: {
+      ...(materialPriceDrafts.value[key] || {}),
+      [field]: value
+    }
+  }
+}
+
+const materialDraftNumber = (row, field) => {
+  const draft = materialPriceDraft(row, field)
+  return draft === '' || draft == null ? null : Number(draft)
+}
+
+const validateMaterialDraftNumber = (fieldLabel, value) => {
+  if (value == null) return true
+  if (!Number.isFinite(value) || value < 0) {
+    ElMessage.warning(`${fieldLabel}不能小于 0。`)
+    return false
+  }
+  return true
+}
+
+const isInlineMaterialSaving = (row) => savingMaterialKeys.value.has(keyOf(row))
+
+const setInlineMaterialSaving = (row, saving) => {
+  const next = new Set(savingMaterialKeys.value)
+  if (saving) {
+    next.add(keyOf(row))
+  } else {
+    next.delete(keyOf(row))
+  }
+  savingMaterialKeys.value = next
+}
+
+const replaceMaterialRecord = (row, updatedMaterial) => {
+  const previousKey = keyOf(row)
+  const merged = {
+    ...row,
+    ...updatedMaterial,
+    id: updatedMaterial.id ?? updatedMaterial.materialId ?? row.id,
+    materialId: updatedMaterial.materialId ?? updatedMaterial.id ?? row.materialId
+  }
+  remoteRecords.value = remoteRecords.value.map(record => (keyOf(record) === previousKey ? merged : record))
+  if (selectedItemSnapshot.value && keyOf(selectedItemSnapshot.value) === previousKey) {
+    selectedItemSnapshot.value = merged
+  }
+  return merged
+}
+
+const saveInlineMaterialPrice = async (row) => {
+  if (!canEditMaterialPrice(row)) {
+    ElMessage.warning('当前材料缺少编码、名称或材料类型，无法在核价弹窗保存。')
+    return
+  }
+  const density = materialDraftNumber(row, 'density')
+  const platePrice = materialDraftNumber(row, 'platePrice')
+  const barPrice = materialDraftNumber(row, 'barPrice')
+  const tubePrice = materialDraftNumber(row, 'tubePrice')
+  if (!validateMaterialDraftNumber('具体密度', density)
+    || !validateMaterialDraftNumber('板材价', platePrice)
+    || !validateMaterialDraftNumber('棒材价', barPrice)
+    || !validateMaterialDraftNumber('管材价', tubePrice)) {
+    return
+  }
+  const payload = {
+    id: row.id ?? row.materialId,
+    materialCode: row.materialCode,
+    materialName: row.materialName,
+    materialTypeId: row.materialTypeId,
+    materialCategory: row.materialCategory || '',
+    density,
+    platePrice,
+    barPrice,
+    tubePrice,
+    remarks: row.remarks || '',
+    enabled: row.enabled,
+    sortNo: row.sortNo
+  }
+  setInlineMaterialSaving(row, true)
+  try {
+    const response = await saveMaterial(payload)
+    const updatedMaterial = replaceMaterialRecord(row, response?.data || {
+      ...row,
+      ...payload,
+      materialId: payload.id
+    })
+    materialPriceDrafts.value = {
+      ...materialPriceDrafts.value,
+      [keyOf(updatedMaterial)]: {
+        density: updatedMaterial.density ?? null,
+        platePrice: updatedMaterial.platePrice ?? null,
+        barPrice: updatedMaterial.barPrice ?? null,
+        tubePrice: updatedMaterial.tubePrice ?? null
+      }
+    }
+    emit('material-price-updated', updatedMaterial)
+    ElMessage.success(response?.message || '材料密度和单价已保存')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error?.response?.data?.message || error?.payload?.message || error?.message || '材料密度和单价保存失败。')
+  } finally {
+    setInlineMaterialSaving(row, false)
+  }
+}
 
 const processRateDraft = (row) => {
   const key = keyOf(row)
@@ -528,6 +768,14 @@ onBeforeUnmount(clearRemoteSearchTimer)
 
 .inline-rate-input {
   width: 104px;
+}
+
+.inline-material-input {
+  width: 112px;
+}
+
+.inline-material-input.density-input {
+  width: 128px;
 }
 
 .picker-pagination {

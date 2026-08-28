@@ -160,7 +160,10 @@ class MaterialMasterSchemaCharacterizationTest {
                 .contains(
                         "prop=\"materialCode\" label=\"材料编码\"",
                         "prop=\"materialName\" label=\"材料名称\"",
-                        "formatEffectiveDensity(row)",
+                        "label=\"具体密度\"",
+                        "label=\"MES密度\"",
+                        "label=\"实际使用密度\"",
+                        "formatEffectiveMaterialDensity(row)",
                         "? (item?.materialCode ?? item?.id ?? '')",
                         "item?.materialCode",
                         "item.materialName",
