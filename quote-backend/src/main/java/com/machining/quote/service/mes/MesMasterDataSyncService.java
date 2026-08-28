@@ -28,7 +28,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +55,7 @@ public class MesMasterDataSyncService {
     private static final String AUDIT_ACTION_PROCESS_SYNC = "DICT_PROCESS_MES_SYNC";
     private static final String AUDIT_ACTION_MATERIAL_SYNC = "DICT_MATERIAL_MES_SYNC";
     private static final int MATERIAL_PAGE_SIZE = 200;
+    private static final int MATERIAL_DELETE_SCAN_BATCH_SIZE = 500;
     private static final Map<String, String> KNOWN_MATERIAL_TYPE_NAMES = Map.of(
             "MATERIAL", "原材料",
             "PRODUCT", "成品",
@@ -320,14 +322,7 @@ public class MesMasterDataSyncService {
     private SyncResult executeMaterialsSync(MesMasterDataSyncRun run, LocalDateTime startedAt) {
         Counters counters = new Counters();
         try {
-            List<MesMaterialPageResp.Row> rows = fetchAllMaterialRows(counters);
-            List<MaterialSource> sources = normalizeMaterialSources(rows, counters);
-            if (sources.isEmpty()) {
-                throw new SyncFailure("MES material sync returned no valid materials", counters);
-            }
-            PersistResult persisted = executeInTransaction(
-                    TransactionDefinition.PROPAGATION_REQUIRED,
-                    () -> persistMaterials(sources, startedAt));
+            PersistResult persisted = syncMaterialPages(startedAt, counters);
             counters.upsertedCount = persisted.upsertedCount();
             counters.disabledCount = persisted.disabledCount();
             counters.deletedCount = persisted.deletedCount();
@@ -504,29 +499,49 @@ public class MesMasterDataSyncService {
         }
     }
 
-    private List<MesMaterialPageResp.Row> fetchAllMaterialRows(Counters counters) {
-        List<MesMaterialPageResp.Row> rows = new ArrayList<>();
+    private PersistResult syncMaterialPages(LocalDateTime syncedAt, Counters counters) {
+        Set<String> seenCodes = new LinkedHashSet<>();
+        Set<String> returnedCodes = new LinkedHashSet<>();
+        int upsertedCount = 0;
+        int disabledCount = 0;
         int pageNo = 1;
         while (true) {
             MesMaterialPageResp.Data page = client.pageMaterials(pageNo, MATERIAL_PAGE_SIZE);
             List<MesMaterialPageResp.Row> pageRows = page == null || page.getList() == null ? List.of() : page.getList();
-            rows.addAll(pageRows);
+            List<MaterialSource> sources = normalizeMaterialSources(pageRows, counters, seenCodes);
+            returnedCodes.addAll(sources.stream().map(MaterialSource::lookupCode).collect(Collectors.toSet()));
+            if (!sources.isEmpty()) {
+                PersistResult pagePersisted = executeInTransaction(
+                        TransactionDefinition.PROPAGATION_REQUIRED,
+                        () -> persistMaterialPage(sources, syncedAt));
+                upsertedCount += pagePersisted.upsertedCount();
+                disabledCount += pagePersisted.disabledCount();
+                counters.upsertedCount = upsertedCount;
+                counters.disabledCount = disabledCount;
+            }
             Long total = page == null ? null : page.getTotal();
             if (pageRows.isEmpty()
                     || pageRows.size() < MATERIAL_PAGE_SIZE
-                    || (total != null && total >= 0 && rows.size() >= total)) {
+                    || (total != null && total >= 0 && counters.fetchedCount >= total)) {
                 break;
             }
             pageNo++;
         }
-        counters.fetchedCount = rows.size();
-        return rows;
+        if (counters.validCount == 0) {
+            throw new SyncFailure("MES material sync returned no valid materials", counters);
+        }
+        int deletedCount = deleteMissingMesMaterials(returnedCodes);
+        counters.deletedCount = deletedCount;
+        return new PersistResult(upsertedCount, disabledCount, deletedCount);
     }
 
-    private List<MaterialSource> normalizeMaterialSources(List<MesMaterialPageResp.Row> rows, Counters counters) {
-        Map<String, MaterialSource> byCode = new LinkedHashMap<>();
+    private List<MaterialSource> normalizeMaterialSources(
+            List<MesMaterialPageResp.Row> rows,
+            Counters counters,
+            Set<String> seenCodes) {
+        Map<String, MaterialSource> pageSourcesByCode = new LinkedHashMap<>();
         List<MesMaterialPageResp.Row> safeRows = rows == null ? List.of() : rows;
-        counters.fetchedCount = safeRows.size();
+        counters.fetchedCount += safeRows.size();
         for (MesMaterialPageResp.Row row : safeRows) {
             String code = trimToNull(row == null ? null : row.getCode());
             String name = trimToNull(row == null ? null : row.getName());
@@ -535,12 +550,13 @@ public class MesMasterDataSyncService {
                 continue;
             }
             String lookupCode = keyCode(code);
-            if (byCode.containsKey(lookupCode)) {
+            if (!seenCodes.add(lookupCode)) {
                 counters.duplicateCount++;
                 continue;
             }
             String materialTypeCode = materialTypeCode(row.getMaterialType());
-            byCode.put(lookupCode, new MaterialSource(
+            counters.validCount++;
+            pageSourcesByCode.put(lookupCode, new MaterialSource(
                     trimToNull(row.getId()),
                     code,
                     lookupCode,
@@ -557,13 +573,13 @@ public class MesMasterDataSyncService {
                     trimToNull(row.getProductionType()),
                     enabledFromStatus(row.getStatus())));
         }
-        counters.validCount = byCode.size();
-        return byCode.values().stream().toList();
+        return pageSourcesByCode.values().stream().toList();
     }
 
-    private PersistResult persistMaterials(List<MaterialSource> sources, LocalDateTime syncedAt) {
+    private PersistResult persistMaterialPage(List<MaterialSource> sources, LocalDateTime syncedAt) {
         Map<String, Long> typeIds = ensureMaterialTypes(sources, syncedAt);
-        List<DictMaterial> existingRows = materialMapper.selectList(new QueryWrapper<>());
+        List<DictMaterial> existingRows = selectExistingMaterialsByLookupCodes(
+                sources.stream().map(MaterialSource::lookupCode).collect(Collectors.toCollection(LinkedHashSet::new)));
         Map<String, DictMaterial> existingByCode = (existingRows == null ? List.<DictMaterial>of() : existingRows).stream()
                 .filter(row -> keyCode(row.getMaterialCode()) != null)
                 .collect(Collectors.toMap(
@@ -590,17 +606,69 @@ public class MesMasterDataSyncService {
             }
         }
 
-        Set<String> returnedCodes = sources.stream().map(MaterialSource::lookupCode).collect(Collectors.toSet());
+        return new PersistResult(upsertedCount, disabledCount, 0);
+    }
+
+    private List<DictMaterial> selectExistingMaterialsByLookupCodes(Collection<String> lookupCodes) {
+        List<String> codes = lookupCodes == null ? List.of() : lookupCodes.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (codes.isEmpty()) {
+            return List.of();
+        }
+        QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+        query.apply("UPPER(TRIM(material_code)) IN (" + applyPlaceholders(codes.size()) + ")", codes.toArray(new Object[0]));
+        return materialMapper.selectList(query);
+    }
+
+    private int deleteMissingMesMaterials(Set<String> returnedCodes) {
         int deletedCount = 0;
-        for (DictMaterial existing : existingByCode.values()) {
-            if (SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))
-                    && !returnedCodes.contains(keyCode(existing.getMaterialCode()))
-                    && existing.getId() != null) {
-                materialMapper.deleteById(existing.getId());
-                deletedCount++;
+        long lastId = 0L;
+        while (true) {
+            QueryWrapper<DictMaterial> query = new QueryWrapper<>();
+            query.select("id", "material_code", "source_type")
+                    .eq("source_type", SOURCE_MES)
+                    .gt("id", lastId)
+                    .orderByAsc("id")
+                    .last("LIMIT " + MATERIAL_DELETE_SCAN_BATCH_SIZE);
+            List<DictMaterial> existingRows = materialMapper.selectList(query);
+            List<DictMaterial> safeRows = existingRows == null ? List.of() : existingRows;
+            if (safeRows.isEmpty()) {
+                break;
+            }
+            long previousLastId = lastId;
+            for (DictMaterial existing : safeRows) {
+                Long id = existing.getId();
+                if (id == null || id <= previousLastId) {
+                    continue;
+                }
+                lastId = Math.max(lastId, id);
+                if (!SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))) {
+                    continue;
+                }
+                String lookupCode = keyCode(existing.getMaterialCode());
+                if (lookupCode != null && !returnedCodes.contains(lookupCode)) {
+                    materialMapper.deleteById(id);
+                    deletedCount++;
+                }
+            }
+            if (lastId == previousLastId) {
+                break;
             }
         }
-        return new PersistResult(upsertedCount, disabledCount, deletedCount);
+        return deletedCount;
+    }
+
+    private String applyPlaceholders(int size) {
+        StringBuilder placeholders = new StringBuilder();
+        for (int index = 0; index < size; index++) {
+            if (index > 0) {
+                placeholders.append(", ");
+            }
+            placeholders.append('{').append(index).append('}');
+        }
+        return placeholders.toString();
     }
 
     private Map<String, Long> ensureMaterialTypes(List<MaterialSource> sources, LocalDateTime syncedAt) {
