@@ -38,11 +38,8 @@ describe('global setup remote material and process options', () => {
       materialTypeName: '原材料',
       materialCategory: '钢材',
       density: '7850',
-      plateDensity: '7860',
       platePrice: '7.5',
-      barDensity: '7870',
       barPrice: '9.5',
-      tubeDensity: '7880',
       tubePrice: '11.5',
       remarks: '远程材料快照',
       processRoute: [
@@ -67,11 +64,8 @@ describe('global setup remote material and process options', () => {
       materialId: 12,
       materialCode: 'MAT-45',
       density: 7850,
-      plateDensity: 7860,
       platePrice: 7.5,
-      barDensity: 7870,
       barPrice: 9.5,
-      tubeDensity: 7880,
       tubePrice: 11.5,
       remarks: '远程材料快照'
     }))

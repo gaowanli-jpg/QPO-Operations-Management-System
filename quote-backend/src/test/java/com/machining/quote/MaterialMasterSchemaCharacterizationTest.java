@@ -13,6 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MaterialMasterSchemaCharacterizationTest {
     private static final Path DICT_MATERIAL = main("entity", "DictMaterial.java");
     private static final Path MATERIAL_DTO = main("dto", "MaterialMasterDTO.java");
+    private static final Path MATERIAL_SAVE_REQ = main("dto", "MaterialMasterSaveReq.java");
+    private static final Path PRICING_MATERIAL_OPTION = main("dto", "PricingMaterialOptionDTO.java");
     private static final Path ITEM = main("entity", "ItemQuoteVersion.java");
     private static final Path SALES_ITEM = main("entity", "SalesOrderItem.java");
     private static final Path TICKET = main("entity", "OrderDeliveryTicket.java");
@@ -27,6 +29,8 @@ class MaterialMasterSchemaCharacterizationTest {
     private static final Path ITEM_PRICING = Path.of("..", "quote-frontend", "src", "components", "ItemPricing.vue");
     private static final Path MATERIAL_PICKER = Path.of(
             "..", "quote-frontend", "src", "components", "EngineeringOptionPickerDialog.vue");
+    private static final Path MATERIAL_PROCESS_PAGE = Path.of(
+            "..", "quote-frontend", "src", "components", "MaterialProcessManage.vue");
     private static final Path DELIVERED_PAGE = Path.of(
             "..", "quote-frontend", "src", "components", "DeliveredItemManage.vue");
     private static final Path LOCKED_PAGE = Path.of(
@@ -35,6 +39,8 @@ class MaterialMasterSchemaCharacterizationTest {
             "..", "quote-frontend", "src", "components", "ProductionItemManage.vue");
     private static final Path SCHEMA = Path.of("src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
     private static final Path SEED = Path.of("src", "main", "resources", "db", "migration", "V2__qpo_baseline_seed_data.sql");
+    private static final Path MATERIAL_DENSITY_MIGRATION = Path.of(
+            "src", "main", "resources", "db", "migration", "V26__consolidate_material_density.sql");
 
     @Test
     void dictMaterialRuntimeEntityUsesCodeTypeAndCategoryIdentityFields() throws IOException {
@@ -48,16 +54,54 @@ class MaterialMasterSchemaCharacterizationTest {
                         "private Long materialTypeId;",
                         "private String materialCategory;",
                         "private Double density;",
-                        "private Double plateDensity;",
                         "private Double platePrice;",
-                        "private Double barDensity;",
                         "private Double barPrice;",
-                        "private Double tubeDensity;",
                         "private Double tubePrice;",
                         "private String remarks;",
                         "private Boolean enabled;",
                         "private Integer sortNo;")
-                .doesNotContain("private String materialType;");
+                .doesNotContain(
+                        "private String materialType;",
+                        "private Double plateDensity;",
+                        "private Double barDensity;",
+                        "private Double tubeDensity;");
+    }
+
+    @Test
+    void materialDensityConsolidationRemovesShapeSpecificDensityRuntimeFields() throws IOException {
+        assertThat(read(MATERIAL_DENSITY_MIGRATION))
+                .contains(
+                        "UPDATE dict_material",
+                        "COALESCE(NULLIF(density, 0)",
+                        "NULLIF(plate_density, 0)",
+                        "NULLIF(bar_density, 0)",
+                        "NULLIF(tube_density, 0)",
+                        "DROP COLUMN IF EXISTS plate_density",
+                        "DROP COLUMN IF EXISTS bar_density",
+                        "DROP COLUMN IF EXISTS tube_density")
+                .doesNotContain("V1__qpo_baseline_schema", "V2__qpo_baseline_seed_data");
+
+        String combinedRuntime = read(DICT_MATERIAL)
+                + read(MATERIAL_DTO)
+                + read(MATERIAL_SAVE_REQ)
+                + read(PRICING_MATERIAL_OPTION)
+                + read(ENGINEER_SERVICE)
+                + read(ITEM_PRICING)
+                + read(MATERIAL_PICKER)
+                + read(MATERIAL_PROCESS_PAGE);
+
+        assertThat(combinedRuntime)
+                .contains("mesDensityRaw")
+                .doesNotContain(
+                        "plateDensity",
+                        "barDensity",
+                        "tubeDensity",
+                        "plate_density",
+                        "bar_density",
+                        "tube_density",
+                        "板材密度",
+                        "棒材密度",
+                        "管材密度");
     }
 
     @Test
@@ -116,7 +160,7 @@ class MaterialMasterSchemaCharacterizationTest {
                 .contains(
                         "prop=\"materialCode\" label=\"材料编码\"",
                         "prop=\"materialName\" label=\"材料名称\"",
-                        "materialTypeCode",
+                        "formatEffectiveDensity(row)",
                         "? (item?.materialCode ?? item?.id ?? '')",
                         "item?.materialCode",
                         "item.materialName",
@@ -132,7 +176,11 @@ class MaterialMasterSchemaCharacterizationTest {
                         "materialData.put(\"density\", density == null ? 0.0 : density);",
                         "materialData.put(\"unitPrice\", unitPrice);",
                         "materialData.put(\"cost\", cost);")
-                .doesNotContain("qw.eq(\"material_name\", materialName);");
+                .doesNotContain(
+                        "qw.eq(\"material_name\", materialName);",
+                        "getPlateDensity",
+                        "getBarDensity",
+                        "getTubeDensity");
     }
 
     @Test

@@ -151,11 +151,8 @@ class EngineerSupplementalPricingWorkflowTest {
         material.setMaterialTypeId(1L);
         material.setMaterialCategory("钢铁");
         material.setDensity(1.0);
-        material.setPlateDensity(1.0);
         material.setPlatePrice(5.0);
-        material.setBarDensity(1.0);
         material.setBarPrice(5.0);
-        material.setTubeDensity(1.0);
         material.setTubePrice(5.0);
         material.setEnabled(true);
         material.setSortNo(0);

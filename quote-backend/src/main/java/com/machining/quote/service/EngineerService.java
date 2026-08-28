@@ -1721,16 +1721,9 @@ public class EngineerService {
     }
 
     private Double resolveMaterialDensityOrNull(DictMaterial material, String shape) {
-        Double shapeDensity;
-        if (isBarShape(shape)) {
-            shapeDensity = material.getBarDensity();
-        } else if (isTubeShape(shape)) {
-            shapeDensity = material.getTubeDensity();
-        } else {
-            shapeDensity = material.getPlateDensity();
-        }
-        if (shapeDensity != null && shapeDensity > 0) {
-            return shapeDensity;
+        Double density = material.getDensity();
+        if (density != null && density > 0) {
+            return density;
         }
         return parseMesDensity(material.getMesDensityRaw());
     }

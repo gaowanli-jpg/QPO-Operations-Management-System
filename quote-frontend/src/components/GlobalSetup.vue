@@ -328,6 +328,14 @@ const numericSortNo = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue : null
 }
+
+const numericOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+const effectiveMaterialDensity = (material = {}) => numericOrNull(material.density ?? material.mesDensityRaw)
 const assignProcessSortNos = () => {
   config.processRoute.forEach((proc, index) => {
     proc.sortNo = (index + 1) * PROCESS_SORT_STEP
@@ -418,12 +426,9 @@ const applyMaterialSelectionToConfig = (material) => {
   config.materialTypeCode = material.materialTypeCode || ''
   config.materialTypeName = material.materialTypeName || ''
   config.materialCategory = material.materialCategory || ''
-  config.density = material.density ?? null
-  config.plateDensity = material.plateDensity ?? material.density ?? null
+  config.density = effectiveMaterialDensity(material)
   config.platePrice = material.platePrice ?? material.unitPrice ?? null
-  config.barDensity = material.barDensity ?? material.density ?? null
   config.barPrice = material.barPrice ?? material.unitPrice ?? null
-  config.tubeDensity = material.tubeDensity ?? material.density ?? null
   config.tubePrice = material.tubePrice ?? material.unitPrice ?? null
   config.remarks = material.remarks || ''
   config.legacyMaterialIdentity = false
@@ -439,11 +444,8 @@ const assignMaterialConfig = (source) => {
   config.materialTypeName = normalized.materialTypeName
   config.materialCategory = normalized.materialCategory
   config.density = normalized.density
-  config.plateDensity = normalized.plateDensity
   config.platePrice = normalized.platePrice
-  config.barDensity = normalized.barDensity
   config.barPrice = normalized.barPrice
-  config.tubeDensity = normalized.tubeDensity
   config.tubePrice = normalized.tubePrice
   config.remarks = normalized.remarks
   config.legacyMaterialIdentity = normalized.legacyMaterialIdentity

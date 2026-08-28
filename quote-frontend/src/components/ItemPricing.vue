@@ -743,11 +743,8 @@ const globalConfig = ref({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  plateDensity: null,
   platePrice: null,
-  barDensity: null,
   barPrice: null,
-  tubeDensity: null,
   tubePrice: null,
   remarks: '',
   shape: '板材',
@@ -794,11 +791,8 @@ const defaultGlobalConfig = () => ({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  plateDensity: null,
   platePrice: null,
-  barDensity: null,
   barPrice: null,
-  tubeDensity: null,
   tubePrice: null,
   remarks: '',
   shape: '板材',
@@ -818,6 +812,8 @@ const numberOrNullForSnapshot = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
+const effectiveMaterialDensity = (material = {}) => numberOrNullForSnapshot(material.density ?? material.mesDensityRaw)
+
 const normalizeGlobalConfig = (config) => {
   const defaults = defaultGlobalConfig()
   if (!config || typeof config !== 'object') return defaults
@@ -834,11 +830,8 @@ const normalizeGlobalConfig = (config) => {
     materialTypeName: config.materialTypeName || defaults.materialTypeName,
     materialCategory: config.materialCategory || defaults.materialCategory,
     density,
-    plateDensity: numberOrNullForSnapshot(config.plateDensity ?? density ?? defaults.plateDensity),
     platePrice: numberOrNullForSnapshot(config.platePrice ?? unitPrice ?? defaults.platePrice),
-    barDensity: numberOrNullForSnapshot(config.barDensity ?? density ?? defaults.barDensity),
     barPrice: numberOrNullForSnapshot(config.barPrice ?? unitPrice ?? defaults.barPrice),
-    tubeDensity: numberOrNullForSnapshot(config.tubeDensity ?? density ?? defaults.tubeDensity),
     tubePrice: numberOrNullForSnapshot(config.tubePrice ?? unitPrice ?? defaults.tubePrice),
     remarks: config.remarks || defaults.remarks || '',
     shape: config.shape || defaults.shape,
@@ -1326,11 +1319,8 @@ const matForm = reactive({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  plateDensity: null,
   platePrice: null,
-  barDensity: null,
   barPrice: null,
-  tubeDensity: null,
   tubePrice: null,
   remarks: '',
   shape: '',
@@ -1353,12 +1343,9 @@ const applyMaterialIdentityToMatForm = (source = {}) => {
   matForm.materialTypeCode = source.materialTypeCode || ''
   matForm.materialTypeName = source.materialTypeName || ''
   matForm.materialCategory = source.materialCategory || ''
-  matForm.density = source.density ?? null
-  matForm.plateDensity = source.plateDensity ?? source.density ?? null
+  matForm.density = effectiveMaterialDensity(source)
   matForm.platePrice = source.platePrice ?? source.unitPrice ?? null
-  matForm.barDensity = source.barDensity ?? source.density ?? null
   matForm.barPrice = source.barPrice ?? source.unitPrice ?? null
-  matForm.tubeDensity = source.tubeDensity ?? source.density ?? null
   matForm.tubePrice = source.tubePrice ?? source.unitPrice ?? null
   matForm.remarks = source.remarks || ''
 }
@@ -1918,11 +1905,8 @@ const openQuoteDialog = async (row) => {
         materialCategory: savedMaterialData.materialCategory,
         density: savedMaterialData.density,
         unitPrice: savedMaterialData.unitPrice,
-        plateDensity: savedMaterialData.plateDensity,
         platePrice: savedMaterialData.platePrice,
-        barDensity: savedMaterialData.barDensity,
         barPrice: savedMaterialData.barPrice,
-        tubeDensity: savedMaterialData.tubeDensity,
         tubePrice: savedMaterialData.tubePrice,
         remarks: savedMaterialData.remarks,
         shape: savedMaterialData.shape || globalConfig.value.shape || '板材'
@@ -1963,11 +1947,8 @@ const openQuoteDialog = async (row) => {
 const currentMatInfo = computed(() => ({
   id: matForm.materialId,
   density: numberOrZero(matForm.density),
-  plateDensity: numberOrZero(matForm.plateDensity ?? matForm.density),
   platePrice: numberOrZero(matForm.platePrice),
-  barDensity: numberOrZero(matForm.barDensity ?? matForm.density),
   barPrice: numberOrZero(matForm.barPrice),
-  tubeDensity: numberOrZero(matForm.tubeDensity ?? matForm.density),
   tubePrice: numberOrZero(matForm.tubePrice)
 }))
 const currentUnitPrice = computed(() => {
@@ -1976,9 +1957,7 @@ const currentUnitPrice = computed(() => {
   return currentMatInfo.value.platePrice || 0
 })
 const currentDensity = computed(() => {
-  if (matForm.shape === '棒材') return currentMatInfo.value.barDensity || currentMatInfo.value.density || 0
-  if (matForm.shape === '管材') return currentMatInfo.value.tubeDensity || currentMatInfo.value.density || 0
-  return currentMatInfo.value.plateDensity || currentMatInfo.value.density || 0
+  return currentMatInfo.value.density || 0
 })
 const calculatedVolume = computed(() => {
   const length = numberOrZero(matForm.L)

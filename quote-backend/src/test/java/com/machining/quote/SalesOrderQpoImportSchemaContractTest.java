@@ -248,7 +248,6 @@ class SalesOrderQpoImportSchemaContractTest {
         material.setMaterialTypeId(1L);
         material.setMaterialCategory("钢铁");
         material.setDensity(7850.0);
-        material.setPlateDensity(7850.0);
         material.setPlatePrice(100.0);
         material.setEnabled(true);
         return material;

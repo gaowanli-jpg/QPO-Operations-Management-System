@@ -12,11 +12,9 @@ public class PricingMaterialOptionDTO {
     private String materialTypeName;
     private String materialCategory;
     private Double density;
-    private Double plateDensity;
+    private String mesDensityRaw;
     private Double platePrice;
-    private Double barDensity;
     private Double barPrice;
-    private Double tubeDensity;
     private Double tubePrice;
     private String remarks;
 }

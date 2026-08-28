@@ -141,12 +141,11 @@ class EngineerServiceMaterialCalculationTests {
     }
 
     @Test
-    void fallsBackToMesDensityWhenShapeDensityIsMissing() {
+    void fallsBackToMesDensityWhenSpecificDensityIsMissing() {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         DictMaterial material = material("MES-MAT-DENSITY", "MES Density Material", 1L, "MES", 0.0, 7.1);
         material.setDensity(null);
-        material.setPlateDensity(null);
         material.setMesDensityRaw("7850.0");
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
@@ -166,12 +165,11 @@ class EngineerServiceMaterialCalculationTests {
     }
 
     @Test
-    void rejectsMaterialWhenShapeAndMesDensitiesAreMissing() {
+    void rejectsMaterialWhenSpecificAndMesDensitiesAreMissing() {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         DictMaterial material = material("MES-MAT-NO-DENSITY", "MES Material No Density", 1L, "MES", 0.0, 7.1);
         material.setDensity(null);
-        material.setPlateDensity(null);
         material.setMesDensityRaw(null);
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
@@ -216,6 +214,30 @@ class EngineerServiceMaterialCalculationTests {
 
         assertThat(barCost).isCloseTo(16.4, within(0.000001));
         assertThat(tubeCost).isCloseTo(18.6, within(0.000001));
+    }
+
+    @Test
+    void specificDensityOverridesMesDensityForEveryShape() {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterial material = material("MAT-DENSITY", "One Density Material", 1L, "Steel", 7850.0, 7.1);
+        material.setBarPrice(8.2);
+        material.setTubePrice(9.3);
+        material.setMesDensityRaw("1.0");
+        when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+
+        for (String shape : List.of("PLATE", "BAR", "TUBE")) {
+            Map<String, Object> materialData = new LinkedHashMap<>();
+            materialData.put("materialCode", "MAT-DENSITY");
+            materialData.put("shape", shape);
+            materialData.put("weight", 2.0);
+
+            ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", materialData);
+
+            assertThat(materialData.get("density")).as(shape).isEqualTo(7850.0);
+        }
     }
 
     @Test
@@ -434,7 +456,6 @@ class EngineerServiceMaterialCalculationTests {
         material.setMaterialCategory(category);
         material.setEnabled(true);
         material.setDensity(density);
-        material.setPlateDensity(density);
         material.setPlatePrice(unitPrice);
         return material;
     }

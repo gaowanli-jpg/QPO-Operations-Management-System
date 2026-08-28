@@ -67,7 +67,8 @@ describe('MES master data sync frontend guard', () => {
     expect(materialProcess).toContain('submitted')
     expect(materialProcess).toContain('formatMesSyncResultMessage')
     expect(materialProcess).toContain('deletedCount')
-    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度')
+    expect(materialProcess).toContain('MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价')
+    expect(materialProcess).toContain('MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格')
     expect(materialProcess).toContain('await reloadAfterMutation()')
   })
 
@@ -97,7 +98,9 @@ describe('MES master data sync frontend guard', () => {
     expect(materialProcess).toContain("scheduleForm.scheduleMode === 'FIXED_DELAY'")
     expect(materialProcess).toContain("scheduleForm.scheduleMode === 'DAILY_TIME'")
     expect(materialProcess).toContain('dailyRunTime: normalizeDailyRunTime(scheduleForm.dailyRunTime)')
-    expect(materialProcess).toContain('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度')
+    expect(materialProcess).toContain('scheduleDialogHelpText')
+    expect(materialProcess).toContain('MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价')
+    expect(materialProcess).toContain('MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格')
   })
 
   test('material and process lists display MES ownership and local price maintenance state', () => {
@@ -126,7 +129,7 @@ describe('MES master data sync frontend guard', () => {
     expect(materialProcess).not.toContain('@click="openMaterialTypeDialog')
     expect(materialProcess).not.toContain('@click="deleteMaterialType')
     expect(materialProcess).not.toContain('@click="openProcessCategoryDialog')
-    expect(materialProcess).not.toContain('@click="openProcessDetailDialog()"')
+    expect(materialProcess).toContain('@click="openProcessDetailDialog()"')
     expect(materialProcess).not.toContain('@click="deleteMaterial(scope.row)"')
     expect(materialProcess).toContain('@click="openMaterialDialog(scope.row)"')
     expect(materialProcess).toContain('@click="openProcessDetailDialog(scope.row)"')

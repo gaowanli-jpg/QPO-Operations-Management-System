@@ -188,11 +188,9 @@ public class EngineeringPricingOptionService {
         dto.setMaterialTypeName(type == null ? null : type.getTypeName());
         dto.setMaterialCategory(material.getMaterialCategory());
         dto.setDensity(material.getDensity());
-        dto.setPlateDensity(material.getPlateDensity());
+        dto.setMesDensityRaw(material.getMesDensityRaw());
         dto.setPlatePrice(material.getPlatePrice());
-        dto.setBarDensity(material.getBarDensity());
         dto.setBarPrice(material.getBarPrice());
-        dto.setTubeDensity(material.getTubeDensity());
         dto.setTubePrice(material.getTubePrice());
         dto.setRemarks(material.getRemarks());
         return dto;

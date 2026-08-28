@@ -2,7 +2,7 @@
 
 > 2026-08-27 MES 主数据同步删除口径收口：QPO 通过数据中心只读获取 MES 工艺类型和材料分页数据，同步到现有材料工艺字典。QPO 不删除材料费用、材料类型、工艺大类、具体工艺四个页签，也不删除 `dict_material`、`dict_material_type`、`dict_process_category`、`dict_process_detail` 四张字典表结构；同步时，MES 返回但状态为停用的材料/工艺大类在 QPO 置为停用，MES 本次全量不再返回的 MES 来源材料/工艺大类在 QPO 硬删除，工艺大类硬删除前先删除其下具体工艺。
 
-> 2026-08-13 定时同步策略补充：材料费用页签“从 MES 同步材料”旁新增“定时同步策略”，工艺大类页签“从 MES 同步工艺”旁新增“定时同步策略”。两套策略分别保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE`，默认关闭；后台巡检到点后复用现有同步服务，不覆盖 QPO 材料单价和板/棒/管密度，不改变 MES 生产下发 payload 合同。
+> 2026-08-13 定时同步策略补充：材料费用页签“从 MES 同步材料”旁新增“定时同步策略”，工艺大类页签“从 MES 同步工艺”旁新增“定时同步策略”。两套策略分别保存 `MES_MATERIAL` 和 `MES_PROCESS_TYPE`，默认关闭；后台巡检到点后复用现有同步服务，不覆盖 QPO 材料单价和具体密度，不改变 MES 生产下发 payload 合同。
 
 > 2026-08-27 异步提交补充：手动同步接口保持原 POST 路径，但只负责提交后台同步批次并立即返回 `submitted`、`alreadyRunning`、`syncRunId` 和 `status`；页面通过状态查询接口轮询 `mes_master_data_sync_run`，同步完成后再刷新材料/工艺列表。
 
@@ -14,7 +14,7 @@ MES 主数据同步用于让 QPO 报价和后续 MES 下发使用 MES 编码体�
 - QPO 为 MES 工艺大类保留或创建默认具体工艺；下发 MES 生产时 `detailName` 转为 `processName`。
 - MES 材料进入 QPO 材料字典；MES `code` 写入 QPO `materialCode` / 后续报价快照 `engineeringMaterialCode`。
 - MES 无材料单价，QPO 继续维护材料单价。材料单价缺失时禁止完成核价，不能按 0 元/kg 静默计算。
-- MES 来源字段只维护主数据身份、类型、MES 密度和追踪信息；QPO 本地继续维护板/棒/管密度、价格、必要例外、排序和备注。
+- MES 来源字段只维护主数据身份、类型、MES 密度和追踪信息；QPO 本地继续维护一个具体密度、板/棒/管价格、必要例外、排序和备注。
 - MES 返回且状态映射为停用时，只更新 QPO 启停状态并计入 `disabledCount`；MES 返回正常状态时可重新启用该 MES 来源记录。
 - MES 全量同步成功但不再返回某个 MES 来源材料或工艺大类时，QPO 删除该材料或工艺大类并计入 `deletedCount`；工艺大类删除前先删除其下 `dict_process_detail` 具体工艺，`LOCAL` 来源记录不受影响。
 - MES 返回空有效数据视为同步失败，不执行缺失删除，避免 MES 异常或接口配置错误导致 QPO 字典被误清理。
@@ -43,7 +43,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 
 - 材料费用页签：按钮“从 MES 同步材料”。
 - 工艺大类页签：按钮“从 MES 同步工艺”。
-- 同步确认弹窗提示：MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。
+- 同步确认弹窗提示：MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价。
 
 后端 API：
 
@@ -102,7 +102,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 | `standard` | `dict_material.mes_standard` | MES 规格。 |
 | `docNum` | `dict_material.mes_doc_num` | MES 图号/资料号。 |
 | `weight` | `dict_material.mes_weight` | MES 原始重量字段，仅作追踪。 |
-| `density` | `dict_material.mes_density_raw` | 只读 MES 密度；同步不覆盖 QPO 默认密度和板/棒/管密度，核价时在对应形态密度为空时作为兜底。 |
+| `density` | `dict_material.mes_density_raw` | 只读 MES 密度；同步不覆盖 QPO 具体密度，核价时在 QPO 具体密度为空时作为兜底。 |
 | 当前时间 | `dict_material.mes_synced_at` | 最近同步时间。 |
 
 ## 5. MES 生产下发合同

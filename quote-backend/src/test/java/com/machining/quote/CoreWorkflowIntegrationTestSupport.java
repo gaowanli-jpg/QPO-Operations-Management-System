@@ -184,11 +184,8 @@ abstract class CoreWorkflowIntegrationTestSupport {
         material.setMaterialTypeId(materialType.getId());
         material.setMaterialCategory("\u94a2\u94c1");
         material.setDensity(1.0);
-        material.setPlateDensity(1.0);
         material.setPlatePrice(1.0);
-        material.setBarDensity(1.0);
         material.setBarPrice(1.0);
-        material.setTubeDensity(1.0);
         material.setTubePrice(1.0);
         material.setEnabled(true);
         material.setSortNo(0);

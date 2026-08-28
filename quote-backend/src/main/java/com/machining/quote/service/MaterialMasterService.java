@@ -246,24 +246,9 @@ public class MaterialMasterService {
         entity.setMaterialTypeId(req.getMaterialTypeId());
         entity.setMaterialCategory(limit(optional(req.getMaterialCategory()), "材质分类", 80));
         entity.setDensity(nonNegative(req.getDensity(), "默认密度"));
-        entity.setPlateDensity(nonNegative(req.getPlateDensity(), "板材密度"));
         entity.setPlatePrice(nonNegative(req.getPlatePrice(), "板材价格"));
-        entity.setBarDensity(nonNegative(req.getBarDensity(), "棒材密度"));
         entity.setBarPrice(nonNegative(req.getBarPrice(), "棒材价格"));
-        entity.setTubeDensity(nonNegative(req.getTubeDensity(), "管材密度"));
         entity.setTubePrice(nonNegative(req.getTubePrice(), "管材价格"));
-        if (entity.getPlateDensity() == null) {
-            entity.setPlateDensity(entity.getDensity());
-        }
-        if (entity.getBarDensity() == null) {
-            entity.setBarDensity(entity.getDensity());
-        }
-        if (entity.getTubeDensity() == null) {
-            entity.setTubeDensity(entity.getDensity());
-        }
-        if (entity.getDensity() == null) {
-            entity.setDensity(firstNonNull(entity.getPlateDensity(), entity.getBarDensity(), entity.getTubeDensity()));
-        }
         entity.setRemarks(optional(req.getRemarks()));
         copyMesSourceFields(entity, before);
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
@@ -389,11 +374,8 @@ public class MaterialMasterService {
         dto.setMaterialTypeName(type == null ? null : type.getTypeName());
         dto.setMaterialCategory(material.getMaterialCategory());
         dto.setDensity(material.getDensity());
-        dto.setPlateDensity(material.getPlateDensity());
         dto.setPlatePrice(material.getPlatePrice());
-        dto.setBarDensity(material.getBarDensity());
         dto.setBarPrice(material.getBarPrice());
-        dto.setTubeDensity(material.getTubeDensity());
         dto.setTubePrice(material.getTubePrice());
         dto.setRemarks(material.getRemarks());
         dto.setSourceType(material.getSourceType() == null || material.getSourceType().isBlank() ? SOURCE_LOCAL : material.getSourceType());
@@ -462,11 +444,8 @@ public class MaterialMasterService {
         target.setMaterialTypeId(source.getMaterialTypeId());
         target.setMaterialCategory(source.getMaterialCategory());
         target.setDensity(source.getDensity());
-        target.setPlateDensity(source.getPlateDensity());
         target.setPlatePrice(source.getPlatePrice());
-        target.setBarDensity(source.getBarDensity());
         target.setBarPrice(source.getBarPrice());
-        target.setTubeDensity(source.getTubeDensity());
         target.setTubePrice(source.getTubePrice());
         target.setRemarks(source.getRemarks());
         target.setSourceType(source.getSourceType());
@@ -539,12 +518,4 @@ public class MaterialMasterService {
         return value;
     }
 
-    private Double firstNonNull(Double... values) {
-        for (Double value : values) {
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
-    }
 }

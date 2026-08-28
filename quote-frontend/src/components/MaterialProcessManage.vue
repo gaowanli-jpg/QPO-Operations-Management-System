@@ -58,20 +58,14 @@
                   <el-tag :type="materialPriceStatusType(scope.row)" size="small">{{ materialPriceStatusText(scope.row) }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="板材密度" width="150" align="right">
-                <template #default="scope">{{ formatDensity(scope.row.plateDensity) }}</template>
+              <el-table-column label="具体密度" width="130" align="right">
+                <template #default="scope">{{ formatDensity(scope.row.density) }}</template>
               </el-table-column>
               <el-table-column label="板材单价" width="150" align="right">
                 <template #default="scope">{{ formatPrice(scope.row.platePrice) }}</template>
               </el-table-column>
-              <el-table-column label="棒材密度" width="150" align="right">
-                <template #default="scope">{{ formatDensity(scope.row.barDensity) }}</template>
-              </el-table-column>
               <el-table-column label="棒材单价" width="150" align="right">
                 <template #default="scope">{{ formatPrice(scope.row.barPrice) }}</template>
-              </el-table-column>
-              <el-table-column label="管材密度" width="150" align="right">
-                <template #default="scope">{{ formatDensity(scope.row.tubeDensity) }}</template>
               </el-table-column>
               <el-table-column label="管材单价" width="150" align="right">
                 <template #default="scope">{{ formatPrice(scope.row.tubePrice) }}</template>
@@ -329,9 +323,9 @@
         <el-form-item label="启用">
           <el-switch v-model="materialForm.enabled" />
         </el-form-item>
-        <el-form-item label="板材密度">
+        <el-form-item label="具体密度">
           <div class="unit-input">
-            <el-input-number v-model="materialForm.plateDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
+            <el-input-number v-model="materialForm.density" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
             <span class="unit-label">kg/m³</span>
           </div>
         </el-form-item>
@@ -341,22 +335,10 @@
             <span class="unit-label">元/kg</span>
           </div>
         </el-form-item>
-        <el-form-item label="棒材密度">
-          <div class="unit-input">
-            <el-input-number v-model="materialForm.barDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
-            <span class="unit-label">kg/m³</span>
-          </div>
-        </el-form-item>
         <el-form-item label="棒材单价">
           <div class="unit-input">
             <el-input-number v-model="materialForm.barPrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
             <span class="unit-label">元/kg</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="管材密度">
-          <div class="unit-input">
-            <el-input-number v-model="materialForm.tubeDensity" :precision="4" :min="0" controls-position="right" class="unit-input-control" />
-            <span class="unit-label">kg/m³</span>
           </div>
         </el-form-item>
         <el-form-item label="管材单价">
@@ -484,7 +466,7 @@
           type="info"
           :closable="false"
           show-icon
-          title="MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度；策略默认关闭，保存后作为运行时配置。"
+          :title="scheduleDialogHelpText"
         />
         <el-form label-width="150px" class="erp-dialog-form" :class="'mes-schedule-form'">
           <el-form-item label="开启定时同步">
@@ -742,6 +724,9 @@ const syncConfigByType = {
 const activeScheduleConfig = computed(() => scheduleConfigs[scheduleTarget.value] || scheduleConfigs.MES_MATERIAL)
 const scheduleDialogTitle = computed(() => activeScheduleConfig.value.title)
 const scheduleTargetLabel = computed(() => activeScheduleConfig.value.label)
+const mesMaterialSyncOwnershipMessage = 'MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价'
+const mesProcessSyncOwnershipMessage = 'MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格'
+const scheduleDialogHelpText = computed(() => `${scheduleTarget.value === 'MES_PROCESS_TYPE' ? mesProcessSyncOwnershipMessage : mesMaterialSyncOwnershipMessage}；策略默认关闭，保存后作为运行时配置。`)
 
 const formatNumber = (value, precision) => {
   const numericValue = Number(value)
@@ -825,11 +810,9 @@ function createEmptyMaterial() {
     remarks: '',
     enabled: true,
     sortNo: 0,
-    plateDensity: 0,
+    density: null,
     platePrice: 0,
-    barDensity: 0,
     barPrice: 0,
-    tubeDensity: 0,
     tubePrice: 0
   }
 }
@@ -1121,7 +1104,7 @@ const openExtraFeeDialog = (row) => {
 
 const syncMesMaterials = async () => {
   return runAction(dictActionKeys.syncMesMaterials, async () => {
-    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。确认从 MES 同步材料主数据？', '同步确认', { type: 'warning' })
+    await ElMessageBox.confirm(`${mesMaterialSyncOwnershipMessage}。确认从 MES 同步材料主数据？`, '同步确认', { type: 'warning' })
     try {
       const response = await syncMesMaterialsRequest()
       await handleMesSyncSubmitResult('MES_MATERIAL', response)
@@ -1134,7 +1117,7 @@ const syncMesMaterials = async () => {
 
 const syncMesProcessTypes = async () => {
   return runAction(dictActionKeys.syncMesProcessTypes, async () => {
-    await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。确认从 MES 同步工艺主数据？', '同步确认', { type: 'warning' })
+    await ElMessageBox.confirm(`${mesProcessSyncOwnershipMessage}。确认从 MES 同步工艺主数据？`, '同步确认', { type: 'warning' })
     try {
       const response = await syncMesProcessTypesRequest()
       await handleMesSyncSubmitResult('MES_PROCESS_TYPE', response)
@@ -1208,7 +1191,7 @@ const saveMaterial = async () => {
   if (!materialForm.materialTypeId) return ElMessage.warning('请选择材料类型。')
   return runAction(dictActionKeys.saveMaterialDialog, async () => {
     try {
-      const payload = { ...materialForm, density: materialForm.plateDensity || materialForm.barDensity || materialForm.tubeDensity || 0 }
+      const payload = { ...materialForm }
       const response = await saveMaterialRequest(payload)
       ElMessage.success(response.message || '保存成功')
       materialDialogVisible.value = false

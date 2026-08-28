@@ -246,11 +246,8 @@ class PricingMarkupFeeEndToEndTest {
         material.setMaterialTypeId(1L);
         material.setMaterialCategory("Steel");
         material.setDensity(1.0);
-        material.setPlateDensity(1.0);
         material.setPlatePrice(1.0);
-        material.setBarDensity(1.0);
         material.setBarPrice(1.0);
-        material.setTubeDensity(1.0);
         material.setTubePrice(1.0);
         material.setEnabled(true);
         material.setSortNo(0);

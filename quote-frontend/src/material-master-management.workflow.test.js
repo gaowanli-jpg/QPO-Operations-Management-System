@@ -53,10 +53,17 @@ describe('material master management workflow refactor', () => {
       'v-model="materialForm.materialCode" disabled',
       'v-model="materialForm.materialName" disabled',
       'v-model="materialForm.materialTypeId" filterable disabled',
-      'v-model="materialForm.materialCategory" disabled'
+      'v-model="materialForm.materialCategory" disabled',
+      'v-model="materialForm.density"'
     ]) {
       expect(materialProcess).toContain(fragment)
     }
+    expect(materialProcess).not.toContain('v-model="materialForm.plateDensity"')
+    expect(materialProcess).not.toContain('v-model="materialForm.barDensity"')
+    expect(materialProcess).not.toContain('v-model="materialForm.tubeDensity"')
+    expect(materialProcess).not.toContain('scope.row.plateDensity')
+    expect(materialProcess).not.toContain('scope.row.barDensity')
+    expect(materialProcess).not.toContain('scope.row.tubeDensity')
     expect(materialProcess).not.toContain('@click="openMaterialDialog()"')
     expect(materialProcess).not.toContain('@click="deleteMaterial(scope.row)"')
     expect(materialProcess).not.toContain('prop="materialType" label="材质"')

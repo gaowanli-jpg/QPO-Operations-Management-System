@@ -45,11 +45,9 @@ class EngineeringPricingOptionServiceTest {
         DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L);
         material.setMaterialCategory("不锈钢");
         material.setDensity(7.93);
-        material.setPlateDensity(7.93);
+        material.setMesDensityRaw("7.92");
         material.setPlatePrice(11.5);
-        material.setBarDensity(7.90);
         material.setBarPrice(12.2);
-        material.setTubeDensity(7.91);
         material.setTubePrice(13.3);
         material.setRemarks("raw remark");
         DictMaterialType type = materialType(1L, "RAW", "原材料");
@@ -75,7 +73,11 @@ class EngineeringPricingOptionServiceTest {
             assertThat(row.getMaterialTypeCode()).isEqualTo("RAW");
             assertThat(row.getMaterialTypeName()).isEqualTo("原材料");
             assertThat(row.getMaterialCategory()).isEqualTo("不锈钢");
+            assertThat(row.getDensity()).isEqualTo(7.93);
+            assertThat(row.getMesDensityRaw()).isEqualTo("7.92");
             assertThat(row.getPlatePrice()).isEqualTo(11.5);
+            assertThat(row.getBarPrice()).isEqualTo(12.2);
+            assertThat(row.getTubePrice()).isEqualTo(13.3);
             assertThat(row.getRemarks()).isEqualTo("raw remark");
         });
         ArgumentCaptor<QueryWrapper<DictMaterial>> countCaptor = ArgumentCaptor.forClass(QueryWrapper.class);

@@ -58,6 +58,7 @@ class MaterialMasterBackendServiceTest {
         material.setMesStandard("GB/T 1220");
         material.setMesWeight("12.34");
         material.setMesDensityRaw("7.93");
+        material.setDensity(7.85);
         material.setMesSyncedAt(syncedAt);
         DictMaterialType type = materialType(1L, "RAW_MATERIAL", "原材料", true);
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
@@ -81,6 +82,7 @@ class MaterialMasterBackendServiceTest {
         assertThat(row.getMesStandard()).isEqualTo("GB/T 1220");
         assertThat(row.getMesWeight()).isEqualTo("12.34");
         assertThat(row.getMesDensityRaw()).isEqualTo("7.93");
+        assertThat(row.getDensity()).isEqualTo(7.85);
         assertThat(row.getMesSyncedAt()).isEqualTo(syncedAt);
         verifyNoInteractions(auditService);
     }
@@ -216,11 +218,9 @@ class MaterialMasterBackendServiceTest {
 
         MaterialMasterSaveReq localMaintenance = materialReq("MES-MAT-001", "MES 45#", 1L);
         localMaintenance.setMaterialCategory("steel");
-        localMaintenance.setPlateDensity(7.9);
+        localMaintenance.setDensity(7.9);
         localMaintenance.setPlatePrice(8.8);
-        localMaintenance.setBarDensity(7.7);
         localMaintenance.setBarPrice(8.6);
-        localMaintenance.setTubeDensity(7.6);
         localMaintenance.setTubePrice(8.4);
         localMaintenance.setRemarks("QPO local price and density");
 
@@ -230,11 +230,9 @@ class MaterialMasterBackendServiceTest {
         assertThat(saved.getMaterialName()).isEqualTo("MES 45#");
         assertThat(saved.getMaterialTypeId()).isEqualTo(1L);
         assertThat(saved.getMaterialCategory()).isEqualTo("steel");
-        assertThat(saved.getPlateDensity()).isEqualTo(7.9);
+        assertThat(saved.getDensity()).isEqualTo(7.9);
         assertThat(saved.getPlatePrice()).isEqualTo(8.8);
-        assertThat(saved.getBarDensity()).isEqualTo(7.7);
         assertThat(saved.getBarPrice()).isEqualTo(8.6);
-        assertThat(saved.getTubeDensity()).isEqualTo(7.6);
         assertThat(saved.getTubePrice()).isEqualTo(8.4);
         assertThat(saved.getSourceType()).isEqualTo("MES");
         assertThat(saved.getMesExternalId()).isEqualTo("mes-001");

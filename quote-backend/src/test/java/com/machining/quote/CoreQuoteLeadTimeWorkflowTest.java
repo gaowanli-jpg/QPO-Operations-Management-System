@@ -84,9 +84,8 @@ class CoreQuoteLeadTimeWorkflowTest extends CoreWorkflowIntegrationTestSupport {
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("");
-        material.setPlateDensity(7850.0);
+        material.setDensity(7850.0);
         material.setPlatePrice(7.1);
-        material.setBarDensity(7850.0);
         material.setBarPrice(7.1);
         materialMapper.insert(material);
 
@@ -241,7 +240,7 @@ class CoreQuoteLeadTimeWorkflowTest extends CoreWorkflowIntegrationTestSupport {
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("");
-        material.setPlateDensity(7850.0);
+        material.setDensity(7850.0);
         material.setPlatePrice(7.1);
         materialMapper.insert(material);
 

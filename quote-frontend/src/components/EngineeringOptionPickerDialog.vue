@@ -56,11 +56,10 @@
       <template v-if="type === 'material'">
         <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
         <el-table-column prop="materialName" label="材料名称" min-width="150" fixed show-overflow-tooltip />
-        <el-table-column prop="materialTypeName" label="材料类型" width="160" show-overflow-tooltip>
+        <el-table-column prop="materialTypeName" label="材料类型" width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="material-type-cell">
               <span>{{ row.materialTypeName || '-' }}</span>
-              <small v-if="row.materialTypeCode">{{ row.materialTypeCode }}</small>
             </div>
           </template>
         </el-table-column>
@@ -68,7 +67,7 @@
           <template #default="{ row }">{{ row.materialCategory || '-' }}</template>
         </el-table-column>
         <el-table-column label="密度" width="100" align="right">
-          <template #default="{ row }">{{ formatNumber(row.plateDensity ?? row.density) }}</template>
+          <template #default="{ row }">{{ formatEffectiveDensity(row) }}</template>
         </el-table-column>
         <el-table-column label="板材价" width="100" align="right">
           <template #default="{ row }">{{ formatNumber(row.platePrice) }}</template>
@@ -249,8 +248,7 @@ const selectedItemSnapshot = ref(null)
 const processRateDrafts = ref({})
 const savingRateKeys = ref(new Set())
 
-const isProcessPicker = computed(() => props.type === 'process')
-const dialogWidth = computed(() => (isProcessPicker.value ? '1180px' : '920px'))
+const dialogWidth = computed(() => '1180px')
 
 const searchPlaceholder = computed(() => (
   props.type === 'material'
@@ -356,6 +354,8 @@ const formatNumber = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '-'
 }
+
+const formatEffectiveDensity = (row) => formatNumber(row?.density ?? row?.mesDensityRaw)
 
 const formatHourlyRate = (value) => {
   const text = formatNumber(value)
@@ -513,16 +513,10 @@ onBeforeUnmount(clearRemoteSearchTimer)
 }
 
 .material-type-cell {
-  display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.material-type-cell small {
-  color: var(--erp-text-secondary);
-  font-size: 12px;
-  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .inline-rate-editor {
