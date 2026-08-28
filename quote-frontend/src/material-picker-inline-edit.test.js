@@ -31,6 +31,27 @@ describe('material picker inline density and price editing', () => {
     expect(picker).not.toContain("setMaterialPriceDraft(row, 'mesDensityRaw'")
   })
 
+  test('material picker keeps editable cells compact and moves type columns after save', () => {
+    const picker = readSource('components', 'EngineeringOptionPickerDialog.vue')
+    const materialBlock = picker.slice(
+      picker.indexOf('<template v-if="type === \'material\'">'),
+      picker.indexOf('<template v-else>')
+    )
+
+    expect(materialBlock.indexOf('label="具体密度"')).toBeGreaterThan(materialBlock.indexOf('label="材料名称"'))
+    expect(materialBlock.indexOf('label="保存"')).toBeGreaterThan(materialBlock.indexOf('label="管材价"'))
+    expect(materialBlock.indexOf('prop="materialTypeName" label="材料类型"')).toBeGreaterThan(materialBlock.indexOf('label="保存"'))
+    expect(materialBlock.indexOf('prop="materialCategory" label="材质分类"')).toBeGreaterThan(materialBlock.indexOf('prop="materialTypeName" label="材料类型"'))
+    expect(materialBlock.indexOf('prop="remarks" label="备注"')).toBeGreaterThan(materialBlock.indexOf('prop="materialCategory" label="材质分类"'))
+
+    expect(picker).toContain('class-name="material-edit-cell"')
+    expect(picker).toContain('.option-picker-dialog :deep(.material-edit-cell .cell)')
+    expect(picker).toContain('text-overflow: clip;')
+    expect(picker).toContain('width: 100%;')
+    expect(picker).toContain('max-width: 104px;')
+    expect(picker).toContain('max-width: 116px;')
+  })
+
   test('item pricing page enables material inline save and refreshes selected material preview', () => {
     const itemPricing = readSource('components', 'ItemPricing.vue')
 

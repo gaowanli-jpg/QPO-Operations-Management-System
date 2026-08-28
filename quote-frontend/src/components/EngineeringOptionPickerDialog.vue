@@ -56,17 +56,7 @@
       <template v-if="type === 'material'">
         <el-table-column prop="materialCode" label="材料编码" width="150" fixed show-overflow-tooltip />
         <el-table-column prop="materialName" label="材料名称" min-width="150" fixed show-overflow-tooltip />
-        <el-table-column prop="materialTypeName" label="材料类型" width="120" show-overflow-tooltip>
-          <template #default="{ row }">
-            <div class="material-type-cell">
-              <span>{{ row.materialTypeName || '-' }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.materialCategory || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="具体密度" width="150" align="right">
+        <el-table-column label="具体密度" width="144" align="right" class-name="material-edit-cell">
           <template #default="{ row }">
             <el-input-number
               v-if="canEditMaterialPrice(row)"
@@ -90,7 +80,7 @@
         <el-table-column label="实际使用密度" width="130" align="right">
           <template #default="{ row }">{{ formatEffectiveMaterialDensity(row) }}</template>
         </el-table-column>
-        <el-table-column label="板材价" width="130" align="right">
+        <el-table-column label="板材价" width="124" align="right" class-name="material-edit-cell">
           <template #default="{ row }">
             <el-input-number
               v-if="canEditMaterialPrice(row)"
@@ -108,7 +98,7 @@
             <span v-else>{{ formatNumber(row.platePrice) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="棒材价" width="130" align="right">
+        <el-table-column label="棒材价" width="124" align="right" class-name="material-edit-cell">
           <template #default="{ row }">
             <el-input-number
               v-if="canEditMaterialPrice(row)"
@@ -126,7 +116,7 @@
             <span v-else>{{ formatNumber(row.barPrice) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="管材价" width="130" align="right">
+        <el-table-column label="管材价" width="124" align="right" class-name="material-edit-cell">
           <template #default="{ row }">
             <el-input-number
               v-if="canEditMaterialPrice(row)"
@@ -158,6 +148,16 @@
               保存
             </el-button>
           </template>
+        </el-table-column>
+        <el-table-column prop="materialTypeName" label="材料类型" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="material-type-cell">
+              <span>{{ row.materialTypeName || '-' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="materialCategory" label="材质分类" width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.materialCategory || '-' }}</template>
         </el-table-column>
         <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remarks || '-' }}</template>
@@ -771,11 +771,17 @@ onBeforeUnmount(clearRemoteSearchTimer)
 }
 
 .inline-material-input {
-  width: 112px;
+  width: 100%;
+  max-width: 104px;
 }
 
 .inline-material-input.density-input {
-  width: 128px;
+  max-width: 116px;
+}
+
+.option-picker-dialog :deep(.material-edit-cell .cell) {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .picker-pagination {
