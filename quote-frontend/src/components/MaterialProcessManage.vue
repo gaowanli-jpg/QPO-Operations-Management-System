@@ -10,9 +10,9 @@
     <section class="erp-toolbar">
       <div class="erp-toolbar-group material-toolbar">
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
-        <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="warning" plain :loading="isPending(dictActionKeys.syncMesMaterials)" :disabled="isPending(dictActionKeys.syncMesMaterials)" @click="syncMesMaterials">从 MES 同步材料</el-button>
+        <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" type="warning" plain :loading="isMesSyncRunning('MES_MATERIAL') || isPending(dictActionKeys.syncMesMaterials)" :disabled="isMesSyncRunning('MES_MATERIAL') || isPending(dictActionKeys.syncMesMaterials)" @click="syncMesMaterials">从 MES 同步材料</el-button>
         <el-button v-permission="'engineer:dict:material-manage'" v-if="activeTab === 'materials'" plain :loading="scheduleLoading && scheduleTarget === 'MES_MATERIAL'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesMaterialScheduleDialog">定时同步策略</el-button>
-        <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" type="warning" plain :loading="isMesSyncRunning('MES_PROCESS_TYPE') || isPending(dictActionKeys.syncMesProcessTypes)" :disabled="isMesSyncRunning('MES_PROCESS_TYPE') || isPending(dictActionKeys.syncMesProcessTypes)" @click="syncMesProcessTypes">从 MES 同步工艺</el-button>
         <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processCategories'" plain :loading="scheduleLoading && scheduleTarget === 'MES_PROCESS_TYPE'" :disabled="scheduleLoading || isPending(dictActionKeys.saveMesSchedule)" @click="openMesProcessScheduleDialog">定时同步策略</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'pricingMarkupFees' && pricingMarkupFeeCategory === 'BASIC_PERCENT'" type="primary" @click="openPricingMarkupFeeDialog()">新增基础百分比费用</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'extraFees'" type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
@@ -488,7 +488,16 @@
           <el-form-item label="开启定时同步">
             <el-switch v-model="scheduleForm.enabled" active-text="开启" inactive-text="关闭" />
           </el-form-item>
-          <el-form-item label="启动后首次执行">
+          <el-form-item label="同步策略">
+            <el-radio-group v-model="scheduleForm.scheduleMode">
+              <el-radio-button
+                v-for="option in scheduleModeOptions"
+                :key="option.scheduleMode"
+                :label="option.scheduleMode"
+              >{{ option.label }}</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="scheduleForm.scheduleMode === 'FIXED_DELAY'" label="启动后首次执行">
             <el-input-number
               v-model="scheduleForm.startupDelaySeconds"
               :min="0"
@@ -498,7 +507,7 @@
             />
             <span class="mes-schedule-unit">秒</span>
           </el-form-item>
-          <el-form-item label="完成后再次执行">
+          <el-form-item v-if="scheduleForm.scheduleMode === 'FIXED_DELAY'" label="完成后再次执行">
             <el-input-number
               v-model="scheduleForm.fixedDelayMinutes"
               :min="1"
@@ -507,6 +516,14 @@
               controls-position="right"
             />
             <span class="mes-schedule-unit">分钟</span>
+          </el-form-item>
+          <el-form-item v-if="scheduleForm.scheduleMode === 'DAILY_TIME'" label="每天执行时间">
+            <el-time-picker
+              v-model="scheduleForm.dailyRunTime"
+              value-format="HH:mm:ss"
+              format="HH:mm"
+              placeholder="选择时间"
+            />
           </el-form-item>
         </el-form>
         <el-descriptions :column="1" size="small" border class="mes-schedule-status">
@@ -529,12 +546,16 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted, watch } from 'vue'
+import { computed, reactive, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   deleteExtraFeeItem,
   deletePricingMarkupFee as deletePricingMarkupFeeRequest,
+  getLatestMesMaterialSyncRun,
+  getLatestMesProcessSyncRun,
+  getMesMaterialSyncRun,
   getMesMaterialSyncSchedule,
+  getMesProcessSyncRun,
   getMesProcessSyncSchedule,
   listExtraFeeItems,
   listMaterialTypes,
@@ -639,6 +660,12 @@ const extraFeeDialogVisible = ref(false)
 const scheduleDialogVisible = ref(false)
 const scheduleLoading = ref(false)
 const scheduleTarget = ref('MES_MATERIAL')
+const MES_SYNC_POLL_INTERVAL_MS = 3000
+const activeMesSyncRuns = reactive({
+  MES_MATERIAL: null,
+  MES_PROCESS_TYPE: null
+})
+const mesSyncPollingTimers = new Map()
 
 const materialForm = reactive(createEmptyMaterial())
 const processDetailForm = reactive(createEmptyProcessDetail())
@@ -646,6 +673,8 @@ const pricingMarkupFeeForm = reactive(createEmptyPricingMarkupFee())
 const extraFeeForm = reactive(createEmptyExtraFee())
 const scheduleForm = reactive({
   enabled: false,
+  scheduleMode: 'FIXED_DELAY',
+  dailyRunTime: '02:00:00',
   startupDelaySeconds: 30,
   fixedDelayMinutes: 30,
   lastScheduledRunAt: '',
@@ -654,6 +683,11 @@ const scheduleForm = reactive({
   lastScheduledMessage: '',
   fallback: false
 })
+
+const scheduleModeOptions = [
+  { scheduleMode: 'FIXED_DELAY', label: '间隔时间' },
+  { scheduleMode: 'DAILY_TIME', label: '每天固定时间' }
+]
 
 const scheduleConfigs = {
   MES_MATERIAL: {
@@ -673,6 +707,25 @@ const scheduleConfigs = {
     loadError: 'MES 工艺定时同步策略加载失败',
     saveSuccess: 'MES 工艺定时同步策略已保存',
     saveError: 'MES 工艺定时同步策略保存失败'
+  }
+}
+
+const syncConfigByType = {
+  MES_MATERIAL: {
+    label: 'MES 材料',
+    getLatestRun: getLatestMesMaterialSyncRun,
+    getRun: getMesMaterialSyncRun,
+    fallbackSubmitMessage: 'MES 材料同步已提交',
+    fallbackSuccessMessage: 'MES 材料同步完成',
+    fallbackErrorMessage: 'MES 材料同步失败'
+  },
+  MES_PROCESS_TYPE: {
+    label: 'MES 工艺',
+    getLatestRun: getLatestMesProcessSyncRun,
+    getRun: getMesProcessSyncRun,
+    fallbackSubmitMessage: 'MES 工艺同步已提交',
+    fallbackSuccessMessage: 'MES 工艺同步完成',
+    fallbackErrorMessage: 'MES 工艺同步失败'
   }
 }
 
@@ -711,6 +764,41 @@ const categoryLabel = (category) => `${category.processCode || '-'} / ${category
 const pricingScopeText = (value) => pricingMarkupScopeOptions.find((item) => item.value === value)?.label || value || '-'
 const pricingMarkupFeeCategoryText = (value) => pricingMarkupFeeCategoryOptions.find((item) => item.value === value)?.label || value || '-'
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
+const normalizeDailyRunTime = (value) => {
+  if (!value) return '02:00:00'
+  if (value instanceof Date) {
+    const hours = String(value.getHours()).padStart(2, '0')
+    const minutes = String(value.getMinutes()).padStart(2, '0')
+    const seconds = String(value.getSeconds()).padStart(2, '0')
+    return `${hours}:${minutes}:${seconds}`
+  }
+  const text = String(value).trim()
+  if (/^\d{2}:\d{2}$/.test(text)) return `${text}:00`
+  if (/^\d{2}:\d{2}:\d{2}$/.test(text)) return text
+  return '02:00:00'
+}
+const normalizeMesSyncRun = (syncType, run = {}) => ({
+  ...run,
+  syncType: run.syncType || syncType,
+  syncRunId: run.syncRunId ?? run.id ?? null,
+  status: run.status || 'NONE'
+})
+const isMesSyncRunning = (syncType) => activeMesSyncRuns[syncType]?.status === 'RUNNING'
+const formatMesSyncResultMessage = (run = {}) => {
+  const baseMessage = run.message || syncConfigByType[run.syncType]?.fallbackSuccessMessage || 'MES 同步完成'
+  const countParts = [
+    ['抓取', run.fetchedCount],
+    ['有效', run.validCount],
+    ['无效', run.invalidCount],
+    ['重复', run.duplicateCount],
+    ['更新', run.upsertedCount],
+    ['停用', run.disabledCount],
+    ['删除', run.deletedCount]
+  ]
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([label, value]) => `${label}${value}`)
+  return countParts.length ? `${baseMessage}（${countParts.join('，')}）` : baseMessage
+}
 const scheduleStatusLabel = (status) => ({
   SUCCESS: '成功',
   FAILED: '失败',
@@ -889,6 +977,109 @@ const reloadAfterMutation = async () => {
   await loadAll()
 }
 
+const applyMesSyncRun = (syncType, run = {}) => {
+  const normalized = normalizeMesSyncRun(syncType, run)
+  activeMesSyncRuns[syncType] = normalized.status === 'RUNNING' ? normalized : null
+  return normalized
+}
+
+const stopMesSyncPolling = (syncType) => {
+  const timer = mesSyncPollingTimers.get(syncType)
+  if (timer) {
+    window.clearInterval(timer)
+    mesSyncPollingTimers.delete(syncType)
+  }
+}
+
+const pollMesSyncRun = async (syncType, syncRunId) => {
+  const config = syncConfigByType[syncType]
+  if (!config || !syncRunId) return
+  try {
+    const run = applyMesSyncRun(syncType, await config.getRun(syncRunId))
+    if (run.status === 'RUNNING') return
+    stopMesSyncPolling(syncType)
+    if (run.status === 'SUCCESS') {
+      ElMessage.success(formatMesSyncResultMessage(run))
+      await reloadAfterMutation()
+      return
+    }
+    if (run.status === 'FAILED') {
+      ElMessage.error(formatMesSyncResultMessage(run) || config.fallbackErrorMessage)
+    }
+  } catch (error) {
+    console.error(error)
+    stopMesSyncPolling(syncType)
+    activeMesSyncRuns[syncType] = null
+    ElMessage.error(syncConfigByType[syncType]?.fallbackErrorMessage || 'MES 同步状态查询失败')
+  }
+}
+
+const startMesSyncPolling = (syncType, syncRunId) => {
+  if (!syncRunId) return
+  stopMesSyncPolling(syncType)
+  mesSyncPollingTimers.set(syncType, window.setInterval(() => {
+    pollMesSyncRun(syncType, syncRunId)
+  }, MES_SYNC_POLL_INTERVAL_MS))
+  pollMesSyncRun(syncType, syncRunId)
+}
+
+const stopAllMesSyncPolling = () => {
+  Object.keys(activeMesSyncRuns).forEach((syncType) => stopMesSyncPolling(syncType))
+}
+
+const loadLatestMesSyncRun = async (syncType) => {
+  const config = syncConfigByType[syncType]
+  if (!config) return
+  try {
+    const run = normalizeMesSyncRun(syncType, await config.getLatestRun())
+    if (run.status === 'RUNNING' && run.syncRunId) {
+      activeMesSyncRuns[syncType] = run
+      startMesSyncPolling(syncType, run.syncRunId)
+      return
+    }
+    activeMesSyncRuns[syncType] = null
+    stopMesSyncPolling(syncType)
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+const loadLatestMesSyncRuns = () => Promise.all([
+  loadLatestMesSyncRun('MES_MATERIAL'),
+  loadLatestMesSyncRun('MES_PROCESS_TYPE')
+])
+
+const handleMesSyncSubmitResult = async (syncType, response = {}) => {
+  const config = syncConfigByType[syncType]
+  const run = applyMesSyncRun(syncType, {
+    ...response,
+    status: response.status || (response.syncRunId ? 'RUNNING' : 'NONE')
+  })
+  const message = response.message || config?.fallbackSubmitMessage || 'MES 同步已提交'
+  if (response.alreadyRunning) {
+    ElMessage.warning(message)
+  } else if (response.success === false) {
+    ElMessage.error(message)
+  } else if (response.submitted) {
+    ElMessage.success(message)
+  } else {
+    ElMessage.success(message)
+  }
+  if (run.status === 'RUNNING' && run.syncRunId) {
+    if (syncType === 'MES_MATERIAL') {
+      startMesSyncPolling('MES_MATERIAL', run.syncRunId)
+    } else if (syncType === 'MES_PROCESS_TYPE') {
+      startMesSyncPolling('MES_PROCESS_TYPE', run.syncRunId)
+    } else {
+      startMesSyncPolling(syncType, run.syncRunId)
+    }
+    return
+  }
+  if (run.status === 'SUCCESS' || !run.syncRunId) {
+    await reloadAfterMutation()
+  }
+}
+
 const openMaterialDialog = (row) => {
   Object.assign(materialForm, createEmptyMaterial(), row || {})
   materialForm.enabled = materialForm.enabled !== false
@@ -921,8 +1112,7 @@ const syncMesMaterials = async () => {
     await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。确认从 MES 同步材料主数据？', '同步确认', { type: 'warning' })
     try {
       const response = await syncMesMaterialsRequest()
-      ElMessage.success(response.message || 'MES 材料同步完成')
-      await reloadAfterMutation()
+      await handleMesSyncSubmitResult('MES_MATERIAL', response)
     } catch (error) {
       console.error(error)
       ElMessage.error('MES 材料同步失败。')
@@ -935,8 +1125,7 @@ const syncMesProcessTypes = async () => {
     await ElMessageBox.confirm('MES 会更新基础信息，不覆盖 QPO 材料单价和板/棒/管密度。确认从 MES 同步工艺主数据？', '同步确认', { type: 'warning' })
     try {
       const response = await syncMesProcessTypesRequest()
-      ElMessage.success(response.message || 'MES 工艺同步完成')
-      await reloadAfterMutation()
+      await handleMesSyncSubmitResult('MES_PROCESS_TYPE', response)
     } catch (error) {
       console.error(error)
       ElMessage.error('MES 工艺同步失败。')
@@ -968,8 +1157,14 @@ const saveMesScheduleSetting = async () => {
     try {
       const payload = {
         enabled: !!scheduleForm.enabled,
-        startupDelayMs: Number(scheduleForm.startupDelaySeconds || 0) * 1000,
-        fixedDelayMs: Number(scheduleForm.fixedDelayMinutes || 1) * 60 * 1000
+        scheduleMode: scheduleForm.scheduleMode,
+        dailyRunTime: normalizeDailyRunTime(scheduleForm.dailyRunTime),
+        ...(scheduleForm.scheduleMode === 'FIXED_DELAY'
+          ? {
+              startupDelayMs: Number(scheduleForm.startupDelaySeconds || 0) * 1000,
+              fixedDelayMs: Number(scheduleForm.fixedDelayMinutes || 1) * 60 * 1000
+            }
+          : {})
       }
       const response = await activeScheduleConfig.value.save(payload)
       applyMesScheduleSetting(response)
@@ -984,6 +1179,8 @@ const saveMesScheduleSetting = async () => {
 
 const applyMesScheduleSetting = (setting = {}) => {
   scheduleForm.enabled = !!setting.enabled
+  scheduleForm.scheduleMode = setting.scheduleMode || 'FIXED_DELAY'
+  scheduleForm.dailyRunTime = normalizeDailyRunTime(setting.dailyRunTime || '02:00:00')
   scheduleForm.startupDelaySeconds = Math.round((setting.startupDelayMs ?? 30000) / 1000)
   scheduleForm.fixedDelayMinutes = Math.max(1, Math.round((setting.fixedDelayMs ?? 1800000) / 60000))
   scheduleForm.lastScheduledRunAt = setting.lastScheduledRunAt || ''
@@ -1113,8 +1310,14 @@ watch(
   () => [processDetailPagination.page, processDetailPagination.pageSize],
   () => loadPageWithLoading(loadProcessDetailPage)
 )
+watch(activeTab, (tab) => {
+  if (tab === 'materials') loadLatestMesSyncRun('MES_MATERIAL')
+  if (tab === 'processCategories') loadLatestMesSyncRun('MES_PROCESS_TYPE')
+})
 
 onMounted(loadAll)
+onMounted(loadLatestMesSyncRuns)
+onBeforeUnmount(stopAllMesSyncPolling)
 </script>
 
 <style scoped>

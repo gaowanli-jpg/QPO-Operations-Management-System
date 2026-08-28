@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,9 +24,16 @@ public class MesMasterDataSyncScheduleConfigService {
     private static final long MAX_STARTUP_DELAY_MS = 86_400_000L;
     private static final long MIN_FIXED_DELAY_MS = 60_000L;
     private static final long MAX_FIXED_DELAY_MS = 604_800_000L;
+    private static final String SCHEDULE_MODE_FIXED_DELAY = "FIXED_DELAY";
+    private static final String SCHEDULE_MODE_DAILY_TIME = "DAILY_TIME";
+    private static final LocalTime DEFAULT_DAILY_RUN_TIME = LocalTime.of(2, 0);
     private static final Set<String> SUPPORTED_SYNC_TYPES = Set.of(
             MesMasterDataSyncService.SYNC_TYPE_MATERIAL,
             MesMasterDataSyncService.SYNC_TYPE_PROCESS_TYPE
+    );
+    private static final Set<String> SUPPORTED_SCHEDULE_MODES = Set.of(
+            SCHEDULE_MODE_FIXED_DELAY,
+            SCHEDULE_MODE_DAILY_TIME
     );
 
     @Autowired
@@ -55,6 +63,7 @@ public class MesMasterDataSyncScheduleConfigService {
         MesMasterDataSyncScheduleConfig before = configMapper.selectById(normalizedType);
         MesMasterDataSyncScheduleConfig config = before == null ? defaultConfigFromFallback(normalizedType) : copy(before);
         applyRequest(config, req);
+        config = normalize(config);
         config.setUpdatedAt(now());
         if (before == null) {
             configMapper.insert(config);
@@ -82,9 +91,22 @@ public class MesMasterDataSyncScheduleConfigService {
             return false;
         }
         LocalDateTime current = now();
+        if (SCHEDULE_MODE_DAILY_TIME.equals(config.getScheduleMode())) {
+            return shouldRunDailyTime(config, current);
+        }
         LocalDateTime base = config.getLastScheduledRunAt() == null ? schedulerStartedAt : config.getLastScheduledRunAt();
         long delay = config.getLastScheduledRunAt() == null ? config.getStartupDelayMs() : config.getFixedDelayMs();
         return base == null || !current.isBefore(base.plusNanos(delay * 1_000_000L));
+    }
+
+    private boolean shouldRunDailyTime(MesMasterDataSyncScheduleConfig config, LocalDateTime current) {
+        LocalTime dailyRunTime = config.getDailyRunTime() == null ? DEFAULT_DAILY_RUN_TIME : config.getDailyRunTime();
+        LocalDateTime todayRunAt = LocalDateTime.of(current.toLocalDate(), dailyRunTime);
+        if (current.isBefore(todayRunAt)) {
+            return false;
+        }
+        LocalDateTime lastRunAt = config.getLastScheduledRunAt();
+        return lastRunAt == null || lastRunAt.toLocalDate().isBefore(current.toLocalDate());
     }
 
     public void updateScheduledResult(String syncType, MesMasterDataSyncService.SyncResult result) {
@@ -115,6 +137,8 @@ public class MesMasterDataSyncScheduleConfigService {
         MesMasterDataSyncScheduleConfig config = new MesMasterDataSyncScheduleConfig();
         config.setSyncType(validateSyncType(syncType));
         config.setEnabled(fallbackEnabled);
+        config.setScheduleMode(SCHEDULE_MODE_FIXED_DELAY);
+        config.setDailyRunTime(DEFAULT_DAILY_RUN_TIME);
         config.setStartupDelayMs(clamp(fallbackStartupDelayMs, 0L, MAX_STARTUP_DELAY_MS, DEFAULT_STARTUP_DELAY_MS));
         config.setFixedDelayMs(clamp(fallbackFixedDelayMs, MIN_FIXED_DELAY_MS, MAX_FIXED_DELAY_MS, DEFAULT_FIXED_DELAY_MS));
         config.setLastScheduledStatus("NEVER");
@@ -128,6 +152,12 @@ public class MesMasterDataSyncScheduleConfigService {
         }
         if (req.getEnabled() != null) {
             config.setEnabled(req.getEnabled());
+        }
+        if (req.getScheduleMode() != null) {
+            config.setScheduleMode(validateScheduleMode(req.getScheduleMode()));
+        }
+        if (req.getDailyRunTime() != null) {
+            config.setDailyRunTime(req.getDailyRunTime());
         }
         if (req.getStartupDelayMs() != null) {
             validateStartupDelay(req.getStartupDelayMs());
@@ -154,6 +184,8 @@ public class MesMasterDataSyncScheduleConfigService {
     private MesMasterDataSyncScheduleConfig normalize(MesMasterDataSyncScheduleConfig config) {
         config.setSyncType(validateSyncType(config.getSyncType()));
         if (config.getEnabled() == null) config.setEnabled(false);
+        config.setScheduleMode(validateScheduleMode(config.getScheduleMode()));
+        if (config.getDailyRunTime() == null) config.setDailyRunTime(DEFAULT_DAILY_RUN_TIME);
         if (config.getStartupDelayMs() == null) config.setStartupDelayMs(DEFAULT_STARTUP_DELAY_MS);
         if (config.getFixedDelayMs() == null) config.setFixedDelayMs(DEFAULT_FIXED_DELAY_MS);
         if (isBlank(config.getLastScheduledStatus())) config.setLastScheduledStatus("NEVER");
@@ -165,6 +197,8 @@ public class MesMasterDataSyncScheduleConfigService {
         MesMasterDataSyncScheduleConfig copy = new MesMasterDataSyncScheduleConfig();
         copy.setSyncType(source.getSyncType());
         copy.setEnabled(source.getEnabled());
+        copy.setScheduleMode(source.getScheduleMode());
+        copy.setDailyRunTime(source.getDailyRunTime());
         copy.setStartupDelayMs(source.getStartupDelayMs());
         copy.setFixedDelayMs(source.getFixedDelayMs());
         copy.setLastScheduledRunAt(source.getLastScheduledRunAt());
@@ -180,6 +214,8 @@ public class MesMasterDataSyncScheduleConfigService {
         MesMasterDataSyncScheduleConfigDTO dto = new MesMasterDataSyncScheduleConfigDTO();
         dto.setSyncType(normalized.getSyncType());
         dto.setEnabled(Boolean.TRUE.equals(normalized.getEnabled()));
+        dto.setScheduleMode(normalized.getScheduleMode());
+        dto.setDailyRunTime(normalized.getDailyRunTime());
         dto.setStartupDelayMs(normalized.getStartupDelayMs());
         dto.setFixedDelayMs(normalized.getFixedDelayMs());
         dto.setLastScheduledRunAt(normalized.getLastScheduledRunAt());
@@ -196,6 +232,8 @@ public class MesMasterDataSyncScheduleConfigService {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("syncType", normalized.getSyncType());
         summary.put("enabled", Boolean.TRUE.equals(normalized.getEnabled()));
+        summary.put("scheduleMode", normalized.getScheduleMode());
+        summary.put("dailyRunTime", normalized.getDailyRunTime());
         summary.put("startupDelayMs", normalized.getStartupDelayMs());
         summary.put("fixedDelayMs", normalized.getFixedDelayMs());
         summary.put("lastScheduledStatus", normalized.getLastScheduledStatus());
@@ -223,6 +261,17 @@ public class MesMasterDataSyncScheduleConfigService {
             throw new IllegalArgumentException("Unsupported MES sync type: " + syncType);
         }
         return syncType.trim();
+    }
+
+    private String validateScheduleMode(String scheduleMode) {
+        if (scheduleMode == null || scheduleMode.trim().isEmpty()) {
+            return SCHEDULE_MODE_FIXED_DELAY;
+        }
+        String normalized = scheduleMode.trim().toUpperCase();
+        if (!SUPPORTED_SCHEDULE_MODES.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported MES sync schedule mode: " + scheduleMode);
+        }
+        return normalized;
     }
 
     private long clamp(long value, long min, long max, long defaultValue) {

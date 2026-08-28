@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Data
 @TableName("mes_master_data_sync_schedule_config")
@@ -14,6 +15,8 @@ public class MesMasterDataSyncScheduleConfig {
     private String syncType;
 
     private Boolean enabled;
+    private String scheduleMode;
+    private LocalTime dailyRunTime;
     private Long startupDelayMs;
     private Long fixedDelayMs;
     private LocalDateTime lastScheduledRunAt;

@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Map;
 
@@ -46,6 +47,8 @@ class MesMasterDataSyncScheduleConfigTest {
         assertThat(material.getSyncType()).isEqualTo("MES_MATERIAL");
         assertThat(process.getSyncType()).isEqualTo("MES_PROCESS_TYPE");
         assertThat(material.isEnabled()).isTrue();
+        assertThat(material.getScheduleMode()).isEqualTo("FIXED_DELAY");
+        assertThat(material.getDailyRunTime()).isEqualTo(LocalTime.of(2, 0));
         assertThat(material.getStartupDelayMs()).isEqualTo(45_000L);
         assertThat(material.getFixedDelayMs()).isEqualTo(3_600_000L);
         assertThat(material.getLastScheduledStatus()).isEqualTo("NEVER");
@@ -62,17 +65,23 @@ class MesMasterDataSyncScheduleConfigTest {
 
         MesMasterDataSyncScheduleConfigReq req = new MesMasterDataSyncScheduleConfigReq();
         req.setEnabled(true);
+        req.setScheduleMode("DAILY_TIME");
+        req.setDailyRunTime(LocalTime.of(2, 0));
         req.setStartupDelayMs(120_000L);
         req.setFixedDelayMs(7_200_000L);
 
         MesMasterDataSyncScheduleConfigDTO updated = service.updateSetting("MES_MATERIAL", req);
 
         assertThat(updated.isEnabled()).isTrue();
+        assertThat(updated.getScheduleMode()).isEqualTo("DAILY_TIME");
+        assertThat(updated.getDailyRunTime()).isEqualTo(LocalTime.of(2, 0));
         assertThat(updated.getStartupDelayMs()).isEqualTo(120_000L);
         assertThat(updated.getFixedDelayMs()).isEqualTo(7_200_000L);
         ArgumentCaptor<MesMasterDataSyncScheduleConfig> captor = ArgumentCaptor.forClass(MesMasterDataSyncScheduleConfig.class);
         verify(mapper).updateById(captor.capture());
         assertThat(captor.getValue().getSyncType()).isEqualTo("MES_MATERIAL");
+        assertThat(captor.getValue().getScheduleMode()).isEqualTo("DAILY_TIME");
+        assertThat(captor.getValue().getDailyRunTime()).isEqualTo(LocalTime.of(2, 0));
         assertThat(captor.getValue().getLastScheduledStatus()).isEqualTo("NEVER");
         verify(auditService).record(
                 eq("DICT_MES_MASTER_DATA_SYNC_SCHEDULE_UPDATE"),
@@ -129,6 +138,36 @@ class MesMasterDataSyncScheduleConfigTest {
     }
 
     @Test
+    void dailyTimeModeRunsOncePerLocalDayAndCatchesUpAfterStartup() {
+        MesMasterDataSyncScheduleConfigMapper mapper = mock(MesMasterDataSyncScheduleConfigMapper.class);
+        MesMasterDataSyncScheduleConfig config = config("MES_MATERIAL", true, 0L, 60_000L, null, "NEVER", "DAILY_TIME", LocalTime.of(2, 0));
+        when(mapper.selectById("MES_MATERIAL")).thenReturn(config);
+
+        assertThat(service(mapper, mock(AuditService.class), LocalDateTime.of(2026, 8, 13, 1, 59))
+                .shouldRun("MES_MATERIAL", LocalDateTime.of(2026, 8, 13, 0, 0))).isFalse();
+        assertThat(service(mapper, mock(AuditService.class), LocalDateTime.of(2026, 8, 13, 2, 0))
+                .shouldRun("MES_MATERIAL", LocalDateTime.of(2026, 8, 13, 0, 0))).isTrue();
+
+        config.setLastScheduledRunAt(LocalDateTime.of(2026, 8, 13, 2, 1));
+        assertThat(service(mapper, mock(AuditService.class), LocalDateTime.of(2026, 8, 13, 3, 0))
+                .shouldRun("MES_MATERIAL", LocalDateTime.of(2026, 8, 13, 0, 0))).isFalse();
+
+        config.setLastScheduledRunAt(LocalDateTime.of(2026, 8, 12, 2, 1));
+        assertThat(service(mapper, mock(AuditService.class), LocalDateTime.of(2026, 8, 13, 3, 0))
+                .shouldRun("MES_MATERIAL", LocalDateTime.of(2026, 8, 13, 2, 30))).isTrue();
+    }
+
+    @Test
+    void schedulerSubmitsAsyncSyncInsteadOfBlockingRequestPath() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/com/machining/quote/service/mes/MesMasterDataSyncService.java"));
+
+        assertThat(source)
+                .contains("submitScheduled(syncType)")
+                .doesNotContain("syncMaterialsManual(null)")
+                .doesNotContain("syncProcessTypesManual(null)");
+    }
+
+    @Test
     void scheduledResultCreatesFallbackRowAndStoresCounters() {
         MesMasterDataSyncScheduleConfigMapper mapper = mock(MesMasterDataSyncScheduleConfigMapper.class);
         MesMasterDataSyncScheduleConfigService service = service(mapper, mock(AuditService.class));
@@ -182,10 +221,17 @@ class MesMasterDataSyncScheduleConfigTest {
     }
 
     private MesMasterDataSyncScheduleConfigService service(MesMasterDataSyncScheduleConfigMapper mapper, AuditService auditService) {
+        return service(mapper, auditService, LocalDateTime.of(2026, 8, 13, 12, 0));
+    }
+
+    private MesMasterDataSyncScheduleConfigService service(
+            MesMasterDataSyncScheduleConfigMapper mapper,
+            AuditService auditService,
+            LocalDateTime current) {
         MesMasterDataSyncScheduleConfigService service = new MesMasterDataSyncScheduleConfigService();
         ReflectionTestUtils.setField(service, "configMapper", mapper);
         ReflectionTestUtils.setField(service, "auditService", auditService);
-        ReflectionTestUtils.setField(service, "clock", Clock.fixed(Instant.parse("2026-08-13T04:00:00Z"), ZONE));
+        ReflectionTestUtils.setField(service, "clock", Clock.fixed(current.atZone(ZONE).toInstant(), ZONE));
         return service;
     }
 
@@ -204,6 +250,21 @@ class MesMasterDataSyncScheduleConfigTest {
         config.setLastScheduledRunAt(lastRunAt);
         config.setLastScheduledStatus(status);
         config.setUpdatedAt(LocalDateTime.of(2026, 8, 13, 12, 0));
+        return config;
+    }
+
+    private MesMasterDataSyncScheduleConfig config(
+            String syncType,
+            boolean enabled,
+            long startupDelayMs,
+            long fixedDelayMs,
+            LocalDateTime lastRunAt,
+            String status,
+            String scheduleMode,
+            LocalTime dailyRunTime) {
+        MesMasterDataSyncScheduleConfig config = config(syncType, enabled, startupDelayMs, fixedDelayMs, lastRunAt, status);
+        config.setScheduleMode(scheduleMode);
+        config.setDailyRunTime(dailyRunTime);
         return config;
     }
 }

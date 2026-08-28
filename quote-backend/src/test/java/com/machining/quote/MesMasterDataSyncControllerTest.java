@@ -8,6 +8,7 @@ import com.machining.quote.controller.ProcessMasterController;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigDTO;
 import com.machining.quote.dto.MesMasterDataSyncScheduleConfigReq;
 import com.machining.quote.dto.PermissionInfoDTO;
+import com.machining.quote.entity.MesMasterDataSyncRun;
 import com.machining.quote.service.AuthService;
 import com.machining.quote.service.PermissionService;
 import com.machining.quote.service.mes.MesMasterDataSyncScheduleConfigService;
@@ -26,11 +27,13 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,8 +54,9 @@ class MesMasterDataSyncControllerTest {
                 .containsExactly("engineer:dict:process-manage");
 
         MesMasterDataSyncService syncService = mock(MesMasterDataSyncService.class);
-        when(syncService.syncProcessTypesManual(88L))
-                .thenReturn(new MesMasterDataSyncService.SyncResult(true, 9001L, 5, 4, 1, 0, 4, 0, 2, null));
+        when(syncService.submitProcessTypesManual(88L))
+                .thenReturn(new MesMasterDataSyncService.SyncSubmitResult(
+                        true, true, false, 9001L, "MES_PROCESS_TYPE", "RUNNING", "MES工艺主数据同步已提交"));
         ProcessMasterController controller = new ProcessMasterController();
         ReflectionTestUtils.setField(controller, "mesMasterDataSyncService", syncService);
 
@@ -61,15 +65,14 @@ class MesMasterDataSyncControllerTest {
 
         assertThat(response)
                 .containsEntry("success", true)
+                .containsEntry("submitted", true)
+                .containsEntry("alreadyRunning", false)
                 .containsEntry("syncRunId", 9001L)
                 .containsEntry("syncType", "MES_PROCESS_TYPE")
-                .containsEntry("fetchedCount", 5)
-                .containsEntry("validCount", 4)
-                .containsEntry("invalidCount", 1)
-                .containsEntry("upsertedCount", 4)
-                .containsEntry("disabledCount", 0)
-                .containsEntry("deletedCount", 2);
-        verify(syncService).syncProcessTypesManual(88L);
+                .containsEntry("status", "RUNNING")
+                .containsEntry("message", "MES工艺主数据同步已提交");
+        verify(syncService).submitProcessTypesManual(88L);
+        verify(syncService, never()).syncProcessTypesManual(88L);
     }
 
     @Test
@@ -82,8 +85,9 @@ class MesMasterDataSyncControllerTest {
                 .containsExactly("engineer:dict:material-manage");
 
         MesMasterDataSyncService syncService = mock(MesMasterDataSyncService.class);
-        when(syncService.syncMaterialsManual(89L))
-                .thenReturn(new MesMasterDataSyncService.SyncResult(false, 9002L, 2, 0, 2, 0, 0, 0, 0, "safe failure"));
+        when(syncService.submitMaterialsManual(89L))
+                .thenReturn(new MesMasterDataSyncService.SyncSubmitResult(
+                        true, false, true, 9002L, "MES_MATERIAL", "RUNNING", "已有MES材料主数据同步正在执行"));
         DictController controller = new DictController();
         ReflectionTestUtils.setField(controller, "mesMasterDataSyncService", syncService);
 
@@ -91,15 +95,79 @@ class MesMasterDataSyncControllerTest {
         Map<String, Object> response = controller.syncMesMaterials();
 
         assertThat(response)
-                .containsEntry("success", false)
+                .containsEntry("success", true)
+                .containsEntry("submitted", false)
+                .containsEntry("alreadyRunning", true)
                 .containsEntry("syncRunId", 9002L)
                 .containsEntry("syncType", "MES_MATERIAL")
-                .containsEntry("fetchedCount", 2)
-                .containsEntry("validCount", 0)
-                .containsEntry("invalidCount", 2)
-                .containsEntry("deletedCount", 0)
+                .containsEntry("status", "RUNNING")
+                .containsEntry("message", "已有MES材料主数据同步正在执行");
+        verify(syncService).submitMaterialsManual(89L);
+        verify(syncService, never()).syncMaterialsManual(89L);
+    }
+
+    @Test
+    void materialRunStatusEndpointsUseMaterialManagePermissionAndReturnCounters() throws Exception {
+        Method latest = DictController.class.getMethod("latestMesMaterialSyncRun");
+        Method byId = DictController.class.getMethod("mesMaterialSyncRun", Long.class);
+
+        assertThat(latest.getAnnotation(GetMapping.class).value())
+                .containsExactly("/materials/sync-runs/latest");
+        assertThat(byId.getAnnotation(GetMapping.class).value())
+                .containsExactly("/materials/sync-runs/{syncRunId}");
+        assertThat(latest.getAnnotation(RequirePermission.class).value())
+                .containsExactly("engineer:dict:material-manage");
+        assertThat(byId.getAnnotation(RequirePermission.class).value())
+                .containsExactly("engineer:dict:material-manage");
+
+        MesMasterDataSyncService syncService = mock(MesMasterDataSyncService.class);
+        MesMasterDataSyncRun run = run(9010L, "MES_MATERIAL", "SUCCESS");
+        when(syncService.getLatestRun("MES_MATERIAL")).thenReturn(run);
+        when(syncService.getRun("MES_MATERIAL", 9010L)).thenReturn(run);
+        DictController controller = new DictController();
+        ReflectionTestUtils.setField(controller, "mesMasterDataSyncService", syncService);
+
+        assertThat(controller.latestMesMaterialSyncRun())
+                .containsEntry("success", true)
+                .containsEntry("syncRunId", 9010L)
+                .containsEntry("syncType", "MES_MATERIAL")
+                .containsEntry("status", "SUCCESS")
+                .containsEntry("deletedCount", 3);
+        assertThat(controller.mesMaterialSyncRun(9010L)).containsEntry("syncRunId", 9010L);
+        verify(syncService).getLatestRun("MES_MATERIAL");
+        verify(syncService).getRun("MES_MATERIAL", 9010L);
+    }
+
+    @Test
+    void processRunStatusEndpointsUseProcessManagePermissionAndReturnCounters() throws Exception {
+        Method latest = ProcessMasterController.class.getMethod("latestMesProcessTypeSyncRun");
+        Method byId = ProcessMasterController.class.getMethod("mesProcessTypeSyncRun", Long.class);
+
+        assertThat(latest.getAnnotation(GetMapping.class).value())
+                .containsExactly("/process-categories/sync-runs/latest");
+        assertThat(byId.getAnnotation(GetMapping.class).value())
+                .containsExactly("/process-categories/sync-runs/{syncRunId}");
+        assertThat(latest.getAnnotation(RequirePermission.class).value())
+                .containsExactly("engineer:dict:process-manage");
+        assertThat(byId.getAnnotation(RequirePermission.class).value())
+                .containsExactly("engineer:dict:process-manage");
+
+        MesMasterDataSyncService syncService = mock(MesMasterDataSyncService.class);
+        MesMasterDataSyncRun run = run(9020L, "MES_PROCESS_TYPE", "FAILED");
+        when(syncService.getLatestRun("MES_PROCESS_TYPE")).thenReturn(run);
+        when(syncService.getRun("MES_PROCESS_TYPE", 9020L)).thenReturn(run);
+        ProcessMasterController controller = new ProcessMasterController();
+        ReflectionTestUtils.setField(controller, "mesMasterDataSyncService", syncService);
+
+        assertThat(controller.latestMesProcessTypeSyncRun())
+                .containsEntry("success", false)
+                .containsEntry("syncRunId", 9020L)
+                .containsEntry("syncType", "MES_PROCESS_TYPE")
+                .containsEntry("status", "FAILED")
                 .containsEntry("message", "safe failure");
-        verify(syncService).syncMaterialsManual(89L);
+        assertThat(controller.mesProcessTypeSyncRun(9020L)).containsEntry("syncRunId", 9020L);
+        verify(syncService).getLatestRun("MES_PROCESS_TYPE");
+        verify(syncService).getRun("MES_PROCESS_TYPE", 9020L);
     }
 
     @Test
@@ -276,5 +344,25 @@ class MesMasterDataSyncControllerTest {
     private HandlerMethod handler(Object controller, String methodName, Class<?>... parameterTypes) throws NoSuchMethodException {
         Method method = controller.getClass().getMethod(methodName, parameterTypes);
         return new HandlerMethod(controller, method);
+    }
+
+    private MesMasterDataSyncRun run(Long id, String syncType, String status) {
+        MesMasterDataSyncRun run = new MesMasterDataSyncRun();
+        run.setId(id);
+        run.setSyncType(syncType);
+        run.setStatus(status);
+        run.setStartedAt(LocalDateTime.of(2026, 8, 27, 14, 22, 10));
+        run.setFinishedAt("RUNNING".equals(status) ? null : LocalDateTime.of(2026, 8, 27, 14, 25, 42));
+        run.setFetchedCount(20);
+        run.setValidCount(18);
+        run.setInvalidCount(1);
+        run.setDuplicateCount(1);
+        run.setUpsertedCount(17);
+        run.setDisabledCount(2);
+        run.setDeletedCount(3);
+        run.setMessage("FAILED".equals(status) ? "safe failure" : "OK");
+        run.setCreatedBy(7L);
+        run.setCreatedAt(LocalDateTime.of(2026, 8, 27, 14, 22, 10));
+        return run;
     }
 }
