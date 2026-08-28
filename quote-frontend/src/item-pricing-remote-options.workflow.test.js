@@ -43,4 +43,17 @@ describe('item pricing remote material and process options', () => {
     expect(source).toContain('inputVal * hourlyRate')
     expect(source).toContain('await submitQuote(payload)')
   })
+
+  test('normal item save syncs current material, shape, and process route back to the order global config', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('const buildGlobalMaterialConfig = () => ({')
+    expect(source).toContain('materialCode: matForm.materialCode')
+    expect(source).toContain('shape: matForm.shape')
+    expect(source).toContain('const syncCurrentSelectionToGlobalConfig = async () =>')
+    expect(source).toContain('...buildGlobalMaterialConfig(),')
+    expect(source).toContain('processRoute: nextProcessRoute')
+    expect(source).toContain('await syncCurrentSelectionToGlobalConfig()')
+    expect(source).not.toContain('syncCurrentRouteToGlobalConfig')
+  })
 })
