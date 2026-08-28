@@ -12,7 +12,7 @@ public class SalesOrderIntegrationSqlProvider {
                   LEFT JOIN sales_order_item soi ON soi.sales_order_id = so.id
                   WHERE 1 = 1
                     <if test='req.saleOrderNo != null and req.saleOrderNo != ""'>
-                    AND so.sales_order_no = #{req.saleOrderNo}
+                    AND so.document_no = #{req.saleOrderNo}
                     </if>
                     <if test='req.status != null and req.status != ""'>
                     AND so.status = #{req.status}
@@ -43,7 +43,7 @@ public class SalesOrderIntegrationSqlProvider {
                 )
                 SELECT
                   so.id AS sales_order_id,
-                  so.sales_order_no AS sale_order_no,
+                  so.document_no AS sale_order_no,
                   so.internal_project_no,
                   so.order_type,
                   so.status,

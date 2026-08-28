@@ -27,7 +27,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 | --- | --- | --- | --- |
 | `pageSize` | integer | 否 | 每页订单数，只允许 `20` / `50` / `100`，默认 `100`。 |
 | `cursor` | string | 否 | 下一页游标。首次同步不传；后续传上次响应的 `data.nextCursor`。 |
-| `saleOrderNo` | string | 否 | 销售订单号精确查询，用于补同步某一单。 |
+| `saleOrderNo` | string | 否 | 对外销售订单号精确查询，固定匹配 QPO `sales_order_header.document_no`，用于补同步某一单。 |
 | `materialNo` | string | 否 | 物料号筛选，用于补同步命中物料行。 |
 | `partNo` | string | 否 | 图号筛选，仅用于查询命中行，响应中不返回图号。 |
 | `version` | string | 否 | 图纸版本筛选，仅用于查询命中行，响应中不返回版本。 |
@@ -53,7 +53,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
   "data": {
     "records": [
       {
-        "saleOrderNo": "SO-20260817-001",
+        "saleOrderNo": "DOC-20260817-001",
         "createdAt": "2026-08-17T09:00:00",
         "changedAt": "2026-08-17T10:30:00",
         "status": "APPROVED",
@@ -102,7 +102,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 
 | 字段 | 类型 | 必返 | 说明 |
 | --- | --- | --- | --- |
-| `saleOrderNo` | string | 是 | 销售订单唯一编号。 |
+| `saleOrderNo` | string | 是 | 对外销售订单唯一编号，业务值固定为 QPO `sales_order_header.document_no`，与 QPO 下发 MES 生产时的销售订单号一致。 |
 | `createdAt` | datetime | 是 | 销售订单创建时间。 |
 | `changedAt` | datetime | 是 | 订单头或任意明细最后变更时间，用于增量同步水位。 |
 | `status` | string | 否 | 销售订单状态，仅用于展示和查询，不限制 MES 创建生产需求。 |
@@ -134,7 +134,7 @@ MES 建议按以下业务键幂等落库：
 
 说明：
 
-- `saleOrderNo` 是销售订单唯一编号。
+- `saleOrderNo` 是对外销售订单唯一编号，取 QPO `sales_order_header.document_no`。
 - `saleOrderItemNo` 是订单内稳定明细编号。
 - 同一订单多次同步时，MES 可按 `saleOrderNo + saleOrderItemNo` 做插入或更新。
 - `changedAt` 可作为增量同步水位，不建议作为业务主键。
@@ -171,7 +171,7 @@ Authorization: Bearer {QPO_OPEN_API_TOKEN}
 按销售订单号补同步：
 
 ```http
-GET /api/integrations/sales-orders?saleOrderNo=SO-20260817-001
+GET /api/integrations/sales-orders?saleOrderNo=DOC-20260817-001
 Authorization: Bearer {QPO_OPEN_API_TOKEN}
 ```
 

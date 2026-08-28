@@ -104,18 +104,21 @@ class SalesOrderIntegrationPagingTest {
     }
 
     @Test
-    void mapperSqlDefinesChangedAtFiltersLineFiltersAndCursorOrdering() throws Exception {
+    void mapperSqlExposesDocumentNoAsExternalSaleOrderNoAndKeepsStablePaging() throws Exception {
         String source = Files.readString(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "mapper", "SalesOrderIntegrationSqlProvider.java"
         ), StandardCharsets.UTF_8);
 
         assertThat(source)
                 .contains("GREATEST(so.updated_at, COALESCE(MAX(soi.updated_at), so.updated_at)) AS changed_at")
+                .contains("so.document_no = #{req.saleOrderNo}")
+                .contains("so.document_no AS sale_order_no")
                 .contains("so.created_at >= #{req.createdFrom}")
                 .contains("so.created_at &lt;= #{req.createdTo}")
                 .contains("oc.changed_at >= #{req.updatedFrom}")
                 .contains("oc.changed_at &lt;= #{req.updatedTo}")
-                .contains("so.sales_order_no = #{req.saleOrderNo}")
+                .doesNotContain("so.sales_order_no = #{req.saleOrderNo}")
+                .doesNotContain("so.sales_order_no AS sale_order_no")
                 .contains("so.status = #{req.status}")
                 .contains("EXISTS")
                 .contains("f.material_no = #{req.materialNo}")
