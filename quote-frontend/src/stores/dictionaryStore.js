@@ -220,6 +220,23 @@ export const useDictionaryStore = defineStore('dictionary', {
       this.processes = this.processDetails.filter(isProcessDetailEffectivelyEnabled).map(toProcessCompatibilityRow)
     },
 
+    upsertPricingMarkupFee(fee = {}) {
+      if (fee.id == null) return
+      const normalizedFee = normalizePricingMarkupFee(fee, fee.pricingScope, fee.feeCategory)
+      const index = this.pricingMarkupFees.findIndex(item => String(item.id) === String(normalizedFee.id))
+      if (index >= 0) {
+        this.pricingMarkupFees.splice(index, 1, {
+          ...this.pricingMarkupFees[index],
+          ...normalizedFee
+        })
+      } else {
+        this.pricingMarkupFees.push(normalizedFee)
+      }
+      this.loadedAt = Date.now()
+      this.pricingMarkupFeesLoadedAt = this.loadedAt
+      this.lastIncludePricingMarkupFees = true
+    },
+
     applyPricingFallbackData() {
       this.materialTypes = [
         { id: 'fallback-raw', typeCode: 'RAW_MATERIAL', typeName: '原材料', enabled: true, sortNo: 0 }

@@ -46,6 +46,7 @@ describe('engineering duplicate click guards', () => {
     expect(source).toContain('refreshOrder: () => `engineer:pricing:refresh:${rfqId.value || \'none\'}`')
     expect(source).toContain('completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || \'none\'}`')
     expect(source).toContain('exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || \'none\'}`')
+    expect(source).toContain('saveCustomerWeight: () => `engineer:pricing:customer-weight:${normalCustomerWeightFee.value?.id || \'none\'}`')
     expect(source).toContain('saveItem: (itemId) => `engineer:pricing:save-item:${itemId || \'none\'}`')
   })
 
@@ -58,7 +59,7 @@ describe('engineering duplicate click guards', () => {
     expect(source).toContain(':disabled="!canCompleteQuote || completeLoading || refreshLoading || repeatApplyLoading"')
     expect(source).toContain(':disabled="orderPricingActionPending"')
     expect(source).toContain(':loading="isItemQuoteSaving(scope.row)"')
-    expect(source).toContain(':disabled="submitLoading || completeLoading || refreshLoading"')
+    expect(source).toContain(':disabled="submitLoading || completeLoading || refreshLoading || customerWeightSavePending"')
   })
 
   test('item pricing wraps long-running pricing actions with runAction guards', () => {

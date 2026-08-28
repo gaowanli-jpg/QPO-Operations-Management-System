@@ -292,8 +292,27 @@
               </el-row>
               <el-row :gutter="20" class="weight-row">
                 <el-col :span="12">
-                  <el-form-item label="材料毛重(kg)">
-                    <el-input :model-value="calculatedWeight.toFixed(3)" disabled class="full-width" />
+                  <el-form-item label="客户权重(%)">
+                    <div class="customer-weight-control">
+                      <el-input-number
+                        v-model="customerWeightRatePercent"
+                        :min="0"
+                        :step="1"
+                        :precision="2"
+                        placeholder="请输入"
+                        controls-position="right"
+                        class="customer-weight-input"
+                        :disabled="customerWeightSavePending"
+                      />
+                      <el-button
+                        v-permission="'engineer:dict:fee-manage'"
+                        type="primary"
+                        plain
+                        :loading="customerWeightSavePending"
+                        :disabled="!customerWeightDirty || customerWeightSavePending"
+                        @click="() => saveCustomerWeightRate()"
+                      >保存</el-button>
+                    </div>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -509,7 +528,7 @@
             type="success"
             @click="submitCurrentQuote"
             :loading="submitLoading"
-            :disabled="submitLoading || completeLoading || refreshLoading"
+            :disabled="submitLoading || completeLoading || refreshLoading || customerWeightSavePending"
           >确认提交</el-button>
         </div>
       </template>
@@ -710,6 +729,7 @@ import {
   submitQuote
 } from '../services/engineerApi'
 import { refreshEngineerQuotes } from '../services/taskApi'
+import { updatePricingMarkupFee } from '../services/dictApi'
 import { useAuthStore } from '../stores/authStore'
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { useGlobalConfigStore } from '../stores/globalConfigStore'
@@ -766,6 +786,7 @@ const pricingActionKeys = {
   refreshOrder: () => `engineer:pricing:refresh:${rfqId.value || 'none'}`,
   completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || 'none'}`,
   exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || 'none'}`,
+  saveCustomerWeight: () => `engineer:pricing:customer-weight:${normalCustomerWeightFee.value?.id || 'none'}`,
   saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`
 }
 
@@ -783,6 +804,7 @@ const pricingListPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_
 const pricingItemTotal = ref(0)
 const markupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('NORMAL'))
 const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))
+const customerWeightRatePercent = ref(0)
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
@@ -876,6 +898,23 @@ const TAX_ONLY_PRICING_FEE_SEQUENCE = TAX_INCLUDED_PRICING_FEE_SEQUENCE.filter(
   feeCategory => !UNTAXED_PRICING_FEE_SEQUENCE.includes(feeCategory)
 )
 
+const normalCustomerWeightFee = computed(() => markupFeeOptions.value.find(fee => (
+  fee.feeCategory === CUSTOMER_WEIGHT && fee.pricingScope === 'NORMAL'
+)))
+const customerWeightRateValue = computed(() => numberOrZero(customerWeightRatePercent.value))
+const customerWeightDirty = computed(() => Math.abs(
+  customerWeightRateValue.value - numberOrZero(normalCustomerWeightFee.value?.ratePercent)
+) > 0.000001)
+const customerWeightSavePending = computed(() => isPending(pricingActionKeys.saveCustomerWeight()))
+const effectiveNormalMarkupFeeOptions = computed(() => markupFeeOptions.value.map((fee) => {
+  if (fee.feeCategory !== CUSTOMER_WEIGHT || fee.pricingScope !== 'NORMAL') return fee
+  return {
+    ...fee,
+    ratePercent: customerWeightRateValue.value,
+    enabled: customerWeightRateValue.value > 0
+  }
+}))
+
 const pricingFeeSortValue = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue : 0
@@ -955,6 +994,45 @@ const numberOrNullForInput = (value) => {
 const formatWeight = (value) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue.toFixed(3) : '-'
+}
+const isPersistablePricingMarkupFeeId = (id) => {
+  const numericId = Number(id)
+  return Number.isInteger(numericId) && numericId > 0
+}
+const syncCustomerWeightDraftFromFee = () => {
+  customerWeightRatePercent.value = numberOrZero(normalCustomerWeightFee.value?.ratePercent)
+}
+const buildCustomerWeightFeePayload = (customerWeightFee) => ({
+  pricingScope: customerWeightFee.pricingScope || 'NORMAL',
+  feeCategory: CUSTOMER_WEIGHT,
+  feeName: customerWeightFee.feeName || '客户权重',
+  ratePercent: customerWeightRateValue.value,
+  sortNo: Number(customerWeightFee.sortNo || 0),
+  enabled: customerWeightRateValue.value > 0
+})
+const saveCustomerWeightRate = async ({ silent = false } = {}) => {
+  if (!customerWeightDirty.value) return { updated: false }
+  const customerWeightFee = normalCustomerWeightFee.value
+  if (!customerWeightFee || !isPersistablePricingMarkupFeeId(customerWeightFee.id)) {
+    const message = '未找到可保存的客户权重配置，请先到材料工艺模块维护客户权重。'
+    if (!silent) ElMessage.warning(message)
+    throw new Error(message)
+  }
+  return runAction(pricingActionKeys.saveCustomerWeight(), async () => {
+    const payload = buildCustomerWeightFeePayload(customerWeightFee)
+    const response = await updatePricingMarkupFee(customerWeightFee.id, payload)
+    const savedFee = {
+      ...customerWeightFee,
+      ...payload,
+      ...(response?.data || {}),
+      id: response?.data?.id ?? customerWeightFee.id,
+      systemRequired: response?.data?.systemRequired ?? customerWeightFee.systemRequired ?? true
+    }
+    dictionaryStore.upsertPricingMarkupFee(savedFee)
+    customerWeightRatePercent.value = numberOrZero(savedFee.ratePercent)
+    if (!silent) ElMessage.success('客户权重已保存，价格预估已刷新。')
+    return { updated: true, fee: savedFee }
+  })
 }
 const formatAssemblyChildTitle = (child) => `${child?.partNo || '-'} / ${child?.version || '-'}`
 const toMetricDimension = (value, unit = 'm') => {
@@ -1041,9 +1119,11 @@ onMounted(async () => {
 const fetchDicts = async () => {
   try {
     await dictionaryStore.loadPricingFeeDicts()
+    syncCustomerWeightDraftFromFee()
   } catch (error) {
     console.error(error)
     dictionaryStore.applyPricingFallbackData()
+    syncCustomerWeightDraftFromFee()
     ElMessage.warning('费用字典加载失败，已启用本地兜底数据。')
   }
 }
@@ -2030,6 +2110,7 @@ const updatePricingItemRemarkInMemory = (itemId, remark) => {
 const openQuoteDialog = async (row) => {
   currentRow.value = row
   itemRemarkDraft.value = row?.remark || ''
+  syncCustomerWeightDraftFromFee()
   dialogVisible.value = true
   quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
   assemblyFee.value = numberOrNullForInput(row.assemblyFee)
@@ -2148,7 +2229,7 @@ const normalProcessCostPreview = computed(() => processRoute.value.reduce((sum, 
 const normalBaseCostPreview = computed(() => calculatedMaterialCost.value + normalProcessCostPreview.value)
 const normalPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(
   normalBaseCostPreview.value,
-  markupFeeOptions.value,
+  effectiveNormalMarkupFeeOptions.value,
   'NORMAL'
 ))
 const normalMarkupFeeRowsPreview = computed(() => normalPreviewPricingResult.value.feeRows)
@@ -2238,6 +2319,9 @@ const submitCurrentQuote = async () => {
       const savedRemark = hasReturnedRemark ? remarkResponse.remark : itemRemarkDraft.value
       itemRemarkDraft.value = savedRemark || ''
       updatePricingItemRemarkInMemory(currentRow.value.id, savedRemark || null)
+      if (quoteMode.value === 'NORMAL') {
+        await saveCustomerWeightRate({ silent: true })
+      }
       await submitQuote(payload)
       let globalSynced = true
       let globalUpdated = false
@@ -2543,6 +2627,18 @@ const submitCurrentQuote = async () => {
 
 .weight-row {
   margin-top: 10px;
+}
+
+.customer-weight-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+}
+
+.customer-weight-input {
+  width: 100%;
 }
 
 .pricing-workbench-summary {

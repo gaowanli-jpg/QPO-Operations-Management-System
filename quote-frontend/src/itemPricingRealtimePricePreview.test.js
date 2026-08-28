@@ -44,7 +44,7 @@ describe('ItemPricing realtime normal price preview', () => {
     expect(source).toContain('categoryBaseAmount * (1 + categoryRatePercent / 100)')
     expect(source).toContain('const normalPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(')
     expect(source).toContain('normalBaseCostPreview.value,')
-    expect(source).toContain("markupFeeOptions.value,")
+    expect(source).toContain("effectiveNormalMarkupFeeOptions.value,")
     expect(source).toContain("'NORMAL'")
     expect(source).toContain('const normalMarkupFeeRowsPreview = computed(() => normalPreviewPricingResult.value.feeRows)')
     expect(source).toContain('const normalTaxIncludedUnitPricePreview = computed(() => normalPreviewPricingResult.value.taxIncludedUnitPrice)')
@@ -55,6 +55,36 @@ describe('ItemPricing realtime normal price preview', () => {
     expect(source).not.toContain("text.includes('vat')")
     expect(source).toContain('normalTaxIncludedUnitPricePreview.value * currentItemQty.value')
     expect(source).toContain('normalUntaxedUnitPricePreview.value * currentItemQty.value')
+  })
+
+  test('edits and saves customer weight from the normal item pricing dialog', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+    const weightBlock = source.slice(
+      source.indexOf('class="weight-row"'),
+      source.indexOf('class="pricing-workbench-summary material-summary"')
+    )
+    const submitBlock = source.slice(
+      source.indexOf('const submitCurrentQuote'),
+      source.indexOf('</script>')
+    )
+
+    expect(weightBlock).toContain('label="客户权重(%)"')
+    expect(weightBlock).toContain('v-model="customerWeightRatePercent"')
+    expect(weightBlock).toContain('saveCustomerWeightRate')
+    expect(weightBlock).toContain('v-permission="\'engineer:dict:fee-manage\'"')
+    expect(weightBlock).not.toContain('label="材料毛重(kg)"')
+    expect(source).toContain("import { updatePricingMarkupFee } from '../services/dictApi'")
+    expect(source).toContain('const normalCustomerWeightFee = computed(() =>')
+    expect(source).toContain('fee.feeCategory === CUSTOMER_WEIGHT')
+    expect(source).toContain('const effectiveNormalMarkupFeeOptions = computed(() =>')
+    expect(source).toContain('ratePercent: customerWeightRateValue.value')
+    expect(source).toContain('enabled: customerWeightRateValue.value > 0')
+    expect(source).toContain('const saveCustomerWeightRate = async ({ silent = false } = {}) =>')
+    expect(source).toContain('await updatePricingMarkupFee(customerWeightFee.id, payload)')
+    expect(source).toContain('dictionaryStore.upsertPricingMarkupFee(savedFee)')
+    expect(source).toContain(':disabled="submitLoading || completeLoading || refreshLoading || customerWeightSavePending"')
+    expect(submitBlock.indexOf('await saveCustomerWeightRate({ silent: true })')).toBeGreaterThanOrEqual(0)
+    expect(submitBlock.indexOf('await saveCustomerWeightRate({ silent: true })')).toBeLessThan(submitBlock.indexOf('await submitQuote(payload)'))
   })
 
   test('does not refresh dictionary cache after saving one item quote', () => {

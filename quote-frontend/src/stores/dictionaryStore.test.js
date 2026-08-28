@@ -177,4 +177,26 @@ describe('dictionaryStore', () => {
     expect(store.getPricingMarkupFees('NORMAL').map(item => item.feeName)).toEqual(['运输费', '管理费', '利润', '税率', '客户权重'])
     expect(store.getPricingMarkupFees('ASSEMBLY').map(item => item.feeName)).toEqual(['组装管理费', '组装利润', '税率', '客户权重'])
   })
+
+  test('upsertPricingMarkupFee replaces the saved row so active pricing dialogs recalculate immediately', () => {
+    const store = useDictionaryStore()
+    store.pricingMarkupFees = [
+      { id: 7, pricingScope: 'NORMAL', feeCategory: 'CUSTOMER_WEIGHT', feeName: '客户权重', ratePercent: 0, enabled: false },
+      { id: 8, pricingScope: 'NORMAL', feeCategory: 'BASIC_PERCENT', feeName: '利润', ratePercent: 10, enabled: true }
+    ]
+
+    store.upsertPricingMarkupFee({
+      id: 7,
+      pricingScope: 'NORMAL',
+      feeCategory: 'CUSTOMER_WEIGHT',
+      feeName: '客户权重',
+      ratePercent: 20,
+      enabled: true
+    })
+
+    expect(store.getPricingMarkupFees('NORMAL', 'CUSTOMER_WEIGHT')).toEqual([
+      expect.objectContaining({ id: 7, ratePercent: 20, enabled: true, systemRequired: false })
+    ])
+    expect(store.getPricingMarkupFees('NORMAL')).toHaveLength(2)
+  })
 })
