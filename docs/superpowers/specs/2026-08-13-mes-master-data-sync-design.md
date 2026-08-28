@@ -207,7 +207,7 @@ MES 材料同步到 `dict_material`，同步键为 MES `code`。
 | `materialType` | `dict_material_type.type_code` | 全量同步 `MATERIAL / PRODUCT / SEMI`，缺少类型时归入 `MES_UNKNOWN`。 |
 | `materialType` | `dict_material_type.type_name` | `MATERIAL=原材料`，`PRODUCT=成品`，`SEMI=半成品`，未知值保存原值。 |
 | `categoryId` / `standard` / `attribute` | `material_category` | 第一版优先 `standard`，其次 `attribute`，再其次 `categoryId`。 |
-| `density` | `mes_density_raw` | 保存 MES 原始密度字符串，作为只读同步字段和核价兜底来源。 |
+| `density` | `mes_density_raw` | MES 返回单位为 `g/cm³`；同步入库前乘以 `1000` 转为 `kg/m³` 兜底值，字段名保留历史兼容。 |
 | `density` | `density/plate_density/bar_density/tube_density` | 不由 MES 同步覆盖；QPO 默认密度和板/棒/管密度由本地维护。 |
 | `id` | `mes_external_id` | 新增字段，保存 MES 主键。 |
 | `materialType` | `mes_material_type` | 新增字段，保存 MES 原始材料类型。 |
@@ -237,12 +237,12 @@ MES 材料接口不提供单价。QPO 当前材料核价依赖：
 
 ### 10.3 密度策略
 
-MES 材料接口存在 `density` 字段，但文档未明确单位。当前处理：
+MES 材料接口存在 `density` 字段，当前按 MES 返回 `g/cm³`、QPO 使用 `kg/m³` 处理：
 
-- MES `density` 只同步到 `mes_density_raw`，作为只读 MES 密度和核价兜底来源。
-- MES 同步不覆盖 QPO `density`、`plate_density`、`bar_density`、`tube_density`。
-- QPO 板材/棒材/管材密度继续由本地人工维护。
-- 零件核价按形态优先读取 QPO 板/棒/管密度；对应形态密度为空或无效时，兜底读取 `mes_density_raw`。
+- MES `density` 同步入库前乘以 `1000`，再写入 `mes_density_raw`，作为只读 MES 密度和核价兜底来源。
+- MES 同步不覆盖 QPO `density`。
+- QPO 具体密度继续由本地人工维护。
+- 零件核价优先读取 QPO 具体密度；具体密度为空或无效时，兜底读取已换算为 `kg/m³` 的 `mes_density_raw`。
 - 如果 QPO 形态密度和 `mes_density_raw` 均为空或无效，后端禁止完成核价，错误消息包含材料编码、材料名称和形态。
 
 ## 11. 核价完成校验
@@ -573,7 +573,7 @@ Permission: engineer:dict:view
 - 材料同步范围：全部 MES 材料类型，不过滤 `materialType`。
 - 材料价格来源：QPO 本地维护，MES 不提供、不覆盖。
 - 材料单价缺失：禁止完成核价。
-- MES density：接口存在，第一版只写入 `mes_density_raw`，用于页面展示和核价兜底；不覆盖 QPO 默认密度和板/棒/管密度。
+- MES density：MES 返回 `g/cm³`，同步写入 `mes_density_raw` 前乘以 `1000` 转为 `kg/m³` 兜底值；不覆盖 QPO 人工维护的具体密度。
 - 工艺 `processTypeCode` 来源：MES `code` 同步为 QPO `processCode`。
 - 工艺 `processName` 来源：QPO `detailName`，默认同步生成 `detailName = MES name`。
 
@@ -585,7 +585,7 @@ Permission: engineer:dict:view
 
 - MES 工艺类型进入 `dict_process_category`，并保证至少有一个可选 `dict_process_detail`。
 - MES 全部材料类型进入 `dict_material` 和 `dict_material_type`，不按 `materialType` 过滤。
-- MES 材料接口的 `density` 只作为 `mes_density_raw` 只读同步字段和核价兜底来源；QPO 形态密度由本地维护。
+- MES 材料接口的 `density` 换算为 `kg/m³` 后作为 `mes_density_raw` 只读同步字段和核价兜底来源；QPO 具体密度由本地维护。
 - QPO 材料单价仍由工程字典维护，MES 同步不得覆盖已有单价。
 - 材料单价缺失或为 0 时，后端禁止完成核价。
 - MES 生产下发字段口径不重新设计，只通过同步后的本地字典保证编码来源正确。
@@ -777,7 +777,7 @@ Expected: all selected tests pass.
 
 ### 26.6 阶段 5：MES 材料同步服务
 
-**目标：** MES 全部材料类型分页同步到 QPO 材料字典，保留本地价格和 QPO 形态密度，写入 MES 原始密度和元数据。
+**目标：** MES 全部材料类型分页同步到 QPO 材料字典，保留本地价格和 QPO 具体密度，写入已换算为 `kg/m³` 的 MES 密度兜底值和元数据。
 
 **文件：**
 
@@ -799,8 +799,8 @@ Expected: all selected tests pass.
 - [ ] Add failing test: `MATERIAL / PRODUCT / SEMI` rows all create enabled material records and material types.
 - [ ] Add failing test: existing material with `platePrice=12,barPrice=13,tubePrice=14` keeps those values after MES sync.
 - [ ] Add failing test: new MES material has price fields null, not 0.
-- [ ] Add failing test: MES `density="7850"` only populates `mesDensityRaw`, and does not overwrite `density/plateDensity/barDensity/tubeDensity`.
-- [ ] Add failing test: MES `weight` and raw `density` are preserved in `mesWeight` and `mesDensityRaw`.
+- [ ] Add failing test: MES `density="7.85"` populates `mesDensityRaw="7850"`, and does not overwrite QPO `density`.
+- [ ] Add failing test: MES `weight` is preserved in `mesWeight`, and MES density is converted before populating `mesDensityRaw`.
 - [ ] Add failing test: duplicate MES material `code` increments duplicateCount and only first row is applied.
 - [ ] Add failing test: empty first page fails and does not disable existing MES materials.
 - [ ] Implement material type ensure/upsert for `MATERIAL=原材料`、`PRODUCT=成品`、`SEMI=半成品`、unknown raw value.
@@ -1115,7 +1115,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 验收：
 
 - Flyway 空库迁移通过。
-- 材料列表 DTO 可返回来源、MES 类型、MES 同步时间和 MES 原始密度。
+- 材料列表 DTO 可返回来源、MES 类型、MES 同步时间和已换算为 `kg/m³` 的 MES 密度兜底值。
 - 本地手工新增材料默认 `sourceType=LOCAL`。
 - 工艺大类继续使用已有 `sourceType/mesExternalId/mesSyncedAt`。
 
@@ -1171,7 +1171,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
   - `SEMI = 半成品`
   - 未知类型按 MES 原值创建或归入 `MES_UNKNOWN`
 - 按 MES `code` upsert `dict_material`。
-- 同步 `materialName/materialType/mesDensityRaw/standard/docNum/weight/status` 等基础信息。
+- 同步 `materialName/materialType/mesDensityRaw/standard/docNum/weight/status` 等基础信息，其中 MES `density` 写入 `mesDensityRaw` 前乘以 `1000` 转为 `kg/m³`。
 - 不覆盖 `platePrice/barPrice/tubePrice`。
 - 新增材料价格保持 null，不写 0。
 
@@ -1180,7 +1180,7 @@ cd D:\QPO-Operations-Management-System\quote-backend
 - 三类 MES 材料都能进入 QPO 材料字典。
 - 已有材料价格同步后保持不变。
 - 新增 MES 材料单价为空。
-- MES `density` 只写入 `mesDensityRaw`，不覆盖 QPO 默认密度和板/棒/管密度。
+- MES `density` 换算后写入 `mesDensityRaw`，不覆盖 QPO 具体密度。
 - 空第一页不会误停用全部 MES 材料。
 
 验收命令：

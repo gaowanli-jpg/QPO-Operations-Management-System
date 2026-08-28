@@ -56,6 +56,7 @@ public class MesMasterDataSyncService {
     private static final String AUDIT_ACTION_MATERIAL_SYNC = "DICT_MATERIAL_MES_SYNC";
     private static final int MATERIAL_PAGE_SIZE = 200;
     private static final int MATERIAL_DELETE_SCAN_BATCH_SIZE = 500;
+    private static final BigDecimal MES_DENSITY_G_PER_CM3_TO_KG_PER_M3 = BigDecimal.valueOf(1000);
     private static final Map<String, String> KNOWN_MATERIAL_TYPE_NAMES = Map.of(
             "MATERIAL", "原材料",
             "PRODUCT", "成品",
@@ -555,6 +556,7 @@ public class MesMasterDataSyncService {
                 continue;
             }
             String materialTypeCode = materialTypeCode(row.getMaterialType());
+            BigDecimal densityKgPerCubicMeter = mesDensityKgPerCubicMeter(row.getDensity());
             counters.validCount++;
             pageSourcesByCode.put(lookupCode, new MaterialSource(
                     trimToNull(row.getId()),
@@ -564,8 +566,8 @@ public class MesMasterDataSyncService {
                     materialTypeCode,
                     materialTypeName(materialTypeCode, row.getMaterialType()),
                     firstNonBlank(row.getAttribute(), row.getCategoryId()),
-                    toDouble(row.getDensity()),
-                    decimalText(row.getDensity()),
+                    toDouble(densityKgPerCubicMeter),
+                    decimalText(densityKgPerCubicMeter),
                     trimToNull(row.getStandard()),
                     trimToNull(row.getDocNum()),
                     decimalText(row.getWeight()),
@@ -896,6 +898,10 @@ public class MesMasterDataSyncService {
 
     private String decimalText(BigDecimal value) {
         return value == null ? null : value.toPlainString();
+    }
+
+    private BigDecimal mesDensityKgPerCubicMeter(BigDecimal value) {
+        return value == null ? null : value.multiply(MES_DENSITY_G_PER_CM3_TO_KG_PER_M3).stripTrailingZeros();
     }
 
     private String firstNonBlank(String... values) {

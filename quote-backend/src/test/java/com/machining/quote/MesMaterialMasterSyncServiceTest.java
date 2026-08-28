@@ -212,7 +212,7 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getMesStandard()).isEqualTo("GB/T 699");
             assertThat(material.getMesDocNum()).isEqualTo("DOC-1");
             assertThat(material.getMesWeight()).isEqualTo("12.50");
-            assertThat(material.getMesDensityRaw()).isEqualTo("7.85");
+            assertThat(material.getMesDensityRaw()).isEqualTo("7850");
             assertThat(material.getMesSyncedAt()).isNotNull();
         });
 
@@ -228,7 +228,7 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getBarPrice()).isNull();
             assertThat(material.getTubePrice()).isNull();
             assertThat(material.getDensity()).isNull();
-            assertThat(material.getMesDensityRaw()).isEqualTo("8.01");
+            assertThat(material.getMesDensityRaw()).isEqualTo("8010");
         });
 
         ArgumentCaptor<MesMasterDataSyncRun> runCaptor = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
@@ -404,6 +404,35 @@ class MesMaterialMasterSyncServiceTest {
         ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
         verify(materialMapper).insert(materialCaptor.capture());
         assertThat(materialCaptor.getValue().getEnabled()).isFalse();
+    }
+
+    @Test
+    void syncMaterialsConvertsMesDensityFromGramPerCubicCentimeterToKilogramPerCubicMeterFallback() {
+        MesMasterDataClient client = mock(MesMasterDataClient.class);
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
+        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, mock(AuditService.class));
+        when(client.pageMaterials(1, 200)).thenReturn(page(1,
+                row("mes-density-unit", "MAT-DENSITY-UNIT", "MES密度单位材料", "MATERIAL", null, null,
+                        null, null, null, "7.85", "ENABLE")));
+        when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(materialType(403L, "MATERIAL", "原材料")));
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        doAnswer(invocation -> {
+            MesMasterDataSyncRun run = invocation.getArgument(0);
+            run.setId(920L);
+            return 1;
+        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
+
+        MesMasterDataSyncService.SyncResult result = service.syncMaterialsManual(17L);
+
+        assertThat(result.success()).isTrue();
+        ArgumentCaptor<DictMaterial> materialCaptor = ArgumentCaptor.forClass(DictMaterial.class);
+        verify(materialMapper).insert(materialCaptor.capture());
+        assertThat(materialCaptor.getValue()).satisfies(material -> {
+            assertThat(material.getDensity()).isNull();
+            assertThat(material.getMesDensityRaw()).isEqualTo("7850");
+        });
     }
 
     @Test

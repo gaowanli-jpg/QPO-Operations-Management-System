@@ -102,7 +102,7 @@ ERP_DATA_CENTER_MES_MATERIAL_PAGE_PATH=/api/v1/mes/openapi/material/page
 | `standard` | `dict_material.mes_standard` | MES 规格。 |
 | `docNum` | `dict_material.mes_doc_num` | MES 图号/资料号。 |
 | `weight` | `dict_material.mes_weight` | MES 原始重量字段，仅作追踪。 |
-| `density` | `dict_material.mes_density_raw` | 只读 MES 密度；同步不覆盖 QPO 具体密度，核价时在 QPO 具体密度为空时作为兜底。 |
+| `density` | `dict_material.mes_density_raw` | MES 返回单位为 `g/cm³`；同步入库前乘以 `1000` 转为 `kg/m³` 兜底值。字段名保留历史兼容，不覆盖 QPO 人工维护的具体密度。 |
 | 当前时间 | `dict_material.mes_synced_at` | 最近同步时间。 |
 
 ## 5. MES 生产下发合同
