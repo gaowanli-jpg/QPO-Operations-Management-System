@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -47,12 +48,13 @@ public class EngineeringPricingOptionService {
         PricingOptionPageReq safeReq = req == null ? new PricingOptionPageReq() : req;
         int safePage = normalizePage(safeReq.getPage());
         int safePageSize = normalizePageSize(safeReq.getPageSize());
-        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword());
+        List<String> materialCodes = parseMaterialCodes(safeReq.getMaterialCodes());
+        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes);
         Long total = materialMapper.selectCount(countQuery);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
-        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword());
+        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes);
         pageQuery.orderByAsc("material_type_id").orderByAsc("sort_no").orderByAsc("id");
         pageQuery.last(limitOffset(safePage, safePageSize));
         List<DictMaterial> materials = materialMapper.selectList(pageQuery);
@@ -64,8 +66,10 @@ public class EngineeringPricingOptionService {
         int safePage = normalizePage(safeReq.getPage());
         int safePageSize = normalizePageSize(safeReq.getPageSize());
         String keyword = safeReq.getKeyword();
-        long processTotal = Objects.requireNonNullElse(processDetailMapper.selectCount(processDetailQuery(keyword)), 0L);
-        long extraTotal = Objects.requireNonNullElse(extraFeeItemMapper.selectCount(extraFeeItemQuery(keyword)), 0L);
+        List<Long> processDetailIds = parseProcessDetailIds(safeReq.getProcessDetailIds());
+        boolean exactProcessLookup = !processDetailIds.isEmpty();
+        long processTotal = Objects.requireNonNullElse(processDetailMapper.selectCount(processDetailQuery(keyword, processDetailIds)), 0L);
+        long extraTotal = exactProcessLookup ? 0L : Objects.requireNonNullElse(extraFeeItemMapper.selectCount(extraFeeItemQuery(keyword)), 0L);
         long total = processTotal + extraTotal;
         if (total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -75,26 +79,26 @@ public class EngineeringPricingOptionService {
         List<PricingProcessOptionDTO> records = List.of();
         if (offset < processTotal) {
             int detailLimit = (int) Math.min(safePageSize, processTotal - offset);
-            List<PricingProcessOptionDTO> detailRecords = toProcessOptions(selectProcessDetails(keyword, detailLimit, offset));
+            List<PricingProcessOptionDTO> detailRecords = toProcessOptions(selectProcessDetails(keyword, processDetailIds, detailLimit, offset));
             int remaining = safePageSize - detailRecords.size();
-            if (remaining > 0) {
+            if (remaining > 0 && !exactProcessLookup) {
                 List<PricingProcessOptionDTO> feeRecords = toExtraFeeOptions(selectExtraFeeItems(keyword, remaining, 0));
                 records = concat(detailRecords, feeRecords);
             } else {
                 records = detailRecords;
             }
-        } else {
+        } else if (!exactProcessLookup) {
             long extraOffset = offset - processTotal;
             records = toExtraFeeOptions(selectExtraFeeItems(keyword, safePageSize, extraOffset));
         }
         return PageResult.of(records, total, safePage, safePageSize);
     }
 
-    private List<DictProcessDetail> selectProcessDetails(String keyword, int limit, long offset) {
+    private List<DictProcessDetail> selectProcessDetails(String keyword, List<Long> processDetailIds, int limit, long offset) {
         if (limit <= 0) {
             return List.of();
         }
-        QueryWrapper<DictProcessDetail> query = processDetailQuery(keyword);
+        QueryWrapper<DictProcessDetail> query = processDetailQuery(keyword, processDetailIds);
         query.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
         query.last("LIMIT " + limit + " OFFSET " + offset);
         return processDetailMapper.selectList(query);
@@ -110,9 +114,12 @@ public class EngineeringPricingOptionService {
         return extraFeeItemMapper.selectList(query);
     }
 
-    private QueryWrapper<DictMaterial> materialQuery(String keyword) {
+    private QueryWrapper<DictMaterial> materialQuery(String keyword, List<String> materialCodes) {
         QueryWrapper<DictMaterial> query = new QueryWrapper<>();
         query.eq("enabled", true);
+        if (materialCodes != null && !materialCodes.isEmpty()) {
+            query.in("UPPER(material_code)", materialCodes);
+        }
         if (!hasText(keyword)) {
             return query;
         }
@@ -130,10 +137,13 @@ public class EngineeringPricingOptionService {
         return query;
     }
 
-    private QueryWrapper<DictProcessDetail> processDetailQuery(String keyword) {
+    private QueryWrapper<DictProcessDetail> processDetailQuery(String keyword, List<Long> processDetailIds) {
         QueryWrapper<DictProcessDetail> query = new QueryWrapper<>();
         query.eq("enabled", true)
                 .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND c.enabled = TRUE)");
+        if (processDetailIds != null && !processDetailIds.isEmpty()) {
+            query.in("id", processDetailIds);
+        }
         if (!hasText(keyword)) {
             return query;
         }
@@ -301,5 +311,34 @@ public class EngineeringPricingOptionService {
 
     private String pattern(String keyword) {
         return "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private List<String> parseMaterialCodes(String value) {
+        if (!hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .map(item -> item.toUpperCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private List<Long> parseProcessDetailIds(String value) {
+        if (!hasText(value)) {
+            return List.of();
+        }
+        try {
+            return Arrays.stream(value.split(","))
+                    .map(String::trim)
+                    .filter(item -> !item.isEmpty())
+                    .map(Long::valueOf)
+                    .filter(item -> item > 0)
+                    .distinct()
+                    .toList();
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("processDetailIds 只允许数字逗号分隔");
+        }
     }
 }

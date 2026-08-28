@@ -718,6 +718,13 @@ import {
   revokeObjectUrl
 } from '../api'
 import {
+  buildPricingOptionIndex,
+  hydrateMaterialPricingSnapshot,
+  hydrateProcessPricingSnapshot,
+  materialCodeKey,
+  processDetailIdKey
+} from '../utils/pricingSnapshotHydrator'
+import {
   CLIENT_PAGE_SIZES,
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
@@ -777,8 +784,15 @@ const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkup
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
+const pricingMaterialOptionCache = ref(new Map())
+const pricingProcessOptionCache = ref(new Map())
 const repeatAnalysis = ref(null)
 const supplementalDrawingOrderPickerVisible = ref(false)
+
+const pricingOptionIndex = computed(() => buildPricingOptionIndex({
+  materialOptions: Array.from(pricingMaterialOptionCache.value.values()),
+  processOptions: Array.from(pricingProcessOptionCache.value.values())
+}))
 
 const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)
 
@@ -1022,6 +1036,66 @@ const fetchDicts = async () => {
     console.error(error)
     dictionaryStore.applyPricingFallbackData()
     ElMessage.warning('费用字典加载失败，已启用本地兜底数据。')
+  }
+}
+
+const extractPageRecords = (response) => {
+  const pageData = response?.data ?? response ?? {}
+  return Array.isArray(pageData.records) ? pageData.records : []
+}
+
+const cachePricingMaterialOptions = (records = []) => {
+  if (!records.length) return
+  const next = new Map(pricingMaterialOptionCache.value)
+  records.forEach((record) => {
+    const key = materialCodeKey(record?.materialCode)
+    if (key) next.set(key, record)
+  })
+  pricingMaterialOptionCache.value = next
+}
+
+const cachePricingProcessOptions = (records = []) => {
+  if (!records.length) return
+  const next = new Map(pricingProcessOptionCache.value)
+  records.forEach((record) => {
+    const key = processDetailIdKey(record?.processDetailId ?? record?.id)
+    if (key) next.set(key, record)
+  })
+  pricingProcessOptionCache.value = next
+}
+
+const loadLatestPricingOptionsForQuote = async (materialSource = {}, processRoutes = []) => {
+  const materialCodes = [materialSource?.materialCode]
+    .map(code => String(code || '').trim())
+    .filter(Boolean)
+  const missingMaterialCodes = materialCodes.filter(code => !pricingMaterialOptionCache.value.has(materialCodeKey(code)))
+  const processDetailIds = Array.from(new Set((processRoutes || [])
+    .filter(route => resolveProcessSourceType(route) !== 'extra')
+    .map(route => route?.processDetailId ?? route?.id)
+    .map(id => String(id ?? '').trim())
+    .filter(Boolean)))
+  const missingProcessDetailIds = processDetailIds.filter(id => !pricingProcessOptionCache.value.has(processDetailIdKey(id)))
+
+  const requests = []
+  if (missingMaterialCodes.length > 0) {
+    requests.push(pagePricingMaterialOptions({
+      materialCodes: missingMaterialCodes.join(','),
+      page: 1,
+      pageSize: 100
+    }).then(response => cachePricingMaterialOptions(extractPageRecords(response))))
+  }
+  if (missingProcessDetailIds.length > 0) {
+    requests.push(pagePricingProcessOptions({
+      processDetailIds: missingProcessDetailIds.join(','),
+      page: 1,
+      pageSize: 100
+    }).then(response => cachePricingProcessOptions(extractPageRecords(response))))
+  }
+  if (requests.length === 0) return
+  try {
+    await Promise.all(requests)
+  } catch (error) {
+    console.warn('最新材料/工艺价格加载失败，将使用当前快照并以后端保存重算为准。', error)
   }
 }
 
@@ -1383,7 +1457,7 @@ const applyMaterialToMatForm = (material) => {
 }
 
 const applyMaterialSnapshotToMatForm = (source = {}) => {
-  const normalized = normalizeGlobalConfig(source)
+  const normalized = normalizeGlobalConfig(hydrateMaterialPricingSnapshot(source, pricingOptionIndex.value))
   applyMaterialIdentityToMatForm(normalized)
   matForm.shape = normalized.shape || '板材'
 }
@@ -1432,7 +1506,7 @@ const buildProcessSnapshotOption = (proc) => {
 
 const findProcessOption = (proc) => {
   if (!proc) return null
-  return buildProcessSnapshotOption(proc)
+  return buildProcessSnapshotOption(hydrateProcessPricingSnapshot(proc, pricingOptionIndex.value))
 }
 
 const selectedProcessOptionKey = computed(() => {
@@ -1488,6 +1562,7 @@ const applyProcessSelection = (proc, selected) => {
 }
 
 const selectMaterial = (material) => {
+  cachePricingMaterialOptions(material ? [material] : [])
   applyMaterialToMatForm(material)
 }
 
@@ -1497,6 +1572,7 @@ const openProcessPicker = (index) => {
 }
 
 const selectProcess = (selected) => {
+  cachePricingProcessOptions(selected ? [selected] : [])
   const proc = processRoute.value[editingProcessIndex.value]
   applyProcessSelection(proc, selected)
   editingProcessIndex.value = null
@@ -1542,6 +1618,7 @@ const handleSupplementalDrawingOrderSelected = async (order) => {
 
 const handleProcessRateUpdated = (updatedDetail) => {
   dictionaryStore.upsertProcessDetail(updatedDetail)
+  cachePricingProcessOptions(updatedDetail ? [updatedDetail] : [])
   syncCurrentSelectedProcessRate(updatedDetail)
 }
 
@@ -1751,7 +1828,7 @@ const removeProcess = (index) => {
 }
 
 const hydrateRouteItem = (proc) => {
-  const selected = buildProcessSnapshotOption(proc)
+  const selected = buildProcessSnapshotOption(hydrateProcessPricingSnapshot(proc, pricingOptionIndex.value))
   if (selected) {
     applyProcessSelection(proc, selected)
   }
@@ -1947,7 +2024,7 @@ const openQuoteDialog = async (row) => {
   const savedMaterialData = row.materialData || {}
   const savedDimensions = savedMaterialData.dimensions || {}
   const hasSavedMaterialSnapshot = Boolean(savedMaterialData.materialCode || savedMaterialData.materialName || savedMaterialData.name)
-  applyMaterialSnapshotToMatForm(hasSavedMaterialSnapshot
+  const materialSnapshotSource = hasSavedMaterialSnapshot
     ? {
         materialId: savedMaterialData.materialId,
         materialCode: savedMaterialData.materialCode,
@@ -1964,7 +2041,15 @@ const openQuoteDialog = async (row) => {
         remarks: savedMaterialData.remarks,
         shape: savedMaterialData.shape || globalConfig.value.shape || '板材'
       }
-    : globalConfig.value)
+    : globalConfig.value
+  const savedProcessRoutes = normalizeRouteList(row.processRoute)
+  const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0
+  const processSnapshotSource = shouldUseSavedProcessRoutes
+    ? savedProcessRoutes
+    : normalizeRouteList(globalConfig.value.processRoute)
+
+  await loadLatestPricingOptionsForQuote(materialSnapshotSource, processSnapshotSource)
+  applyMaterialSnapshotToMatForm(materialSnapshotSource)
   const savedDimensionUnit = savedMaterialData.dimensionUnit || 'mm'
   matForm.L = toMetricDimension(savedDimensions.L, savedDimensionUnit)
   matForm.W = toMetricDimension(savedDimensions.W, savedDimensionUnit)
@@ -1974,18 +2059,16 @@ const openQuoteDialog = async (row) => {
   matForm.netWeight = numberOrNullForInput(row.partNetWeight ?? savedMaterialData.netWeight)
 
   const loadGlobalProcessRouteDefaults = () => {
-    if (globalConfig.value.processRoute && globalConfig.value.processRoute.length > 0) {
-      processRoute.value = assignProcessSortNos(normalizeRouteList(globalConfig.value.processRoute)
+    if (processSnapshotSource.length > 0) {
+      processRoute.value = assignProcessSortNos(processSnapshotSource
         .map(p => hydrateRouteItem(createProcessRow(p))))
     } else {
       processRoute.value = []
     }
   }
 
-  const savedProcessRoutes = normalizeRouteList(row.processRoute)
-  const shouldUseSavedProcessRoutes = quoteMode.value === 'NORMAL' && savedProcessRoutes.length > 0
   if (shouldUseSavedProcessRoutes) {
-    processRoute.value = assignProcessSortNos(savedProcessRoutes.map(route => hydrateRouteItem(createProcessRow(route))))
+    processRoute.value = assignProcessSortNos(processSnapshotSource.map(route => hydrateRouteItem(createProcessRow(route))))
   } else {
     // 组合件的 processRoute 是后端保存的“组装费”快照，不能回灌到普通件工艺模板状态。
     loadGlobalProcessRouteDefaults()

@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class EngineeringPricingOptionServiceTest {
@@ -115,6 +116,33 @@ class EngineeringPricingOptionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void pageMaterialOptionsCanHydrateByExactMaterialCodes() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, materialTypeMapper,
+                mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
+        DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L);
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(material));
+        when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(materialType(1L, "RAW", "原材料")));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setMaterialCodes(" mat-000010 , mat-000011 ");
+        req.setPageSize(100);
+
+        PageResult<PricingMaterialOptionDTO> page = service.pageMaterialOptions(req);
+
+        assertThat(page.getRecords()).singleElement()
+                .extracting(PricingMaterialOptionDTO::getMaterialCode)
+                .isEqualTo("MAT-000010");
+        ArgumentCaptor<QueryWrapper<DictMaterial>> countCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectCount(countCaptor.capture());
+        assertThat(sql(countCaptor.getValue()))
+                .contains("enabled", "upper(material_code)", "in");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void pageProcessOptionsCombinesEnabledProcessDetailsAndEnabledExtraFees() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
@@ -169,6 +197,60 @@ class EngineeringPricingOptionServiceTest {
                 .contains("enabled", "dict_process_category", "detail_name", "detail_remarks", "process_code", "category_name");
         assertThat(sql(extraCountCaptor.getValue()))
                 .contains("enabled", "fee_name", "remarks");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageProcessOptionsCanHydrateByExactProcessDetailIdsWithoutExtraFees() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+        DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialTypeMapper.class),
+                detailMapper, categoryMapper, extraFeeItemMapper);
+        DictProcessCategory category = category(7L, "MTA_PICK", "下料", new BigDecimal("60.00"));
+        DictProcessDetail detail = detail(10L, 7L, "激光下料", new BigDecimal("200.00"));
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(detail));
+        when(categoryMapper.selectBatchIds(any())).thenReturn(List.of(category));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setProcessDetailIds("10, 11");
+        req.setPageSize(100);
+
+        PageResult<PricingProcessOptionDTO> page = service.pageProcessOptions(req);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getProcessDetailId()).isEqualTo(10L);
+            assertThat(row.getHourlyRate()).isEqualByComparingTo("200.00");
+        });
+        ArgumentCaptor<QueryWrapper<DictProcessDetail>> detailCountCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(detailMapper).selectCount(detailCountCaptor.capture());
+        assertThat(sql(detailCountCaptor.getValue()))
+                .contains("enabled", "dict_process_category", "id in");
+        verifyNoInteractions(extraFeeItemMapper);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void exactProcessHydrationDoesNotFallbackToExtraFeesWhenPageIsOutOfRange() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialTypeMapper.class),
+                detailMapper, mock(DictProcessCategoryMapper.class), extraFeeItemMapper);
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setProcessDetailIds("10");
+        req.setPage(2);
+        req.setPageSize(10);
+
+        PageResult<PricingProcessOptionDTO> page = service.pageProcessOptions(req);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).isEmpty();
+        verify(detailMapper).selectCount(any(QueryWrapper.class));
+        verifyNoInteractions(extraFeeItemMapper);
     }
 
     @Test

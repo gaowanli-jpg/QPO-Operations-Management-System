@@ -7,4 +7,6 @@ public class PricingOptionPageReq {
     private String keyword;
     private Integer page;
     private Integer pageSize;
+    private String materialCodes;
+    private String processDetailIds;
 }

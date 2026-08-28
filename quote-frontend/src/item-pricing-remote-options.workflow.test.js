@@ -30,14 +30,21 @@ describe('item pricing remote material and process options', () => {
     expect(source).not.toContain('dictionaryStore.combinedProcessOptions')
   })
 
-  test('price preview uses selected snapshots instead of global option caches', () => {
+  test('price preview hydrates selected snapshots from targeted remote option caches', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
     expect(source).toContain('const currentMatInfo = computed(() => ({')
     expect(source).toContain('id: matForm.materialId')
     expect(source).toContain('platePrice: numberOrZero(matForm.platePrice)')
+    expect(source).toContain('const pricingMaterialOptionCache = ref(new Map())')
+    expect(source).toContain('const pricingProcessOptionCache = ref(new Map())')
+    expect(source).toContain('const loadLatestPricingOptionsForQuote = async (materialSource = {}, processRoutes = []) =>')
+    expect(source).toContain("materialCodes: missingMaterialCodes.join(',')")
+    expect(source).toContain("processDetailIds: missingProcessDetailIds.join(',')")
+    expect(source).toContain('hydrateMaterialPricingSnapshot(source, pricingOptionIndex.value)')
+    expect(source).toContain('hydrateProcessPricingSnapshot(proc, pricingOptionIndex.value)')
     expect(source).toContain('const findProcessOption = (proc) => {')
-    expect(source).toContain('return buildProcessSnapshotOption(proc)')
+    expect(source).not.toContain('return buildProcessSnapshotOption(proc)')
     expect(source).not.toContain('combinedProcessOptions.value.find')
     expect(source).toContain('const normalProcessCostPreview = computed(() => processRoute.value.reduce')
     expect(source).toContain('inputVal * hourlyRate')
