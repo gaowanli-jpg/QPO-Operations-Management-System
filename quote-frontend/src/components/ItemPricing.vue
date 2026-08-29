@@ -461,6 +461,28 @@
               </el-col>
             </el-row>
             <el-form label-width="100px" class="pricing-section-form assembly-fee-form">
+              <el-form-item label="客户权重(%)">
+                <div class="assembly-customer-weight-control">
+                  <el-input-number
+                    v-model="assemblyCustomerWeightRatePercent"
+                    :min="0"
+                    :step="1"
+                    :precision="2"
+                    placeholder="请输入"
+                    controls-position="right"
+                    class="assembly-pricing-number-input"
+                    :disabled="assemblyCustomerWeightSavePending"
+                  />
+                  <el-button
+                    v-permission="'engineer:dict:fee-manage'"
+                    type="primary"
+                    plain
+                    :loading="assemblyCustomerWeightSavePending"
+                    :disabled="!assemblyCustomerWeightDirty || assemblyCustomerWeightSavePending"
+                    @click="() => saveAssemblyCustomerWeightRate()"
+                  >保存</el-button>
+                </div>
+              </el-form-item>
               <el-form-item label="组装费">
                 <el-input-number
                   v-model="assemblyFee"
@@ -469,7 +491,7 @@
                   :precision="2"
                   placeholder="请输入"
                   controls-position="right"
-                  class="full-width"
+                  class="assembly-pricing-number-input"
                 />
               </el-form-item>
             </el-form>
@@ -528,7 +550,7 @@
             type="success"
             @click="submitCurrentQuote"
             :loading="submitLoading"
-            :disabled="submitLoading || completeLoading || refreshLoading || customerWeightSavePending"
+            :disabled="submitLoading || completeLoading || refreshLoading || pricingCustomerWeightSavePending"
           >确认提交</el-button>
         </div>
       </template>
@@ -787,6 +809,7 @@ const pricingActionKeys = {
   completeOrder: () => `engineer:pricing:complete-order:${rfqId.value || 'none'}`,
   exportSheet: () => `engineer:pricing:export-sheet:${rfqId.value || 'none'}`,
   saveCustomerWeight: () => `engineer:pricing:customer-weight:${normalCustomerWeightFee.value?.id || 'none'}`,
+  saveAssemblyCustomerWeight: () => `engineer:pricing:assembly-customer-weight:${assemblyCustomerWeightFee.value?.id || 'none'}`,
   saveItem: (itemId) => `engineer:pricing:save-item:${itemId || 'none'}`
 }
 
@@ -805,6 +828,7 @@ const pricingItemTotal = ref(0)
 const markupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('NORMAL'))
 const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))
 const customerWeightRatePercent = ref(0)
+const assemblyCustomerWeightRatePercent = ref(0)
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
@@ -901,17 +925,34 @@ const TAX_ONLY_PRICING_FEE_SEQUENCE = TAX_INCLUDED_PRICING_FEE_SEQUENCE.filter(
 const normalCustomerWeightFee = computed(() => markupFeeOptions.value.find(fee => (
   fee.feeCategory === CUSTOMER_WEIGHT && fee.pricingScope === 'NORMAL'
 )))
+const assemblyCustomerWeightFee = computed(() => assemblyMarkupFeeOptions.value.find(fee => (
+  fee.feeCategory === CUSTOMER_WEIGHT && fee.pricingScope === 'ASSEMBLY'
+)))
 const customerWeightRateValue = computed(() => numberOrZero(customerWeightRatePercent.value))
+const assemblyCustomerWeightRateValue = computed(() => numberOrZero(assemblyCustomerWeightRatePercent.value))
 const customerWeightDirty = computed(() => Math.abs(
   customerWeightRateValue.value - numberOrZero(normalCustomerWeightFee.value?.ratePercent)
 ) > 0.000001)
+const assemblyCustomerWeightDirty = computed(() => Math.abs(
+  assemblyCustomerWeightRateValue.value - numberOrZero(assemblyCustomerWeightFee.value?.ratePercent)
+) > 0.000001)
 const customerWeightSavePending = computed(() => isPending(pricingActionKeys.saveCustomerWeight()))
+const assemblyCustomerWeightSavePending = computed(() => isPending(pricingActionKeys.saveAssemblyCustomerWeight()))
+const pricingCustomerWeightSavePending = computed(() => customerWeightSavePending.value || assemblyCustomerWeightSavePending.value)
 const effectiveNormalMarkupFeeOptions = computed(() => markupFeeOptions.value.map((fee) => {
   if (fee.feeCategory !== CUSTOMER_WEIGHT || fee.pricingScope !== 'NORMAL') return fee
   return {
     ...fee,
     ratePercent: customerWeightRateValue.value,
     enabled: customerWeightRateValue.value > 0
+  }
+}))
+const effectiveAssemblyMarkupFeeOptions = computed(() => assemblyMarkupFeeOptions.value.map((fee) => {
+  if (fee.feeCategory !== CUSTOMER_WEIGHT || fee.pricingScope !== 'ASSEMBLY') return fee
+  return {
+    ...fee,
+    ratePercent: assemblyCustomerWeightRateValue.value,
+    enabled: assemblyCustomerWeightRateValue.value > 0
   }
 }))
 
@@ -1002,6 +1043,9 @@ const isPersistablePricingMarkupFeeId = (id) => {
 const syncCustomerWeightDraftFromFee = () => {
   customerWeightRatePercent.value = numberOrZero(normalCustomerWeightFee.value?.ratePercent)
 }
+const syncAssemblyCustomerWeightDraftFromFee = () => {
+  assemblyCustomerWeightRatePercent.value = numberOrZero(assemblyCustomerWeightFee.value?.ratePercent)
+}
 const buildCustomerWeightFeePayload = (customerWeightFee) => ({
   pricingScope: customerWeightFee.pricingScope || 'NORMAL',
   feeCategory: CUSTOMER_WEIGHT,
@@ -1009,6 +1053,14 @@ const buildCustomerWeightFeePayload = (customerWeightFee) => ({
   ratePercent: customerWeightRateValue.value,
   sortNo: Number(customerWeightFee.sortNo || 0),
   enabled: customerWeightRateValue.value > 0
+})
+const buildAssemblyCustomerWeightFeePayload = (customerWeightFee) => ({
+  pricingScope: customerWeightFee.pricingScope || 'ASSEMBLY',
+  feeCategory: CUSTOMER_WEIGHT,
+  feeName: customerWeightFee.feeName || '客户权重',
+  ratePercent: assemblyCustomerWeightRateValue.value,
+  sortNo: Number(customerWeightFee.sortNo || 0),
+  enabled: assemblyCustomerWeightRateValue.value > 0
 })
 const saveCustomerWeightRate = async ({ silent = false } = {}) => {
   if (!customerWeightDirty.value) return { updated: false }
@@ -1031,6 +1083,29 @@ const saveCustomerWeightRate = async ({ silent = false } = {}) => {
     dictionaryStore.upsertPricingMarkupFee(savedFee)
     customerWeightRatePercent.value = numberOrZero(savedFee.ratePercent)
     if (!silent) ElMessage.success('客户权重已保存，价格预估已刷新。')
+    return { updated: true, fee: savedFee }
+  })
+}
+const saveAssemblyCustomerWeightRate = async ({ silent = false } = {}) => {
+  if (!assemblyCustomerWeightDirty.value) return { updated: false }
+  if (!assemblyCustomerWeightFee.value || !isPersistablePricingMarkupFeeId(assemblyCustomerWeightFee.value.id)) {
+    const message = '未找到可保存的组合件客户权重配置，请先到材料工艺模块维护客户权重。'
+    if (!silent) ElMessage.warning(message)
+    throw new Error(message)
+  }
+  return runAction(pricingActionKeys.saveAssemblyCustomerWeight(), async () => {
+    const payload = buildAssemblyCustomerWeightFeePayload(assemblyCustomerWeightFee.value)
+    const response = await updatePricingMarkupFee(assemblyCustomerWeightFee.value.id, payload)
+    const savedFee = {
+      ...assemblyCustomerWeightFee.value,
+      ...payload,
+      ...(response?.data || {}),
+      id: response?.data?.id ?? assemblyCustomerWeightFee.value.id,
+      systemRequired: response?.data?.systemRequired ?? assemblyCustomerWeightFee.value.systemRequired ?? true
+    }
+    dictionaryStore.upsertPricingMarkupFee(savedFee)
+    assemblyCustomerWeightRatePercent.value = numberOrZero(savedFee.ratePercent)
+    if (!silent) ElMessage.success('组合件客户权重已保存，价格预估已刷新。')
     return { updated: true, fee: savedFee }
   })
 }
@@ -1120,10 +1195,12 @@ const fetchDicts = async () => {
   try {
     await dictionaryStore.loadPricingFeeDicts()
     syncCustomerWeightDraftFromFee()
+    syncAssemblyCustomerWeightDraftFromFee()
   } catch (error) {
     console.error(error)
     dictionaryStore.applyPricingFallbackData()
     syncCustomerWeightDraftFromFee()
+    syncAssemblyCustomerWeightDraftFromFee()
     ElMessage.warning('费用字典加载失败，已启用本地兜底数据。')
   }
 }
@@ -1760,7 +1837,7 @@ const assemblyChildrenTotal = computed(() => assemblyChildren.value.reduce((sum,
 
 const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(
   numberOrZero(assemblyFee.value),
-  assemblyMarkupFeeOptions.value,
+  effectiveAssemblyMarkupFeeOptions.value,
   'ASSEMBLY'
 ))
 
@@ -2111,6 +2188,7 @@ const openQuoteDialog = async (row) => {
   currentRow.value = row
   itemRemarkDraft.value = row?.remark || ''
   syncCustomerWeightDraftFromFee()
+  syncAssemblyCustomerWeightDraftFromFee()
   dialogVisible.value = true
   quoteMode.value = isAssemblyItem(row) ? 'ASSEMBLY' : 'NORMAL'
   assemblyFee.value = numberOrNullForInput(row.assemblyFee)
@@ -2321,6 +2399,9 @@ const submitCurrentQuote = async () => {
       updatePricingItemRemarkInMemory(currentRow.value.id, savedRemark || null)
       if (quoteMode.value === 'NORMAL') {
         await saveCustomerWeightRate({ silent: true })
+      }
+      if (quoteMode.value === 'ASSEMBLY') {
+        await saveAssemblyCustomerWeightRate({ silent: true })
       }
       await submitQuote(payload)
       let globalSynced = true
@@ -2639,6 +2720,18 @@ const submitCurrentQuote = async () => {
 
 .customer-weight-input {
   width: 100%;
+}
+
+.assembly-customer-weight-control {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.assembly-pricing-number-input {
+  width: 240px;
+  max-width: 100%;
 }
 
 .pricing-workbench-summary {

@@ -27,7 +27,7 @@ describe('assembly pricing fee dictionary', () => {
     expect(source).toContain("const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))")
     expect(source).toContain('const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(')
     expect(source).toContain('numberOrZero(assemblyFee.value),')
-    expect(source).toContain('assemblyMarkupFeeOptions.value,')
+    expect(source).toContain('effectiveAssemblyMarkupFeeOptions.value,')
     expect(source).toContain("'ASSEMBLY'")
     expect(source).toContain('const assemblyFeeMarkupRows = computed(() => assemblyPreviewPricingResult.value.feeRows)')
     expect(source).not.toContain('isTransportMarkupFee')

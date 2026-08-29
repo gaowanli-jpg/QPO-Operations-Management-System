@@ -82,9 +82,38 @@ describe('ItemPricing realtime normal price preview', () => {
     expect(source).toContain('const saveCustomerWeightRate = async ({ silent = false } = {}) =>')
     expect(source).toContain('await updatePricingMarkupFee(customerWeightFee.id, payload)')
     expect(source).toContain('dictionaryStore.upsertPricingMarkupFee(savedFee)')
-    expect(source).toContain(':disabled="submitLoading || completeLoading || refreshLoading || customerWeightSavePending"')
+    expect(source).toContain(':disabled="submitLoading || completeLoading || refreshLoading || pricingCustomerWeightSavePending"')
     expect(submitBlock.indexOf('await saveCustomerWeightRate({ silent: true })')).toBeGreaterThanOrEqual(0)
     expect(submitBlock.indexOf('await saveCustomerWeightRate({ silent: true })')).toBeLessThan(submitBlock.indexOf('await submitQuote(payload)'))
+  })
+
+  test('edits and saves assembly customer weight above the assembly fee field', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+    const assemblyBlock = source.slice(
+      source.indexOf('class="erp-dialog-section pricing-workbench-section pricing-assembly-section assembly-box"'),
+      source.indexOf('class="pricing-workbench-summary assembly-summary"')
+    )
+    const submitBlock = source.slice(
+      source.indexOf('const submitCurrentQuote'),
+      source.indexOf('</script>')
+    )
+
+    expect(assemblyBlock).toContain('label="客户权重(%)"')
+    expect(assemblyBlock.indexOf('label="客户权重(%)"')).toBeLessThan(assemblyBlock.indexOf('label="组装费"'))
+    expect(assemblyBlock).toContain('v-model="assemblyCustomerWeightRatePercent"')
+    expect(assemblyBlock).toContain('saveAssemblyCustomerWeightRate')
+    expect(assemblyBlock).toContain('v-permission="\'engineer:dict:fee-manage\'"')
+    expect(assemblyBlock).toContain('class="assembly-pricing-number-input"')
+    expect(source).toContain('const assemblyCustomerWeightFee = computed(() =>')
+    expect(source).toContain("fee.feeCategory === CUSTOMER_WEIGHT && fee.pricingScope === 'ASSEMBLY'")
+    expect(source).toContain('const effectiveAssemblyMarkupFeeOptions = computed(() =>')
+    expect(source).toContain('ratePercent: assemblyCustomerWeightRateValue.value')
+    expect(source).toContain('const saveAssemblyCustomerWeightRate = async ({ silent = false } = {}) =>')
+    expect(source).toContain('await updatePricingMarkupFee(assemblyCustomerWeightFee.value.id, payload)')
+    expect(source).toContain('dictionaryStore.upsertPricingMarkupFee(savedFee)')
+    expect(source).toContain('effectiveAssemblyMarkupFeeOptions.value,')
+    expect(submitBlock.indexOf('await saveAssemblyCustomerWeightRate({ silent: true })')).toBeGreaterThanOrEqual(0)
+    expect(submitBlock.indexOf('await saveAssemblyCustomerWeightRate({ silent: true })')).toBeLessThan(submitBlock.indexOf('await submitQuote(payload)'))
   })
 
   test('does not refresh dictionary cache after saving one item quote', () => {

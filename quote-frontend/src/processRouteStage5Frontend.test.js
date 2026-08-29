@@ -14,7 +14,7 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     expect(itemPricing).toContain("const assemblyMarkupFeeOptions = computed(() => dictionaryStore.getPricingMarkupFees('ASSEMBLY'))")
     expect(itemPricing).toContain('const assemblyPreviewPricingResult = computed(() => calculatePreviewPriceByFeeCategory(')
     expect(itemPricing).toContain('numberOrZero(assemblyFee.value),')
-    expect(itemPricing).toContain('assemblyMarkupFeeOptions.value,')
+    expect(itemPricing).toContain('effectiveAssemblyMarkupFeeOptions.value,')
     expect(itemPricing).toContain("'ASSEMBLY'")
     expect(itemPricing).toContain('const assemblyFeeMarkupRows = computed(() => assemblyPreviewPricingResult.value.feeRows)')
     expect(itemPricing).toContain('const assemblyFeeMarkupTotal = computed(() => assemblyFeeMarkupRows.value.reduce((sum, row) => sum + numberOrZero(row.cost), 0))')
