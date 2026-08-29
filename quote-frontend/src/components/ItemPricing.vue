@@ -484,15 +484,18 @@
                 </div>
               </el-form-item>
               <el-form-item label="组装费">
-                <el-input-number
-                  v-model="assemblyFee"
-                  :min="0"
-                  :step="10"
-                  :precision="2"
-                  placeholder="请输入"
-                  controls-position="right"
-                  class="assembly-pricing-number-input"
-                />
+                <div class="assembly-fee-control">
+                  <el-input-number
+                    v-model="assemblyFee"
+                    :min="0"
+                    :step="10"
+                    :precision="2"
+                    placeholder="请输入"
+                    controls-position="right"
+                    class="assembly-pricing-number-input"
+                  />
+                  <span class="assembly-fee-spacer" aria-hidden="true"></span>
+                </div>
               </el-form-item>
             </el-form>
             <div class="pricing-workbench-summary assembly-summary">
@@ -2722,16 +2725,29 @@ const submitCurrentQuote = async () => {
   width: 100%;
 }
 
-.assembly-customer-weight-control {
+.assembly-fee-form {
+  --assembly-pricing-input-width: 240px;
+  --assembly-pricing-action-width: 74px;
+}
+
+.assembly-customer-weight-control,
+.assembly-fee-control {
   display: grid;
-  grid-template-columns: minmax(0, 240px) auto;
+  grid-template-columns: var(--assembly-pricing-input-width) var(--assembly-pricing-action-width);
   gap: 8px;
   align-items: center;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .assembly-pricing-number-input {
-  width: 240px;
+  width: var(--assembly-pricing-input-width);
   max-width: 100%;
+}
+
+.assembly-customer-weight-control :deep(.el-button),
+.assembly-fee-spacer {
+  width: var(--assembly-pricing-action-width);
 }
 
 .pricing-workbench-summary {
