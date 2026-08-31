@@ -27,13 +27,13 @@ class SalesOrderNumberServiceTest {
     }
 
     @Test
-    void rfqReleaseKeepsExistingDeterministicNumberingRule() {
+    void rfqReleaseUsesSalesOrderNumberAsStableDocumentNumber() {
         SalesOrderNumberService.SalesOrderNumbers numbers = service.forRfqRelease(
                 LocalDate.of(2026, 8, 11),
                 "RFQ:42:BATCH:abc");
 
         assertThat(numbers.salesOrderNo()).isEqualTo("SORFQ-20260811-600D09B4A774CE40");
-        assertThat(numbers.documentNo()).isEqualTo("DOC-RFQ-20260811-600D09B4A774CE40");
+        assertThat(numbers.documentNo()).isEqualTo(numbers.salesOrderNo());
         assertThat(service.forRfqRelease(LocalDate.of(2026, 8, 11), "RFQ:42:BATCH:abc"))
                 .isEqualTo(numbers);
     }

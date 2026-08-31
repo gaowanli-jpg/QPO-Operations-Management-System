@@ -105,12 +105,14 @@ class RfqReleaseSalesOrderIntegrationTest {
         assertThat(result.getSalesOrderId()).isNotNull();
         assertThat(result.getSalesOrderNo()).isNotBlank();
         assertThat(result.getDocumentNo()).isNotBlank();
+        assertThat(result.getDocumentNo()).isEqualTo(result.getSalesOrderNo());
         assertThat(result.getSourceRfqIds()).containsExactly(firstOrder.getId(), secondOrder.getId());
         assertThat(result.getTicketCount()).isEqualTo(3);
         assertThat(result.getConfirmedMaterialCount()).isEqualTo(1);
         assertThat(result.getPendingMaterialCount()).isEqualTo(2);
 
         SalesOrderHeader header = headerMapper.selectById(result.getSalesOrderId());
+        assertThat(header.getDocumentNo()).isEqualTo(header.getSalesOrderNo());
         assertThat(header.getSourceType()).isEqualTo("RFQ_RELEASE");
         assertThat(header.getSourceReleaseBatchKey()).isEqualTo(req.getReleaseBatchKey());
         assertThat(header.getSourceReleaseRequestHash()).hasSize(64);

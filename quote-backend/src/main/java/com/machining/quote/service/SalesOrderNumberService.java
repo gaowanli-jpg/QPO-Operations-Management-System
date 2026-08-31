@@ -33,9 +33,8 @@ public class SalesOrderNumberService {
         }
         String date = DATE.format(salesOrderDate);
         String suffix = sha256(releaseBatchKey.trim()).substring(0, 16).toUpperCase();
-        return new SalesOrderNumbers(
-                "SORFQ-" + date + "-" + suffix,
-                "DOC-RFQ-" + date + "-" + suffix);
+        String orderNo = "SORFQ-" + date + "-" + suffix;
+        return new SalesOrderNumbers(orderNo, orderNo);
     }
 
     private String sha256(String value) {
