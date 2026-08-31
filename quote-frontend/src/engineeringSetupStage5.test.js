@@ -84,6 +84,7 @@ describe('QPO Stage 5 engineering setup redesign', () => {
     expect(source).not.toContain('同客户已提单历史重复件')
     expect(source).not.toContain('同客户')
     expect(source).toContain('图号和版本')
-    expect(source).toContain('已提单历史重复件')
+    expect(source).toContain('历史重复件')
+    expect(source).toContain('可自动复用')
   })
 })

@@ -46,6 +46,13 @@ public class EngineerService {
     private static final String QUOTE_MODE_ASSEMBLY = "ASSEMBLY";
     private static final String ASSEMBLY_FEE_PROCESS_NAME = "组装费";
     private static final int REPEAT_SOURCE_KEY_BATCH_SIZE = 500;
+    private static final Set<String> AUTO_REUSABLE_REPEAT_STATUSES = Set.of(
+            QuoteStatusWorkflow.PRICED,
+            QuoteStatusWorkflow.QUOTED,
+            QuoteStatusWorkflow.PARTIALLY_RELEASED,
+            QuoteStatusWorkflow.RELEASED,
+            QuoteStatusWorkflow.ITEM_RELEASED
+    );
 
     @Autowired
     private ItemQuoteVersionMapper itemMapper;
@@ -724,6 +731,7 @@ public class EngineerService {
     public Map<String, Object> analyzeRepeatOrder(Integer rfqId) {
         OrderRfq order = requireOrder(rfqId);
         List<ItemQuoteVersion> currentItems = listItems(rfqId);
+        Map<String, RepeatSource> repeatIdentitySources = findRepeatIdentitySources(order, currentItems);
         Map<String, RepeatSource> repeatSources = findRepeatSources(order, currentItems);
 
         List<Map<String, Object>> repeatItems = new ArrayList<>();
@@ -733,14 +741,25 @@ public class EngineerService {
         Map<String, Map<String, Object>> materialSamples = new LinkedHashMap<>();
 
         for (ItemQuoteVersion item : currentItems) {
-            RepeatSource source = repeatSources.get(itemKey(item));
-            if (source == null) {
+            String key = itemKey(item);
+            RepeatSource identitySource = repeatIdentitySources.get(key);
+            if (identitySource == null) {
                 newItems.add(buildBasicItemInfo(item));
                 continue;
             }
 
+            RepeatSource source = repeatSources.get(key);
+            boolean autoReusable = source != null;
+            RepeatSource displaySource = autoReusable ? source : identitySource;
+            Map<String, Object> repeatInfo = buildRepeatItemInfo(item, displaySource);
+            repeatInfo.put("autoReusable", autoReusable);
+            repeatItems.add(repeatInfo);
+
+            if (!autoReusable) {
+                continue;
+            }
+
             ItemQuoteVersion sourceItem = source.item();
-            repeatItems.add(buildRepeatItemInfo(item, source));
 
             if (recommendedProcessRoute.isEmpty()) {
                 recommendedProcessRoute = reusableEngineerProcessRoute(source.order().getEngineerConfig());
@@ -815,7 +834,7 @@ public class EngineerService {
             }
             RepeatSource source = repeatSources.get(itemKey(item));
             if (source == null) {
-                skippedItems.add(buildSkipInfo(item, "未找到已提单历史重复件"));
+                skippedItems.add(buildSkipInfo(item, "未找到可自动复用的历史重复件"));
                 continue;
             }
             if (!hasDrawing(item)) {
@@ -1287,6 +1306,41 @@ public class EngineerService {
         return result;
     }
 
+    private Map<String, RepeatSource> findRepeatIdentitySources(OrderRfq order, List<ItemQuoteVersion> currentItems) {
+        Map<String, RepeatSource> result = new LinkedHashMap<>();
+        List<PartVersionKey> currentKeys = buildRepeatSourceKeys(currentItems);
+        if (order == null || order.getId() == null || currentKeys.isEmpty()) {
+            return result;
+        }
+
+        List<ItemQuoteVersion> historicalItems = new ArrayList<>();
+        for (int start = 0; start < currentKeys.size(); start += REPEAT_SOURCE_KEY_BATCH_SIZE) {
+            int end = Math.min(start + REPEAT_SOURCE_KEY_BATCH_SIZE, currentKeys.size());
+            historicalItems.addAll(itemMapper.selectLatestPartVersionRepeatSources(order.getId(), currentKeys.subList(start, end)));
+        }
+        if (historicalItems.isEmpty()) {
+            return result;
+        }
+
+        Map<Integer, OrderRfq> historicalOrderMap = loadRepeatSourceOrders(historicalItems);
+        for (ItemQuoteVersion historicalItem : historicalItems) {
+            String itemKey = itemKey(historicalItem);
+            if (result.containsKey(itemKey)) {
+                continue;
+            }
+            OrderRfq historicalOrder = historicalOrderMap.get(historicalItem.getRfqId());
+            if (historicalOrder == null) {
+                continue;
+            }
+            result.put(itemKey, new RepeatSource(historicalOrder, historicalItem));
+            if (result.size() == currentKeys.size()) {
+                break;
+            }
+        }
+
+        return result;
+    }
+
     private List<PartVersionKey> buildRepeatSourceKeys(List<ItemQuoteVersion> currentItems) {
         Map<String, PartVersionKey> keysByIdentity = new LinkedHashMap<>();
         for (ItemQuoteVersion item : currentItems) {
@@ -1323,10 +1377,14 @@ public class EngineerService {
 
     private boolean hasReusableQuote(ItemQuoteVersion item) {
         return item != null
-                && Boolean.TRUE.equals(item.getRepeatMatchEligible())
+                && isAutoReusableRepeatStatus(item.getStatus())
                 && item.getTaxIncludedUnitPrice() != null
-                && item.getMaterialData() != null
-                && item.getProcessRoute() != null;
+                && !normalizeMap(item.getMaterialData()).isEmpty()
+                && !normalizeProcessRoute(item.getProcessRoute()).isEmpty();
+    }
+
+    private boolean isAutoReusableRepeatStatus(String status) {
+        return status != null && AUTO_REUSABLE_REPEAT_STATUSES.contains(status.trim());
     }
 
     private Map<String, Object> buildRecommendedConfig(

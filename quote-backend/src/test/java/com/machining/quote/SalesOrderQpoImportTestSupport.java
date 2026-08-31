@@ -337,6 +337,8 @@ abstract class SalesOrderQpoImportTestSupport {
         source.setVersion("A");
         source.setStatus(QuoteStatusWorkflow.ITEM_RELEASED);
         source.setRepeatMatchEligible(true);
+        source.setTaxIncludedUnitPrice(15.0);
+        source.setTaxIncludedTotalPrice(15.0);
         source.setMaterialName("historical imported material");
         source.setMaterialNo("MAT-HIST-001");
         source.setMaterialNoStatus("已确认");

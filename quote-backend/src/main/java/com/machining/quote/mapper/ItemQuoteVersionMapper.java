@@ -21,4 +21,10 @@ public interface ItemQuoteVersionMapper extends BaseMapper<ItemQuoteVersion> {
     List<ItemQuoteVersion> selectLatestReleasedRepeatSources(
             @Param("currentRfqId") Integer currentRfqId,
             @Param("keys") List<PartVersionKey> keys);
+
+    @ResultMap("mybatis-plus_ItemQuoteVersion")
+    @SelectProvider(type = RepeatQuoteSourceSqlProvider.class, method = "selectLatestPartVersionRepeatSources")
+    List<ItemQuoteVersion> selectLatestPartVersionRepeatSources(
+            @Param("currentRfqId") Integer currentRfqId,
+            @Param("keys") List<PartVersionKey> keys);
 }

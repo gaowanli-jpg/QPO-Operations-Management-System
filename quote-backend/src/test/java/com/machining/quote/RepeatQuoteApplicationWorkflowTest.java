@@ -149,6 +149,84 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void repeatQuoteReusesLatestQualifiedPricedHistoryWithoutTicketing() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-PRICED-REUSE-" + System.nanoTime());
+        historicalOrder.setCustomerName("已核价复用客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.PRICED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion reusablePricedSource = reusableItem(
+                historicalOrder,
+                "PRICED-REUSE-100",
+                "A",
+                26.0,
+                QuoteStatusWorkflow.PRICED);
+        reusablePricedSource.setRepeatMatchEligible(false);
+        itemMapper.updateById(reusablePricedSource);
+
+        ItemQuoteVersion newerUnpricedSource = new ItemQuoteVersion();
+        newerUnpricedSource.setRfqId(historicalOrder.getId());
+        newerUnpricedSource.setPartNo("PRICED-REUSE-100");
+        newerUnpricedSource.setVersion("A");
+        newerUnpricedSource.setDescription("更新的未核价同图号版本历史件");
+        newerUnpricedSource.setQty(1);
+        newerUnpricedSource.setDrawingUrl("/uploads/test/PRICED-REUSE-100-newer.pdf");
+        newerUnpricedSource.setStatus(QuoteStatusWorkflow.UNPRICED);
+        newerUnpricedSource.setRepeatMatchEligible(true);
+        itemMapper.insert(newerUnpricedSource);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-PRICED-REUSE-" + System.nanoTime());
+        currentOrder.setCustomerName("当前已核价复用客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        ItemQuoteVersion currentItem = pendingItem(currentOrder, "PRICED-REUSE-100", "A");
+
+        Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
+        List<Map<String, Object>> appliedItems = (List<Map<String, Object>>) result.get("appliedItems");
+        assertThat(result.get("appliedCount")).isEqualTo(1);
+        assertThat(appliedItems).singleElement()
+                .satisfies(row -> assertThat(row.get("sourceItemId")).isEqualTo(reusablePricedSource.getId()));
+        assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
+        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void repeatAnalysisRecognizesDuplicateByPartVersionEvenWhenHistoryCannotAutoReuse() {
+        OrderRfq historicalOrder = new OrderRfq();
+        historicalOrder.setRfqNo("HIST-IDENTITY-ONLY-" + System.nanoTime());
+        historicalOrder.setCustomerName("仅重复识别客户");
+        historicalOrder.setStatus(QuoteStatusWorkflow.UNPRICED);
+        orderMapper.insert(historicalOrder);
+        ItemQuoteVersion historicalItem = pendingItem(historicalOrder, "IDENTITY-ONLY-100", "A");
+        historicalItem.setRepeatMatchEligible(false);
+        itemMapper.updateById(historicalItem);
+
+        OrderRfq currentOrder = new OrderRfq();
+        currentOrder.setRfqNo("CUR-IDENTITY-ONLY-" + System.nanoTime());
+        currentOrder.setCustomerName("当前仅重复识别客户");
+        currentOrder.setStatus("待工程部评估");
+        orderMapper.insert(currentOrder);
+        pendingItem(currentOrder, "IDENTITY-ONLY-100", "A");
+
+        Map<String, Object> result = engineerService.analyzeRepeatOrder(currentOrder.getId());
+
+        List<Map<String, Object>> repeatItems = (List<Map<String, Object>>) result.get("repeatItems");
+        List<Map<String, Object>> newItems = (List<Map<String, Object>>) result.get("newItems");
+        assertThat(result.get("repeatCount")).isEqualTo(1);
+        assertThat(result.get("newCount")).isEqualTo(0);
+        assertThat(repeatItems).singleElement().satisfies(row -> {
+            assertThat(row.get("partNo")).isEqualTo("IDENTITY-ONLY-100");
+            assertThat(row.get("autoReusable")).isEqualTo(false);
+        });
+        assertThat(newItems).isEmpty();
+    }
+
+    @Test
     void repeatQuoteReusesQuoteSnapshotWhenSourceMaterialNoIsUnconfirmed() {
         OrderRfq historicalOrder = new OrderRfq();
         historicalOrder.setRfqNo("HIST-UNCONFIRMED-MATERIAL-" + System.nanoTime());

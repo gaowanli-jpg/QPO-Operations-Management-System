@@ -59,12 +59,12 @@ class RepeatQuoteInfrastructureCharacterizationTest extends CoreWorkflowIntegrat
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void repeatSourceImplementationUsesItemQuoteVersionEligibilityFlagWithoutTicketRuntimeLookup() throws Exception {
+    void repeatSourceImplementationUsesItemQuoteVersionQualifiedStatusWithoutTicketRuntimeLookup() throws Exception {
         String service = source("src/main/java/com/machining/quote/service/EngineerService.java");
         String repeatMethod = methodBody(service, "private Map<String, RepeatSource> findRepeatSources", "private boolean hasReusableQuote");
 
         assertThat(repeatMethod)
-                .as("重复件候选入口应直接查 item_quote_version，不能在服务层逐行依赖 order_delivery_ticket")
+                .as("重复件可复用候选入口应直接查 item_quote_version，不能在服务层逐行依赖 order_delivery_ticket")
                 .doesNotContain("OrderDeliveryTicket")
                 .doesNotContain("ticketMapper");
         assertThat(repeatMethod)
@@ -82,7 +82,11 @@ class RepeatQuoteInfrastructureCharacterizationTest extends CoreWorkflowIntegrat
                 .contains("JOIN LATERAL")
                 .contains("VALUES");
         assertThat(provider)
-                .contains("h.repeat_match_eligible = TRUE")
+                .contains("h.status IN")
+                .contains("已核价")
+                .contains("已报价")
+                .contains("已提单")
+                .doesNotContain("h.repeat_match_eligible = TRUE")
                 .doesNotContain("order_delivery_ticket")
                 .doesNotContain("EXISTS (")
                 .as("重复件候选必须排除导入默认空 JSON 快照，不能只判断 IS NOT NULL")
@@ -96,11 +100,11 @@ class RepeatQuoteInfrastructureCharacterizationTest extends CoreWorkflowIntegrat
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void repeatReleasedItemLookupUsesEligibilityFlagIndexWithoutCustomerOrTicketIndex() throws Exception {
+    void repeatReusableItemLookupUsesPricedSnapshotIndexWithoutCustomerOrTicketIndex() throws Exception {
         Path migrationPath = Path.of(
-                "src", "main", "resources", "db", "migration", "V1__qpo_baseline_schema.sql");
+                "src", "main", "resources", "db", "migration", "V28__repeat_match_priced_snapshot_index.sql");
         assertThat(migrationPath)
-                .as("阶段 1 必须新增重复件已提单历史零件部分索引迁移")
+                .as("重复件可自动复用查询需要按已核价及之后状态建立部分索引")
                 .exists();
 
         String migration = Files.readString(migrationPath, StandardCharsets.UTF_8);
@@ -122,10 +126,9 @@ class RepeatQuoteInfrastructureCharacterizationTest extends CoreWorkflowIntegrat
         String combined = migration + "\n" + schema + "\n" + allMigrations;
 
         assertThat(combined)
-                .contains("repeat_match_eligible boolean DEFAULT false NOT NULL")
-                .contains("idx_item_quote_version_repeat_eligible_key")
+                .contains("idx_item_quote_version_repeat_priced_snapshot_key")
                 .contains("ON item_quote_version USING btree (part_no, version, id DESC)")
-                .contains("repeat_match_eligible IS TRUE")
+                .contains("status IN ('已核价', '已报价', '部分已提单', '已生成提单', '已提单')")
                 .contains("tax_included_unit_price IS NOT NULL")
                 .contains("material_data IS NOT NULL")
                 .contains("material_data <> '{}'::jsonb")
@@ -134,12 +137,13 @@ class RepeatQuoteInfrastructureCharacterizationTest extends CoreWorkflowIntegrat
         assertThat(combined)
                 .as("重复件匹配不能退回普通全量联合索引")
                 .doesNotContain("item_quote_version(part_no, version, status, id DESC)");
-        String repeatIndex = combined.substring(combined.indexOf("idx_item_quote_version_repeat_eligible_key"));
+        String repeatIndex = combined.substring(combined.indexOf("idx_item_quote_version_repeat_priced_snapshot_key"));
         repeatIndex = repeatIndex.substring(0, repeatIndex.indexOf(";"));
         assertThat(repeatIndex)
-                .as("重复件匹配索引不能新增客户或提单表专用索引")
+                .as("重复件可自动复用索引不能新增客户或提单表专用索引")
                 .doesNotContain("customer")
                 .doesNotContain("order_delivery_ticket")
+                .doesNotContain("repeat_match_eligible")
                 .doesNotContain("fee_data");
     }
 }

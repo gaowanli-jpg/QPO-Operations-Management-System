@@ -8,12 +8,16 @@ import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictPricingMarkupFee;
+import com.machining.quote.entity.DictProcessCategory;
+import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.mapper.DictProcessCategoryMapper;
+import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
@@ -57,6 +61,10 @@ class AssemblyWorkflowIntegrationTests {
     private DictMaterialMapper materialMapper;
     @Autowired
     private DictMaterialPriceSpecMapper materialPriceSpecMapper;
+    @Autowired
+    private DictProcessCategoryMapper processCategoryMapper;
+    @Autowired
+    private DictProcessDetailMapper processDetailMapper;
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
     @Autowired
@@ -529,8 +537,51 @@ class AssemblyWorkflowIntegrationTests {
         req.setItemId(item.getId());
         req.setQuoteMode("NORMAL");
         req.setMaterialData(materialDataWithCost(baseCost));
-        req.setProcessRoute(List.of());
+        req.setProcessRoute(List.of(zeroCostProcessRoute()));
         engineerService.calculateAndSaveQuote(req);
+    }
+
+    private QuoteSubmitReq.ProcessSubmitDTO zeroCostProcessRoute() {
+        DictProcessDetail detail = ensureZeroCostProcess();
+        QuoteSubmitReq.ProcessSubmitDTO row = new QuoteSubmitReq.ProcessSubmitDTO();
+        row.setSortNo(10);
+        row.setProcessDetailId(detail.getId());
+        row.setUnitWorkHours(1.0);
+        return row;
+    }
+
+    private DictProcessDetail ensureZeroCostProcess() {
+        DictProcessCategory category = processCategoryMapper.selectOne(new QueryWrapper<DictProcessCategory>()
+                .eq("process_code", "ASSY_ZERO_REUSE")
+                .last("LIMIT 1"));
+        if (category == null) {
+            category = new DictProcessCategory();
+            category.setProcessCode("ASSY_ZERO_REUSE");
+            category.setCategoryName("Assembly zero cost reuse process");
+            category.setSortNo(0);
+            processCategoryMapper.insert(category);
+        }
+        category.setHourlyRate(BigDecimal.ZERO);
+        category.setSourceType("LOCAL");
+        category.setEnabled(true);
+        processCategoryMapper.updateById(category);
+
+        DictProcessDetail detail = processDetailMapper.selectOne(new QueryWrapper<DictProcessDetail>()
+                .eq("category_id", category.getId())
+                .eq("detail_name", "Assembly zero cost reuse detail")
+                .last("LIMIT 1"));
+        if (detail == null) {
+            detail = new DictProcessDetail();
+            detail.setCategoryId(category.getId());
+            detail.setDetailName("Assembly zero cost reuse detail");
+            detail.setSortNo(0);
+            processDetailMapper.insert(detail);
+        }
+        detail.setHourlyRate(BigDecimal.ZERO);
+        detail.setDetailRemarks("test process detail");
+        detail.setEnabled(true);
+        processDetailMapper.updateById(detail);
+        return detail;
     }
 
     private Map<String, Object> materialDataWithCost(double baseCost) {

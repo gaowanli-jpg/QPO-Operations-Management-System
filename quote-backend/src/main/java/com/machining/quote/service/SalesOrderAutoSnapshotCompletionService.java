@@ -44,6 +44,13 @@ public class SalesOrderAutoSnapshotCompletionService {
     private static final String ASSEMBLY_RELATION_NOT_APPLICABLE = "不适用";
     private static final String ASSEMBLY_RELATION_UNSPECIFIED = "未指定父子关系";
     private static final String ASSEMBLY_RELATION_SPECIFIED = "已指定父子关系";
+    private static final Set<String> AUTO_REUSABLE_REPEAT_STATUSES = Set.of(
+            QuoteStatusWorkflow.PRICED,
+            QuoteStatusWorkflow.QUOTED,
+            QuoteStatusWorkflow.PARTIALLY_RELEASED,
+            QuoteStatusWorkflow.RELEASED,
+            QuoteStatusWorkflow.ITEM_RELEASED
+    );
 
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
@@ -209,7 +216,8 @@ public class SalesOrderAutoSnapshotCompletionService {
             int end = Math.min(start + REPEAT_SOURCE_KEY_BATCH_SIZE, keys.size());
             List<ItemQuoteVersion> sources = itemQuoteVersionMapper.selectLatestReleasedRepeatSources(null, keys.subList(start, end));
             for (ItemQuoteVersion source : sources == null ? List.<ItemQuoteVersion>of() : sources) {
-                if (source == null || isBlank(source.getPartNo()) || isBlank(source.getVersion())) {
+                if (source == null || isBlank(source.getPartNo()) || isBlank(source.getVersion())
+                        || !hasReusableProductionSnapshot(source)) {
                     continue;
                 }
                 String key = itemKey(source.getPartNo(), source.getVersion());
@@ -369,6 +377,18 @@ public class SalesOrderAutoSnapshotCompletionService {
             return left;
         }
         return rightId > leftId ? right : left;
+    }
+
+    private boolean hasReusableProductionSnapshot(ItemQuoteVersion source) {
+        return source != null
+                && isAutoReusableRepeatStatus(source.getStatus())
+                && source.getTaxIncludedUnitPrice() != null
+                && !isMissingSnapshot(source.getMaterialData())
+                && !isMissingSnapshot(source.getProcessRoute());
+    }
+
+    private boolean isAutoReusableRepeatStatus(String status) {
+        return status != null && AUTO_REUSABLE_REPEAT_STATUSES.contains(status.trim());
     }
 
     private List<PartVersionKey> partVersionKeys(List<SalesOrderItem> items) {
