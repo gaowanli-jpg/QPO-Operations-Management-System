@@ -103,6 +103,27 @@ class FlywayMigrationPolicyTest {
                 .contains("idx_item_quote_version_repeat_eligible_key");
     }
 
+    @Test
+    void repeatIdentityLookupHasDedicatedPartVersionLatestIndex() throws IOException {
+        Path migrationPath = MIGRATION_DIR.resolve("V29__repeat_identity_lookup_index.sql");
+        assertThat(migrationPath)
+                .as("展示型重复身份判断也需要按图号+版本+最新ID稳定命中，避免大表回退扫表")
+                .exists();
+
+        String migration = read(migrationPath);
+        assertThat(migration)
+                .contains("idx_item_quote_version_part_version_latest")
+                .contains("ON item_quote_version USING btree (part_no, version, id DESC)");
+        assertThat(migration)
+                .as("展示型身份索引必须是通用图号版本索引，不能混入可复用快照过滤条件")
+                .doesNotContain("tax_included_unit_price")
+                .doesNotContain("material_data")
+                .doesNotContain("process_route")
+                .doesNotContain("repeat_match_eligible")
+                .doesNotContain("order_delivery_ticket")
+                .doesNotContain("sales_order_item");
+    }
+
     private static List<MigrationFile> migrationFiles() throws IOException {
         List<MigrationFile> migrations = new ArrayList<>();
         try (var paths = Files.list(MIGRATION_DIR)) {

@@ -241,6 +241,7 @@
       title="选择零件核价订单"
       customer-scope="engineer-setup"
       order-scope="engineer-setup"
+      default-status-after-customer="未核价"
       @select="handleOrderSelected"
     />
 

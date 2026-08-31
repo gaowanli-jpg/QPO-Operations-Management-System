@@ -177,6 +177,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  defaultStatusAfterCustomer: {
+    type: String,
+    default: ''
+  },
   customerScope: {
     type: String,
     default: 'quote-process'
@@ -243,16 +247,26 @@ const statusOptions = computed(() => {
   return allowed.length > 0 ? allowed : (STATUS_OPTIONS_BY_SCOPE[props.orderScope] || DEFAULT_STATUS_OPTIONS)
 })
 
+const defaultStatusAfterCustomer = computed(() => {
+  const status = props.defaultStatusAfterCustomer
+  return status && statusOptions.value.includes(status) ? status : ''
+})
+
 const customerSelectPermission = computed(() => (
   CUSTOMER_PERMISSION_BY_SCOPE[props.customerScope] || CUSTOMER_PERMISSION_BY_SCOPE['quote-process']
 ))
 
 watch(selectedCustomer, () => {
-  selectedStatus.value = ''
+  const nextDefaultStatus = selectedCustomer.value ? defaultStatusAfterCustomer.value : ''
+  const shouldLoadCurrentStatus = nextDefaultStatus && selectedStatus.value === nextDefaultStatus
+  selectedStatus.value = nextDefaultStatus || ''
   selectedOrderId.value = null
   selectedOrder.value = null
   clearPendingSelectedOrders()
   resetPageAndRows()
+  if (shouldLoadCurrentStatus) {
+    loadOrders()
+  }
 })
 
 watch(selectedStatus, () => {
