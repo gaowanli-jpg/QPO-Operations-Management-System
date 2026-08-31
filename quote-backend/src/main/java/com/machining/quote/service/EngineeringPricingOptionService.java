@@ -2,21 +2,25 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.dto.MaterialPriceSpecDTO;
 import com.machining.quote.dto.PricingMaterialOptionDTO;
 import com.machining.quote.dto.PricingOptionPageReq;
 import com.machining.quote.dto.PricingProcessOptionDTO;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.machining.quote.util.MaterialPriceSpecSupport;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,6 +39,8 @@ public class EngineeringPricingOptionService {
 
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
     @Autowired
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
@@ -183,12 +189,27 @@ public class EngineeringPricingOptionService {
         Map<Long, DictMaterialType> typeById = typeIds.isEmpty()
                 ? Map.of()
                 : toMap(materialTypeMapper.selectBatchIds(typeIds), DictMaterialType::getId);
+        List<Long> materialIds = materials.stream()
+                .map(DictMaterial::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, List<MaterialPriceSpecDTO>> specsByMaterialId = loadPriceSpecsByMaterialIds(materialIds);
         return materials.stream()
-                .map(material -> toMaterialOption(material, typeById.get(material.getMaterialTypeId())))
+                .map(material -> toMaterialOption(material, typeById.get(material.getMaterialTypeId()), specsByMaterialId.get(material.getId())))
                 .toList();
     }
 
-    private PricingMaterialOptionDTO toMaterialOption(DictMaterial material, DictMaterialType type) {
+    private Map<Long, List<MaterialPriceSpecDTO>> loadPriceSpecsByMaterialIds(List<Long> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<DictMaterialPriceSpec> query = new QueryWrapper<>();
+        query.in("material_id", materialIds).orderByAsc("material_id").orderByAsc("sort_no").orderByAsc("id");
+        return MaterialPriceSpecSupport.groupDtosByMaterialId(materialIds, materialPriceSpecMapper.selectList(query));
+    }
+
+    private PricingMaterialOptionDTO toMaterialOption(DictMaterial material, DictMaterialType type, List<MaterialPriceSpecDTO> priceSpecs) {
         PricingMaterialOptionDTO dto = new PricingMaterialOptionDTO();
         dto.setId(material.getId());
         dto.setMaterialCode(material.getMaterialCode());
@@ -199,9 +220,7 @@ public class EngineeringPricingOptionService {
         dto.setMaterialCategory(material.getMaterialCategory());
         dto.setDensity(material.getDensity());
         dto.setMesDensityRaw(material.getMesDensityRaw());
-        dto.setPlatePrice(material.getPlatePrice());
-        dto.setBarPrice(material.getBarPrice());
-        dto.setTubePrice(material.getTubePrice());
+        dto.setPriceSpecs(MaterialPriceSpecSupport.normalizeDtos(priceSpecs));
         dto.setRemarks(material.getRemarks());
         return dto;
     }

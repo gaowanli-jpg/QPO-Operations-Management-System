@@ -7,11 +7,13 @@ import com.machining.quote.dto.PricingOptionPageReq;
 import com.machining.quote.dto.PricingProcessOptionDTO;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
@@ -40,20 +42,20 @@ class EngineeringPricingOptionServiceTest {
     @SuppressWarnings("unchecked")
     void pageMaterialOptionsReturnsEnabledRowsWithTypeFieldsAndStrictPaging() {
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialPriceSpecMapper specMapper = mock(DictMaterialPriceSpecMapper.class);
         DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
-        EngineeringPricingOptionService service = service(materialMapper, materialTypeMapper,
+        EngineeringPricingOptionService service = service(materialMapper, specMapper, materialTypeMapper,
                 mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
         DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L);
         material.setMaterialCategory("不锈钢");
         material.setDensity(7.93);
         material.setMesDensityRaw("7.92");
-        material.setPlatePrice(11.5);
-        material.setBarPrice(12.2);
-        material.setTubePrice(13.3);
         material.setRemarks("raw remark");
         DictMaterialType type = materialType(1L, "RAW", "原材料");
         when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(25L);
         when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(material));
+        when(specMapper.selectList(any())).thenReturn(List.of(
+                spec(100L, 10L, "SPEC_1", "规格一", 11.5, null, 12.2, 13.3, 10)));
         when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(type));
 
         PricingOptionPageReq req = new PricingOptionPageReq();
@@ -76,9 +78,11 @@ class EngineeringPricingOptionServiceTest {
             assertThat(row.getMaterialCategory()).isEqualTo("不锈钢");
             assertThat(row.getDensity()).isEqualTo(7.93);
             assertThat(row.getMesDensityRaw()).isEqualTo("7.92");
-            assertThat(row.getPlatePrice()).isEqualTo(11.5);
-            assertThat(row.getBarPrice()).isEqualTo(12.2);
-            assertThat(row.getTubePrice()).isEqualTo(13.3);
+            assertThat(row.getPriceSpecs()).hasSize(3);
+            assertThat(row.getPriceSpecs().get(0).getUnifiedPrice()).isEqualTo(11.5);
+            assertThat(row.getPriceSpecs().get(0).getEffectivePlatePrice()).isEqualTo(11.5);
+            assertThat(row.getPriceSpecs().get(0).getEffectiveBarPrice()).isEqualTo(12.2);
+            assertThat(row.getPriceSpecs().get(0).getEffectiveTubePrice()).isEqualTo(13.3);
             assertThat(row.getRemarks()).isEqualTo("raw remark");
         });
         ArgumentCaptor<QueryWrapper<DictMaterial>> countCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
@@ -94,7 +98,7 @@ class EngineeringPricingOptionServiceTest {
     @Test
     void pageMaterialOptionsDefaultsToTenRowsAndRejectsUnsupportedPageSize() {
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
-        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialTypeMapper.class),
+        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
                 mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
         when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
 
@@ -118,12 +122,14 @@ class EngineeringPricingOptionServiceTest {
     @SuppressWarnings("unchecked")
     void pageMaterialOptionsCanHydrateByExactMaterialCodes() {
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialPriceSpecMapper specMapper = mock(DictMaterialPriceSpecMapper.class);
         DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
-        EngineeringPricingOptionService service = service(materialMapper, materialTypeMapper,
+        EngineeringPricingOptionService service = service(materialMapper, specMapper, materialTypeMapper,
                 mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
         DictMaterial material = material(10L, "MAT-000010", "SUS304", 1L);
         when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
         when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(material));
+        when(specMapper.selectList(any())).thenReturn(List.of());
         when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(materialType(1L, "RAW", "原材料")));
 
         PricingOptionPageReq req = new PricingOptionPageReq();
@@ -147,7 +153,7 @@ class EngineeringPricingOptionServiceTest {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
-        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialTypeMapper.class),
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
                 detailMapper, categoryMapper, extraFeeItemMapper);
         DictProcessCategory category = category(7L, "CNC", "数控加工", new BigDecimal("60.00"));
         DictProcessDetail detail = detail(10L, 7L, "CNC 精加工", new BigDecimal("80.00"));
@@ -205,7 +211,7 @@ class EngineeringPricingOptionServiceTest {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
-        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialTypeMapper.class),
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
                 detailMapper, categoryMapper, extraFeeItemMapper);
         DictProcessCategory category = category(7L, "MTA_PICK", "下料", new BigDecimal("60.00"));
         DictProcessDetail detail = detail(10L, 7L, "激光下料", new BigDecimal("200.00"));
@@ -236,7 +242,7 @@ class EngineeringPricingOptionServiceTest {
     void exactProcessHydrationDoesNotFallbackToExtraFeesWhenPageIsOutOfRange() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
-        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialTypeMapper.class),
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
                 detailMapper, mock(DictProcessCategoryMapper.class), extraFeeItemMapper);
         when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
 
@@ -265,12 +271,14 @@ class EngineeringPricingOptionServiceTest {
 
     private static EngineeringPricingOptionService service(
             DictMaterialMapper materialMapper,
+            DictMaterialPriceSpecMapper materialPriceSpecMapper,
             DictMaterialTypeMapper materialTypeMapper,
             DictProcessDetailMapper detailMapper,
             DictProcessCategoryMapper categoryMapper,
             DictExtraFeeItemMapper extraFeeItemMapper) {
         EngineeringPricingOptionService service = new EngineeringPricingOptionService();
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        ReflectionTestUtils.setField(service, "materialPriceSpecMapper", materialPriceSpecMapper);
         ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
         ReflectionTestUtils.setField(service, "processDetailMapper", detailMapper);
         ReflectionTestUtils.setField(service, "processCategoryMapper", categoryMapper);
@@ -287,6 +295,22 @@ class EngineeringPricingOptionServiceTest {
         material.setEnabled(true);
         material.setSortNo(1);
         return material;
+    }
+
+    private static DictMaterialPriceSpec spec(Long id, Long materialId, String code, String name,
+                                              Double unifiedPrice, Double platePrice, Double barPrice,
+                                              Double tubePrice, int sortNo) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setId(id);
+        spec.setMaterialId(materialId);
+        spec.setSpecCode(code);
+        spec.setSpecName(name);
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setPlatePrice(platePrice);
+        spec.setBarPrice(barPrice);
+        spec.setTubePrice(tubePrice);
+        spec.setSortNo(sortNo);
+        return spec;
     }
 
     private static DictMaterialType materialType(Long id, String code, String name) {

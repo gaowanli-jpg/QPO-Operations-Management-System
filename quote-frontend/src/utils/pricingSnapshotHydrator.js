@@ -1,3 +1,5 @@
+import { findPriceSpec, normalizePriceSpecs } from './materialPriceSpecs'
+
 const normalizeCodeKey = (value) => String(value || '').trim().toUpperCase()
 const normalizeIdKey = (value) => String(value ?? '').trim()
 
@@ -45,29 +47,38 @@ export const buildPricingOptionIndex = ({ materialOptions = [], processOptions =
 }
 
 export const hydrateMaterialPricingSnapshot = (snapshot = {}, optionIndex = {}) => {
-  const key = materialCodeKey(snapshot?.materialCode)
+  const {
+    platePrice: _legacyPlatePrice,
+    barPrice: _legacyBarPrice,
+    tubePrice: _legacyTubePrice,
+    ...snapshotWithoutLegacyPrices
+  } = snapshot || {}
+  const key = materialCodeKey(snapshotWithoutLegacyPrices?.materialCode)
   const latest = key ? optionIndex.materialByCode?.get(key) : null
-  if (!latest) return snapshot
+  if (!latest) return snapshotWithoutLegacyPrices
 
   const density = effectiveMaterialDensity(latest)
-  const unitPrice = firstNumber(latest.unitPrice)
+  const priceSpecs = normalizePriceSpecs(latest.priceSpecs)
+  const priceSpecCode = normalizeCodeKey(snapshotWithoutLegacyPrices.priceSpecCode || snapshotWithoutLegacyPrices.priceSpec?.specCode)
+  const priceSpec = priceSpecCode ? findPriceSpec(priceSpecs, priceSpecCode) : null
   return {
-    ...snapshot,
-    materialId: latest.materialId ?? latest.id ?? snapshot.materialId ?? snapshot.id ?? null,
-    materialCode: latest.materialCode || snapshot.materialCode || '',
-    materialName: latest.materialName || latest.name || snapshot.materialName || snapshot.name || '',
-    name: latest.materialName || latest.name || snapshot.name || snapshot.materialName || '',
-    materialTypeId: latest.materialTypeId ?? snapshot.materialTypeId ?? null,
-    materialTypeCode: latest.materialTypeCode || snapshot.materialTypeCode || '',
-    materialTypeName: latest.materialTypeName || snapshot.materialTypeName || '',
-    materialCategory: latest.materialCategory || snapshot.materialCategory || '',
-    density: density ?? effectiveMaterialDensity(snapshot),
-    mesDensityRaw: latest.mesDensityRaw ?? snapshot.mesDensityRaw,
-    platePrice: firstNumber(latest.platePrice, unitPrice) ?? firstNumber(snapshot.platePrice, snapshot.unitPrice),
-    barPrice: firstNumber(latest.barPrice, unitPrice) ?? firstNumber(snapshot.barPrice, snapshot.unitPrice),
-    tubePrice: firstNumber(latest.tubePrice, unitPrice) ?? firstNumber(snapshot.tubePrice, snapshot.unitPrice),
-    remarks: latest.remarks ?? snapshot.remarks ?? '',
-    shape: snapshot.shape || latest.shape || '板材'
+    ...snapshotWithoutLegacyPrices,
+    materialId: latest.materialId ?? latest.id ?? snapshotWithoutLegacyPrices.materialId ?? snapshotWithoutLegacyPrices.id ?? null,
+    materialCode: latest.materialCode || snapshotWithoutLegacyPrices.materialCode || '',
+    materialName: latest.materialName || latest.name || snapshotWithoutLegacyPrices.materialName || snapshotWithoutLegacyPrices.name || '',
+    name: latest.materialName || latest.name || snapshotWithoutLegacyPrices.name || snapshotWithoutLegacyPrices.materialName || '',
+    materialTypeId: latest.materialTypeId ?? snapshotWithoutLegacyPrices.materialTypeId ?? null,
+    materialTypeCode: latest.materialTypeCode || snapshotWithoutLegacyPrices.materialTypeCode || '',
+    materialTypeName: latest.materialTypeName || snapshotWithoutLegacyPrices.materialTypeName || '',
+    materialCategory: latest.materialCategory || snapshotWithoutLegacyPrices.materialCategory || '',
+    density: density ?? effectiveMaterialDensity(snapshotWithoutLegacyPrices),
+    mesDensityRaw: latest.mesDensityRaw ?? snapshotWithoutLegacyPrices.mesDensityRaw,
+    priceSpecs,
+    priceSpecCode,
+    priceSpecName: priceSpec?.specName || snapshotWithoutLegacyPrices.priceSpecName || '',
+    priceSpec: priceSpec || snapshotWithoutLegacyPrices.priceSpec || null,
+    remarks: latest.remarks ?? snapshotWithoutLegacyPrices.remarks ?? '',
+    shape: snapshotWithoutLegacyPrices.shape || latest.shape || '板材'
   }
 }
 

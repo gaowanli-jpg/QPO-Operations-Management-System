@@ -3,6 +3,7 @@ package com.machining.quote.dto;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class MaterialMasterDTO {
@@ -14,9 +15,7 @@ public class MaterialMasterDTO {
     private String materialTypeName;
     private String materialCategory;
     private Double density;
-    private Double platePrice;
-    private Double barPrice;
-    private Double tubePrice;
+    private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;
     private String sourceType;
     private String mesExternalId;

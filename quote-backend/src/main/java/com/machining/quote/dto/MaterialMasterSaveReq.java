@@ -2,6 +2,8 @@ package com.machining.quote.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class MaterialMasterSaveReq {
     private String materialCode;
@@ -9,9 +11,7 @@ public class MaterialMasterSaveReq {
     private Long materialTypeId;
     private String materialCategory;
     private Double density;
-    private Double platePrice;
-    private Double barPrice;
-    private Double tubePrice;
+    private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;
     private Boolean enabled;
     private Integer sortNo;

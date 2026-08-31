@@ -175,12 +175,12 @@ class CoreDeliveryWorkflowIntegrationTest extends CoreWorkflowIntegrationTestSup
         material.setSortNo(0);
         material.setRemarks("");
         material.setDensity(7850.0);
-        material.setPlatePrice(7.1);
-        material.setBarPrice(7.1);
         materialMapper.insert(material);
+        ensureMaterialPriceSpecs(material.getId(), 7.1);
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", material.getMaterialCode());
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("name", engineeringMaterial);
         materialData.put("shape", "BAR");
         materialData.put("weight", 2.5);

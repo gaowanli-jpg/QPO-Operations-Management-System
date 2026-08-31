@@ -109,6 +109,28 @@ public final class MaterialDataResolver {
         return stringValue(normalizeMap(materialData).get("materialCategory"));
     }
 
+    public static String materialPriceSpecCode(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        return materialPriceSpecCode(item.getMaterialData());
+    }
+
+    public static String materialPriceSpecCode(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("priceSpecCode"));
+    }
+
+    public static String materialPriceSpecName(ItemQuoteVersion item) {
+        if (item == null || "ASSEMBLY".equalsIgnoreCase(item.getQuoteMode())) {
+            return "";
+        }
+        return materialPriceSpecName(item.getMaterialData());
+    }
+
+    public static String materialPriceSpecName(Object materialData) {
+        return stringValue(normalizeMap(materialData).get("priceSpecName"));
+    }
+
     public static String effectiveSalesOrderMaterialName(SalesOrderItem item) {
         if (item == null) {
             return "";

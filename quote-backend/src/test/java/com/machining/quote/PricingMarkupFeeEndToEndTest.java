@@ -6,10 +6,12 @@ import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PricingMarkupFeeSaveReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
@@ -53,6 +55,8 @@ class PricingMarkupFeeEndToEndTest {
     private PricingMarkupFeeService pricingMarkupFeeService;
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
     @Autowired
     private OrderRfqMapper orderMapper;
     @Autowired
@@ -229,6 +233,7 @@ class PricingMarkupFeeEndToEndTest {
         DictMaterial material = ensureFlatMaterial();
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", material.getMaterialCode());
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "板材");
         materialData.put("weight", baseCost);
         return materialData;
@@ -238,6 +243,7 @@ class PricingMarkupFeeEndToEndTest {
         String materialCode = "MAT-STAGE6-FLAT";
         DictMaterial existing = materialMapper.selectOne(new QueryWrapper<DictMaterial>().eq("material_code", materialCode));
         if (existing != null) {
+            ensureMaterialPriceSpecs(existing.getId(), 1.0);
             return existing;
         }
         DictMaterial material = new DictMaterial();
@@ -246,13 +252,32 @@ class PricingMarkupFeeEndToEndTest {
         material.setMaterialTypeId(1L);
         material.setMaterialCategory("Steel");
         material.setDensity(1.0);
-        material.setPlatePrice(1.0);
-        material.setBarPrice(1.0);
-        material.setTubePrice(1.0);
         material.setEnabled(true);
         material.setSortNo(0);
         materialMapper.insert(material);
+        ensureMaterialPriceSpecs(material.getId(), 1.0);
         return material;
+    }
+
+    private void ensureMaterialPriceSpecs(Long materialId, double unifiedPrice) {
+        Long count = materialPriceSpecMapper.selectCount(new QueryWrapper<DictMaterialPriceSpec>()
+                .eq("material_id", materialId));
+        if (count != null && count > 0) {
+            return;
+        }
+        materialPriceSpecMapper.insert(priceSpec(materialId, "SPEC_1", "规格一", unifiedPrice, 10));
+        materialPriceSpecMapper.insert(priceSpec(materialId, "SPEC_2", "规格二", null, 20));
+        materialPriceSpecMapper.insert(priceSpec(materialId, "SPEC_3", "规格三", null, 30));
+    }
+
+    private DictMaterialPriceSpec priceSpec(Long materialId, String code, String name, Double unifiedPrice, int sortNo) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setMaterialId(materialId);
+        spec.setSpecCode(code);
+        spec.setSpecName(name);
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setSortNo(sortNo);
+        return spec;
     }
 
     private Row rowByPartNo(Sheet sheet, String partNo) {

@@ -20,6 +20,8 @@ describe('material master picker workflow and global defaults', () => {
       materialTypeCode: 'RAW_MATERIAL',
       materialTypeName: '原材料',
       materialCategory: '钢铁',
+      priceSpecCode: 'SPEC_1',
+      priceSpecs: [{ specCode: 'SPEC_1', unifiedPrice: 7.5 }],
       shape: '棒材',
       processRoute: []
     })
@@ -31,7 +33,13 @@ describe('material master picker workflow and global defaults', () => {
       materialTypeCode: 'RAW_MATERIAL',
       materialTypeName: '原材料',
       materialCategory: '钢铁',
+      priceSpecCode: 'SPEC_1',
+      priceSpecName: '规格一',
       legacyMaterialIdentity: false
+    }))
+    expect(coded.priceSpec).toEqual(expect.objectContaining({
+      specCode: 'SPEC_1',
+      unifiedPrice: 7.5
     }))
 
     const legacy = normalizeGlobalConfig({ materialName: '45#', shape: '板材', processRoute: [] })
@@ -45,7 +53,7 @@ describe('material master picker workflow and global defaults', () => {
   })
 
   test('material picker identifies materials by material code and renders remote material fields', () => {
-    expect(optionPicker).toContain("props.type === 'material' && props.enableMaterialPriceEdit ? '1320px' : '1180px'")
+    expect(optionPicker).toContain("props.type === 'material' && props.enableMaterialPriceEdit ? '1380px' : '1180px'")
     expect(optionPicker).toContain('prop="materialCode"')
     expect(optionPicker).toContain('label="材料编码"')
     expect(optionPicker).toContain('prop="materialName"')
@@ -55,6 +63,8 @@ describe('material master picker workflow and global defaults', () => {
     expect(optionPicker).toContain('label="具体密度"')
     expect(optionPicker).toContain('label="MES密度"')
     expect(optionPicker).toContain('label="实际使用密度"')
+    expect(optionPicker).toContain('MATERIAL_PRICE_SPEC_DEFINITIONS')
+    expect(optionPicker).toContain('选择{{ definition.specName }}')
     expect(optionPicker).toContain('formatEffectiveMaterialDensity(row)')
     expect(optionPicker).not.toContain('row.plateDensity')
     expect(optionPicker).toContain('materialCategory')
@@ -72,15 +82,16 @@ describe('material master picker workflow and global defaults', () => {
 
   test('GlobalSetup saves default material by material code and refuses legacy name-only defaults', () => {
     expect(globalSetup).toContain(':selected-key="config.materialCode"')
-    expect(globalSetup).toContain('config.materialCode = material.materialCode')
-    expect(globalSetup).toContain('config.materialTypeCode = material.materialTypeCode')
-    expect(globalSetup).toContain('config.materialTypeName = material.materialTypeName')
-    expect(globalSetup).toContain('config.materialCategory = material.materialCategory')
+    expect(globalSetup).toContain('config.materialCode = selectedMaterial.materialCode')
+    expect(globalSetup).toContain('config.priceSpecCode = selectedMaterial.priceSpecCode')
+    expect(globalSetup).toContain('config.materialTypeCode = selectedMaterial.materialTypeCode')
+    expect(globalSetup).toContain('config.materialTypeName = selectedMaterial.materialTypeName')
+    expect(globalSetup).toContain('config.materialCategory = selectedMaterial.materialCategory')
     expect(globalSetup).not.toContain('config.plateDensity')
     expect(globalSetup).not.toContain('config.barDensity')
     expect(globalSetup).not.toContain('config.tubeDensity')
     expect(globalSetup).toContain('hasUnresolvedMaterialIdentity')
-    expect(globalSetup).toContain('旧材料模板缺少材料编码')
+    expect(globalSetup).toContain('材料模板缺少材料编码或价格规格')
     expect(globalSetup).not.toContain('item.materialName === config.materialName')
   })
 

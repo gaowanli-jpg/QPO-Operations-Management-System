@@ -3,16 +3,20 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
+import com.machining.quote.dto.MaterialPriceSpecDTO;
 import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.machining.quote.util.MaterialPriceSpecSupport;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -30,6 +34,8 @@ public class MaterialMasterService {
 
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
     @Autowired
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
@@ -79,9 +85,29 @@ public class MaterialMasterService {
                 ? Map.of()
                 : materialTypeMapper.selectBatchIds(typeIds).stream()
                 .collect(Collectors.toMap(DictMaterialType::getId, Function.identity(), (left, right) -> left));
+        Map<Long, List<MaterialPriceSpecDTO>> specsByMaterialId = loadPriceSpecsByMaterialIds(
+                materials.stream().map(DictMaterial::getId).filter(Objects::nonNull).toList());
         return materials.stream()
-                .map(material -> toMaterialDTO(material, typeById.get(material.getMaterialTypeId())))
+                .map(material -> toMaterialDTO(material, typeById.get(material.getMaterialTypeId()), specsByMaterialId.get(material.getId())))
                 .toList();
+    }
+
+    private Map<Long, List<MaterialPriceSpecDTO>> loadPriceSpecsByMaterialIds(List<Long> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<DictMaterialPriceSpec> query = new QueryWrapper<>();
+        query.in("material_id", materialIds).orderByAsc("material_id").orderByAsc("sort_no").orderByAsc("id");
+        return MaterialPriceSpecSupport.groupDtosByMaterialId(materialIds, materialPriceSpecMapper.selectList(query));
+    }
+
+    private List<MaterialPriceSpecDTO> loadPriceSpecsByMaterialId(Long materialId) {
+        if (materialId == null) {
+            return MaterialPriceSpecSupport.normalizeDtos(List.of());
+        }
+        return loadPriceSpecsByMaterialIds(List.of(materialId)).getOrDefault(
+                materialId,
+                MaterialPriceSpecSupport.normalizeDtos(List.of()));
     }
 
     private void applyMaterialFilters(QueryWrapper<DictMaterial> query, Boolean enabledOnly, String keyword) {
@@ -169,6 +195,8 @@ public class MaterialMasterService {
     @Transactional
     public MaterialMasterDTO saveMaterial(Long id, MaterialMasterSaveReq req) {
         DictMaterial before = id == null ? null : requireMaterial(id);
+        List<MaterialPriceSpecDTO> beforeSpecs = before == null ? MaterialPriceSpecSupport.normalizeDtos(List.of()) : loadPriceSpecsByMaterialId(before.getId());
+        List<MaterialPriceSpecDTO> normalizedSpecs = MaterialPriceSpecSupport.normalizeDtos(req == null ? null : req.getPriceSpecs());
         validateMesMaterialIdentityUnchanged(before, req);
         DictMaterial entity = normalizeMaterial(req, before);
         entity.setId(id);
@@ -176,28 +204,43 @@ public class MaterialMasterService {
         ensureMaterialCodeUnique(entity.getMaterialCode(), id);
         LocalDateTime now = LocalDateTime.now();
         entity.setUpdatedAt(now);
+        List<String> changedSpecCodes = changedSpecCodes(beforeSpecs, normalizedSpecs);
         if (id == null) {
             entity.setCreatedAt(now);
             materialMapper.insert(entity);
+            replaceMaterialPriceSpecs(entity.getId(), normalizedSpecs, now);
             auditService.record(
                     "DICT_MATERIAL_CREATE",
                     "dict_material",
                     entity.getId(),
                     null,
-                    materialAuditSummary(entity, type)
+                    materialAuditSummary(entity, type, normalizedSpecs, changedSpecCodes)
             );
         } else {
             DictMaterialType beforeType = before.getMaterialTypeId() == null ? null : materialTypeMapper.selectById(before.getMaterialTypeId());
             materialMapper.updateById(entity);
+            replaceMaterialPriceSpecs(entity.getId(), normalizedSpecs, now);
             auditService.record(
                     "DICT_MATERIAL_UPDATE",
                     "dict_material",
                     id,
-                    materialAuditSummary(before, beforeType),
-                    materialAuditSummary(entity, type)
+                    materialAuditSummary(before, beforeType, beforeSpecs, null),
+                    materialAuditSummary(entity, type, normalizedSpecs, changedSpecCodes)
             );
         }
-        return toMaterialDTO(entity, type);
+        return toMaterialDTO(entity, type, normalizedSpecs);
+    }
+
+    private void replaceMaterialPriceSpecs(Long materialId, List<MaterialPriceSpecDTO> specs, LocalDateTime now) {
+        if (materialId == null) {
+            throw new IllegalArgumentException("材料 ID 不能为空");
+        }
+        QueryWrapper<DictMaterialPriceSpec> delete = new QueryWrapper<>();
+        delete.eq("material_id", materialId);
+        materialPriceSpecMapper.delete(delete);
+        for (DictMaterialPriceSpec spec : MaterialPriceSpecSupport.toEntities(materialId, specs, now)) {
+            materialPriceSpecMapper.insert(spec);
+        }
     }
 
     @Transactional
@@ -246,9 +289,6 @@ public class MaterialMasterService {
         entity.setMaterialTypeId(req.getMaterialTypeId());
         entity.setMaterialCategory(limit(optional(req.getMaterialCategory()), "材质分类", 80));
         entity.setDensity(nonNegative(req.getDensity(), "默认密度"));
-        entity.setPlatePrice(nonNegative(req.getPlatePrice(), "板材价格"));
-        entity.setBarPrice(nonNegative(req.getBarPrice(), "棒材价格"));
-        entity.setTubePrice(nonNegative(req.getTubePrice(), "管材价格"));
         entity.setRemarks(optional(req.getRemarks()));
         copyMesSourceFields(entity, before);
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
@@ -365,6 +405,10 @@ public class MaterialMasterService {
     }
 
     private MaterialMasterDTO toMaterialDTO(DictMaterial material, DictMaterialType type) {
+        return toMaterialDTO(material, type, loadPriceSpecsByMaterialId(material.getId()));
+    }
+
+    private MaterialMasterDTO toMaterialDTO(DictMaterial material, DictMaterialType type, List<MaterialPriceSpecDTO> priceSpecs) {
         MaterialMasterDTO dto = new MaterialMasterDTO();
         dto.setId(material.getId());
         dto.setMaterialCode(material.getMaterialCode());
@@ -374,9 +418,7 @@ public class MaterialMasterService {
         dto.setMaterialTypeName(type == null ? null : type.getTypeName());
         dto.setMaterialCategory(material.getMaterialCategory());
         dto.setDensity(material.getDensity());
-        dto.setPlatePrice(material.getPlatePrice());
-        dto.setBarPrice(material.getBarPrice());
-        dto.setTubePrice(material.getTubePrice());
+        dto.setPriceSpecs(MaterialPriceSpecSupport.normalizeDtos(priceSpecs));
         dto.setRemarks(material.getRemarks());
         dto.setSourceType(material.getSourceType() == null || material.getSourceType().isBlank() ? SOURCE_LOCAL : material.getSourceType());
         dto.setMesExternalId(material.getMesExternalId());
@@ -408,6 +450,14 @@ public class MaterialMasterService {
     }
 
     private Map<String, Object> materialAuditSummary(DictMaterial material, DictMaterialType type) {
+        return materialAuditSummary(material, type, null, null);
+    }
+
+    private Map<String, Object> materialAuditSummary(
+            DictMaterial material,
+            DictMaterialType type,
+            List<MaterialPriceSpecDTO> priceSpecs,
+            List<String> changedSpecCodes) {
         if (material == null) {
             return null;
         }
@@ -420,7 +470,19 @@ public class MaterialMasterService {
         summary.put("materialTypeName", type == null ? null : type.getTypeName());
         summary.put("materialCategory", material.getMaterialCategory());
         summary.put("enabled", material.getEnabled());
+        if (changedSpecCodes != null && !changedSpecCodes.isEmpty()) {
+            summary.put("changedSpecCodes", changedSpecCodes);
+        }
         return summary;
+    }
+
+    private List<String> changedSpecCodes(List<MaterialPriceSpecDTO> beforeSpecs, List<MaterialPriceSpecDTO> afterSpecs) {
+        Map<String, MaterialPriceSpecDTO> beforeByCode = MaterialPriceSpecSupport.normalizeDtos(beforeSpecs).stream()
+                .collect(Collectors.toMap(MaterialPriceSpecDTO::getSpecCode, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        return MaterialPriceSpecSupport.normalizeDtos(afterSpecs).stream()
+                .filter(after -> !MaterialPriceSpecSupport.pricesEqual(beforeByCode.get(after.getSpecCode()), after))
+                .map(MaterialPriceSpecDTO::getSpecCode)
+                .toList();
     }
 
     private DictMaterialType copyType(DictMaterialType source) {
@@ -444,9 +506,6 @@ public class MaterialMasterService {
         target.setMaterialTypeId(source.getMaterialTypeId());
         target.setMaterialCategory(source.getMaterialCategory());
         target.setDensity(source.getDensity());
-        target.setPlatePrice(source.getPlatePrice());
-        target.setBarPrice(source.getBarPrice());
-        target.setTubePrice(source.getTubePrice());
         target.setRemarks(source.getRemarks());
         target.setSourceType(source.getSourceType());
         target.setMesExternalId(source.getMesExternalId());

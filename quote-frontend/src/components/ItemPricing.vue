@@ -776,6 +776,13 @@ import {
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
 import { usePendingAction } from '../composables/usePendingAction'
+import {
+  buildMaterialSpecSelection,
+  effectiveSpecPrice,
+  findPriceSpec,
+  normalizePriceSpecs,
+  unitPriceSource
+} from '../utils/materialPriceSpecs'
 
 const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
 const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'
@@ -797,9 +804,10 @@ const globalConfig = ref({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  platePrice: null,
-  barPrice: null,
-  tubePrice: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: '',
+  priceSpecName: '',
+  priceSpec: null,
   remarks: '',
   shape: '板材',
   processRoute: [],
@@ -856,9 +864,10 @@ const defaultGlobalConfig = () => ({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  platePrice: null,
-  barPrice: null,
-  tubePrice: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: '',
+  priceSpecName: '',
+  priceSpec: null,
   remarks: '',
   shape: '板材',
   processRoute: [],
@@ -892,7 +901,9 @@ const normalizeGlobalConfig = (config) => {
   const materialCode = String(config.materialCode || '').trim()
   const materialName = config.materialName || config.name || defaults.materialName || ''
   const density = numberOrNullForSnapshot(config.density ?? defaults.density)
-  const unitPrice = numberOrNullForSnapshot(config.unitPrice ?? defaults.unitPrice)
+  const priceSpecs = normalizePriceSpecs(config.priceSpecs ?? (config.priceSpec ? [config.priceSpec] : defaults.priceSpecs))
+  const priceSpecCode = String(config.priceSpecCode || config.priceSpec?.specCode || defaults.priceSpecCode || '').trim().toUpperCase()
+  const priceSpec = priceSpecCode ? findPriceSpec(priceSpecs, priceSpecCode) : null
   return {
     materialId: config.materialId ?? config.id ?? defaults.materialId,
     materialCode,
@@ -902,12 +913,13 @@ const normalizeGlobalConfig = (config) => {
     materialTypeName: config.materialTypeName || defaults.materialTypeName,
     materialCategory: config.materialCategory || defaults.materialCategory,
     density,
-    platePrice: numberOrNullForSnapshot(config.platePrice ?? unitPrice ?? defaults.platePrice),
-    barPrice: numberOrNullForSnapshot(config.barPrice ?? unitPrice ?? defaults.barPrice),
-    tubePrice: numberOrNullForSnapshot(config.tubePrice ?? unitPrice ?? defaults.tubePrice),
+    priceSpecs,
+    priceSpecCode,
+    priceSpecName: priceSpec?.specName || config.priceSpecName || defaults.priceSpecName || '',
+    priceSpec,
     remarks: config.remarks || defaults.remarks || '',
     shape: config.shape || defaults.shape,
-    legacyMaterialIdentity: !materialCode && Boolean(materialName),
+    legacyMaterialIdentity: (!materialCode && Boolean(materialName)) || (Boolean(materialCode) && !priceSpecCode),
     processRoute: normalizeRouteList(config.processRoute)
   }
 }
@@ -1572,9 +1584,10 @@ const matForm = reactive({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  platePrice: null,
-  barPrice: null,
-  tubePrice: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: '',
+  priceSpecName: '',
+  priceSpec: null,
   remarks: '',
   shape: '',
   L: null,
@@ -1589,18 +1602,23 @@ let processRouteSeq = 0
 const PROCESS_SORT_STEP = 10
 
 const applyMaterialIdentityToMatForm = (source = {}) => {
-  matForm.materialId = source.materialId ?? source.id ?? null
-  matForm.materialCode = source.materialCode || ''
-  matForm.materialName = source.materialName || source.name || ''
-  matForm.materialTypeId = source.materialTypeId ?? null
-  matForm.materialTypeCode = source.materialTypeCode || ''
-  matForm.materialTypeName = source.materialTypeName || ''
-  matForm.materialCategory = source.materialCategory || ''
-  matForm.density = effectiveMaterialDensity(source)
-  matForm.platePrice = source.platePrice ?? source.unitPrice ?? null
-  matForm.barPrice = source.barPrice ?? source.unitPrice ?? null
-  matForm.tubePrice = source.tubePrice ?? source.unitPrice ?? null
-  matForm.remarks = source.remarks || ''
+  const selectedMaterial = buildMaterialSpecSelection(
+    source,
+    source.priceSpecCode || source.priceSpec?.specCode || matForm.priceSpecCode || 'SPEC_1'
+  )
+  matForm.materialId = selectedMaterial.materialId ?? selectedMaterial.id ?? null
+  matForm.materialCode = selectedMaterial.materialCode || ''
+  matForm.materialName = selectedMaterial.materialName || selectedMaterial.name || ''
+  matForm.materialTypeId = selectedMaterial.materialTypeId ?? null
+  matForm.materialTypeCode = selectedMaterial.materialTypeCode || ''
+  matForm.materialTypeName = selectedMaterial.materialTypeName || ''
+  matForm.materialCategory = selectedMaterial.materialCategory || ''
+  matForm.density = effectiveMaterialDensity(selectedMaterial)
+  matForm.priceSpecs = normalizePriceSpecs(selectedMaterial.priceSpecs)
+  matForm.priceSpecCode = selectedMaterial.priceSpecCode || ''
+  matForm.priceSpecName = selectedMaterial.priceSpecName || ''
+  matForm.priceSpec = selectedMaterial.priceSpec || findPriceSpec(matForm.priceSpecs, matForm.priceSpecCode)
+  matForm.remarks = selectedMaterial.remarks || ''
 }
 
 const formatMaterialLabel = (material) => {
@@ -1609,14 +1627,15 @@ const formatMaterialLabel = (material) => {
   const name = material.materialName || '-'
   const typeName = material.materialTypeName || '-'
   const category = material.materialCategory || '-'
+  const specName = material.priceSpecName ? ` / ${material.priceSpecName}` : ''
   return material.remarks
-    ? `${code} / ${name} / ${typeName} / ${category} ${material.remarks}`
-    : `${code} / ${name} / ${typeName} / ${category}`
+    ? `${code} / ${name} / ${typeName} / ${category}${specName} ${material.remarks}`
+    : `${code} / ${name} / ${typeName} / ${category}${specName}`
 }
 
 const selectedMaterialLabel = computed(() => {
   if (matForm.materialCode) return formatMaterialLabel(matForm)
-  if (!matForm.materialCode && matForm.materialName) return `${matForm.materialName}（旧材料模板缺少材料编码，请重新选择）`
+  if (!matForm.materialCode && matForm.materialName) return `${matForm.materialName}（缺少材料编码或规格，请重新选择）`
   return matForm.materialName || matForm.materialCode || '请选择材质'
 })
 
@@ -1738,7 +1757,7 @@ const selectMaterial = (material) => {
 const handleMaterialPriceUpdated = (updatedMaterial) => {
   cachePricingMaterialOptions(updatedMaterial ? [updatedMaterial] : [])
   if (materialCodeKey(updatedMaterial?.materialCode) !== materialCodeKey(matForm.materialCode)) return
-  applyMaterialIdentityToMatForm(updatedMaterial)
+  applyMaterialIdentityToMatForm(buildMaterialSpecSelection(updatedMaterial, matForm.priceSpecCode || 'SPEC_1'))
 }
 
 const openProcessPicker = (index) => {
@@ -2102,9 +2121,10 @@ const buildGlobalMaterialConfig = () => ({
   materialTypeName: matForm.materialTypeName,
   materialCategory: matForm.materialCategory,
   density: matForm.density,
-  platePrice: matForm.platePrice,
-  barPrice: matForm.barPrice,
-  tubePrice: matForm.tubePrice,
+  priceSpecs: normalizePriceSpecs(matForm.priceSpecs),
+  priceSpecCode: matForm.priceSpecCode,
+  priceSpecName: matForm.priceSpecName,
+  priceSpec: matForm.priceSpec,
   remarks: matForm.remarks,
   shape: matForm.shape,
   legacyMaterialIdentity: false
@@ -2121,9 +2141,9 @@ const comparableMaterialConfig = (config) => {
     materialTypeName: normalized.materialTypeName || '',
     materialCategory: normalized.materialCategory || '',
     density: numberOrNullForSnapshot(normalized.density),
-    platePrice: numberOrNullForSnapshot(normalized.platePrice),
-    barPrice: numberOrNullForSnapshot(normalized.barPrice),
-    tubePrice: numberOrNullForSnapshot(normalized.tubePrice),
+    priceSpecCode: normalized.priceSpecCode || '',
+    priceSpecName: normalized.priceSpecName || '',
+    priceSpec: normalized.priceSpec || null,
     remarks: normalized.remarks || '',
     shape: normalized.shape || '板材'
   }
@@ -2212,9 +2232,10 @@ const openQuoteDialog = async (row) => {
         materialCategory: savedMaterialData.materialCategory,
         density: savedMaterialData.density,
         unitPrice: savedMaterialData.unitPrice,
-        platePrice: savedMaterialData.platePrice,
-        barPrice: savedMaterialData.barPrice,
-        tubePrice: savedMaterialData.tubePrice,
+        priceSpecs: savedMaterialData.priceSpecs,
+        priceSpecCode: savedMaterialData.priceSpecCode,
+        priceSpecName: savedMaterialData.priceSpecName,
+        priceSpec: savedMaterialData.priceSpec,
         remarks: savedMaterialData.remarks,
         shape: savedMaterialData.shape || globalConfig.value.shape || '板材'
       }
@@ -2260,15 +2281,11 @@ const openQuoteDialog = async (row) => {
 const currentMatInfo = computed(() => ({
   id: matForm.materialId,
   density: numberOrZero(matForm.density),
-  platePrice: numberOrZero(matForm.platePrice),
-  barPrice: numberOrZero(matForm.barPrice),
-  tubePrice: numberOrZero(matForm.tubePrice)
+  priceSpecCode: matForm.priceSpecCode,
+  priceSpecName: matForm.priceSpecName,
+  priceSpec: matForm.priceSpec || findPriceSpec(matForm.priceSpecs, matForm.priceSpecCode)
 }))
-const currentUnitPrice = computed(() => {
-  if (matForm.shape === '棒材') return currentMatInfo.value.barPrice || 0
-  if (matForm.shape === '管材') return currentMatInfo.value.tubePrice || 0
-  return currentMatInfo.value.platePrice || 0
-})
+const currentUnitPrice = computed(() => effectiveSpecPrice(currentMatInfo.value.priceSpec, matForm.shape) || 0)
 const currentDensity = computed(() => {
   return currentMatInfo.value.density || 0
 })
@@ -2352,7 +2369,11 @@ const submitCurrentQuote = async () => {
     if (!matForm.materialCode) {
       return ElMessage.warning('请重新选择带编码材料后再核价。')
     }
+    if (!matForm.priceSpecCode) {
+      return ElMessage.warning('请重新选择材料规格后再核价。')
+    }
     const validProcess = buildQuoteProcessRoute()
+    const selectedPriceSpec = currentMatInfo.value.priceSpec
     payload = {
       itemId: currentRow.value.id,
       quoteMode: 'NORMAL',
@@ -2365,6 +2386,9 @@ const submitCurrentQuote = async () => {
         materialTypeCode: matForm.materialTypeCode,
         materialTypeName: matForm.materialTypeName,
         materialCategory: matForm.materialCategory,
+        priceSpecCode: matForm.priceSpecCode,
+        priceSpecName: matForm.priceSpecName,
+        priceSpec: selectedPriceSpec,
         name: matForm.materialName,
         shape: matForm.shape,
         volume: calculatedVolume.value,
@@ -2376,6 +2400,7 @@ const submitCurrentQuote = async () => {
         density: currentDensity.value,
         densityUnit: 'kg/m3',
         unitPrice: currentUnitPrice.value,
+        unitPriceSource: unitPriceSource(selectedPriceSpec, matForm.shape),
         unitPriceUnit: '元/kg',
         cost: calculatedMaterialCost.value,
         dimensionUnit: 'm',
@@ -2422,7 +2447,7 @@ const submitCurrentQuote = async () => {
         quoteMode.value === 'ASSEMBLY'
           ? '组合件核价成功。'
           : globalSynced
-          ? (globalUpdated ? '核价成功，当前材料、形态和工艺路线已同步为订单全局设定。' : '核价成功，订单全局设定未变化。')
+          ? (globalUpdated ? '核价成功，当前材料、规格、形态和工艺路线已同步为订单全局设定。' : '核价成功，订单全局设定未变化。')
           : '核价成功，但订单全局工艺同步失败，请返回全局设定页检查。'
       )
       dialogVisible.value = false

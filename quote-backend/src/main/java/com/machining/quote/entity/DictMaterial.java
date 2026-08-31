@@ -18,9 +18,6 @@ public class DictMaterial {
     private Long materialTypeId;
     private String materialCategory;
     private Double density;
-    private Double platePrice;
-    private Double barPrice;
-    private Double tubePrice;
     private String remarks;
     private String sourceType;
     private String mesExternalId;

@@ -282,6 +282,7 @@ import OrderPickerDialog from './OrderPickerDialog.vue'
 import { getRepeatAnalysis, getSetupSummary, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
 import { defaultGlobalConfig, hasLegacyMaterialIdentity, hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeGlobalConfig, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
 import { usePendingAction } from '../composables/usePendingAction'
+import { buildMaterialSpecSelection, findPriceSpec, normalizePriceSpecs } from '../utils/materialPriceSpecs'
 import {
   createAuthenticatedObjectUrl,
   openAuthenticatedFileInNewWindow,
@@ -422,23 +423,25 @@ const legacyMaterialWarningShown = ref(false)
 const notifyLegacyMaterialTemplate = () => {
   if (legacyMaterialWarningShown.value) return
   legacyMaterialWarningShown.value = true
-  ElMessage.warning('旧材料模板缺少材料编码，请重新选择带编码材料后再保存。')
+  ElMessage.warning('材料模板缺少材料编码或价格规格，请重新选择材料规格后再保存。')
 }
 
 const applyMaterialSelectionToConfig = (material) => {
   if (!material?.materialCode) return
+  const selectedMaterial = buildMaterialSpecSelection(material, material.priceSpecCode || material.priceSpec?.specCode || 'SPEC_1')
   config.materialId = material.materialId ?? material.id ?? null
-  config.materialCode = material.materialCode
-  config.materialName = material.materialName || ''
-  config.materialTypeId = material.materialTypeId ?? null
-  config.materialTypeCode = material.materialTypeCode || ''
-  config.materialTypeName = material.materialTypeName || ''
-  config.materialCategory = material.materialCategory || ''
-  config.density = effectiveMaterialDensity(material)
-  config.platePrice = material.platePrice ?? material.unitPrice ?? null
-  config.barPrice = material.barPrice ?? material.unitPrice ?? null
-  config.tubePrice = material.tubePrice ?? material.unitPrice ?? null
-  config.remarks = material.remarks || ''
+  config.materialCode = selectedMaterial.materialCode
+  config.materialName = selectedMaterial.materialName || ''
+  config.materialTypeId = selectedMaterial.materialTypeId ?? null
+  config.materialTypeCode = selectedMaterial.materialTypeCode || ''
+  config.materialTypeName = selectedMaterial.materialTypeName || ''
+  config.materialCategory = selectedMaterial.materialCategory || ''
+  config.density = effectiveMaterialDensity(selectedMaterial)
+  config.priceSpecs = normalizePriceSpecs(selectedMaterial.priceSpecs)
+  config.priceSpecCode = selectedMaterial.priceSpecCode || ''
+  config.priceSpecName = selectedMaterial.priceSpecName || ''
+  config.priceSpec = selectedMaterial.priceSpec || findPriceSpec(config.priceSpecs, config.priceSpecCode)
+  config.remarks = selectedMaterial.remarks || ''
   config.legacyMaterialIdentity = false
 }
 
@@ -452,9 +455,10 @@ const assignMaterialConfig = (source) => {
   config.materialTypeName = normalized.materialTypeName
   config.materialCategory = normalized.materialCategory
   config.density = normalized.density
-  config.platePrice = normalized.platePrice
-  config.barPrice = normalized.barPrice
-  config.tubePrice = normalized.tubePrice
+  config.priceSpecs = normalizePriceSpecs(normalized.priceSpecs)
+  config.priceSpecCode = normalized.priceSpecCode
+  config.priceSpecName = normalized.priceSpecName
+  config.priceSpec = normalized.priceSpec
   config.remarks = normalized.remarks
   config.legacyMaterialIdentity = normalized.legacyMaterialIdentity
 }
@@ -486,14 +490,15 @@ const formatMaterialLabel = (material) => {
   const name = material.materialName || '-'
   const typeName = material.materialTypeName || '-'
   const category = material.materialCategory || '-'
+  const specName = material.priceSpecName ? ` / ${material.priceSpecName}` : ''
   return material.remarks
-    ? `${code} / ${name} / ${typeName} / ${category} ${material.remarks}`
-    : `${code} / ${name} / ${typeName} / ${category}`
+    ? `${code} / ${name} / ${typeName} / ${category}${specName} ${material.remarks}`
+    : `${code} / ${name} / ${typeName} / ${category}${specName}`
 }
 
 const selectedMaterialLabel = computed(() => {
   if (config.materialCode) return formatMaterialLabel(config)
-  if (config.legacyMaterialIdentity && config.materialName) return `${config.materialName}（旧材料模板缺少材料编码，请重新选择）`
+  if (config.legacyMaterialIdentity && config.materialName) return `${config.materialName}（缺少材料编码或规格，请重新选择）`
   return config.materialName || config.materialCode || '请选择默认材质'
 })
 
@@ -589,7 +594,7 @@ const materialCodeKey = (value) => String(value || '').trim().toUpperCase()
 
 const handleMaterialPriceUpdated = (updatedMaterial) => {
   if (materialCodeKey(updatedMaterial?.materialCode) !== materialCodeKey(config.materialCode)) return
-  applyMaterialSelectionToConfig(updatedMaterial)
+  applyMaterialSelectionToConfig(buildMaterialSpecSelection(updatedMaterial, config.priceSpecCode || 'SPEC_1'))
 }
 
 const openProcessPicker = (index) => {
@@ -670,7 +675,7 @@ const handleNext = async () => {
     return ElMessage.warning('请先选择订单并加载数据。')
   }
   if (hasUnresolvedMaterialIdentity.value) {
-    return ElMessage.warning('请重新选择带编码材料后再保存')
+    return ElMessage.warning('请重新选择材料规格后再保存')
   }
   if (hasUnresolvedProcessRoute.value) {
     return ElMessage.warning('请重新选择具体工艺后再保存')

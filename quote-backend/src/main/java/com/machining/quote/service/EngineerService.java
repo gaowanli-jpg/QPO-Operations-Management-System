@@ -6,21 +6,25 @@ import com.machining.quote.domain.PricingScope;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PartVersionKey;
+import com.machining.quote.dto.MaterialPriceSpecDTO;
 import com.machining.quote.dto.PricingItemRemarkUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.util.MaterialDataResolver;
+import com.machining.quote.util.MaterialPriceSpecSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +55,8 @@ public class EngineerService {
     private ProcessRoutePricingService processRoutePricingService;
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
     @Autowired
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
@@ -741,11 +747,12 @@ public class EngineerService {
             }
 
             String materialCode = MaterialDataResolver.materialCode(sourceItem);
+            String priceSpecCode = MaterialDataResolver.materialPriceSpecCode(sourceItem);
             String shape = MaterialDataResolver.materialShape(sourceItem);
-            if (!isBlank(materialCode)) {
-                String materialKey = materialCode.trim().toUpperCase(Locale.ROOT) + "||" + (isBlank(shape) ? "板材" : shape);
+            if (!isBlank(materialCode) && !isBlank(priceSpecCode)) {
+                String materialKey = materialKey(materialCode, priceSpecCode, shape);
                 materialFrequency.put(materialKey, materialFrequency.getOrDefault(materialKey, 0) + 1);
-                materialSamples.putIfAbsent(materialKey, repeatMaterialIdentity(sourceItem, materialCode, shape));
+                materialSamples.putIfAbsent(materialKey, repeatMaterialIdentity(sourceItem, materialCode, priceSpecCode, shape));
             }
         }
 
@@ -945,7 +952,11 @@ public class EngineerService {
         if (isBlank(materialCode)) {
             return "历史重复件缺少材料编码，需手动重新选择材料";
         }
-        Map<String, Object> materialData = repeatQuoteMaterialData(sourceItem, materialCode);
+        String priceSpecCode = MaterialDataResolver.materialPriceSpecCode(sourceItem);
+        if (isBlank(priceSpecCode)) {
+            return "历史重复件缺少材料价格规格，需手动重新选择材料规格";
+        }
+        Map<String, Object> materialData = repeatQuoteMaterialData(sourceItem, materialCode, priceSpecCode);
         List<QuoteSubmitReq.ProcessSubmitDTO> processRoute = toProcessSubmitRows(sourceItem.getProcessRoute());
         String processRouteBlockedReason = validateRepeatProcessRoute(processRoute);
         if (processRouteBlockedReason != null) {
@@ -957,9 +968,14 @@ public class EngineerService {
         return null;
     }
 
-    private Map<String, Object> repeatQuoteMaterialData(ItemQuoteVersion sourceItem, String materialCode) {
+    private Map<String, Object> repeatQuoteMaterialData(ItemQuoteVersion sourceItem, String materialCode, String priceSpecCode) {
         Map<String, Object> materialData = new LinkedHashMap<>(normalizeMap(sourceItem.getMaterialData()));
         materialData.put("materialCode", materialCode);
+        materialData.put("priceSpecCode", priceSpecCode.trim().toUpperCase(Locale.ROOT));
+        String priceSpecName = MaterialDataResolver.materialPriceSpecName(sourceItem);
+        if (!isBlank(priceSpecName)) {
+            materialData.put("priceSpecName", priceSpecName);
+        }
         String materialShape = MaterialDataResolver.materialShape(sourceItem);
         if (!isBlank(materialShape)) {
             materialData.put("shape", materialShape);
@@ -1368,15 +1384,29 @@ public class EngineerService {
         return row;
     }
 
-    private Map<String, Object> repeatMaterialIdentity(ItemQuoteVersion sourceItem, String materialCode, String shape) {
+    private Map<String, Object> repeatMaterialIdentity(ItemQuoteVersion sourceItem, String materialCode, String priceSpecCode, String shape) {
+        Map<String, Object> sourceMaterialData = normalizeMap(sourceItem == null ? null : sourceItem.getMaterialData());
         Map<String, Object> material = new LinkedHashMap<>();
         material.put("materialCode", materialCode.trim());
         material.put("materialName", MaterialDataResolver.engineeringMaterialName(sourceItem));
         material.put("materialTypeCode", MaterialDataResolver.materialTypeCode(sourceItem));
         material.put("materialTypeName", MaterialDataResolver.materialTypeName(sourceItem));
         material.put("materialCategory", MaterialDataResolver.materialCategory(sourceItem));
+        material.put("priceSpecCode", priceSpecCode.trim().toUpperCase(Locale.ROOT));
+        material.put("priceSpecName", MaterialDataResolver.materialPriceSpecName(sourceItem));
+        if (sourceMaterialData.containsKey("priceSpec")) {
+            material.put("priceSpec", sourceMaterialData.get("priceSpec"));
+        }
         material.put("shape", isBlank(shape) ? "板材" : shape);
         return material;
+    }
+
+    private String materialKey(String materialCode, String priceSpecCode, String shape) {
+        return materialCode.trim().toUpperCase(Locale.ROOT)
+                + "||"
+                + priceSpecCode.trim().toUpperCase(Locale.ROOT)
+                + "||"
+                + (isBlank(shape) ? "板材" : shape);
     }
 
     private String recommendedRouteSourceType(Map<String, Object> route) {
@@ -1575,6 +1605,10 @@ public class EngineerService {
         if (isBlank(materialCode)) {
             throw new RuntimeException("请重新选择材料：材料编码不能为空");
         }
+        String priceSpecCode = stringValue(materialData.get("priceSpecCode"));
+        if (isBlank(priceSpecCode)) {
+            throw new RuntimeException("请重新选择材料规格：priceSpecCode不能为空");
+        }
         String shape = stringValue(materialData.get("shape"));
         Double submittedWeight = doubleValue(materialData.get("weight"));
 
@@ -1582,7 +1616,9 @@ public class EngineerService {
         DictMaterialType materialType = material.getMaterialTypeId() == null
                 ? null
                 : materialTypeMapper.selectById(material.getMaterialTypeId());
-        double unitPrice = resolveMaterialPrice(material, shape);
+        MaterialPriceSpecDTO priceSpec = requireMaterialPriceSpec(material, priceSpecCode);
+        MaterialPriceSpecSupport.PriceResolution priceResolution = resolveMaterialPrice(material, priceSpec, shape);
+        double unitPrice = priceResolution.unitPrice();
         Double volume = calculateMetricVolume(materialData, shape);
         Double density;
         Double weight;
@@ -1603,9 +1639,13 @@ public class EngineerService {
         materialData.put("materialTypeCode", materialType == null ? null : materialType.getTypeCode());
         materialData.put("materialTypeName", materialType == null ? null : materialType.getTypeName());
         materialData.put("materialCategory", material.getMaterialCategory());
+        materialData.put("priceSpecCode", priceSpec.getSpecCode());
+        materialData.put("priceSpecName", priceSpec.getSpecName());
+        materialData.put("priceSpec", priceSpecSnapshot(priceSpec));
         materialData.put("density", density == null ? 0.0 : density);
         materialData.put("densityUnit", "kg/m3");
         materialData.put("unitPrice", unitPrice);
+        materialData.put("unitPriceSource", priceResolution.source());
         materialData.put("unitPriceUnit", "元/kg");
         if (volume != null) {
             materialData.put("volume", volume);
@@ -1675,24 +1715,52 @@ public class EngineerService {
         return value == null ? 0.0 : value;
     }
 
-    private double resolveMaterialPrice(DictMaterial material, String shape) {
-        Double unitPrice;
-        if (isBarShape(shape)) {
-            unitPrice = material.getBarPrice();
-        } else if (isTubeShape(shape)) {
-            unitPrice = material.getTubePrice();
-        } else {
-            unitPrice = material.getPlatePrice();
+    private MaterialPriceSpecDTO requireMaterialPriceSpec(DictMaterial material, String priceSpecCode) {
+        String normalizedSpecCode = MaterialPriceSpecSupport.normalizeSpecCode(priceSpecCode);
+        QueryWrapper<DictMaterialPriceSpec> query = new QueryWrapper<>();
+        query.eq("material_id", material.getId()).eq("spec_code", normalizedSpecCode).last("LIMIT 1");
+        DictMaterialPriceSpec spec = materialPriceSpecMapper.selectOne(query);
+        if (spec == null) {
+            throw new RuntimeException("材料价格规格未维护：materialCode="
+                    + safeText(material.getMaterialCode())
+                    + ", materialName="
+                    + safeText(material.getMaterialName())
+                    + ", priceSpec="
+                    + normalizedSpecCode);
         }
-        if (unitPrice == null || unitPrice <= 0) {
+        return MaterialPriceSpecSupport.toDto(spec);
+    }
+
+    private MaterialPriceSpecSupport.PriceResolution resolveMaterialPrice(
+            DictMaterial material,
+            MaterialPriceSpecDTO priceSpec,
+            String shape) {
+        MaterialPriceSpecSupport.PriceResolution resolution = MaterialPriceSpecSupport.effectivePrice(priceSpec, shape);
+        if (resolution.unitPrice() == null || resolution.unitPrice() <= 0) {
             throw new RuntimeException("材料单价未维护：materialCode="
                     + safeText(material.getMaterialCode())
                     + ", materialName="
                     + safeText(material.getMaterialName())
+                    + ", priceSpec="
+                    + safeText(priceSpec == null ? null : priceSpec.getSpecName())
                     + ", shape="
                     + safeText(shape));
         }
-        return unitPrice;
+        return resolution;
+    }
+
+    private Map<String, Object> priceSpecSnapshot(MaterialPriceSpecDTO spec) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("specCode", spec.getSpecCode());
+        snapshot.put("specName", spec.getSpecName());
+        snapshot.put("unifiedPrice", spec.getUnifiedPrice());
+        snapshot.put("platePrice", spec.getPlatePrice());
+        snapshot.put("barPrice", spec.getBarPrice());
+        snapshot.put("tubePrice", spec.getTubePrice());
+        snapshot.put("effectivePlatePrice", spec.getEffectivePlatePrice());
+        snapshot.put("effectiveBarPrice", spec.getEffectiveBarPrice());
+        snapshot.put("effectiveTubePrice", spec.getEffectiveTubePrice());
+        return snapshot;
     }
 
     private boolean isBarShape(String shape) {

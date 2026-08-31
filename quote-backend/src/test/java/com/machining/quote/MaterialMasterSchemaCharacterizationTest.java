@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MaterialMasterSchemaCharacterizationTest {
     private static final Path DICT_MATERIAL = main("entity", "DictMaterial.java");
+    private static final Path DICT_MATERIAL_PRICE_SPEC = main("entity", "DictMaterialPriceSpec.java");
     private static final Path MATERIAL_DTO = main("dto", "MaterialMasterDTO.java");
     private static final Path MATERIAL_SAVE_REQ = main("dto", "MaterialMasterSaveReq.java");
     private static final Path PRICING_MATERIAL_OPTION = main("dto", "PricingMaterialOptionDTO.java");
@@ -43,8 +44,9 @@ class MaterialMasterSchemaCharacterizationTest {
             "src", "main", "resources", "db", "migration", "V26__consolidate_material_density.sql");
 
     @Test
-    void dictMaterialRuntimeEntityUsesCodeTypeAndCategoryIdentityFields() throws IOException {
+    void dictMaterialRuntimeEntityUsesCodeTypeAndCategoryIdentityFieldsAndPriceSpecsUseChildRows() throws IOException {
         String entity = read(DICT_MATERIAL);
+        String priceSpec = read(DICT_MATERIAL_PRICE_SPEC);
 
         assertThat(entity)
                 .contains(
@@ -54,17 +56,29 @@ class MaterialMasterSchemaCharacterizationTest {
                         "private Long materialTypeId;",
                         "private String materialCategory;",
                         "private Double density;",
-                        "private Double platePrice;",
-                        "private Double barPrice;",
-                        "private Double tubePrice;",
                         "private String remarks;",
                         "private Boolean enabled;",
                         "private Integer sortNo;")
                 .doesNotContain(
                         "private String materialType;",
+                        "private Double platePrice;",
+                        "private Double barPrice;",
+                        "private Double tubePrice;",
                         "private Double plateDensity;",
                         "private Double barDensity;",
                         "private Double tubeDensity;");
+
+        assertThat(priceSpec)
+                .contains(
+                        "@TableName(\"dict_material_price_spec\")",
+                        "private Long materialId;",
+                        "private String specCode;",
+                        "private String specName;",
+                        "private Double unifiedPrice;",
+                        "private Double platePrice;",
+                        "private Double barPrice;",
+                        "private Double tubePrice;",
+                        "private Integer sortNo;");
     }
 
     @Test
@@ -145,11 +159,13 @@ class MaterialMasterSchemaCharacterizationTest {
                         ":remote-loader=\"pagePricingMaterialOptions\"",
                         ":selected-key=\"matForm.materialCode\"",
                         "materialCode: '',",
-                        "matForm.materialId = source.materialId ?? source.id ?? null",
-                        "matForm.materialCode = source.materialCode || ''",
-                        "matForm.materialName = source.materialName || source.name || ''",
+                        "matForm.materialId = selectedMaterial.materialId ?? selectedMaterial.id ?? null",
+                        "matForm.materialCode = selectedMaterial.materialCode || ''",
+                        "matForm.materialName = selectedMaterial.materialName || selectedMaterial.name || ''",
+                        "matForm.priceSpecCode = selectedMaterial.priceSpecCode || ''",
                         "const currentMatInfo = computed(() => ({",
                         "materialCode: matForm.materialCode",
+                        "priceSpecCode: matForm.priceSpecCode",
                         "materialTypeCode: matForm.materialTypeCode",
                         "name: matForm.materialName")
                 .doesNotContain(

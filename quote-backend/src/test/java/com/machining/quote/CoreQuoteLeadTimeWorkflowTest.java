@@ -85,15 +85,15 @@ class CoreQuoteLeadTimeWorkflowTest extends CoreWorkflowIntegrationTestSupport {
         material.setSortNo(0);
         material.setRemarks("");
         material.setDensity(7850.0);
-        material.setPlatePrice(7.1);
-        material.setBarPrice(7.1);
         materialMapper.insert(material);
+        ensureMaterialPriceSpecs(material.getId(), 7.1);
 
         QuoteSubmitReq req = new QuoteSubmitReq();
         req.setItemId(item.getId());
         req.setPartNetWeight(1.23);
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", material.getMaterialCode());
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("name", materialName);
         materialData.put("shape", "板材");
         materialData.put("dimensionUnit", "m");
@@ -241,14 +241,15 @@ class CoreQuoteLeadTimeWorkflowTest extends CoreWorkflowIntegrationTestSupport {
         material.setSortNo(0);
         material.setRemarks("");
         material.setDensity(7850.0);
-        material.setPlatePrice(7.1);
         materialMapper.insert(material);
+        ensureMaterialPriceSpecs(material.getId(), 7.1);
 
         QuoteSubmitReq quoteReq = new QuoteSubmitReq();
         quoteReq.setItemId(item.getId());
         quoteReq.setPartNetWeight(1.0);
         quoteReq.setMaterialData(Map.of(
                 "materialCode", material.getMaterialCode(),
+                "priceSpecCode", "SPEC_1",
                 "name", materialName,
                 "shape", "板材",
                 "dimensionUnit", "m",

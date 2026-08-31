@@ -4,16 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.mes.master.MesMaterialPageResp;
 import com.machining.quote.dto.mes.master.MesProcessTypeListResp;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.entity.MesMasterDataSyncRun;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.MesMasterDataSyncRunMapper;
 import com.machining.quote.service.AuditService;
+import com.machining.quote.util.MaterialPriceSpecSupport;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +79,8 @@ public class MesMasterDataSyncService {
     private MesMasterDataClient client;
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
     @Autowired
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
@@ -602,6 +607,7 @@ public class MesMasterDataSyncService {
             } else {
                 materialMapper.updateById(material);
             }
+            ensureDefaultMaterialPriceSpecs(material.getId(), syncedAt);
             upsertedCount++;
             if (!source.enabled()) {
                 disabledCount++;
@@ -609,6 +615,25 @@ public class MesMasterDataSyncService {
         }
 
         return new PersistResult(upsertedCount, disabledCount, 0);
+    }
+
+    private void ensureDefaultMaterialPriceSpecs(Long materialId, LocalDateTime syncedAt) {
+        if (materialId == null) {
+            return;
+        }
+        QueryWrapper<DictMaterialPriceSpec> query = new QueryWrapper<>();
+        query.eq("material_id", materialId);
+        List<DictMaterialPriceSpec> existingRows = materialPriceSpecMapper.selectList(query);
+        Set<String> existingCodes = (existingRows == null ? List.<DictMaterialPriceSpec>of() : existingRows).stream()
+                .map(DictMaterialPriceSpec::getSpecCode)
+                .filter(Objects::nonNull)
+                .map(code -> code.trim().toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        for (DictMaterialPriceSpec spec : MaterialPriceSpecSupport.defaultEntities(materialId, syncedAt)) {
+            if (!existingCodes.contains(spec.getSpecCode())) {
+                materialPriceSpecMapper.insert(spec);
+            }
+        }
     }
 
     private List<DictMaterial> selectExistingMaterialsByLookupCodes(Collection<String> lookupCodes) {

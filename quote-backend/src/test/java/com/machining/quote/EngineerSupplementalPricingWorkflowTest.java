@@ -6,9 +6,11 @@ import com.machining.quote.dto.OrderItemPageReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.EngineerService;
@@ -41,6 +43,8 @@ class EngineerSupplementalPricingWorkflowTest {
     private ItemQuoteVersionMapper itemMapper;
     @Autowired
     private DictMaterialMapper materialMapper;
+    @Autowired
+    private DictMaterialPriceSpecMapper materialPriceSpecMapper;
 
     @Test
     void supplementalPricingOrdersAndItemsOnlyIncludeReleasedOrdersWithDrawingAndMissingPrice() {
@@ -132,6 +136,7 @@ class EngineerSupplementalPricingWorkflowTest {
         DictMaterial material = ensureMaterial();
         req.setMaterialData(Map.of(
                 "materialCode", material.getMaterialCode(),
+                "priceSpecCode", "SPEC_1",
                 "materialName", material.getMaterialName(),
                 "shape", "板材",
                 "weight", 2.0));
@@ -143,6 +148,7 @@ class EngineerSupplementalPricingWorkflowTest {
         DictMaterial existing = materialMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DictMaterial>()
                 .eq("material_code", "MAT-SUPPLEMENTAL-PRICING"));
         if (existing != null) {
+            ensureMaterialPriceSpecs(existing.getId(), 5.0);
             return existing;
         }
         DictMaterial material = new DictMaterial();
@@ -151,13 +157,32 @@ class EngineerSupplementalPricingWorkflowTest {
         material.setMaterialTypeId(1L);
         material.setMaterialCategory("钢铁");
         material.setDensity(1.0);
-        material.setPlatePrice(5.0);
-        material.setBarPrice(5.0);
-        material.setTubePrice(5.0);
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("test material");
         materialMapper.insert(material);
+        ensureMaterialPriceSpecs(material.getId(), 5.0);
         return material;
+    }
+
+    private void ensureMaterialPriceSpecs(Long materialId, double unifiedPrice) {
+        Long count = materialPriceSpecMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DictMaterialPriceSpec>()
+                .eq("material_id", materialId));
+        if (count != null && count > 0) {
+            return;
+        }
+        materialPriceSpecMapper.insert(priceSpec(materialId, "SPEC_1", "规格一", unifiedPrice, 10));
+        materialPriceSpecMapper.insert(priceSpec(materialId, "SPEC_2", "规格二", null, 20));
+        materialPriceSpecMapper.insert(priceSpec(materialId, "SPEC_3", "规格三", null, 30));
+    }
+
+    private DictMaterialPriceSpec priceSpec(Long materialId, String code, String name, Double unifiedPrice, int sortNo) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setMaterialId(materialId);
+        spec.setSpecCode(code);
+        spec.setSpecName(name);
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setSortNo(sortNo);
+        return spec;
     }
 }

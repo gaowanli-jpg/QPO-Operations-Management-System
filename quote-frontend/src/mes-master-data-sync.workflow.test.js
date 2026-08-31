@@ -67,7 +67,7 @@ describe('MES master data sync frontend guard', () => {
     expect(materialProcess).toContain('submitted')
     expect(materialProcess).toContain('formatMesSyncResultMessage')
     expect(materialProcess).toContain('deletedCount')
-    expect(materialProcess).toContain('MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价')
+    expect(materialProcess).toContain('MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料规格价格')
     expect(materialProcess).toContain('MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格')
     expect(materialProcess).toContain('await reloadAfterMutation()')
   })
@@ -99,7 +99,7 @@ describe('MES master data sync frontend guard', () => {
     expect(materialProcess).toContain("scheduleForm.scheduleMode === 'DAILY_TIME'")
     expect(materialProcess).toContain('dailyRunTime: normalizeDailyRunTime(scheduleForm.dailyRunTime)')
     expect(materialProcess).toContain('scheduleDialogHelpText')
-    expect(materialProcess).toContain('MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价')
+    expect(materialProcess).toContain('MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料规格价格')
     expect(materialProcess).toContain('MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格')
   })
 

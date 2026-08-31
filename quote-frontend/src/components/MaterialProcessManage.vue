@@ -61,14 +61,21 @@
               <el-table-column label="具体密度" width="130" align="right">
                 <template #default="scope">{{ formatDensity(scope.row.density) }}</template>
               </el-table-column>
-              <el-table-column label="板材单价" width="150" align="right">
-                <template #default="scope">{{ formatPrice(scope.row.platePrice) }}</template>
-              </el-table-column>
-              <el-table-column label="棒材单价" width="150" align="right">
-                <template #default="scope">{{ formatPrice(scope.row.barPrice) }}</template>
-              </el-table-column>
-              <el-table-column label="管材单价" width="150" align="right">
-                <template #default="scope">{{ formatPrice(scope.row.tubePrice) }}</template>
+              <el-table-column
+                v-for="definition in MATERIAL_PRICE_SPEC_DEFINITIONS"
+                :key="definition.specCode"
+                :label="definition.specName"
+                width="160"
+                align="right"
+              >
+                <template #default="scope">
+                  <div class="material-spec-cell">
+                    <span>{{ formatSpecUnifiedPrice(scope.row, definition.specCode) }}</span>
+                    <el-button v-permission="'engineer:dict:material-manage'" size="small" link type="primary" @click="openRowMaterialSpecDialog(scope.row, definition.specCode)">
+                      详情
+                    </el-button>
+                  </div>
+                </template>
               </el-table-column>
               <el-table-column label="状态" width="90" align="center">
                 <template #default="scope">
@@ -329,22 +336,15 @@
             <span class="unit-label">kg/m³</span>
           </div>
         </el-form-item>
-        <el-form-item label="板材单价">
-          <div class="unit-input">
-            <el-input-number v-model="materialForm.platePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-            <span class="unit-label">元/kg</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="棒材单价">
-          <div class="unit-input">
-            <el-input-number v-model="materialForm.barPrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-            <span class="unit-label">元/kg</span>
-          </div>
-        </el-form-item>
-        <el-form-item label="管材单价">
-          <div class="unit-input">
-            <el-input-number v-model="materialForm.tubePrice" :precision="2" :min="0" controls-position="right" class="unit-input-control" />
-            <span class="unit-label">元/kg</span>
+        <el-form-item label="规格价格" class="process-dialog-wide">
+          <div class="material-spec-grid">
+            <div v-for="definition in MATERIAL_PRICE_SPEC_DEFINITIONS" :key="definition.specCode" class="material-spec-card">
+              <span>{{ definition.specName }}</span>
+              <strong>{{ formatSpecUnifiedPrice(materialForm, definition.specCode) }}</strong>
+              <el-button type="primary" plain size="small" @click="openMaterialFormSpecDialog(definition.specCode)">
+                详情
+              </el-button>
+            </div>
           </div>
         </el-form-item>
         <el-form-item label="备注" class="process-dialog-wide">
@@ -358,6 +358,12 @@
         </div>
       </template>
     </el-dialog>
+
+    <MaterialPriceSpecDetailDialog
+      v-model="materialSpecDialogVisible"
+      :spec="activeMaterialSpecDraft"
+      @update:spec="updateActiveMaterialSpecDraft"
+    />
 
     <el-dialog v-model="processDetailDialogVisible" :title="processDetailForm.id ? '编辑具体工艺' : '新增具体工艺'" width="680px">
       <el-form :model="processDetailForm" label-width="120px" class="erp-dialog-form process-dialog-grid">
@@ -532,6 +538,7 @@
 <script setup>
 import { computed, reactive, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import MaterialPriceSpecDetailDialog from './material/MaterialPriceSpecDetailDialog.vue'
 import {
   deleteExtraFeeItem,
   deletePricingMarkupFee as deletePricingMarkupFeeRequest,
@@ -562,6 +569,13 @@ import {
 import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, paginateRows } from '../utils/clientPagination'
+import {
+  MATERIAL_PRICE_SPEC_DEFINITIONS,
+  findPriceSpec,
+  formatMaterialSpecPrice,
+  hasAnyMaterialSpecPrice,
+  normalizePriceSpecs
+} from '../utils/materialPriceSpecs'
 
 const dictionaryStore = useDictionaryStore()
 const pricingMarkupScopeOptions = [
@@ -646,6 +660,8 @@ const isPricingMarkupFeeDeletePending = (row) => isPending(dictActionKeys.delete
 const isExtraFeeDeletePending = (row) => isPending(dictActionKeys.deleteExtraFee(row?.id))
 
 const materialDialogVisible = ref(false)
+const materialSpecDialogVisible = ref(false)
+const materialSpecDialogCode = ref('SPEC_1')
 const processDetailDialogVisible = ref(false)
 const pricingMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
@@ -724,7 +740,7 @@ const syncConfigByType = {
 const activeScheduleConfig = computed(() => scheduleConfigs[scheduleTarget.value] || scheduleConfigs.MES_MATERIAL)
 const scheduleDialogTitle = computed(() => activeScheduleConfig.value.title)
 const scheduleTargetLabel = computed(() => activeScheduleConfig.value.label)
-const mesMaterialSyncOwnershipMessage = 'MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料单价'
+const mesMaterialSyncOwnershipMessage = 'MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料规格价格'
 const mesProcessSyncOwnershipMessage = 'MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格'
 const scheduleDialogHelpText = computed(() => `${scheduleTarget.value === 'MES_PROCESS_TYPE' ? mesProcessSyncOwnershipMessage : mesMaterialSyncOwnershipMessage}；策略默认关闭，保存后作为运行时配置。`)
 
@@ -746,13 +762,13 @@ const formatHourlyRate = (value) => {
 }
 const formatDetailHourlyRate = (value) => (value == null || value === '' ? '继承大类' : formatHourlyRate(value))
 const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
-const hasPositivePrice = (value) => Number(value) > 0
 const materialPriceStatusText = (row = {}) => (
-  hasPositivePrice(row.platePrice) || hasPositivePrice(row.barPrice) || hasPositivePrice(row.tubePrice)
+  hasAnyMaterialSpecPrice(row.priceSpecs)
     ? '单价已维护'
     : '单价未维护'
 )
 const materialPriceStatusType = (row = {}) => (materialPriceStatusText(row) === '单价已维护' ? 'success' : 'danger')
+const formatSpecUnifiedPrice = (row, specCode) => formatMaterialSpecPrice(findPriceSpec(row?.priceSpecs, specCode)?.unifiedPrice)
 const formatSyncTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '-')
 const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
 const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
@@ -811,9 +827,7 @@ function createEmptyMaterial() {
     enabled: true,
     sortNo: 0,
     density: null,
-    platePrice: 0,
-    barPrice: 0,
-    tubePrice: 0
+    priceSpecs: normalizePriceSpecs([])
   }
 }
 
@@ -1077,8 +1091,27 @@ const handleMesSyncSubmitResult = async (syncType, response = {}) => {
 
 const openMaterialDialog = (row) => {
   Object.assign(materialForm, createEmptyMaterial(), row || {})
+  materialForm.priceSpecs = normalizePriceSpecs(row?.priceSpecs)
   materialForm.enabled = materialForm.enabled !== false
   materialDialogVisible.value = true
+}
+
+const activeMaterialSpecDraft = computed(() => findPriceSpec(materialForm.priceSpecs, materialSpecDialogCode.value))
+
+const openMaterialFormSpecDialog = (specCode) => {
+  materialSpecDialogCode.value = specCode
+  materialSpecDialogVisible.value = true
+}
+
+const openRowMaterialSpecDialog = (row, specCode) => {
+  openMaterialDialog(row)
+  openMaterialFormSpecDialog(specCode)
+}
+
+const updateActiveMaterialSpecDraft = (updatedSpec) => {
+  materialForm.priceSpecs = normalizePriceSpecs(materialForm.priceSpecs).map(spec => (
+    spec.specCode === updatedSpec.specCode ? updatedSpec : spec
+  ))
 }
 
 const openProcessDetailDialog = (row) => {
@@ -1191,7 +1224,7 @@ const saveMaterial = async () => {
   if (!materialForm.materialTypeId) return ElMessage.warning('请选择材料类型。')
   return runAction(dictActionKeys.saveMaterialDialog, async () => {
     try {
-      const payload = { ...materialForm }
+      const payload = { ...materialForm, priceSpecs: normalizePriceSpecs(materialForm.priceSpecs) }
       const response = await saveMaterialRequest(payload)
       ElMessage.success(response.message || '保存成功')
       materialDialogVisible.value = false
@@ -1387,6 +1420,48 @@ onBeforeUnmount(stopAllMesSyncPolling)
   color: #909399;
   font-size: 12px;
   line-height: 1.2;
+}
+
+.material-spec-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.material-spec-cell span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-spec-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.material-spec-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface-muted);
+}
+
+.material-spec-card span {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.material-spec-card strong {
+  color: var(--erp-text);
+  font-size: 14px;
 }
 
 .process-master-grid {

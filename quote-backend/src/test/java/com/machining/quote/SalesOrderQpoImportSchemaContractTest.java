@@ -2,11 +2,13 @@ package com.machining.quote;
 
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
@@ -164,6 +166,7 @@ class SalesOrderQpoImportSchemaContractTest {
         ItemQuoteVersionMapper itemMapper = mock(ItemQuoteVersionMapper.class);
         ItemAssemblyRelationMapper assemblyRelationMapper = mock(ItemAssemblyRelationMapper.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialPriceSpecMapper materialPriceSpecMapper = mock(DictMaterialPriceSpecMapper.class);
         DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
         DictPricingMarkupFeeMapper pricingMarkupFeeMapper = mock(DictPricingMarkupFeeMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
@@ -171,11 +174,13 @@ class SalesOrderQpoImportSchemaContractTest {
         ReflectionTestUtils.setField(service, "itemMapper", itemMapper);
         ReflectionTestUtils.setField(service, "assemblyRelationMapper", assemblyRelationMapper);
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        ReflectionTestUtils.setField(service, "materialPriceSpecMapper", materialPriceSpecMapper);
         ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
         ReflectionTestUtils.setField(service, "pricingFeeCalculator", pricingFeeCalculator);
         ReflectionTestUtils.setField(pricingFeeCalculator, "pricingMarkupFeeMapper", pricingMarkupFeeMapper);
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", extraFeeItemMapper);
         when(materialMapper.selectList(any())).thenReturn(List.of(material()));
+        when(materialPriceSpecMapper.selectOne(any())).thenReturn(priceSpec(100.0));
         when(materialTypeMapper.selectById(1L)).thenReturn(materialType());
         when(pricingMarkupFeeMapper.selectList(any())).thenReturn(List.of(
                 markup("NORMAL", "BASIC_PERCENT", "profit", 10.0, 1),
@@ -189,6 +194,7 @@ class SalesOrderQpoImportSchemaContractTest {
         item.setQty(2);
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MAT-TEST-PRICE");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "板材");
         materialData.put("weight", 1.0);
 
@@ -248,9 +254,19 @@ class SalesOrderQpoImportSchemaContractTest {
         material.setMaterialTypeId(1L);
         material.setMaterialCategory("钢铁");
         material.setDensity(7850.0);
-        material.setPlatePrice(100.0);
         material.setEnabled(true);
         return material;
+    }
+
+    private DictMaterialPriceSpec priceSpec(Double unifiedPrice) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setId(10L);
+        spec.setMaterialId(1L);
+        spec.setSpecCode("SPEC_1");
+        spec.setSpecName("规格一");
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setSortNo(10);
+        return spec;
     }
 
     private DictMaterialType materialType() {

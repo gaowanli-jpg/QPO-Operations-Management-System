@@ -80,58 +80,23 @@
         <el-table-column label="实际使用密度" width="130" align="right">
           <template #default="{ row }">{{ formatEffectiveMaterialDensity(row) }}</template>
         </el-table-column>
-        <el-table-column label="板材价" width="124" align="right" class-name="material-edit-cell">
+        <el-table-column
+          v-for="definition in MATERIAL_PRICE_SPEC_DEFINITIONS"
+          :key="definition.specCode"
+          :label="definition.specName"
+          width="154"
+          align="right"
+          class-name="material-edit-cell"
+        >
           <template #default="{ row }">
-            <el-input-number
-              v-if="canEditMaterialPrice(row)"
-              :model-value="materialPriceDraft(row, 'platePrice')"
-              :min="0"
-              :precision="2"
-              :value-on-clear="null"
-              clearable
-              controls-position="right"
-              size="small"
-              class="inline-material-input"
-              @click.stop
-              @update:model-value="value => setMaterialPriceDraft(row, 'platePrice', value)"
-            />
-            <span v-else>{{ formatNumber(row.platePrice) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="棒材价" width="124" align="right" class-name="material-edit-cell">
-          <template #default="{ row }">
-            <el-input-number
-              v-if="canEditMaterialPrice(row)"
-              :model-value="materialPriceDraft(row, 'barPrice')"
-              :min="0"
-              :precision="2"
-              :value-on-clear="null"
-              clearable
-              controls-position="right"
-              size="small"
-              class="inline-material-input"
-              @click.stop
-              @update:model-value="value => setMaterialPriceDraft(row, 'barPrice', value)"
-            />
-            <span v-else>{{ formatNumber(row.barPrice) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="管材价" width="124" align="right" class-name="material-edit-cell">
-          <template #default="{ row }">
-            <el-input-number
-              v-if="canEditMaterialPrice(row)"
-              :model-value="materialPriceDraft(row, 'tubePrice')"
-              :min="0"
-              :precision="2"
-              :value-on-clear="null"
-              clearable
-              controls-position="right"
-              size="small"
-              class="inline-material-input"
-              @click.stop
-              @update:model-value="value => setMaterialPriceDraft(row, 'tubePrice', value)"
-            />
-            <span v-else>{{ formatNumber(row.tubePrice) }}</span>
+            <div class="material-spec-cell" @click.stop>
+              <span :title="formatSpecUnifiedPrice(row, definition.specCode)">
+                {{ formatSpecUnifiedPrice(row, definition.specCode) }}
+              </span>
+              <el-button size="small" link type="primary" @click.stop="openMaterialSpecDialog(row, definition.specCode)">
+                详情
+              </el-button>
+            </div>
           </template>
         </el-table-column>
         <el-table-column v-if="enableMaterialPriceEdit" label="保存" width="92" align="center">
@@ -245,12 +210,31 @@
       </div>
     </div>
 
+    <MaterialPriceSpecDetailDialog
+      v-if="type === 'material'"
+      v-model="materialSpecDialogVisible"
+      :spec="activeMaterialSpecDraft"
+      :readonly="!activeMaterialSpecEditable"
+      @update:spec="updateActiveMaterialSpecDraft"
+    />
+
     <template #footer>
       <div class="picker-footer">
         <span class="selected-hint" :title="selectedLabel">当前选择：{{ selectedLabel }}</span>
         <div class="footer-actions">
           <el-button @click="visible = false">取消</el-button>
-          <el-button type="primary" :disabled="!selectedItem" @click="confirmSelection">
+          <template v-if="type === 'material'">
+            <el-button
+              v-for="definition in MATERIAL_PRICE_SPEC_DEFINITIONS"
+              :key="definition.specCode"
+              :type="definition.buttonType"
+              :disabled="!selectedItem"
+              @click="confirmMaterialSpecSelection(definition.specCode)"
+            >
+              选择{{ definition.specName }}
+            </el-button>
+          </template>
+          <el-button v-else type="primary" :disabled="!selectedItem" @click="confirmSelection">
             确定选择
           </el-button>
         </div>
@@ -262,7 +246,15 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import MaterialPriceSpecDetailDialog from './material/MaterialPriceSpecDetailDialog.vue'
 import { saveMaterial, saveProcessDetail } from '../services/dictApi'
+import {
+  MATERIAL_PRICE_SPEC_DEFINITIONS,
+  buildMaterialSpecSelection,
+  formatMaterialSpecPrice,
+  normalizePriceSpecs,
+  samePriceSpecs
+} from '../utils/materialPriceSpecs'
 
 const props = defineProps({
   modelValue: {
@@ -299,11 +291,11 @@ const props = defineProps({
   },
   pageSizeOptions: {
     type: Array,
-    default: () => [20, 50, 100]
+    default: () => [10, 20, 50, 100]
   },
   defaultPageSize: {
     type: Number,
-    default: 20
+    default: 10
   }
 })
 
@@ -311,7 +303,7 @@ const emit = defineEmits(['update:modelValue', 'confirm', 'process-rate-updated'
 
 function normalizeRemotePageSize(value) {
   const numericValue = Number(value)
-  return props.pageSizeOptions.includes(numericValue) ? numericValue : 20
+  return props.pageSizeOptions.includes(numericValue) ? numericValue : props.defaultPageSize
 }
 
 const visible = computed({
@@ -334,9 +326,12 @@ const processRateDrafts = ref({})
 const savingRateKeys = ref(new Set())
 const materialPriceDrafts = ref({})
 const savingMaterialKeys = ref(new Set())
+const materialSpecDialogVisible = ref(false)
+const materialSpecDialogRow = ref(null)
+const materialSpecDialogCode = ref('SPEC_1')
 
 const dialogWidth = computed(() => (
-  props.type === 'material' && props.enableMaterialPriceEdit ? '1320px' : '1180px'
+  props.type === 'material' && props.enableMaterialPriceEdit ? '1380px' : '1180px'
 ))
 
 const searchPlaceholder = computed(() => (
@@ -358,9 +353,10 @@ const labelOf = (item) => {
     const name = item.materialName || '-'
     const typeName = item.materialTypeName || '-'
     const category = item.materialCategory || '-'
+    const specName = item.priceSpecName ? ` / ${item.priceSpecName}` : ''
     return item.remarks
-      ? `${code} / ${name} / ${typeName} / ${category} ${item.remarks}`
-      : `${code} / ${name} / ${typeName} / ${category}`
+      ? `${code} / ${name} / ${typeName} / ${category}${specName} ${item.remarks}`
+      : `${code} / ${name} / ${typeName} / ${category}${specName}`
   }
   return item.label || item.detailName || item.processName || item.feeName || ''
 }
@@ -419,6 +415,9 @@ const resetPicker = () => {
   savingRateKeys.value = new Set()
   materialPriceDrafts.value = {}
   savingMaterialKeys.value = new Set()
+  materialSpecDialogVisible.value = false
+  materialSpecDialogRow.value = null
+  materialSpecDialogCode.value = 'SPEC_1'
 }
 
 const selectRow = (row) => {
@@ -436,6 +435,19 @@ const confirmSelection = () => {
     return
   }
   emit('confirm', selectedItem.value)
+  visible.value = false
+}
+
+const confirmMaterialSpecSelection = (specCode) => {
+  if (!selectedItem.value) {
+    ElMessage.warning('请先选择一条材料。')
+    return
+  }
+  if (hasInlineMaterialDraft(selectedItem.value)) {
+    ElMessage.warning('当前材料规格价格或密度有未保存修改，请先保存后再选择规格。')
+    return
+  }
+  emit('confirm', buildMaterialSpecSelection(selectedItem.value, specCode))
   visible.value = false
 }
 
@@ -562,6 +574,48 @@ const materialPriceDraft = (row, field) => {
     : row?.[field] ?? null
 }
 
+const materialPriceSpecsDraft = (row) => {
+  const key = keyOf(row)
+  const rowDraft = materialPriceDrafts.value[key] || {}
+  return normalizePriceSpecs(rowDraft.priceSpecs ?? row?.priceSpecs)
+}
+
+const setMaterialPriceSpecsDraft = (row, priceSpecs) => {
+  const key = keyOf(row)
+  materialPriceDrafts.value = {
+    ...materialPriceDrafts.value,
+    [key]: {
+      ...(materialPriceDrafts.value[key] || {}),
+      priceSpecs: normalizePriceSpecs(priceSpecs)
+    }
+  }
+}
+
+const materialSpecDraft = (row, specCode) => (
+  materialPriceSpecsDraft(row).find(spec => spec.specCode === specCode) || normalizePriceSpecs([])[0]
+)
+
+const activeMaterialSpecDraft = computed(() => materialSpecDraft(materialSpecDialogRow.value, materialSpecDialogCode.value))
+
+const activeMaterialSpecEditable = computed(() => canEditMaterialPrice(materialSpecDialogRow.value))
+
+const formatSpecUnifiedPrice = (row, specCode) => formatMaterialSpecPrice(materialSpecDraft(row, specCode)?.unifiedPrice)
+
+const openMaterialSpecDialog = (row, specCode) => {
+  materialSpecDialogRow.value = row
+  materialSpecDialogCode.value = specCode
+  materialSpecDialogVisible.value = true
+}
+
+const updateActiveMaterialSpecDraft = (updatedSpec) => {
+  const row = materialSpecDialogRow.value
+  if (!row || !canEditMaterialPrice(row)) return
+  const specs = materialPriceSpecsDraft(row).map(spec => (
+    spec.specCode === updatedSpec.specCode ? updatedSpec : spec
+  ))
+  setMaterialPriceSpecsDraft(row, specs)
+}
+
 const setMaterialPriceDraft = (row, field, value) => {
   const key = keyOf(row)
   materialPriceDrafts.value = {
@@ -576,6 +630,16 @@ const setMaterialPriceDraft = (row, field, value) => {
 const materialDraftNumber = (row, field) => {
   const draft = materialPriceDraft(row, field)
   return draft === '' || draft == null ? null : Number(draft)
+}
+
+const hasInlineMaterialDraft = (row) => {
+  const key = keyOf(row)
+  const rowDraft = materialPriceDrafts.value[key]
+  if (!rowDraft) return false
+  const draftDensity = materialPriceDraft(row, 'density')
+  const sourceDensity = row?.density ?? null
+  if ((draftDensity ?? null) !== (sourceDensity ?? null)) return true
+  return !samePriceSpecs(rowDraft.priceSpecs ?? row?.priceSpecs, row?.priceSpecs)
 }
 
 const validateMaterialDraftNumber = (fieldLabel, value) => {
@@ -620,13 +684,8 @@ const saveInlineMaterialPrice = async (row) => {
     return
   }
   const density = materialDraftNumber(row, 'density')
-  const platePrice = materialDraftNumber(row, 'platePrice')
-  const barPrice = materialDraftNumber(row, 'barPrice')
-  const tubePrice = materialDraftNumber(row, 'tubePrice')
-  if (!validateMaterialDraftNumber('具体密度', density)
-    || !validateMaterialDraftNumber('板材价', platePrice)
-    || !validateMaterialDraftNumber('棒材价', barPrice)
-    || !validateMaterialDraftNumber('管材价', tubePrice)) {
+  const priceSpecs = materialPriceSpecsDraft(row)
+  if (!validateMaterialDraftNumber('具体密度', density)) {
     return
   }
   const payload = {
@@ -636,9 +695,7 @@ const saveInlineMaterialPrice = async (row) => {
     materialTypeId: row.materialTypeId,
     materialCategory: row.materialCategory || '',
     density,
-    platePrice,
-    barPrice,
-    tubePrice,
+    priceSpecs,
     remarks: row.remarks || '',
     enabled: row.enabled,
     sortNo: row.sortNo
@@ -655,16 +712,14 @@ const saveInlineMaterialPrice = async (row) => {
       ...materialPriceDrafts.value,
       [keyOf(updatedMaterial)]: {
         density: updatedMaterial.density ?? null,
-        platePrice: updatedMaterial.platePrice ?? null,
-        barPrice: updatedMaterial.barPrice ?? null,
-        tubePrice: updatedMaterial.tubePrice ?? null
+        priceSpecs: normalizePriceSpecs(updatedMaterial.priceSpecs)
       }
     }
     emit('material-price-updated', updatedMaterial)
-    ElMessage.success(response?.message || '材料密度和单价已保存')
+    ElMessage.success(response?.message || '材料密度和规格价格已保存')
   } catch (error) {
     console.error(error)
-    ElMessage.error(error?.response?.data?.message || error?.payload?.message || error?.message || '材料密度和单价保存失败。')
+    ElMessage.error(error?.response?.data?.message || error?.payload?.message || error?.message || '材料密度和规格价格保存失败。')
   } finally {
     setInlineMaterialSaving(row, false)
   }

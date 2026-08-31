@@ -3,9 +3,11 @@ package com.machining.quote;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.mes.master.MesMaterialPageResp;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.MesMasterDataSyncRun;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.MesMasterDataSyncRunMapper;
 import com.machining.quote.service.AuditService;
@@ -138,14 +140,12 @@ class MesMaterialMasterSyncServiceTest {
     void syncMaterialsUpsertsThreeMesTypesPreservesExistingPricesAndAuditsCounts() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        DictMaterialPriceSpecMapper materialPriceSpecMapper = mock(DictMaterialPriceSpecMapper.class);
         DictMaterialTypeMapper materialTypeMapper = mock(DictMaterialTypeMapper.class);
         MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
         AuditService auditService = mock(AuditService.class);
-        MesMasterDataSyncService service = service(client, materialMapper, materialTypeMapper, syncRunMapper, auditService);
+        MesMasterDataSyncService service = service(client, materialMapper, materialPriceSpecMapper, materialTypeMapper, syncRunMapper, auditService);
         DictMaterial existing = material(10L, "MAT-001", "旧材料名", 91L, "LOCAL", true);
-        existing.setPlatePrice(11.1);
-        existing.setBarPrice(12.2);
-        existing.setTubePrice(13.3);
         existing.setDensity(7.6);
         when(client.pageMaterials(1, 200)).thenReturn(page(3,
                 row("mes-1", " MAT-001 ", " 45#钢 ", "MATERIAL", "BUY", "MAKE", "GB/T 699", "DOC-1", "12.50", "7.85", "ENABLE"),
@@ -153,6 +153,13 @@ class MesMaterialMasterSyncServiceTest {
                 row("mes-3", "MAT-003", "半成品件", "SEMI", "BUY", "MAKE", "STD-S", "DOC-3", "3.00", "7.66", "ENABLE")));
         when(materialTypeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
         when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existing));
+        when(materialPriceSpecMapper.selectList(any(QueryWrapper.class))).thenReturn(
+                List.of(
+                        spec(10L, "SPEC_1", "规格一", 11.1, 11.1, 12.2, 13.3, 10),
+                        spec(10L, "SPEC_2", "规格二", null, null, null, null, 20),
+                        spec(10L, "SPEC_3", "规格三", null, null, null, null, 30)),
+                List.of(),
+                List.of());
         doAnswer(invocation -> {
             MesMasterDataSyncRun run = invocation.getArgument(0);
             run.setId(910L);
@@ -201,9 +208,6 @@ class MesMaterialMasterSyncServiceTest {
             assertThat(material.getMaterialName()).isEqualTo("45#钢");
             assertThat(material.getMaterialTypeId()).isEqualTo(101L);
             assertThat(material.getDensity()).isEqualTo(7.6);
-            assertThat(material.getPlatePrice()).isEqualTo(11.1);
-            assertThat(material.getBarPrice()).isEqualTo(12.2);
-            assertThat(material.getTubePrice()).isEqualTo(13.3);
             assertThat(material.getSourceType()).isEqualTo("MES");
             assertThat(material.getMesExternalId()).isEqualTo("mes-1");
             assertThat(material.getMesMaterialType()).isEqualTo("MATERIAL");
@@ -224,12 +228,21 @@ class MesMaterialMasterSyncServiceTest {
                 .orElseThrow();
         assertThat(product).satisfies(material -> {
             assertThat(material.getMaterialTypeId()).isEqualTo(102L);
-            assertThat(material.getPlatePrice()).isNull();
-            assertThat(material.getBarPrice()).isNull();
-            assertThat(material.getTubePrice()).isNull();
             assertThat(material.getDensity()).isNull();
             assertThat(material.getMesDensityRaw()).isEqualTo("8010");
         });
+
+        ArgumentCaptor<DictMaterialPriceSpec> specCaptor = ArgumentCaptor.forClass(DictMaterialPriceSpec.class);
+        verify(materialPriceSpecMapper, org.mockito.Mockito.times(6)).insert(specCaptor.capture());
+        assertThat(specCaptor.getAllValues())
+                .extracting(DictMaterialPriceSpec::getMaterialId, DictMaterialPriceSpec::getSpecCode, DictMaterialPriceSpec::getUnifiedPrice)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(202L, "SPEC_1", null),
+                        org.assertj.core.groups.Tuple.tuple(202L, "SPEC_2", null),
+                        org.assertj.core.groups.Tuple.tuple(202L, "SPEC_3", null),
+                        org.assertj.core.groups.Tuple.tuple(203L, "SPEC_1", null),
+                        org.assertj.core.groups.Tuple.tuple(203L, "SPEC_2", null),
+                        org.assertj.core.groups.Tuple.tuple(203L, "SPEC_3", null));
 
         ArgumentCaptor<MesMasterDataSyncRun> runCaptor = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
         verify(syncRunMapper).updateById(runCaptor.capture());
@@ -581,7 +594,17 @@ class MesMaterialMasterSyncServiceTest {
             DictMaterialTypeMapper materialTypeMapper,
             MesMasterDataSyncRunMapper syncRunMapper,
             AuditService auditService) {
-        return service(client, materialMapper, materialTypeMapper, syncRunMapper, auditService, null);
+        return service(client, materialMapper, mock(DictMaterialPriceSpecMapper.class), materialTypeMapper, syncRunMapper, auditService, null);
+    }
+
+    private static MesMasterDataSyncService service(
+            MesMasterDataClient client,
+            DictMaterialMapper materialMapper,
+            DictMaterialPriceSpecMapper materialPriceSpecMapper,
+            DictMaterialTypeMapper materialTypeMapper,
+            MesMasterDataSyncRunMapper syncRunMapper,
+            AuditService auditService) {
+        return service(client, materialMapper, materialPriceSpecMapper, materialTypeMapper, syncRunMapper, auditService, null);
     }
 
     private static MesMasterDataSyncService service(
@@ -591,9 +614,21 @@ class MesMaterialMasterSyncServiceTest {
             MesMasterDataSyncRunMapper syncRunMapper,
             AuditService auditService,
             TaskExecutor taskExecutor) {
+        return service(client, materialMapper, mock(DictMaterialPriceSpecMapper.class), materialTypeMapper, syncRunMapper, auditService, taskExecutor);
+    }
+
+    private static MesMasterDataSyncService service(
+            MesMasterDataClient client,
+            DictMaterialMapper materialMapper,
+            DictMaterialPriceSpecMapper materialPriceSpecMapper,
+            DictMaterialTypeMapper materialTypeMapper,
+            MesMasterDataSyncRunMapper syncRunMapper,
+            AuditService auditService,
+            TaskExecutor taskExecutor) {
         MesMasterDataSyncService service = new MesMasterDataSyncService();
         ReflectionTestUtils.setField(service, "client", client);
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        ReflectionTestUtils.setField(service, "materialPriceSpecMapper", materialPriceSpecMapper);
         ReflectionTestUtils.setField(service, "materialTypeMapper", materialTypeMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", syncRunMapper);
         ReflectionTestUtils.setField(service, "auditService", auditService);
@@ -651,6 +686,21 @@ class MesMaterialMasterSyncServiceTest {
         material.setEnabled(enabled);
         material.setSortNo(0);
         return material;
+    }
+
+    private static DictMaterialPriceSpec spec(Long materialId, String specCode, String specName,
+                                              Double unifiedPrice, Double platePrice, Double barPrice,
+                                              Double tubePrice, int sortNo) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setMaterialId(materialId);
+        spec.setSpecCode(specCode);
+        spec.setSpecName(specName);
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setPlatePrice(platePrice);
+        spec.setBarPrice(barPrice);
+        spec.setTubePrice(tubePrice);
+        spec.setSortNo(sortNo);
+        return spec;
     }
 
     private static DictMaterialType materialType(Long id, String code, String name) {

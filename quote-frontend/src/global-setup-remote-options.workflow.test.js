@@ -29,7 +29,7 @@ describe('global setup remote material and process options', () => {
     expect(source).toContain(':enable-process-rate-edit="true"')
     expect(source).toContain('@process-rate-updated="handleProcessRateUpdated"')
     expect(source).toContain('const handleMaterialPriceUpdated = (updatedMaterial) => {')
-    expect(source).toContain('applyMaterialSelectionToConfig(updatedMaterial)')
+    expect(source).toContain("applyMaterialSelectionToConfig(buildMaterialSpecSelection(updatedMaterial, config.priceSpecCode || 'SPEC_1'))")
     expect(source).toContain('const handleProcessRateUpdated = (updatedDetail) => {')
     expect(source).toContain('syncCurrentSelectedProcessRate(updatedDetail)')
   })
@@ -53,9 +53,11 @@ describe('global setup remote material and process options', () => {
       materialTypeName: '原材料',
       materialCategory: '钢材',
       density: '7850',
-      platePrice: '7.5',
-      barPrice: '9.5',
-      tubePrice: '11.5',
+      priceSpecCode: 'SPEC_2',
+      priceSpecs: [
+        { specCode: 'SPEC_1', unifiedPrice: '7.5' },
+        { specCode: 'SPEC_2', unifiedPrice: '8.5', barPrice: '9.5' }
+      ],
       remarks: '远程材料快照',
       processRoute: [
         {
@@ -79,11 +81,19 @@ describe('global setup remote material and process options', () => {
       materialId: 12,
       materialCode: 'MAT-45',
       density: 7850,
-      platePrice: 7.5,
-      barPrice: 9.5,
-      tubePrice: 11.5,
+      priceSpecCode: 'SPEC_2',
+      priceSpecName: '规格二',
       remarks: '远程材料快照'
     }))
+    expect(normalized.priceSpec).toEqual(expect.objectContaining({
+      specCode: 'SPEC_2',
+      unifiedPrice: 8.5,
+      barPrice: 9.5
+    }))
+    expect(normalized.priceSpecs).toHaveLength(3)
+    expect(normalized).not.toHaveProperty('platePrice')
+    expect(normalized).not.toHaveProperty('barPrice')
+    expect(normalized).not.toHaveProperty('tubePrice')
     expect(normalized.processRoute[0]).toEqual(expect.objectContaining({
       optionKey: 'process:77',
       processDetailId: 77,

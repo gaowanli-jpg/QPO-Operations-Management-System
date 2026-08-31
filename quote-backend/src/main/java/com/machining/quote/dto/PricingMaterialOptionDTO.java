@@ -2,6 +2,8 @@ package com.machining.quote.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class PricingMaterialOptionDTO {
     private Long id;
@@ -13,8 +15,6 @@ public class PricingMaterialOptionDTO {
     private String materialCategory;
     private Double density;
     private String mesDensityRaw;
-    private Double platePrice;
-    private Double barPrice;
-    private Double tubePrice;
+    private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;
 }

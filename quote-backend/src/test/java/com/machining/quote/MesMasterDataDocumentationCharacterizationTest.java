@@ -124,8 +124,8 @@ class MesMasterDataDocumentationCharacterizationTest {
         assertThat(masterData)
                 .contains(
                         "MES 无材料单价",
-                        "QPO 继续维护材料单价",
-                        "材料单价缺失时禁止完成核价",
+                        "QPO 继续维护材料规格价格",
+                        "材料规格有效单价缺失时禁止完成核价",
                         "真实写 MES 仍使用独立显式开关",
                         "不记录完整请求、完整响应、token、Authorization、Cookie 或 client_secret");
 

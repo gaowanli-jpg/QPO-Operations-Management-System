@@ -5,12 +5,15 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.controller.DictController;
 import com.machining.quote.dto.MaterialMasterDTO;
 import com.machining.quote.dto.MaterialMasterSaveReq;
+import com.machining.quote.dto.MaterialPriceSpecDTO;
 import com.machining.quote.dto.MaterialTypeDTO;
 import com.machining.quote.dto.MaterialTypeSaveReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.MaterialMasterService;
@@ -32,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,6 +46,7 @@ class MaterialMasterBackendServiceTest {
     void listMaterialsReturnsMaterialTypeFieldsWithoutAuditLog() {
         MaterialMasterService service = service();
         DictMaterialMapper materialMapper = mapper(service, "materialMapper");
+        DictMaterialPriceSpecMapper specMapper = mapper(service, "materialPriceSpecMapper");
         DictMaterialTypeMapper materialTypeMapper = mapper(service, "materialTypeMapper");
         AuditService auditService = mapper(service, "auditService");
 
@@ -62,6 +67,9 @@ class MaterialMasterBackendServiceTest {
         material.setMesSyncedAt(syncedAt);
         DictMaterialType type = materialType(1L, "RAW_MATERIAL", "原材料", true);
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
+        when(specMapper.selectList(any())).thenReturn(List.of(
+                spec(100L, 10L, "SPEC_1", "规格一", 12.0, null, 13.0, null, 10),
+                spec(101L, 10L, "SPEC_2", "规格二", null, null, null, null, 20)));
         when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(type));
 
         List<MaterialMasterDTO> rows = service.listMaterials(null);
@@ -83,6 +91,17 @@ class MaterialMasterBackendServiceTest {
         assertThat(row.getMesWeight()).isEqualTo("12.34");
         assertThat(row.getMesDensityRaw()).isEqualTo("7.93");
         assertThat(row.getDensity()).isEqualTo(7.85);
+        assertThat(row.getPriceSpecs()).hasSize(3);
+        assertThat(row.getPriceSpecs()).extracting(MaterialPriceSpecDTO::getSpecCode)
+                .containsExactly("SPEC_1", "SPEC_2", "SPEC_3");
+        assertThat(row.getPriceSpecs().get(0)).satisfies(priceSpec -> {
+            assertThat(priceSpec.getUnifiedPrice()).isEqualTo(12.0);
+            assertThat(priceSpec.getPlatePrice()).isNull();
+            assertThat(priceSpec.getEffectivePlatePrice()).isEqualTo(12.0);
+            assertThat(priceSpec.getBarPrice()).isEqualTo(13.0);
+            assertThat(priceSpec.getEffectiveBarPrice()).isEqualTo(13.0);
+            assertThat(priceSpec.getEffectiveTubePrice()).isEqualTo(12.0);
+        });
         assertThat(row.getMesSyncedAt()).isEqualTo(syncedAt);
         verifyNoInteractions(auditService);
     }
@@ -92,6 +111,7 @@ class MaterialMasterBackendServiceTest {
     void pageMaterialsSupportsServerSidePaginationAndKeywordSearch() throws Exception {
         MaterialMasterService service = service();
         DictMaterialMapper materialMapper = mapper(service, "materialMapper");
+        DictMaterialPriceSpecMapper specMapper = mapper(service, "materialPriceSpecMapper");
         DictMaterialTypeMapper materialTypeMapper = mapper(service, "materialTypeMapper");
         AuditService auditService = mapper(service, "auditService");
 
@@ -99,6 +119,7 @@ class MaterialMasterBackendServiceTest {
         DictMaterialType type = materialType(1L, "RAW_MATERIAL", "原材料", true);
         when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(25L);
         when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(material));
+        when(specMapper.selectList(any())).thenReturn(List.of(spec(100L, 10L, "SPEC_1", "规格一", 12.0, null, null, null, 10)));
         when(materialTypeMapper.selectBatchIds(any())).thenReturn(List.of(type));
 
         Method pageMaterials = MaterialMasterService.class.getMethod(
@@ -113,6 +134,7 @@ class MaterialMasterBackendServiceTest {
             assertThat(row.getMaterialCode()).isEqualTo("MAT-000010");
             assertThat(row.getMaterialTypeCode()).isEqualTo("RAW_MATERIAL");
             assertThat(row.getMaterialTypeName()).isEqualTo("原材料");
+            assertThat(row.getPriceSpecs()).hasSize(3);
         });
         verifyNoInteractions(auditService);
     }
@@ -149,6 +171,7 @@ class MaterialMasterBackendServiceTest {
     void createMaterialNormalizesDefaultsAndAuditsConciseSummary() {
         MaterialMasterService service = service();
         DictMaterialMapper materialMapper = mapper(service, "materialMapper");
+        DictMaterialPriceSpecMapper specMapper = mapper(service, "materialPriceSpecMapper");
         DictMaterialTypeMapper materialTypeMapper = mapper(service, "materialTypeMapper");
         AuditService auditService = mapper(service, "auditService");
         when(materialTypeMapper.selectById(1L)).thenReturn(materialType(1L, "RAW_MATERIAL", "原材料", true));
@@ -161,7 +184,7 @@ class MaterialMasterBackendServiceTest {
 
         MaterialMasterSaveReq req = materialReq(" mat-keep-case ", " 45# ", 1L);
         req.setDensity(7.85);
-        req.setPlatePrice(7.1);
+        req.setPriceSpecs(List.of(specReq("SPEC_1", "规格一", 12.0, null, 13.0, null)));
         req.setEnabled(null);
         req.setSortNo(null);
 
@@ -176,7 +199,16 @@ class MaterialMasterBackendServiceTest {
         assertThat(saved.getMesExternalId()).isNull();
         assertThat(saved.getMesMaterialType()).isNull();
         assertThat(saved.getMesSyncedAt()).isNull();
+        assertThat(saved.getPriceSpecs()).hasSize(3);
+        assertThat(saved.getPriceSpecs().get(0)).satisfies(priceSpec -> {
+            assertThat(priceSpec.getSpecCode()).isEqualTo("SPEC_1");
+            assertThat(priceSpec.getUnifiedPrice()).isEqualTo(12.0);
+            assertThat(priceSpec.getBarPrice()).isEqualTo(13.0);
+            assertThat(priceSpec.getEffectivePlatePrice()).isEqualTo(12.0);
+        });
         verify(materialMapper).insert(any(DictMaterial.class));
+        verify(specMapper).delete(any(QueryWrapper.class));
+        verify(specMapper, times(3)).insert(any(DictMaterialPriceSpec.class));
         verify(auditService).record(
                 org.mockito.ArgumentMatchers.eq("DICT_MATERIAL_CREATE"),
                 org.mockito.ArgumentMatchers.eq("dict_material"),
@@ -187,6 +219,7 @@ class MaterialMasterBackendServiceTest {
                     Map<?, ?> summary = (Map<?, ?>) after;
                     assertThat(summary.get("materialCode")).isEqualTo("mat-keep-case");
                     assertThat(summary.get("materialTypeCode")).isEqualTo("RAW_MATERIAL");
+                    assertThat(summary.get("changedSpecCodes")).isEqualTo(List.of("SPEC_1"));
                     assertThat(summary.containsKey("platePrice")).isFalse();
                     assertThat(summary.containsKey("barPrice")).isFalse();
                     assertThat(summary.containsKey("tubePrice")).isFalse();
@@ -219,9 +252,7 @@ class MaterialMasterBackendServiceTest {
         MaterialMasterSaveReq localMaintenance = materialReq("MES-MAT-001", "MES 45#", 1L);
         localMaintenance.setMaterialCategory("steel");
         localMaintenance.setDensity(7.9);
-        localMaintenance.setPlatePrice(8.8);
-        localMaintenance.setBarPrice(8.6);
-        localMaintenance.setTubePrice(8.4);
+        localMaintenance.setPriceSpecs(List.of(specReq("SPEC_2", "规格二", 8.8, 8.9, 8.6, 8.4)));
         localMaintenance.setRemarks("QPO local price and density");
 
         MaterialMasterDTO saved = service.saveMaterial(10L, localMaintenance);
@@ -231,9 +262,15 @@ class MaterialMasterBackendServiceTest {
         assertThat(saved.getMaterialTypeId()).isEqualTo(1L);
         assertThat(saved.getMaterialCategory()).isEqualTo("steel");
         assertThat(saved.getDensity()).isEqualTo(7.9);
-        assertThat(saved.getPlatePrice()).isEqualTo(8.8);
-        assertThat(saved.getBarPrice()).isEqualTo(8.6);
-        assertThat(saved.getTubePrice()).isEqualTo(8.4);
+        assertThat(saved.getPriceSpecs()).hasSize(3);
+        assertThat(saved.getPriceSpecs()).filteredOn(spec -> "SPEC_2".equals(spec.getSpecCode()))
+                .singleElement()
+                .satisfies(spec -> {
+                    assertThat(spec.getUnifiedPrice()).isEqualTo(8.8);
+                    assertThat(spec.getPlatePrice()).isEqualTo(8.9);
+                    assertThat(spec.getBarPrice()).isEqualTo(8.6);
+                    assertThat(spec.getTubePrice()).isEqualTo(8.4);
+                });
         assertThat(saved.getSourceType()).isEqualTo("MES");
         assertThat(saved.getMesExternalId()).isEqualTo("mes-001");
     }
@@ -291,6 +328,7 @@ class MaterialMasterBackendServiceTest {
     private MaterialMasterService service() {
         MaterialMasterService service = new MaterialMasterService();
         ReflectionTestUtils.setField(service, "materialMapper", mock(DictMaterialMapper.class));
+        ReflectionTestUtils.setField(service, "materialPriceSpecMapper", mock(DictMaterialPriceSpecMapper.class));
         ReflectionTestUtils.setField(service, "materialTypeMapper", mock(DictMaterialTypeMapper.class));
         ReflectionTestUtils.setField(service, "auditService", mock(AuditService.class));
         return service;
@@ -311,6 +349,34 @@ class MaterialMasterBackendServiceTest {
         return material;
     }
 
+    private DictMaterialPriceSpec spec(Long id, Long materialId, String code, String name,
+                                       Double unifiedPrice, Double platePrice, Double barPrice,
+                                       Double tubePrice, int sortNo) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setId(id);
+        spec.setMaterialId(materialId);
+        spec.setSpecCode(code);
+        spec.setSpecName(name);
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setPlatePrice(platePrice);
+        spec.setBarPrice(barPrice);
+        spec.setTubePrice(tubePrice);
+        spec.setSortNo(sortNo);
+        return spec;
+    }
+
+    private MaterialPriceSpecDTO specReq(String code, String name, Double unifiedPrice,
+                                         Double platePrice, Double barPrice, Double tubePrice) {
+        MaterialPriceSpecDTO dto = new MaterialPriceSpecDTO();
+        dto.setSpecCode(code);
+        dto.setSpecName(name);
+        dto.setUnifiedPrice(unifiedPrice);
+        dto.setPlatePrice(platePrice);
+        dto.setBarPrice(barPrice);
+        dto.setTubePrice(tubePrice);
+        return dto;
+    }
+
     private DictMaterialType materialType(Long id, String code, String name, boolean enabled) {
         DictMaterialType type = new DictMaterialType();
         type.setId(id);
@@ -326,7 +392,6 @@ class MaterialMasterBackendServiceTest {
         req.setMaterialName(name);
         req.setMaterialTypeId(typeId);
         req.setDensity(7.85);
-        req.setPlatePrice(7.1);
         return req;
     }
 

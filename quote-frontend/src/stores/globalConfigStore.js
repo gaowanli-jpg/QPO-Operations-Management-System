@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { findPriceSpec, normalizePriceSpecs } from '../utils/materialPriceSpecs'
 
 const FALLBACK_KEY = 'erp_global_config'
 const rfqConfigKey = (rfqId) => `erp_global_config_${rfqId}`
@@ -14,9 +15,10 @@ export const defaultGlobalConfig = () => ({
   materialTypeName: '',
   materialCategory: '',
   density: null,
-  platePrice: null,
-  barPrice: null,
-  tubePrice: null,
+  priceSpecs: normalizePriceSpecs([]),
+  priceSpecCode: '',
+  priceSpecName: '',
+  priceSpec: null,
   remarks: '',
   shape: '板材',
   processRoute: [],
@@ -137,7 +139,9 @@ const normalizeMaterialIdentity = (config = {}, defaults = defaultGlobalConfig()
   const materialCode = String(config.materialCode || '').trim()
   const materialName = config.materialName || config.name || defaults.materialName || ''
   const density = numericOrOriginal(config.density ?? defaults.density)
-  const unitPrice = numericOrOriginal(config.unitPrice ?? defaults.unitPrice)
+  const priceSpecs = normalizePriceSpecs(config.priceSpecs ?? defaults.priceSpecs)
+  const priceSpecCode = String(config.priceSpecCode || config.priceSpec?.specCode || defaults.priceSpecCode || '').trim().toUpperCase()
+  const priceSpec = priceSpecCode ? findPriceSpec(priceSpecs, priceSpecCode) : null
   return {
     materialId: config.materialId ?? config.id ?? defaults.materialId ?? null,
     materialCode,
@@ -147,16 +151,19 @@ const normalizeMaterialIdentity = (config = {}, defaults = defaultGlobalConfig()
     materialTypeName: config.materialTypeName || defaults.materialTypeName || '',
     materialCategory: config.materialCategory || defaults.materialCategory || '',
     density,
-    platePrice: numericOrOriginal(config.platePrice ?? unitPrice ?? defaults.platePrice),
-    barPrice: numericOrOriginal(config.barPrice ?? unitPrice ?? defaults.barPrice),
-    tubePrice: numericOrOriginal(config.tubePrice ?? unitPrice ?? defaults.tubePrice),
+    priceSpecs,
+    priceSpecCode,
+    priceSpecName: priceSpec?.specName || config.priceSpecName || defaults.priceSpecName || '',
+    priceSpec,
     remarks: config.remarks || defaults.remarks || '',
-    legacyMaterialIdentity: !materialCode && Boolean(materialName)
+    legacyMaterialIdentity: (!materialCode && Boolean(materialName)) || (Boolean(materialCode) && !priceSpecCode)
   }
 }
 
 export const hasLegacyMaterialIdentity = (config = {}) => Boolean(
-  config?.legacyMaterialIdentity || (!config?.materialCode && (config?.materialName || config?.name))
+  config?.legacyMaterialIdentity
+  || (!config?.materialCode && (config?.materialName || config?.name))
+  || (config?.materialCode && !config?.priceSpecCode)
 )
 
 export const normalizeGlobalConfig = (config) => {

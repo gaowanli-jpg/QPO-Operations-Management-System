@@ -35,7 +35,8 @@ describe('item pricing remote material and process options', () => {
 
     expect(source).toContain('const currentMatInfo = computed(() => ({')
     expect(source).toContain('id: matForm.materialId')
-    expect(source).toContain('platePrice: numberOrZero(matForm.platePrice)')
+    expect(source).toContain('priceSpecCode: matForm.priceSpecCode')
+    expect(source).toContain('priceSpec: matForm.priceSpec || findPriceSpec(matForm.priceSpecs, matForm.priceSpecCode)')
     expect(source).toContain('const pricingMaterialOptionCache = ref(new Map())')
     expect(source).toContain('const pricingProcessOptionCache = ref(new Map())')
     expect(source).toContain('const loadLatestPricingOptionsForQuote = async (materialSource = {}, processRoutes = []) =>')
@@ -48,14 +49,17 @@ describe('item pricing remote material and process options', () => {
     expect(source).not.toContain('combinedProcessOptions.value.find')
     expect(source).toContain('const normalProcessCostPreview = computed(() => processRoute.value.reduce')
     expect(source).toContain('inputVal * hourlyRate')
+    expect(source).toContain('effectiveSpecPrice(currentMatInfo.value.priceSpec, matForm.shape)')
     expect(source).toContain('await submitQuote(payload)')
   })
 
-  test('normal item save syncs current material, shape, and process route back to the order global config', () => {
+  test('normal item save syncs current material, spec, shape, and process route back to the order global config', () => {
     const source = readSource('components', 'ItemPricing.vue')
 
     expect(source).toContain('const buildGlobalMaterialConfig = () => ({')
     expect(source).toContain('materialCode: matForm.materialCode')
+    expect(source).toContain('priceSpecCode: matForm.priceSpecCode')
+    expect(source).toContain('priceSpec: matForm.priceSpec')
     expect(source).toContain('shape: matForm.shape')
     expect(source).toContain('const syncCurrentSelectionToGlobalConfig = async () =>')
     expect(source).toContain('...buildGlobalMaterialConfig(),')

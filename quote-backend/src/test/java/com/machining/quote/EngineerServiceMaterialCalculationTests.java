@@ -1,12 +1,14 @@
 package com.machining.quote;
 
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictPricingMarkupFee;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictPricingMarkupFeeMapper;
 import com.machining.quote.mapper.ItemAssemblyRelationMapper;
@@ -41,10 +43,12 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MAT-000005", "45#", 1L, "钢铁", 7850.0, 7.1)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MAT-000005");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("name", "前端伪造材料");
         materialData.put("materialName", "前端伪造材料");
         materialData.put("materialTypeCode", "FAKE_TYPE");
@@ -67,6 +71,9 @@ class EngineerServiceMaterialCalculationTests {
         assertThat(materialData.get("materialTypeCode")).isEqualTo("RAW_MATERIAL");
         assertThat(materialData.get("materialTypeName")).isEqualTo("原材料");
         assertThat(materialData.get("materialCategory")).isEqualTo("钢铁");
+        assertThat(materialData.get("priceSpecCode")).isEqualTo("SPEC_1");
+        assertThat(materialData.get("priceSpecName")).isEqualTo("规格一");
+        assertThat(materialData.get("unitPriceSource")).isEqualTo("UNIFIED_PRICE");
         assertThat((Double) materialData.get("volume")).isCloseTo(0.0002, within(0.000000001));
         assertThat((Double) materialData.get("weight")).isCloseTo(1.57, within(0.000001));
         assertThat(cost).isCloseTo(11.147, within(0.000001));
@@ -81,10 +88,12 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MAT-000005", "45#", 1L, "钢铁", 7850.0, 7.1)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MAT-000005");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "板材");
         materialData.put("weight", 1.57);
         materialData.put("dimensions", Map.of("L", 200, "W", 100, "T", 10));
@@ -105,10 +114,12 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MES-MAT-001", "MES Material No Price", 1L, "MES", 7850.0, null)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(null, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MES-MAT-001");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "鏉挎潗");
         materialData.put("weight", 1.0);
 
@@ -126,10 +137,12 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MES-MAT-002", "MES Material Zero Price", 1L, "MES", 7850.0, 0.0)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(0.0, 0.0, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MES-MAT-002");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "鏉挎潗");
         materialData.put("weight", 1.0);
 
@@ -149,10 +162,12 @@ class EngineerServiceMaterialCalculationTests {
         material.setMesDensityRaw("7850.0");
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MES-MAT-DENSITY");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "PLATE");
         materialData.put("dimensionUnit", "m");
         materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
@@ -173,10 +188,12 @@ class EngineerServiceMaterialCalculationTests {
         material.setMesDensityRaw(null);
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MES-MAT-NO-DENSITY");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "PLATE");
         materialData.put("dimensionUnit", "m");
         materialData.put("dimensions", Map.of("L", 0.2, "W", 0.1, "T", 0.01));
@@ -194,20 +211,21 @@ class EngineerServiceMaterialCalculationTests {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         DictMaterial material = material("MAT-SHAPE", "Shape Price Material", 1L, "Steel", 7850.0, 7.1);
-        material.setBarPrice(8.2);
-        material.setTubePrice(9.3);
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, 8.2, 9.3));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         Map<String, Object> barMaterialData = new LinkedHashMap<>();
         barMaterialData.put("materialCode", "MAT-SHAPE");
+        barMaterialData.put("priceSpecCode", "SPEC_1");
         barMaterialData.put("shape", "妫掓潗");
         barMaterialData.put("weight", 2.0);
         Double barCost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", barMaterialData);
 
         Map<String, Object> tubeMaterialData = new LinkedHashMap<>();
         tubeMaterialData.put("materialCode", "MAT-SHAPE");
+        tubeMaterialData.put("priceSpecCode", "SPEC_1");
         tubeMaterialData.put("shape", "绠℃潗");
         tubeMaterialData.put("weight", 2.0);
         Double tubeCost = ReflectionTestUtils.invokeMethod(service, "calculateMaterialCost", tubeMaterialData);
@@ -221,16 +239,16 @@ class EngineerServiceMaterialCalculationTests {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         DictMaterial material = material("MAT-DENSITY", "One Density Material", 1L, "Steel", 7850.0, 7.1);
-        material.setBarPrice(8.2);
-        material.setTubePrice(9.3);
         material.setMesDensityRaw("1.0");
         when(materialMapper.selectList(any())).thenReturn(List.of(material));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, 8.2, 9.3));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
 
         for (String shape : List.of("PLATE", "BAR", "TUBE")) {
             Map<String, Object> materialData = new LinkedHashMap<>();
             materialData.put("materialCode", "MAT-DENSITY");
+            materialData.put("priceSpecCode", "SPEC_1");
             materialData.put("shape", shape);
             materialData.put("weight", 2.0);
 
@@ -263,6 +281,7 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MAT-000005", "45#", 1L, "钢铁", 7850.0, 7.1)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(7.1, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
         ReflectionTestUtils.setField(service, "pricingFeeCalculator", emptyPricingCalculator());
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());
@@ -277,6 +296,7 @@ class EngineerServiceMaterialCalculationTests {
 
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MAT-000005");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("name", "前端伪造材料");
         materialData.put("shape", "板材");
         materialData.put("weight", 1.57);
@@ -300,6 +320,8 @@ class EngineerServiceMaterialCalculationTests {
                 .containsEntry("materialTypeCode", "RAW_MATERIAL")
                 .containsEntry("materialTypeName", "原材料")
                 .containsEntry("materialCategory", "钢铁")
+                .containsEntry("priceSpecCode", "SPEC_1")
+                .containsEntry("priceSpecName", "规格一")
                 .containsEntry("shape", "板材");
     }
 
@@ -311,6 +333,7 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material("MAT-PRICE", "Price Material", 1L, "Steel", 1.0, 100.0)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(100.0, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
         ReflectionTestUtils.setField(service, "pricingFeeCalculator", pricingCalculator(
                 pricingFee(1L, "NORMAL", "CUSTOMER_WEIGHT", "Customer weight", "10", 1),
@@ -329,6 +352,7 @@ class EngineerServiceMaterialCalculationTests {
         item.setQty(2);
         Map<String, Object> materialData = new LinkedHashMap<>();
         materialData.put("materialCode", "MAT-PRICE");
+        materialData.put("priceSpecCode", "SPEC_1");
         materialData.put("shape", "PLATE");
         materialData.put("weight", 1.0);
 
@@ -406,6 +430,7 @@ class EngineerServiceMaterialCalculationTests {
         source.setMaterialShape("板材");
         source.setMaterialData(Map.of(
                 "name", "45#-历史快照",
+                "priceSpecCode", "SPEC_1",
                 "shape", "板材",
                 "weight", 2.0,
                 "cost", 9999.0));
@@ -435,6 +460,8 @@ class EngineerServiceMaterialCalculationTests {
                 .containsEntry("materialName", "45#-当前字典")
                 .containsEntry("materialTypeName", "原材料")
                 .containsEntry("materialCategory", "钢铁")
+                .containsEntry("priceSpecCode", "SPEC_1")
+                .containsEntry("priceSpecName", "规格一")
                 .containsEntry("shape", "板材");
         assertThat((Double) savedMaterialData.get("cost")).isCloseTo(16.0, within(0.000001));
         assertThat(current.getTaxIncludedUnitPrice()).isCloseTo(16.0, within(0.000001));
@@ -471,8 +498,23 @@ class EngineerServiceMaterialCalculationTests {
         material.setMaterialCategory(category);
         material.setEnabled(true);
         material.setDensity(density);
-        material.setPlatePrice(unitPrice);
         return material;
+    }
+
+    private DictMaterialPriceSpecMapper specMapper(Double unifiedPrice, Double platePrice, Double barPrice, Double tubePrice) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setId(50L);
+        spec.setMaterialId(5L);
+        spec.setSpecCode("SPEC_1");
+        spec.setSpecName("规格一");
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setPlatePrice(platePrice);
+        spec.setBarPrice(barPrice);
+        spec.setTubePrice(tubePrice);
+        spec.setSortNo(10);
+        DictMaterialPriceSpecMapper mapper = mock(DictMaterialPriceSpecMapper.class);
+        when(mapper.selectOne(any())).thenReturn(spec);
+        return mapper;
     }
 
     private EngineerService repeatQuoteServiceWithMaterial(
@@ -486,6 +528,7 @@ class EngineerServiceMaterialCalculationTests {
         when(materialMapper.selectList(any()))
                 .thenReturn(List.of(material(code, name, 1L, category, density, unitPrice)));
         ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(unitPrice, null, null, null));
         setOptionalField(service, "materialTypeMapper", materialTypeMapper());
         ReflectionTestUtils.setField(service, "pricingFeeCalculator", emptyPricingCalculator());
         ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());

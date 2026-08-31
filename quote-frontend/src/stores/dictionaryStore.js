@@ -7,6 +7,7 @@ import {
   listProcessCategories,
   listProcessDetails
 } from '../services/dictApi'
+import { normalizePriceSpecs } from '../utils/materialPriceSpecs'
 
 const PRICING_MARKUP_SCOPES = ['NORMAL', 'ASSEMBLY']
 const PRICING_MARKUP_FEE_CATEGORIES = ['BASIC_PERCENT', 'TAX', 'CUSTOMER_WEIGHT']
@@ -242,7 +243,19 @@ export const useDictionaryStore = defineStore('dictionary', {
         { id: 'fallback-raw', typeCode: 'RAW_MATERIAL', typeName: '原材料', enabled: true, sortNo: 0 }
       ]
       this.materials = [
-        { id: 'fallback-45', materialCode: 'MAT-FALLBACK-45', materialName: '45#', materialTypeId: 'fallback-raw', materialTypeCode: 'RAW_MATERIAL', materialTypeName: '原材料', materialCategory: '钢铁', density: 7850, platePrice: 7.1, barPrice: 10, tubePrice: 10, enabled: true, sortNo: 0 }
+        {
+          id: 'fallback-45',
+          materialCode: 'MAT-FALLBACK-45',
+          materialName: '45#',
+          materialTypeId: 'fallback-raw',
+          materialTypeCode: 'RAW_MATERIAL',
+          materialTypeName: '原材料',
+          materialCategory: '钢铁',
+          density: 7850,
+          priceSpecs: normalizePriceSpecs([{ specCode: 'SPEC_1', unifiedPrice: 7.1, barPrice: 10, tubePrice: 10 }]),
+          enabled: true,
+          sortNo: 0
+        }
       ]
       this.processes = [
         { id: 'fallback-mill', processDetailId: 'fallback-mill', processName: '铣', detailName: '铣', processCode: 'MILLING', categoryName: '铣削', hourlyRate: 0, calcType: '工时', sourceType: 'process' },

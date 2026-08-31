@@ -65,9 +65,10 @@ describe('pricingSnapshotHydrator', () => {
         materialCategory: '碳钢',
         density: null,
         mesDensityRaw: '7850',
-        platePrice: 6.5,
-        barPrice: 7.5,
-        tubePrice: 8.5,
+        priceSpecs: [
+          { specCode: 'SPEC_1', unifiedPrice: 6.5 },
+          { specCode: 'SPEC_2', unifiedPrice: 7.0, barPrice: 7.5, tubePrice: 8.5 }
+        ],
         remarks: 'MES 同步'
       }]
     })
@@ -79,6 +80,7 @@ describe('pricingSnapshotHydrator', () => {
       platePrice: 0,
       barPrice: 0,
       tubePrice: 0,
+      priceSpecCode: 'SPEC_2',
       shape: '棒材',
       dimensions: { L: 0.2, outR: 0.03 }
     }, optionIndex)
@@ -92,13 +94,22 @@ describe('pricingSnapshotHydrator', () => {
       materialTypeName: '原材料',
       materialCategory: '碳钢',
       density: 7850,
-      platePrice: 6.5,
-      barPrice: 7.5,
-      tubePrice: 8.5,
+      priceSpecCode: 'SPEC_2',
+      priceSpecName: '规格二',
       remarks: 'MES 同步',
       shape: '棒材',
       dimensions: { L: 0.2, outR: 0.03 }
     }))
+    expect(hydrated.priceSpec).toEqual(expect.objectContaining({
+      specCode: 'SPEC_2',
+      unifiedPrice: 7,
+      barPrice: 7.5,
+      tubePrice: 8.5
+    }))
+    expect(hydrated.priceSpecs).toHaveLength(3)
+    expect(hydrated).not.toHaveProperty('platePrice')
+    expect(hydrated).not.toHaveProperty('barPrice')
+    expect(hydrated).not.toHaveProperty('tubePrice')
   })
 
   test('treats non-positive material density as missing and falls back to MES density', () => {
@@ -109,7 +120,7 @@ describe('pricingSnapshotHydrator', () => {
         materialName: '铝材',
         density: 0,
         mesDensityRaw: '2700',
-        platePrice: 16
+        priceSpecs: [{ specCode: 'SPEC_1', unifiedPrice: 16 }]
       }]
     })
 

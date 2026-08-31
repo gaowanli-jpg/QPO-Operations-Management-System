@@ -12,6 +12,7 @@ import com.machining.quote.dto.QuoteLeadTimeUpdateReq;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.dto.aps.ApsDeliveryItemDTO;
 import com.machining.quote.entity.DictMaterial;
+import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.DictProcessCategory;
@@ -22,6 +23,7 @@ import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
+import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.CustomerMasterMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
@@ -67,6 +69,8 @@ abstract class CoreWorkflowIntegrationTestSupport {
     protected OrderRfqMapper orderMapper;
     @Autowired
     protected DictMaterialMapper materialMapper;
+    @Autowired
+    protected DictMaterialPriceSpecMapper materialPriceSpecMapper;
     @Autowired
     protected DictMaterialTypeMapper materialTypeMapper;
     @Autowired
@@ -166,6 +170,10 @@ abstract class CoreWorkflowIntegrationTestSupport {
         materialData.put("materialTypeName", "\u539f\u6750\u6599");
         materialData.put("materialCategory", material.getMaterialCategory());
         materialData.put("shape", "\u677f\u6750");
+        materialData.put("priceSpecCode", "SPEC_1");
+        materialData.put("priceSpecName", "规格一");
+        materialData.put("priceSpec", Map.of("specCode", "SPEC_1", "specName", "规格一", "unifiedPrice", materialCost));
+        materialData.put("unitPrice", materialCost);
         materialData.put("weight", materialCost);
         materialData.put("cost", materialCost);
         return materialData;
@@ -175,6 +183,7 @@ abstract class CoreWorkflowIntegrationTestSupport {
         DictMaterial existing = materialMapper.selectOne(new QueryWrapper<DictMaterial>()
                 .eq("material_code", "MAT-CORE-REPEAT"));
         if (existing != null) {
+            ensureMaterialPriceSpecs(existing.getId(), 1.0);
             return existing;
         }
         DictMaterialType materialType = ensureRepeatMaterialType();
@@ -184,14 +193,33 @@ abstract class CoreWorkflowIntegrationTestSupport {
         material.setMaterialTypeId(materialType.getId());
         material.setMaterialCategory("\u94a2\u94c1");
         material.setDensity(1.0);
-        material.setPlatePrice(1.0);
-        material.setBarPrice(1.0);
-        material.setTubePrice(1.0);
         material.setEnabled(true);
         material.setSortNo(0);
         material.setRemarks("test material");
         materialMapper.insert(material);
+        ensureMaterialPriceSpecs(material.getId(), 1.0);
         return material;
+    }
+
+    protected void ensureMaterialPriceSpecs(Long materialId, double unifiedPrice) {
+        Long count = materialPriceSpecMapper.selectCount(new QueryWrapper<DictMaterialPriceSpec>()
+                .eq("material_id", materialId));
+        if (count != null && count > 0) {
+            return;
+        }
+        materialPriceSpecMapper.insert(materialPriceSpec(materialId, "SPEC_1", "规格一", unifiedPrice, 10));
+        materialPriceSpecMapper.insert(materialPriceSpec(materialId, "SPEC_2", "规格二", null, 20));
+        materialPriceSpecMapper.insert(materialPriceSpec(materialId, "SPEC_3", "规格三", null, 30));
+    }
+
+    private DictMaterialPriceSpec materialPriceSpec(Long materialId, String specCode, String specName, Double unifiedPrice, int sortNo) {
+        DictMaterialPriceSpec spec = new DictMaterialPriceSpec();
+        spec.setMaterialId(materialId);
+        spec.setSpecCode(specCode);
+        spec.setSpecName(specName);
+        spec.setUnifiedPrice(unifiedPrice);
+        spec.setSortNo(sortNo);
+        return spec;
     }
 
     protected DictMaterialType ensureRepeatMaterialType() {
