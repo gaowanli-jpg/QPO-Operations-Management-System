@@ -20,7 +20,7 @@ describe('quote status stage 1 frontend copy', () => {
     const source = readSource('components', 'GlobalSetup.vue')
 
     expect(source).toContain('先选择未核价订单')
-    expect(source).not.toContain('待核价订单')
+    expect(source).not.toContain('先选择待核价订单')
     expect(source).not.toContain('待工程部评估')
   })
 

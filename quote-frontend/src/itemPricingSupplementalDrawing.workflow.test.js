@@ -15,8 +15,8 @@ const functionBlock = (source, declaration) => {
 }
 
 describe('item pricing supplemental drawing workflow', () => {
-  test('shows supplemental drawing pricing entry and reuses the order picker', () => {
-    const source = readSource('components', 'ItemPricing.vue')
+  test('shows supplemental drawing pricing entry beside setup order picker', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
 
     expect(source).toContain('补图待核价')
     expect(source).toContain('openSupplementalDrawingOrderPicker')
@@ -26,16 +26,31 @@ describe('item pricing supplemental drawing workflow', () => {
     expect(source).toContain('@select="handleSupplementalDrawingOrderSelected"')
   })
 
-  test('loads only supplemental drawing items when opened from supplemental entry', () => {
+  test('does not hide supplemental drawing entry inside item pricing page toolbar', () => {
     const source = readSource('components', 'ItemPricing.vue')
-    const fetchItemsBlock = functionBlock(source, 'const fetchPricingItems = async')
-    const selectedOrderBlock = functionBlock(source, 'const handleSupplementalDrawingOrderSelected = async')
+    const toolbarBlock = source.slice(
+      source.indexOf('<section class="erp-toolbar pricing-toolbar">'),
+      source.indexOf('<section class="erp-table-surface pricing-table-surface">')
+    )
 
-    expect(source).toContain("const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'")
-    expect(source).toContain('const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)')
+    expect(toolbarBlock).not.toContain('openSupplementalDrawingOrderPicker')
+    expect(source).not.toContain('supplementalDrawingOrderPickerVisible')
+    expect(source).not.toContain('order-scope="engineer-supplemental-pricing"')
+    expect(source).not.toContain('handleSupplementalDrawingOrderSelected')
+  })
+
+  test('loads only supplemental drawing items when opened from supplemental entry', () => {
+    const pricingSource = readSource('components', 'ItemPricing.vue')
+    const setupSource = readSource('components', 'GlobalSetup.vue')
+    const fetchItemsBlock = functionBlock(pricingSource, 'const fetchPricingItems = async')
+    const selectedOrderBlock = functionBlock(setupSource, 'const handleSupplementalDrawingOrderSelected = async')
+
+    expect(pricingSource).toContain("const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'")
+    expect(setupSource).toContain("const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'")
+    expect(pricingSource).toContain('const isSupplementalDrawingScope = computed(() => pricingScope.value === SUPPLEMENTAL_DRAWING_SCOPE)')
     expect(fetchItemsBlock).toContain('scope: isSupplementalDrawingScope.value ? SUPPLEMENTAL_DRAWING_SCOPE : undefined')
+    expect(selectedOrderBlock).toContain('path: \'/pricing\'')
     expect(selectedOrderBlock).toContain('scope: SUPPLEMENTAL_DRAWING_SCOPE')
-    expect(selectedOrderBlock).toContain('await fetchQuoteData()')
   })
 
   test('supplemental completion calls supplemental API while normal completion stays unchanged', () => {

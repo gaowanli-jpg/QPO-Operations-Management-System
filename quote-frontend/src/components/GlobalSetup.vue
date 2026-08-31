@@ -11,6 +11,9 @@
         <el-button v-permission="'engineer:setup:order-select'" :icon="DocumentChecked" type="primary" @click="openOrderPicker" :loading="isLoading">
           选择订单
         </el-button>
+        <el-button v-permission="'engineer:pricing:view'" type="primary" plain @click="openSupplementalDrawingOrderPicker">
+          补图待核价
+        </el-button>
         <el-button @click="fetchOrderData" :disabled="!testRfqId" :loading="isLoading">
           刷新当前订单
         </el-button>
@@ -241,6 +244,14 @@
       @select="handleOrderSelected"
     />
 
+    <OrderPickerDialog
+      v-model="supplementalDrawingOrderPickerVisible"
+      title="补图待核价"
+      customer-scope="engineer-pricing"
+      order-scope="engineer-supplemental-pricing"
+      @select="handleSupplementalDrawingOrderSelected"
+    />
+
     <EngineeringOptionPickerDialog
       v-model="materialPickerVisible"
       title="选择默认材质"
@@ -294,6 +305,7 @@ const router = useRouter()
 const route = useRoute()
 const globalConfigStore = useGlobalConfigStore()
 const { isPending, runAction } = usePendingAction()
+const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'
 
 const testRfqId = ref(null)
 
@@ -306,6 +318,7 @@ const resolveRouteRfqId = () => {
 // 数据存放区
 const isLoading = ref(false)
 const orderPickerVisible = ref(false)
+const supplementalDrawingOrderPickerVisible = ref(false)
 const materialPickerVisible = ref(false)
 const processPickerVisible = ref(false)
 const editingProcessIndex = ref(null)
@@ -706,9 +719,24 @@ const openOrderPicker = () => {
   orderPickerVisible.value = true
 }
 
+const openSupplementalDrawingOrderPicker = () => {
+  supplementalDrawingOrderPickerVisible.value = true
+}
+
 const handleOrderSelected = async (order) => {
   testRfqId.value = order.id
   await fetchOrderData()
+}
+
+const handleSupplementalDrawingOrderSelected = async (order) => {
+  if (!order?.id) {
+    return ElMessage.warning('请先选择补图待核价订单。')
+  }
+  supplementalDrawingOrderPickerVisible.value = false
+  await router.push({
+    path: '/pricing',
+    query: { rfqId: order.id, scope: SUPPLEMENTAL_DRAWING_SCOPE }
+  })
 }
 
 // 核心逻辑 1：从数据库拉取订单数据

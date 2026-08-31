@@ -47,14 +47,6 @@
         <small>先处理有图纸零件，再提交到市场报价处理。</small>
       </div>
       <div class="erp-toolbar-group pricing-toolbar-actions">
-        <el-button
-          v-permission="'engineer:pricing:view'"
-          type="primary"
-          plain
-          @click="openSupplementalDrawingOrderPicker"
-        >
-          补图待核价
-        </el-button>
         <el-button @click="returnToGlobalSetup">返回修改全局设定</el-button>
         <el-button
           v-permission="ENGINEER_PRICING_EXPORT_SHEET_PERMISSION"
@@ -700,14 +692,6 @@
       @process-rate-updated="handleProcessRateUpdated"
     />
 
-    <OrderPickerDialog
-      v-model="supplementalDrawingOrderPickerVisible"
-      title="补图待核价"
-      customer-scope="engineer-pricing"
-      order-scope="engineer-supplemental-pricing"
-      @select="handleSupplementalDrawingOrderSelected"
-    />
-
     <!-- 图纸预览 -->
     <el-dialog
       v-model="pdfVisible"
@@ -736,7 +720,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus, Top } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
-import OrderPickerDialog from './OrderPickerDialog.vue'
 import {
   applyRepeatQuotes,
   completeOrderQuote as completeOrderQuoteRequest,
@@ -846,7 +829,6 @@ const editingProcessIndex = ref(null)
 const pricingMaterialOptionCache = ref(new Map())
 const pricingProcessOptionCache = ref(new Map())
 const repeatAnalysis = ref(null)
-const supplementalDrawingOrderPickerVisible = ref(false)
 
 const pricingOptionIndex = computed(() => buildPricingOptionIndex({
   materialOptions: Array.from(pricingMaterialOptionCache.value.values()),
@@ -1792,22 +1774,6 @@ const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
       proc.unitRate = hourlyRate
     }
   })
-}
-
-const openSupplementalDrawingOrderPicker = () => {
-  supplementalDrawingOrderPickerVisible.value = true
-}
-
-const handleSupplementalDrawingOrderSelected = async (order) => {
-  rfqId.value = order?.id || ''
-  pricingScope.value = SUPPLEMENTAL_DRAWING_SCOPE
-  repeatApplyAttempted.value = false
-  pricingListPagination.page = 1
-  await router.push({
-    path: '/pricing',
-    query: { rfqId: rfqId.value, scope: SUPPLEMENTAL_DRAWING_SCOPE }
-  })
-  await fetchQuoteData()
 }
 
 const handleProcessRateUpdated = (updatedDetail) => {
