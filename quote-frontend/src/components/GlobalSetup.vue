@@ -46,7 +46,7 @@
         </div>
         <div class="engineering-metric">
           <span>通用工序</span>
-          <strong>{{ config.processRoute.length }}</strong>
+          <strong>{{ selectedProcessRouteCount }}</strong>
         </div>
       </div>
     </section>
@@ -291,7 +291,18 @@ import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
 import { getRepeatAnalysis, getSetupSummary, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
-import { defaultGlobalConfig, hasLegacyMaterialIdentity, hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeGlobalConfig, normalizeRouteList, useGlobalConfigStore } from '../stores/globalConfigStore'
+import {
+  defaultBlankProcessRouteList,
+  defaultGlobalConfig,
+  hasLegacyMaterialIdentity,
+  hasLegacyProcessIdentity,
+  hasSavedEngineerConfig,
+  isBlankProcessRoute,
+  normalizeGlobalConfig,
+  normalizeRouteList,
+  persistableProcessRouteList,
+  useGlobalConfigStore
+} from '../stores/globalConfigStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import { buildMaterialSpecSelection, findPriceSpec, normalizePriceSpecs } from '../utils/materialPriceSpecs'
 import {
@@ -398,33 +409,16 @@ const normalizeRouteRow = (item, index) => ({
   legacyProcessIdentity: Boolean(item.legacyProcessIdentity)
 })
 
-const createBlankProcessRoute = () => ({
-  processName: '',
-  detailName: '',
-  processCode: '',
-  categoryName: '',
-  detailHourlyRate: null,
-  categoryHourlyRate: null,
-  effectiveHourlyRate: null,
-  hourlyRate: null,
-  unitRate: null,
-  processDetailId: null,
-  processCategoryId: null,
-  categoryId: null,
-  feeItemId: null,
-  feeName: '',
-  label: '',
-  calcType: '工时',
-  sourceType: 'process',
-  optionKey: '',
-  legacyProcessIdentity: false
-})
+const createBlankProcessRoute = (index = config.processRoute.length) => normalizeRouteRow(defaultBlankProcessRouteList(1)[0], index)
+const defaultProcessRouteRows = () => defaultBlankProcessRouteList().map(normalizeRouteRow)
 
-const isUnresolvedProcessRoute = (proc) => (proc?.sourceType || 'process') === 'process'
+const isUnresolvedProcessRoute = (proc) => !isBlankProcessRoute(proc)
+  && (proc?.sourceType || 'process') === 'process'
   && (!proc.processDetailId || proc.legacyProcessIdentity)
 
+const selectedProcessRouteCount = computed(() => persistableProcessRouteList(config.processRoute).length)
 const hasUnresolvedProcessRoute = computed(() => config.processRoute.some(isUnresolvedProcessRoute))
-const hasUnresolvedMaterialIdentity = computed(() => !config.materialCode || config.legacyMaterialIdentity)
+const hasUnresolvedMaterialIdentity = computed(() => hasLegacyMaterialIdentity(config))
 
 const notifyLegacyProcessTemplate = () => {
   if (legacyProcessWarningShown.value) return
@@ -482,10 +476,13 @@ const assignConfig = (source) => {
   assignMaterialConfig(normalizedConfig)
   config.shape = normalizedConfig.shape || config.shape || '板材'
   const normalizedRoute = normalizedConfig.processRoute || []
+  const displayRoute = persistableProcessRouteList(normalizedRoute).length > 0
+    ? normalizedRoute
+    : defaultBlankProcessRouteList()
   config.processRoute.splice(
     0,
     config.processRoute.length,
-    ...normalizedRoute.map(normalizeRouteRow)
+    ...displayRoute.map(normalizeRouteRow)
   )
   assignProcessSortNos()
   hydrateProcessRoute()
@@ -697,7 +694,10 @@ const handleNext = async () => {
   return runAction(engineeringSetupActionKeys.saveSetup(), async () => {
     try {
       assignProcessSortNos()
-      const nextConfig = JSON.parse(JSON.stringify(config))
+      const nextConfig = normalizeGlobalConfig({
+        ...JSON.parse(JSON.stringify(config)),
+        processRoute: persistableProcessRouteList(config.processRoute)
+      })
       await saveOrderConfig(orderInfo.value.id, nextConfig)
       globalConfigStore.setConfig(orderInfo.value.id, nextConfig)
     } catch (error) {

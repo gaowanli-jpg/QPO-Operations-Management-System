@@ -5,25 +5,64 @@ const FALLBACK_KEY = 'erp_global_config'
 const rfqConfigKey = (rfqId) => `erp_global_config_${rfqId}`
 const PROCESS_SORT_STEP = 10
 const ASSEMBLY_FEE_PROCESS_NAME = '组装费'
+export const DEFAULT_MATERIAL_PRICE_SPEC_CODE = 'SPEC_1'
+export const DEFAULT_GLOBAL_PROCESS_ROUTE_COUNT = 3
 
-export const defaultGlobalConfig = () => ({
-  materialId: null,
-  materialCode: '',
-  materialName: '',
-  materialTypeId: null,
-  materialTypeCode: '',
-  materialTypeName: '',
-  materialCategory: '',
-  density: null,
-  priceSpecs: normalizePriceSpecs([]),
-  priceSpecCode: '',
-  priceSpecName: '',
-  priceSpec: null,
-  remarks: '',
-  shape: '板材',
-  processRoute: [],
-  legacyMaterialIdentity: false
+const defaultPriceSpecs = () => normalizePriceSpecs([])
+
+export const defaultMaterialPriceSpec = () => findPriceSpec(defaultPriceSpecs(), DEFAULT_MATERIAL_PRICE_SPEC_CODE)
+
+export const createBlankGlobalProcessRoute = (index = 0) => ({
+  sortNo: (index + 1) * PROCESS_SORT_STEP,
+  optionKey: '',
+  processDetailId: null,
+  processCategoryId: null,
+  categoryId: null,
+  processCode: '',
+  categoryName: '',
+  detailName: '',
+  detailHourlyRate: null,
+  categoryHourlyRate: null,
+  effectiveHourlyRate: null,
+  hourlyRate: null,
+  unitRate: null,
+  feeItemId: null,
+  feeName: '',
+  label: '',
+  processName: '',
+  calcType: '工时',
+  sourceType: 'process',
+  inputVal: undefined,
+  unitWorkHours: undefined,
+  legacyProcessIdentity: false
 })
+
+export const defaultBlankProcessRouteList = (count = DEFAULT_GLOBAL_PROCESS_ROUTE_COUNT) => (
+  Array.from({ length: count }, (_, index) => createBlankGlobalProcessRoute(index))
+)
+
+export const defaultGlobalConfig = () => {
+  const priceSpecs = defaultPriceSpecs()
+  const priceSpec = findPriceSpec(priceSpecs, DEFAULT_MATERIAL_PRICE_SPEC_CODE)
+  return {
+    materialId: null,
+    materialCode: '',
+    materialName: '',
+    materialTypeId: null,
+    materialTypeCode: '',
+    materialTypeName: '',
+    materialCategory: '',
+    density: null,
+    priceSpecs,
+    priceSpecCode: priceSpec.specCode,
+    priceSpecName: priceSpec.specName,
+    priceSpec,
+    remarks: '',
+    shape: '板材',
+    processRoute: defaultBlankProcessRouteList(),
+    legacyMaterialIdentity: false
+  }
+}
 
 const numericSortNo = (value) => {
   const numericValue = Number(value)
@@ -130,6 +169,27 @@ export const normalizeRouteList = (route) => {
     .map(normalizeRouteItem)
 }
 
+export const isBlankProcessRoute = (item = {}) => {
+  const normalized = normalizeRouteItem(item)
+  const sourceType = normalized.sourceType
+  if (sourceType === 'extra') {
+    return !hasValue(normalized.optionKey)
+      && !hasValue(normalized.feeItemId)
+      && !hasValue(normalized.processName)
+      && !hasValue(normalized.feeName)
+  }
+  return !hasValue(normalized.optionKey)
+    && !hasValue(normalized.processDetailId)
+    && !hasValue(normalized.processName)
+    && !hasValue(normalized.detailName)
+    && !hasValue(normalized.processCode)
+    && !hasValue(normalized.categoryName)
+}
+
+export const persistableProcessRouteList = (route = []) => (
+  normalizeRouteList(route).filter(item => !isBlankProcessRoute(item))
+)
+
 export const hasLegacyProcessIdentity = (configOrRoutes) => {
   const routes = Array.isArray(configOrRoutes) ? configOrRoutes : (configOrRoutes?.processRoute || [])
   return routes.some(item => item?.legacyProcessIdentity || normalizeRouteItem(item).legacyProcessIdentity)
@@ -140,7 +200,8 @@ const normalizeMaterialIdentity = (config = {}, defaults = defaultGlobalConfig()
   const materialName = config.materialName || config.name || defaults.materialName || ''
   const density = numericOrOriginal(config.density ?? defaults.density)
   const priceSpecs = normalizePriceSpecs(config.priceSpecs ?? defaults.priceSpecs)
-  const priceSpecCode = String(config.priceSpecCode || config.priceSpec?.specCode || defaults.priceSpecCode || '').trim().toUpperCase()
+  const sourcePriceSpecCode = String(config.priceSpecCode || config.priceSpec?.specCode || '').trim().toUpperCase()
+  const priceSpecCode = sourcePriceSpecCode || defaults.priceSpecCode || DEFAULT_MATERIAL_PRICE_SPEC_CODE
   const priceSpec = priceSpecCode ? findPriceSpec(priceSpecs, priceSpecCode) : null
   return {
     materialId: config.materialId ?? config.id ?? defaults.materialId ?? null,
@@ -156,7 +217,7 @@ const normalizeMaterialIdentity = (config = {}, defaults = defaultGlobalConfig()
     priceSpecName: priceSpec?.specName || config.priceSpecName || defaults.priceSpecName || '',
     priceSpec,
     remarks: config.remarks || defaults.remarks || '',
-    legacyMaterialIdentity: (!materialCode && Boolean(materialName)) || (Boolean(materialCode) && !priceSpecCode)
+    legacyMaterialIdentity: (!materialCode && Boolean(materialName)) || (Boolean(materialCode) && !sourcePriceSpecCode)
   }
 }
 
@@ -169,10 +230,11 @@ export const hasLegacyMaterialIdentity = (config = {}) => Boolean(
 export const normalizeGlobalConfig = (config) => {
   const defaults = defaultGlobalConfig()
   if (!config || typeof config !== 'object') return defaults
+  const hasProcessRoute = Object.prototype.hasOwnProperty.call(config, 'processRoute')
   return {
     ...normalizeMaterialIdentity(config, defaults),
     shape: config.shape || defaults.shape,
-    processRoute: normalizeRouteList(config.processRoute)
+    processRoute: hasProcessRoute ? normalizeRouteList(config.processRoute) : defaults.processRoute
   }
 }
 
@@ -182,7 +244,7 @@ export const hasSavedEngineerConfig = (config) => {
   return Boolean(
     normalized.materialCode
     || normalized.materialName
-    || normalized.processRoute.length > 0
+    || persistableProcessRouteList(normalized.processRoute).length > 0
   )
 }
 

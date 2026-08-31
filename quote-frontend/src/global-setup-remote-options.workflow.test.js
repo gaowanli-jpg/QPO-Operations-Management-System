@@ -43,6 +43,15 @@ describe('global setup remote material and process options', () => {
     expect(source).not.toContain('dictionaryStore.combinedProcessOptions')
   })
 
+  test('global setup allows blank material and blank process placeholders before entering item pricing', () => {
+    const source = readSource('components', 'GlobalSetup.vue')
+
+    expect(source).toContain('const hasUnresolvedMaterialIdentity = computed(() => hasLegacyMaterialIdentity(config))')
+    expect(source).not.toContain('const hasUnresolvedMaterialIdentity = computed(() => !config.materialCode || config.legacyMaterialIdentity)')
+    expect(source).toContain('isBlankProcessRoute(proc)')
+    expect(source).toContain('persistableProcessRouteList(config.processRoute)')
+  })
+
   test('global config normalization preserves selected material and process snapshots', () => {
     const normalized = normalizeGlobalConfig({
       materialId: 12,

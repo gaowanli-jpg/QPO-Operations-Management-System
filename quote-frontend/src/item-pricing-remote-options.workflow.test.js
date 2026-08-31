@@ -30,6 +30,13 @@ describe('item pricing remote material and process options', () => {
     expect(source).not.toContain('dictionaryStore.combinedProcessOptions')
   })
 
+  test('item pricing opens normal items with three blank process placeholders when no route template exists', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('const createDefaultBlankProcessRows = () =>')
+    expect(source).toContain('processRoute.value = assignProcessSortNos(createDefaultBlankProcessRows())')
+  })
+
   test('price preview hydrates selected snapshots from targeted remote option caches', () => {
     const source = readSource('components', 'ItemPricing.vue')
 

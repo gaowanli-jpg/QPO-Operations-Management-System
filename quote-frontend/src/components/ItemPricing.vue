@@ -770,6 +770,8 @@ import {
 const ENGINEER_PRICING_EXPORT_SHEET_PERMISSION = 'engineer:pricing:export-sheet'
 const ENGINEER_PRICING_SAVE_ITEM_PERMISSION = 'engineer:pricing:save-item'
 const SUPPLEMENTAL_DRAWING_SCOPE = 'SUPPLEMENTAL_DRAWING'
+const DEFAULT_MATERIAL_PRICE_SPEC_CODE = 'SPEC_1'
+const DEFAULT_GLOBAL_PROCESS_ROUTE_COUNT = 3
 
 const route = useRoute()
 const router = useRouter()
@@ -788,9 +790,9 @@ const globalConfig = ref({
   materialCategory: '',
   density: null,
   priceSpecs: normalizePriceSpecs([]),
-  priceSpecCode: '',
-  priceSpecName: '',
-  priceSpec: null,
+  priceSpecCode: DEFAULT_MATERIAL_PRICE_SPEC_CODE,
+  priceSpecName: '规格一',
+  priceSpec: findPriceSpec(normalizePriceSpecs([]), DEFAULT_MATERIAL_PRICE_SPEC_CODE),
   remarks: '',
   shape: '板材',
   processRoute: [],
@@ -847,9 +849,9 @@ const defaultGlobalConfig = () => ({
   materialCategory: '',
   density: null,
   priceSpecs: normalizePriceSpecs([]),
-  priceSpecCode: '',
-  priceSpecName: '',
-  priceSpec: null,
+  priceSpecCode: DEFAULT_MATERIAL_PRICE_SPEC_CODE,
+  priceSpecName: '规格一',
+  priceSpec: findPriceSpec(normalizePriceSpecs([]), DEFAULT_MATERIAL_PRICE_SPEC_CODE),
   remarks: '',
   shape: '板材',
   processRoute: [],
@@ -1868,6 +1870,10 @@ const createProcessRow = (source = {}) => ({
   sortNo: numericSortNo(source.sortNo)
 })
 
+const createDefaultBlankProcessRows = () => (
+  Array.from({ length: DEFAULT_GLOBAL_PROCESS_ROUTE_COUNT }, () => createProcessRow())
+)
+
 const createAssemblyChildRow = (source = {}) => {
   const childId = source.childItemId ?? source.id ?? null
   const option = assemblyChildOptions.value.find(item => item.id === childId)
@@ -2227,7 +2233,7 @@ const openQuoteDialog = async (row) => {
       processRoute.value = assignProcessSortNos(processSnapshotSource
         .map(p => hydrateRouteItem(createProcessRow(p))))
     } else {
-      processRoute.value = []
+      processRoute.value = assignProcessSortNos(createDefaultBlankProcessRows())
     }
   }
 

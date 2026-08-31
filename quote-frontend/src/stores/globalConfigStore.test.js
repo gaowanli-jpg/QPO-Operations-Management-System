@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeRouteList, useGlobalConfigStore } from './globalConfigStore'
+import { defaultGlobalConfig, hasLegacyProcessIdentity, hasSavedEngineerConfig, normalizeRouteList, useGlobalConfigStore } from './globalConfigStore'
 
 const createLocalStorage = () => {
   const values = new Map()
@@ -21,6 +21,25 @@ beforeEach(() => {
 })
 
 describe('globalConfigStore', () => {
+  test('defaults blank global setup to spec one, plate shape, and three empty process rows', () => {
+    const config = defaultGlobalConfig()
+
+    expect(config.materialCode).toBe('')
+    expect(config.materialName).toBe('')
+    expect(config.shape).toBe('板材')
+    expect(config.priceSpecCode).toBe('SPEC_1')
+    expect(config.priceSpecName).toBe('规格一')
+    expect(config.priceSpec).toEqual(expect.objectContaining({ specCode: 'SPEC_1', specName: '规格一' }))
+    expect(config.processRoute).toHaveLength(3)
+    expect(config.processRoute).toEqual(config.processRoute.map((row, index) => expect.objectContaining({
+      sortNo: (index + 1) * 10,
+      processName: '',
+      processDetailId: null,
+      sourceType: 'process'
+    })))
+    expect(hasSavedEngineerConfig(config)).toBe(false)
+  })
+
   test('loadLocalConfig prefers rfq-specific config and normalizes route', () => {
     localStorage.setItem('erp_global_config', JSON.stringify({ materialName: 'fallback', shape: 'bar', processRoute: [] }))
     localStorage.setItem('erp_global_config_12', JSON.stringify({
