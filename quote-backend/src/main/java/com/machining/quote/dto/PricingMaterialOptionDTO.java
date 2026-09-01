@@ -17,4 +17,5 @@ public class PricingMaterialOptionDTO {
     private String mesDensityRaw;
     private List<MaterialPriceSpecDTO> priceSpecs;
     private String remarks;
+    private Long usageCount;
 }

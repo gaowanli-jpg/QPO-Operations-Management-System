@@ -105,6 +105,9 @@ export const useDictionaryStore = defineStore('dictionary', {
       })),
       ...state.extraFeeItems.map(item => ({
         optionKey: `extra-${item.id}`,
+        feeItemId: item.id,
+        feeCode: item.feeCode || '',
+        feeName: item.feeName,
         processName: item.feeName,
         label: `${item.feeName}（非工时费用）`,
         calcType: '非工时费用',

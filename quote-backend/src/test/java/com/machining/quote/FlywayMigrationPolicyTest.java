@@ -124,6 +124,29 @@ class FlywayMigrationPolicyTest {
                 .doesNotContain("sales_order_item");
     }
 
+    @Test
+    void pricingOptionUsageStatsStartEmptyAndUseStableBusinessKeys() throws IOException {
+        Path migrationPath = MIGRATION_DIR.resolve("V30__pricing_option_usage_stat.sql");
+        assertThat(migrationPath).exists();
+
+        String migration = read(migrationPath);
+        assertThat(migration)
+                .contains("pricing_option_usage_stat")
+                .contains("option_type")
+                .contains("option_key")
+                .contains("usage_count")
+                .contains("uk_pricing_option_usage_stat_type_key")
+                .contains("idx_pricing_option_usage_stat_sort")
+                .contains("fee_code")
+                .contains("uk_dict_extra_fee_item_fee_code");
+        assertThat(migration)
+                .as("usage stats are counted prospectively; no historical JSON backfill should scan item quote snapshots")
+                .doesNotContain("item_quote_version")
+                .doesNotContain("material_data")
+                .doesNotContain("process_route")
+                .doesNotContain("INSERT INTO pricing_option_usage_stat SELECT");
+    }
+
     private static List<MigrationFile> migrationFiles() throws IOException {
         List<MigrationFile> migrations = new ArrayList<>();
         try (var paths = Files.list(MIGRATION_DIR)) {

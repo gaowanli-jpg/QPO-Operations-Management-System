@@ -107,6 +107,15 @@ describe('process master management frontend workflow', () => {
     expect(materialProcess).not.toContain('price3000Plus')
   })
 
+  test('extra fee process master uses fee code as stable reusable identity', () => {
+    expect(materialProcess).toContain('prop="feeCode" label="工艺编码"')
+    expect(materialProcess).toContain('v-model="extraFeeForm.feeCode"')
+    expect(materialProcess).toContain('请填写工艺编码')
+    expect(materialProcess).toContain('feeCode:')
+    expect(materialProcess).toContain(':readonly="!!extraFeeForm.id && !!extraFeeOriginalCode"')
+    expect(materialProcess).toContain('extraFeeOriginalCode')
+  })
+
   test('process master layout has responsive safeguards', () => {
     expect(materialProcess).toContain('process-master-grid')
     expect(materialProcess).toContain('process-dialog-grid')

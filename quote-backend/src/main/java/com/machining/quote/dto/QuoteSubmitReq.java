@@ -31,6 +31,8 @@ public class QuoteSubmitReq {
         private Double hourlyRate;
         private Double unitWorkHours; // 工程师填入的工时
         private String sourceType;    // process / extra
+        private Integer feeItemId;    // 非工时费用工艺 ID
+        private String feeCode;       // 非工时费用业务编码，用于使用次数统计和删除重建后的身份继承
         private String processName; // 兼容展示字段；非工时费用仍使用名称
         private Double inputVal;    // 兼容字段：旧工时或非工时费用金额
         private String calcType;    // 工时 / 非工时费用

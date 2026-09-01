@@ -402,6 +402,7 @@ const normalizeRouteRow = (item, index) => ({
   hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate ?? item.unitRate ?? null,
   unitRate: item.unitRate ?? item.hourlyRate ?? item.effectiveHourlyRate ?? null,
   feeItemId: item.feeItemId ?? null,
+  feeCode: item.feeCode || '',
   feeName: item.feeName || '',
   label: item.label || '',
   processName: item.processName || item.detailName || '',
@@ -521,7 +522,10 @@ const findProcessOption = (proc) => {
     if (!processName && !proc.optionKey) return null
     return {
       ...proc,
-      optionKey: proc.optionKey || (proc.feeItemId ? `extra:${proc.feeItemId}` : ''),
+      optionKey: proc.optionKey || (proc.feeCode ? `extra:${String(proc.feeCode).trim().toUpperCase()}` : (proc.feeItemId ? `extra:${proc.feeItemId}` : '')),
+      feeItemId: proc.feeItemId ?? null,
+      feeCode: proc.feeCode || '',
+      feeName: proc.feeName || processName,
       processName,
       label: proc.label || (processName ? `${processName}（非工时费用）` : ''),
       calcType: '非工时费用',
@@ -576,7 +580,9 @@ const applyProcessSelection = (proc, selected) => {
   const hourlyRate = sourceType === 'process'
     ? (selected.hourlyRate ?? selected.effectiveHourlyRate ?? selected.unitRate ?? null)
     : null
-  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId ? `process:${processDetailId}` : '')
+  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId
+    ? `process:${processDetailId}`
+    : (sourceType === 'extra' && selected.feeCode ? `extra:${String(selected.feeCode).trim().toUpperCase()}` : ''))
   proc.processDetailId = processDetailId
   proc.processCategoryId = processCategoryId
   proc.categoryId = processCategoryId
@@ -589,6 +595,7 @@ const applyProcessSelection = (proc, selected) => {
   proc.hourlyRate = hourlyRate
   proc.unitRate = hourlyRate
   proc.feeItemId = sourceType === 'extra' ? (selected.feeItemId ?? selected.id ?? null) : null
+  proc.feeCode = sourceType === 'extra' ? (selected.feeCode || '') : ''
   proc.feeName = sourceType === 'extra' ? (selected.feeName || processName) : ''
   proc.label = selected.label || ''
   proc.processName = processName

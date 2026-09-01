@@ -12,12 +12,14 @@ import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
+import com.machining.quote.entity.PricingOptionUsageStat;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
+import com.machining.quote.mapper.PricingOptionUsageStatMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.machining.quote.util.MaterialPriceSpecSupport;
@@ -26,6 +28,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,6 +39,9 @@ import java.util.stream.Collectors;
 @Service
 public class EngineeringPricingOptionService {
     private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final String OPTION_TYPE_MATERIAL = PricingOptionUsageStatService.OPTION_TYPE_MATERIAL;
+    private static final String OPTION_TYPE_PROCESS_CATEGORY = PricingOptionUsageStatService.OPTION_TYPE_PROCESS_CATEGORY;
+    private static final String OPTION_TYPE_EXTRA_FEE = PricingOptionUsageStatService.OPTION_TYPE_EXTRA_FEE;
 
     @Autowired
     private DictMaterialMapper materialMapper;
@@ -49,6 +55,8 @@ public class EngineeringPricingOptionService {
     private DictProcessCategoryMapper processCategoryMapper;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
+    @Autowired(required = false)
+    private PricingOptionUsageStatMapper usageStatMapper;
 
     public PageResult<PricingMaterialOptionDTO> pageMaterialOptions(PricingOptionPageReq req) {
         PricingOptionPageReq safeReq = req == null ? new PricingOptionPageReq() : req;
@@ -61,10 +69,11 @@ public class EngineeringPricingOptionService {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
         QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes);
-        pageQuery.orderByAsc("material_type_id").orderByAsc("sort_no").orderByAsc("id");
-        pageQuery.last(limitOffset(safePage, safePageSize));
+        pageQuery.last(materialUsageOrderBy() + " " + limitOffset(safePage, safePageSize));
         List<DictMaterial> materials = materialMapper.selectList(pageQuery);
-        return PageResult.of(toMaterialOptions(materials), total, safePage, safePageSize);
+        List<PricingMaterialOptionDTO> records = toMaterialOptions(materials);
+        applyMaterialUsageCounts(records);
+        return PageResult.of(records, total, safePage, safePageSize);
     }
 
     public PageResult<PricingProcessOptionDTO> pageProcessOptions(PricingOptionPageReq req) {
@@ -82,21 +91,20 @@ public class EngineeringPricingOptionService {
         }
 
         long offset = (safePage - 1L) * safePageSize;
-        List<PricingProcessOptionDTO> records = List.of();
-        if (offset < processTotal) {
-            int detailLimit = (int) Math.min(safePageSize, processTotal - offset);
-            List<PricingProcessOptionDTO> detailRecords = toProcessOptions(selectProcessDetails(keyword, processDetailIds, detailLimit, offset));
-            int remaining = safePageSize - detailRecords.size();
-            if (remaining > 0 && !exactProcessLookup) {
-                List<PricingProcessOptionDTO> feeRecords = toExtraFeeOptions(selectExtraFeeItems(keyword, remaining, 0));
-                records = concat(detailRecords, feeRecords);
-            } else {
-                records = detailRecords;
-            }
-        } else if (!exactProcessLookup) {
-            long extraOffset = offset - processTotal;
-            records = toExtraFeeOptions(selectExtraFeeItems(keyword, safePageSize, extraOffset));
-        }
+        int candidateLimit = (int) Math.min(Integer.MAX_VALUE, offset + safePageSize);
+        List<PricingProcessOptionDTO> detailRecords = processTotal == 0
+                ? List.of()
+                : toProcessOptions(selectProcessDetails(keyword, processDetailIds, candidateLimit, 0));
+        List<PricingProcessOptionDTO> feeRecords = exactProcessLookup || extraTotal == 0
+                ? List.of()
+                : toExtraFeeOptions(selectExtraFeeItems(keyword, candidateLimit, 0));
+        applyProcessUsageCounts(detailRecords);
+        applyExtraFeeUsageCounts(feeRecords);
+        List<PricingProcessOptionDTO> records = concat(detailRecords, feeRecords).stream()
+                .sorted(Comparator.comparingLong(this::usageCount).reversed())
+                .skip(offset)
+                .limit(safePageSize)
+                .toList();
         return PageResult.of(records, total, safePage, safePageSize);
     }
 
@@ -105,8 +113,7 @@ public class EngineeringPricingOptionService {
             return List.of();
         }
         QueryWrapper<DictProcessDetail> query = processDetailQuery(keyword, processDetailIds);
-        query.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
-        query.last("LIMIT " + limit + " OFFSET " + offset);
+        query.last(processUsageOrderBy() + " LIMIT " + limit + " OFFSET " + offset);
         return processDetailMapper.selectList(query);
     }
 
@@ -115,8 +122,7 @@ public class EngineeringPricingOptionService {
             return List.of();
         }
         QueryWrapper<DictExtraFeeItem> query = extraFeeItemQuery(keyword);
-        query.orderByAsc("sort_no").orderByAsc("id");
-        query.last("LIMIT " + limit + " OFFSET " + offset);
+        query.last(extraFeeUsageOrderBy() + " LIMIT " + limit + " OFFSET " + offset);
         return extraFeeItemMapper.selectList(query);
     }
 
@@ -173,8 +179,85 @@ public class EngineeringPricingOptionService {
         query.and(wrapper -> wrapper
                 .apply("LOWER(fee_name) LIKE {0}", pattern)
                 .or()
+                .apply("LOWER(fee_code) LIKE {0}", pattern)
+                .or()
                 .apply("LOWER(remarks) LIKE {0}", pattern));
         return query;
+    }
+
+    private void applyMaterialUsageCounts(List<PricingMaterialOptionDTO> records) {
+        Map<String, Long> counts = usageCounts(OPTION_TYPE_MATERIAL, records.stream()
+                .map(PricingMaterialOptionDTO::getMaterialCode)
+                .map(this::normalizedKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
+        records.forEach(record -> record.setUsageCount(usageCountFor(counts, normalizedKey(record.getMaterialCode()))));
+    }
+
+    private void applyProcessUsageCounts(List<PricingProcessOptionDTO> records) {
+        Map<String, Long> counts = usageCounts(OPTION_TYPE_PROCESS_CATEGORY, records.stream()
+                .map(PricingProcessOptionDTO::getProcessCode)
+                .map(this::normalizedKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
+        records.forEach(record -> record.setUsageCount(usageCountFor(counts, normalizedKey(record.getProcessCode()))));
+    }
+
+    private void applyExtraFeeUsageCounts(List<PricingProcessOptionDTO> records) {
+        Map<String, Long> counts = usageCounts(OPTION_TYPE_EXTRA_FEE, records.stream()
+                .map(PricingProcessOptionDTO::getFeeCode)
+                .map(this::normalizedKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
+        records.forEach(record -> record.setUsageCount(usageCountFor(counts, normalizedKey(record.getFeeCode()))));
+    }
+
+    private long usageCountFor(Map<String, Long> counts, String optionKey) {
+        return optionKey == null ? 0L : counts.getOrDefault(optionKey, 0L);
+    }
+
+    private Map<String, Long> usageCounts(String optionType, List<String> optionKeys) {
+        if (usageStatMapper == null || optionKeys == null || optionKeys.isEmpty()) {
+            return Map.of();
+        }
+        List<PricingOptionUsageStat> rows = usageStatMapper.selectUsageCounts(optionType, optionKeys);
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        return rows.stream()
+                .filter(row -> normalizedKey(row.getOptionKey()) != null)
+                .collect(Collectors.toMap(
+                        row -> normalizedKey(row.getOptionKey()),
+                        row -> Objects.requireNonNullElse(row.getUsageCount(), 0L),
+                        Long::max));
+    }
+
+    private long usageCount(PricingProcessOptionDTO record) {
+        return record == null || record.getUsageCount() == null ? 0L : record.getUsageCount();
+    }
+
+    private String materialUsageOrderBy() {
+        return "ORDER BY " + usageCountSubquery(OPTION_TYPE_MATERIAL, "UPPER(material_code)")
+                + " DESC, material_type_id ASC, sort_no ASC, id ASC";
+    }
+
+    private String processUsageOrderBy() {
+        return "ORDER BY " + usageCountSubquery(OPTION_TYPE_PROCESS_CATEGORY,
+                "(SELECT UPPER(c.process_code) FROM dict_process_category c WHERE c.id = dict_process_detail.category_id)")
+                + " DESC, category_id ASC, sort_no ASC, id ASC";
+    }
+
+    private String extraFeeUsageOrderBy() {
+        return "ORDER BY " + usageCountSubquery(OPTION_TYPE_EXTRA_FEE, "UPPER(fee_code)")
+                + " DESC, sort_no ASC, id ASC";
+    }
+
+    private String usageCountSubquery(String optionType, String keyExpression) {
+        return "COALESCE((SELECT s.usage_count FROM pricing_option_usage_stat s "
+                + "WHERE s.option_type = '" + optionType + "' AND s.option_key = " + keyExpression + "), 0)";
     }
 
     private List<PricingMaterialOptionDTO> toMaterialOptions(List<DictMaterial> materials) {
@@ -272,9 +355,11 @@ public class EngineeringPricingOptionService {
 
     private PricingProcessOptionDTO toExtraFeeOption(DictExtraFeeItem item) {
         PricingProcessOptionDTO dto = new PricingProcessOptionDTO();
-        dto.setOptionKey("extra:" + item.getId());
+        String feeCode = normalizedKey(item.getFeeCode());
+        dto.setOptionKey("extra:" + (feeCode == null ? item.getId() : feeCode));
         dto.setSourceType("extra");
         dto.setFeeItemId(item.getId());
+        dto.setFeeCode(item.getFeeCode());
         dto.setFeeName(item.getFeeName());
         dto.setProcessName(item.getFeeName());
         dto.setLabel(item.getFeeName() + "（非工时费用）");
@@ -330,6 +415,13 @@ public class EngineeringPricingOptionService {
 
     private String pattern(String keyword) {
         return "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private String normalizedKey(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 
     private List<String> parseMaterialCodes(String value) {

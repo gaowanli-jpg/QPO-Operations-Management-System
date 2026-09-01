@@ -149,6 +149,27 @@ class EngineeringPricingOptionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void pageMaterialOptionsSortsByPersistedMaterialUsageBeforeManualSort() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                mock(DictProcessDetailMapper.class), mock(DictProcessCategoryMapper.class), mock(DictExtraFeeItemMapper.class));
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(materialMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        service.pageMaterialOptions(new PricingOptionPageReq());
+
+        ArgumentCaptor<QueryWrapper<DictMaterial>> listCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectList(listCaptor.capture());
+        assertThat(sql(listCaptor.getValue()))
+                .contains("pricing_option_usage_stat")
+                .contains("option_type = 'material'")
+                .contains("upper(material_code)")
+                .contains("usage_count")
+                .containsSubsequence("usage_count", "desc", "material_type_id", "sort_no", "id");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void pageProcessOptionsCombinesEnabledProcessDetailsAndEnabledExtraFees() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
@@ -203,6 +224,38 @@ class EngineeringPricingOptionServiceTest {
                 .contains("enabled", "dict_process_category", "detail_name", "detail_remarks", "process_code", "category_name");
         assertThat(sql(extraCountCaptor.getValue()))
                 .contains("enabled", "fee_name", "remarks");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageProcessOptionsSortsProcessCategoriesAndExtraFeesByPersistedUsage() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                detailMapper, mock(DictProcessCategoryMapper.class), extraFeeItemMapper);
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(extraFeeItemMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(extraFeeItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        service.pageProcessOptions(new PricingOptionPageReq());
+
+        ArgumentCaptor<QueryWrapper<DictProcessDetail>> detailListCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        ArgumentCaptor<QueryWrapper<DictExtraFeeItem>> extraListCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(detailMapper).selectList(detailListCaptor.capture());
+        verify(extraFeeItemMapper).selectList(extraListCaptor.capture());
+        assertThat(sql(detailListCaptor.getValue()))
+                .contains("pricing_option_usage_stat")
+                .contains("option_type = 'process_category'")
+                .contains("process_code")
+                .contains("usage_count")
+                .containsSubsequence("usage_count", "desc", "category_id", "sort_no", "id");
+        assertThat(sql(extraListCaptor.getValue()))
+                .contains("pricing_option_usage_stat")
+                .contains("option_type = 'extra_fee'")
+                .contains("fee_code")
+                .contains("usage_count")
+                .containsSubsequence("usage_count", "desc", "sort_no", "id");
     }
 
     @Test

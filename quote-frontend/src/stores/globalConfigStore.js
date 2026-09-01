@@ -27,6 +27,7 @@ export const createBlankGlobalProcessRoute = (index = 0) => ({
   hourlyRate: null,
   unitRate: null,
   feeItemId: null,
+  feeCode: '',
   feeName: '',
   label: '',
   processName: '',
@@ -99,6 +100,8 @@ const normalizeProcessOptionKey = (item = {}, sourceType = resolveSourceType(ite
     const processDetailId = resolveProcessDetailId(item)
     return hasValue(processDetailId) ? `process:${processDetailId}` : ''
   }
+  const feeCode = String(item.feeCode || '').trim().toUpperCase()
+  if (hasValue(feeCode)) return `extra:${feeCode}`
   return item.optionKey || ''
 }
 
@@ -126,6 +129,7 @@ const normalizeRouteItem = (item = {}, index = 0) => {
     hourlyRate: sourceType === 'process' ? numericOrOriginal(item.hourlyRate ?? item.effectiveHourlyRate ?? item.unitRate) : null,
     unitRate: sourceType === 'process' ? numericOrOriginal(item.unitRate ?? item.hourlyRate ?? item.effectiveHourlyRate) : null,
     feeItemId: sourceType === 'extra' ? numericOrOriginal(item.feeItemId ?? item.id) : null,
+    feeCode: sourceType === 'extra' ? (item.feeCode || '') : '',
     feeName: sourceType === 'extra' ? (item.feeName || processName) : '',
     label: item.label || '',
     processName,
@@ -175,6 +179,7 @@ export const isBlankProcessRoute = (item = {}) => {
   if (sourceType === 'extra') {
     return !hasValue(normalized.optionKey)
       && !hasValue(normalized.feeItemId)
+      && !hasValue(normalized.feeCode)
       && !hasValue(normalized.processName)
       && !hasValue(normalized.feeName)
   }

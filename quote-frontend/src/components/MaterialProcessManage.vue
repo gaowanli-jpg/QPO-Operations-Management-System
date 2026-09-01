@@ -287,7 +287,8 @@
           <el-tab-pane label="非工时费用工艺" name="extraFees">
             <el-table :data="extraFeeItems" border stripe height="560" v-loading="loading">
               <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-              <el-table-column prop="feeName" label="工艺名称" min-width="180" fixed show-overflow-tooltip />
+              <el-table-column prop="feeCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
+              <el-table-column prop="feeName" label="工艺名称" min-width="180" show-overflow-tooltip />
               <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
               <el-table-column label="启用" width="90" align="center">
                 <template #default="scope">
@@ -440,6 +441,10 @@
       <el-form :model="extraFeeForm" label-width="120px" class="erp-dialog-form">
         <el-form-item label="序号">
           <el-input-number v-model="extraFeeForm.sortNo" :min="0" controls-position="right" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="工艺编码" required>
+          <el-input v-model="extraFeeForm.feeCode" :readonly="!!extraFeeForm.id && !!extraFeeOriginalCode" placeholder="例如：SURFACE_TREATMENT" />
+          <div class="form-helper-text">编码是使用次数排序的稳定身份；删除后可用旧编码重建并继承热度。</div>
         </el-form-item>
         <el-form-item label="工艺名称" required>
           <el-input v-model="extraFeeForm.feeName" placeholder="例如：EDM、热处理、表面处理、QA" />
@@ -665,6 +670,7 @@ const materialSpecDialogCode = ref('SPEC_1')
 const processDetailDialogVisible = ref(false)
 const pricingMarkupFeeDialogVisible = ref(false)
 const extraFeeDialogVisible = ref(false)
+const extraFeeOriginalCode = ref('')
 const scheduleDialogVisible = ref(false)
 const scheduleLoading = ref(false)
 const scheduleTarget = ref('MES_MATERIAL')
@@ -860,6 +866,7 @@ function createEmptyExtraFee() {
   return {
     id: null,
     sortNo: 0,
+    feeCode: '',
     feeName: '',
     enabled: true,
     remarks: ''
@@ -1132,6 +1139,7 @@ const openPricingMarkupFeeDialog = (row) => {
 
 const openExtraFeeDialog = (row) => {
   Object.assign(extraFeeForm, createEmptyExtraFee(), row || {})
+  extraFeeOriginalCode.value = row?.feeCode || ''
   extraFeeDialogVisible.value = true
 }
 
@@ -1281,6 +1289,7 @@ const savePricingMarkupFee = async () => {
 }
 
 const saveExtraFee = async () => {
+  if (!extraFeeForm.feeCode) return ElMessage.warning('请填写工艺编码。')
   if (!extraFeeForm.feeName) return ElMessage.warning('请填写工艺名称。')
   return runAction(dictActionKeys.saveExtraFeeDialog, async () => {
     try {

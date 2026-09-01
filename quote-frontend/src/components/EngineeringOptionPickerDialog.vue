@@ -337,7 +337,7 @@ const dialogWidth = computed(() => (
 const searchPlaceholder = computed(() => (
   props.type === 'material'
     ? '搜索材料编码、名称、材料类型、材质分类、备注'
-    : '搜索具体工艺、大类编码、大类名称、费用名称'
+    : '搜索具体工艺、大类编码、大类名称、非工时费用编码/名称'
 ))
 
 const keyOf = (item) => String(

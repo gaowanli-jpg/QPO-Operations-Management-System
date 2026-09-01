@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -199,7 +200,8 @@ public class DictController {
     @PostMapping("/extra-fee-items")
     @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> createExtraFeeItem(@RequestBody DictExtraFeeItem item) {
-        normalizeExtraFeeItem(item);
+        normalizeExtraFeeItem(item, null);
+        ensureExtraFeeCodeUnique(item.getFeeCode(), null);
         extraFeeItemMapper.insert(item);
         auditService.record("DICT_EXTRA_FEE_CREATE", "dict_extra_fee_item", item.getId(), null, item);
         return Map.of("success", true, "message", "非工时费用工艺已新增", "data", item);
@@ -209,8 +211,12 @@ public class DictController {
     @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> updateExtraFeeItem(@PathVariable Integer id, @RequestBody DictExtraFeeItem item) {
         DictExtraFeeItem before = extraFeeItemMapper.selectById(id);
+        if (before == null) {
+            throw new RuntimeException("非工时费用工艺不存在");
+        }
         item.setId(id);
-        normalizeExtraFeeItem(item);
+        normalizeExtraFeeItem(item, before);
+        ensureExtraFeeCodeUnique(item.getFeeCode(), id);
         extraFeeItemMapper.updateById(item);
         auditService.record("DICT_EXTRA_FEE_UPDATE", "dict_extra_fee_item", id, before, item);
         return Map.of("success", true, "message", "非工时费用工艺已更新", "data", item);
@@ -225,7 +231,19 @@ public class DictController {
         return Map.of("success", true, "message", "非工时费用工艺已删除");
     }
 
-    private void normalizeExtraFeeItem(DictExtraFeeItem item) {
+    private void normalizeExtraFeeItem(DictExtraFeeItem item, DictExtraFeeItem before) {
+        if (item == null) {
+            throw new RuntimeException("非工时费用工艺请求不能为空");
+        }
+        String normalizedCode = normalizeExtraFeeCode(item.getFeeCode());
+        String existingCode = before == null ? null : normalizeExtraFeeCode(before.getFeeCode());
+        if (isBlank(normalizedCode)) {
+            throw new RuntimeException("工艺编码不能为空");
+        }
+        if (!isBlank(existingCode) && !existingCode.equals(normalizedCode)) {
+            throw new RuntimeException("工艺编码是非工时费用稳定身份，已有编码不允许修改");
+        }
+        item.setFeeCode(isBlank(existingCode) ? normalizedCode : existingCode);
         if (isBlank(item.getFeeName())) {
             throw new RuntimeException("工艺名称不能为空");
         }
@@ -239,6 +257,29 @@ public class DictController {
         if (item.getRemarks() == null) {
             item.setRemarks("");
         }
+    }
+
+    private void ensureExtraFeeCodeUnique(String feeCode, Integer currentId) {
+        QueryWrapper<DictExtraFeeItem> query = new QueryWrapper<>();
+        query.eq("fee_code", feeCode);
+        if (currentId != null) {
+            query.ne("id", currentId);
+        }
+        Long count = extraFeeItemMapper.selectCount(query);
+        if (count != null && count > 0) {
+            throw new RuntimeException("工艺编码已存在");
+        }
+    }
+
+    private String normalizeExtraFeeCode(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (!normalized.matches("[A-Z0-9_-]{1,80}")) {
+            throw new RuntimeException("工艺编码只允许 1-80 位大写字母、数字、下划线或中划线");
+        }
+        return normalized;
     }
 
     private boolean isBlank(String value) {

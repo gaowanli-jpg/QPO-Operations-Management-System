@@ -1647,7 +1647,10 @@ const buildProcessSnapshotOption = (proc) => {
     if (!processName && !proc.optionKey) return null
     return {
       ...proc,
-      optionKey: proc.optionKey || (proc.feeItemId ? `extra:${proc.feeItemId}` : ''),
+      optionKey: proc.optionKey || (proc.feeCode ? `extra:${String(proc.feeCode).trim().toUpperCase()}` : (proc.feeItemId ? `extra:${proc.feeItemId}` : '')),
+      feeItemId: proc.feeItemId ?? null,
+      feeCode: proc.feeCode || '',
+      feeName: proc.feeName || processName,
       processName,
       label: proc.label || (processName ? `${processName}（非工时费用）` : ''),
       calcType: '非工时费用',
@@ -1713,7 +1716,9 @@ const applyProcessSelection = (proc, selected) => {
   const hourlyRate = sourceType === 'process'
     ? (selected.hourlyRate ?? selected.effectiveHourlyRate ?? selected.unitRate ?? null)
     : null
-  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId ? `process:${processDetailId}` : '')
+  proc.optionKey = selected.optionKey || (sourceType === 'process' && processDetailId
+    ? `process:${processDetailId}`
+    : (sourceType === 'extra' && selected.feeCode ? `extra:${String(selected.feeCode).trim().toUpperCase()}` : ''))
   proc.processDetailId = processDetailId
   proc.processCategoryId = processCategoryId
   proc.categoryId = processCategoryId
@@ -1726,6 +1731,7 @@ const applyProcessSelection = (proc, selected) => {
   proc.hourlyRate = hourlyRate
   proc.unitRate = hourlyRate
   proc.feeItemId = sourceType === 'extra' ? (selected.feeItemId ?? selected.id ?? null) : null
+  proc.feeCode = sourceType === 'extra' ? (selected.feeCode || '') : ''
   proc.feeName = sourceType === 'extra' ? (selected.feeName || processName) : ''
   proc.processName = processName
   proc.label = selected.label || ''
@@ -1862,6 +1868,7 @@ const createProcessRow = (source = {}) => ({
   hourlyRate: source.hourlyRate ?? source.effectiveHourlyRate ?? source.unitRate ?? null,
   unitRate: source.unitRate ?? source.hourlyRate ?? source.effectiveHourlyRate ?? null,
   feeItemId: source.feeItemId ?? null,
+  feeCode: source.feeCode || '',
   feeName: source.feeName || '',
   label: source.label || '',
   calcType: source.calcType || '工时',
@@ -2042,6 +2049,7 @@ const buildQuoteProcessRoute = () => processRoute.value
       return {
         sortNo: p.sortNo,
         processDetailId: p.processDetailId,
+        processCode: p.processCode || '',
         unitWorkHours: p.inputVal,
         calcType: '工时'
       }
@@ -2049,6 +2057,9 @@ const buildQuoteProcessRoute = () => processRoute.value
     return {
       sortNo: p.sortNo,
       processName: p.processName,
+      feeItemId: p.feeItemId ?? null,
+      feeCode: p.feeCode || '',
+      feeName: p.feeName || p.processName || '',
       inputVal: p.inputVal,
       calcType: '非工时费用',
       sourceType: 'extra'
@@ -2079,6 +2090,9 @@ const buildGlobalProcessRoute = () => processRoute.value
       sortNo: p.sortNo,
       processName: p.processName,
       optionKey: p.optionKey || '',
+      feeItemId: p.feeItemId ?? null,
+      feeCode: p.feeCode || '',
+      feeName: p.feeName || p.processName || '',
       calcType: '非工时费用',
       sourceType
     }
@@ -2128,6 +2142,8 @@ const comparableProcessRoute = (route) => normalizeRouteList(route)
     return {
       sortNo: (index + 1) * PROCESS_SORT_STEP,
       processDetailId: sourceType === 'process' ? (p.processDetailId ?? null) : null,
+      processCode: sourceType === 'process' ? (p.processCode || '') : '',
+      feeCode: sourceType === 'extra' ? (p.feeCode || '') : '',
       processName: p.processName || '',
       calcType: sourceType === 'extra' ? '非工时费用' : '工时',
       sourceType

@@ -74,4 +74,12 @@ describe('item pricing remote material and process options', () => {
     expect(source).toContain('await syncCurrentSelectionToGlobalConfig()')
     expect(source).not.toContain('syncCurrentRouteToGlobalConfig')
   })
+
+  test('normal item save includes stable extra fee identity for usage statistics', () => {
+    const source = readSource('components', 'ItemPricing.vue')
+
+    expect(source).toContain('proc.feeCode = sourceType === \'extra\' ? (selected.feeCode || \'\') : \'\'')
+    expect(source).toContain('feeItemId: p.feeItemId ?? null')
+    expect(source).toContain('feeCode: p.feeCode || \'\'')
+  })
 })

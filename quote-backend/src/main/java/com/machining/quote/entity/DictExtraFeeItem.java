@@ -11,6 +11,7 @@ public class DictExtraFeeItem {
     @TableId(type = IdType.AUTO)
     private Integer id;
 
+    private String feeCode;
     private String feeName;
     private Integer sortNo;
     private Boolean enabled;

@@ -80,6 +80,8 @@ public class EngineerService {
     private SystemTaskGuardService taskGuardService;
     @Autowired(required = false)
     private ConfirmedMaterialNoReuseService confirmedMaterialNoReuseService = new ConfirmedMaterialNoReuseService();
+    @Autowired(required = false)
+    private PricingOptionUsageStatService pricingOptionUsageStatService;
 
     @Transactional
     public void calculateAndSaveQuote(QuoteSubmitReq req) {
@@ -90,6 +92,7 @@ public class EngineerService {
             saveAssemblyQuote(item, req.getAssemblyFee(), req.getAssemblyChildren());
         } else {
             saveCalculatedQuote(item, req.getMaterialData(), req.getProcessRoute(), req.getPartNetWeight());
+            recordPricingOptionUsage(item);
         }
         markAncestorAssembliesPending(item.getId(), new HashSet<>());
         auditService.record("ITEM_QUOTE_SAVE", "item_quote_version", item.getId(), before, itemMapper.selectById(item.getId()));
@@ -1565,6 +1568,9 @@ public class EngineerService {
         row.put("routeType", "FEE");
         row.put("sourceType", "extra");
         row.put("sortNo", process.getSortNo());
+        row.put("feeItemId", process.getFeeItemId());
+        row.put("feeCode", stringValue(process.getFeeCode()));
+        row.put("feeName", process.getProcessName());
         row.put("processName", process.getProcessName());
         row.put("calcType", "非工时费用");
         row.put("inputVal", lineCost);
@@ -1588,6 +1594,8 @@ public class EngineerService {
                     ? doubleValue(row.get("inputVal"))
                     : doubleValue(row.get("unitWorkHours")));
             process.setSourceType(stringValue(row.get("sourceType")));
+            process.setFeeItemId(intValue(row.get("feeItemId")));
+            process.setFeeCode(stringValue(row.get("feeCode")));
             process.setProcessName(stringValue(row.get("processName")));
             process.setCalcType(stringValue(row.get("calcType")));
             process.setInputVal(doubleValue(row.get("inputVal")));
@@ -1596,6 +1604,13 @@ public class EngineerService {
             result.add(process);
         }
         return result;
+    }
+
+    private void recordPricingOptionUsage(ItemQuoteVersion item) {
+        if (pricingOptionUsageStatService == null || item == null) {
+            return;
+        }
+        pricingOptionUsageStatService.recordSavedQuoteOptionUsage(item.getMaterialData(), item.getProcessRoute());
     }
 
     private Map<String, Object> normalizeMap(Object value) {

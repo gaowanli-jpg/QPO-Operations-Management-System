@@ -21,5 +21,7 @@ public class PricingProcessOptionDTO {
     private BigDecimal effectiveHourlyRate;
     private BigDecimal hourlyRate;
     private Integer feeItemId;
+    private String feeCode;
     private String feeName;
+    private Long usageCount;
 }
