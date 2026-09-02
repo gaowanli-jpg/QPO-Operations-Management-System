@@ -229,13 +229,15 @@ public class EngineerService {
                     .or()
                     .like("project_name", normalizedKeyword));
         }
+        List<String> pendingStatuses = QuoteStatusWorkflow.supplementalPricingPendingItemStatuses();
         query.apply("EXISTS (SELECT 1 FROM item_quote_version item "
                 + "WHERE item.rfq_id = order_rfq.id "
                 + "AND NULLIF(BTRIM(item.drawing_url), '') IS NOT NULL "
-                + "AND item.tax_included_unit_price IS NULL "
-                + "AND item.status IN ({0}, {1}))",
-                QuoteStatusWorkflow.UNPRICED,
-                QuoteStatusWorkflow.NO_DRAWING);
+                + "AND item.status IN ({0}, {1}, {2}, {3}))",
+                pendingStatuses.get(0),
+                pendingStatuses.get(1),
+                pendingStatuses.get(2),
+                pendingStatuses.get(3));
 
         Long total = orderMapper.selectCount(query);
         if (total == null || total == 0) {
@@ -248,6 +250,12 @@ public class EngineerService {
 
     private void saveCalculatedQuote(ItemQuoteVersion item, Map<String, Object> materialData,
                                      List<QuoteSubmitReq.ProcessSubmitDTO> processRoute, Double partNetWeight) {
+        saveCalculatedQuote(item, materialData, processRoute, partNetWeight, true);
+    }
+
+    private void saveCalculatedQuote(ItemQuoteVersion item, Map<String, Object> materialData,
+                                     List<QuoteSubmitReq.ProcessSubmitDTO> processRoute, Double partNetWeight,
+                                     boolean markPriced) {
         int qty = item.getQty() == null ? 0 : item.getQty();
         if (materialData == null) {
             materialData = new LinkedHashMap<>();
@@ -316,17 +324,25 @@ public class EngineerService {
         item.setTaxIncludedTotalPrice(taxIncludedTotalPrice);
         item.setUntaxedUnitPrice(untaxedUnitPrice);
         item.setUntaxedTotalPrice(untaxedTotalPrice);
-        item.setStatus(QuoteStatusWorkflow.PRICED);
+        if (markPriced) {
+            item.setStatus(QuoteStatusWorkflow.PRICED);
+        }
 
         deleteAssemblyRelations(item.getId());
         itemMapper.updateById(item);
         log.info("Item quote saved rfqId={} itemId={} partNo={} quoteMode={} baseCost={} taxIncludedUnitPrice={} toStatus={}",
                 item.getRfqId(), item.getId(), item.getPartNo(), QUOTE_MODE_NORMAL, baseCost, taxIncludedUnitPrice,
-                QuoteStatusWorkflow.PRICED);
+                item.getStatus());
     }
 
     private void saveAssemblyQuote(ItemQuoteVersion parent, Double assemblyFee,
                                    List<QuoteSubmitReq.AssemblyChildDTO> assemblyChildren) {
+        saveAssemblyQuote(parent, assemblyFee, assemblyChildren, true);
+    }
+
+    private void saveAssemblyQuote(ItemQuoteVersion parent, Double assemblyFee,
+                                   List<QuoteSubmitReq.AssemblyChildDTO> assemblyChildren,
+                                   boolean markPriced) {
         if (assemblyChildren == null || assemblyChildren.isEmpty()) {
             throw new RuntimeException("组合件必须至少选择一个子件");
         }
@@ -416,11 +432,13 @@ public class EngineerService {
         parent.setTaxIncludedTotalPrice(taxIncludedTotalPrice);
         parent.setUntaxedUnitPrice(untaxedUnitPrice);
         parent.setUntaxedTotalPrice(untaxedTotalPrice);
-        parent.setStatus(QuoteStatusWorkflow.PRICED);
+        if (markPriced) {
+            parent.setStatus(QuoteStatusWorkflow.PRICED);
+        }
         itemMapper.updateById(parent);
         log.info("Assembly quote saved rfqId={} itemId={} partNo={} childrenTotal={} assemblyFee={} assemblyFeeMarkupCost={} taxIncludedUnitPrice={} toStatus={}",
                 parent.getRfqId(), parent.getId(), parent.getPartNo(), childrenTotal, safeAssemblyFee,
-                assemblyFeeMarkupCost, taxIncludedUnitPrice, QuoteStatusWorkflow.PRICED);
+                assemblyFeeMarkupCost, taxIncludedUnitPrice, parent.getStatus());
     }
 
     public List<Map<String, Object>> listAssemblyRelations(Integer parentItemId) {
@@ -669,6 +687,8 @@ public class EngineerService {
             throw new RuntimeException("仍有未报价的有图零件：" + String.join("、", unquotedItems));
         }
 
+        int normalizedPricedItemCount = markPricedPendingItemsAsPriced(items);
+
         int noDrawingCount = 0;
         for (ItemQuoteVersion item : items) {
             if (QuoteStatusWorkflow.DISCARDED.equals(item.getStatus())) {
@@ -684,8 +704,8 @@ public class EngineerService {
         order.setStatus(QuoteStatusWorkflow.nextAfterEngineerComplete(order.getStatus()));
         orderMapper.updateById(order);
         auditService.record("ORDER_QUOTE_COMPLETE", "order_rfq", order.getId(), null, order);
-        log.info("Order quote completed rfqId={} itemCount={} noDrawingCount={} toStatus={} durationMs={}",
-                rfqId, items.size(), noDrawingCount, order.getStatus(), System.currentTimeMillis() - startedAt);
+        log.info("Order quote completed rfqId={} itemCount={} noDrawingCount={} normalizedPricedItemCount={} toStatus={} durationMs={}",
+                rfqId, items.size(), noDrawingCount, normalizedPricedItemCount, order.getStatus(), System.currentTimeMillis() - startedAt);
     }
 
     @Transactional
@@ -705,6 +725,8 @@ public class EngineerService {
             throw new RuntimeException("尚未完成补核价的补图零件：" + String.join("、", pendingSupplementalItems));
         }
 
+        int normalizedPricedItemCount = markPricedPendingItemsAsPriced(items);
+
         int pricedSupplementalItemCount = (int) items.stream()
                 .filter(this::isSupplementalPricingCompletedItem)
                 .count();
@@ -715,12 +737,29 @@ public class EngineerService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("supplemental", true);
         result.put("pricedSupplementalItemCount", pricedSupplementalItemCount);
+        result.put("normalizedPricedItemCount", normalizedPricedItemCount);
         result.put("orderStatusBefore", orderStatusBefore);
         result.put("orderStatusAfter", order.getStatus());
         auditService.record("ORDER_QUOTE_COMPLETE", "order_rfq", order.getId(), null, result);
         log.info("Supplemental drawing quote completed rfqId={} pricedSupplementalItemCount={} orderStatusBefore={} orderStatusAfter={} durationMs={}",
                 rfqId, pricedSupplementalItemCount, orderStatusBefore, order.getStatus(), System.currentTimeMillis() - startedAt);
         return result;
+    }
+
+    private int markPricedPendingItemsAsPriced(List<ItemQuoteVersion> items) {
+        int count = 0;
+        for (ItemQuoteVersion item : items == null ? List.<ItemQuoteVersion>of() : items) {
+            if (isDiscardedItem(item)
+                    || !hasDrawing(item)
+                    || item.getTaxIncludedUnitPrice() == null
+                    || !QuoteStatusWorkflow.isPendingPricingItemStatus(item.getStatus())) {
+                continue;
+            }
+            item.setStatus(QuoteStatusWorkflow.PRICED);
+            itemMapper.updateById(item);
+            count++;
+        }
+        return count;
     }
 
     private boolean hasDrawing(ItemQuoteVersion item) {
@@ -730,8 +769,7 @@ public class EngineerService {
     private boolean isSupplementalPricingPendingItem(ItemQuoteVersion item) {
         return hasDrawing(item)
                 && item.getTaxIncludedUnitPrice() == null
-                && (QuoteStatusWorkflow.UNPRICED.equals(item.getStatus())
-                || QuoteStatusWorkflow.NO_DRAWING.equals(item.getStatus()));
+                && QuoteStatusWorkflow.isPendingPricingItemStatus(item.getStatus());
     }
 
     private boolean isSupplementalPricingCompletedItem(ItemQuoteVersion item) {
@@ -966,7 +1004,7 @@ public class EngineerService {
         }
 
         MaterialNoReuseResult materialNoResult = reuseConfirmedMaterialNo(currentParent, sourceParent);
-        saveAssemblyQuote(currentParent, sourceParent.getAssemblyFee(), currentChildren);
+        saveAssemblyQuote(currentParent, sourceParent.getAssemblyFee(), currentChildren, false);
         addAppliedRepeatItem(currentParent, source, materialNoResult, handledItemIds, appliedItems);
         return null;
     }
@@ -994,7 +1032,7 @@ public class EngineerService {
             return processRouteBlockedReason;
         }
         MaterialNoReuseResult materialNoResult = reuseConfirmedMaterialNo(currentItem, sourceItem);
-        saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight());
+        saveCalculatedQuote(currentItem, materialData, processRoute, sourceItem.getPartNetWeight(), false);
         addAppliedRepeatItem(currentItem, source, materialNoResult, handledItemIds, appliedItems);
         return null;
     }

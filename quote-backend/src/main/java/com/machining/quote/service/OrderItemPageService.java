@@ -142,8 +142,7 @@ public class OrderItemPageService {
 
     private void applySupplementalDrawingPricingFilter(QueryWrapper<ItemQuoteVersion> query) {
         query.apply("NULLIF(BTRIM(drawing_url), '') IS NOT NULL")
-                .isNull("tax_included_unit_price")
-                .in("status", QuoteStatusWorkflow.UNPRICED, QuoteStatusWorkflow.NO_DRAWING);
+                .in("status", QuoteStatusWorkflow.supplementalPricingPendingItemStatuses());
     }
 
     private void applySupplementalDrawingQuoteFilter(QueryWrapper<ItemQuoteVersion> query) {

@@ -139,13 +139,14 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         currentOrder.setStatus("待工程部评估");
         orderMapper.insert(currentOrder);
         ItemQuoteVersion currentItem = pendingItem(currentOrder, "CROSS-100", "A");
+        String pendingStatus = currentItem.getStatus();
 
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
         assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
-        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(saved.getStatus()).isEqualTo(pendingStatus);
     }
 
     @Test
@@ -182,6 +183,7 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         currentOrder.setStatus("待工程部评估");
         orderMapper.insert(currentOrder);
         ItemQuoteVersion currentItem = pendingItem(currentOrder, "PRICED-REUSE-100", "A");
+        String pendingStatus = currentItem.getStatus();
 
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
@@ -191,7 +193,7 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         assertThat(appliedItems).singleElement()
                 .satisfies(row -> assertThat(row.get("sourceItemId")).isEqualTo(reusablePricedSource.getId()));
         assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
-        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(saved.getStatus()).isEqualTo(pendingStatus);
     }
 
     @Test
@@ -362,13 +364,14 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         currentOrder.setStatus("待工程部评估");
         orderMapper.insert(currentOrder);
         ItemQuoteVersion currentItem = pendingItem(currentOrder, "NONREL-100", "A");
+        String pendingStatus = currentItem.getStatus();
 
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
         ItemQuoteVersion saved = itemMapper.selectById(currentItem.getId());
         assertThat(result.get("appliedCount")).isEqualTo(1);
         assertThat(saved.getTaxIncludedUnitPrice()).isNotNull();
-        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(saved.getStatus()).isEqualTo(pendingStatus);
         assertThat(saved.getMaterialData()).isNotNull();
         assertThat(saved.getProcessRoute()).isNotNull();
     }
@@ -449,6 +452,8 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         currentItem.setDrawingUrl("/uploads/test/AUTO-100.pdf");
         currentItem.setStatus("待核价");
         itemMapper.insert(currentItem);
+        currentItem.setStatus(QuoteStatusWorkflow.UNPRICED);
+        itemMapper.updateById(currentItem);
 
         Map<String, Object> result = engineerService.applyRepeatQuotes(currentOrder.getId());
 
@@ -457,12 +462,13 @@ class RepeatQuoteApplicationWorkflowTest extends CoreWorkflowIntegrationTestSupp
         assertThat(result.get("appliedCount")).isEqualTo(1);
         assertThat(savedItem.getTaxIncludedUnitPrice()).isNotNull();
         assertThat(savedItem.getStatus())
-                .as("重复历史核价只套用工程核价结果，仍需市场保存报价单后才进入已报价")
-                .isEqualTo(QuoteStatusWorkflow.PRICED);
+                .as("重复历史核价只套用工程核价结果，仍需点击完成核价提交后才进入已核价")
+                .isEqualTo(QuoteStatusWorkflow.UNPRICED);
         assertThat(savedOrder.getStatus()).isEqualTo("待工程部评估");
         assertThat(result.get("message")).asString().contains("完成核价提交");
 
         engineerService.completeOrderQuote(currentOrder.getId());
         assertThat(orderMapper.selectById(currentOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(itemMapper.selectById(currentItem.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
     }
 }

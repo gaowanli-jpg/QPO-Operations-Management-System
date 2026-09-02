@@ -225,6 +225,64 @@ class EngineerSupplementalPricingWorkflowTest {
                 .containsExactly(restored.getId());
     }
 
+    @Test
+    void supplementalRepeatPricedItemStaysPendingUntilSupplementalCompletion() {
+        OrderRfq historicalOrder = createOrder(QuoteStatusWorkflow.RELEASED, "SUP-REPEAT-HIST");
+        ItemQuoteVersion historicalItem = createItem(historicalOrder, "SUP-REPEAT-SOURCE", QuoteStatusWorkflow.ITEM_RELEASED, true, 20.0);
+        DictMaterial material = ensureMaterial();
+        historicalItem.setMaterialName(material.getMaterialName());
+        historicalItem.setMaterialData(Map.of(
+                "materialCode", material.getMaterialCode(),
+                "priceSpecCode", "SPEC_1",
+                "materialName", material.getMaterialName(),
+                "shape", "sheet",
+                "weight", 2.0,
+                "cost", 10.0));
+        historicalItem.setProcessRoute(List.of(Map.of(
+                "routeType", "FEE",
+                "sourceType", "extra",
+                "processName", "repeat-test-fee",
+                "calcType", "extra-fee",
+                "inputVal", 1.0,
+                "lineCost", 1.0,
+                "sortNo", 10)));
+        historicalItem.setPartNetWeight(1.0);
+        itemMapper.updateById(historicalItem);
+
+        OrderRfq currentOrder = createOrder(QuoteStatusWorkflow.RELEASED, "SUP-REPEAT-CUR");
+        ItemQuoteVersion currentItem = createItem(currentOrder, "SUP-REPEAT-CURRENT", QuoteStatusWorkflow.UNPRICED, true, null);
+        currentItem.setPartNo(historicalItem.getPartNo());
+        currentItem.setVersion(historicalItem.getVersion());
+        itemMapper.updateById(currentItem);
+
+        Map<String, Object> applyResult = engineerService.applyRepeatQuotes(currentOrder.getId());
+
+        ItemQuoteVersion repeatPriced = itemMapper.selectById(currentItem.getId());
+        assertThat(applyResult.get("appliedCount")).isEqualTo(1);
+        assertThat(repeatPriced.getTaxIncludedUnitPrice()).isNotNull();
+        assertThat(repeatPriced.getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        assertThat(engineerService.listSupplementalPricingOrders(null, null, null, 1, 20).getRecords())
+                .extracting(OrderRfq::getId)
+                .contains(currentOrder.getId());
+
+        OrderItemPageReq pendingReq = new OrderItemPageReq();
+        pendingReq.setRfqId(currentOrder.getId());
+        pendingReq.setScope(OrderItemPageReq.SCOPE_SUPPLEMENTAL_DRAWING);
+        pendingReq.setPage(1);
+        pendingReq.setPageSize(20);
+        assertThat(orderItemPageService.pageItems(pendingReq).getRecords())
+                .extracting(ItemQuoteVersion::getId)
+                .containsExactly(currentItem.getId());
+
+        Map<String, Object> completeResult = engineerService.completeSupplementalDrawingQuote(currentOrder.getId());
+
+        assertThat(completeResult).containsEntry("pricedSupplementalItemCount", 1);
+        assertThat(itemMapper.selectById(currentItem.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(orderItemPageService.pageItems(pendingReq).getRecords())
+                .extracting(ItemQuoteVersion::getId)
+                .doesNotContain(currentItem.getId());
+    }
+
     private OrderRfq createOrder(String status, String prefix) {
         OrderRfq order = new OrderRfq();
         order.setRfqNo(prefix + "-" + System.nanoTime());

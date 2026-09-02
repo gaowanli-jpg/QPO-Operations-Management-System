@@ -1,5 +1,6 @@
 package com.machining.quote.domain;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -138,6 +139,18 @@ public final class QuoteStatusWorkflow {
 
     public static String normalizeUnpricedStatus(String status) {
         return isLegacyUnpricedStatus(status) ? UNPRICED : status;
+    }
+
+    public static boolean isPendingPricingItemStatus(String status) {
+        return UNPRICED.equals(status) || NO_DRAWING.equals(status) || isLegacyUnpricedStatus(status);
+    }
+
+    public static List<String> supplementalPricingPendingItemStatuses() {
+        List<String> statuses = new ArrayList<>();
+        statuses.add(UNPRICED);
+        statuses.add(NO_DRAWING);
+        statuses.addAll(LEGACY_UNPRICED);
+        return statuses;
     }
 
 }
