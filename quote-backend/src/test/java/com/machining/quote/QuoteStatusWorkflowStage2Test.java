@@ -147,6 +147,27 @@ class QuoteStatusWorkflowStage2Test {
     }
 
     @Test
+    void saveQuoteSheetIgnoresDiscardedItemsWhenCheckingQuoteLeadTimes() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion activeItem = createQuotedItem(order, "S2-DISCARD-ACTIVE", "2026-03-20");
+        activeItem.setStatus(QuoteStatusWorkflow.PRICED);
+        itemMapper.updateById(activeItem);
+
+        ItemQuoteVersion discardedItem = createQuotedItem(order, "S2-DISCARD-MISSING", null);
+        discardedItem.setStatus(QuoteStatusWorkflow.DISCARDED);
+        discardedItem.setLeadTime(null);
+        discardedItem.setQuoteLeadTime(null);
+        discardedItem.setPreviousStatusBeforeDiscard(QuoteStatusWorkflow.PRICED);
+        itemMapper.updateById(discardedItem);
+
+        quoteProcessService.saveQuoteSheet(order.getId());
+
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(activeItem.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(discardedItem.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+    }
+
+    @Test
     void activeRefreshTaskBlocksEngineeringCompletion() {
         OrderRfq order = createOrder(QuoteStatusWorkflow.UNPRICED);
         createQuotedItem(order, "S2-D", "2026-03-20");

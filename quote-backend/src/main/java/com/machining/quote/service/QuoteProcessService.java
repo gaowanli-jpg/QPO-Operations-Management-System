@@ -420,6 +420,7 @@ public class QuoteProcessService {
             }
 
             List<String> missingLeadTimes = items.stream()
+                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
                     .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
                     .map(this::itemLabel)
                     .toList();
