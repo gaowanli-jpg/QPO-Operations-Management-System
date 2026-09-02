@@ -122,4 +122,36 @@ describe('orderApi', () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   })
+
+  test('exposes order item maintenance endpoints', async () => {
+    const payload = {
+      items: [{ itemId: 21, partNo: 'P-100', version: 'B', qty: 12, leadTime: '2026-10-01', quoteLeadTime: '2026-10-05' }]
+    }
+    const formData = new FormData()
+
+    await orderApi.saveOrderItems(12, payload)
+    await orderApi.replaceOrderDrawings(12, formData)
+    await orderApi.previewOrderItemDataReplacement(12, formData)
+    await orderApi.confirmOrderItemDataReplacement(12, formData)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-management/orders/12/items/batch', {
+      method: 'POST',
+      data: payload
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-management/orders/12/drawings/replace', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(3, '/api/order-management/orders/12/item-data-replacement/preview', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/order-management/orders/12/item-data-replacement/confirm', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  })
 })

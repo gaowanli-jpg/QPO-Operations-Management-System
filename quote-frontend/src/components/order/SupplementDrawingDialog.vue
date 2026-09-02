@@ -13,7 +13,7 @@
       </el-descriptions>
 
       <div class="erp-dialog-section missing-list">
-        <div class="section-subtitle">待补图零件</div>
+        <div class="section-subtitle">{{ listTitle }}</div>
         <el-table :data="missingItems" border stripe height="180">
           <el-table-column prop="partNo" label="图号" min-width="140" show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center" />
@@ -25,7 +25,7 @@
       <div class="erp-upload-surface upload-area">
         <div class="supplement-upload-dual-grid">
           <section class="supplement-upload-entry">
-            <div class="supplement-upload-title">按图号补传</div>
+            <div class="supplement-upload-title">{{ partUploadTitle }}</div>
             <div
               v-permission="permission"
               class="custom-dropzone supplement-dropzone"
@@ -45,7 +45,7 @@
             </div>
 
             <div v-if="files.length > 0" class="supplement-file-stats">
-              <h4>按图号待补传图纸（{{ files.length }} 份）</h4>
+              <h4>{{ partPendingTitle }}（{{ files.length }} 份）</h4>
               <ul class="supplement-pdf-list">
                 <li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${index}`">
                   <span>{{ file.name }}</span>
@@ -56,7 +56,7 @@
           </section>
 
           <section class="supplement-upload-entry">
-            <div class="supplement-upload-title">按图号+版本补传</div>
+            <div class="supplement-upload-title">{{ versionUploadTitle }}</div>
             <div
               v-permission="permission"
               class="custom-dropzone supplement-dropzone"
@@ -76,7 +76,7 @@
             </div>
 
             <div v-if="versionFiles.length > 0" class="supplement-file-stats">
-              <h4>按图号+版本待补传图纸（{{ versionFiles.length }} 份）</h4>
+              <h4>{{ versionPendingTitle }}（{{ versionFiles.length }} 份）</h4>
               <ul class="supplement-pdf-list">
                 <li v-for="(file, index) in versionFiles" :key="`${file.name}-${file.size}-${index}`">
                   <span>{{ file.name }}</span>
@@ -91,10 +91,10 @@
       <div v-if="result" class="supplement-result">
         <el-alert :title="result.message" type="success" :closable="false" show-icon />
         <el-tabs>
-          <el-tab-pane :label="`已绑定 ${result.boundCount || 0}`">
+          <el-tab-pane :label="`${boundResultLabel} ${result.boundCount || 0}`">
             <result-list :items="result.boundItems" />
           </el-tab-pane>
-          <el-tab-pane :label="`已跳过 ${result.alreadyBoundCount || 0}`">
+          <el-tab-pane :label="`${alreadyBoundResultLabel} ${result.alreadyBoundCount || 0}`">
             <result-list :items="result.alreadyBoundItems" />
           </el-tab-pane>
           <el-tab-pane :label="`未匹配 ${result.unmatchedCount || 0}`">
@@ -141,7 +141,14 @@ const props = defineProps({
   result: { type: Object, default: null },
   pending: { type: Boolean, default: false },
   permission: { type: String, required: true },
-  submitText: { type: String, default: '上传并匹配' }
+  submitText: { type: String, default: '上传并匹配' },
+  listTitle: { type: String, default: '待补图零件' },
+  partUploadTitle: { type: String, default: '按图号补传' },
+  versionUploadTitle: { type: String, default: '按图号+版本补传' },
+  partPendingTitle: { type: String, default: '按图号待补传图纸' },
+  versionPendingTitle: { type: String, default: '按图号+版本待补传图纸' },
+  boundResultLabel: { type: String, default: '已绑定' },
+  alreadyBoundResultLabel: { type: String, default: '已跳过' }
 })
 
 const emit = defineEmits(['update:modelValue', 'update:files', 'update:versionFiles', 'submit'])

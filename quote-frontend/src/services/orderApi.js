@@ -27,6 +27,29 @@ export const getOrder = (orderId) => request(`/api/order-management/orders/${ord
 
 export const listOrderItems = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/items`, { params })
 
+export const saveOrderItems = (rfqId, payload = {}) => request(`/api/order-management/orders/${rfqId}/items/batch`, {
+  method: 'POST',
+  data: payload
+})
+
+export const replaceOrderDrawings = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/drawings/replace`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
+export const previewOrderItemDataReplacement = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/item-data-replacement/preview`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
+export const confirmOrderItemDataReplacement = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/item-data-replacement/confirm`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
 export const listOrderTickets = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/tickets`, { params })
 
 export const listOrderProcessSheets = (rfqId, params = {}) => request(`/api/order-management/orders/${rfqId}/process-sheets`, { params })

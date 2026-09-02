@@ -367,6 +367,9 @@ public class AuditService {
             case "ORDER_STATUS_ROLLBACK_PRICED" -> "已核价退回未核价";
             case "ORDER_DISCARD" -> "废弃订单";
             case "ORDER_RESTORE" -> "恢复废弃订单";
+            case "ORDER_ITEM_UPDATE" -> "保存询价订单零件信息";
+            case "ORDER_ITEM_DATA_REPLACEMENT" -> "询价订单表格数据替换";
+            case "ORDER_DRAWING_REPLACE" -> "询价订单替换图纸";
             case "QUOTE_LEAD_TIME_UPDATE" -> "更新客户交期";
             case "QUOTE_LEAD_TIME_BATCH_UPDATE" -> "批量保存报价交期";
             case "QUOTE_LEAD_TIME_DATA_REPLACEMENT" -> "报价处理表格数据替换";

@@ -1,8 +1,16 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
+import com.machining.quote.config.PreviewFingerprintConflictException;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.OrderItemDataReplacementExcelErrorDTO;
+import com.machining.quote.dto.OrderItemDataReplacementExcelParseResult;
+import com.machining.quote.dto.OrderItemDataReplacementExcelRowDTO;
+import com.machining.quote.dto.OrderItemDataReplacementField;
+import com.machining.quote.dto.OrderItemMaintenanceLineReq;
+import com.machining.quote.dto.OrderItemMaintenanceUpdateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
@@ -19,12 +27,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -47,6 +64,10 @@ public class OrderManagementService {
     private AuditService auditService;
     @Autowired
     private DeliveryService deliveryService;
+    @Autowired
+    private LeadTimeService leadTimeService;
+    @Autowired
+    private OrderItemDataReplacementExcelParser orderItemDataReplacementExcelParser;
     @Autowired(required = false)
     private DataScopeService dataScopeService;
     @Autowired(required = false)
@@ -297,6 +318,87 @@ public class OrderManagementService {
         return PageResult.of(itemMapper.selectList(pageQuery), total, safePage, safePageSize);
     }
 
+    public PageResult<Map<String, Object>> pageOrderItemRows(Integer rfqId, Integer page, Integer pageSize) {
+        requireOrder(rfqId);
+        int safePage = normalizePage(page);
+        int safePageSize = pageSize == null || pageSize < 1 ? 50 : Math.min(pageSize, 100);
+        long offset = (long) (safePage - 1) * safePageSize;
+        QueryWrapper<ItemQuoteVersion> countQuery = new QueryWrapper<>();
+        countQuery.eq("rfq_id", rfqId);
+        Long total = itemMapper.selectCount(countQuery);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        QueryWrapper<ItemQuoteVersion> pageQuery = new QueryWrapper<>();
+        pageQuery.eq("rfq_id", rfqId)
+                .orderByAsc("id")
+                .last("LIMIT " + safePageSize + " OFFSET " + offset);
+        List<ItemQuoteVersion> items = safeList(itemMapper.selectList(pageQuery));
+        Map<Integer, Integer> ticketedQtyByItemId = ticketedQuantities(rfqId, items);
+        List<Map<String, Object>> rows = items.stream()
+                .map(item -> buildOrderItemRow(item, ticketedQtyByItemId.getOrDefault(item.getId(), 0)))
+                .toList();
+        return PageResult.of(rows, total, safePage, safePageSize);
+    }
+
+    @Transactional
+    public Map<String, Object> saveOrderItems(Integer rfqId, OrderItemMaintenanceUpdateReq req) {
+        long startedAt = System.currentTimeMillis();
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        List<OrderItemMaintenanceLineReq> lines = normalizeMaintenanceLines(req);
+        assertNoDuplicateItemIds(lines);
+
+        List<Integer> itemIds = lines.stream()
+                .map(OrderItemMaintenanceLineReq::getItemId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Integer, Integer> ticketedQtyByItemId = ticketedQuantitiesForItemIds(rfqId, itemIds);
+        int updatedCount = 0;
+        Set<String> changedFields = new LinkedHashSet<>();
+        List<Map<String, Object>> affectedRows = new ArrayList<>();
+        for (OrderItemMaintenanceLineReq line : lines) {
+            ItemQuoteVersion item = lockOrderItem(order, line.getItemId());
+            int ticketedQty = ticketedQtyByItemId.getOrDefault(item.getId(), 0);
+            Map<String, Object> before = buildOrderItemRow(item, ticketedQty);
+            Set<String> rowChangedFields = applyMaintenanceLine(item, line, ticketedQty);
+            if (rowChangedFields.isEmpty()) {
+                continue;
+            }
+            recalculateItemTotals(item);
+            if (itemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("询价订单零件信息保存失败，请刷新后重试");
+            }
+            changedFields.addAll(rowChangedFields);
+            updatedCount++;
+            affectedRows.add(buildOrderItemRow(item, ticketedQty));
+            log.info("Order item updated rfqId={} itemId={} changedFields={}", rfqId, item.getId(), rowChangedFields);
+            log.debug("Order item before update rfqId={} itemId={} before={}", rfqId, item.getId(), before);
+        }
+
+        if (updatedCount > 0) {
+            Map<String, Object> auditSummary = new LinkedHashMap<>();
+            auditSummary.put("rfqId", rfqId);
+            auditSummary.put("rfqNo", order.getRfqNo());
+            auditSummary.put("requestedCount", lines.size());
+            auditSummary.put("updatedCount", updatedCount);
+            auditSummary.put("changedFields", new ArrayList<>(changedFields));
+            auditSummary.put("durationMs", System.currentTimeMillis() - startedAt);
+            auditOrderSuccess(
+                    "ORDER_ITEM_UPDATE",
+                    order,
+                    auditSummary);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "已保存 " + updatedCount + " 行询价订单零件信息。");
+        result.put("rfqId", rfqId);
+        result.put("updatedCount", updatedCount);
+        result.put("changedFields", new ArrayList<>(changedFields));
+        result.put("affectedRows", affectedRows);
+        return result;
+    }
+
     public PageResult<OrderDeliveryTicket> pageOrderTickets(Integer rfqId, Integer page, Integer pageSize) {
         requireOrder(rfqId);
         int safePage = normalizePage(page);
@@ -518,6 +620,942 @@ public class OrderManagementService {
                     rfqId, unmatchedDrawings.size(), skippedFiles.size());
         }
         return result;
+    }
+
+    @Transactional
+    public Map<String, Object> replaceDrawings(
+            Integer rfqId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        if (isEmptyFiles(drawings) && isEmptyFiles(versionDrawings)) {
+            throw new RuntimeException("请至少上传一份 PDF 图纸");
+        }
+
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        Map<String, List<ItemQuoteVersion>> itemMapByPartNo = new HashMap<>();
+        Map<String, List<ItemQuoteVersion>> itemMapByPartNoVersion = new HashMap<>();
+        Set<DrawingPartNoResolver.DrawingIdentity> itemIdentities = new HashSet<>();
+        for (ItemQuoteVersion item : items) {
+            String normalizedPartNo = normalizePartNo(item.getPartNo());
+            if (!normalizedPartNo.isEmpty()) {
+                itemMapByPartNo.computeIfAbsent(normalizedPartNo, key -> new ArrayList<>()).add(item);
+            }
+            String normalizedVersion = DrawingPartNoResolver.normalizeVersion(item.getVersion());
+            if (!normalizedPartNo.isEmpty() && !normalizedVersion.isEmpty()) {
+                itemMapByPartNoVersion
+                        .computeIfAbsent(itemKey(normalizedPartNo, normalizedVersion), key -> new ArrayList<>())
+                        .add(item);
+                itemIdentities.add(new DrawingPartNoResolver.DrawingIdentity(normalizedPartNo, normalizedVersion));
+            }
+        }
+
+        List<Map<String, Object>> replacedItems = new ArrayList<>();
+        List<Map<String, Object>> protectedSkippedItems = new ArrayList<>();
+        List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
+        List<Map<String, Object>> skippedFiles = new ArrayList<>();
+        Set<String> protectedItemKeys = new HashSet<>();
+
+        if (versionDrawings != null) {
+            for (MultipartFile drawing : versionDrawings) {
+                replaceDrawing(
+                        order,
+                        drawing,
+                        true,
+                        itemMapByPartNo,
+                        itemMapByPartNoVersion,
+                        itemIdentities,
+                        protectedItemKeys,
+                        replacedItems,
+                        protectedSkippedItems,
+                        unmatchedDrawings,
+                        skippedFiles);
+            }
+        }
+        if (drawings != null) {
+            for (MultipartFile drawing : drawings) {
+                replaceDrawing(
+                        order,
+                        drawing,
+                        false,
+                        itemMapByPartNo,
+                        itemMapByPartNoVersion,
+                        itemIdentities,
+                        protectedItemKeys,
+                        replacedItems,
+                        protectedSkippedItems,
+                        unmatchedDrawings,
+                        skippedFiles);
+            }
+        }
+
+        if (!replacedItems.isEmpty()) {
+            auditOrderSuccess(
+                    "ORDER_DRAWING_REPLACE",
+                    order,
+                    buildReplaceDrawingAuditSummary(rfqId, drawings, versionDrawings, replacedItems, unmatchedDrawings, skippedFiles));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "替换图纸处理完成，成功替换 " + replacedItems.size() + " 项。");
+        result.put("replacedCount", replacedItems.size());
+        result.put("boundCount", replacedItems.size());
+        result.put("alreadyBoundCount", protectedSkippedItems.size());
+        result.put("unmatchedCount", unmatchedDrawings.size());
+        result.put("skippedCount", skippedFiles.size());
+        result.put("replacedItems", replacedItems);
+        result.put("boundItems", replacedItems);
+        result.put("alreadyBoundItems", protectedSkippedItems);
+        result.put("unmatchedDrawings", unmatchedDrawings);
+        result.put("skippedFiles", skippedFiles);
+        log.info("Order drawings replace completed rfqId={} uploadCount={} replacedCount={} unmatchedCount={} skippedCount={}",
+                rfqId, fileCount(drawings) + fileCount(versionDrawings), replacedItems.size(), unmatchedDrawings.size(), skippedFiles.size());
+        if (!unmatchedDrawings.isEmpty() || !skippedFiles.isEmpty()) {
+            log.warn("Order drawings replace completed with warnings rfqId={} unmatchedCount={} skippedCount={}",
+                    rfqId, unmatchedDrawings.size(), skippedFiles.size());
+        }
+        return result;
+    }
+
+    public Map<String, Object> previewItemDataReplacement(Integer rfqId, MultipartFile excelFile) {
+        OrderRfq order = requireOrder(rfqId);
+        OrderItemDataReplacementExcelParseResult parsed = parseOrderItemReplacementFile(excelFile);
+        List<ItemQuoteVersion> items = listItems(rfqId);
+        Map<Integer, Integer> ticketedQtyByItemId = ticketedQuantities(rfqId, items);
+        return buildItemDataReplacementPreview(order, parsed, items, ticketedQtyByItemId);
+    }
+
+    @Transactional
+    public Map<String, Object> confirmItemDataReplacement(
+            Integer rfqId,
+            MultipartFile excelFile,
+            String previewFingerprint) {
+        long startedAt = System.currentTimeMillis();
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        OrderItemDataReplacementExcelParseResult parsed = parseOrderItemReplacementFile(excelFile);
+        List<ItemQuoteVersion> currentItems = listItems(rfqId);
+        Map<Integer, Integer> ticketedQtyByItemId = ticketedQuantities(rfqId, currentItems);
+        Map<String, Object> preview = buildItemDataReplacementPreview(order, parsed, currentItems, ticketedQtyByItemId);
+        if (!fingerprintsEqual(previewFingerprint, String.valueOf(preview.get("previewFingerprint")))) {
+            throw new PreviewFingerprintConflictException("数据已发生变化，请重新预览");
+        }
+        if (!Boolean.TRUE.equals(preview.get("canConfirm"))) {
+            throw new IllegalArgumentException("当前替换数据不能确认，请重新预览");
+        }
+
+        Map<Integer, ItemQuoteVersion> lockedItemsById = new LinkedHashMap<>();
+        for (Map<String, Object> row : safeMapList(preview.get("rows"))) {
+            if (!"CHANGED".equals(row.get("status"))) {
+                continue;
+            }
+            Integer itemId = objectToInteger(row.get("itemId"));
+            ItemQuoteVersion locked = lockOrderItem(order, itemId);
+            lockedItemsById.put(itemId, locked);
+        }
+
+        int updatedCount = 0;
+        Map<String, Integer> changedFieldCounts = new LinkedHashMap<>();
+        List<Map<String, Object>> affectedRows = new ArrayList<>();
+        for (Map<String, Object> row : safeMapList(preview.get("rows"))) {
+            if (!"CHANGED".equals(row.get("status"))) {
+                continue;
+            }
+            Integer itemId = objectToInteger(row.get("itemId"));
+            ItemQuoteVersion item = lockedItemsById.get(itemId);
+            if (item == null) {
+                throw new PreviewFingerprintConflictException("数据已发生变化，请重新预览");
+            }
+            int ticketedQty = ticketedQtyByItemId.getOrDefault(item.getId(), 0);
+            for (Map<String, Object> change : safeMapList(row.get("changes"))) {
+                String field = String.valueOf(change.get("field"));
+                applyImportedChange(item, field, change.get("afterValue"), ticketedQty);
+                changedFieldCounts.merge(field, 1, Integer::sum);
+            }
+            recalculateItemTotals(item);
+            if (itemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("询价订单表格数据替换保存失败，请刷新后重试");
+            }
+            updatedCount++;
+            affectedRows.add(buildOrderItemRow(item, ticketedQty));
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>(safeMap(preview.get("summary")));
+        summary.put("updatedItemCount", updatedCount);
+        summary.put("quantityAppliedCount", 0);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "表格数据替换已确认，更新 " + updatedCount + " 行询价订单零件信息。");
+        result.put("summary", summary);
+        result.put("affectedRows", affectedRows);
+
+        if (updatedCount > 0) {
+            Map<String, Object> auditSummary = new LinkedHashMap<>();
+            auditSummary.put("rfqId", rfqId);
+            auditSummary.put("rfqNo", order.getRfqNo());
+            auditSummary.put("importedCount", summary.getOrDefault("importedCount", 0));
+            auditSummary.put("matchedCount", summary.getOrDefault("matchedCount", 0));
+            auditSummary.put("updatedItemCount", updatedCount);
+            auditSummary.put("unmatchedCount", summary.getOrDefault("unmatchedCount", 0));
+            auditSummary.put("skippedCount", summary.getOrDefault("skippedCount", 0));
+            auditSummary.put("errorCount", summary.getOrDefault("errorCount", 0));
+            auditSummary.put("changedFieldCounts", changedFieldCounts);
+            auditSummary.put("durationMs", System.currentTimeMillis() - startedAt);
+            auditOrderSuccess(
+                    "ORDER_ITEM_DATA_REPLACEMENT",
+                    order,
+                    auditSummary);
+        }
+        log.info("Order item data replacement completed rfqId={} updatedItemCount={} unmatchedCount={} errorCount={} durationMs={}",
+                rfqId, updatedCount, summary.getOrDefault("unmatchedCount", 0), summary.getOrDefault("errorCount", 0),
+                System.currentTimeMillis() - startedAt);
+        return result;
+    }
+
+    private List<OrderItemMaintenanceLineReq> normalizeMaintenanceLines(OrderItemMaintenanceUpdateReq req) {
+        if (req == null || req.getItems() == null || req.getItems().isEmpty()) {
+            throw new RuntimeException("请提供需要保存的询价订单零件行");
+        }
+        List<OrderItemMaintenanceLineReq> lines = req.getItems().stream()
+                .filter(Objects::nonNull)
+                .toList();
+        if (lines.isEmpty()) {
+            throw new RuntimeException("请提供需要保存的询价订单零件行");
+        }
+        for (OrderItemMaintenanceLineReq line : lines) {
+            if (line.getItemId() == null) {
+                throw new RuntimeException("询价订单零件行 ID 不能为空");
+            }
+        }
+        return lines;
+    }
+
+    private void assertNoDuplicateItemIds(List<OrderItemMaintenanceLineReq> lines) {
+        Set<Integer> seen = new LinkedHashSet<>();
+        for (OrderItemMaintenanceLineReq line : lines) {
+            if (!seen.add(line.getItemId())) {
+                throw new RuntimeException("询价订单零件行重复提交：" + line.getItemId());
+            }
+        }
+    }
+
+    private ItemQuoteVersion lockOrderItem(OrderRfq order, Integer itemId) {
+        if (itemId == null) {
+            throw new RuntimeException("询价订单零件行 ID 不能为空");
+        }
+        ItemQuoteVersion item = itemMapper.selectByIdForUpdate(itemId);
+        if (item == null) {
+            throw new RuntimeException("询价订单零件行不存在：" + itemId);
+        }
+        if (!Objects.equals(order.getId(), item.getRfqId())) {
+            throw new RuntimeException("询价订单零件行 " + itemId + " 不属于当前询价订单");
+        }
+        return item;
+    }
+
+    private Set<String> applyMaintenanceLine(
+            ItemQuoteVersion item,
+            OrderItemMaintenanceLineReq line,
+            int ticketedQty) {
+        Set<String> changed = new LinkedHashSet<>();
+        applyString(item.getPartNo(), normalizeRequiredText(line.getPartNo(), "图号", 100), "partNo", changed, item::setPartNo);
+        applyString(item.getVersion(), normalizeText(line.getVersion(), "版本", 20), "version", changed, item::setVersion);
+
+        Integer qty = line.getQty();
+        validateOrderItemQty(qty, ticketedQty);
+        if (!Objects.equals(item.getQty(), qty)) {
+            item.setQty(qty);
+            changed.add("qty");
+        }
+
+        applyString(item.getLeadTime(), normalizeLeadTime(line.getLeadTime(), "客户询价交期"), "leadTime", changed, item::setLeadTime);
+        applyString(item.getQuoteLeadTime(), normalizeLeadTime(line.getQuoteLeadTime(), "报价承诺交期"), "quoteLeadTime", changed, item::setQuoteLeadTime);
+        applyString(item.getInternalTargetLeadTime(), normalizeLeadTime(line.getInternalTargetLeadTime(), "内部目标交期"), "internalTargetLeadTime", changed, item::setInternalTargetLeadTime);
+        applyString(item.getDescription(), normalizeText(line.getDescription(), "物料描述", 500), "description", changed, item::setDescription);
+        applyString(item.getSurfaceTreatment(), normalizeText(line.getSurfaceTreatment(), "表面处理", 200), "surfaceTreatment", changed, item::setSurfaceTreatment);
+        applyString(item.getRemark(), normalizeText(line.getRemark(), "备注", 500), "remark", changed, item::setRemark);
+
+        if (!Objects.equals(item.getSalesOrderDate(), line.getSalesOrderDate())) {
+            item.setSalesOrderDate(line.getSalesOrderDate());
+            changed.add("salesOrderDate");
+        }
+        applyString(item.getCustomerOrderNo(), normalizeText(line.getCustomerOrderNo(), "客户订单号", 120), "customerOrderNo", changed, item::setCustomerOrderNo);
+        applyString(item.getCustomerProjectNo(), normalizeText(line.getCustomerProjectNo(), "客户项目号", 120), "customerProjectNo", changed, item::setCustomerProjectNo);
+        applyString(item.getCustomerOrderTitle(), normalizeText(line.getCustomerOrderTitle(), "客户下单抬头", 255), "customerOrderTitle", changed, item::setCustomerOrderTitle);
+        applyString(item.getOrderType(), normalizeOrderType(line.getOrderType()), "orderType", changed, item::setOrderType);
+        applyString(item.getInternalProjectNo(), normalizeText(line.getInternalProjectNo(), "内部项目号", 120), "internalProjectNo", changed, item::setInternalProjectNo);
+        return changed;
+    }
+
+    private void applyString(
+            String current,
+            String next,
+            String field,
+            Set<String> changed,
+            java.util.function.Consumer<String> setter) {
+        if (!Objects.equals(trimToNull(current), next)) {
+            changed.add(field);
+        }
+        setter.accept(next);
+    }
+
+    private void validateOrderItemQty(Integer qty, int ticketedQty) {
+        if (qty == null || qty <= 0) {
+            throw new RuntimeException("询价数量必须为正整数");
+        }
+        if (qty < ticketedQty) {
+            throw new RuntimeException("询价数量不能小于已提单数量 " + ticketedQty);
+        }
+    }
+
+    private String normalizeRequiredText(String value, String fieldName, int maxLength) {
+        String normalized = normalizeText(value, fieldName, maxLength);
+        if (normalized == null) {
+            throw new RuntimeException(fieldName + "不能为空");
+        }
+        return normalized;
+    }
+
+    private String normalizeText(String value, String fieldName, int maxLength) {
+        String normalized = trimToNull(value);
+        if (normalized != null && normalized.length() > maxLength) {
+            throw new RuntimeException(fieldName + "长度不能超过 " + maxLength + " 个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeLeadTime(String value, String fieldName) {
+        String normalized = leadTimeService == null ? trimToNull(value) : leadTimeService.normalizeForQuote(value);
+        if (normalized != null && normalized.length() > 100) {
+            throw new RuntimeException(fieldName + "长度不能超过 100 个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeOrderType(String value) {
+        String normalized = normalizeText(value, "订单类型", 20);
+        if (normalized == null) {
+            return null;
+        }
+        if (!Set.of("预测订单", "备货订单", "正式订单").contains(normalized)) {
+            throw new RuntimeException("订单类型只能是预测订单、备货订单或正式订单");
+        }
+        return normalized;
+    }
+
+    private void recalculateItemTotals(ItemQuoteVersion item) {
+        Integer qty = item.getQty();
+        if (qty == null) {
+            item.setTaxIncludedTotalPrice(null);
+            item.setUntaxedTotalPrice(null);
+            return;
+        }
+        item.setTaxIncludedTotalPrice(item.getTaxIncludedUnitPrice() == null
+                ? null
+                : item.getTaxIncludedUnitPrice() * qty);
+        item.setUntaxedTotalPrice(item.getUntaxedUnitPrice() == null
+                ? null
+                : item.getUntaxedUnitPrice() * qty);
+    }
+
+    private Map<Integer, Integer> ticketedQuantities(Integer rfqId, List<ItemQuoteVersion> items) {
+        if (items == null || items.isEmpty()) {
+            return Map.of();
+        }
+        QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
+        query.eq("rfq_id", rfqId);
+        return ticketedQuantities(items, safeList(ticketMapper.selectList(query)));
+    }
+
+    private Map<Integer, Integer> ticketedQuantitiesForItemIds(Integer rfqId, List<Integer> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return Map.of();
+        }
+        Set<Integer> itemIdSet = new LinkedHashSet<>(itemIds);
+        Map<Integer, Integer> quantities = new LinkedHashMap<>();
+        itemIdSet.forEach(itemId -> quantities.put(itemId, 0));
+        QueryWrapper<OrderDeliveryTicket> query = new QueryWrapper<>();
+        query.eq("rfq_id", rfqId);
+        for (OrderDeliveryTicket ticket : safeList(ticketMapper.selectList(query))) {
+            Integer itemId = ticket.getItemId();
+            if (itemId == null
+                    && "RFQ".equalsIgnoreCase(ticket.getSourceType())
+                    && ticket.getSourceItemId() != null
+                    && ticket.getSourceItemId() <= Integer.MAX_VALUE) {
+                itemId = ticket.getSourceItemId().intValue();
+            }
+            if (itemId != null && itemIdSet.contains(itemId)) {
+                quantities.merge(itemId, safeInt(ticket.getQty()), Integer::sum);
+            }
+        }
+        return quantities;
+    }
+
+    private Map<Integer, Integer> ticketedQuantities(List<ItemQuoteVersion> items, List<OrderDeliveryTicket> tickets) {
+        Map<Integer, ItemQuoteVersion> itemsById = items.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(
+                        ItemQuoteVersion::getId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        Map<String, List<ItemQuoteVersion>> itemsByHistoricalKey = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : items) {
+            if (item == null || item.getRfqId() == null) {
+                continue;
+            }
+            String key = item.getRfqId() + "||" + itemKey(item.getPartNo(), item.getVersion());
+            itemsByHistoricalKey.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+        }
+
+        Map<Integer, Integer> quantities = new LinkedHashMap<>();
+        itemsById.keySet().forEach(itemId -> quantities.put(itemId, 0));
+        for (OrderDeliveryTicket ticket : safeList(tickets)) {
+            ItemQuoteVersion matched = exactTicketItem(ticket, itemsById);
+            if (matched == null) {
+                matched = historicalTicketItem(ticket, itemsByHistoricalKey);
+            }
+            if (matched != null && matched.getId() != null) {
+                quantities.merge(matched.getId(), safeInt(ticket.getQty()), Integer::sum);
+            }
+        }
+        return quantities;
+    }
+
+    private ItemQuoteVersion exactTicketItem(OrderDeliveryTicket ticket, Map<Integer, ItemQuoteVersion> itemsById) {
+        if (ticket == null) {
+            return null;
+        }
+        ItemQuoteVersion byItemId = ticket.getItemId() == null ? null : itemsById.get(ticket.getItemId());
+        if (byItemId != null) {
+            return byItemId;
+        }
+        if (!"RFQ".equalsIgnoreCase(ticket.getSourceType())
+                || ticket.getSourceItemId() == null
+                || ticket.getSourceItemId() > Integer.MAX_VALUE) {
+            return null;
+        }
+        ItemQuoteVersion bySourceItemId = itemsById.get(ticket.getSourceItemId().intValue());
+        if (bySourceItemId == null || ticket.getSourceOrderId() == null || bySourceItemId.getRfqId() == null) {
+            return null;
+        }
+        return Objects.equals(ticket.getSourceOrderId(), bySourceItemId.getRfqId().longValue())
+                ? bySourceItemId
+                : null;
+    }
+
+    private ItemQuoteVersion historicalTicketItem(
+            OrderDeliveryTicket ticket,
+            Map<String, List<ItemQuoteVersion>> itemsByHistoricalKey) {
+        if (ticket == null || ticket.getItemId() != null) {
+            return null;
+        }
+        Integer rfqId = ticket.getRfqId();
+        if (rfqId == null
+                && "RFQ".equalsIgnoreCase(ticket.getSourceType())
+                && ticket.getSourceOrderId() != null
+                && ticket.getSourceOrderId() <= Integer.MAX_VALUE) {
+            rfqId = ticket.getSourceOrderId().intValue();
+        }
+        if (rfqId == null) {
+            return null;
+        }
+        List<ItemQuoteVersion> candidates = itemsByHistoricalKey.getOrDefault(
+                rfqId + "||" + itemKey(ticket.getPartNo(), ticket.getVersion()),
+                List.of());
+        return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    private Map<String, Object> buildOrderItemRow(ItemQuoteVersion item, int ticketedQty) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", item.getId());
+        row.put("itemId", item.getId());
+        row.put("rfqId", item.getRfqId());
+        row.put("partNo", item.getPartNo());
+        row.put("version", item.getVersion());
+        row.put("quoteMode", item.getQuoteMode());
+        row.put("orderType", item.getOrderType());
+        row.put("drawingUrl", item.getDrawingUrl());
+        row.put("hasDrawing", !isBlank(item.getDrawingUrl()));
+        row.put("qty", item.getQty());
+        row.put("ticketedQty", ticketedQty);
+        row.put("remainingQty", Math.max(0, safeInt(item.getQty()) - ticketedQty));
+        row.put("leadTime", item.getLeadTime());
+        row.put("quoteLeadTime", item.getQuoteLeadTime());
+        row.put("internalTargetLeadTime", item.getInternalTargetLeadTime());
+        row.put("materialName", item.getMaterialName());
+        row.put("engineeringMaterialName", item.getEngineeringMaterialName());
+        row.put("materialNo", item.getMaterialNo());
+        row.put("materialNoStatus", item.getMaterialNoStatus());
+        row.put("description", item.getDescription());
+        row.put("surfaceTreatment", item.getSurfaceTreatment());
+        row.put("remark", item.getRemark());
+        row.put("salesOrderDate", item.getSalesOrderDate());
+        row.put("customerOrderNo", item.getCustomerOrderNo());
+        row.put("customerProjectNo", item.getCustomerProjectNo());
+        row.put("customerOrderTitle", item.getCustomerOrderTitle());
+        row.put("internalProjectNo", item.getInternalProjectNo());
+        row.put("status", item.getStatus());
+        row.put("taxIncludedUnitPrice", item.getTaxIncludedUnitPrice());
+        row.put("taxIncludedTotalPrice", item.getTaxIncludedTotalPrice());
+        row.put("untaxedUnitPrice", item.getUntaxedUnitPrice());
+        row.put("untaxedTotalPrice", item.getUntaxedTotalPrice());
+        return row;
+    }
+
+    private void replaceDrawing(
+            OrderRfq order,
+            MultipartFile drawing,
+            boolean matchByPartNoVersion,
+            Map<String, List<ItemQuoteVersion>> itemMapByPartNo,
+            Map<String, List<ItemQuoteVersion>> itemMapByPartNoVersion,
+            Set<DrawingPartNoResolver.DrawingIdentity> itemIdentities,
+            Set<String> protectedItemKeys,
+            List<Map<String, Object>> replacedItems,
+            List<Map<String, Object>> protectedSkippedItems,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+        if (drawing == null || isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+            skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+            return;
+        }
+
+        String partNoFromFileName;
+        List<ItemQuoteVersion> matchedItems;
+        if (matchByPartNoVersion) {
+            DrawingPartNoResolver.DrawingIdentity identity =
+                    DrawingPartNoResolver.extractPartNoVersion(cleanFileName, itemIdentities);
+            partNoFromFileName = identity == null
+                    ? DrawingPartNoResolver.extractPartNo(cleanFileName, itemMapByPartNo.keySet())
+                    : identity.partNo();
+            matchedItems = identity == null ? null : itemMapByPartNoVersion.get(itemKey(identity.partNo(), identity.version()));
+        } else {
+            partNoFromFileName = DrawingPartNoResolver.extractPartNo(cleanFileName, itemMapByPartNo.keySet());
+            matchedItems = itemMapByPartNo.get(partNoFromFileName);
+        }
+
+        if (matchedItems == null || matchedItems.isEmpty()) {
+            unmatchedDrawings.add(buildFileResult(cleanFileName, partNoFromFileName, "未找到该订单对应零件"));
+            return;
+        }
+
+        String fileUrl = businessFileService
+                .saveDrawing(order, drawing, "ORDER_DRAWING_REPLACE", String.valueOf(order.getId()))
+                .publicPath();
+        for (ItemQuoteVersion item : matchedItems) {
+            String key = String.valueOf(item.getId());
+            if (!matchByPartNoVersion && protectedItemKeys.contains(key)) {
+                protectedSkippedItems.add(buildItemResult(item, cleanFileName, "已由图号+版本图纸替换，本次按图号跳过"));
+                continue;
+            }
+            item.setDrawingUrl(fileUrl);
+            if (itemMapper.updateById(item) <= 0) {
+                throw new RuntimeException("询价订单图纸替换保存失败，请刷新后重试");
+            }
+            if (matchByPartNoVersion) {
+                protectedItemKeys.add(key);
+            }
+            replacedItems.add(buildItemResult(item, cleanFileName, "已替换"));
+        }
+    }
+
+    private Map<String, Object> buildReplaceDrawingAuditSummary(
+            Integer rfqId,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings,
+            List<Map<String, Object>> replacedItems,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        int uploadedDrawingCount = fileCount(drawings);
+        int versionUploadedDrawingCount = fileCount(versionDrawings);
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("rfqId", rfqId);
+        summary.put("uploadCount", uploadedDrawingCount + versionUploadedDrawingCount);
+        summary.put("uploadedDrawingCount", uploadedDrawingCount);
+        summary.put("versionUploadedDrawingCount", versionUploadedDrawingCount);
+        summary.put("replacedCount", replacedItems.size());
+        summary.put("unmatchedCount", unmatchedDrawings.size());
+        summary.put("skippedCount", skippedFiles.size());
+        summary.put("drawingMatchModes", Map.of(
+                "partNo", uploadedDrawingCount,
+                "partNoVersion", versionUploadedDrawingCount
+        ));
+        return summary;
+    }
+
+    private OrderItemDataReplacementExcelParseResult parseOrderItemReplacementFile(MultipartFile excelFile) {
+        if (excelFile == null || excelFile.isEmpty()) {
+            throw new IllegalArgumentException("表格数据替换文件不能为空");
+        }
+        try {
+            return orderItemDataReplacementExcelParser.parse(excelFile.getInputStream());
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("询价订单表格数据替换解析失败：" + e.getMessage(), e);
+        }
+    }
+
+    private Map<String, Object> buildItemDataReplacementPreview(
+            OrderRfq order,
+            OrderItemDataReplacementExcelParseResult parsed,
+            List<ItemQuoteVersion> items,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        Map<Integer, ItemQuoteVersion> itemsById = items.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(
+                        ItemQuoteVersion::getId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        Map<String, List<ItemQuoteVersion>> candidatesByKey = groupItemsByPartVersion(items);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (OrderItemDataReplacementExcelRowDTO excelRow : safeList(parsed.getRows())) {
+            rows.add(previewReplacementRow(excelRow, order, itemsById, candidatesByKey, ticketedQtyByItemId));
+        }
+        Map<String, Object> summary = summarizeReplacementRows(rows);
+
+        Map<String, Object> preview = new LinkedHashMap<>();
+        preview.put("success", true);
+        preview.put("recognizedFields", safeList(parsed.getRecognizedFields()));
+        preview.put("rows", rows);
+        preview.put("summary", summary);
+        preview.put("canConfirm", numberValue(summary.get("errorCount")).intValue() == 0
+                && numberValue(summary.get("changedCount")).intValue() > 0);
+        preview.put("previewFingerprint", replacementFingerprint(order, parsed, rows, itemsById, ticketedQtyByItemId));
+        return preview;
+    }
+
+    private Map<String, List<ItemQuoteVersion>> groupItemsByPartVersion(List<ItemQuoteVersion> items) {
+        Map<String, List<ItemQuoteVersion>> grouped = new LinkedHashMap<>();
+        for (ItemQuoteVersion item : safeList(items)) {
+            grouped.computeIfAbsent(itemKey(item.getPartNo(), item.getVersion()), ignored -> new ArrayList<>()).add(item);
+        }
+        grouped.values().forEach(group -> group.sort(Comparator.comparing(ItemQuoteVersion::getId)));
+        return grouped;
+    }
+
+    private Map<String, Object> previewReplacementRow(
+            OrderItemDataReplacementExcelRowDTO excelRow,
+            OrderRfq order,
+            Map<Integer, ItemQuoteVersion> itemsById,
+            Map<String, List<ItemQuoteVersion>> candidatesByKey,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("excelRowNumber", excelRow.getExcelRowNumber());
+        row.put("partNo", excelRow.getPartNo());
+        row.put("version", excelRow.getVersion());
+        row.put("changes", new ArrayList<>());
+
+        if (excelRow.hasErrors()) {
+            row.put("status", "ERROR");
+            row.put("reason", excelRow.getErrors().stream()
+                    .map(OrderItemDataReplacementExcelErrorDTO::getMessage)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("；")));
+            return row;
+        }
+
+        ItemQuoteVersion item = null;
+        if (excelRow.getItemId() != null) {
+            item = itemsById.get(excelRow.getItemId());
+            if (item == null) {
+                row.put("status", "UNMATCHED");
+                row.put("reason", "当前询价订单未找到该零件ID");
+                return row;
+            }
+        } else {
+            List<ItemQuoteVersion> candidates = candidatesByKey.getOrDefault(
+                    itemKey(excelRow.getNormalizedPartNo(), excelRow.getNormalizedVersion()),
+                    List.of());
+            if (candidates.isEmpty()) {
+                row.put("status", "UNMATCHED");
+                row.put("reason", "当前询价订单未找到对应图号和版本的零件");
+                return row;
+            }
+            if (candidates.size() > 1) {
+                row.put("status", "ERROR");
+                row.put("reason", "当前询价订单存在多个相同图号和版本的零件，请使用零件ID匹配");
+                return row;
+            }
+            item = candidates.get(0);
+        }
+
+        row.put("rfqId", item.getRfqId());
+        row.put("rfqNo", order.getRfqNo());
+        row.put("itemId", item.getId());
+        int ticketedQty = ticketedQtyByItemId.getOrDefault(item.getId(), 0);
+        List<Map<String, Object>> changes = replacementChanges(item, excelRow.getValues(), ticketedQty);
+        row.put("changes", changes);
+        row.put("status", changes.isEmpty() ? "UNCHANGED" : "CHANGED");
+        row.put("reason", "");
+        return row;
+    }
+
+    private List<Map<String, Object>> replacementChanges(
+            ItemQuoteVersion item,
+            Map<String, Object> values,
+            int ticketedQty) {
+        List<Map<String, Object>> changes = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : safeMap(values).entrySet()) {
+            String field = entry.getKey();
+            Object beforeValue = currentReplacementValue(item, field);
+            Object afterValue = normalizeReplacementValue(field, entry.getValue(), ticketedQty);
+            if (Objects.equals(beforeValue, afterValue)) {
+                continue;
+            }
+            Map<String, Object> change = new LinkedHashMap<>();
+            change.put("field", field);
+            change.put("label", replacementFieldLabel(field));
+            change.put("beforeValue", beforeValue);
+            change.put("afterValue", afterValue);
+            changes.add(change);
+        }
+        return changes;
+    }
+
+    private Object currentReplacementValue(ItemQuoteVersion item, String field) {
+        return switch (field) {
+            case "partNo" -> item.getPartNo();
+            case "version" -> item.getVersion();
+            case "qty" -> item.getQty();
+            case "leadTime" -> item.getLeadTime();
+            case "quoteLeadTime" -> item.getQuoteLeadTime();
+            case "internalTargetLeadTime" -> item.getInternalTargetLeadTime();
+            case "description" -> item.getDescription();
+            case "surfaceTreatment" -> item.getSurfaceTreatment();
+            case "remark" -> item.getRemark();
+            case "salesOrderDate" -> item.getSalesOrderDate();
+            case "customerOrderNo" -> item.getCustomerOrderNo();
+            case "customerProjectNo" -> item.getCustomerProjectNo();
+            case "customerOrderTitle" -> item.getCustomerOrderTitle();
+            case "orderType" -> item.getOrderType();
+            case "internalProjectNo" -> item.getInternalProjectNo();
+            default -> null;
+        };
+    }
+
+    private Object normalizeReplacementValue(String field, Object value, int ticketedQty) {
+        return switch (field) {
+            case "partNo" -> normalizeRequiredText(stringValue(value), "图号", 100);
+            case "version" -> normalizeText(stringValue(value), "版本", 20);
+            case "qty" -> {
+                Integer qty = objectToInteger(value);
+                validateOrderItemQty(qty, ticketedQty);
+                yield qty;
+            }
+            case "leadTime" -> normalizeLeadTime(stringValue(value), "客户询价交期");
+            case "quoteLeadTime" -> normalizeLeadTime(stringValue(value), "报价承诺交期");
+            case "internalTargetLeadTime" -> normalizeLeadTime(stringValue(value), "内部目标交期");
+            case "description" -> normalizeText(stringValue(value), "物料描述", 500);
+            case "surfaceTreatment" -> normalizeText(stringValue(value), "表面处理", 200);
+            case "remark" -> normalizeText(stringValue(value), "备注", 500);
+            case "salesOrderDate" -> value;
+            case "customerOrderNo" -> normalizeText(stringValue(value), "客户订单号", 120);
+            case "customerProjectNo" -> normalizeText(stringValue(value), "客户项目号", 120);
+            case "customerOrderTitle" -> normalizeText(stringValue(value), "客户下单抬头", 255);
+            case "orderType" -> normalizeOrderType(stringValue(value));
+            case "internalProjectNo" -> normalizeText(stringValue(value), "内部项目号", 120);
+            default -> throw new IllegalArgumentException("存在不支持的替换字段");
+        };
+    }
+
+    private void applyImportedChange(ItemQuoteVersion item, String field, Object value, int ticketedQty) {
+        Object normalized = normalizeReplacementValue(field, value, ticketedQty);
+        switch (field) {
+            case "partNo" -> item.setPartNo((String) normalized);
+            case "version" -> item.setVersion((String) normalized);
+            case "qty" -> item.setQty((Integer) normalized);
+            case "leadTime" -> item.setLeadTime((String) normalized);
+            case "quoteLeadTime" -> item.setQuoteLeadTime((String) normalized);
+            case "internalTargetLeadTime" -> item.setInternalTargetLeadTime((String) normalized);
+            case "description" -> item.setDescription((String) normalized);
+            case "surfaceTreatment" -> item.setSurfaceTreatment((String) normalized);
+            case "remark" -> item.setRemark((String) normalized);
+            case "salesOrderDate" -> item.setSalesOrderDate((LocalDate) normalized);
+            case "customerOrderNo" -> item.setCustomerOrderNo((String) normalized);
+            case "customerProjectNo" -> item.setCustomerProjectNo((String) normalized);
+            case "customerOrderTitle" -> item.setCustomerOrderTitle((String) normalized);
+            case "orderType" -> item.setOrderType((String) normalized);
+            case "internalProjectNo" -> item.setInternalProjectNo((String) normalized);
+            default -> throw new IllegalArgumentException("存在不支持的替换字段");
+        }
+    }
+
+    private String replacementFieldLabel(String field) {
+        return OrderItemDataReplacementField.replaceableFields().stream()
+                .filter(candidate -> candidate.getPropertyName().equals(field))
+                .findFirst()
+                .map(OrderItemDataReplacementField::getHeader)
+                .orElse(field);
+    }
+
+    private Map<String, Object> summarizeReplacementRows(List<Map<String, Object>> rows) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("importedCount", rows.size());
+        summary.put("matchedCount", 0);
+        summary.put("changedCount", 0);
+        summary.put("quantityOnlyCount", 0);
+        summary.put("unchangedCount", 0);
+        summary.put("unmatchedCount", 0);
+        summary.put("skippedCount", 0);
+        summary.put("errorCount", 0);
+        summary.put("updatedItemCount", 0);
+        summary.put("quantityAppliedCount", 0);
+        for (Map<String, Object> row : rows) {
+            if (row.get("itemId") != null) {
+                summary.put("matchedCount", numberValue(summary.get("matchedCount")).intValue() + 1);
+            }
+            String status = String.valueOf(row.get("status"));
+            switch (status) {
+                case "CHANGED" -> summary.put("changedCount", numberValue(summary.get("changedCount")).intValue() + 1);
+                case "UNCHANGED" -> summary.put("unchangedCount", numberValue(summary.get("unchangedCount")).intValue() + 1);
+                case "UNMATCHED" -> summary.put("unmatchedCount", numberValue(summary.get("unmatchedCount")).intValue() + 1);
+                case "SKIPPED" -> summary.put("skippedCount", numberValue(summary.get("skippedCount")).intValue() + 1);
+                case "ERROR" -> summary.put("errorCount", numberValue(summary.get("errorCount")).intValue() + 1);
+                default -> {
+                }
+            }
+        }
+        return summary;
+    }
+
+    private String replacementFingerprint(
+            OrderRfq order,
+            OrderItemDataReplacementExcelParseResult parsed,
+            List<Map<String, Object>> previewRows,
+            Map<Integer, ItemQuoteVersion> itemsById,
+            Map<Integer, Integer> ticketedQtyByItemId) {
+        StringBuilder canonical = new StringBuilder();
+        AuthContext.SessionUser user = AuthContext.get();
+        appendToken(canonical, "user", user == null || user.id() == null ? "anonymous" : user.id());
+        appendToken(canonical, "rfqId", order.getId());
+        appendToken(canonical, "rfqStatus", order.getStatus());
+        appendToken(canonical, "rfqCustomer", trimToNull(order.getCustomerName()));
+        safeList(parsed.getRecognizedFields()).stream()
+                .sorted()
+                .forEach(field -> appendToken(canonical, "field", field));
+
+        for (Map<String, Object> row : safeList(previewRows)) {
+            appendToken(canonical, "excelRow", row.get("excelRowNumber"));
+            appendToken(canonical, "status", row.get("status"));
+            appendToken(canonical, "itemId", row.get("itemId"));
+            for (Map<String, Object> change : safeMapList(row.get("changes"))) {
+                appendToken(canonical, "changeField", change.get("field"));
+                appendToken(canonical, "changeAfter", canonicalValue(change.get("afterValue")));
+            }
+            Integer itemId = objectToInteger(row.get("itemId"));
+            ItemQuoteVersion item = itemId == null ? null : itemsById.get(itemId);
+            if (item != null) {
+                appendToken(canonical, "currentItem", item.getId());
+                appendToken(canonical, "currentPartNo", item.getPartNo());
+                appendToken(canonical, "currentVersion", item.getVersion());
+                appendToken(canonical, "currentQty", item.getQty());
+                appendToken(canonical, "ticketedQty", ticketedQtyByItemId.getOrDefault(item.getId(), 0));
+                appendToken(canonical, "currentLeadTime", item.getLeadTime());
+                appendToken(canonical, "currentQuoteLeadTime", item.getQuoteLeadTime());
+                appendToken(canonical, "currentInternalTargetLeadTime", item.getInternalTargetLeadTime());
+                appendToken(canonical, "currentDescription", item.getDescription());
+                appendToken(canonical, "currentSurfaceTreatment", item.getSurfaceTreatment());
+                appendToken(canonical, "currentRemark", item.getRemark());
+                appendToken(canonical, "currentSalesOrderDate", item.getSalesOrderDate());
+                appendToken(canonical, "currentCustomerOrderNo", item.getCustomerOrderNo());
+                appendToken(canonical, "currentCustomerProjectNo", item.getCustomerProjectNo());
+                appendToken(canonical, "currentCustomerOrderTitle", item.getCustomerOrderTitle());
+                appendToken(canonical, "currentOrderType", item.getOrderType());
+                appendToken(canonical, "currentInternalProjectNo", item.getInternalProjectNo());
+            }
+        }
+        return sha256(canonical.toString());
+    }
+
+    private void auditOrderSuccess(String action, OrderRfq order, Map<String, Object> summary) {
+        if (auditService == null) {
+            return;
+        }
+        auditService.record(
+                action,
+                "order_rfq",
+                order.getId(),
+                null,
+                summary,
+                "ORDER",
+                "SUCCESS",
+                AuditService.labelForAction(action),
+                null);
+    }
+
+    private boolean fingerprintsEqual(String expected, String actual) {
+        if (expected == null || !expected.trim().matches("(?i)[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("预览指纹格式不正确");
+        }
+        byte[] expectedBytes = HexFormat.of().parseHex(expected.trim());
+        byte[] actualBytes = HexFormat.of().parseHex(actual);
+        return MessageDigest.isEqual(expectedBytes, actualBytes);
+    }
+
+    private void appendToken(StringBuilder canonical, String key, Object value) {
+        String text = canonicalValue(value);
+        canonical.append(key.length()).append(':').append(key)
+                .append(text.length()).append(':').append(text).append('\n');
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private String canonicalValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Integer objectToInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private <T> List<T> safeList(Collection<T> values) {
+        return values == null ? List.of() : new ArrayList<>(values);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> safeMapList(Object values) {
+        if (!(values instanceof Collection<?> collection)) {
+            return List.of();
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Object value : collection) {
+            if (value instanceof Map<?, ?> map) {
+                rows.add((Map<String, Object>) map);
+            }
+        }
+        return rows;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> safeMap(Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     private Map<String, Object> buildSummary(OrderRfq order) {
@@ -800,6 +1838,14 @@ public class OrderManagementService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private boolean matchesCustomerKeyword(String customerName, String field, String keyword) {

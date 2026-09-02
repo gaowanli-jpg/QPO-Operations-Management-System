@@ -2,11 +2,11 @@ package com.machining.quote.controller;
 
 import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.OrderItemMaintenanceUpdateReq;
 import com.machining.quote.dto.OrderStatusChangeReq;
 import com.machining.quote.dto.OrderStatusChangeResult;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
-import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.OrderStatusManagementService;
@@ -52,11 +52,45 @@ public class OrderManagementController {
 
     @GetMapping("/orders/{rfqId}/items")
     @RequirePermission("market:order:view")
-    public PageResult<ItemQuoteVersion> listOrderItems(
+    public PageResult<Map<String, Object>> listOrderItems(
             @PathVariable Integer rfqId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-        return orderManagementService.pageOrderItems(rfqId, page, pageSize);
+        return orderManagementService.pageOrderItemRows(rfqId, page, pageSize);
+    }
+
+    @PostMapping("/orders/{rfqId}/items/batch")
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> saveOrderItems(
+            @PathVariable Integer rfqId,
+            @RequestBody OrderItemMaintenanceUpdateReq req) {
+        return orderManagementService.saveOrderItems(rfqId, req);
+    }
+
+    @PostMapping(value = "/orders/{rfqId}/drawings/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> replaceDrawings(
+            @PathVariable Integer rfqId,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        return orderManagementService.replaceDrawings(rfqId, drawings, versionDrawings);
+    }
+
+    @PostMapping(value = "/orders/{rfqId}/item-data-replacement/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> previewItemDataReplacement(
+            @PathVariable Integer rfqId,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        return orderManagementService.previewItemDataReplacement(rfqId, excelFile);
+    }
+
+    @PostMapping(value = "/orders/{rfqId}/item-data-replacement/confirm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> confirmItemDataReplacement(
+            @PathVariable Integer rfqId,
+            @RequestParam("previewFingerprint") String previewFingerprint,
+            @RequestParam("excelFile") MultipartFile excelFile) {
+        return orderManagementService.confirmItemDataReplacement(rfqId, excelFile, previewFingerprint);
     }
 
     @GetMapping("/orders/{rfqId}/tickets")
