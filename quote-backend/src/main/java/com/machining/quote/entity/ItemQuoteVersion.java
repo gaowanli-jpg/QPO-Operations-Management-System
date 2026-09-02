@@ -84,6 +84,7 @@ public class ItemQuoteVersion {
     @Deprecated
     private Long salesOrderImportRecordId;
     private String status; // 状态：未核价 / 已核价 / 已报价 / 已提单 / 无图
+    private String previousStatusBeforeDiscard;
 
     // MyBatis-Plus 会自动把驼峰命名 drawingUrl 映射到数据库的 drawing_url
     private String drawingUrl;

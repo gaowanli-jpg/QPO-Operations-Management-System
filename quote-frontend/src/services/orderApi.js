@@ -32,6 +32,20 @@ export const saveOrderItems = (rfqId, payload = {}) => request(`/api/order-manag
   data: payload
 })
 
+export const discardOrderItem = (rfqId, itemId) => request(`/api/order-management/orders/${rfqId}/items/${itemId}/discard`, {
+  method: 'POST'
+})
+
+export const restoreOrderItem = (rfqId, itemId) => request(`/api/order-management/orders/${rfqId}/items/${itemId}/restore`, {
+  method: 'POST'
+})
+
+export const appendOrderItems = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/items/import`, {
+  method: 'POST',
+  data: formData,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+
 export const replaceOrderDrawings = (rfqId, formData) => request(`/api/order-management/orders/${rfqId}/drawings/replace`, {
   method: 'POST',
   data: formData,

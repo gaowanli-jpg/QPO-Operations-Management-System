@@ -205,14 +205,15 @@ public class EngineerService {
         int safePage = safePage(page);
         int safePageSize = safePageSize(pageSize);
         String normalizedStatus = isBlank(status) ? null : status.trim();
-        if (normalizedStatus != null && !QuoteStatusWorkflow.isReleasedOrderStatus(normalizedStatus)) {
+        if (normalizedStatus != null && !QuoteStatusWorkflow.isSupplementalPricingOrderStatus(normalizedStatus)) {
             return PageResult.of(List.of(), 0L, safePage, safePageSize);
         }
 
         QueryWrapper<OrderRfq> query = new QueryWrapper<>();
         applyOrderDataScope(query);
         if (normalizedStatus == null) {
-            query.in("status", QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
+            query.in("status", QuoteStatusWorkflow.PRICED, QuoteStatusWorkflow.QUOTED,
+                    QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
         } else {
             query.eq("status", normalizedStatus);
         }
@@ -655,6 +656,7 @@ public class EngineerService {
         }
 
         List<String> unquotedItems = items.stream()
+                .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
                 .filter(this::hasDrawing)
                 .filter(item -> item.getTaxIncludedUnitPrice() == null)
                 .map(this::itemLabel)
@@ -665,6 +667,9 @@ public class EngineerService {
 
         int noDrawingCount = 0;
         for (ItemQuoteVersion item : items) {
+            if (QuoteStatusWorkflow.DISCARDED.equals(item.getStatus())) {
+                continue;
+            }
             if (!hasDrawing(item) && item.getTaxIncludedUnitPrice() == null) {
                 item.setStatus(QuoteStatusWorkflow.NO_DRAWING);
                 itemMapper.updateById(item);
@@ -683,8 +688,8 @@ public class EngineerService {
     public Map<String, Object> completeSupplementalDrawingQuote(Integer rfqId) {
         long startedAt = System.currentTimeMillis();
         OrderRfq order = requireOrderForUpdate(rfqId);
-        if (!QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())) {
-            throw new RuntimeException("只有部分已提单或已生成提单订单可以完成补图补核价");
+        if (!QuoteStatusWorkflow.isSupplementalPricingOrderStatus(order.getStatus())) {
+            throw new RuntimeException("只有已核价、已报价、部分已提单或已生成提单订单可以完成补图补核价");
         }
         String orderStatusBefore = order.getStatus();
         List<ItemQuoteVersion> items = listItemsForUpdate(rfqId);

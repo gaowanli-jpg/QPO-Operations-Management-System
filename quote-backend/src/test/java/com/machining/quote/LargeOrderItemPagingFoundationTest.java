@@ -220,11 +220,12 @@ class LargeOrderItemPagingFoundationTest extends LargeOrderItemPagingTestSupport
         String service = source("service", "OrderManagementService.java");
 
         assertThat(controller)
-                .contains("pageOrderItems(rfqId, page, pageSize)")
+                .contains("pageOrderItemRows(rfqId, page, pageSize)")
                 .contains("pageOrderTickets(rfqId, page, pageSize)")
                 .contains("pageDynamicProcessSheets(rfqId, page, pageSize)")
                 .contains("getDrawingSummary(rfqId)");
         assertThat(service)
+                .contains("public PageResult<Map<String, Object>> pageOrderItemRows")
                 .contains("public PageResult<ItemQuoteVersion> pageOrderItems")
                 .contains("public PageResult<OrderDeliveryTicket> pageOrderTickets")
                 .contains("public PageResult<ProcessSheetDTO> pageDynamicProcessSheets")

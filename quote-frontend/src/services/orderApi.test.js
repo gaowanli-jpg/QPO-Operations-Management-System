@@ -133,6 +133,9 @@ describe('orderApi', () => {
     await orderApi.replaceOrderDrawings(12, formData)
     await orderApi.previewOrderItemDataReplacement(12, formData)
     await orderApi.confirmOrderItemDataReplacement(12, formData)
+    await orderApi.discardOrderItem(12, 21)
+    await orderApi.restoreOrderItem(12, 21)
+    await orderApi.appendOrderItems(12, formData)
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/order-management/orders/12/items/batch', {
       method: 'POST',
@@ -149,6 +152,17 @@ describe('orderApi', () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     expect(request).toHaveBeenNthCalledWith(4, '/api/order-management/orders/12/item-data-replacement/confirm', {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/order-management/orders/12/items/21/discard', {
+      method: 'POST'
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/order-management/orders/12/items/21/restore', {
+      method: 'POST'
+    })
+    expect(request).toHaveBeenNthCalledWith(7, '/api/order-management/orders/12/items/import', {
       method: 'POST',
       data: formData,
       headers: { 'Content-Type': 'multipart/form-data' }

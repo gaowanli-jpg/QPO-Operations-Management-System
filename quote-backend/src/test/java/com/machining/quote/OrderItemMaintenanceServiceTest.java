@@ -317,6 +317,120 @@ class OrderItemMaintenanceServiceTest {
                 .containsEntry("matchedCount", 1);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void discardOrderItemStoresPreviousStatusAndLeavesTicketSnapshotUntouched() {
+        Fixture fixture = fixture();
+        OrderRfq order = order(905, "RFQ-905", QuoteStatusWorkflow.RELEASED);
+        ItemQuoteVersion item = item(1007, 905, "P-DISCARD", "A", 10);
+        item.setStatus(QuoteStatusWorkflow.QUOTED);
+        OrderDeliveryTicket ticket = ticket(3003, 905, 1007, "P-DISCARD", "A", 4);
+
+        when(fixture.orderMapper.selectByIdForUpdate(905)).thenReturn(order);
+        when(fixture.itemMapper.selectByIdForUpdate(1007)).thenReturn(item);
+        when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(ticket));
+        when(fixture.itemMapper.updateById(item)).thenReturn(1);
+
+        Map<String, Object> result = fixture.service.discardOrderItem(905, 1007);
+
+        assertThat(result).containsEntry("success", true).containsEntry("itemId", 1007);
+        assertThat(item.getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+        assertThat(item.getPreviousStatusBeforeDiscard()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(ticket.getPartNo()).isEqualTo("P-DISCARD");
+        assertThat(ticket.getQty()).isEqualTo(4);
+
+        ArgumentCaptor<Object> afterData = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("ORDER_ITEM_DISCARD"),
+                eq("order_rfq"),
+                eq(905),
+                isNull(),
+                afterData.capture(),
+                eq("ORDER"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("ORDER_ITEM_DISCARD")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) afterData.getValue())
+                .containsEntry("itemId", 1007)
+                .containsEntry("statusBefore", QuoteStatusWorkflow.QUOTED)
+                .containsEntry("statusAfter", QuoteStatusWorkflow.DISCARDED)
+                .containsEntry("ticketedQty", 4);
+    }
+
+    @Test
+    void restoreOrderItemUsesPreviousStatusBeforeDiscard() {
+        Fixture fixture = fixture();
+        OrderRfq order = order(906, "RFQ-906", QuoteStatusWorkflow.QUOTED);
+        ItemQuoteVersion item = item(1008, 906, "P-RESTORE", "B", 3);
+        item.setStatus(QuoteStatusWorkflow.DISCARDED);
+        item.setPreviousStatusBeforeDiscard(QuoteStatusWorkflow.PRICED);
+
+        when(fixture.orderMapper.selectByIdForUpdate(906)).thenReturn(order);
+        when(fixture.itemMapper.selectByIdForUpdate(1008)).thenReturn(item);
+        when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+        when(fixture.itemMapper.updateById(item)).thenReturn(1);
+
+        Map<String, Object> result = fixture.service.restoreOrderItem(906, 1008);
+
+        assertThat(result).containsEntry("success", true).containsEntry("itemId", 1008);
+        assertThat(item.getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(item.getPreviousStatusBeforeDiscard()).isNull();
+        verify(fixture.auditService).record(
+                eq("ORDER_ITEM_RESTORE"),
+                eq("order_rfq"),
+                eq(906),
+                isNull(),
+                any(),
+                eq("ORDER"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("ORDER_ITEM_RESTORE")),
+                isNull()
+        );
+    }
+
+    @Test
+    void appendOrderItemsImportsUnpricedPartsAndBindsDrawingsWithoutChangingOrderStatus() throws Exception {
+        Fixture fixture = fixture();
+        OrderRfq order = order(907, "RFQ-907", QuoteStatusWorkflow.QUOTED);
+        order.setCustomerCode("C907");
+        order.setCustomerShortName("ACME");
+        MockMultipartFile workbook = rfqImportWorkbook(
+                List.of("图号", "物料描述", "材料名称", "表面处理", "版本", "数量", "单位", "交货周期", "备注"),
+                List.of(row("P-APP", "append desc", "45#", "black", "A", 5, "pcs", "2026/10/01", "new part")));
+        MockMultipartFile drawing = drawing("P-APP_A.pdf");
+
+        when(fixture.orderMapper.selectByIdForUpdate(907)).thenReturn(order);
+        when(fixture.businessFileService.saveDrawing(eq(order), eq(drawing), eq("ORDER_ITEM_APPEND_DRAWING"), eq("907")))
+                .thenReturn(stored("/new/P-APP_A.pdf", drawing));
+        when(fixture.itemMapper.insert(any(ItemQuoteVersion.class))).thenReturn(1);
+
+        Map<String, Object> result = fixture.service.appendOrderItems(
+                907,
+                workbook,
+                List.<MultipartFile>of(),
+                List.<MultipartFile>of(drawing));
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("insertedCount", 1)
+                .containsEntry("orderStatusBefore", QuoteStatusWorkflow.QUOTED)
+                .containsEntry("orderStatusAfter", QuoteStatusWorkflow.QUOTED);
+        assertThat(order.getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+
+        ArgumentCaptor<ItemQuoteVersion> inserted = ArgumentCaptor.forClass(ItemQuoteVersion.class);
+        verify(fixture.itemMapper).insert(inserted.capture());
+        ItemQuoteVersion saved = inserted.getValue();
+        assertThat(saved.getRfqId()).isEqualTo(907);
+        assertThat(saved.getPartNo()).isEqualTo("P-APP");
+        assertThat(saved.getVersion()).isEqualTo("A");
+        assertThat(saved.getQty()).isEqualTo(5);
+        assertThat(saved.getLeadTime()).isEqualTo("2026/10/01");
+        assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        assertThat(saved.getDrawingUrl()).isEqualTo("/new/P-APP_A.pdf");
+        verify(fixture.orderMapper, never()).updateById(any());
+    }
+
     private Fixture fixture() {
         Fixture fixture = new Fixture();
         fixture.service = new OrderManagementService();
@@ -411,6 +525,27 @@ class OrderItemMaintenanceServiceTest {
             return new MockMultipartFile(
                     "excelFile",
                     "order-item-replacement.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    output.toByteArray());
+        }
+    }
+
+    private MockMultipartFile rfqImportWorkbook(List<String> headers, List<List<Object>> rows) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("rfq");
+            writeHeaders(sheet.createRow(0), headers);
+            for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+                Row dataRow = sheet.createRow(rowIndex + 1);
+                List<Object> values = rows.get(rowIndex);
+                for (int columnIndex = 0; columnIndex < values.size(); columnIndex++) {
+                    writeCell(dataRow.createCell(columnIndex), values.get(columnIndex));
+                }
+            }
+            workbook.write(output);
+            return new MockMultipartFile(
+                    "excelFile",
+                    "order-item-append.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     output.toByteArray());
         }

@@ -35,6 +35,18 @@ class OrderItemMaintenanceContractTest {
                 OrderManagementController.class.getDeclaredMethod("confirmItemDataReplacement", Integer.class, String.class, org.springframework.web.multipart.MultipartFile.class),
                 "/orders/{rfqId}/item-data-replacement/confirm",
                 UPDATE_PERMISSION);
+        assertPostEndpoint(
+                OrderManagementController.class.getDeclaredMethod("discardOrderItem", Integer.class, Integer.class),
+                "/orders/{rfqId}/items/{itemId}/discard",
+                UPDATE_PERMISSION);
+        assertPostEndpoint(
+                OrderManagementController.class.getDeclaredMethod("restoreOrderItem", Integer.class, Integer.class),
+                "/orders/{rfqId}/items/{itemId}/restore",
+                UPDATE_PERMISSION);
+        assertMultipartEndpoint(
+                OrderManagementController.class.getDeclaredMethod("appendOrderItems", Integer.class, org.springframework.web.multipart.MultipartFile.class, java.util.List.class, java.util.List.class),
+                "/orders/{rfqId}/items/import",
+                UPDATE_PERMISSION);
     }
 
     @Test
@@ -43,10 +55,23 @@ class OrderItemMaintenanceContractTest {
         assertThat(AuditService.labelForAction("ORDER_ITEM_UPDATE")).isEqualTo("保存询价订单零件信息");
         assertThat(AuditService.labelForAction("ORDER_ITEM_DATA_REPLACEMENT")).isEqualTo("询价订单表格数据替换");
         assertThat(AuditService.labelForAction("ORDER_DRAWING_REPLACE")).isEqualTo("询价订单替换图纸");
+        assertThat(AuditService.labelForAction("ORDER_ITEM_DISCARD")).isEqualTo("废弃询价订单零件");
+        assertThat(AuditService.labelForAction("ORDER_ITEM_RESTORE")).isEqualTo("恢复询价订单零件");
+        assertThat(AuditService.labelForAction("ORDER_ITEM_APPEND_IMPORT")).isEqualTo("新增询价订单零件");
 
         String docs = Files.readString(Path.of("..", "docs", "QPO权限用户体系", "02-权限点清单与现有角色映射.md"));
         assertThat(docs).contains("market:order:update-item");
-        assertThat(docs).contains("保存询价订单零件信息 / 表格数据替换 / 导入替换图纸");
+        assertThat(docs).contains("保存询价订单零件信息 / 表格数据替换 / 导入替换图纸 / 新增零件 / 废弃恢复零件");
+    }
+
+    @Test
+    void migrationAddsPreviousStatusColumnForItemRestore() throws Exception {
+        Path migration = Path.of("src", "main", "resources", "db", "migration", "V32__order_item_change_management.sql");
+        String sql = Files.readString(migration);
+
+        assertThat(sql).contains("previous_status_before_discard");
+        assertThat(sql).contains("item_quote_version");
+        assertThat(sql).doesNotContain("DROP TABLE");
     }
 
     @Test

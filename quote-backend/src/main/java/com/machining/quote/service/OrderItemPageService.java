@@ -53,7 +53,10 @@ public class OrderItemPageService {
         int page = safePage(req.getPage());
         int pageSize = safePageSize(req.getPageSize());
         OrderItemSummaryDTO summary = querySummary(req.getRfqId());
-        if (isAnySupplementalDrawingScope(req) && !QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())) {
+        if (isSupplementalDrawingScope(req) && !QuoteStatusWorkflow.isSupplementalPricingOrderStatus(order.getStatus())) {
+            return OrderItemPageDTO.of(List.of(), 0L, page, pageSize, summary);
+        }
+        if (isSupplementalDrawingQuoteScope(req) && !QuoteStatusWorkflow.isSupplementalQuoteOrderStatus(order.getStatus())) {
             return OrderItemPageDTO.of(List.of(), 0L, page, pageSize, summary);
         }
         long offset = (long) (page - 1) * pageSize;
@@ -146,10 +149,6 @@ public class OrderItemPageService {
         query.apply("NULLIF(BTRIM(drawing_url), '') IS NOT NULL")
                 .isNotNull("tax_included_unit_price")
                 .eq("status", QuoteStatusWorkflow.PRICED);
-    }
-
-    private boolean isAnySupplementalDrawingScope(OrderItemPageReq req) {
-        return isSupplementalDrawingScope(req) || isSupplementalDrawingQuoteScope(req);
     }
 
     private boolean isSupplementalDrawingScope(OrderItemPageReq req) {

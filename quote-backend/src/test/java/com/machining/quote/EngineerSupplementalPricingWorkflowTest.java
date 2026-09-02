@@ -47,12 +47,18 @@ class EngineerSupplementalPricingWorkflowTest {
     private DictMaterialPriceSpecMapper materialPriceSpecMapper;
 
     @Test
-    void supplementalPricingOrdersAndItemsOnlyIncludeReleasedOrdersWithDrawingAndMissingPrice() {
+    void supplementalPricingOrdersAndItemsIncludePricedQuotedAndReleasedOrdersWithDrawingAndMissingPrice() {
         OrderRfq releasedOrder = createOrder(QuoteStatusWorkflow.RELEASED, "SUP-RELEASED");
         ItemQuoteVersion pending = createItem(releasedOrder, "SUP-PENDING", QuoteStatusWorkflow.UNPRICED, true, null);
         createItem(releasedOrder, "SUP-QUOTED", QuoteStatusWorkflow.QUOTED, true, 10.0);
         createItem(releasedOrder, "SUP-ITEM-RELEASED", QuoteStatusWorkflow.ITEM_RELEASED, true, 10.0);
         createItem(releasedOrder, "SUP-NO-DRAWING", QuoteStatusWorkflow.NO_DRAWING, false, null);
+
+        OrderRfq pricedOrder = createOrder(QuoteStatusWorkflow.PRICED, "SUP-PRICED");
+        createItem(pricedOrder, "SUP-PRICED-PENDING", QuoteStatusWorkflow.UNPRICED, true, null);
+
+        OrderRfq quotedOrder = createOrder(QuoteStatusWorkflow.QUOTED, "SUP-QUOTED-ORDER");
+        createItem(quotedOrder, "SUP-QUOTED-PENDING", QuoteStatusWorkflow.UNPRICED, true, null);
 
         OrderRfq normalUnpricedOrder = createOrder(QuoteStatusWorkflow.UNPRICED, "SUP-NORMAL");
         createItem(normalUnpricedOrder, "SUP-NORMAL-PENDING", QuoteStatusWorkflow.UNPRICED, true, null);
@@ -61,6 +67,8 @@ class EngineerSupplementalPricingWorkflowTest {
 
         assertThat(orders.getRecords()).extracting(OrderRfq::getId)
                 .contains(releasedOrder.getId())
+                .contains(pricedOrder.getId())
+                .contains(quotedOrder.getId())
                 .doesNotContain(normalUnpricedOrder.getId());
 
         OrderItemPageReq req = new OrderItemPageReq();
@@ -100,6 +108,36 @@ class EngineerSupplementalPricingWorkflowTest {
         assertThat(orderMapper.selectById(releasedOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.RELEASED);
         assertThatThrownBy(() -> engineerService.completeOrderQuote(releasedOrder.getId()))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void supplementalPricingCompletionAllowsQuotedOrdersForAppendedPartsWithoutChangingHeaderStatus() {
+        OrderRfq quotedOrder = createOrder(QuoteStatusWorkflow.QUOTED, "SUP-QUOTED-COMPLETE");
+        ItemQuoteVersion pending = createItem(quotedOrder, "SUP-QUOTED-COMPLETE-P", QuoteStatusWorkflow.UNPRICED, true, null);
+
+        engineerService.calculateAndSaveQuote(normalQuoteReq(pending));
+
+        Map<String, Object> result = engineerService.completeSupplementalDrawingQuote(quotedOrder.getId());
+
+        assertThat(result)
+                .containsEntry("supplemental", true)
+                .containsEntry("pricedSupplementalItemCount", 1)
+                .containsEntry("orderStatusBefore", QuoteStatusWorkflow.QUOTED)
+                .containsEntry("orderStatusAfter", QuoteStatusWorkflow.QUOTED);
+        assertThat(orderMapper.selectById(quotedOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(pending.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+    }
+
+    @Test
+    void ordinaryQuoteCompletionIgnoresDiscardedItemsBecauseDiscardMeansUnused() {
+        OrderRfq unpricedOrder = createOrder(QuoteStatusWorkflow.UNPRICED, "SUP-DISCARDED-IGNORED");
+        createItem(unpricedOrder, "SUP-DISCARDED-PRICED", QuoteStatusWorkflow.PRICED, true, 10.0);
+        ItemQuoteVersion discarded = createItem(unpricedOrder, "SUP-DISCARDED-PENDING", QuoteStatusWorkflow.DISCARDED, true, null);
+
+        engineerService.completeOrderQuote(unpricedOrder.getId());
+
+        assertThat(orderMapper.selectById(unpricedOrder.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.PRICED);
+        assertThat(itemMapper.selectById(discarded.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
     }
 
     private OrderRfq createOrder(String status, String prefix) {

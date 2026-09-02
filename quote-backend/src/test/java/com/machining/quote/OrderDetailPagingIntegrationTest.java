@@ -70,12 +70,13 @@ class OrderDetailPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
         createTicket(order, first, 1);
         createTicket(order, second, 1);
 
-        PageResult<ItemQuoteVersion> itemPage = orderManagementService.pageOrderItems(order.getId(), 2, 1);
+        PageResult<Map<String, Object>> itemPage = orderManagementService.pageOrderItemRows(order.getId(), 2, 1);
         PageResult<OrderDeliveryTicket> ticketPage = orderManagementService.pageOrderTickets(order.getId(), 2, 1);
         PageResult<ProcessSheetDTO> processSheetPage = orderManagementService.pageDynamicProcessSheets(order.getId(), 2, 1);
 
         assertThat(itemPage.getTotal()).isEqualTo(2);
-        assertThat(itemPage.getRecords()).extracting(ItemQuoteVersion::getPartNo).containsExactly("TAB-02");
+        assertThat(itemPage.getRecords()).extracting(row -> row.get("partNo")).containsExactly("TAB-02");
+        assertThat(itemPage.getRecords()).extracting(row -> row.get("ticketedQty")).containsExactly(1);
         assertThat(ticketPage.getTotal()).isEqualTo(2);
         assertThat(ticketPage.getRecords()).extracting(OrderDeliveryTicket::getPartNo).containsExactly("TAB-02");
         assertThat(processSheetPage.getTotal()).isEqualTo(2);
@@ -86,9 +87,10 @@ class OrderDetailPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
                 .doesNotContain("detail.put(\"itemList\"")
                 .doesNotContain("detail.put(\"ticketList\"")
                 .doesNotContain("detail.put(\"processSheetList\"");
-        assertThat(method(service, "pageOrderItems"))
+        assertThat(javaMethod(service, "pageOrderItemRows"))
                 .contains("itemMapper.selectCount")
                 .contains("LIMIT")
+                .contains("ticketedQuantities")
                 .doesNotContain("pageRows(listItems");
         assertThat(method(service, "pageOrderTickets"))
                 .contains("ticketMapper.selectCount")
@@ -97,7 +99,9 @@ class OrderDetailPagingIntegrationTest extends LargeOrderItemPagingTestSupport {
         assertThat(method(service, "pageDynamicProcessSheets"))
                 .contains("deliveryService.pageProcessSheets")
                 .doesNotContain("pageRows(listProcessSheets");
-        assertThat(method(service, "getDrawingSummary"))
+        String drawingSummaryMethod = service.substring(service.indexOf(
+                "public Map<String, Object> getDrawingSummary(Integer rfqId)"));
+        assertThat(javaMethod(drawingSummaryMethod, "getDrawingSummary"))
                 .contains("itemMapper.selectMaps")
                 .doesNotContain("listItems(rfqId)");
     }

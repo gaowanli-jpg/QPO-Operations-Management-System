@@ -83,6 +83,14 @@ public final class QuoteStatusWorkflow {
         return PARTIALLY_RELEASED.equals(status) || RELEASED.equals(status);
     }
 
+    public static boolean isSupplementalPricingOrderStatus(String status) {
+        return PRICED.equals(status) || QUOTED.equals(status) || isReleasedOrderStatus(status);
+    }
+
+    public static boolean isSupplementalQuoteOrderStatus(String status) {
+        return QUOTED.equals(status) || isReleasedOrderStatus(status);
+    }
+
     public static boolean isDiscardableOrderStatus(String status) {
         return UNPRICED.equals(status) || PRICED.equals(status) || QUOTED.equals(status);
     }

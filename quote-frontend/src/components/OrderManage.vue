@@ -180,6 +180,16 @@
           >
             导入替换图纸
           </el-button>
+          <el-button
+            v-permission="ORDER_ITEM_UPDATE_PERMISSION"
+            plain
+            class="workflow-soft-button"
+            :disabled="orderItemAppendPending"
+            :loading="orderItemAppendPending"
+            @click="openOrderItemAppendDialog"
+          >
+            新增零件
+          </el-button>
           <el-button v-permission="'market:order:supplement-drawing'" type="primary" plain :disabled="Number(drawingSummary?.missingDrawingCount || 0) === 0" @click="openSupplementDialog">
             补传图纸
           </el-button>
@@ -424,11 +434,24 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column label="状态" width="110" align="center" fixed="right">
+              <el-table-column label="状态" width="140" align="center" fixed="right">
                 <template #default="{ row }">
-                  <el-tag :type="orderItemStatusTagType(row.status)" size="small">
-                    {{ row.status || '-' }}
-                  </el-tag>
+                  <div class="order-item-status-cell">
+                    <el-tag :type="orderItemStatusTagType(row.status)" size="small">
+                      {{ row.status || '-' }}
+                    </el-tag>
+                    <el-button
+                      v-permission="ORDER_ITEM_UPDATE_PERMISSION"
+                      link
+                      :type="row.status === '废弃' ? 'success' : 'danger'"
+                      size="small"
+                      :loading="orderItemStatusPending(row)"
+                      :disabled="orderItemStatusPending(row)"
+                      @click="changeOrderItemDiscardState(row)"
+                    >
+                      {{ row.status === '废弃' ? '恢复' : '废弃' }}
+                    </el-button>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -545,6 +568,19 @@
       @confirmed="handleOrderItemDataReplacementConfirmed"
     />
 
+    <OrderItemAppendDialog
+      v-model="orderItemAppendVisible"
+      v-model:excel-file="orderItemAppendExcelFile"
+      v-model:files="orderItemAppendDrawingFiles"
+      v-model:version-files="orderItemAppendVersionDrawingFiles"
+      :order-label="orderDetail?.orderInfo?.rfqNo || '-'"
+      :customer-name="orderDetail?.orderInfo?.customerName || '-'"
+      :result="orderItemAppendResult"
+      :pending="orderItemAppendPending"
+      :permission="ORDER_ITEM_UPDATE_PERMISSION"
+      @submit="submitOrderItemAppend"
+    />
+
     <CustomerPickerDialog
       v-model="customerPickerVisible"
       :current-customer="selectedCustomer"
@@ -559,11 +595,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
+import OrderItemAppendDialog from './order/OrderItemAppendDialog.vue'
 import OrderItemDataReplacementDialog from './order/OrderItemDataReplacementDialog.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
 import { usePendingAction } from '../composables/usePendingAction'
 import {
+  appendOrderItems,
   discardOrder,
+  discardOrderItem,
   getOrderDrawingSummary,
   getOrder,
   listOrderItems,
@@ -572,6 +611,7 @@ import {
   listOrders,
   replaceOrderDrawings,
   restoreOrder,
+  restoreOrderItem,
   rollbackPricedOrder,
   rollbackQuotedOrder,
   saveOrderItems,
@@ -618,6 +658,11 @@ const replaceVersionDrawingFiles = ref([])
 const replaceDrawingResult = ref(null)
 const orderItemDataReplacementVisible = ref(false)
 const orderItemDataReplacementBusy = ref(false)
+const orderItemAppendVisible = ref(false)
+const orderItemAppendExcelFile = ref(null)
+const orderItemAppendDrawingFiles = ref([])
+const orderItemAppendVersionDrawingFiles = ref([])
+const orderItemAppendResult = ref(null)
 const customerPickerVisible = ref(false)
 
 const ORDER_ITEM_UPDATE_PERMISSION = 'market:order:update-item'
@@ -648,7 +693,9 @@ const orderActionKeys = {
   statusChange: (orderId) => `order:status-change:${orderId || 'none'}`,
   supplementDrawings: (orderId) => `order:supplement-drawings:${orderId || 'none'}`,
   replaceDrawings: (orderId) => `order:replace-drawings:${orderId || 'none'}`,
-  saveItems: (orderId) => `order:save-items:${orderId || 'none'}`
+  saveItems: (orderId) => `order:save-items:${orderId || 'none'}`,
+  appendItems: (orderId) => `order:append-items:${orderId || 'none'}`,
+  itemStatus: (orderId, itemId) => `order:item-status:${orderId || 'none'}:${itemId || 'none'}`
 }
 const ORDER_STATUS_ACTIONS = [
   {
@@ -736,6 +783,7 @@ const missingDrawingItems = computed(() => detailItemList.value.filter(item => !
 const supplementUploadPending = computed(() => isPending(orderActionKeys.supplementDrawings(orderDetail.value?.orderInfo?.id)))
 const replaceDrawingUploadPending = computed(() => isPending(orderActionKeys.replaceDrawings(orderDetail.value?.orderInfo?.id)))
 const orderItemSavePending = computed(() => isPending(orderActionKeys.saveItems(orderDetail.value?.orderInfo?.id)))
+const orderItemAppendPending = computed(() => isPending(orderActionKeys.appendItems(orderDetail.value?.orderInfo?.id)))
 const orderItemDraftEntries = computed(() => Object.entries(orderItemDrafts).filter(([, draft]) => draft && Object.keys(draft).length > 0))
 const orderItemDraftCount = computed(() => orderItemDraftEntries.value.length)
 const hasOrderItemDrafts = computed(() => orderItemDraftCount.value > 0)
@@ -759,6 +807,8 @@ const orderItemStatusTagType = (status) => {
 const isAssemblyItem = (row) => String(row?.quoteMode || '').toUpperCase() === 'ASSEMBLY'
 
 const isOrderStatusPending = (row) => isPending(orderActionKeys.statusChange(row?.id))
+
+const orderItemStatusPending = (row) => isPending(orderActionKeys.itemStatus(orderDetail.value?.orderInfo?.id, row?.itemId ?? row?.id))
 
 watch([page, pageSize], () => {
   if (selectedCustomer.value) {
@@ -1114,10 +1164,86 @@ const openOrderItemDataReplacementDialog = () => {
   orderItemDataReplacementVisible.value = true
 }
 
+const openOrderItemAppendDialog = () => {
+  if (!orderDetail.value?.orderInfo?.id) {
+    ElMessage.warning('请先打开询价订单详情。')
+    return
+  }
+  orderItemAppendExcelFile.value = null
+  orderItemAppendDrawingFiles.value = []
+  orderItemAppendVersionDrawingFiles.value = []
+  orderItemAppendResult.value = null
+  orderItemAppendVisible.value = true
+}
+
+const submitOrderItemAppend = async () => {
+  const rfqId = orderDetail.value?.orderInfo?.id
+  if (!rfqId) return ElMessage.warning('请先打开询价订单详情。')
+  if (!orderItemAppendExcelFile.value) return ElMessage.warning('请先选择新增零件询价表。')
+
+  return runAction(orderActionKeys.appendItems(rfqId), async () => {
+    const formData = new FormData()
+    formData.append('excelFile', orderItemAppendExcelFile.value)
+    orderItemAppendDrawingFiles.value.forEach(file => formData.append('drawings', file))
+    orderItemAppendVersionDrawingFiles.value.forEach(file => formData.append('versionDrawings', file))
+    try {
+      const response = await appendOrderItems(rfqId, formData)
+      orderItemAppendResult.value = response
+      orderItemAppendExcelFile.value = null
+      orderItemAppendDrawingFiles.value = []
+      orderItemAppendVersionDrawingFiles.value = []
+      clearOrderItemDrafts()
+      await refreshCurrentDetail()
+      await loadOrders()
+      ElMessage.success(response?.message || '新增零件导入完成。')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || '新增零件导入失败。')
+    }
+  })
+}
+
 const handleOrderItemDataReplacementConfirmed = async () => {
   clearOrderItemDrafts()
   await refreshCurrentDetail()
   await loadOrders()
+}
+
+const changeOrderItemDiscardState = async (row) => {
+  const rfqId = orderDetail.value?.orderInfo?.id
+  const itemId = row?.itemId ?? row?.id
+  if (!rfqId || !itemId) return
+  const discarding = row.status !== '废弃'
+  try {
+    await ElMessageBox.confirm(
+      discarding
+        ? `确认废弃零件“${row.partNo || itemId}”吗？废弃后该零件不再参与后续核价、报价和提单选择，历史提单记录不受影响。`
+        : `确认恢复零件“${row.partNo || itemId}”到废弃前状态吗？`,
+      discarding ? '废弃零件' : '恢复零件',
+      {
+        type: discarding ? 'error' : 'warning',
+        confirmButtonText: discarding ? '确认废弃' : '确认恢复',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  return runAction(orderActionKeys.itemStatus(rfqId, itemId), async () => {
+    try {
+      const response = discarding
+        ? await discardOrderItem(rfqId, itemId)
+        : await restoreOrderItem(rfqId, itemId)
+      clearOrderItemDrafts()
+      await refreshCurrentDetail()
+      await loadOrders()
+      ElMessage.success(response?.message || (discarding ? '零件已废弃。' : '零件已恢复。'))
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || (discarding ? '废弃零件失败。' : '恢复零件失败。'))
+    }
+  })
 }
 
 const refreshCurrentDetail = async () => {
@@ -1378,6 +1504,14 @@ const formatRoute = (route) => {
 
 .order-item-draft-tip {
   margin-bottom: 10px;
+}
+
+.order-item-status-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .order-item-qty-input {

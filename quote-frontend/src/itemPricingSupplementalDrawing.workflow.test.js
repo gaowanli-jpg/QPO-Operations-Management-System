@@ -70,7 +70,7 @@ describe('item pricing supplemental drawing workflow', () => {
     const source = readSource('components', 'OrderPickerDialog.vue')
 
     expect(source).toContain('listSupplementalPricingOrders')
-    expect(source).toContain("'engineer-supplemental-pricing': ['部分已提单', '已生成提单']")
+    expect(source).toContain("'engineer-supplemental-pricing': ['已核价', '已报价', '部分已提单', '已生成提单']")
     expect(source).toContain("props.orderScope === 'engineer-supplemental-pricing'")
     expect(source).toContain('await listSupplementalPricingOrders(params)')
   })

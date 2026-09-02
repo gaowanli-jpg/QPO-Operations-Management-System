@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class QuoteProcessSupplementalConfirmationTest extends CoreWorkflowIntegrationTestSupport {
 
     @Test
-    void supplementalQuoteCandidateOrdersAndItemsOnlyIncludePricedSupplementalRows() {
+    void supplementalQuoteCandidateOrdersAndItemsIncludeQuotedAndReleasedOrdersWithPricedSupplementalRows() {
         String customerName = "补充报价候选客户-" + System.nanoTime();
         OrderRfq releasedOrder = createOrder(customerName, "SUP-QP-REL", QuoteStatusWorkflow.RELEASED);
         ItemQuoteVersion supplemental = createQuoteItem(releasedOrder, "SUP-QP-PENDING", QuoteStatusWorkflow.PRICED, true, 18.0);
@@ -30,13 +30,17 @@ class QuoteProcessSupplementalConfirmationTest extends CoreWorkflowIntegrationTe
         createQuoteItem(releasedOrder, "SUP-QP-RELEASED", QuoteStatusWorkflow.ITEM_RELEASED, true, 10.0);
         createQuoteItem(releasedOrder, "SUP-QP-NO-PRICE", QuoteStatusWorkflow.UNPRICED, true, null);
 
+        OrderRfq quotedOrder = createOrder(customerName, "SUP-QP-QUOTED-ORDER", QuoteStatusWorkflow.QUOTED);
+        ItemQuoteVersion quotedSupplemental = createQuoteItem(quotedOrder, "SUP-QP-QUOTED-P", QuoteStatusWorkflow.PRICED, true, 19.0);
+
         OrderRfq normalPricedOrder = createOrder(customerName, "SUP-QP-NORMAL", QuoteStatusWorkflow.PRICED);
         createQuoteItem(normalPricedOrder, "SUP-QP-NORMAL-P", QuoteStatusWorkflow.PRICED, true, 12.0);
 
         PageResult<OrderRfq> supplementalOrders = orderManagementService.listQuoteProcessSupplementalCandidateOrders(
                 null, customerName, null, null, 1, 20);
         assertThat(supplementalOrders.getRecords()).extracting(OrderRfq::getId)
-                .containsExactly(releasedOrder.getId());
+                .contains(releasedOrder.getId(), quotedOrder.getId())
+                .doesNotContain(normalPricedOrder.getId());
 
         PageResult<OrderRfq> ordinaryOrders = orderManagementService.listQuoteProcessCandidateOrders(
                 null, customerName, null, null, 1, 20);
@@ -53,6 +57,11 @@ class QuoteProcessSupplementalConfirmationTest extends CoreWorkflowIntegrationTe
         PageResult<Map<String, Object>> rows = quoteProcessService.listQuoteProcessItems(req);
         assertThat(rows.getRecords()).extracting(row -> row.get("id"))
                 .containsExactly(supplemental.getId());
+
+        req.setRfqId(quotedOrder.getId());
+        PageResult<Map<String, Object>> quotedRows = quoteProcessService.listQuoteProcessItems(req);
+        assertThat(quotedRows.getRecords()).extracting(row -> row.get("id"))
+                .containsExactly(quotedSupplemental.getId());
     }
 
     @Test
@@ -89,6 +98,26 @@ class QuoteProcessSupplementalConfirmationTest extends CoreWorkflowIntegrationTe
         OrderDeliveryTicket savedTicket = ticketMapper.selectById(ticket.getId());
         assertThat(savedTicket.getItemId()).isEqualTo(quoted.getId());
         assertThat(savedTicket.getQty()).isEqualTo(3);
+    }
+
+    @Test
+    void supplementalQuoteSaveConfirmsAppendedPartsOnQuotedOrderWithoutChangingHeaderStatus() {
+        String customerName = "补充报价已报价客户-" + System.nanoTime();
+        OrderRfq order = createOrder(customerName, "SUP-QP-QUOTED-SAVE", QuoteStatusWorkflow.QUOTED);
+        ItemQuoteVersion supplemental = createQuoteItem(order, "SUP-QP-QUOTED-SAVE-P", QuoteStatusWorkflow.PRICED, true, 22.0);
+        supplemental.setQuoteLeadTime("2026-08-01");
+        itemMapper.updateById(supplemental);
+
+        Map<String, Object> result = quoteProcessService.saveSupplementalQuoteSheet(order.getId());
+
+        assertThat(result)
+                .containsEntry("success", true)
+                .containsEntry("supplemental", true)
+                .containsEntry("supplementalItemCount", 1)
+                .containsEntry("orderStatusBefore", QuoteStatusWorkflow.QUOTED)
+                .containsEntry("orderStatusAfter", QuoteStatusWorkflow.QUOTED);
+        assertThat(orderMapper.selectById(order.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
+        assertThat(itemMapper.selectById(supplemental.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.QUOTED);
     }
 
     @Test

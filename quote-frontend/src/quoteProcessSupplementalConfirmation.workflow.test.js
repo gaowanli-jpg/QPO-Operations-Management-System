@@ -61,7 +61,7 @@ describe('quote process supplemental confirmation workflow', () => {
     const orderPicker = readSource('components', 'OrderPickerDialog.vue')
     const marketApi = readSource('services', 'marketApi.js')
 
-    expect(orderPicker).toContain("'quote-process-supplemental': ['部分已提单', '已生成提单']")
+    expect(orderPicker).toContain("'quote-process-supplemental': ['已报价', '部分已提单', '已生成提单']")
     expect(orderPicker).toContain("'quote-process-supplemental': '补充报价待确认 RFQ 订单'")
     expect(marketApi).toContain("'quote-process-supplemental': '/api/market/quote-process/supplemental-drawing/orders'")
     expect(marketApi).toContain('saveSupplementalQuoteSheet')

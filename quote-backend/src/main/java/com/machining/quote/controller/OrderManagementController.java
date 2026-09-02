@@ -76,6 +76,32 @@ public class OrderManagementController {
         return orderManagementService.replaceDrawings(rfqId, drawings, versionDrawings);
     }
 
+    @PostMapping("/orders/{rfqId}/items/{itemId}/discard")
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> discardOrderItem(
+            @PathVariable Integer rfqId,
+            @PathVariable Integer itemId) {
+        return orderManagementService.discardOrderItem(rfqId, itemId);
+    }
+
+    @PostMapping("/orders/{rfqId}/items/{itemId}/restore")
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> restoreOrderItem(
+            @PathVariable Integer rfqId,
+            @PathVariable Integer itemId) {
+        return orderManagementService.restoreOrderItem(rfqId, itemId);
+    }
+
+    @PostMapping(value = "/orders/{rfqId}/items/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequirePermission("market:order:update-item")
+    public Map<String, Object> appendOrderItems(
+            @PathVariable Integer rfqId,
+            @RequestParam("excelFile") MultipartFile excelFile,
+            @RequestParam(value = "drawings", required = false) List<MultipartFile> drawings,
+            @RequestParam(value = "versionDrawings", required = false) List<MultipartFile> versionDrawings) {
+        return orderManagementService.appendOrderItems(rfqId, excelFile, drawings, versionDrawings);
+    }
+
     @PostMapping(value = "/orders/{rfqId}/item-data-replacement/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequirePermission("market:order:update-item")
     public Map<String, Object> previewItemDataReplacement(

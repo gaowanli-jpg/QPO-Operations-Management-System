@@ -1,5 +1,6 @@
 package com.machining.quote.service;
 
+import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.PreviewFingerprintConflictException;
@@ -13,6 +14,7 @@ import com.machining.quote.dto.OrderItemMaintenanceLineReq;
 import com.machining.quote.dto.OrderItemMaintenanceUpdateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
+import com.machining.quote.dto.RfqExcelDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
@@ -172,7 +174,7 @@ public class OrderManagementService {
         int safePage = normalizePage(page);
         int safePageSize = normalizePageSize(pageSize);
         String normalizedStatus = isBlank(status) ? null : status.trim();
-        if (normalizedStatus != null && !QuoteStatusWorkflow.isReleasedOrderStatus(normalizedStatus)) {
+        if (normalizedStatus != null && !QuoteStatusWorkflow.isSupplementalQuoteOrderStatus(normalizedStatus)) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
 
@@ -180,7 +182,7 @@ public class OrderManagementService {
         applyOrderDataScope(qw);
         applyOrderFilters(qw, customerCode, customerName, keyword, null);
         if (normalizedStatus == null) {
-            qw.in("status", QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
+            qw.in("status", QuoteStatusWorkflow.QUOTED, QuoteStatusWorkflow.PARTIALLY_RELEASED, QuoteStatusWorkflow.RELEASED);
         } else {
             qw.eq("status", normalizedStatus);
         }
@@ -396,6 +398,214 @@ public class OrderManagementService {
         result.put("updatedCount", updatedCount);
         result.put("changedFields", new ArrayList<>(changedFields));
         result.put("affectedRows", affectedRows);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> discardOrderItem(Integer rfqId, Integer itemId) {
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        ItemQuoteVersion item = lockOrderItem(order, itemId);
+        if (QuoteStatusWorkflow.DISCARDED.equals(item.getStatus())) {
+            throw new RuntimeException("该询价订单零件已废弃");
+        }
+
+        int ticketedQty = ticketedQuantitiesForItemIds(rfqId, List.of(item.getId()))
+                .getOrDefault(item.getId(), 0);
+        String statusBefore = item.getStatus();
+        item.setPreviousStatusBeforeDiscard(statusBefore);
+        item.setStatus(QuoteStatusWorkflow.DISCARDED);
+        if (itemMapper.updateById(item) <= 0) {
+            throw new RuntimeException("询价订单零件废弃失败，请刷新后重试");
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("rfqId", rfqId);
+        summary.put("rfqNo", order.getRfqNo());
+        summary.put("itemId", item.getId());
+        summary.put("partNo", item.getPartNo());
+        summary.put("version", item.getVersion());
+        summary.put("statusBefore", statusBefore);
+        summary.put("statusAfter", item.getStatus());
+        summary.put("ticketedQty", ticketedQty);
+        auditOrderSuccess("ORDER_ITEM_DISCARD", order, summary);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "询价订单零件已废弃。");
+        result.put("rfqId", rfqId);
+        result.put("itemId", item.getId());
+        result.put("statusBefore", statusBefore);
+        result.put("statusAfter", item.getStatus());
+        result.put("ticketedQty", ticketedQty);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> restoreOrderItem(Integer rfqId, Integer itemId) {
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        ItemQuoteVersion item = lockOrderItem(order, itemId);
+        if (!QuoteStatusWorkflow.DISCARDED.equals(item.getStatus())) {
+            throw new RuntimeException("只有废弃状态的询价订单零件可以恢复");
+        }
+
+        int ticketedQty = ticketedQuantitiesForItemIds(rfqId, List.of(item.getId()))
+                .getOrDefault(item.getId(), 0);
+        String statusBefore = item.getStatus();
+        String restoredStatus = trimToNull(item.getPreviousStatusBeforeDiscard());
+        if (restoredStatus == null) {
+            throw new RuntimeException("该零件缺少废弃前状态，不能自动恢复");
+        }
+        item.setStatus(restoredStatus);
+        item.setPreviousStatusBeforeDiscard(null);
+        if (itemMapper.updateById(item) <= 0) {
+            throw new RuntimeException("询价订单零件恢复失败，请刷新后重试");
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("rfqId", rfqId);
+        summary.put("rfqNo", order.getRfqNo());
+        summary.put("itemId", item.getId());
+        summary.put("partNo", item.getPartNo());
+        summary.put("version", item.getVersion());
+        summary.put("statusBefore", statusBefore);
+        summary.put("statusAfter", item.getStatus());
+        summary.put("ticketedQty", ticketedQty);
+        auditOrderSuccess("ORDER_ITEM_RESTORE", order, summary);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "询价订单零件已恢复。");
+        result.put("rfqId", rfqId);
+        result.put("itemId", item.getId());
+        result.put("statusBefore", statusBefore);
+        result.put("statusAfter", item.getStatus());
+        result.put("ticketedQty", ticketedQty);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> appendOrderItems(
+            Integer rfqId,
+            MultipartFile excelFile,
+            List<MultipartFile> drawings,
+            List<MultipartFile> versionDrawings) {
+        long startedAt = System.currentTimeMillis();
+        OrderRfq order = requireOrderForUpdate(rfqId);
+        String orderStatusBefore = order.getStatus();
+        List<RfqExcelDTO> excelRows = parseAppendOrderItemsExcel(excelFile);
+        if (excelRows.isEmpty()) {
+            throw new RuntimeException("新增零件询价表没有可导入的零件明细");
+        }
+
+        Set<String> excelPartNos = new LinkedHashSet<>();
+        Set<DrawingPartNoResolver.DrawingIdentity> excelPartNoVersions = new LinkedHashSet<>();
+        for (RfqExcelDTO row : excelRows) {
+            String partNo = normalizePartNo(row == null ? null : row.getPartNo());
+            if (partNo.isEmpty()) {
+                continue;
+            }
+            excelPartNos.add(partNo);
+            String version = normalizeVersion(row.getVersion());
+            if (!version.isEmpty()) {
+                excelPartNoVersions.add(new DrawingPartNoResolver.DrawingIdentity(partNo, version));
+            }
+        }
+        if (excelPartNos.isEmpty()) {
+            throw new RuntimeException("新增零件询价表必须包含图号");
+        }
+
+        List<Map<String, Object>> unmatchedDrawings = new ArrayList<>();
+        List<Map<String, Object>> skippedFiles = new ArrayList<>();
+        Map<String, AppendDrawingFileInfo> drawingByPartNo = saveAppendDrawingsByPartNo(
+                order,
+                drawings,
+                excelPartNos,
+                unmatchedDrawings,
+                skippedFiles);
+        Map<String, AppendDrawingFileInfo> drawingByPartNoVersion = saveAppendDrawingsByPartNoVersion(
+                order,
+                versionDrawings,
+                excelPartNos,
+                excelPartNoVersions,
+                unmatchedDrawings,
+                skippedFiles);
+
+        int insertedCount = 0;
+        int boundCount = 0;
+        List<Map<String, Object>> boundItems = new ArrayList<>();
+        List<Map<String, Object>> missingDrawingItems = new ArrayList<>();
+        for (RfqExcelDTO row : excelRows) {
+            String partNo = trimToNull(row.getPartNo());
+            String normalizedPartNo = normalizePartNo(partNo);
+            if (normalizedPartNo.isEmpty()) {
+                continue;
+            }
+            Integer qty = row.getQty();
+            validateOrderItemQty(qty, 0);
+            String normalizedVersion = normalizeVersion(row.getVersion());
+            AppendDrawingFileInfo matchedDrawing = drawingByPartNoVersion.get(itemKey(normalizedPartNo, normalizedVersion));
+            if (matchedDrawing == null) {
+                matchedDrawing = drawingByPartNo.get(normalizedPartNo);
+            }
+
+            ItemQuoteVersion item = new ItemQuoteVersion();
+            item.setRfqId(rfqId);
+            item.setPartNo(partNo);
+            item.setDescription(trimToNull(row.getDescription()));
+            item.setMaterialName(trimToNull(row.getMaterialName()));
+            item.setSurfaceTreatment(trimToNull(row.getSurfaceTreatment()));
+            item.setVersion(normalizedVersion);
+            item.setQty(qty);
+            item.setUnit(trimToNull(row.getUnit()));
+            item.setLeadTime(trimToNull(row.getLeadTime()));
+            item.setRemark(trimToNull(row.getRemark()));
+            item.setStatus(QuoteStatusWorkflow.UNPRICED);
+            if (matchedDrawing != null) {
+                item.setDrawingUrl(matchedDrawing.url());
+            }
+            if (itemMapper.insert(item) <= 0) {
+                throw new RuntimeException("新增询价订单零件保存失败，请刷新后重试");
+            }
+            insertedCount++;
+            if (matchedDrawing != null) {
+                boundCount++;
+                boundItems.add(buildItemResult(item, matchedDrawing.originalFilename(), "已绑定"));
+            } else {
+                missingDrawingItems.add(buildMissingAppendItem(row, normalizedPartNo));
+            }
+        }
+
+        Map<String, Object> auditSummary = new LinkedHashMap<>();
+        auditSummary.put("rfqId", rfqId);
+        auditSummary.put("rfqNo", order.getRfqNo());
+        auditSummary.put("insertedCount", insertedCount);
+        auditSummary.put("boundCount", boundCount);
+        auditSummary.put("missingDrawingCount", missingDrawingItems.size());
+        auditSummary.put("unmatchedDrawingCount", unmatchedDrawings.size());
+        auditSummary.put("skippedFileCount", skippedFiles.size());
+        auditSummary.put("orderStatusBefore", orderStatusBefore);
+        auditSummary.put("orderStatusAfter", order.getStatus());
+        auditSummary.put("durationMs", System.currentTimeMillis() - startedAt);
+        auditOrderSuccess("ORDER_ITEM_APPEND_IMPORT", order, auditSummary);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "新增零件导入完成，已新增 " + insertedCount + " 个零件，绑定图纸 " + boundCount + " 个。");
+        result.put("rfqId", rfqId);
+        result.put("insertedCount", insertedCount);
+        result.put("boundCount", boundCount);
+        result.put("missingDrawingCount", missingDrawingItems.size());
+        result.put("unmatchedCount", unmatchedDrawings.size());
+        result.put("skippedCount", skippedFiles.size());
+        result.put("orderStatusBefore", orderStatusBefore);
+        result.put("orderStatusAfter", order.getStatus());
+        result.put("boundItems", boundItems);
+        result.put("missingItems", missingDrawingItems);
+        result.put("unmatchedDrawings", unmatchedDrawings);
+        result.put("skippedFiles", skippedFiles);
+        log.info("Order item append import completed rfqId={} insertedCount={} boundCount={} missingDrawingCount={} unmatchedDrawingCount={} skippedFileCount={} orderStatusBefore={} orderStatusAfter={} durationMs={}",
+                rfqId, insertedCount, boundCount, missingDrawingItems.size(), unmatchedDrawings.size(), skippedFiles.size(),
+                orderStatusBefore, order.getStatus(), System.currentTimeMillis() - startedAt);
         return result;
     }
 
@@ -941,6 +1151,94 @@ public class OrderManagementService {
             throw new RuntimeException("订单类型只能是预测订单、备货订单或正式订单");
         }
         return normalized;
+    }
+
+    private List<RfqExcelDTO> parseAppendOrderItemsExcel(MultipartFile excelFile) {
+        if (excelFile == null || excelFile.isEmpty()) {
+            throw new IllegalArgumentException("新增零件询价表不能为空");
+        }
+        try {
+            List<RfqExcelDTO> rows = EasyExcel.read(excelFile.getInputStream())
+                    .head(RfqExcelDTO.class)
+                    .sheet()
+                    .doReadSync();
+            return safeList(rows).stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("新增零件询价表解析失败：" + e.getMessage(), e);
+        }
+    }
+
+    private Map<String, AppendDrawingFileInfo> saveAppendDrawingsByPartNo(
+            OrderRfq order,
+            List<MultipartFile> drawings,
+            Set<String> excelPartNos,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        Map<String, AppendDrawingFileInfo> drawingByPartNo = new LinkedHashMap<>();
+        if (drawings == null) {
+            return drawingByPartNo;
+        }
+        for (MultipartFile drawing : drawings) {
+            String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+            if (drawing == null || isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+                skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+                continue;
+            }
+            String partNo = DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos);
+            if (isBlank(partNo) || !excelPartNos.contains(partNo)) {
+                unmatchedDrawings.add(buildFileResult(cleanFileName, partNo, "未找到新增零件图号"));
+                continue;
+            }
+            String url = businessFileService.saveDrawing(
+                    order,
+                    drawing,
+                    "ORDER_ITEM_APPEND_DRAWING",
+                    String.valueOf(order.getId())).publicPath();
+            drawingByPartNo.put(partNo, new AppendDrawingFileInfo(partNo, "", cleanFileName, url));
+        }
+        return drawingByPartNo;
+    }
+
+    private Map<String, AppendDrawingFileInfo> saveAppendDrawingsByPartNoVersion(
+            OrderRfq order,
+            List<MultipartFile> versionDrawings,
+            Set<String> excelPartNos,
+            Set<DrawingPartNoResolver.DrawingIdentity> excelPartNoVersions,
+            List<Map<String, Object>> unmatchedDrawings,
+            List<Map<String, Object>> skippedFiles) {
+        Map<String, AppendDrawingFileInfo> drawingByPartNoVersion = new LinkedHashMap<>();
+        if (versionDrawings == null) {
+            return drawingByPartNoVersion;
+        }
+        for (MultipartFile drawing : versionDrawings) {
+            String cleanFileName = cleanFilename(drawing == null ? null : drawing.getOriginalFilename());
+            if (drawing == null || isBlank(cleanFileName) || !cleanFileName.toLowerCase().endsWith(".pdf")) {
+                skippedFiles.add(buildFileResult(cleanFileName, "", "非 PDF 文件"));
+                continue;
+            }
+            DrawingPartNoResolver.DrawingIdentity identity =
+                    DrawingPartNoResolver.extractPartNoVersion(cleanFileName, excelPartNoVersions);
+            String partNo = identity == null
+                    ? DrawingPartNoResolver.extractPartNo(cleanFileName, excelPartNos)
+                    : identity.partNo();
+            if (identity == null) {
+                unmatchedDrawings.add(buildFileResult(cleanFileName, partNo, "未找到新增零件图号+版本"));
+                continue;
+            }
+            String url = businessFileService.saveDrawing(
+                    order,
+                    drawing,
+                    "ORDER_ITEM_APPEND_DRAWING",
+                    String.valueOf(order.getId())).publicPath();
+            drawingByPartNoVersion.put(
+                    itemKey(identity.partNo(), identity.version()),
+                    new AppendDrawingFileInfo(identity.partNo(), identity.version(), cleanFileName, url));
+        }
+        return drawingByPartNoVersion;
     }
 
     private void recalculateItemTotals(ItemQuoteVersion item) {
@@ -1774,8 +2072,12 @@ public class OrderManagementService {
         return DrawingPartNoResolver.normalizePartNo(partNo);
     }
 
+    private String normalizeVersion(String version) {
+        return DrawingPartNoResolver.normalizeVersion(version);
+    }
+
     private String itemKey(String partNo, String version) {
-        return normalizePartNo(partNo) + "||" + DrawingPartNoResolver.normalizeVersion(version);
+        return normalizePartNo(partNo) + "||" + normalizeVersion(version);
     }
 
     private boolean isEmptyFiles(List<MultipartFile> files) {
@@ -1830,6 +2132,23 @@ public class OrderManagementService {
         result.put("partNo", partNo);
         result.put("reason", reason);
         return result;
+    }
+
+    private Map<String, Object> buildMissingAppendItem(RfqExcelDTO item, String normalizedPartNo) {
+        Map<String, Object> missingItem = new LinkedHashMap<>();
+        String partNo = item == null ? null : item.getPartNo();
+        missingItem.put("partNo", isBlank(partNo) ? normalizedPartNo : partNo.trim());
+        missingItem.put("version", item == null ? "" : normalizeVersion(item.getVersion()));
+        missingItem.put("description", item == null ? null : item.getDescription());
+        missingItem.put("qty", item == null ? null : item.getQty());
+        return missingItem;
+    }
+
+    private record AppendDrawingFileInfo(
+            String partNo,
+            String version,
+            String originalFilename,
+            String url) {
     }
 
     private int safeInt(Integer value) {

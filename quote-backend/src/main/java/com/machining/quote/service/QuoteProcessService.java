@@ -410,6 +410,7 @@ public class QuoteProcessService {
             }
 
             List<String> unpricedItems = items.stream()
+                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
                     .filter(this::hasDrawing)
                     .filter(item -> item.getTaxIncludedUnitPrice() == null)
                     .map(this::itemLabel)
@@ -480,6 +481,7 @@ public class QuoteProcessService {
             }
 
             List<String> missingLeadTimes = items.stream()
+                    .filter(item -> !QuoteStatusWorkflow.DISCARDED.equals(item.getStatus()))
                     .filter(item -> isBlank(leadTimeService.effectiveLeadTime(item)))
                     .map(this::itemLabel)
                     .toList();
@@ -489,7 +491,9 @@ public class QuoteProcessService {
 
             Map<String, Object> before = supplementalQuoteSheetSummary(order, items, missingLeadTimes.size(), 0);
             int itemStatusUpdatedCount = markSupplementalItemsAsQuoted(items);
-            OrderRfq savedOrder = refreshReleasedOrderStatus(order.getId());
+            OrderRfq savedOrder = QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())
+                    ? refreshReleasedOrderStatus(order.getId())
+                    : orderRfqMapper.selectById(order.getId());
             Map<String, Object> after = supplementalQuoteSheetSummary(savedOrder, items, 0, itemStatusUpdatedCount);
             auditService.record(
                     "QUOTE_PROCESS_SAVE_QUOTE",
@@ -658,8 +662,8 @@ public class QuoteProcessService {
     }
 
     private void assertSupplementalQuoteOrderStatus(OrderRfq order) {
-        if (order == null || !QuoteStatusWorkflow.isReleasedOrderStatus(order.getStatus())) {
-            throw new RuntimeException("只有部分已提单或已生成提单订单可以处理补充报价");
+        if (order == null || !QuoteStatusWorkflow.isSupplementalQuoteOrderStatus(order.getStatus())) {
+            throw new RuntimeException("只有已报价、部分已提单或已生成提单订单可以处理补充报价");
         }
     }
 
@@ -858,6 +862,7 @@ public class QuoteProcessService {
     private long countMissingQuoteLeadTimes(Integer rfqId, String scope) {
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.eq("rfq_id", rfqId)
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
                 .apply("(quote_lead_time IS NULL OR BTRIM(quote_lead_time) = '')")
                 .apply("(lead_time IS NULL OR BTRIM(lead_time) = '')");
         if (isSupplementalQuoteScope(scope)) {
