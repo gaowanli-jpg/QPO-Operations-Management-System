@@ -158,7 +158,7 @@ public class QuoteProcessService {
                 continue;
             }
             if (!isItemEditableInScope(item, req.getScope())) {
-                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "零件不属于补充报价待确认范围"));
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), quoteLeadTimeBlockedReason(item, req.getScope())));
                 continue;
             }
 
@@ -201,7 +201,7 @@ public class QuoteProcessService {
                 continue;
             }
             if (!isItemEditableInScope(item, req.getScope())) {
-                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "零件不属于补充报价待确认范围"));
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), quoteLeadTimeBlockedReason(item, req.getScope())));
                 continue;
             }
 
@@ -234,7 +234,7 @@ public class QuoteProcessService {
             throw new RuntimeException("零件不存在或不属于当前 RFQ");
         }
         if (!isItemEditableInScope(item, req.getScope())) {
-            throw new RuntimeException("零件不属于补充报价待确认范围");
+            throw new RuntimeException(quoteLeadTimeBlockedReason(item, req.getScope()));
         }
 
         Object before = buildItemRow(item);
@@ -278,7 +278,7 @@ public class QuoteProcessService {
                 continue;
             }
             if (!isItemEditableInScope(item, req.getScope())) {
-                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), "零件不属于补充报价待确认范围"));
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), quoteLeadTimeBlockedReason(item, req.getScope())));
                 continue;
             }
 
@@ -875,7 +875,9 @@ public class QuoteProcessService {
 
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId);
+        applyActiveItemFilter(qw);
+        qw.orderByAsc("id");
         return itemMapper.selectList(qw);
     }
 
@@ -885,9 +887,17 @@ public class QuoteProcessService {
         }
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.eq("rfq_id", rfqId);
+        applyActiveItemFilter(query);
         applySupplementalQuoteItemFilter(query);
         query.orderByAsc("id");
         return itemMapper.selectList(query);
+    }
+
+    private void applyActiveItemFilter(QueryWrapper<ItemQuoteVersion> query) {
+        query.and(wrapper -> wrapper
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
+                .or()
+                .isNull("status"));
     }
 
     private void applySupplementalQuoteItemFilter(QueryWrapper<ItemQuoteVersion> query) {
@@ -897,7 +907,22 @@ public class QuoteProcessService {
     }
 
     private boolean isItemEditableInScope(ItemQuoteVersion item, String scope) {
-        return !isSupplementalQuoteScope(scope) || isSupplementalQuoteItem(item);
+        return !isDiscardedItem(item)
+                && (!isSupplementalQuoteScope(scope) || isSupplementalQuoteItem(item));
+    }
+
+    private String quoteLeadTimeBlockedReason(ItemQuoteVersion item, String scope) {
+        if (isDiscardedItem(item)) {
+            return "零件已废弃，不能在报价处理中操作";
+        }
+        if (isSupplementalQuoteScope(scope)) {
+            return "零件不属于补充报价待确认范围";
+        }
+        return "零件不能在报价处理中操作";
+    }
+
+    private boolean isDiscardedItem(ItemQuoteVersion item) {
+        return item != null && QuoteStatusWorkflow.DISCARDED.equals(item.getStatus());
     }
 
     private boolean isSupplementalQuoteItem(ItemQuoteVersion item) {
@@ -913,6 +938,9 @@ public class QuoteProcessService {
     private int markPricedItemsAsQuoted(List<ItemQuoteVersion> items) {
         int updated = 0;
         for (ItemQuoteVersion item : items) {
+            if (isDiscardedItem(item)) {
+                continue;
+            }
             if (!hasDrawing(item) || item.getTaxIncludedUnitPrice() == null) {
                 continue;
             }

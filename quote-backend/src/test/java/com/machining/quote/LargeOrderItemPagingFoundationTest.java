@@ -8,6 +8,7 @@ import com.machining.quote.dto.OrderItemSummaryDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseItemBatchQueryReq;
+import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LargeOrderItemPagingFoundationTest extends LargeOrderItemPagingTestSupport {
 
@@ -149,6 +151,31 @@ class LargeOrderItemPagingFoundationTest extends LargeOrderItemPagingTestSupport
     }
 
     @Test
+    void releaseWorkspaceHidesDiscardedRfqItemsAndRejectsEditingThem() {
+        OrderRfq order = createReleaseOrder("RELEASE-DISCARDED");
+        ItemQuoteVersion active = createItem(order, "REL-ACTIVE", QuoteStatusWorkflow.QUOTED, 10.0, "/active.pdf");
+        ItemQuoteVersion discarded = createItem(order, "REL-DISCARDED", QuoteStatusWorkflow.DISCARDED, 12.0, "/discarded.pdf");
+
+        PageResult<Map<String, Object>> singlePage = internalTargetLeadTimeService.pageItemRows(
+                order.getId(), 1, 20, null, null, null);
+
+        ReleaseItemBatchQueryReq batchReq = new ReleaseItemBatchQueryReq();
+        batchReq.setRfqIds(List.of(order.getId()));
+        batchReq.setPage(1);
+        batchReq.setPageSize(20);
+        PageResult<Map<String, Object>> batchPage = internalTargetLeadTimeService.pageItemRowsBatch(batchReq);
+
+        assertThat(singlePage.getRecords()).extracting(row -> row.get("id"))
+                .containsExactly(active.getId());
+        assertThat(batchPage.getRecords()).extracting(row -> row.get("id"))
+                .containsExactly(active.getId());
+        assertThatThrownBy(() -> internalTargetLeadTimeService.updateReleaseItemVersion(
+                discarded.getId(), versionUpdate(order.getId(), "B")))
+                .hasMessageContaining("废弃");
+        assertThat(itemMapper.selectById(discarded.getId()).getVersion()).isEqualTo("A");
+    }
+
+    @Test
     void setupSummaryRemainsPreviewOnly() throws Exception {
         String source = source("controller", "EngineerController.java");
 
@@ -230,5 +257,12 @@ class LargeOrderItemPagingFoundationTest extends LargeOrderItemPagingTestSupport
                 .contains("public PageResult<OrderDeliveryTicket> pageOrderTickets")
                 .contains("public PageResult<ProcessSheetDTO> pageDynamicProcessSheets")
                 .contains("public Map<String, Object> getDrawingSummary");
+    }
+
+    private ReleaseItemVersionUpdateReq versionUpdate(Integer rfqId, String version) {
+        ReleaseItemVersionUpdateReq req = new ReleaseItemVersionUpdateReq();
+        req.setRfqId(rfqId);
+        req.setVersion(version);
+        return req;
     }
 }

@@ -109,6 +109,7 @@ public class OrderItemPageService {
     private QueryWrapper<ItemQuoteVersion> buildFilteredQuery(OrderItemPageReq req) {
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.eq("rfq_id", req.getRfqId());
+        applyActiveItemFilter(query);
         if (req.getExcludeItemId() != null) {
             query.ne("id", req.getExcludeItemId());
         }
@@ -163,6 +164,7 @@ public class OrderItemPageService {
         List<Integer> accessibleRfqIds = req.getRfqIds();
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.in("rfq_id", accessibleRfqIds);
+        applyActiveItemFilter(query);
         if (!isBlank(req.getKeyword())) {
             String keyword = req.getKeyword().trim();
             query.and(wrapper -> wrapper
@@ -176,6 +178,13 @@ public class OrderItemPageService {
             query.eq("status", req.getStatus().trim());
         }
         return query;
+    }
+
+    private void applyActiveItemFilter(QueryWrapper<ItemQuoteVersion> query) {
+        query.and(wrapper -> wrapper
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
+                .or()
+                .isNull("status"));
     }
 
     private List<Integer> accessibleRfqIds(List<Integer> rawRfqIds) {
@@ -233,11 +242,13 @@ public class OrderItemPageService {
                     SUM(CASE WHEN drawing_url IS NULL OR BTRIM(drawing_url) = '' THEN 1 ELSE 0 END) AS missing_drawing_count
                 FROM item_quote_version
                 WHERE rfq_id = ?
+                  AND (status IS NULL OR status <> ?)
                 """,
                 QuoteStatusWorkflow.QUOTED,
                 QuoteStatusWorkflow.ITEM_RELEASED,
                 QuoteStatusWorkflow.RELEASED,
-                rfqId);
+                rfqId,
+                QuoteStatusWorkflow.DISCARDED);
         OrderItemSummaryDTO summary = new OrderItemSummaryDTO();
         summary.setItemCount(number(row.get("item_count")));
         summary.setPricedCount(number(row.get("priced_count")));

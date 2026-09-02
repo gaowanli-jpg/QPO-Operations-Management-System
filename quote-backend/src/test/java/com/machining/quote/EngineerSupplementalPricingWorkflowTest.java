@@ -140,6 +140,26 @@ class EngineerSupplementalPricingWorkflowTest {
         assertThat(itemMapper.selectById(discarded.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
     }
 
+    @Test
+    void ordinaryPricingWorkspaceHidesDiscardedItemsAndRejectsSavingThem() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.UNPRICED, "SUP-DISCARDED-PRICING");
+        ItemQuoteVersion active = createItem(order, "SUP-DISCARDED-ACTIVE", QuoteStatusWorkflow.UNPRICED, true, null);
+        ItemQuoteVersion discarded = createItem(order, "SUP-DISCARDED-HIDDEN", QuoteStatusWorkflow.DISCARDED, true, null);
+
+        OrderItemPageReq req = new OrderItemPageReq();
+        req.setRfqId(order.getId());
+        req.setPage(1);
+        req.setPageSize(20);
+        OrderItemPageDTO page = orderItemPageService.pageItems(req);
+
+        assertThat(page.getRecords()).extracting(ItemQuoteVersion::getId)
+                .contains(active.getId())
+                .doesNotContain(discarded.getId());
+        assertThatThrownBy(() -> engineerService.calculateAndSaveQuote(normalQuoteReq(discarded)))
+                .hasMessageContaining("废弃");
+        assertThat(itemMapper.selectById(discarded.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+    }
+
     private OrderRfq createOrder(String status, String prefix) {
         OrderRfq order = new OrderRfq();
         order.setRfqNo(prefix + "-" + System.nanoTime());

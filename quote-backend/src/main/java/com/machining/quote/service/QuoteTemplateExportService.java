@@ -3,6 +3,7 @@ package com.machining.quote.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -617,7 +618,12 @@ public class QuoteTemplateExportService {
 
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId)
+                .and(wrapper -> wrapper
+                        .ne("status", QuoteStatusWorkflow.DISCARDED)
+                        .or()
+                        .isNull("status"))
+                .orderByAsc("id");
         return itemMapper.selectList(qw);
     }
 

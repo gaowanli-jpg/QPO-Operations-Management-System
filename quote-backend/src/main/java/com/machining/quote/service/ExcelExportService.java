@@ -229,7 +229,9 @@ public class ExcelExportService {
         quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId);
+        applyActiveItemFilter(qw);
+        qw.orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
 
         List<List<String>> head = buildSimpleQuoteHead();
@@ -248,7 +250,9 @@ public class ExcelExportService {
         boolean simple = "SIMPLE".equals(safeType);
 
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId);
+        applyActiveItemFilter(qw);
+        qw.orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
 
         String suffix = simple ? "简化报价单" : "报价单";
@@ -282,7 +286,9 @@ public class ExcelExportService {
                                          String fileSuffix, String sheetName) throws IOException {
         assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId);
+        applyActiveItemFilter(qw);
+        qw.orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
 
         List<String> processNames = collectQuoteProcessNames(items);
@@ -301,6 +307,13 @@ public class ExcelExportService {
         if (dataScopeService != null) {
             dataScopeService.assertCanAccessOrder(rfqId, orderRfqMapper);
         }
+    }
+
+    private void applyActiveItemFilter(QueryWrapper<ItemQuoteVersion> query) {
+        query.and(wrapper -> wrapper
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
+                .or()
+                .isNull("status"));
     }
 
     private OrderRfq requirePricingSheetExportable(Integer rfqId) {

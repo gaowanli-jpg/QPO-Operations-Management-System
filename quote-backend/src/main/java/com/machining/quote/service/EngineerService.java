@@ -480,6 +480,9 @@ public class EngineerService {
             if (!parent.getRfqId().equals(child.getRfqId())) {
                 throw new RuntimeException("子件 " + itemLabel(child) + " 不属于当前 RFQ");
             }
+            if (isDiscardedItem(child)) {
+                throw new RuntimeException("子件已废弃，不能作为组合件子件");
+            }
 
             QuoteSubmitReq.AssemblyChildDTO normalized = new QuoteSubmitReq.AssemblyChildDTO();
             normalized.setChildItemId(childLine.getChildItemId());
@@ -564,6 +567,7 @@ public class EngineerService {
 
     private boolean isRefreshableNormalQuote(ItemQuoteVersion item) {
         return item != null
+                && !isDiscardedItem(item)
                 && item.getTaxIncludedUnitPrice() != null
                 && (item.getMaterialData() != null || item.getProcessRoute() != null);
     }
@@ -627,7 +631,7 @@ public class EngineerService {
         List<ItemAssemblyRelation> parentRelations = assemblyRelationMapper.selectList(qw);
         for (ItemAssemblyRelation relation : parentRelations) {
             ItemQuoteVersion parent = itemMapper.selectById(relation.getParentItemId());
-            if (parent == null || parent.getTaxIncludedUnitPrice() == null) {
+            if (parent == null || isDiscardedItem(parent) || parent.getTaxIncludedUnitPrice() == null) {
                 continue;
             }
             UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
@@ -1229,6 +1233,9 @@ public class EngineerService {
         if (lockedItem == null) {
             throw new RuntimeException("找不到该零件！");
         }
+        if (isDiscardedItem(lockedItem)) {
+            throw new RuntimeException("零件已废弃，不能继续核价或修改核价信息");
+        }
         return lockedItem;
     }
 
@@ -1269,14 +1276,29 @@ public class EngineerService {
 
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId);
+        applyActiveItemFilter(qw);
+        qw.orderByAsc("id");
         return itemMapper.selectList(qw);
     }
 
     private List<ItemQuoteVersion> listItemsForUpdate(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id").last("FOR UPDATE");
+        qw.eq("rfq_id", rfqId);
+        applyActiveItemFilter(qw);
+        qw.orderByAsc("id").last("FOR UPDATE");
         return itemMapper.selectList(qw);
+    }
+
+    private void applyActiveItemFilter(QueryWrapper<ItemQuoteVersion> query) {
+        query.and(wrapper -> wrapper
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
+                .or()
+                .isNull("status"));
+    }
+
+    private boolean isDiscardedItem(ItemQuoteVersion item) {
+        return item != null && QuoteStatusWorkflow.DISCARDED.equals(item.getStatus());
     }
 
     private Map<String, RepeatSource> findRepeatSources(OrderRfq order, List<ItemQuoteVersion> currentItems) {

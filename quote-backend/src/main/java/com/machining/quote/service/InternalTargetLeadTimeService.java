@@ -48,6 +48,7 @@ import java.util.Set;
 @Service
 public class InternalTargetLeadTimeService {
     private static final Logger log = LoggerFactory.getLogger(InternalTargetLeadTimeService.class);
+    private static final String DISCARDED_RELEASE_ITEM_MESSAGE = "零件已废弃，不能在议价提单中操作";
     private static final Set<String> RELEASE_ORDER_TYPES = Set.of("预测订单", "备货订单", "正式订单");
     private static final int CUSTOMER_ORDER_NO_MAX_LENGTH = 120;
     private static final int CUSTOMER_PROJECT_NO_MAX_LENGTH = 120;
@@ -100,6 +101,10 @@ public class InternalTargetLeadTimeService {
                 skipped.add(skipRow(itemId, "", "", "闂傚棙婀瑰▎銏＄▔瀹ュ懐鎽犻柛锔哄妽閸ㄣ劍绋夊鍛剑濞存粌楠哥紞瀣礈?RFQ"));
                 continue;
             }
+            if (isDiscardedRfqItem(item)) {
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), DISCARDED_RELEASE_ITEM_MESSAGE));
+                continue;
+            }
 
             String baseLeadTime = leadTimeService.effectiveDeliveryLeadTime(item);
             try {
@@ -144,6 +149,11 @@ public class InternalTargetLeadTimeService {
                 continue;
             }
 
+            if (isDiscardedRfqItem(item)) {
+                skipped.add(skipRow(item.getId(), item.getPartNo(), item.getVersion(), DISCARDED_RELEASE_ITEM_MESSAGE));
+                continue;
+            }
+
             Object before = buildItemRow(item);
             item.setInternalTargetLeadTime(normalizedDate);
             itemMapper.updateById(item);
@@ -174,6 +184,10 @@ public class InternalTargetLeadTimeService {
         ItemQuoteVersion item = itemMapper.selectByIdForUpdate(req.getItemId());
         if (item == null || !req.getRfqId().equals(item.getRfqId())) {
             throw new RuntimeException("闂傚棙婀瑰▎銏＄▔瀹ュ懐鎽犻柛锔哄妽閸ㄣ劍绋夊鍛剑濞存粌楠哥紞瀣礈?RFQ");
+        }
+
+        if (isDiscardedRfqItem(item)) {
+            throw new RuntimeException(DISCARDED_RELEASE_ITEM_MESSAGE);
         }
 
         Object before = buildItemRow(item);
@@ -742,6 +756,8 @@ public class InternalTargetLeadTimeService {
                     """)
                     .append(placeholders(params, rfqIds))
                     .append(")");
+            sql.append(" AND (item.status IS NULL OR item.status <> ?)");
+            params.add(QuoteStatusWorkflow.DISCARDED);
             appendMixedItemFilters(sql, params, req, "item");
             branches.add(sql.toString());
         }
@@ -1363,7 +1379,9 @@ public class InternalTargetLeadTimeService {
 
     private List<ItemQuoteVersion> listItems(Integer rfqId) {
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.eq("rfq_id", rfqId).orderByAsc("id");
+        qw.eq("rfq_id", rfqId);
+        applyActiveRfqItemFilter(qw);
+        qw.orderByAsc("id");
         return itemMapper.selectList(qw);
     }
 
@@ -1372,10 +1390,18 @@ public class InternalTargetLeadTimeService {
             return List.of();
         }
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
-        qw.in("rfq_id", rfqIds)
-                .orderByAsc("rfq_id")
+        qw.in("rfq_id", rfqIds);
+        applyActiveRfqItemFilter(qw);
+        qw.orderByAsc("rfq_id")
                 .orderByAsc("id");
         return itemMapper.selectList(qw);
+    }
+
+    private void applyActiveRfqItemFilter(QueryWrapper<ItemQuoteVersion> query) {
+        query.and(wrapper -> wrapper
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
+                .or()
+                .isNull("status"));
     }
 
     private List<Map<String, Object>> buildItemRows(Integer rfqId) {
@@ -1559,6 +1585,9 @@ public class InternalTargetLeadTimeService {
         return row;
     }
     private String releaseBlockedReason(ItemQuoteVersion item, int remainingQty) {
+        if (isDiscardedRfqItem(item)) {
+            return DISCARDED_RELEASE_ITEM_MESSAGE;
+        }
         if (!hasDrawing(item)) {
             return "Item has no drawing";
         }
@@ -1578,6 +1607,9 @@ public class InternalTargetLeadTimeService {
             String status,
             boolean hasDrawing) {
         if (ReleaseSourceType.RFQ.name().equals(sourceType)) {
+            if (QuoteStatusWorkflow.DISCARDED.equals(status)) {
+                return DISCARDED_RELEASE_ITEM_MESSAGE;
+            }
             if (!hasDrawing) {
                 return "Item has no drawing";
             }
@@ -1885,11 +1917,18 @@ public class InternalTargetLeadTimeService {
         if (item == null) {
             return false;
         }
-        return true;
+        return !isDiscardedRfqItem(item);
     }
 
     private String releaseMutationBlockedReason(ItemQuoteVersion item, int remainingQty) {
+        if (isDiscardedRfqItem(item)) {
+            return DISCARDED_RELEASE_ITEM_MESSAGE;
+        }
         return "Item cannot be updated";
+    }
+
+    private boolean isDiscardedRfqItem(ItemQuoteVersion item) {
+        return item != null && QuoteStatusWorkflow.DISCARDED.equals(item.getStatus());
     }
 
     private boolean isSalesOrderReleaseItemMutable(SalesOrderItem item) {

@@ -2,6 +2,7 @@ package com.machining.quote.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.RequirePermission;
+import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.OrderItemPageDTO;
 import com.machining.quote.dto.OrderItemPageReq;
@@ -191,6 +192,10 @@ public class EngineerController {
         if (dataScopeService != null) {
             dataScopeService.applyRfqScope(queryWrapper, "rfq_id");
         }
+        queryWrapper.and(wrapper -> wrapper
+                .ne("status", QuoteStatusWorkflow.DISCARDED)
+                .or()
+                .isNull("status"));
         queryWrapper.orderByDesc("id");
 
         // 去数据库里把符合条件的零件全部查出来并返回

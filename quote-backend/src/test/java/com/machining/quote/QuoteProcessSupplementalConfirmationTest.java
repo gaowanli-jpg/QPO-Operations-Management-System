@@ -155,6 +155,37 @@ class QuoteProcessSupplementalConfirmationTest extends CoreWorkflowIntegrationTe
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void ordinaryQuoteProcessHidesDiscardedItemsAndRejectsLeadTimeEdits() {
+        String customerName = "报价废弃零件客户-" + System.nanoTime();
+        OrderRfq order = createOrder(customerName, "SUP-QP-DISCARD", QuoteStatusWorkflow.PRICED);
+        ItemQuoteVersion active = createQuoteItem(order, "SUP-QP-ACTIVE", QuoteStatusWorkflow.PRICED, true, 15.0);
+        active.setQuoteLeadTime("2026-07-01");
+        itemMapper.updateById(active);
+        ItemQuoteVersion discarded = createQuoteItem(order, "SUP-QP-DISCARDED", QuoteStatusWorkflow.DISCARDED, true, 15.0);
+
+        OrderItemPageReq pageReq = new OrderItemPageReq();
+        pageReq.setRfqId(order.getId());
+        pageReq.setPage(1);
+        pageReq.setPageSize(20);
+        PageResult<Map<String, Object>> page = quoteProcessService.listQuoteProcessItems(pageReq);
+        Map<String, Object> legacyProcess = quoteProcessService.getQuoteProcess(order.getId());
+        List<Map<String, Object>> legacyRows = (List<Map<String, Object>>) legacyProcess.get("itemList");
+
+        assertThat(page.getRecords()).extracting(row -> row.get("id"))
+                .containsExactly(active.getId());
+        assertThat(legacyRows).extracting(row -> row.get("id"))
+                .containsExactly(active.getId());
+
+        QuoteLeadTimeUpdateReq updateReq = new QuoteLeadTimeUpdateReq();
+        updateReq.setRfqId(order.getId());
+        updateReq.setItemId(discarded.getId());
+        updateReq.setQuoteLeadTime("2026-08-01");
+        assertThatThrownBy(() -> quoteProcessService.updateLeadTime(updateReq))
+                .hasMessageContaining("废弃");
+    }
+
+    @Test
     void controllerContractsExposeSupplementalQuoteEndpoints() throws Exception {
         String marketController = Files.readString(
                 Path.of("src", "main", "java", "com", "machining", "quote", "controller", "MarketController.java"),

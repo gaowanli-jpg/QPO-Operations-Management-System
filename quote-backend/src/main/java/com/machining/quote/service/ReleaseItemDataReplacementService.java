@@ -466,6 +466,10 @@ public class ReleaseItemDataReplacementService {
     private List<ItemQuoteVersion> listItems(List<Integer> rfqIds) {
         QueryWrapper<ItemQuoteVersion> query = new QueryWrapper<>();
         query.in("rfq_id", rfqIds)
+                .and(wrapper -> wrapper
+                        .ne("status", QuoteStatusWorkflow.DISCARDED)
+                        .or()
+                        .isNull("status"))
                 .orderByAsc("rfq_id")
                 .orderByAsc("id");
         return safeList(itemMapper.selectList(query));
