@@ -1,6 +1,7 @@
 package com.machining.quote;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.OrderItemMaintenanceLineReq;
 import com.machining.quote.dto.OrderItemMaintenanceUpdateReq;
@@ -369,7 +370,7 @@ class OrderItemMaintenanceServiceTest {
         when(fixture.orderMapper.selectByIdForUpdate(906)).thenReturn(order);
         when(fixture.itemMapper.selectByIdForUpdate(1008)).thenReturn(item);
         when(fixture.ticketMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        when(fixture.itemMapper.updateById(item)).thenReturn(1);
+        when(fixture.itemMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
 
         Map<String, Object> result = fixture.service.restoreOrderItem(906, 1008);
 

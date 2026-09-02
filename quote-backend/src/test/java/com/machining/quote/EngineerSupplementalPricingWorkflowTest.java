@@ -15,6 +15,7 @@ import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import com.machining.quote.service.EngineerService;
 import com.machining.quote.service.OrderItemPageService;
+import com.machining.quote.service.OrderManagementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +38,8 @@ class EngineerSupplementalPricingWorkflowTest {
     private EngineerService engineerService;
     @Autowired
     private OrderItemPageService orderItemPageService;
+    @Autowired
+    private OrderManagementService orderManagementService;
     @Autowired
     private OrderRfqMapper orderMapper;
     @Autowired
@@ -158,6 +161,68 @@ class EngineerSupplementalPricingWorkflowTest {
         assertThatThrownBy(() -> engineerService.calculateAndSaveQuote(normalQuoteReq(discarded)))
                 .hasMessageContaining("废弃");
         assertThat(itemMapper.selectById(discarded.getId()).getStatus()).isEqualTo(QuoteStatusWorkflow.DISCARDED);
+    }
+
+    @Test
+    void restoredUnpricedDiscardedItemClearsStalePricingAndEntersSupplementalPricing() {
+        OrderRfq order = createOrder(QuoteStatusWorkflow.RELEASED, "SUP-RESTORE-REPRICE");
+        ItemQuoteVersion discarded = createItem(order, "SUP-RESTORE-REPRICE-P", QuoteStatusWorkflow.DISCARDED, true, 25.0);
+        discarded.setMaterialData(Map.of("materialCode", "OLD-MAT"));
+        discarded.setProcessRoute(List.of(Map.of("processName", "old-process")));
+        discarded.setFeeData(Map.of("oldFee", 1));
+        discarded.setBaseCost(20.0);
+        discarded.setEngineeringMaterialCode("OLD-MAT");
+        discarded.setEngineeringMaterialName("Old material");
+        discarded.setEngineeringMaterialTypeCode("OLD-TYPE");
+        discarded.setEngineeringMaterialTypeName("Old type");
+        discarded.setEngineeringMaterialCategory("Old category");
+        discarded.setMaterialShape("old-shape");
+        discarded.setMaterialGrossWeight(2.5);
+        discarded.setPartNetWeight(1.5);
+        discarded.setQuoteMode("NORMAL");
+        discarded.setAssemblyFee(3.0);
+        discarded.setRepeatMatchEligible(true);
+        discarded.setPreviousStatusBeforeDiscard(QuoteStatusWorkflow.UNPRICED);
+        itemMapper.updateById(discarded);
+
+        orderManagementService.restoreOrderItem(order.getId(), discarded.getId());
+
+        ItemQuoteVersion restored = itemMapper.selectById(discarded.getId());
+        assertThat(restored.getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
+        assertThat(restored.getPreviousStatusBeforeDiscard()).isNull();
+        assertThat(restored.getMaterialData()).isNull();
+        assertThat(restored.getProcessRoute()).isNull();
+        assertThat(restored.getFeeData()).isNull();
+        assertThat(restored.getBaseCost()).isNull();
+        assertThat(restored.getEngineeringMaterialCode()).isNull();
+        assertThat(restored.getEngineeringMaterialName()).isNull();
+        assertThat(restored.getEngineeringMaterialTypeCode()).isNull();
+        assertThat(restored.getEngineeringMaterialTypeName()).isNull();
+        assertThat(restored.getEngineeringMaterialCategory()).isNull();
+        assertThat(restored.getMaterialShape()).isNull();
+        assertThat(restored.getMaterialGrossWeight()).isNull();
+        assertThat(restored.getPartNetWeight()).isNull();
+        assertThat(restored.getQuoteMode()).isNull();
+        assertThat(restored.getAssemblyFee()).isNull();
+        assertThat(restored.getRepeatMatchEligible()).isFalse();
+        assertThat(restored.getTaxIncludedUnitPrice()).isNull();
+        assertThat(restored.getTaxIncludedTotalPrice()).isNull();
+        assertThat(restored.getUntaxedUnitPrice()).isNull();
+        assertThat(restored.getUntaxedTotalPrice()).isNull();
+
+        PageResult<OrderRfq> orders = engineerService.listSupplementalPricingOrders(null, null, null, 1, 20);
+        assertThat(orders.getRecords()).extracting(OrderRfq::getId)
+                .contains(order.getId());
+
+        OrderItemPageReq req = new OrderItemPageReq();
+        req.setRfqId(order.getId());
+        req.setScope(OrderItemPageReq.SCOPE_SUPPLEMENTAL_DRAWING);
+        req.setPage(1);
+        req.setPageSize(20);
+        OrderItemPageDTO items = orderItemPageService.pageItems(req);
+
+        assertThat(items.getRecords()).extracting(ItemQuoteVersion::getId)
+                .containsExactly(restored.getId());
     }
 
     private OrderRfq createOrder(String status, String prefix) {

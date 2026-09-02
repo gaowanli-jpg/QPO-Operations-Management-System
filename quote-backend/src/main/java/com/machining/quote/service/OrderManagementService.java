@@ -2,6 +2,7 @@ package com.machining.quote.service;
 
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.machining.quote.config.AuthContext;
 import com.machining.quote.config.PreviewFingerprintConflictException;
 import com.machining.quote.domain.QuoteStatusWorkflow;
@@ -455,9 +456,18 @@ public class OrderManagementService {
         if (restoredStatus == null) {
             throw new RuntimeException("该零件缺少废弃前状态，不能自动恢复");
         }
+        boolean resetPricing = shouldResetPricingAfterRestore(restoredStatus);
+        UpdateWrapper<ItemQuoteVersion> update = new UpdateWrapper<>();
+        update.eq("id", item.getId())
+                .set("status", restoredStatus)
+                .set("previous_status_before_discard", null);
+        if (resetPricing) {
+            resetPricingFields(update);
+            resetPricingFields(item);
+        }
         item.setStatus(restoredStatus);
         item.setPreviousStatusBeforeDiscard(null);
-        if (itemMapper.updateById(item) <= 0) {
+        if (itemMapper.update(null, update) <= 0) {
             throw new RuntimeException("询价订单零件恢复失败，请刷新后重试");
         }
 
@@ -481,6 +491,56 @@ public class OrderManagementService {
         result.put("statusAfter", item.getStatus());
         result.put("ticketedQty", ticketedQty);
         return result;
+    }
+
+    private boolean shouldResetPricingAfterRestore(String restoredStatus) {
+        return QuoteStatusWorkflow.UNPRICED.equals(restoredStatus)
+                || QuoteStatusWorkflow.NO_DRAWING.equals(restoredStatus)
+                || QuoteStatusWorkflow.isLegacyUnpricedStatus(restoredStatus);
+    }
+
+    private void resetPricingFields(UpdateWrapper<ItemQuoteVersion> update) {
+        update.set("material_data", null)
+                .set("process_route", null)
+                .set("fee_data", null)
+                .set("base_cost", null)
+                .set("tax_included_unit_price", null)
+                .set("tax_included_total_price", null)
+                .set("untaxed_unit_price", null)
+                .set("untaxed_total_price", null)
+                .set("repeat_match_eligible", false)
+                .set("engineering_material_code", null)
+                .set("engineering_material_name", null)
+                .set("engineering_material_type_code", null)
+                .set("engineering_material_type_name", null)
+                .set("engineering_material_category", null)
+                .set("material_shape", null)
+                .set("material_gross_weight", null)
+                .set("part_net_weight", null)
+                .set("quote_mode", null)
+                .set("assembly_fee", null);
+    }
+
+    private void resetPricingFields(ItemQuoteVersion item) {
+        item.setMaterialData(null);
+        item.setProcessRoute(null);
+        item.setFeeData(null);
+        item.setBaseCost(null);
+        item.setTaxIncludedUnitPrice(null);
+        item.setTaxIncludedTotalPrice(null);
+        item.setUntaxedUnitPrice(null);
+        item.setUntaxedTotalPrice(null);
+        item.setRepeatMatchEligible(false);
+        item.setEngineeringMaterialCode(null);
+        item.setEngineeringMaterialName(null);
+        item.setEngineeringMaterialTypeCode(null);
+        item.setEngineeringMaterialTypeName(null);
+        item.setEngineeringMaterialCategory(null);
+        item.setMaterialShape(null);
+        item.setMaterialGrossWeight(null);
+        item.setPartNetWeight(null);
+        item.setQuoteMode(null);
+        item.setAssemblyFee(null);
     }
 
     @Transactional
