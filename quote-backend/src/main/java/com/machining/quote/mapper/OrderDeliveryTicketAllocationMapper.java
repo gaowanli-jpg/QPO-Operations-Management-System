@@ -17,6 +17,9 @@ import java.util.List;
 
 @Mapper
 public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDeliveryTicketAllocation> {
+    @Select("SELECT * FROM order_delivery_ticket_allocation WHERE id = #{id} FOR UPDATE")
+    OrderDeliveryTicketAllocation selectByIdForUpdate(@Param("id") Integer id);
+
     @Update("""
             UPDATE order_delivery_ticket_allocation
             SET mes_production_request_id = #{lineRequestId},
@@ -75,7 +78,14 @@ public interface OrderDeliveryTicketAllocationMapper extends BaseMapper<OrderDel
                 alloc.mes_production_message,
                 alloc.status,
                 alloc.created_at,
-                alloc.updated_at
+                alloc.updated_at,
+                alloc.discarded,
+                alloc.discarded_at,
+                alloc.discarded_by,
+                alloc.discard_reason,
+                alloc.restored_at,
+                alloc.restored_by,
+                alloc.restore_reason
             FROM order_delivery_ticket_allocation alloc
             LEFT JOIN order_rfq rfq ON rfq.id = alloc.rfq_id
             LEFT JOIN order_delivery_ticket ticket ON ticket.id = alloc.ticket_id

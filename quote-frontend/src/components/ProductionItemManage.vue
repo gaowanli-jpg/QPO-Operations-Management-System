@@ -11,6 +11,9 @@
       <div class="production-toolbar-main">
         <div class="erp-toolbar-group production-primary-filters">
           <el-tag v-if="route.query.ticketId" type="info" effect="plain">提单ID：{{ route.query.ticketId }}</el-tag>
+          <el-radio-group v-model="viewMode" size="small">
+            <el-radio-button v-for="option in viewModeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
+          </el-radio-group>
           <el-button v-permission="'market:production-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
             <span class="customer-picker-content">
               <span
@@ -36,7 +39,7 @@
           <el-button v-if="route.query.ticketId" @click="showAllItems">查看全部</el-button>
         </div>
 
-        <div class="erp-toolbar-group production-batch-actions">
+        <div v-if="viewMode === 'ACTIVE'" class="erp-toolbar-group production-batch-actions">
           <el-button
             v-permission="PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION"
             type="primary"
@@ -121,7 +124,7 @@
           v-loading="loading"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column type="selection" width="46" fixed align="center" />
+          <el-table-column v-if="viewMode === 'ACTIVE'" type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="分配ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="ticketId" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
@@ -189,17 +192,48 @@
           <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDash(row.remark) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="120" align="center" fixed="right">
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardReason" label="废弃原因" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.discardReason) }}</template>
+          </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.discardedAt) }}</template>
+          </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDash(row.discardedBy) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button
-                v-permission="DELIVERED_ITEM_VIEW_PERMISSION"
-                size="small"
-                type="primary"
-                plain
-                @click="openTicketDetail(row)"
-              >
-                查看提单行
-              </el-button>
+              <div class="erp-table-actions production-row-actions">
+                <el-button
+                  v-permission="DELIVERED_ITEM_VIEW_PERMISSION"
+                  size="small"
+                  type="primary"
+                  plain
+                  @click="openTicketDetail(row)"
+                >
+                  查看提单行
+                </el-button>
+                <el-button
+                  v-if="viewMode === 'ACTIVE'"
+                  v-permission="PRODUCTION_ITEM_DISCARD_PERMISSION"
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="handleDiscard(row)"
+                >
+                  废弃
+                </el-button>
+                <el-button
+                  v-if="viewMode === 'DISCARDED'"
+                  v-permission="PRODUCTION_ITEM_RESTORE_PERMISSION"
+                  size="small"
+                  type="success"
+                  plain
+                  @click="handleRestore(row)"
+                >
+                  恢复
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -267,10 +301,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
+  discardProductionItem,
   getDeliveredItem,
   getDeliveryIntegrationTask,
   listProductionItems,
   listTicketAllocations,
+  restoreProductionItem,
   submitMesProductionDispatchBatch
 } from '../services/deliveredItemApi'
 import { usePendingAction } from '../composables/usePendingAction'
@@ -278,6 +314,8 @@ import { formatProcessRouteSnapshot } from '../utils/processRouteFormatter'
 
 const PRODUCTION_ITEM_VIEW_PERMISSION = 'market:production-item:view'
 const PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT_PERMISSION = 'market:production-item:mes-production-submit'
+const PRODUCTION_ITEM_DISCARD_PERMISSION = 'market:production-item:discard'
+const PRODUCTION_ITEM_RESTORE_PERMISSION = 'market:production-item:restore'
 const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 
 const route = useRoute()
@@ -313,6 +351,10 @@ const mesProductionStatusOptions = [
   { value: 'SUCCESS', label: '已下发' },
   { value: 'FAILED', label: '下发失败' }
 ]
+const viewModeOptions = [
+  { label: '待处理', value: 'ACTIVE' },
+  { label: '已废弃', value: 'DISCARDED' }
+]
 
 const items = ref([])
 const selectedRows = ref([])
@@ -326,9 +368,16 @@ const ticketDetailVisible = ref(false)
 const selectedTicketDetail = ref(null)
 const advancedFiltersVisible = ref(false)
 const mesProductionResult = ref(null)
+const viewMode = ref('ACTIVE')
+const isDiscardedView = computed(() => viewMode.value === 'DISCARDED')
 
 watch([page, pageSize], () => loadItems())
 watch(() => route.query.ticketId, () => loadItems())
+watch(viewMode, async () => {
+  selectedRows.value = []
+  page.value = 1
+  await loadItems()
+})
 watch(() => route.query.mesProductionStatus, async () => {
   syncFiltersFromRouteQuery()
   page.value = 1
@@ -347,6 +396,7 @@ const buildParams = () => {
   const [dateFrom, dateTo] = filters.dateRange || []
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
+  params.discarded = viewMode.value === 'DISCARDED'
   return {
     ...params,
     page: page.value,
@@ -413,10 +463,47 @@ const handleCustomerClear = async () => {
 
 const filterProductionRows = (records) => (Array.isArray(records) ? records : [])
   .filter(row => row?.allocationType === 'PRODUCTION_REQUIRED')
+  .filter(row => Boolean(row?.discarded) === (viewMode.value === 'DISCARDED'))
   .filter(row => String(row?.mesProductionStatus || 'PENDING').toUpperCase() !== 'SUCCESS')
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows || []
+}
+
+const handleDiscard = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入废弃原因', '废弃待产零件', {
+      confirmButtonText: '确认废弃',
+      cancelButtonText: '取消',
+      inputPlaceholder: '废弃原因',
+      inputValidator: (value) => String(value || '').trim() ? true : '废弃原因不能为空'
+    })
+    await discardProductionItem(row.id, { reason: String(value || '').trim() })
+    ElMessage.success('待产零件已废弃')
+    selectedRows.value = []
+    await loadItems()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '待产零件废弃失败。')
+  }
+}
+
+const handleRestore = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入恢复原因（可选）', '恢复待产零件', {
+      confirmButtonText: '确认恢复',
+      cancelButtonText: '取消',
+      inputPlaceholder: '恢复原因（可选）'
+    })
+    await restoreProductionItem(row.id, { reason: String(value || '').trim() })
+    ElMessage.success('待产零件已恢复')
+    await loadItems()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '待产零件恢复失败。')
+  }
 }
 
 const selectedAllocationCountText = () => `${selectedAllocationIds.value.length} 条待产零件`
@@ -437,6 +524,10 @@ const productionDispatchPreview = computed(() => {
     const status = String(row?.mesProductionStatus || 'PENDING').toUpperCase()
     if (row?.allocationType !== 'PRODUCTION_REQUIRED') {
       addBlocked('非待生产行')
+      return
+    }
+    if (row?.discarded) {
+      addBlocked('已废弃')
       return
     }
     if (status === 'SUCCESS') {
@@ -551,6 +642,11 @@ const allocationTypeMeta = (value) => allocationTypeOptions.find(option => optio
 }
 
 const formatDash = (value) => (value === null || value === undefined || value === '') ? '-' : value
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').replace(/\.\d+$/, '').replace(/Z$/, '')
+}
 
 const statusText = (value) => ({
   PENDING: '未处理',

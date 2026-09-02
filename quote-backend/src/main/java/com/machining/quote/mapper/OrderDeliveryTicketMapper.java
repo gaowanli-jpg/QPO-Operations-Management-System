@@ -81,6 +81,13 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.wms_allocate_status,
                 ticket.wms_allocate_message,
                 ticket.wms_allocated_at,
+                ticket.discarded,
+                ticket.discarded_at,
+                ticket.discarded_by,
+                ticket.discard_reason,
+                ticket.restored_at,
+                ticket.restored_by,
+                ticket.restore_reason,
                 ticket.delivery_date
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id
@@ -178,6 +185,13 @@ public interface OrderDeliveryTicketMapper extends BaseMapper<OrderDeliveryTicke
                 ticket.wms_allocate_status,
                 ticket.wms_allocate_message,
                 ticket.wms_allocated_at,
+                ticket.discarded,
+                ticket.discarded_at,
+                ticket.discarded_by,
+                ticket.discard_reason,
+                ticket.restored_at,
+                ticket.restored_by,
+                ticket.restore_reason,
                 ticket.delivery_date
             FROM order_delivery_ticket ticket
             LEFT JOIN order_rfq rfq ON rfq.id = ticket.rfq_id

@@ -229,6 +229,14 @@ class DeliveryIntegrationBatchTaskTest {
         ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "deliveryIntegrationBatchService", batchService);
+        OrderDeliveryTicketMapper ticketMapper = mock(OrderDeliveryTicketMapper.class);
+        when(ticketMapper.selectById(any())).thenAnswer(invocation -> {
+            OrderDeliveryTicket ticket = new OrderDeliveryTicket();
+            ticket.setId(invocation.getArgument(0));
+            ticket.setDiscarded(false);
+            return ticket;
+        });
+        ReflectionTestUtils.setField(service, "ticketMapper", ticketMapper);
     }
 
     private void wireBatchService(

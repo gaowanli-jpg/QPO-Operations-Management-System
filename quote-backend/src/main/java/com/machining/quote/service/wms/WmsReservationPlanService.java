@@ -45,6 +45,10 @@ public class WmsReservationPlanService {
                 plan.getFailures().add(new RowFailure(ticketId, "delivery ticket not found"));
                 continue;
             }
+            if (Boolean.TRUE.equals(ticket.getDiscarded())) {
+                plan.getFailures().add(new RowFailure(ticketId, "delivery ticket is discarded"));
+                continue;
+            }
             PreparedTicket prepared = prepareTicket(ticket, plan.getFailures());
             if (prepared == null) {
                 continue;

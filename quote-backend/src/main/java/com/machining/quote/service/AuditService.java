@@ -402,9 +402,13 @@ public class AuditService {
             case "DELIVERY_WMS_ALLOCATION_RESULT_UNKNOWN" -> "WMS锁库结果待核对";
             case "DELIVERY_WMS_ALLOCATION_APPLY_FAILED" -> "WMS锁库本地写入待修复";
             case "DELIVERY_WMS_ALLOCATION_RECONCILED" -> "WMS锁库结果已核对";
+            case "DELIVERED_ITEM_DISCARD" -> "废弃已提零件";
+            case "DELIVERED_ITEM_RESTORE" -> "恢复已提零件";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "LOCKED_ITEM_MES_PRODUCTION_SUBMIT" -> "提交MES生产下发";
             case "PRODUCTION_ITEM_MES_PRODUCTION_SUCCESS", "LOCKED_ITEM_MES_PRODUCTION_SUCCESS" -> "MES生产下发成功";
             case "PRODUCTION_ITEM_MES_PRODUCTION_FAILED", "LOCKED_ITEM_MES_PRODUCTION_FAILED" -> "MES生产下发失败";
+            case "PRODUCTION_ITEM_DISCARD" -> "废弃待产零件";
+            case "PRODUCTION_ITEM_RESTORE" -> "恢复待产零件";
             case "ORDER_SUPPLEMENT_DRAWINGS" -> "补传图纸";
             default -> action;
         };

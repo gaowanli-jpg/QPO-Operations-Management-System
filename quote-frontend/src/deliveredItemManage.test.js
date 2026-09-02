@@ -79,7 +79,8 @@ describe('DeliveredItemManage foundation page', () => {
 
   test('supports selecting delivered items for batch MES and WMS tasks', () => {
     expect(source).toContain('@selection-change="handleSelectionChange"')
-    expect(source).toContain('<el-table-column type="selection"')
+    expect(source).toContain('type="selection"')
+    expect(source).toContain('v-if="viewMode === \'ACTIVE\'" type="selection"')
     expect(source).toContain('selectedRows')
     expect(source).toContain('selectedTicketIds')
     expect(source).toContain('batchMesSync')
@@ -88,6 +89,26 @@ describe('DeliveredItemManage foundation page', () => {
     expect(source).toContain('handleBatchWmsAllocation')
     expect(source).toContain('syncMesMaterialBatch')
     expect(source).toContain('submitWmsAllocationBatch')
+  })
+
+  test('supports module-local discarded view and reasoned restore workflow', () => {
+    expect(source).toContain('viewMode')
+    expect(source).toContain("{ label: '待处理', value: 'ACTIVE' }")
+    expect(source).toContain("{ label: '已废弃', value: 'DISCARDED' }")
+    expect(source).toContain('params.discarded = viewMode.value === \'DISCARDED\'')
+    expect(source).toContain('DELIVERED_ITEM_DISCARD_PERMISSION')
+    expect(source).toContain('DELIVERED_ITEM_RESTORE_PERMISSION')
+    expect(source).toContain('market:delivered-item:discard')
+    expect(source).toContain('market:delivered-item:restore')
+    expect(source).toContain('handleDiscard(row)')
+    expect(source).toContain('handleRestore(row)')
+    expect(source).toContain('废弃原因')
+    expect(source).toContain('废弃时间')
+    expect(source).toContain('废弃人')
+    expect(source).toContain('discardDeliveredItem(row.id')
+    expect(source).toContain('restoreDeliveredItem(row.id')
+    expect(source).toContain('viewMode.value === \'ACTIVE\'')
+    expect(source).toContain('viewMode.value === \'DISCARDED\'')
   })
 
   test('keeps WMS allocation as a batch toolbar action and locked-result entry as row navigation', () => {

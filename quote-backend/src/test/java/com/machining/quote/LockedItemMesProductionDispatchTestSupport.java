@@ -63,6 +63,14 @@ abstract class LockedItemMesProductionDispatchTestSupport {
         ReflectionTestUtils.setField(service, "taskExecutor", taskExecutor);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         ReflectionTestUtils.setField(service, "mesProductionDispatchService", dispatchService);
+        OrderDeliveryTicketAllocationMapper allocationMapper = mock(OrderDeliveryTicketAllocationMapper.class);
+        when(allocationMapper.selectById(any())).thenAnswer(invocation -> {
+            OrderDeliveryTicketAllocation allocation = new OrderDeliveryTicketAllocation();
+            allocation.setId(invocation.getArgument(0));
+            allocation.setDiscarded(false);
+            return allocation;
+        });
+        ReflectionTestUtils.setField(service, "allocationMapper", allocationMapper);
     }
 
     protected void wireDispatchService(

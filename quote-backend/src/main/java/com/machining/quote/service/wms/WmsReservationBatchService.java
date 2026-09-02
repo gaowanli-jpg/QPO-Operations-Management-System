@@ -177,6 +177,9 @@ public class WmsReservationBatchService {
         if (ticket == null) {
             return null;
         }
+        if (Boolean.TRUE.equals(ticket.getDiscarded())) {
+            return "Delivery ticket is discarded";
+        }
         String status = normalizeStatus(ticket.getWmsAllocateStatus());
         if (STATUS_SUCCESS.equals(status)) {
             return "WMS reservation already completed";

@@ -63,4 +63,11 @@ public class OrderDeliveryTicketAllocation {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean discarded;
+    private LocalDateTime discardedAt;
+    private Long discardedBy;
+    private String discardReason;
+    private LocalDateTime restoredAt;
+    private Long restoredBy;
+    private String restoreReason;
 }

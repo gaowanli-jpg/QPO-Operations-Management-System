@@ -1,17 +1,27 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerOptionDTO;
+import com.machining.quote.dto.DeliveryItemDiscardReq;
+import com.machining.quote.dto.DeliveryItemRestoreReq;
 import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.LockedItemPageDTO;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProductionItemQueryReq;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class ProductionItemService {
@@ -19,11 +29,16 @@ public class ProductionItemService {
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
 
     @Autowired
     private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
+    private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private AuditService auditService;
     @Autowired(required = false)
     private CustomerMasterService customerMasterService;
 
@@ -49,6 +64,7 @@ public class ProductionItemService {
         QueryWrapper<LockedItemDTO> query = new QueryWrapper<>();
         query.eq("alloc.allocation_type", PRODUCTION_REQUIRED_TYPE);
         applyProductionActiveScope(query);
+        applyDiscardedScope(query, Boolean.FALSE);
         applyCustomerPresentScope(query);
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return allocationMapper.selectLockedItemCustomers(query).stream()
@@ -96,8 +112,147 @@ public class ProductionItemService {
         if (req.getDateTo() != null) {
             query.le("alloc.delivery_date", req.getDateTo());
         }
+        applyDiscardedScope(query, req.getDiscarded());
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    @Transactional
+    public Map<String, Object> discardAllocation(Integer allocationId, DeliveryItemDiscardReq req) {
+        OrderDeliveryTicketAllocation allocation = lockAllocation(allocationId);
+        assertCanAccessAllocation(allocation);
+        if (Boolean.TRUE.equals(allocation.getDiscarded())) {
+            throw new RuntimeException("该待产零件已废弃");
+        }
+        if (STATUS_CALLBACK_PENDING.equalsIgnoreCase(safeText(allocation.getMesProductionStatus()))) {
+            throw new RuntimeException("MES 待回调的待产零件不能废弃，请等待回调后再处理");
+        }
+        String reason = requiredReason(req == null ? null : req.getReason());
+        LocalDateTime now = LocalDateTime.now();
+        allocation.setDiscarded(true);
+        allocation.setDiscardedAt(now);
+        allocation.setDiscardedBy(currentUserId());
+        allocation.setDiscardReason(reason);
+        allocation.setUpdatedAt(now);
+        if (allocationMapper.updateById(allocation) <= 0) {
+            throw new RuntimeException("待产零件废弃失败，请刷新后重试");
+        }
+        Map<String, Object> result = actionResult(allocation, "待产零件已废弃。", "discarded", reason);
+        recordAudit("PRODUCTION_ITEM_DISCARD", allocation, result, "废弃待产零件");
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> restoreAllocation(Integer allocationId, DeliveryItemRestoreReq req) {
+        OrderDeliveryTicketAllocation allocation = lockAllocation(allocationId);
+        assertCanAccessAllocation(allocation);
+        if (!Boolean.TRUE.equals(allocation.getDiscarded())) {
+            throw new RuntimeException("只有已废弃的待产零件可以恢复");
+        }
+        String reason = optionalReason(req == null ? null : req.getReason());
+        LocalDateTime now = LocalDateTime.now();
+        allocation.setDiscarded(false);
+        allocation.setRestoredAt(now);
+        allocation.setRestoredBy(currentUserId());
+        allocation.setRestoreReason(reason);
+        allocation.setUpdatedAt(now);
+        if (allocationMapper.updateById(allocation) <= 0) {
+            throw new RuntimeException("待产零件恢复失败，请刷新后重试");
+        }
+        Map<String, Object> result = actionResult(allocation, "待产零件已恢复。", "active", reason);
+        recordAudit("PRODUCTION_ITEM_RESTORE", allocation, result, "恢复待产零件");
+        return result;
+    }
+
+    private void applyDiscardedScope(QueryWrapper<?> query, Boolean discarded) {
+        query.eq("alloc.discarded", Boolean.TRUE.equals(discarded));
+    }
+
+    private OrderDeliveryTicketAllocation lockAllocation(Integer allocationId) {
+        if (allocationId == null) {
+            throw new RuntimeException("待产零件 ID 不能为空");
+        }
+        OrderDeliveryTicketAllocation allocation = allocationMapper.selectByIdForUpdate(allocationId);
+        if (allocation == null) {
+            throw new RuntimeException("待产零件不存在");
+        }
+        if (!PRODUCTION_REQUIRED_TYPE.equalsIgnoreCase(safeText(allocation.getAllocationType()))) {
+            throw new RuntimeException("只有待产零件可以废弃或恢复");
+        }
+        return allocation;
+    }
+
+    private void assertCanAccessAllocation(OrderDeliveryTicketAllocation allocation) {
+        OrderDeliveryTicket ticket = allocation.getTicketId() == null ? null : ticketMapper.selectById(allocation.getTicketId());
+        if (ticket == null) {
+            throw new RuntimeException("待产零件对应的提单不存在");
+        }
+        dataScopeService.assertCanAccessDeliveryTicket(ticket);
+    }
+
+    private String requiredReason(String value) {
+        String reason = optionalReason(value);
+        if (!hasText(reason)) {
+            throw new RuntimeException("废弃原因不能为空");
+        }
+        return reason;
+    }
+
+    private String optionalReason(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        String reason = value.trim();
+        if (reason.length() > 500) {
+            throw new RuntimeException("原因不能超过 500 个字符");
+        }
+        return reason;
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser current = AuthContext.get();
+        return current == null || current.id() == null ? null : current.id().longValue();
+    }
+
+    private Map<String, Object> actionResult(OrderDeliveryTicketAllocation allocation, String message, String state, String reason) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", message);
+        result.put("allocationId", allocation.getId());
+        result.put("ticketId", allocation.getTicketId());
+        result.put("rfqNo", allocation.getRfqNo());
+        result.put("partNo", allocation.getPartNo());
+        result.put("version", allocation.getVersion());
+        result.put("discarded", Boolean.TRUE.equals(allocation.getDiscarded()));
+        result.put("state", state);
+        result.put("reason", reason);
+        result.put("mesProductionStatus", allocation.getMesProductionStatus());
+        result.put("discardedAt", allocation.getDiscardedAt());
+        result.put("discardedBy", allocation.getDiscardedBy());
+        result.put("restoredAt", allocation.getRestoredAt());
+        result.put("restoredBy", allocation.getRestoredBy());
+        return result;
+    }
+
+    private void recordAudit(String action, OrderDeliveryTicketAllocation allocation, Map<String, Object> summary, String label) {
+        if (auditService == null) {
+            return;
+        }
+        auditService.record(
+                action,
+                "order_delivery_ticket_allocation",
+                allocation.getId(),
+                null,
+                summary,
+                "DELIVERY",
+                "SUCCESS",
+                label + " allocationId=" + allocation.getId(),
+                null
+        );
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private void applyCustomerFilter(QueryWrapper<LockedItemDTO> query, String customerCode, String customerName) {

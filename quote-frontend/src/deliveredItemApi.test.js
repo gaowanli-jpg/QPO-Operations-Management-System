@@ -25,6 +25,20 @@ describe('deliveredItemApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-delivery/tickets/42')
   })
 
+  test('discard and restore delivered tickets through module-owned endpoints', async () => {
+    await deliveredItemApi.discardDeliveredItem(42, { reason: '重复提单' })
+    await deliveredItemApi.restoreDeliveredItem(42, { reason: '恢复处理' })
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-delivery/tickets/42/discard', {
+      method: 'POST',
+      data: { reason: '重复提单' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/tickets/42/restore', {
+      method: 'POST',
+      data: { reason: '恢复处理' }
+    })
+  })
+
   test('does not expose legacy single-ticket MES material sync helper', () => {
     expect(deliveredItemApi.syncMesMaterial).toBeUndefined()
   })
@@ -80,6 +94,20 @@ describe('deliveredItemApi', () => {
     expect(request).toHaveBeenCalledWith('/api/order-delivery/production-items/mes-production', {
       method: 'POST',
       data: { allocationIds: [101, 102] }
+    })
+  })
+
+  test('discard and restore production allocations through module-owned endpoints', async () => {
+    await deliveredItemApi.discardProductionItem(101, { reason: '暂停生产' })
+    await deliveredItemApi.restoreProductionItem(101, {})
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/order-delivery/production-items/101/discard', {
+      method: 'POST',
+      data: { reason: '暂停生产' }
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/order-delivery/production-items/101/restore', {
+      method: 'POST',
+      data: {}
     })
   })
 

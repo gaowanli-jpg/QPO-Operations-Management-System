@@ -1012,6 +1012,9 @@ public class MesProductionDispatchService {
     }
 
     private String skipReason(OrderDeliveryTicketAllocation allocation) {
+        if (Boolean.TRUE.equals(allocation.getDiscarded())) {
+            return "Production item is discarded";
+        }
         if (!TYPE_PRODUCTION_REQUIRED.equalsIgnoreCase(blankToEmpty(allocation.getAllocationType()))) {
             return "Only PRODUCTION_REQUIRED production items can be dispatched to MES production";
         }

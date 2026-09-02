@@ -1,16 +1,24 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.DeliveryItemDiscardReq;
+import com.machining.quote.dto.DeliveryItemRestoreReq;
 import com.machining.quote.dto.PageResult;
+import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class DeliveredItemService {
@@ -24,6 +32,7 @@ public class DeliveredItemService {
     private static final String FLOW_STAGE_NEED_WMS = "NEED_WMS";
     private static final String FLOW_STAGE_WMS_PROCESSING = "WMS_PROCESSING";
     private static final String FLOW_STAGE_WMS_FAILED = "WMS_FAILED";
+    private static final String STATUS_CALLBACK_PENDING = "CALLBACK_PENDING";
 
     @Autowired
     private OrderDeliveryTicketMapper ticketMapper;
@@ -31,6 +40,8 @@ public class DeliveredItemService {
     private OrderRfqMapper orderRfqMapper;
     @Autowired
     private DataScopeService dataScopeService;
+    @Autowired(required = false)
+    private AuditService auditService;
     @Autowired(required = false)
     private CustomerMasterService customerMasterService;
 
@@ -70,6 +81,7 @@ public class DeliveredItemService {
         QueryWrapper<DeliveredItemDTO> query = new QueryWrapper<>();
         query.isNotNull("COALESCE(ticket.customer_name, rfq.customer_name)");
         query.ne("COALESCE(ticket.customer_name, rfq.customer_name)", "");
+        applyDiscardedScope(query, Boolean.FALSE);
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return ticketMapper.selectDeliveredItemCustomers(query).stream()
                 .filter(this::hasText)
@@ -117,8 +129,135 @@ public class DeliveredItemService {
         }
         applyFlowStage(query, req.getFlowStage());
         applyFlowScope(query, req.getFlowScope());
+        applyDiscardedScope(query, req.getDiscarded());
         dataScopeService.applyDeliveryTicketScope(query, "ticket");
         return query;
+    }
+
+    @Transactional
+    public Map<String, Object> discardTicket(Integer ticketId, DeliveryItemDiscardReq req) {
+        OrderDeliveryTicket ticket = lockTicket(ticketId);
+        dataScopeService.assertCanAccessDeliveryTicket(ticket);
+        if (Boolean.TRUE.equals(ticket.getDiscarded())) {
+            throw new RuntimeException("该已提零件已废弃");
+        }
+        if (STATUS_CALLBACK_PENDING.equalsIgnoreCase(safeText(ticket.getMesSyncStatus()))) {
+            throw new RuntimeException("MES 待回调的已提零件不能废弃，请等待回调后再处理");
+        }
+        String reason = requiredReason(req == null ? null : req.getReason());
+        LocalDateTime now = LocalDateTime.now();
+        Long currentUserId = currentUserId();
+        ticket.setDiscarded(true);
+        ticket.setDiscardedAt(now);
+        ticket.setDiscardedBy(currentUserId);
+        ticket.setDiscardReason(reason);
+        if (ticketMapper.updateById(ticket) <= 0) {
+            throw new RuntimeException("已提零件废弃失败，请刷新后重试");
+        }
+        Map<String, Object> result = actionResult(ticket, "已提零件已废弃。", "discarded", reason);
+        recordAudit("DELIVERED_ITEM_DISCARD", ticket, result, "废弃已提零件");
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> restoreTicket(Integer ticketId, DeliveryItemRestoreReq req) {
+        OrderDeliveryTicket ticket = lockTicket(ticketId);
+        dataScopeService.assertCanAccessDeliveryTicket(ticket);
+        if (!Boolean.TRUE.equals(ticket.getDiscarded())) {
+            throw new RuntimeException("只有已废弃的已提零件可以恢复");
+        }
+        String reason = optionalReason(req == null ? null : req.getReason());
+        LocalDateTime now = LocalDateTime.now();
+        ticket.setDiscarded(false);
+        ticket.setRestoredAt(now);
+        ticket.setRestoredBy(currentUserId());
+        ticket.setRestoreReason(reason);
+        if (ticketMapper.updateById(ticket) <= 0) {
+            throw new RuntimeException("已提零件恢复失败，请刷新后重试");
+        }
+        Map<String, Object> result = actionResult(ticket, "已提零件已恢复。", "active", reason);
+        recordAudit("DELIVERED_ITEM_RESTORE", ticket, result, "恢复已提零件");
+        return result;
+    }
+
+    private void applyDiscardedScope(QueryWrapper<?> query, Boolean discarded) {
+        query.eq("ticket.discarded", Boolean.TRUE.equals(discarded));
+    }
+
+    private OrderDeliveryTicket lockTicket(Integer ticketId) {
+        if (ticketId == null) {
+            throw new RuntimeException("已提零件 ID 不能为空");
+        }
+        OrderDeliveryTicket ticket = ticketMapper.selectByIdForUpdate(ticketId);
+        if (ticket == null) {
+            throw new RuntimeException("已提零件不存在");
+        }
+        return ticket;
+    }
+
+    private String requiredReason(String value) {
+        String reason = optionalReason(value);
+        if (!hasText(reason)) {
+            throw new RuntimeException("废弃原因不能为空");
+        }
+        return reason;
+    }
+
+    private String optionalReason(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        String reason = value.trim();
+        if (reason.length() > 500) {
+            throw new RuntimeException("原因不能超过 500 个字符");
+        }
+        return reason;
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser current = AuthContext.get();
+        return current == null || current.id() == null ? null : current.id().longValue();
+    }
+
+    private Map<String, Object> actionResult(OrderDeliveryTicket ticket, String message, String state, String reason) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", message);
+        result.put("ticketId", ticket.getId());
+        result.put("rfqNo", ticket.getRfqNo());
+        result.put("partNo", ticket.getPartNo());
+        result.put("version", ticket.getVersion());
+        result.put("discarded", Boolean.TRUE.equals(ticket.getDiscarded()));
+        result.put("state", state);
+        result.put("reason", reason);
+        result.put("mesSyncStatus", ticket.getMesSyncStatus());
+        result.put("wmsAllocateStatus", ticket.getWmsAllocateStatus());
+        result.put("discardedAt", ticket.getDiscardedAt());
+        result.put("discardedBy", ticket.getDiscardedBy());
+        result.put("restoredAt", ticket.getRestoredAt());
+        result.put("restoredBy", ticket.getRestoredBy());
+        return result;
+    }
+
+    private void recordAudit(String action, OrderDeliveryTicket ticket, Map<String, Object> summary, String label) {
+        if (auditService == null) {
+            return;
+        }
+        auditService.record(
+                action,
+                "order_delivery_ticket",
+                ticket.getId(),
+                null,
+                summary,
+                "DELIVERY",
+                "SUCCESS",
+                label + " ticketId=" + ticket.getId(),
+                null
+        );
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private void applyCustomerFilter(QueryWrapper<DeliveredItemDTO> query, String customerCode, String customerName) {

@@ -21,4 +21,5 @@ public class ProductionItemQueryReq {
     private String mesProductionStatus;
     private LocalDate dateFrom;
     private LocalDate dateTo;
+    private Boolean discarded;
 }

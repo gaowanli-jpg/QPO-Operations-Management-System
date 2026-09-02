@@ -2,7 +2,11 @@ package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.config.AuthContext;
+import com.machining.quote.entity.OrderDeliveryTicket;
+import com.machining.quote.entity.OrderDeliveryTicketAllocation;
 import com.machining.quote.entity.SystemTask;
+import com.machining.quote.mapper.OrderDeliveryTicketAllocationMapper;
+import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.SystemTaskMapper;
 import com.machining.quote.service.mes.MesProductionDispatchService;
 import org.slf4j.Logger;
@@ -31,6 +35,10 @@ public class SystemTaskService {
 
     @Autowired
     private SystemTaskMapper taskMapper;
+    @Autowired
+    private OrderDeliveryTicketMapper ticketMapper;
+    @Autowired
+    private OrderDeliveryTicketAllocationMapper allocationMapper;
     @Autowired
     private EngineerService engineerService;
     @Autowired
@@ -100,13 +108,18 @@ public class SystemTaskService {
         }
         List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
         deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
+        normalizedTicketIds = filterDiscardedTicketIds(normalizedTicketIds);
+        if (normalizedTicketIds.isEmpty()) {
+            throw new RuntimeException("所选已提零件均已废弃，不能提交 MES 物料号任务");
+        }
+        List<Integer> taskTicketIds = normalizedTicketIds;
         Map<String, Object> request = new LinkedHashMap<>();
-        request.put("ticketIds", normalizedTicketIds);
-        request.put("ticketCount", normalizedTicketIds.size());
+        request.put("ticketIds", taskTicketIds);
+        request.put("ticketCount", taskTicketIds.size());
         SystemTask task = createTask("MES_MATERIAL_BATCH_SYNC", request);
         recordTaskSubmitAudit("DELIVERY_MES_MATERIAL_SYNC_SUBMIT", "DELIVERY", task, request);
-        log.info("MES material batch sync submitted taskId={} ticketCount={}", task.getId(), normalizedTicketIds.size());
-        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.syncMesMaterialBatch(normalizedTicketIds, task.getId())));
+        log.info("MES material batch sync submitted taskId={} ticketCount={}", task.getId(), taskTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.syncMesMaterialBatch(taskTicketIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 
@@ -117,13 +130,18 @@ public class SystemTaskService {
         }
         List<Integer> normalizedTicketIds = deliveryIntegrationBatchService.normalizeTicketIds(ticketIds);
         deliveryIntegrationBatchService.assertCanAccessTickets(normalizedTicketIds);
+        normalizedTicketIds = filterDiscardedTicketIds(normalizedTicketIds);
+        if (normalizedTicketIds.isEmpty()) {
+            throw new RuntimeException("所选已提零件均已废弃，不能提交 WMS 锁库任务");
+        }
+        List<Integer> taskTicketIds = normalizedTicketIds;
         Map<String, Object> request = new LinkedHashMap<>();
-        request.put("ticketIds", normalizedTicketIds);
-        request.put("ticketCount", normalizedTicketIds.size());
+        request.put("ticketIds", taskTicketIds);
+        request.put("ticketCount", taskTicketIds.size());
         SystemTask task = createTask("WMS_ALLOCATION_BATCH", request);
         recordTaskSubmitAudit("DELIVERY_WMS_ALLOCATION_SUBMIT", "DELIVERY", task, request);
-        log.info("WMS allocation batch submitted taskId={} ticketCount={}", task.getId(), normalizedTicketIds.size());
-        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.allocateWmsBatch(normalizedTicketIds, task.getId())));
+        log.info("WMS allocation batch submitted taskId={} ticketCount={}", task.getId(), taskTicketIds.size());
+        taskExecutor.execute(() -> runTask(task.getId(), () -> deliveryIntegrationBatchService.allocateWmsBatch(taskTicketIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 
@@ -133,15 +151,20 @@ public class SystemTaskService {
         }
         List<Integer> normalizedAllocationIds = mesProductionDispatchService.normalizeAllocationIds(allocationIds);
         mesProductionDispatchService.assertCanAccessAllocations(normalizedAllocationIds);
+        normalizedAllocationIds = filterDiscardedAllocationIds(normalizedAllocationIds);
+        if (normalizedAllocationIds.isEmpty()) {
+            throw new RuntimeException("所选待产零件均已废弃，不能提交 MES 生产任务");
+        }
+        List<Integer> taskAllocationIds = normalizedAllocationIds;
         Map<String, Object> request = new LinkedHashMap<>();
-        request.put("allocationIds", normalizedAllocationIds);
-        request.put("allocationCount", normalizedAllocationIds.size());
+        request.put("allocationIds", taskAllocationIds);
+        request.put("allocationCount", taskAllocationIds.size());
         SystemTask task = createTask("MES_PRODUCTION_DISPATCH", request);
         recordTaskSubmitAudit("PRODUCTION_ITEM_MES_PRODUCTION_SUBMIT", "DELIVERY", task, request);
         log.info("MES production dispatch submitted taskId={} allocationCount={}",
-                task.getId(), normalizedAllocationIds.size());
+                task.getId(), taskAllocationIds.size());
         taskExecutor.execute(() -> runTask(task.getId(),
-                () -> mesProductionDispatchService.dispatchBatch(normalizedAllocationIds, task.getId())));
+                () -> mesProductionDispatchService.dispatchBatch(taskAllocationIds, task.getId())));
         return taskMapper.selectById(task.getId());
     }
 
@@ -197,6 +220,24 @@ public class SystemTaskService {
         if (taskGuardService != null) {
             taskGuardService.assertNoActiveRefreshQuotesTask(rfqId);
         }
+    }
+
+    public List<Integer> filterDiscardedTicketIds(List<Integer> ticketIds) {
+        return ticketIds.stream()
+                .filter(ticketId -> {
+                    OrderDeliveryTicket ticket = ticketMapper.selectById(ticketId);
+                    return ticket == null || !Boolean.TRUE.equals(ticket.getDiscarded());
+                })
+                .toList();
+    }
+
+    public List<Integer> filterDiscardedAllocationIds(List<Integer> allocationIds) {
+        return allocationIds.stream()
+                .filter(allocationId -> {
+                    OrderDeliveryTicketAllocation allocation = allocationMapper.selectById(allocationId);
+                    return allocation == null || !Boolean.TRUE.equals(allocation.getDiscarded());
+                })
+                .toList();
     }
 
     private SystemTask createTask(String taskType, Object requestJson) {

@@ -141,6 +141,9 @@ public class DeliveryIntegrationBatchService {
         if (ticket == null) {
             return "Delivery ticket does not exist";
         }
+        if (Boolean.TRUE.equals(ticket.getDiscarded())) {
+            return "Delivery ticket is discarded";
+        }
         if ("SUCCESS".equalsIgnoreCase(ticket.getMesSyncStatus()) && !isBlank(ticket.getMaterialNo())) {
             return "MES material number already exists";
         }

@@ -23,4 +23,5 @@ public class DeliveredItemQueryReq {
     private String wmsAllocateStatus;
     private LocalDate dateFrom;
     private LocalDate dateTo;
+    private Boolean discarded;
 }

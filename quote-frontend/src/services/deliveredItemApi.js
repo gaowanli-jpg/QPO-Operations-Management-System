@@ -4,6 +4,16 @@ export const listDeliveredItems = (params = {}) => request('/api/order-delivery/
 
 export const getDeliveredItem = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}`)
 
+export const discardDeliveredItem = (ticketId, payload = {}) => request(`/api/order-delivery/tickets/${ticketId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreDeliveredItem = (ticketId, payload = {}) => request(`/api/order-delivery/tickets/${ticketId}/restore`, {
+  method: 'POST',
+  data: payload
+})
+
 export const syncMesMaterialBatch = (ticketIds = []) => request('/api/order-delivery/tickets/mes-material/batch', {
   method: 'POST',
   data: { ticketIds }
@@ -17,6 +27,16 @@ export const submitWmsAllocationBatch = (ticketIds = []) => request('/api/order-
 export const listLockedItems = (params = {}) => request('/api/order-delivery/locked-items', { params })
 
 export const listProductionItems = (params = {}) => request('/api/order-delivery/production-items', { params })
+
+export const discardProductionItem = (allocationId, payload = {}) => request(`/api/order-delivery/production-items/${allocationId}/discard`, {
+  method: 'POST',
+  data: payload
+})
+
+export const restoreProductionItem = (allocationId, payload = {}) => request(`/api/order-delivery/production-items/${allocationId}/restore`, {
+  method: 'POST',
+  data: payload
+})
 
 export const listTicketAllocations = (ticketId) => request(`/api/order-delivery/tickets/${ticketId}/allocations`)
 

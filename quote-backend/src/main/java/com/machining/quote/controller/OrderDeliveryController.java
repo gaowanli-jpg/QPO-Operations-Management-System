@@ -4,6 +4,8 @@ import com.machining.quote.config.RequirePermission;
 import com.machining.quote.dto.CustomerOptionDTO;
 import com.machining.quote.dto.DeliveredItemDTO;
 import com.machining.quote.dto.DeliveredItemQueryReq;
+import com.machining.quote.dto.DeliveryItemDiscardReq;
+import com.machining.quote.dto.DeliveryItemRestoreReq;
 import com.machining.quote.dto.DeliveryTicketBatchReq;
 import com.machining.quote.dto.LockedItemDTO;
 import com.machining.quote.dto.LockedItemMesProductionBatchReq;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/order-delivery")
@@ -62,6 +65,28 @@ public class OrderDeliveryController {
         return deliveredItemService.getTicket(ticketId);
     }
 
+    @PostMapping("/tickets/{ticketId}/discard")
+    @RequirePermission("market:delivered-item:discard")
+    public Map<String, Object> discardTicket(
+            @PathVariable Integer ticketId,
+            @RequestBody(required = false) DeliveryItemDiscardReq req) {
+        if (req == null) {
+            req = new DeliveryItemDiscardReq();
+        }
+        return deliveredItemService.discardTicket(ticketId, req);
+    }
+
+    @PostMapping("/tickets/{ticketId}/restore")
+    @RequirePermission("market:delivered-item:restore")
+    public Map<String, Object> restoreTicket(
+            @PathVariable Integer ticketId,
+            @RequestBody(required = false) DeliveryItemRestoreReq req) {
+        if (req == null) {
+            req = new DeliveryItemRestoreReq();
+        }
+        return deliveredItemService.restoreTicket(ticketId, req);
+    }
+
     @PostMapping("/tickets/mes-material/batch")
     @RequirePermission("market:delivered-item:mes-sync")
     public SystemTask syncMesMaterialBatch(@RequestBody DeliveryTicketBatchReq req) {
@@ -95,6 +120,28 @@ public class OrderDeliveryController {
     @RequirePermission("market:production-item:view")
     public LockedItemPageDTO listProductionItems(@ModelAttribute ProductionItemQueryReq req) {
         return productionItemService.listProductionItems(req);
+    }
+
+    @PostMapping("/production-items/{allocationId}/discard")
+    @RequirePermission("market:production-item:discard")
+    public Map<String, Object> discardProductionItem(
+            @PathVariable Integer allocationId,
+            @RequestBody(required = false) DeliveryItemDiscardReq req) {
+        if (req == null) {
+            req = new DeliveryItemDiscardReq();
+        }
+        return productionItemService.discardAllocation(allocationId, req);
+    }
+
+    @PostMapping("/production-items/{allocationId}/restore")
+    @RequirePermission("market:production-item:restore")
+    public Map<String, Object> restoreProductionItem(
+            @PathVariable Integer allocationId,
+            @RequestBody(required = false) DeliveryItemRestoreReq req) {
+        if (req == null) {
+            req = new DeliveryItemRestoreReq();
+        }
+        return productionItemService.restoreAllocation(allocationId, req);
     }
 
     @GetMapping("/production-items/customers")

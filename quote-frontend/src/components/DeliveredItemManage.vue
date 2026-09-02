@@ -10,6 +10,9 @@
     <section class="erp-toolbar delivered-filter-toolbar">
       <div class="delivered-toolbar-main">
         <div class="erp-toolbar-group delivered-primary-filters">
+          <el-radio-group v-model="viewMode" size="small">
+            <el-radio-button v-for="option in viewModeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
+          </el-radio-group>
           <el-button v-permission="'market:delivered-item:customer-select'" class="customer-picker-trigger" @click="customerPickerVisible = true">
             <span class="customer-picker-content">
               <span
@@ -34,7 +37,7 @@
           </el-button>
         </div>
 
-        <div class="erp-toolbar-group delivered-batch-actions">
+        <div v-if="viewMode === 'ACTIVE'" class="erp-toolbar-group delivered-batch-actions">
           <el-button
             v-permission="DELIVERED_ITEM_MES_SYNC_PERMISSION"
             type="success"
@@ -152,7 +155,7 @@
           empty-text="暂无未完成流程的已提零件，完成锁库后的结果请在锁库零件模块查看。"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column type="selection" width="46" fixed align="center" />
+          <el-table-column v-if="viewMode === 'ACTIVE'" type="selection" width="46" fixed align="center" />
           <el-table-column prop="id" label="提单ID" width="96" fixed align="center" show-overflow-tooltip />
           <el-table-column prop="partNo" label="图号" min-width="150" fixed show-overflow-tooltip />
           <el-table-column prop="version" label="版本" width="80" align="center">
@@ -221,10 +224,39 @@
           <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ row.remark || '-' }}</template>
           </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardReason" label="废弃原因" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.discardReason || '-' }}</template>
+          </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedAt" label="废弃时间" width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.discardedAt) }}</template>
+          </el-table-column>
+          <el-table-column v-if="viewMode === 'DISCARDED'" prop="discardedBy" label="废弃人" width="110" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.discardedBy || '-' }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="220" align="center" fixed="right">
             <template #default="{ row }">
               <div class="erp-table-actions delivered-row-actions">
                 <el-button size="small" @click="openDetail(row)">详情</el-button>
+                <el-button
+                  v-if="viewMode === 'ACTIVE'"
+                  v-permission="DELIVERED_ITEM_DISCARD_PERMISSION"
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="handleDiscard(row)"
+                >
+                  废弃
+                </el-button>
+                <el-button
+                  v-if="viewMode === 'DISCARDED'"
+                  v-permission="DELIVERED_ITEM_RESTORE_PERMISSION"
+                  size="small"
+                  type="success"
+                  plain
+                  @click="handleRestore(row)"
+                >
+                  恢复
+                </el-button>
                 <el-button
                   v-if="row.wmsAllocateStatus === 'SUCCESS'"
                   v-permission="LOCKED_ITEM_VIEW_PERMISSION"
@@ -334,9 +366,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { openAuthenticatedFileInNewWindow } from '../api'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import {
+  discardDeliveredItem,
   getDeliveredItem,
   getDeliveryIntegrationTask,
   listDeliveredItems,
+  restoreDeliveredItem,
   submitWmsAllocationBatch,
   syncMesMaterialBatch
 } from '../services/deliveredItemApi'
@@ -350,6 +384,8 @@ const DELIVERED_ITEM_VIEW_PERMISSION = 'market:delivered-item:view'
 const DELIVERED_ITEM_FILE_PREVIEW_PERMISSION = 'market:delivered-item:file-preview'
 const DELIVERED_ITEM_MES_SYNC_PERMISSION = 'market:delivered-item:mes-sync'
 const DELIVERED_ITEM_WMS_ALLOCATE_PERMISSION = 'market:delivered-item:wms-allocate'
+const DELIVERED_ITEM_DISCARD_PERMISSION = 'market:delivered-item:discard'
+const DELIVERED_ITEM_RESTORE_PERMISSION = 'market:delivered-item:restore'
 const LOCKED_ITEM_VIEW_PERMISSION = 'market:locked-item:view'
 
 const deliveredActionKeys = {
@@ -390,6 +426,10 @@ const flowStageOptions = [
   { value: 'WMS_PROCESSING', label: '库存处理中' },
   { value: 'WMS_FAILED', label: '库存失败' }
 ]
+const viewModeOptions = [
+  { label: '待处理', value: 'ACTIVE' },
+  { label: '已废弃', value: 'DISCARDED' }
+]
 const items = ref([])
 const selectedRows = ref([])
 const selectedTicketIds = computed(() => selectedRows.value.map(row => row.id).filter(Boolean))
@@ -403,8 +443,16 @@ const customerPickerVisible = ref(false)
 const mesBatchResult = ref(null)
 const wmsBatchResult = ref(null)
 const advancedFiltersVisible = ref(false)
+const viewMode = ref('ACTIVE')
+const isActiveView = computed(() => viewMode.value === 'ACTIVE')
+const isDiscardedView = computed(() => viewMode.value === 'DISCARDED')
 
 watch([page, pageSize], () => loadItems())
+watch(viewMode, async () => {
+  selectedRows.value = []
+  page.value = 1
+  await loadItems()
+})
 
 const buildParams = () => {
   const params = Object.fromEntries(Object.entries(filters)
@@ -415,6 +463,7 @@ const buildParams = () => {
   const [dateFrom, dateTo] = filters.dateRange || []
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
+  params.discarded = viewMode.value === 'DISCARDED'
   return {
     ...params,
     page: page.value,
@@ -491,6 +540,42 @@ const handleCustomerClear = async () => {
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows || []
+}
+
+const handleDiscard = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入废弃原因', '废弃已提零件', {
+      confirmButtonText: '确认废弃',
+      cancelButtonText: '取消',
+      inputPlaceholder: '废弃原因',
+      inputValidator: (value) => String(value || '').trim() ? true : '废弃原因不能为空'
+    })
+    await discardDeliveredItem(row.id, { reason: String(value || '').trim() })
+    ElMessage.success('已提零件已废弃')
+    selectedRows.value = []
+    await loadItems()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '已提零件废弃失败。')
+  }
+}
+
+const handleRestore = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入恢复原因（可选）', '恢复已提零件', {
+      confirmButtonText: '确认恢复',
+      cancelButtonText: '取消',
+      inputPlaceholder: '恢复原因（可选）'
+    })
+    await restoreDeliveredItem(row.id, { reason: String(value || '').trim() })
+    ElMessage.success('已提零件已恢复')
+    await loadItems()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    console.error(error)
+    ElMessage.error(error.response?.data?.message || error.message || '已提零件恢复失败。')
+  }
 }
 
 const selectedCountText = () => `${selectedTicketIds.value.length} 条已提零件`

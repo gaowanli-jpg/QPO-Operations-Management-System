@@ -55,4 +55,11 @@ public class DeliveredItemDTO {
     private String wmsAllocateMessage;
     private LocalDateTime wmsAllocatedAt;
     private LocalDate deliveryDate;
+    private Boolean discarded;
+    private LocalDateTime discardedAt;
+    private Long discardedBy;
+    private String discardReason;
+    private LocalDateTime restoredAt;
+    private Long restoredBy;
+    private String restoreReason;
 }

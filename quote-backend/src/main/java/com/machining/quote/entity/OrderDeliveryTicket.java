@@ -67,4 +67,11 @@ public class OrderDeliveryTicket {
     private String wmsAllocateStatus;
     private String wmsAllocateMessage;
     private LocalDateTime wmsAllocatedAt;
+    private Boolean discarded;
+    private LocalDateTime discardedAt;
+    private Long discardedBy;
+    private String discardReason;
+    private LocalDateTime restoredAt;
+    private Long restoredBy;
+    private String restoreReason;
 }
