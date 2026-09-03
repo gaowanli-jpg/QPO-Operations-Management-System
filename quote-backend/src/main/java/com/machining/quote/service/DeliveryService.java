@@ -7,6 +7,7 @@ import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessSheetDTO;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.RfqReleaseAppendSalesOrderReq;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.entity.SalesOrderHeader;
@@ -62,6 +63,8 @@ public class DeliveryService {
     private SalesOrderItemMapper salesOrderItemMapper;
     @Autowired
     private RfqReleaseSalesOrderService rfqReleaseSalesOrderService;
+    @Autowired
+    private RfqReleaseAppendSalesOrderService rfqReleaseAppendSalesOrderService;
     @Autowired(required = false)
     @Lazy
     private DeliveryAutoMesMaterialSyncService autoMesMaterialSyncService;
@@ -79,6 +82,11 @@ public class DeliveryService {
     @Transactional
     public DeliveryBatchResultDTO generateRfqReleaseBatch(DeliveryGenerateReq req) {
         return generateRfqReleaseAndAutoSubmitMes(req);
+    }
+
+    @Transactional
+    public DeliveryBatchResultDTO appendRfqReleaseToSalesOrder(RfqReleaseAppendSalesOrderReq req) {
+        return rfqReleaseAppendSalesOrderService.appendToSalesOrder(req);
     }
 
     @Transactional

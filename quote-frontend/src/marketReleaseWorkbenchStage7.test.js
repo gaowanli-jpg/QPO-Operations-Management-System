@@ -20,6 +20,7 @@ describe('market release workbench stage 7', () => {
     expect(source).toContain('订单默认信息')
     expect(source).toContain('一批生成一张销售订单')
     expect(source).toContain('零件值优先，空值继承订单默认信息')
+    expect(source).toContain('追加销售提单以目标销售订单头为准，左侧必填项不参与')
     expect(source).toContain('label="下单日期"')
     expect(source).toContain('v-model="releaseForm.documentTypeCode"')
     expect(source).toContain('v-model="releaseForm.salesOrderDate"')

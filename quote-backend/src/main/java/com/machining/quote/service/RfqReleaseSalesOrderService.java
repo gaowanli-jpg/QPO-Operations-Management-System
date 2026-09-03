@@ -1,15 +1,19 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.machining.quote.config.AuthContext;
 import com.machining.quote.domain.QuoteStatusWorkflow;
 import com.machining.quote.dto.DeliveryBatchResultDTO;
 import com.machining.quote.dto.DeliveryGenerateReq;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.RfqReleaseAppendSalesOrderReq;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemAssemblyRelation;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
 import com.machining.quote.entity.OrderRfq;
+import com.machining.quote.entity.SalesOrderAppendBatch;
 import com.machining.quote.entity.SalesOrderHeader;
 import com.machining.quote.entity.SalesOrderItem;
 import com.machining.quote.entity.SalesOrderItemAssemblyRelation;
@@ -19,6 +23,7 @@ import com.machining.quote.mapper.ItemAssemblyRelationMapper;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
 import com.machining.quote.mapper.OrderDeliveryTicketMapper;
 import com.machining.quote.mapper.OrderRfqMapper;
+import com.machining.quote.mapper.SalesOrderAppendBatchMapper;
 import com.machining.quote.mapper.SalesOrderHeaderMapper;
 import com.machining.quote.mapper.SalesOrderItemAssemblyRelationMapper;
 import com.machining.quote.mapper.SalesOrderItemMapper;
@@ -31,6 +36,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -55,6 +63,11 @@ public class RfqReleaseSalesOrderService {
     private static final String MATERIAL_UNCONFIRMED = "未确认";
     private static final String MES_SUCCESS = "SUCCESS";
     private static final String MES_PENDING = "PENDING";
+    private static final String U9_UNSYNCED = "未同步";
+    private static final String U9_FAILED = "同步失败";
+    private static final String U9_SYNCING = "同步中";
+    private static final String U9_SYNCED = "已同步";
+    private static final String U9_PENDING_CONFIRMATION = "结果待确认";
     private static final String CONFIRMED_MATERIAL_MESSAGE = "前置匹配复用已确认 MES 物料号";
     private static final String ITEM_TYPE_ASSEMBLY = "组合件";
     private static final String ITEM_TYPE_NORMAL = "普通件";
@@ -69,6 +82,8 @@ public class RfqReleaseSalesOrderService {
     private SalesOrderNumberService numberService;
     @Autowired
     private SalesOrderHeaderMapper headerMapper;
+    @Autowired
+    private SalesOrderAppendBatchMapper appendBatchMapper;
     @Autowired
     private SalesOrderItemMapper salesItemMapper;
     @Autowired
@@ -129,6 +144,74 @@ public class RfqReleaseSalesOrderService {
         Map<Integer, OrderDeliveryTicket> byId = ticketMapper.selectBatchIds(result.getTicketIds()).stream()
                 .collect(Collectors.toMap(OrderDeliveryTicket::getId, Function.identity()));
         return result.getTicketIds().stream().map(byId::get).filter(Objects::nonNull).toList();
+    }
+
+    @Transactional
+    public DeliveryBatchResultDTO appendToExistingSalesOrder(RfqReleaseAppendSalesOrderReq req) {
+        long startedAt = System.currentTimeMillis();
+        String appendBatchKey = requireAppendBatchKey(req);
+        String requestHash = calculateAppendRequestHash(req, appendBatchKey);
+        headerMapper.lockReleaseBatch("rfq-release-append:" + appendBatchKey);
+
+        SalesOrderAppendBatch existing = appendBatchMapper.selectByAppendBatchKeyForUpdate(appendBatchKey);
+        if (existing != null) {
+            if (!Objects.equals(existing.getRequestHash(), requestHash)) {
+                throw new RuntimeException("追加批次参数与首次提交不一致");
+            }
+            DeliveryBatchResultDTO replay = buildExistingAppendResult(existing);
+            auditAppend(existing, replay, true, startedAt);
+            return replay;
+        }
+
+        SalesOrderHeader target = lockAndValidateAppendTarget(req.getTargetSalesOrderId());
+        headerMapper.lockReleaseBatch("rfq-release-append-target:" + target.getId());
+        DeliveryGenerateReq delegatedReq = toDelegatedAppendRequest(req, target, appendBatchKey);
+        RfqReleaseBatchValidationService.BatchContext context = validationService.validate(delegatedReq);
+        if (!Objects.equals(trimToNull(target.getCustomerCode()), context.customerCode())) {
+            throw new RuntimeException("只能追加到同一客户的销售订单");
+        }
+
+        Map<Integer, OrderRfq> lockedOrders = lockOrders(context);
+        List<ReleaseLine> releaseLines = lockAndValidateLines(delegatedReq, context, lockedOrders, true);
+        List<ItemAssemblyRelation> sourceRelations = selectedAssemblyRelations(releaseLines);
+        Set<Integer> selectedRelationParents = sourceRelations.stream()
+                .map(ItemAssemblyRelation::getParentItemId)
+                .collect(Collectors.toSet());
+
+        LocalDateTime now = LocalDateTime.now();
+        ensureSourceRfqs(target.getId(), context.rfqIds(), now);
+        Map<Integer, SalesOrderItem> salesItemBySourceId = new LinkedHashMap<>();
+        List<OrderDeliveryTicket> tickets = new ArrayList<>();
+        List<Long> salesOrderItemIds = new ArrayList<>();
+        int lineNo = nextSalesOrderLineNo(target.getId());
+        for (ReleaseLine line : releaseLines) {
+            OrderRfq order = lockedOrders.get(line.item().getRfqId());
+            OrderDeliveryTicket ticket = insertTicket(order, line, context);
+            SalesOrderItem salesItem = insertSalesItem(
+                    target.getId(), lineNo++, line, ticket.getId(), selectedRelationParents, now);
+            tickets.add(ticket);
+            salesOrderItemIds.add(salesItem.getId());
+            salesItemBySourceId.put(line.item().getId(), salesItem);
+        }
+        insertAssemblyRelations(target.getId(), sourceRelations, salesItemBySourceId, now);
+
+        for (ReleaseLine line : releaseLines) {
+            refreshItemTicketStatus(line.item());
+        }
+        for (Integer rfqId : context.rfqIds()) {
+            refreshOrderTicketStatus(rfqId);
+        }
+        refreshAppendTargetHeader(target, now);
+
+        SalesOrderAppendBatch batch = insertAppendBatch(
+                appendBatchKey, target, requestHash, context.rfqIds(), tickets, salesOrderItemIds, now);
+        DeliveryBatchResultDTO result = buildResult(target, context.rfqIds(), tickets);
+        result.setIdempotentReplay(false);
+        result.setMessage("已追加到销售订单 " + target.getSalesOrderNo() + "，并生成 " + tickets.size() + " 条提单行。");
+        auditAppend(batch, result, false, startedAt);
+        log.info("RFQ release append completed salesOrderId={} rfqCount={} ticketCount={} durationMs={}",
+                target.getId(), context.rfqIds().size(), tickets.size(), System.currentTimeMillis() - startedAt);
+        return result;
     }
 
     private DeliveryBatchResultDTO create(
@@ -197,6 +280,14 @@ public class RfqReleaseSalesOrderService {
             DeliveryGenerateReq req,
             RfqReleaseBatchValidationService.BatchContext context,
             Map<Integer, OrderRfq> lockedOrders) {
+        return lockAndValidateLines(req, context, lockedOrders, false);
+    }
+
+    private List<ReleaseLine> lockAndValidateLines(
+            DeliveryGenerateReq req,
+            RfqReleaseBatchValidationService.BatchContext context,
+            Map<Integer, OrderRfq> lockedOrders,
+            boolean forceContextOrderFields) {
         List<Integer> itemIds = req.getItems().stream()
                 .map(this::resolveItemId)
                 .sorted()
@@ -230,7 +321,10 @@ public class RfqReleaseSalesOrderService {
             if (acceptedQty <= 0) {
                 throw new RuntimeException("零件 " + itemLabel(item) + " 的通过数量必须大于 0");
             }
-            result.add(new ReleaseLine(item, acceptedQty, effectiveFields(item, context)));
+            EffectiveOrderFields fields = forceContextOrderFields
+                    ? effectiveFieldsFromContext(context)
+                    : effectiveFields(item, context);
+            result.add(new ReleaseLine(item, acceptedQty, fields));
         }
         result.sort(Comparator
                 .comparing((ReleaseLine line) -> line.item().getRfqId())
@@ -562,6 +656,16 @@ public class RfqReleaseSalesOrderService {
         orderMapper.updateById(order);
     }
 
+    private EffectiveOrderFields effectiveFieldsFromContext(RfqReleaseBatchValidationService.BatchContext context) {
+        return new EffectiveOrderFields(
+                context.salesOrderDate(),
+                context.customerOrderNo(),
+                context.customerProjectNo(),
+                context.customerOrderTitle(),
+                context.orderType(),
+                context.internalProjectNo());
+    }
+
     private String releaseEligibilityFailureReason(ItemQuoteVersion item) {
         if (!hasDrawing(item)) {
             return "缺少图纸，不能提单";
@@ -650,6 +754,266 @@ public class RfqReleaseSalesOrderService {
                 orderedTickets);
         result.setIdempotentReplay(true);
         return result;
+    }
+
+    private String requireAppendBatchKey(RfqReleaseAppendSalesOrderReq req) {
+        if (req == null) {
+            throw new RuntimeException("追加提单参数不能为空");
+        }
+        String key = trimToNull(req.getAppendBatchKey());
+        if (key == null) {
+            throw new RuntimeException("追加批次键不能为空");
+        }
+        if (key.length() > 100) {
+            throw new RuntimeException("追加批次键不能超过 100 个字符");
+        }
+        return key;
+    }
+
+    private String calculateAppendRequestHash(RfqReleaseAppendSalesOrderReq req, String appendBatchKey) {
+        if (req.getTargetSalesOrderId() == null) {
+            throw new RuntimeException("目标销售订单不能为空");
+        }
+        List<Integer> rfqIds = new ArrayList<>(new LinkedHashSet<>(req.getRfqIds() == null ? List.of() : req.getRfqIds().stream()
+                .filter(Objects::nonNull)
+                .toList()));
+        if (rfqIds.isEmpty()) {
+            throw new RuntimeException("至少选择一个询价单");
+        }
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw new RuntimeException("请至少选择一个通过议价的零件");
+        }
+        String lines = req.getItems().stream()
+                .map(line -> String.join(":",
+                        String.valueOf(line == null ? null : line.getSourceType()),
+                        String.valueOf(line == null ? null : line.getItemId()),
+                        String.valueOf(line == null ? null : line.getSourceOrderId()),
+                        String.valueOf(line == null ? null : line.getSourceItemId()),
+                        String.valueOf(line == null ? null : line.getAcceptedQty())))
+                .sorted()
+                .collect(Collectors.joining("|"));
+        return sha256(String.join("|",
+                appendBatchKey,
+                String.valueOf(req.getTargetSalesOrderId()),
+                rfqIds.stream().map(String::valueOf).sorted().collect(Collectors.joining(",")),
+                lines));
+    }
+
+    private SalesOrderHeader lockAndValidateAppendTarget(Long targetSalesOrderId) {
+        if (targetSalesOrderId == null) {
+            throw new RuntimeException("目标销售订单不能为空");
+        }
+        SalesOrderHeader target = headerMapper.selectByIdForUpdate(targetSalesOrderId);
+        if (target == null) {
+            throw new RuntimeException("目标销售订单不存在");
+        }
+        if (dataScopeService != null) {
+            dataScopeService.assertCanAccessSalesOrder(target);
+        }
+        if (!HEADER_RELEASED.equals(trim(target.getStatus()))) {
+            throw new RuntimeException("只能追加到已生成提单的销售订单");
+        }
+        String u9Status = trimToNull(target.getU9SyncStatus());
+        if (U9_SYNCED.equals(u9Status) || U9_SYNCING.equals(u9Status) || U9_PENDING_CONFIRMATION.equals(u9Status)) {
+            throw new RuntimeException("不能追加到已同步或同步中的销售订单");
+        }
+        if (u9Status != null && !U9_UNSYNCED.equals(u9Status) && !U9_FAILED.equals(u9Status)) {
+            throw new RuntimeException("不能追加到当前 U9 状态的销售订单：" + u9Status);
+        }
+        return target;
+    }
+
+    private DeliveryGenerateReq toDelegatedAppendRequest(
+            RfqReleaseAppendSalesOrderReq req,
+            SalesOrderHeader target,
+            String appendBatchKey) {
+        DeliveryGenerateReq delegated = new DeliveryGenerateReq();
+        delegated.setRfqIds(req.getRfqIds());
+        delegated.setReleaseBatchKey(appendBatchKey);
+        delegated.setDocumentTypeCode(firstText(target.getDocumentTypeCode(), "SO06"));
+        delegated.setSalesOrderDate(target.getSalesOrderDate());
+        delegated.setCustomerOrderTitle(trimToNull(target.getCustomerOrderTitle()));
+        delegated.setOrderType(firstText(target.getOrderType(), ""));
+        delegated.setInternalProjectNo(firstText(target.getInternalProjectNo(), ""));
+        delegated.setCustomerOrderNo(firstText(target.getCustomerOrderNo(), ""));
+        delegated.setCustomerProjectNo(trimToNull(target.getCustomerProjectNo()));
+        delegated.setProjectNo(firstText(target.getSalesOrderNo(), target.getInternalProjectNo()));
+        delegated.setArrangeType("计划");
+        delegated.setItems(req.getItems().stream().map(this::toDeliveryLine).toList());
+        return delegated;
+    }
+
+    private DeliveryGenerateReq.DeliveryItemReq toDeliveryLine(RfqReleaseAppendSalesOrderReq.ReleaseItemReq source) {
+        DeliveryGenerateReq.DeliveryItemReq target = new DeliveryGenerateReq.DeliveryItemReq();
+        if (source != null) {
+            target.setItemId(source.getItemId());
+            target.setSourceType(source.getSourceType());
+            target.setSourceOrderId(source.getSourceOrderId());
+            target.setSourceItemId(source.getSourceItemId());
+            target.setAcceptedQty(source.getAcceptedQty());
+        }
+        return target;
+    }
+
+    private void ensureSourceRfqs(Long salesOrderId, List<Integer> rfqIds, LocalDateTime now) {
+        if (salesOrderId == null || rfqIds == null || rfqIds.isEmpty()) {
+            return;
+        }
+        Set<Integer> existing = sourceRfqMapper.selectList(new QueryWrapper<SalesOrderSourceRfq>()
+                        .eq("sales_order_id", salesOrderId)
+                        .in("rfq_id", rfqIds))
+                .stream()
+                .map(SalesOrderSourceRfq::getRfqId)
+                .collect(Collectors.toSet());
+        for (Integer rfqId : rfqIds) {
+            if (existing.contains(rfqId)) {
+                continue;
+            }
+            SalesOrderSourceRfq source = new SalesOrderSourceRfq();
+            source.setSalesOrderId(salesOrderId);
+            source.setRfqId(rfqId);
+            source.setCreatedAt(now);
+            sourceRfqMapper.insert(source);
+        }
+    }
+
+    private int nextSalesOrderLineNo(Long salesOrderId) {
+        List<SalesOrderItem> latest = salesItemMapper.selectList(new QueryWrapper<SalesOrderItem>()
+                .eq("sales_order_id", salesOrderId)
+                .orderByDesc("line_no")
+                .orderByDesc("id")
+                .last("LIMIT 1"));
+        if (latest.isEmpty() || latest.get(0).getLineNo() == null) {
+            return 1;
+        }
+        return latest.get(0).getLineNo() + 1;
+    }
+
+    private void refreshAppendTargetHeader(SalesOrderHeader target, LocalDateTime now) {
+        long total = salesItemMapper.selectCount(new QueryWrapper<SalesOrderItem>()
+                .eq("sales_order_id", target.getId()));
+        UpdateWrapper<SalesOrderHeader> update = new UpdateWrapper<>();
+        update.eq("id", target.getId())
+                .set("status", HEADER_RELEASED)
+                .set("total_item_count", Math.toIntExact(total))
+                .set("updated_at", now);
+        String u9Status = trimToNull(target.getU9SyncStatus());
+        if (u9Status == null || U9_FAILED.equals(u9Status)) {
+            update.set("u9_sync_status", U9_UNSYNCED)
+                    .set("u9_sync_message", null)
+                    .set("u9_sync_attempt_id", null)
+                    .set("u9_sync_request_hash", null)
+                    .set("u9_sync_started_at", null)
+                    .set("u9_sync_finished_at", null);
+            target.setU9SyncStatus(U9_UNSYNCED);
+            target.setU9SyncMessage(null);
+            target.setU9SyncAttemptId(null);
+            target.setU9SyncRequestHash(null);
+            target.setU9SyncStartedAt(null);
+            target.setU9SyncFinishedAt(null);
+        }
+        headerMapper.update(null, update);
+        target.setStatus(HEADER_RELEASED);
+        target.setTotalItemCount(Math.toIntExact(total));
+        target.setUpdatedAt(now);
+    }
+
+    private SalesOrderAppendBatch insertAppendBatch(
+            String appendBatchKey,
+            SalesOrderHeader target,
+            String requestHash,
+            List<Integer> sourceRfqIds,
+            List<OrderDeliveryTicket> tickets,
+            List<Long> salesOrderItemIds,
+            LocalDateTime now) {
+        SalesOrderAppendBatch batch = new SalesOrderAppendBatch();
+        batch.setAppendBatchKey(appendBatchKey);
+        batch.setTargetSalesOrderId(target.getId());
+        batch.setRequestHash(requestHash);
+        batch.setSourceRfqIds(sourceRfqIds == null ? List.of() : sourceRfqIds);
+        batch.setTicketIds(tickets == null ? List.of() : tickets.stream().map(OrderDeliveryTicket::getId).toList());
+        batch.setSalesOrderItemIds(salesOrderItemIds == null ? List.of() : salesOrderItemIds);
+        batch.setItemCount(tickets == null ? 0 : tickets.size());
+        batch.setCreatedBy(currentUserId());
+        batch.setCreatedAt(now);
+        appendBatchMapper.insert(batch);
+        return batch;
+    }
+
+    private DeliveryBatchResultDTO buildExistingAppendResult(SalesOrderAppendBatch batch) {
+        SalesOrderHeader header = headerMapper.selectById(batch.getTargetSalesOrderId());
+        if (header == null) {
+            throw new RuntimeException("追加提单历史销售订单不存在");
+        }
+        List<Integer> ticketIds = toIntegerList(batch.getTicketIds());
+        List<OrderDeliveryTicket> tickets = ticketIds.isEmpty() ? List.of() : ticketMapper.selectBatchIds(ticketIds);
+        Map<Integer, OrderDeliveryTicket> ticketById = tickets.stream()
+                .collect(Collectors.toMap(OrderDeliveryTicket::getId, Function.identity()));
+        List<OrderDeliveryTicket> orderedTickets = ticketIds.stream()
+                .map(ticketById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        if (orderedTickets.size() != ticketIds.size()) {
+            throw new RuntimeException("追加提单批次历史结果不完整");
+        }
+        DeliveryBatchResultDTO result = buildResult(header, toIntegerList(batch.getSourceRfqIds()), orderedTickets);
+        result.setIdempotentReplay(true);
+        result.setMessage("已追加到销售订单 " + header.getSalesOrderNo() + "，并生成 " + orderedTickets.size() + " 条提单行。");
+        return result;
+    }
+
+    private List<Integer> toIntegerList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        List<Integer> result = new ArrayList<>();
+        for (Object item : values) {
+            if (item instanceof Number number) {
+                result.add(number.intValue());
+            } else if (item instanceof String text && !text.isBlank()) {
+                result.add(Integer.parseInt(text));
+            }
+        }
+        return result;
+    }
+
+    private void auditAppend(
+            SalesOrderAppendBatch batch,
+            DeliveryBatchResultDTO result,
+            boolean idempotentReplay,
+            long startedAt) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("mode", "APPEND_TO_EXISTING_SALES_ORDER");
+        summary.put("salesOrderId", result.getSalesOrderId());
+        summary.put("salesOrderNo", result.getSalesOrderNo());
+        summary.put("rfqCount", result.getSourceRfqIds() == null ? 0 : result.getSourceRfqIds().size());
+        summary.put("itemCount", result.getTicketCount());
+        summary.put("ticketCount", result.getTicketCount());
+        summary.put("confirmedMaterialCount", result.getConfirmedMaterialCount());
+        summary.put("pendingMaterialCount", result.getPendingMaterialCount());
+        summary.put("appendBatchKeySummary", sha256(batch.getAppendBatchKey()).substring(0, 12));
+        summary.put("idempotentReplay", idempotentReplay);
+        summary.put("durationMs", System.currentTimeMillis() - startedAt);
+        auditService.record("DELIVERY_TICKET_GENERATE", "sales_order_header", result.getSalesOrderId(), null, summary);
+    }
+
+    private Long currentUserId() {
+        AuthContext.SessionUser user = AuthContext.get();
+        return user == null || user.id() == null ? null : user.id().longValue();
+    }
+
+    private String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte item : digest) {
+                result.append(String.format("%02x", item));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        }
     }
 
     private void audit(

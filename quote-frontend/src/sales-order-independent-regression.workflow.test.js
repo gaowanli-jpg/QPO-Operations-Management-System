@@ -38,6 +38,10 @@ describe('sales order independent regression', () => {
     const lockedItem = readSource('components', 'LockedItemManage.vue')
     const marketApi = readSource('services', 'marketApi.js')
     const deliveredItemApi = readSource('services', 'deliveredItemApi.js')
+    const formalSubmitBlock = marketRelease.slice(
+      marketRelease.indexOf('const submitTicket = async () =>'),
+      marketRelease.indexOf('const resolveDeliveryLeadTime')
+    )
 
     expect(marketRelease).toContain('selectedOrderSources')
     expect(marketRelease).toContain("sourceType: row?.sourceType || 'RFQ'")
@@ -45,8 +49,9 @@ describe('sales order independent regression', () => {
     expect(marketRelease).toContain('sourceItemId: Number(row?.sourceItemId ?? row?.id)')
     expect(marketRelease).toContain("sourceType: 'RFQ'")
     expect(marketRelease).toContain('sources: selectedOrderSources.value')
-    expect(marketRelease).not.toContain('getSalesOrder')
-    expect(marketRelease).not.toContain('SALES_ORDER')
+    expect(marketRelease).toContain('appendReleaseToSalesOrder(payload)')
+    expect(formalSubmitBlock).not.toContain('targetSalesOrderId')
+    expect(formalSubmitBlock).not.toContain('appendReleaseToSalesOrder')
     expect(marketApi).toContain("listReleaseItemsBatch = (payload) => postJson('/api/market/release/items/batch', payload)")
     expect(marketRelease).not.toContain('fetchAllReleaseItems')
 

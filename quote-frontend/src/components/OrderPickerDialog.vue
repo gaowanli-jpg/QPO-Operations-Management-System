@@ -144,6 +144,7 @@ const DEFAULT_STATUS_OPTIONS = ['未核价', '已核价', '已报价', '部分�
 
 const STATUS_OPTIONS_BY_SCOPE = {
   'delivery-document': ['部分已提单', '已生成提单'],
+  'release-append-sales-order': ['已生成提单'],
   'u9-sync': ['已生成提单'],
   'sales-order-change': ['已生成提单'],
   'engineer-setup': ['未核价'],
@@ -152,13 +153,14 @@ const STATUS_OPTIONS_BY_SCOPE = {
 }
 
 const ORDER_TYPE_LABEL_BY_SCOPE = {
+  'release-append-sales-order': '销售订单',
   'u9-sync': '销售订单',
   'sales-order-change': '销售订单',
   'engineer-supplemental-pricing': '补图待核价 RFQ 订单',
   'quote-process-supplemental': '补充报价待确认 RFQ 订单'
 }
 
-const SALES_ORDER_SCOPES = ['u9-sync', 'sales-order-change']
+const SALES_ORDER_SCOPES = ['release-append-sales-order', 'u9-sync', 'sales-order-change']
 
 const props = defineProps({
   modelValue: {
@@ -194,6 +196,10 @@ const props = defineProps({
     default: false
   },
   lockedCustomerName: {
+    type: String,
+    default: ''
+  },
+  lockedCustomerCode: {
     type: String,
     default: ''
   },
@@ -294,10 +300,11 @@ watch([page, pageSize], () => {
 })
 
 watch(
-  () => [props.modelValue, props.lockedCustomerName],
-  ([isVisible, customerName]) => {
+  () => [props.modelValue, props.lockedCustomerName, props.lockedCustomerCode],
+  ([isVisible, customerName, customerCode]) => {
     if (isVisible && customerName) {
       selectedCustomer.value = customerName
+      selectedCustomerCode.value = customerCode || ''
     }
   },
   { immediate: true }

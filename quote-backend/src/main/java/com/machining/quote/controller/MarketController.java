@@ -16,7 +16,9 @@ import com.machining.quote.dto.ReleaseItemOrderFieldUpdateReq;
 import com.machining.quote.dto.ReleaseItemVersionUpdateReq;
 import com.machining.quote.dto.ReleaseOrderSource;
 import com.machining.quote.dto.ReleaseSourceType;
+import com.machining.quote.dto.RfqReleaseAppendSalesOrderReq;
 import com.machining.quote.dto.RfqExcelDTO;
+import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.entity.CustomerMaster;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderDeliveryTicket;
@@ -35,6 +37,7 @@ import com.machining.quote.service.InternalTargetLeadTimeService;
 import com.machining.quote.service.OrderManagementService;
 import com.machining.quote.service.PartSelectionImportService;
 import com.machining.quote.service.QuoteTemplateExportService;
+import com.machining.quote.service.RfqReleaseAppendSalesOrderService;
 import com.machining.quote.service.RfqNumberService;
 import com.machining.quote.util.DrawingPartNoResolver;
 import jakarta.servlet.http.HttpServletResponse;
@@ -63,6 +66,9 @@ public class MarketController {
 
     @Autowired
     private DeliveryService deliveryService;
+
+    @Autowired
+    private RfqReleaseAppendSalesOrderService rfqReleaseAppendSalesOrderService;
 
     @Autowired
     private InternalTargetLeadTimeService internalTargetLeadTimeService;
@@ -167,6 +173,19 @@ public class MarketController {
         return orderManagementService.listReleaseOrderSources(customerCode, customerName, keyword, status, page, pageSize);
     }
 
+    @GetMapping("/release/append-target-sales-orders")
+    @RequirePermission("market:release:order-select")
+    public PageResult<SalesOrderU9SyncOrderRow> listReleaseAppendTargetSalesOrders(
+            @RequestParam(value = "customerCode", required = false) String customerCode,
+            @RequestParam(value = "customerName", required = false) String customerName,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        return rfqReleaseAppendSalesOrderService.listAppendTargetSalesOrders(
+                customerCode, customerName, keyword, status, page, pageSize);
+    }
+
     @GetMapping("/tickets/{rfqId}")
     @RequirePermission("market:release:view")
     public PageResult<OrderDeliveryTicket> listDeliveryTickets(
@@ -231,6 +250,12 @@ public class MarketController {
     @RequirePermission("market:release:create")
     public DeliveryBatchResultDTO generateDeliveryTicket(@RequestBody DeliveryGenerateReq req) {
         return deliveryService.generateRfqReleaseBatch(req);
+    }
+
+    @PostMapping("/release/append-to-sales-order")
+    @RequirePermission("market:release:create")
+    public DeliveryBatchResultDTO appendReleaseToSalesOrder(@RequestBody RfqReleaseAppendSalesOrderReq req) {
+        return deliveryService.appendRfqReleaseToSalesOrder(req);
     }
 
     @GetMapping("/release/summary/{rfqId}")

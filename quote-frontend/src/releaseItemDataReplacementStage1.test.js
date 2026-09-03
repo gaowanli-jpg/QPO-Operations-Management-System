@@ -29,7 +29,7 @@ describe('release item data replacement stage 1 characterization', () => {
     )
     const leadTimeSaveBlock = marketReleaseSource.slice(
       marketReleaseSource.indexOf('const saveInternalTargetLeadTime = async (row) =>'),
-      marketReleaseSource.indexOf('const submitTicket = async () =>')
+      marketReleaseSource.indexOf('const openAppendSalesOrderPicker = () =>')
     )
 
     expect(fieldSaveBlock).not.toContain('acceptedQty')

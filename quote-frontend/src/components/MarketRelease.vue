@@ -13,8 +13,8 @@
       <div class="release-result-header">
         <div>
           <div class="release-result-kicker">批次处理完成</div>
-          <h3>已生成提单和 U9 销售订单</h3>
-          <p>本批次已进入已提零件，后续可在 U9 同步页面继续处理。</p>
+          <h3>{{ releaseResultTitle }}</h3>
+          <p>{{ releaseResultDescription }}</p>
         </div>
         <div class="release-result-actions">
           <el-button
@@ -83,7 +83,7 @@
 
             <section class="release-order-default-panel">
               <div class="panel-title compact">订单默认信息</div>
-              <p class="release-order-default-hint">一批生成一张销售订单；零件值优先，空值继承订单默认信息。</p>
+              <p class="release-order-default-hint">仅用于生成正式提单：一批生成一张销售订单，零件值优先，空值继承订单默认信息；追加销售提单以目标销售订单头为准，左侧必填项不参与。</p>
               <el-form label-width="96px" class="ticket-form release-order-default-form">
                 <el-form-item label="单据类型" required>
                   <el-input
@@ -193,6 +193,18 @@
                 @click="submitTicket"
               >
                 生成正式提单
+              </el-button>
+              <el-button
+                v-permission="'market:release:create'"
+                type="primary"
+                plain
+                size="large"
+                class="workflow-primary-action"
+                :loading="appendingSalesOrder"
+                :disabled="appendSalesOrderDisabled"
+                @click="openAppendSalesOrderPicker"
+              >
+                追加销售提单
               </el-button>
             </div>
           </div>
@@ -797,6 +809,19 @@
       :selected-order-ids="selectedOrderKeys"
       @select="handleOrderSelected"
     />
+
+    <OrderPickerDialog
+      v-model="appendSalesOrderPickerVisible"
+      title="选择要追加的销售订单"
+      customer-scope="release"
+      order-scope="release-append-sales-order"
+      :allowed-statuses="['已生成提单']"
+      default-status-after-customer="已生成提单"
+      :multiple="false"
+      :locked-customer-name="selectedCustomerName"
+      :locked-customer-code="selectedCustomerCode"
+      @select="appendToSalesOrder"
+    />
   </div>
 </template>
 
@@ -811,6 +836,7 @@ import { collectPdfFilesFromDataTransfer, isPdfFile, mergePdfFiles } from '../ut
 import {
   generateTicket,
   getReleaseSummary,
+  appendReleaseToSalesOrder,
   listReleaseItemsBatch,
   parsePartSelectionBatch,
   replaceReleaseDrawings,
@@ -836,6 +862,7 @@ import {
 const selectedRfqId = ref(null)
 const selectedOrders = ref([])
 const orderPickerVisible = ref(false)
+const appendSalesOrderPickerVisible = ref(false)
 const itemList = ref([])
 const releaseItemTotal = ref(0)
 const selectedItemIdMap = reactive({})
@@ -877,6 +904,7 @@ const selectedRfqIds = computed(() => selectedOrderSources.value
   .filter(source => source.sourceType === 'RFQ')
   .map(source => source.sourceOrderId))
 const selectedCustomerName = computed(() => selectedOrders.value[0]?.customerName || '')
+const selectedCustomerCode = computed(() => selectedOrders.value[0]?.customerCode || '')
 const selectedSourcesIncludeNonRfq = computed(() => selectedOrderSources.value.some(source => source.sourceType !== 'RFQ'))
 const { isPending, runAction } = usePendingAction()
 const releaseActionKeys = {
@@ -889,9 +917,12 @@ const releaseActionKeys = {
   orderField: (releaseItemKey, field) => `market:release:order-fields:${releaseItemKey}:${field}`,
   version: (itemId) => `market:release:version:${itemId}`,
   internalLeadTime: (itemId) => `market:release:internal-lead-time:${itemId}`,
-  generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join(',') || 'none'}`
+  generateTicket: () => `market:release:generate-ticket:${selectedOrderKeys.value.join(',') || 'none'}`,
+  appendSalesOrder: () => `market:release:append-sales-order:${selectedOrderKeys.value.join(',') || 'none'}`
 }
-const submitting = computed(() => isPending(releaseActionKeys.generateTicket()))
+const generatingTicket = computed(() => isPending(releaseActionKeys.generateTicket()))
+const appendingSalesOrder = computed(() => isPending(releaseActionKeys.appendSalesOrder()))
+const submitting = computed(() => generatingTicket.value || appendingSalesOrder.value)
 const adjustingInternalLeadTime = computed(() => isPending(releaseActionKeys.shiftInternalLeadTime))
 const settingInternalTargetLeadTime = computed(() => isPending(releaseActionKeys.setInternalTargetLeadTime))
 const importSelecting = computed(() => isPending(releaseActionKeys.importSelection))
@@ -927,6 +958,16 @@ const releaseForm = reactive({
   arrangeType: '计划'
 })
 const releaseBatchState = reactive({ fingerprint: '', key: '' })
+const appendBatchState = reactive({ fingerprint: '', key: '' })
+const releaseResultMode = computed(() => releaseResult.value?.resultMode || 'CREATE')
+const releaseResultTitle = computed(() => (
+  releaseResultMode.value === 'APPEND' ? '已追加到销售订单' : '已生成提单和 U9 销售订单'
+))
+const releaseResultDescription = computed(() => (
+  releaseResultMode.value === 'APPEND'
+    ? '本批次已进入已提零件，后续可在 U9 同步页面继续处理。'
+    : '本批次已进入已提零件，后续可在 U9 同步页面继续处理。'
+))
 
 const openDerivedOrderU9 = () => {
   const salesOrderId = Number(releaseResult.value?.salesOrderId)
@@ -958,6 +999,7 @@ const openDerivedOrderDeliveredItems = () => {
 const pagedReleaseItems = computed(() => itemList.value)
 const selectedRows = computed(() => Object.values(selectedItemIdMap))
 const selectedRowsWithUnsavedOrderFields = computed(() => selectedRows.value.filter(hasUnsavedOrderFieldDraft))
+const appendSalesOrderDisabled = computed(() => (selectedRows.value.length === 0 || selectedRowsWithUnsavedOrderFields.value.length > 0 || selectedSourcesIncludeNonRfq.value || submitting.value || dataReplacementBusy.value))
 const selectedReleaseItemIds = computed(() => new Set(selectedRows.value.map(row => rowKey(row))))
 const replacementReplacedItems = computed(() => replacementDrawingResult.value?.replacedItems || [])
 const replacementUnmatchedDrawings = computed(() => replacementDrawingResult.value?.unmatchedDrawings || [])
@@ -1112,6 +1154,8 @@ const resetReleaseFormForOrders = () => {
   releaseForm.customerProjectNo = ''
   releaseBatchState.fingerprint = ''
   releaseBatchState.key = ''
+  appendBatchState.fingerprint = ''
+  appendBatchState.key = ''
 }
 
 const setItemList = (rows) => {
@@ -1470,6 +1514,16 @@ const nextReleaseBatchKey = (payload) => {
   return releaseBatchState.key
 }
 
+const nextAppendBatchKey = (payload) => {
+  const fingerprint = JSON.stringify(payload)
+  if (appendBatchState.fingerprint !== fingerprint || !appendBatchState.key) {
+    appendBatchState.fingerprint = fingerprint
+    appendBatchState.key = globalThis.crypto?.randomUUID?.()
+      || `rfq-release-append-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+  return appendBatchState.key
+}
+
 const refreshSelectedOrdersAfterGeneration = async (successItemIds = new Set()) => {
   successItemIds.forEach(id => delete selectedItemIdMap[id])
   const refreshedRfqOrders = await Promise.all(selectedRfqIds.value.map(async (rfqId) => {
@@ -1788,6 +1842,79 @@ const saveInternalTargetLeadTime = async (row) => {
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || '内部目标交期保存失败。')
+    }
+  })
+}
+
+const openAppendSalesOrderPicker = () => {
+  if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
+  if (selectedRowsWithUnsavedOrderFields.value.length > 0) {
+    return ElMessage.warning('请先保存已选零件的行级订单字段草稿，再追加销售提单。')
+  }
+  if (!selectedOrders.value.length) return ElMessage.warning('请先选择订单。')
+  if (selectedSourcesIncludeNonRfq.value) return ElMessage.warning('追加销售提单只支持 RFQ 询价订单。')
+
+  const orderedSelectedRows = selectedRowsInItemOrder()
+  const unquoted = orderedSelectedRows.filter(row => row.taxIncludedUnitPrice == null)
+  if (unquoted.length > 0) {
+    return ElMessage.warning(`仍有 ${unquoted.length} 个零件未报价，暂不追加销售提单。`)
+  }
+  if (selectedRowsRfqIds().length === 0) {
+    return ElMessage.warning('已选零件缺少来源询价单信息，无法追加销售提单。')
+  }
+
+  appendSalesOrderPickerVisible.value = true
+}
+
+const appendToSalesOrder = async (targetOrder) => {
+  const targetSalesOrderId = Number(targetOrder?.salesOrderId ?? targetOrder?.sourceOrderId ?? targetOrder?.id)
+  if (!Number.isInteger(targetSalesOrderId) || targetSalesOrderId <= 0) {
+    ElMessage.warning('请选择有效的目标销售订单。')
+    return
+  }
+
+  const orderedSelectedRows = selectedRowsInItemOrder()
+  const batchRfqIds = selectedRowsRfqIds()
+  if (orderedSelectedRows.length === 0 || batchRfqIds.length === 0) {
+    ElMessage.warning('已选零件缺少来源询价单信息，无法追加销售提单。')
+    return
+  }
+
+  const payload = {
+    targetSalesOrderId,
+    rfqIds: batchRfqIds,
+    items: orderedSelectedRows.map(row => ({
+      sourceType: 'RFQ',
+      sourceOrderId: Number(row?.sourceOrderId ?? row?.rfqId ?? selectedRfqId.value),
+      sourceItemId: Number(row?.sourceItemId ?? row?.id),
+      itemId: row.id,
+      acceptedQty: acceptedQtyMap[rowKey(row)] || defaultAcceptedQtyFor(row)
+    }))
+  }
+  const appendBatchKey = nextAppendBatchKey(payload)
+  payload.appendBatchKey = appendBatchKey
+
+  return runAction(releaseActionKeys.appendSalesOrder(), async () => {
+    await ElMessageBox.confirm(
+      `确认将 ${batchRfqIds.length} 个询价单中已选的 ${orderedSelectedRows.length} 个零件追加到销售订单 ${targetOrder?.salesOrderNo || targetSalesOrderId}？本次追加以目标销售订单头为准，不使用左侧订单默认信息。`,
+      '追加销售提单确认',
+      { type: 'warning', confirmButtonText: '确认追加', cancelButtonText: '取消' }
+    )
+
+    try {
+      const response = await appendReleaseToSalesOrder(payload)
+      if (!response?.success) {
+        throw new Error(response?.message || '追加销售提单失败。')
+      }
+      releaseResult.value = { ...response, resultMode: 'APPEND' }
+      await refreshSelectedOrdersAfterGeneration(new Set(orderedSelectedRows.map(rowKey)))
+      appendBatchState.fingerprint = ''
+      appendBatchState.key = ''
+      appendSalesOrderPickerVisible.value = false
+      ElMessage.success(response.message || `已追加 ${response.ticketCount || orderedSelectedRows.length} 项提单。`)
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(error.response?.data?.message || error.message || '追加销售提单请求失败。')
     }
   })
 }

@@ -90,14 +90,16 @@ describe('marketApi', () => {
     await marketApi.listMarketOrders(params, 'quote-process')
     await marketApi.listMarketOrders(params, 'quote-process-supplemental')
     await marketApi.listMarketOrders(params, 'release')
+    await marketApi.listMarketOrders(params, 'release-append-sales-order')
     await marketApi.listMarketOrders(params, 'delivery-document')
     await marketApi.listMarketOrders(params, 'u9-sync')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/market/quote-process/orders', { params })
     expect(request).toHaveBeenNthCalledWith(2, '/api/market/quote-process/supplemental-drawing/orders', { params })
     expect(request).toHaveBeenNthCalledWith(3, '/api/market/release/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(4, '/api/market/delivery-documents/orders', { params })
-    expect(request).toHaveBeenNthCalledWith(5, '/api/market/u9-sync/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/market/release/append-target-sales-orders', { params })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/market/delivery-documents/orders', { params })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/u9-sync/orders', { params })
   })
 
   test('delivery document helpers use the independent backend namespace', async () => {
@@ -331,6 +333,29 @@ describe('marketApi', () => {
       method: 'POST',
       data: payload
     })
+  })
+
+  test('appendReleaseToSalesOrder posts only target order and selected RFQ lines', async () => {
+    const payload = {
+      targetSalesOrderId: 9001,
+      appendBatchKey: 'append-001',
+      rfqIds: [18],
+      items: [{ sourceType: 'RFQ', sourceOrderId: 18, sourceItemId: 1001, acceptedQty: 2 }]
+    }
+
+    await marketApi.appendReleaseToSalesOrder(payload)
+
+    expect(request).toHaveBeenCalledWith('/api/market/release/append-to-sales-order', {
+      method: 'POST',
+      data: payload
+    })
+    expect(JSON.stringify(payload)).not.toContain('documentTypeCode')
+    expect(JSON.stringify(payload)).not.toContain('salesOrderDate')
+    expect(JSON.stringify(payload)).not.toContain('customerOrderNo')
+    expect(JSON.stringify(payload)).not.toContain('customerProjectNo')
+    expect(JSON.stringify(payload)).not.toContain('customerOrderTitle')
+    expect(JSON.stringify(payload)).not.toContain('orderType')
+    expect(JSON.stringify(payload)).not.toContain('internalProjectNo')
   })
 
   test('updateReleaseItemVersion posts item-scoped version payload', async () => {
