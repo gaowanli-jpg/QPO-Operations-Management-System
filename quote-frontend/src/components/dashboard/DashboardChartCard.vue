@@ -145,7 +145,7 @@ const buildChartOption = () => ({
     {
       name: props.title,
       type: 'pie',
-      radius: '76%',
+      radius: ['42%', '76%'],
       center: ['33%', '50%'],
       startAngle: pieStartAngle,
       animation: false,
@@ -186,7 +186,7 @@ const buildChartOption = () => ({
         series: [
           {
             center: ['50%', '40%'],
-            radius: '68%'
+            radius: ['38%', '68%']
           }
         ]
       }

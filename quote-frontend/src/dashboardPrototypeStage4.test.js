@@ -44,12 +44,13 @@ describe('Dashboard prototype stage 4 ECharts chart card', () => {
     expect(source).toContain('.resize()')
   })
 
-  test('uses a solid pie with a visible line-to-pie sweep mask, tooltip, legend, no duplicate total, and clear empty state', () => {
+  test('uses a native donut pie with a visible sweep mask, tooltip, legend, no duplicate total, and clear empty state', () => {
     expect(existsSync(chartCardPath)).toBe(true)
 
     const source = readSource(chartCardPath)
     expect(source).toContain("type: 'pie'")
-    expect(source).toContain("radius: '76%'")
+    expect(source).toContain("radius: ['42%', '76%']")
+    expect(source).toContain("radius: ['38%', '68%']")
     expect(source).toContain('dashboard-chart-shell')
     expect(source).toContain('dashboard-chart-reveal-mask')
     expect(source).toContain('isPieRevealing')
@@ -72,7 +73,7 @@ describe('Dashboard prototype stage 4 ECharts chart card', () => {
     expect(source).not.toContain('graphic')
     expect(source).not.toContain('<el-tag')
     expect(source).not.toContain('formatDashboardNumber(total')
-    expect(source).not.toContain("radius: ['")
+    expect(source).not.toContain('dashboard-donut-ring')
     expect(source).toContain('dashboard-chart-empty')
     expect(source).toContain('hasData')
     expect(source).toContain('emptyText')
