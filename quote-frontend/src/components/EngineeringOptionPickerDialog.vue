@@ -189,27 +189,22 @@
       </template>
 
       <template v-else>
-        <el-table-column prop="detailName" label="具体工艺" min-width="150" fixed show-overflow-tooltip>
-          <template #default="{ row }">{{ row.detailName || row.processName || row.feeName || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="processCode" label="大类编码" width="120" show-overflow-tooltip>
+        <el-table-column prop="processCode" label="工艺编码" width="140" fixed show-overflow-tooltip>
           <template #default="{ row }">{{ row.processCode || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="categoryName" label="大类名称" min-width="130" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.categoryName || '-' }}</template>
+        <el-table-column prop="detailName" label="具体工艺" min-width="170" fixed show-overflow-tooltip>
+          <template #default="{ row }">{{ row.detailName || row.processName || row.feeName || '-' }}</template>
         </el-table-column>
         <el-table-column label="所在层级" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ processArrangementPathLabel(row) }}</template>
         </el-table-column>
-        <el-table-column label="具体小时价格" width="180" align="right">
+        <el-table-column label="小时价格" width="180" align="right">
           <template #default="{ row }">
             <div v-if="canEditProcessRate(row)" class="inline-rate-editor" @click.stop>
               <el-input-number
                 :model-value="processRateDraft(row)"
                 :min="0"
                 :precision="2"
-                :value-on-clear="null"
-                clearable
                 controls-position="right"
                 size="small"
                 class="inline-rate-input"
@@ -226,14 +221,8 @@
                 保存
               </el-button>
             </div>
-            <span v-else>{{ formatDetailHourlyRate(row.detailHourlyRate) }}</span>
+            <span v-else>{{ formatHourlyRate(row.hourlyRate ?? row.effectiveHourlyRate ?? row.detailHourlyRate) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="大类小时价格" width="130" align="right">
-          <template #default="{ row }">{{ formatHourlyRate(row.categoryHourlyRate) }}</template>
-        </el-table-column>
-        <el-table-column label="核价使用价格" width="130" align="right">
-          <template #default="{ row }">{{ formatHourlyRate(row.effectiveHourlyRate ?? row.hourlyRate) }}</template>
         </el-table-column>
         <el-table-column label="类型" width="110" align="center">
           <template #default="{ row }">
@@ -416,14 +405,14 @@ const processArrangementTreeProps = { children: 'children', label: 'label' }
 
 const dialogWidth = computed(() => (
   props.type === 'process'
-    ? '1480px'
+    ? '1320px'
     : props.type === 'material' && props.enableMaterialPriceEdit ? '1380px' : '1180px'
 ))
 
 const searchPlaceholder = computed(() => (
   props.type === 'material'
     ? '搜索材料编码、名称、材料类型、材质分类、备注'
-    : '搜索具体工艺、大类编码、大类名称、非工时费用编码/名称'
+    : '搜索工艺编码、具体工艺、非工时费用编码/名称'
 ))
 
 const keyOf = (item) => String(
@@ -666,8 +655,6 @@ const formatHourlyRate = (value) => {
   const text = formatNumber(value)
   return text === '-' ? '-' : `${text} 元/小时`
 }
-
-const formatDetailHourlyRate = (value) => (value == null ? '继承大类' : formatHourlyRate(value))
 
 const goPickerPage = (page) => {
   loadRemotePage(page)
@@ -929,7 +916,7 @@ const processRateDraft = (row) => {
   const key = keyOf(row)
   return Object.prototype.hasOwnProperty.call(processRateDrafts.value, key)
     ? processRateDrafts.value[key]
-    : row?.detailHourlyRate ?? null
+    : row?.hourlyRate ?? row?.effectiveHourlyRate ?? row?.detailHourlyRate ?? null
 }
 
 const setProcessRateDraft = (row, value) => {
@@ -954,14 +941,19 @@ const setInlineRateSaving = (row, saving) => {
 const saveInlineProcessRate = async (row) => {
   if (!canEditProcessRate(row)) return
   const draft = processRateDraft(row)
-  const hourlyRate = draft === '' || draft == null ? null : Number(draft)
-  if (hourlyRate != null && (!Number.isFinite(hourlyRate) || hourlyRate < 0)) {
-    ElMessage.warning('具体小时价格不能小于 0。')
+  if (draft === '' || draft == null) {
+    ElMessage.warning('请填写小时价格。')
+    return
+  }
+  const hourlyRate = Number(draft)
+  if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
+    ElMessage.warning('小时价格不能小于 0。')
     return
   }
   const payload = {
     id: row.processDetailId,
-    categoryId: row.categoryId ?? row.processCategoryId,
+    categoryId: row.categoryId ?? row.processCategoryId ?? null,
+    processCode: row.processCode,
     detailName: row.detailName || row.processName,
     detailRemarks: row.detailRemarks || '',
     enabled: row.enabled !== false,
@@ -976,10 +968,10 @@ const saveInlineProcessRate = async (row) => {
       id: row.processDetailId,
       categoryId: payload.categoryId,
       detailHourlyRate: hourlyRate,
-      effectiveHourlyRate: hourlyRate ?? row.categoryHourlyRate,
-      hourlyRate: hourlyRate ?? row.categoryHourlyRate
+      effectiveHourlyRate: hourlyRate,
+      hourlyRate
     }
-    setProcessRateDraft(row, updatedDetail.detailHourlyRate ?? null)
+    setProcessRateDraft(row, updatedDetail.hourlyRate ?? updatedDetail.effectiveHourlyRate ?? updatedDetail.detailHourlyRate ?? null)
     emit('process-rate-updated', updatedDetail)
     ElMessage.success(response?.message || '具体小时价格已保存')
   } catch (error) {

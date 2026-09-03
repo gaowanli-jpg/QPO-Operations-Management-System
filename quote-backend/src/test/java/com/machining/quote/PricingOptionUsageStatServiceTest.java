@@ -17,7 +17,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 class PricingOptionUsageStatServiceTest {
 
     @Test
-    void recordsMaterialProcessCategoryAndExtraFeeUsageFromSuccessfulQuotePayload() {
+    void recordsMaterialProcessAndExtraFeeUsageFromSuccessfulQuotePayload() {
         PricingOptionUsageStatMapper mapper = mock(PricingOptionUsageStatMapper.class);
         PricingOptionUsageStatService service = new PricingOptionUsageStatService();
         ReflectionTestUtils.setField(service, "usageStatMapper", mapper);
@@ -36,7 +36,7 @@ class PricingOptionUsageStatServiceTest {
         service.recordQuoteOptionUsage(materialData, List.of(process, extra));
 
         verify(mapper).increment("MATERIAL", "MAT-0007");
-        verify(mapper).increment("PROCESS_CATEGORY", "CNC");
+        verify(mapper).increment("PROCESS", "CNC");
         verify(mapper).increment("EXTRA_FEE", "POLISH");
         verifyNoMoreInteractions(mapper);
     }

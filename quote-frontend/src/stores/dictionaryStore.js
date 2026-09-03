@@ -19,25 +19,23 @@ const toProcessCompatibilityRow = (item = {}) => ({
   processCategoryId: item.categoryId,
   categoryId: item.categoryId,
   detailHourlyRate: item.detailHourlyRate,
-  categoryHourlyRate: item.categoryHourlyRate,
-  effectiveHourlyRate: item.effectiveHourlyRate,
-  hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate,
+  categoryHourlyRate: null,
+  effectiveHourlyRate: item.effectiveHourlyRate ?? item.hourlyRate ?? item.detailHourlyRate,
+  hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate ?? item.detailHourlyRate,
   detailEnabled: item.detailEnabled ?? item.enabled,
-  categoryEnabled: item.categoryEnabled,
-  effectiveEnabled: item.effectiveEnabled ?? ((item.detailEnabled ?? item.enabled) !== false && item.categoryEnabled !== false),
+  categoryEnabled: null,
+  effectiveEnabled: (item.detailEnabled ?? item.enabled) !== false,
   processName: item.detailName,
   calcType: '工时',
   sourceType: 'process'
 })
 
 const isProcessDetailEffectivelyEnabled = (item = {}) => {
-  if (item.effectiveEnabled != null) return item.effectiveEnabled !== false
   const detailEnabled = item.detailEnabled ?? item.enabled
-  return detailEnabled !== false && item.categoryEnabled !== false
+  return detailEnabled !== false
 }
 
 const formatHourlyRate = (value) => Number(value ?? 0).toFixed(2)
-const processRateSourceText = (item = {}) => item.detailHourlyRate == null ? '继承大类' : '具体价'
 
 const normalizePricingMarkupFee = (item = {}, pricingScope, feeCategory) => ({
   ...item,
@@ -86,20 +84,20 @@ export const useDictionaryStore = defineStore('dictionary', {
         processCategoryId: item.categoryId,
         categoryId: item.categoryId,
         processCode: item.processCode,
-        categoryName: item.categoryName,
+        categoryName: null,
         detailName: item.detailName,
         detailRemarks: item.detailRemarks,
         enabled: item.enabled,
         detailEnabled: item.detailEnabled ?? item.enabled,
-        categoryEnabled: item.categoryEnabled,
-        effectiveEnabled: item.effectiveEnabled ?? ((item.detailEnabled ?? item.enabled) !== false && item.categoryEnabled !== false),
+        categoryEnabled: null,
+        effectiveEnabled: (item.detailEnabled ?? item.enabled) !== false,
         sortNo: item.sortNo,
         detailHourlyRate: item.detailHourlyRate,
-        categoryHourlyRate: item.categoryHourlyRate,
-        effectiveHourlyRate: item.effectiveHourlyRate,
-        hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate,
+        categoryHourlyRate: null,
+        effectiveHourlyRate: item.effectiveHourlyRate ?? item.hourlyRate ?? item.detailHourlyRate,
+        hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate ?? item.detailHourlyRate,
         processName: item.detailName,
-        label: `${item.detailName}（${item.processCode || '-'} / ${item.categoryName || '-'} / ${formatHourlyRate(item.hourlyRate ?? item.effectiveHourlyRate)}元/小时 / ${processRateSourceText(item)}）`,
+        label: `${item.detailName}（${item.processCode || '-'} / ${formatHourlyRate(item.hourlyRate ?? item.effectiveHourlyRate ?? item.detailHourlyRate)}元/小时）`,
         calcType: '工时',
         sourceType: 'process'
       })),
@@ -261,16 +259,16 @@ export const useDictionaryStore = defineStore('dictionary', {
         }
       ]
       this.processes = [
-        { id: 'fallback-mill', processDetailId: 'fallback-mill', processName: '铣', detailName: '铣', processCode: 'MILLING', categoryName: '铣削', hourlyRate: 0, calcType: '工时', sourceType: 'process' },
-        { id: 'fallback-cnc1', processDetailId: 'fallback-cnc1', processName: 'CNC1', detailName: 'CNC1', processCode: 'CNC', categoryName: '数控', hourlyRate: 0, calcType: '工时', sourceType: 'process' }
+        { id: 'fallback-mill', processDetailId: 'fallback-mill', processName: '铣', detailName: '铣', processCode: 'MILLING', categoryName: null, hourlyRate: 0, calcType: '工时', sourceType: 'process' },
+        { id: 'fallback-cnc1', processDetailId: 'fallback-cnc1', processName: 'CNC1', detailName: 'CNC1', processCode: 'CNC1', categoryName: null, hourlyRate: 0, calcType: '工时', sourceType: 'process' }
       ]
       this.processCategories = [
         { id: 'fallback-milling', processCode: 'MILLING', categoryName: '铣削', hourlyRate: 0, enabled: true },
         { id: 'fallback-cnc', processCode: 'CNC', categoryName: '数控', hourlyRate: 0, enabled: true }
       ]
       this.processDetails = [
-        { id: 'fallback-mill', categoryId: 'fallback-milling', processCode: 'MILLING', categoryName: '铣削', detailName: '铣', hourlyRate: 0, enabled: true },
-        { id: 'fallback-cnc1', categoryId: 'fallback-cnc', processCode: 'CNC', categoryName: '数控', detailName: 'CNC1', hourlyRate: 0, enabled: true }
+        { id: 'fallback-mill', categoryId: null, processCode: 'MILLING', categoryName: null, detailName: '铣', hourlyRate: 0, enabled: true },
+        { id: 'fallback-cnc1', categoryId: null, processCode: 'CNC1', categoryName: null, detailName: 'CNC1', hourlyRate: 0, enabled: true }
       ]
       this.extraFeeItems = []
       this.pricingMarkupFees = [

@@ -7,13 +7,11 @@ import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
 import com.machining.quote.entity.DictProcessCategory;
-import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.entity.MesMasterDataSyncRun;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
 import com.machining.quote.mapper.DictProcessCategoryMapper;
-import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.MesMasterDataSyncRunMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.util.MaterialPriceSpecSupport;
@@ -85,8 +83,6 @@ public class MesMasterDataSyncService {
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
     private DictProcessCategoryMapper categoryMapper;
-    @Autowired
-    private DictProcessDetailMapper detailMapper;
     @Autowired
     private MesMasterDataSyncRunMapper syncRunMapper;
     @Autowired
@@ -427,7 +423,6 @@ public class MesMasterDataSyncService {
             if (!source.enabled()) {
                 disabledCount++;
             }
-            ensureDefaultDetail(category, source.name(), syncedAt);
         }
 
         Set<String> returnedCodes = sources.stream().map(ProcessTypeSource::code).collect(Collectors.toSet());
@@ -435,7 +430,7 @@ public class MesMasterDataSyncService {
         for (DictProcessCategory existing : existingByCode.values()) {
             if (SOURCE_MES.equalsIgnoreCase(trimToNull(existing.getSourceType()))
                     && !returnedCodes.contains(trimToNull(existing.getProcessCode()))) {
-                if (deleteProcessCategoryWithDetails(existing)) {
+                if (deleteProcessCategory(existing)) {
                     deletedCount++;
                 }
             }
@@ -443,13 +438,10 @@ public class MesMasterDataSyncService {
         return new PersistResult(upsertedCount, disabledCount, deletedCount);
     }
 
-    private boolean deleteProcessCategoryWithDetails(DictProcessCategory category) {
+    private boolean deleteProcessCategory(DictProcessCategory category) {
         if (category == null || category.getId() == null) {
             return false;
         }
-        QueryWrapper<DictProcessDetail> detailDelete = new QueryWrapper<>();
-        detailDelete.eq("category_id", category.getId());
-        detailMapper.delete(detailDelete);
         categoryMapper.deleteById(category.getId());
         return true;
     }
@@ -470,38 +462,6 @@ public class MesMasterDataSyncService {
         if (created) {
             category.setCreatedAt(syncedAt);
             category.setSortNo(0);
-        }
-    }
-
-    private void ensureDefaultDetail(DictProcessCategory category, String detailName, LocalDateTime syncedAt) {
-        if (category.getId() == null || trimToNull(detailName) == null) {
-            return;
-        }
-        QueryWrapper<DictProcessDetail> query = new QueryWrapper<>();
-        query.eq("category_id", category.getId());
-        List<DictProcessDetail> details = detailMapper.selectList(query);
-        DictProcessDetail existing = (details == null ? List.<DictProcessDetail>of() : details).stream()
-                .filter(detail -> Objects.equals(trimToNull(detail.getDetailName()), detailName))
-                .findFirst()
-                .orElse(null);
-        if (existing == null) {
-            DictProcessDetail created = new DictProcessDetail();
-            created.setCategoryId(category.getId());
-            created.setDetailName(detailName);
-            created.setDetailRemarks("");
-            // Detail hourlyRate is QPO-owned; MES sync must leave new rows inheriting the category rate.
-            created.setEnabled(true);
-            created.setSortNo(0);
-            created.setCreatedAt(syncedAt);
-            created.setUpdatedAt(syncedAt);
-            detailMapper.insert(created);
-            return;
-        }
-        if (!Boolean.TRUE.equals(existing.getEnabled())) {
-            // Re-enable the MES detail identity without overwriting its QPO-maintained hourlyRate.
-            existing.setEnabled(true);
-            existing.setUpdatedAt(syncedAt);
-            detailMapper.updateById(existing);
         }
     }
 

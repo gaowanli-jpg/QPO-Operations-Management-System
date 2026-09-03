@@ -92,8 +92,8 @@ export const hydrateProcessPricingSnapshot = (snapshot = {}, optionIndex = {}) =
 
   const processDetailId = latest.processDetailId ?? latest.id ?? snapshot.processDetailId ?? null
   const processCategoryId = latest.processCategoryId ?? latest.categoryId ?? snapshot.processCategoryId ?? snapshot.categoryId ?? null
-  const effectiveHourlyRate = firstNumber(latest.effectiveHourlyRate, latest.hourlyRate, latest.unitRate)
-  const hourlyRate = firstNumber(latest.hourlyRate, latest.effectiveHourlyRate, latest.unitRate)
+  const effectiveHourlyRate = firstNumber(latest.effectiveHourlyRate, latest.hourlyRate, latest.detailHourlyRate, latest.unitRate)
+  const hourlyRate = firstNumber(latest.hourlyRate, latest.effectiveHourlyRate, latest.detailHourlyRate, latest.unitRate)
   const processName = latest.detailName || latest.processName || snapshot.detailName || snapshot.processName || ''
 
   return {
@@ -102,12 +102,12 @@ export const hydrateProcessPricingSnapshot = (snapshot = {}, optionIndex = {}) =
     processDetailId,
     processCategoryId,
     categoryId: processCategoryId,
-    processCode: latest.processCode || snapshot.processCode || '',
-    categoryName: latest.categoryName || snapshot.categoryName || '',
+    processCode: latest.processCode ?? snapshot.processCode ?? '',
+    categoryName: latest.categoryName ?? '',
     detailName: processName,
     processName,
     detailHourlyRate: latest.detailHourlyRate ?? snapshot.detailHourlyRate ?? null,
-    categoryHourlyRate: latest.categoryHourlyRate ?? snapshot.categoryHourlyRate ?? null,
+    categoryHourlyRate: latest.categoryHourlyRate ?? null,
     effectiveHourlyRate: effectiveHourlyRate ?? firstNumber(snapshot.effectiveHourlyRate, snapshot.hourlyRate, snapshot.unitRate),
     hourlyRate: hourlyRate ?? firstNumber(snapshot.hourlyRate, snapshot.effectiveHourlyRate, snapshot.unitRate),
     unitRate: hourlyRate ?? effectiveHourlyRate ?? firstNumber(snapshot.unitRate, snapshot.hourlyRate, snapshot.effectiveHourlyRate),

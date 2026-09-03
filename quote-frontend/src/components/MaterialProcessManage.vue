@@ -167,35 +167,18 @@
           <el-tab-pane label="具体工艺" name="processDetails">
             <div class="process-master-grid">
               <div class="material-filter-bar">
-                <el-input v-model="processDetailKeyword" clearable placeholder="搜索具体工艺、大类编码、大类名称或具体备注" />
+                <el-input v-model="processDetailKeyword" clearable placeholder="搜索工艺编码、具体工艺或备注" />
               </div>
               <el-table :data="processDetails" border stripe height="520" v-loading="loading">
                 <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-                <el-table-column prop="detailName" label="具体工艺" min-width="160" fixed show-overflow-tooltip />
-                <el-table-column prop="processCode" label="大类编码" width="150" show-overflow-tooltip />
-                <el-table-column prop="categoryName" label="大类名称" min-width="150" show-overflow-tooltip />
-                <el-table-column label="大类状态" width="100" align="center">
-                  <template #default="scope">
-                    <el-tag :type="scope.row.categoryEnabled !== false ? 'success' : 'info'" size="small">{{ scope.row.categoryEnabled !== false ? '启用' : '停用' }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="具体状态" width="100" align="center">
+                <el-table-column prop="processCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
+                <el-table-column prop="detailName" label="具体工艺" min-width="180" fixed show-overflow-tooltip />
+                <el-table-column label="状态" width="100" align="center">
                   <template #default="scope">
                     <el-tag :type="(scope.row.detailEnabled ?? scope.row.enabled) !== false ? 'success' : 'info'" size="small">{{ (scope.row.detailEnabled ?? scope.row.enabled) !== false ? '启用' : '停用' }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="核价可用" width="100" align="center">
-                  <template #default="scope">
-                    <el-tag :type="scope.row.effectiveEnabled !== false ? 'success' : 'danger'" size="small">{{ scope.row.effectiveEnabled !== false ? '可用' : '不可用' }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="具体小时价格" width="150" align="right">
-                  <template #default="scope">{{ formatDetailHourlyRate(scope.row.detailHourlyRate) }}</template>
-                </el-table-column>
-                <el-table-column label="大类小时价格" width="150" align="right">
-                  <template #default="scope">{{ formatHourlyRate(scope.row.categoryHourlyRate) }}</template>
-                </el-table-column>
-                <el-table-column label="核价使用价格" width="150" align="right">
+                <el-table-column label="小时价格" width="150" align="right">
                   <template #default="scope">{{ formatHourlyRate(scope.row.effectiveHourlyRate ?? scope.row.hourlyRate) }}</template>
                 </el-table-column>
                 <el-table-column prop="detailRemarks" label="具体备注" min-width="200" show-overflow-tooltip />
@@ -466,28 +449,26 @@
       @update:spec="updateActiveMaterialSpecDraft"
     />
 
-    <el-dialog v-model="processDetailDialogVisible" :title="processDetailForm.id ? '编辑具体工艺' : '新增具体工艺'" width="680px">
+    <el-dialog v-model="processDetailDialogVisible" :title="processDetailForm.id ? '编辑具体工艺' : '新增具体工艺'" width="720px">
       <el-form :model="processDetailForm" label-width="120px" class="erp-dialog-form process-dialog-grid">
         <el-form-item label="序号">
           <el-input-number v-model="processDetailForm.sortNo" :min="0" controls-position="right" class="dialog-number-input" />
         </el-form-item>
-        <el-form-item label="工艺大类" required>
-          <el-select v-model="processDetailForm.categoryId" filterable :disabled="!!processDetailForm.id" class="dialog-select" placeholder="选择工艺大类">
-            <el-option v-for="category in processCategoryOptions" :key="category.id" :label="categoryLabel(category)" :value="category.id" />
-          </el-select>
+        <el-form-item label="工艺编码" required>
+          <el-input v-model="processDetailForm.processCode" :readonly="!!processDetailForm.id" placeholder="例如：CNC_FINE" />
         </el-form-item>
         <el-form-item label="具体工艺" required>
-          <el-input v-model="processDetailForm.detailName" :readonly="!!processDetailForm.id" placeholder="例如：精细包装" />
+          <el-input v-model="processDetailForm.detailName" placeholder="例如：精细包装" />
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="processDetailForm.enabled" />
         </el-form-item>
-        <el-form-item label="具体小时价格">
+        <el-form-item label="小时价格" required>
           <div class="unit-input">
-            <el-input-number v-model="processDetailForm.hourlyRate" :min="0" :precision="2" :value-on-clear="null" clearable controls-position="right" class="unit-input-control" />
+            <el-input-number v-model="processDetailForm.hourlyRate" :min="0" :precision="2" controls-position="right" class="unit-input-control" />
             <span class="unit-label wide">元/小时</span>
           </div>
-          <div class="form-helper-text">留空继承大类小时价格；填 0 表示该具体工艺按 0 元/小时核价。</div>
+          <div class="form-helper-text">具体工艺按这里维护的小时价格核价；填 0 表示按 0 元/小时核价。</div>
         </el-form-item>
         <el-form-item label="具体备注" class="process-dialog-wide">
           <el-input v-model="processDetailForm.detailRemarks" type="textarea" :rows="3" placeholder="例如：包装选择精细包装" />
@@ -679,7 +660,6 @@ import {
   listExtraFeeItems,
   listMaterialTypes,
   listProcessArrangementTree,
-  listProcessCategories,
   listPricingMarkupFees,
   listUnplacedProcessArrangementOptions,
   moveProcessArrangementItem,
@@ -728,7 +708,6 @@ const activeTab = ref('materials')
 const materialTypes = ref([])
 const materials = ref([])
 const processCategories = ref([])
-const processCategoryLookupRows = ref([])
 const processDetails = ref([])
 const processArrangementTree = ref([])
 const processArrangementTreeRef = ref(null)
@@ -764,28 +743,6 @@ const arrangementNodeDialogMode = ref('root')
 const arrangementNodeParentName = ref('根层级')
 const arrangementNodeForm = reactive(createEmptyArrangementNode())
 const deleteSummary = reactive({ removedNodeCount: 0, removedItemCount: 0 })
-const processCategoryOptions = computed(() => {
-  const options = new Map()
-  for (const category of processCategoryLookupRows.value) {
-    options.set(String(category.id), category)
-  }
-  for (const category of processCategories.value) {
-    options.set(String(category.id), category)
-  }
-  for (const detail of processDetails.value) {
-    const id = detail?.categoryId
-    if (id != null && !options.has(String(id))) {
-      options.set(String(id), {
-        id,
-        processCode: detail.processCode,
-        categoryName: detail.categoryName,
-        hourlyRate: detail.categoryHourlyRate,
-        enabled: detail.categoryEnabled
-      })
-    }
-  }
-  return Array.from(options.values())
-})
 const resetMaterialPage = () => { materialPagination.page = 1 }
 const resetProcessCategoryPage = () => { processCategoryPagination.page = 1 }
 const resetProcessDetailPage = () => { processDetailPagination.page = 1 }
@@ -906,7 +863,7 @@ const activeScheduleConfig = computed(() => scheduleConfigs[scheduleTarget.value
 const scheduleDialogTitle = computed(() => activeScheduleConfig.value.title)
 const scheduleTargetLabel = computed(() => activeScheduleConfig.value.label)
 const mesMaterialSyncOwnershipMessage = 'MES 会更新基础信息和 MES 密度，不覆盖 QPO 具体密度和材料规格价格'
-const mesProcessSyncOwnershipMessage = 'MES 会更新工艺基础信息和小时价格，不覆盖具体工艺价格'
+const mesProcessSyncOwnershipMessage = 'MES 同步只更新工艺大类页，不创建、删除或覆盖 QPO 具体工艺'
 const scheduleDialogHelpText = computed(() => `${scheduleTarget.value === 'MES_PROCESS_TYPE' ? mesProcessSyncOwnershipMessage : mesMaterialSyncOwnershipMessage}；策略默认关闭，保存后作为运行时配置。`)
 
 const formatNumber = (value, precision) => {
@@ -925,7 +882,6 @@ const formatHourlyRate = (value) => {
   const text = formatNumber(value, 2)
   return text === '-' ? '-' : `${text} 元/小时`
 }
-const formatDetailHourlyRate = (value) => (value == null || value === '' ? '继承大类' : formatHourlyRate(value))
 const sourceTypeText = (value) => (value === 'MES' ? 'MES同步' : '本地维护')
 const materialPriceStatusText = (row = {}) => (
   hasAnyMaterialSpecPrice(row.priceSpecs)
@@ -936,7 +892,6 @@ const materialPriceStatusType = (row = {}) => (materialPriceStatusText(row) === 
 const formatSpecUnifiedPrice = (row, specCode) => formatMaterialSpecPrice(findPriceSpec(row?.priceSpecs, specCode)?.unifiedPrice)
 const formatSyncTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '-')
 const materialTypeLabel = (type) => `${type.typeCode || '-'} / ${type.typeName || '-'}`
-const categoryLabel = (category) => `${category.processCode || '-'} / ${category.categoryName || '-'} / ${formatHourlyRate(category.hourlyRate)}`
 const pricingScopeText = (value) => pricingMarkupScopeOptions.find((item) => item.value === value)?.label || value || '-'
 const pricingMarkupFeeCategoryText = (value) => pricingMarkupFeeCategoryOptions.find((item) => item.value === value)?.label || value || '-'
 const requestErrorMessage = (error, fallback) => error?.response?.data?.message || error?.payload?.message || error?.message || fallback
@@ -1001,6 +956,7 @@ function createEmptyProcessDetail() {
     id: null,
     sortNo: 0,
     categoryId: null,
+    processCode: '',
     detailName: '',
     hourlyRate: null,
     detailRemarks: '',
@@ -1148,14 +1104,12 @@ const invalidateDictionaryCache = () => {
 }
 
 const loadLookupDictionaries = async () => {
-  const [types, categories, pricingFees, extraFees] = await Promise.all([
+  const [types, pricingFees, extraFees] = await Promise.all([
     listMaterialTypes(),
-    listProcessCategories({ enabledOnly: false }),
     loadPricingMarkupFeeRows(),
     listExtraFeeItems({ includeDisabled: true })
   ])
   materialTypes.value = types || []
-  processCategoryLookupRows.value = categories || []
   pricingMarkupFees.value = pricingFees || []
   extraFeeItems.value = extraFees || []
 }
@@ -1370,7 +1324,8 @@ const updateActiveMaterialSpecDraft = (updatedSpec) => {
 
 const openProcessDetailDialog = (row) => {
   Object.assign(processDetailForm, createEmptyProcessDetail(), row || {})
-  processDetailForm.hourlyRate = row?.detailHourlyRate ?? null
+  processDetailForm.processCode = row?.processCode || ''
+  processDetailForm.hourlyRate = row?.detailHourlyRate ?? row?.hourlyRate ?? row?.effectiveHourlyRate ?? null
   processDetailForm.enabled = processDetailForm.enabled !== false
   processDetailDialogVisible.value = true
 }
@@ -1658,13 +1613,13 @@ const saveMaterial = async () => {
 }
 
 const saveProcessDetail = async () => {
-  if (!processDetailForm.categoryId) return ElMessage.warning('请选择工艺大类。')
+  processDetailForm.processCode = String(processDetailForm.processCode || '').trim().toUpperCase()
+  if (!processDetailForm.processCode) return ElMessage.warning('请填写工艺编码。')
   if (!processDetailForm.detailName) return ElMessage.warning('请填写具体工艺名称。')
+  if (processDetailForm.hourlyRate === '' || processDetailForm.hourlyRate == null) return ElMessage.warning('请填写小时价格。')
   return runAction(dictActionKeys.saveProcessDetailDialog, async () => {
     try {
-      const hourlyRate = processDetailForm.hourlyRate === '' || processDetailForm.hourlyRate == null
-        ? null
-        : Number(processDetailForm.hourlyRate)
+      const hourlyRate = Number(processDetailForm.hourlyRate)
       const response = await saveProcessDetailRequest({ ...processDetailForm, hourlyRate })
       ElMessage.success(response.message || '保存成功')
       processDetailDialogVisible.value = false
@@ -1719,7 +1674,7 @@ const saveExtraFee = async () => {
 
 const deleteProcessDetail = async (row) => {
   return runAction(dictActionKeys.deleteProcessDetail(row.id), async () => {
-    await ElMessageBox.confirm(`确认删除具体工艺「${row.detailName}」？如果它是 MES 同名保底项，下次工艺同步会自动补回。`, '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除具体工艺「${row.detailName}」？删除后推荐次数也会跟随 QPO 工艺编码重新累计。`, '删除确认', { type: 'warning' })
     await deleteProcessDetailRequest(row.id)
     ElMessage.success('具体工艺已删除')
     await reloadAfterMutation()

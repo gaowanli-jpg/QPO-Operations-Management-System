@@ -3,8 +3,8 @@ package com.machining.quote;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.ProcessCategoryDTO;
-import com.machining.quote.dto.ProcessDetailDTO;
 import com.machining.quote.dto.ProcessCategorySaveReq;
+import com.machining.quote.dto.ProcessDetailDTO;
 import com.machining.quote.dto.ProcessDetailSaveReq;
 import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.math.BigDecimal;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
 class ProcessMasterBackendServiceTest {
 
     @Test
-    void controllerExposesTwoLevelProcessMasterEndpointsWithExistingDictPermissions() throws Exception {
+    void controllerExposesProcessMasterEndpointsWithExistingDictPermissions() throws Exception {
         String controller = read("controller/ProcessMasterController.java");
 
         assertThat(controller)
@@ -58,11 +58,10 @@ class ProcessMasterBackendServiceTest {
     }
 
     @Test
-    void entitiesMappersDtosAndAuditLabelsExistForTwoLevelProcessMaster() throws Exception {
+    void entitiesMappersDtosAndAuditLabelsExposeQpoOwnedProcessDetailCode() throws Exception {
         assertThat(read("entity/DictProcessCategory.java"))
                 .contains(
                         "@TableName(\"dict_process_category\")",
-                        "private Long id;",
                         "private String processCode;",
                         "private String categoryName;",
                         "private BigDecimal hourlyRate;",
@@ -72,25 +71,18 @@ class ProcessMasterBackendServiceTest {
                         "@TableName(\"dict_process_detail\")",
                         "private Long id;",
                         "private Long categoryId;",
+                        "private String processCode;",
                         "private BigDecimal hourlyRate;",
                         "private String detailName;",
                         "private Boolean enabled;");
-        assertThat(read("mapper/DictProcessCategoryMapper.java"))
-                .contains("interface DictProcessCategoryMapper extends BaseMapper<DictProcessCategory>");
-        assertThat(read("mapper/DictProcessDetailMapper.java"))
-                .contains("interface DictProcessDetailMapper extends BaseMapper<DictProcessDetail>");
-        assertThat(read("dto/ProcessCategorySaveReq.java"))
-                .contains("private String processCode;", "private String categoryName;", "private BigDecimal hourlyRate;");
         assertThat(read("dto/ProcessDetailSaveReq.java"))
-                .contains("private Long categoryId;", "private String detailName;", "private BigDecimal hourlyRate;");
+                .contains("private String processCode;", "private String detailName;", "private BigDecimal hourlyRate;");
         assertThat(read("dto/ProcessDetailDTO.java"))
                 .contains(
+                        "private String processCode;",
                         "private BigDecimal hourlyRate;",
                         "private BigDecimal detailHourlyRate;",
-                        "private BigDecimal categoryHourlyRate;",
                         "private BigDecimal effectiveHourlyRate;",
-                        "private Boolean detailEnabled;",
-                        "private Boolean categoryEnabled;",
                         "private Boolean effectiveEnabled;");
 
         assertThat(AuditService.inferModule("DICT_PROCESS_CATEGORY_CREATE")).isEqualTo("DICT");
@@ -123,9 +115,6 @@ class ProcessMasterBackendServiceTest {
         assertThat(result.getCategoryName()).isEqualTo("包装");
         assertThat(result.getSourceType()).isEqualTo("LOCAL");
         assertThat(result.getEnabled()).isTrue();
-        ArgumentCaptor<DictProcessCategory> entityCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
-        verify(categoryMapper).insert(entityCaptor.capture());
-        assertThat(entityCaptor.getValue().getProcessCode()).isEqualTo("PACKAGING");
         ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("DICT_PROCESS_CATEGORY_CREATE"), eq("dict_process_category"), eq(88L), isNull(), afterCaptor.capture());
         assertThat(String.valueOf(afterCaptor.getValue()))
@@ -139,9 +128,8 @@ class ProcessMasterBackendServiceTest {
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         AuditService auditService = mock(AuditService.class);
         ProcessMasterService service = service(categoryMapper, mock(DictProcessDetailMapper.class), auditService);
-        DictProcessCategory category = category(7L, true);
         when(categoryMapper.selectCount(any(QueryWrapper.class))).thenReturn(31L);
-        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(category));
+        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(category(7L, true)));
 
         Method pageCategories = ProcessMasterService.class.getMethod(
                 "pageCategories", Boolean.class, String.class, Integer.class, Integer.class);
@@ -160,85 +148,46 @@ class ProcessMasterBackendServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void pageDetailsSupportsServerSidePaginationCategoryFilterAndKeywordSearchWithoutAuditLog() throws Exception {
+    void pageDetailsUsesQpoOwnedCodeSearchAndDetailEnabledOnly() throws Exception {
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         AuditService auditService = mock(AuditService.class);
         ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
-        DictProcessCategory category = category(7L, true);
-        DictProcessDetail detail = detail(10L, 7L, null);
+        DictProcessDetail detail = detail(10L, "pack_FINE", new BigDecimal("12.30"));
         when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(22L);
         when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(detail));
-        when(categoryMapper.selectById(7L)).thenReturn(category);
 
         Method pageDetails = ProcessMasterService.class.getMethod(
                 "pageDetails", Long.class, Boolean.class, String.class, Integer.class, Integer.class);
         PageResult<ProcessDetailDTO> page = (PageResult<ProcessDetailDTO>) pageDetails.invoke(
-                service, 7L, true, "包装", 3, 10);
+                service, null, true, "pack", 3, 10);
 
         assertThat(page.getTotal()).isEqualTo(22);
         assertThat(page.getPage()).isEqualTo(3);
         assertThat(page.getPageSize()).isEqualTo(10);
         assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getProcessCode()).isEqualTo("pack_FINE");
             assertThat(row.getDetailName()).isEqualTo("具体工艺10");
-            assertThat(row.getProcessCode()).isEqualTo("PACKAGING");
-            assertThat(row.getCategoryName()).isEqualTo("包装");
+            assertThat(row.getHourlyRate()).isEqualByComparingTo("12.30");
+            assertThat(row.getEffectiveHourlyRate()).isEqualByComparingTo("12.30");
+            assertThat(row.getDetailHourlyRate()).isEqualByComparingTo("12.30");
+            assertThat(row.getCategoryHourlyRate()).isNull();
+            assertThat(row.getCategoryEnabled()).isNull();
+            assertThat(row.getEffectiveEnabled()).isTrue();
         });
+        ArgumentCaptor<QueryWrapper<DictProcessDetail>> queryCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(detailMapper).selectCount(queryCaptor.capture());
+        String sql = queryCaptor.getValue().getTargetSql().toLowerCase();
+        assertThat(sql).contains("process_code", "detail_name", "detail_remarks");
+        assertThat(sql).doesNotContain("dict_process_category");
         verify(auditService, never()).record(any(), any(), any(), any(), any());
     }
 
     @Test
-    void categoryValidationRejectsDuplicateNegativeRateAndOversizedFields() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        ProcessMasterService service = service(categoryMapper, mock(DictProcessDetailMapper.class), mock(AuditService.class));
-
-        ProcessCategorySaveReq duplicate = validCategoryReq();
-        when(categoryMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
-        assertThatThrownBy(() -> service.saveCategory(null, duplicate))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("工艺编码");
-
-        ProcessCategorySaveReq negative = validCategoryReq();
-        negative.setHourlyRate(new BigDecimal("-1"));
-        when(categoryMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
-        assertThatThrownBy(() -> service.saveCategory(null, negative))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("小时价格");
-
-        ProcessCategorySaveReq tooLong = validCategoryReq();
-        tooLong.setProcessCode("A".repeat(65));
-        assertThatThrownBy(() -> service.saveCategory(null, tooLong))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("工艺编码");
-        verify(categoryMapper, never()).insert(any(DictProcessCategory.class));
-    }
-
-    @Test
-    void mesSourcedProcessCategoryRejectsManualMaintenanceBecauseMesOwnsIt() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        ProcessMasterService service = service(categoryMapper, mock(DictProcessDetailMapper.class), mock(AuditService.class));
-        DictProcessCategory before = category(7L, true);
-        before.setSourceType("MES");
-        before.setMesExternalId("mes-process-7");
-        when(categoryMapper.selectById(7L)).thenReturn(before);
-
-        ProcessCategorySaveReq req = validCategoryReq();
-        req.setCategoryName("Manual renamed category");
-
-        assertThatThrownBy(() -> service.saveCategory(7L, req))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("MES process category");
-        verify(categoryMapper, never()).updateById(any(DictProcessCategory.class));
-    }
-
-    @Test
-    void createDetailChecksNameUniquenessAndRecordsSummaryOnlyAudit() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+    void createDetailRequiresQpoOwnedCodeAndHourlyRateWithoutCategory() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         AuditService auditService = mock(AuditService.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
-        DictProcessCategory category = category(7L, true);
-        when(categoryMapper.selectById(7L)).thenReturn(category);
+        ProcessMasterService service = service(mock(DictProcessCategoryMapper.class), detailMapper, auditService);
         when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
         doAnswer(invocation -> {
             DictProcessDetail entity = invocation.getArgument(0);
@@ -247,78 +196,107 @@ class ProcessMasterBackendServiceTest {
         }).when(detailMapper).insert(any(DictProcessDetail.class));
 
         ProcessDetailSaveReq req = new ProcessDetailSaveReq();
-        req.setCategoryId(7L);
+        req.setCategoryId(88L);
+        req.setProcessCode(" pack-fine ");
         req.setDetailName(" 精细包装 ");
+        req.setHourlyRate(BigDecimal.ZERO);
         req.setDetailRemarks("完整具体备注不应进入审计摘要");
 
         var result = service.saveDetail(null, req);
 
+        assertThat(result.getProcessCode()).isEqualTo("PACK-FINE");
+        assertThat(result.getCategoryId()).isNull();
         assertThat(result.getDetailName()).isEqualTo("精细包装");
-        assertThat(result.getProcessCode()).isEqualTo("PACKAGING");
-        assertThat(result.getCategoryName()).isEqualTo("包装");
-        assertThat(result.getHourlyRate()).isEqualByComparingTo("10.0000");
-        assertThat(result.getCategoryHourlyRate()).isEqualByComparingTo("10.0000");
-        assertThat(result.getEffectiveHourlyRate()).isEqualByComparingTo("10.0000");
-        assertThat(result.getDetailHourlyRate()).isNull();
+        assertThat(result.getHourlyRate()).isEqualByComparingTo("0");
+        assertThat(result.getDetailHourlyRate()).isEqualByComparingTo("0");
+        assertThat(result.getEffectiveHourlyRate()).isEqualByComparingTo("0");
+        assertThat(result.getEffectiveEnabled()).isTrue();
+        ArgumentCaptor<DictProcessDetail> entityCaptor = ArgumentCaptor.forClass(DictProcessDetail.class);
+        verify(detailMapper).insert(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getProcessCode()).isEqualTo("PACK-FINE");
+        assertThat(entityCaptor.getValue().getCategoryId()).isNull();
         ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("DICT_PROCESS_DETAIL_CREATE"), eq("dict_process_detail"), eq(99L), isNull(), afterCaptor.capture());
         assertThat(String.valueOf(afterCaptor.getValue()))
-                .contains("detailName=精细包装", "processCode=PACKAGING")
+                .contains("processCode=PACK-FINE", "detailName=精细包装", "hourlyRate=0")
                 .doesNotContain("完整具体备注不应进入审计摘要");
-
-        DictProcessCategory disabled = category(8L, false);
-        when(categoryMapper.selectById(8L)).thenReturn(disabled);
-        ProcessDetailSaveReq underDisabled = new ProcessDetailSaveReq();
-        underDisabled.setCategoryId(8L);
-        underDisabled.setDetailName("不可启用");
-        underDisabled.setEnabled(true);
-        var disabledCategoryDetail = service.saveDetail(null, underDisabled);
-        assertThat(disabledCategoryDetail.getDetailEnabled()).isTrue();
-        assertThat(disabledCategoryDetail.getCategoryEnabled()).isFalse();
-        assertThat(disabledCategoryDetail.getEffectiveEnabled()).isFalse();
     }
 
     @Test
-    void createDetailAllowsCustomNamesUnderMesSourcedCategory() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
+    void detailValidationRejectsMissingOrDuplicateCodeMutableCodeAndMissingHourlyRate() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        AuditService auditService = mock(AuditService.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
-        DictProcessCategory category = category(7L, true);
-        category.setSourceType("MES");
-        when(categoryMapper.selectById(7L)).thenReturn(category);
-        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
-        doAnswer(invocation -> {
-            DictProcessDetail entity = invocation.getArgument(0);
-            entity.setId(100L);
-            return 1;
-        }).when(detailMapper).insert(any(DictProcessDetail.class));
+        ProcessMasterService service = service(mock(DictProcessCategoryMapper.class), detailMapper, mock(AuditService.class));
 
-        ProcessDetailSaveReq req = validDetailReq();
-        req.setDetailName("精细包装-客户A");
+        ProcessDetailSaveReq missingCode = validDetailReq();
+        missingCode.setProcessCode(" ");
+        assertThatThrownBy(() -> service.saveDetail(null, missingCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("工艺编码");
 
-        ProcessDetailDTO result = service.saveDetail(null, req);
+        ProcessDetailSaveReq invalidCode = validDetailReq();
+        invalidCode.setProcessCode("cnc.1");
+        assertThatThrownBy(() -> service.saveDetail(null, invalidCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("工艺编码只允许");
 
-        assertThat(result.getId()).isEqualTo(100L);
-        assertThat(result.getCategoryId()).isEqualTo(7L);
-        assertThat(result.getDetailName()).isEqualTo("精细包装-客户A");
-        verify(detailMapper).insert(any(DictProcessDetail.class));
-        verify(auditService).record(eq("DICT_PROCESS_DETAIL_CREATE"), eq("dict_process_detail"), eq(100L), isNull(), any());
+        ProcessDetailSaveReq missingRate = validDetailReq();
+        missingRate.setHourlyRate(null);
+        assertThatThrownBy(() -> service.saveDetail(null, missingRate))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("具体小时价格不能为空");
+
+        ProcessDetailSaveReq negative = validDetailReq();
+        negative.setHourlyRate(new BigDecimal("-0.01"));
+        assertThatThrownBy(() -> service.saveDetail(null, negative))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("具体小时价格不能小于 0");
+
+        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        ProcessDetailSaveReq duplicate = validDetailReq();
+        assertThatThrownBy(() -> service.saveDetail(null, duplicate))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("工艺编码已存在");
+
+        DictProcessDetail before = detail(88L, "CNC", BigDecimal.TEN);
+        when(detailMapper.selectById(88L)).thenReturn(before);
+        ProcessDetailSaveReq changedCode = validDetailReq();
+        changedCode.setProcessCode("MILL");
+        assertThatThrownBy(() -> service.saveDetail(88L, changedCode))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("工艺编码是具体工艺稳定身份");
+        verify(detailMapper, never()).updateById(any(DictProcessDetail.class));
     }
 
     @Test
-    void deleteDetailHardDeletesAnyDetailAndRecordsSummaryOnlyAudit() {
+    void disabledCategoryDoesNotAffectSpecificProcessAvailability() {
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
+        DictProcessCategory disabledCategory = category(8L, false);
+        when(categoryMapper.selectById(8L)).thenReturn(disabledCategory);
+        DictProcessDetail detail = detail(2L, "CNC_FINE", new BigDecimal("80.00"));
+        detail.setCategoryId(8L);
+        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(detail));
+
+        var enabledOnlyDetails = service.listDetails(null, true);
+
+        assertThat(enabledOnlyDetails).singleElement().satisfies(row -> {
+            assertThat(row.getProcessCode()).isEqualTo("CNC_FINE");
+            assertThat(row.getDetailEnabled()).isTrue();
+            assertThat(row.getCategoryEnabled()).isNull();
+            assertThat(row.getEffectiveEnabled()).isTrue();
+        });
+    }
+
+    @Test
+    void deleteDetailHardDeletesQpoOwnedDetailAndRecordsSummaryOnlyAudit() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         AuditService auditService = mock(AuditService.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, auditService);
-        DictProcessCategory category = category(7L, true);
-        category.setSourceType("MES");
-        DictProcessDetail before = detail(99L, 7L, new BigDecimal("120.00"));
+        ProcessMasterService service = service(mock(DictProcessCategoryMapper.class), detailMapper, auditService);
+        DictProcessDetail before = detail(99L, "PACK_FINE", new BigDecimal("120.00"));
         before.setDetailName("包装-临时客户名");
         before.setDetailRemarks("完整删除备注不应该进入审计摘要");
         when(detailMapper.selectById(99L)).thenReturn(before);
-        when(categoryMapper.selectById(7L)).thenReturn(category);
 
         service.deleteDetail(99L);
 
@@ -326,143 +304,8 @@ class ProcessMasterBackendServiceTest {
         ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
         verify(auditService).record(eq("DICT_PROCESS_DETAIL_DELETE"), eq("dict_process_detail"), eq(99L), beforeCaptor.capture(), isNull());
         assertThat(String.valueOf(beforeCaptor.getValue()))
-                .contains("detailName=包装-临时客户名", "processCode=PACKAGING", "effectiveHourlyRate=120.00")
+                .contains("detailName=包装-临时客户名", "processCode=PACK_FINE", "hourlyRate=120.00")
                 .doesNotContain("完整删除备注不应该进入审计摘要");
-    }
-
-    @Test
-    void detailHourlyRateOverridesCategoryRateOnlyWhenNonNullAndZeroIsValid() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
-        DictProcessCategory category = category(7L, true);
-        category.setHourlyRate(new BigDecimal("80.00"));
-        when(categoryMapper.selectById(7L)).thenReturn(category);
-
-        DictProcessDetail inherited = detail(1L, 7L, null);
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(inherited));
-        var inheritedDto = service.listDetails(null, null).get(0);
-        assertThat(inheritedDto.getHourlyRate()).isEqualByComparingTo("80.00");
-        assertThat(inheritedDto.getEffectiveHourlyRate()).isEqualByComparingTo("80.00");
-        assertThat(inheritedDto.getCategoryHourlyRate()).isEqualByComparingTo("80.00");
-        assertThat(inheritedDto.getDetailHourlyRate()).isNull();
-
-        DictProcessDetail zero = detail(2L, 7L, new BigDecimal("0.00"));
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(zero));
-        var zeroDto = service.listDetails(null, null).get(0);
-        assertThat(zeroDto.getHourlyRate()).isEqualByComparingTo("0.00");
-        assertThat(zeroDto.getEffectiveHourlyRate()).isEqualByComparingTo("0.00");
-        assertThat(zeroDto.getDetailHourlyRate()).isEqualByComparingTo("0.00");
-
-        DictProcessDetail custom = detail(3L, 7L, new BigDecimal("125.50"));
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(custom));
-        var customDto = service.listDetails(null, null).get(0);
-        assertThat(customDto.getHourlyRate()).isEqualByComparingTo("125.50");
-        assertThat(customDto.getEffectiveHourlyRate()).isEqualByComparingTo("125.50");
-        assertThat(customDto.getDetailHourlyRate()).isEqualByComparingTo("125.50");
-    }
-
-    @Test
-    void listDetailsExposesEffectiveAvailabilityAndEnabledOnlyFiltersDisabledCategories() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
-        DictProcessCategory enabledCategory = category(7L, true);
-        DictProcessCategory disabledCategory = category(8L, false);
-        disabledCategory.setProcessCode("CNC");
-        disabledCategory.setCategoryName("CNC");
-        when(categoryMapper.selectById(7L)).thenReturn(enabledCategory);
-        when(categoryMapper.selectById(8L)).thenReturn(disabledCategory);
-        DictProcessDetail usableDetail = detail(1L, 7L, null);
-        DictProcessDetail blockedByCategory = detail(2L, 8L, null);
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(usableDetail, blockedByCategory));
-
-        var allDetails = service.listDetails(null, false);
-
-        assertThat(allDetails).hasSize(2);
-        assertThat(allDetails.get(0).getDetailEnabled()).isTrue();
-        assertThat(allDetails.get(0).getCategoryEnabled()).isTrue();
-        assertThat(allDetails.get(0).getEffectiveEnabled()).isTrue();
-        assertThat(allDetails.get(1).getDetailEnabled()).isTrue();
-        assertThat(allDetails.get(1).getCategoryEnabled()).isFalse();
-        assertThat(allDetails.get(1).getEffectiveEnabled()).isFalse();
-
-        var enabledOnlyDetails = service.listDetails(null, true);
-
-        assertThat(enabledOnlyDetails).extracting("id").containsExactly(1L);
-    }
-
-    @Test
-    void saveDetailAllowsNullAndZeroHourlyRateButRejectsNegativeRate() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
-        when(categoryMapper.selectById(7L)).thenReturn(category(7L, true));
-        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
-
-        ProcessDetailSaveReq inherited = validDetailReq();
-        inherited.setHourlyRate(null);
-        assertThat(service.saveDetail(null, inherited).getDetailHourlyRate()).isNull();
-
-        ProcessDetailSaveReq zero = validDetailReq();
-        zero.setHourlyRate(BigDecimal.ZERO);
-        var zeroDto = service.saveDetail(null, zero);
-        assertThat(zeroDto.getDetailHourlyRate()).isEqualByComparingTo("0");
-        assertThat(zeroDto.getHourlyRate()).isEqualByComparingTo("0");
-
-        ProcessDetailSaveReq negative = validDetailReq();
-        negative.setHourlyRate(new BigDecimal("-0.01"));
-        assertThatThrownBy(() -> service.saveDetail(null, negative))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("具体小时价格");
-    }
-
-    @Test
-    void mesProcessDetailRejectsIdentityChangesButAllowsLocalRemarkStateAndSortMaintenance() {
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        ProcessMasterService service = service(categoryMapper, detailMapper, mock(AuditService.class));
-        DictProcessCategory category = category(7L, true);
-        category.setSourceType("MES");
-        DictProcessCategory anotherCategory = category(8L, true);
-        anotherCategory.setSourceType("MES");
-        when(categoryMapper.selectById(7L)).thenReturn(category);
-        when(categoryMapper.selectById(8L)).thenReturn(anotherCategory);
-        when(detailMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
-
-        DictProcessDetail before = new DictProcessDetail();
-        before.setId(99L);
-        before.setCategoryId(7L);
-        before.setDetailName("MES detail");
-        before.setEnabled(true);
-        before.setSortNo(0);
-        when(detailMapper.selectById(99L)).thenReturn(before);
-
-        ProcessDetailSaveReq changedIdentity = new ProcessDetailSaveReq();
-        changedIdentity.setCategoryId(8L);
-        changedIdentity.setDetailName("Manual detail");
-        assertThatThrownBy(() -> service.saveDetail(99L, changedIdentity))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("MES process detail identity");
-        verify(detailMapper, never()).updateById(any(DictProcessDetail.class));
-
-        ProcessDetailSaveReq localMaintenance = new ProcessDetailSaveReq();
-        localMaintenance.setCategoryId(7L);
-        localMaintenance.setDetailName("MES detail");
-        localMaintenance.setDetailRemarks("QPO local remark");
-        localMaintenance.setHourlyRate(new BigDecimal("120.00"));
-        localMaintenance.setEnabled(false);
-        localMaintenance.setSortNo(20);
-
-        var saved = service.saveDetail(99L, localMaintenance);
-
-        assertThat(saved.getCategoryId()).isEqualTo(7L);
-        assertThat(saved.getDetailName()).isEqualTo("MES detail");
-        assertThat(saved.getDetailRemarks()).isEqualTo("QPO local remark");
-        assertThat(saved.getDetailHourlyRate()).isEqualByComparingTo("120.00");
-        assertThat(saved.getHourlyRate()).isEqualByComparingTo("120.00");
-        assertThat(saved.getEnabled()).isFalse();
-        assertThat(saved.getSortNo()).isEqualTo(20);
     }
 
     private static ProcessMasterService service(
@@ -476,25 +319,18 @@ class ProcessMasterBackendServiceTest {
         return service;
     }
 
-    private static ProcessCategorySaveReq validCategoryReq() {
-        ProcessCategorySaveReq req = new ProcessCategorySaveReq();
-        req.setProcessCode("PACKAGING");
-        req.setCategoryName("包装");
-        req.setHourlyRate(new BigDecimal("10.0000"));
-        return req;
-    }
-
     private static ProcessDetailSaveReq validDetailReq() {
         ProcessDetailSaveReq req = new ProcessDetailSaveReq();
-        req.setCategoryId(7L);
+        req.setProcessCode("CNC");
         req.setDetailName("精细包装");
+        req.setHourlyRate(BigDecimal.TEN);
         return req;
     }
 
-    private static DictProcessDetail detail(Long id, Long categoryId, BigDecimal hourlyRate) {
+    private static DictProcessDetail detail(Long id, String processCode, BigDecimal hourlyRate) {
         DictProcessDetail detail = new DictProcessDetail();
         detail.setId(id);
-        detail.setCategoryId(categoryId);
+        detail.setProcessCode(processCode);
         detail.setDetailName("具体工艺" + id);
         detail.setHourlyRate(hourlyRate);
         detail.setEnabled(true);

@@ -15,6 +15,7 @@ public class DictProcessDetail {
     private Long id;
 
     private Long categoryId;
+    private String processCode;
     private BigDecimal hourlyRate;
     private String detailName;
     private String detailRemarks;

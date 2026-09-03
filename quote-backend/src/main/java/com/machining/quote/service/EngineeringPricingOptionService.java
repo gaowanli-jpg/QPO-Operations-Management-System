@@ -1,8 +1,8 @@
 package com.machining.quote.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.MaterialPriceSpecDTO;
+import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PricingMaterialOptionDTO;
 import com.machining.quote.dto.PricingOptionPageReq;
 import com.machining.quote.dto.PricingProcessOptionDTO;
@@ -10,19 +10,17 @@ import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictMaterial;
 import com.machining.quote.entity.DictMaterialPriceSpec;
 import com.machining.quote.entity.DictMaterialType;
-import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.entity.PricingOptionUsageStat;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictMaterialMapper;
 import com.machining.quote.mapper.DictMaterialPriceSpecMapper;
 import com.machining.quote.mapper.DictMaterialTypeMapper;
-import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.mapper.PricingOptionUsageStatMapper;
+import com.machining.quote.util.MaterialPriceSpecSupport;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import com.machining.quote.util.MaterialPriceSpecSupport;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -40,7 +38,7 @@ import java.util.stream.Collectors;
 public class EngineeringPricingOptionService {
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final String OPTION_TYPE_MATERIAL = PricingOptionUsageStatService.OPTION_TYPE_MATERIAL;
-    private static final String OPTION_TYPE_PROCESS_CATEGORY = PricingOptionUsageStatService.OPTION_TYPE_PROCESS_CATEGORY;
+    private static final String OPTION_TYPE_PROCESS = PricingOptionUsageStatService.OPTION_TYPE_PROCESS;
     private static final String OPTION_TYPE_EXTRA_FEE = PricingOptionUsageStatService.OPTION_TYPE_EXTRA_FEE;
     private static final String SOURCE_TYPE_PROCESS = "process";
     private static final String SOURCE_TYPE_EXTRA = "extra";
@@ -53,8 +51,6 @@ public class EngineeringPricingOptionService {
     private DictMaterialTypeMapper materialTypeMapper;
     @Autowired
     private DictProcessDetailMapper processDetailMapper;
-    @Autowired
-    private DictProcessCategoryMapper processCategoryMapper;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired(required = false)
@@ -72,8 +68,7 @@ public class EngineeringPricingOptionService {
         }
         QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes);
         pageQuery.last(materialUsageOrderBy() + " " + limitOffset(safePage, safePageSize));
-        List<DictMaterial> materials = materialMapper.selectList(pageQuery);
-        List<PricingMaterialOptionDTO> records = toMaterialOptions(materials);
+        List<PricingMaterialOptionDTO> records = toMaterialOptions(materialMapper.selectList(pageQuery));
         applyMaterialUsageCounts(records);
         return PageResult.of(records, total, safePage, safePageSize);
     }
@@ -163,8 +158,7 @@ public class EngineeringPricingOptionService {
 
     private QueryWrapper<DictProcessDetail> processDetailQuery(String keyword, List<Long> processDetailIds) {
         QueryWrapper<DictProcessDetail> query = new QueryWrapper<>();
-        query.eq("enabled", true)
-                .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND c.enabled = TRUE)");
+        query.eq("enabled", true);
         if (processDetailIds != null && !processDetailIds.isEmpty()) {
             query.in("id", processDetailIds);
         }
@@ -173,11 +167,11 @@ public class EngineeringPricingOptionService {
         }
         String pattern = pattern(keyword);
         query.and(wrapper -> wrapper
+                .apply("LOWER(process_code) LIKE {0}", pattern)
+                .or()
                 .apply("LOWER(detail_name) LIKE {0}", pattern)
                 .or()
-                .apply("LOWER(detail_remarks) LIKE {0}", pattern)
-                .or()
-                .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND (LOWER(c.process_code) LIKE {0} OR LOWER(c.category_name) LIKE {0}))", pattern));
+                .apply("LOWER(detail_remarks) LIKE {0}", pattern));
         return query;
     }
 
@@ -211,7 +205,7 @@ public class EngineeringPricingOptionService {
     }
 
     private void applyProcessUsageCounts(List<PricingProcessOptionDTO> records) {
-        Map<String, Long> counts = usageCounts(OPTION_TYPE_PROCESS_CATEGORY, records.stream()
+        Map<String, Long> counts = usageCounts(OPTION_TYPE_PROCESS, records.stream()
                 .map(PricingProcessOptionDTO::getProcessCode)
                 .map(this::normalizedKey)
                 .filter(Objects::nonNull)
@@ -260,9 +254,8 @@ public class EngineeringPricingOptionService {
     }
 
     private String processUsageOrderBy() {
-        return "ORDER BY " + usageCountSubquery(OPTION_TYPE_PROCESS_CATEGORY,
-                "(SELECT UPPER(c.process_code) FROM dict_process_category c WHERE c.id = dict_process_detail.category_id)")
-                + " DESC, category_id ASC, sort_no ASC, id ASC";
+        return "ORDER BY " + usageCountSubquery(OPTION_TYPE_PROCESS, "UPPER(process_code)")
+                + " DESC, sort_no ASC, id ASC";
     }
 
     private String extraFeeUsageOrderBy() {
@@ -327,35 +320,24 @@ public class EngineeringPricingOptionService {
         if (details == null || details.isEmpty()) {
             return List.of();
         }
-        List<Long> categoryIds = details.stream()
-                .map(DictProcessDetail::getCategoryId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        Map<Long, DictProcessCategory> categoryById = categoryIds.isEmpty()
-                ? Map.of()
-                : toMap(processCategoryMapper.selectBatchIds(categoryIds), DictProcessCategory::getId);
-        return details.stream()
-                .map(detail -> toProcessOption(detail, categoryById.get(detail.getCategoryId())))
-                .toList();
+        return details.stream().map(this::toProcessOption).toList();
     }
 
-    private PricingProcessOptionDTO toProcessOption(DictProcessDetail detail, DictProcessCategory category) {
-        BigDecimal categoryRate = category == null ? BigDecimal.ZERO : Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);
-        BigDecimal effectiveRate = detail.getHourlyRate() == null ? categoryRate : detail.getHourlyRate();
+    private PricingProcessOptionDTO toProcessOption(DictProcessDetail detail) {
+        BigDecimal effectiveRate = Objects.requireNonNullElse(detail.getHourlyRate(), BigDecimal.ZERO);
         PricingProcessOptionDTO dto = new PricingProcessOptionDTO();
         dto.setOptionKey("process:" + detail.getId());
-        dto.setSourceType("process");
+        dto.setSourceType(SOURCE_TYPE_PROCESS);
         dto.setProcessDetailId(detail.getId());
         dto.setProcessCategoryId(detail.getCategoryId());
-        dto.setProcessCode(category == null ? null : category.getProcessCode());
-        dto.setCategoryName(category == null ? null : category.getCategoryName());
+        dto.setProcessCode(detail.getProcessCode());
+        dto.setCategoryName(null);
         dto.setDetailName(detail.getDetailName());
         dto.setProcessName(detail.getDetailName());
-        dto.setLabel(processLabel(detail, category, effectiveRate));
+        dto.setLabel(processLabel(detail, effectiveRate));
         dto.setCalcType("工时");
         dto.setDetailHourlyRate(detail.getHourlyRate());
-        dto.setCategoryHourlyRate(categoryRate);
+        dto.setCategoryHourlyRate(null);
         dto.setEffectiveHourlyRate(effectiveRate);
         dto.setHourlyRate(effectiveRate);
         return dto;
@@ -372,7 +354,7 @@ public class EngineeringPricingOptionService {
         PricingProcessOptionDTO dto = new PricingProcessOptionDTO();
         String feeCode = normalizedKey(item.getFeeCode());
         dto.setOptionKey("extra:" + (feeCode == null ? item.getId() : feeCode));
-        dto.setSourceType("extra");
+        dto.setSourceType(SOURCE_TYPE_EXTRA);
         dto.setFeeItemId(item.getId());
         dto.setFeeCode(item.getFeeCode());
         dto.setFeeName(item.getFeeName());
@@ -382,10 +364,9 @@ public class EngineeringPricingOptionService {
         return dto;
     }
 
-    private String processLabel(DictProcessDetail detail, DictProcessCategory category, BigDecimal effectiveRate) {
-        String processCode = category == null ? "" : Objects.toString(category.getProcessCode(), "");
-        String categoryName = category == null ? "" : Objects.toString(category.getCategoryName(), "");
-        return detail.getDetailName() + "（" + processCode + " / " + categoryName + " / "
+    private String processLabel(DictProcessDetail detail, BigDecimal effectiveRate) {
+        String processCode = Objects.toString(detail.getProcessCode(), "-");
+        return detail.getDetailName() + "（" + processCode + " / "
                 + effectiveRate.setScale(2, RoundingMode.HALF_UP).toPlainString() + "元/小时）";
     }
 

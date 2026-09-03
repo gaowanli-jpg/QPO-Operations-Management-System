@@ -12,7 +12,7 @@ import java.util.Map;
 @Service
 public class PricingOptionUsageStatService {
     public static final String OPTION_TYPE_MATERIAL = "MATERIAL";
-    public static final String OPTION_TYPE_PROCESS_CATEGORY = "PROCESS_CATEGORY";
+    public static final String OPTION_TYPE_PROCESS = "PROCESS";
     public static final String OPTION_TYPE_EXTRA_FEE = "EXTRA_FEE";
 
     @Autowired
@@ -52,7 +52,7 @@ public class PricingOptionUsageStatService {
         if (isExtraFee(row.getSourceType(), row.getCalcType())) {
             increment(OPTION_TYPE_EXTRA_FEE, row.getFeeCode());
         } else {
-            increment(OPTION_TYPE_PROCESS_CATEGORY, row.getProcessCode());
+            increment(OPTION_TYPE_PROCESS, row.getProcessCode());
         }
     }
 
@@ -65,7 +65,7 @@ public class PricingOptionUsageStatService {
         if (isExtraFee(sourceType, calcType)) {
             increment(OPTION_TYPE_EXTRA_FEE, value(row, "feeCode"));
         } else {
-            increment(OPTION_TYPE_PROCESS_CATEGORY, value(row, "processCode"));
+            increment(OPTION_TYPE_PROCESS, value(row, "processCode"));
         }
     }
 

@@ -8,12 +8,10 @@ import com.machining.quote.dto.ProcessArrangementNodeSaveReq;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictProcessArrangementItem;
 import com.machining.quote.entity.DictProcessArrangementNode;
-import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictProcessArrangementItemMapper;
 import com.machining.quote.mapper.DictProcessArrangementNodeMapper;
-import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.service.AuditService;
 import com.machining.quote.service.ProcessArrangementService;
@@ -21,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -92,7 +89,6 @@ class ProcessArrangementBackendServiceTest {
         when(fixture.nodeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(root, child));
         when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(processLeaf, extraLeaf));
         when(fixture.detailMapper.selectBatchIds(List.of(100L))).thenReturn(List.of(detail(100L, 7L, "精铣", true)));
-        when(fixture.categoryMapper.selectBatchIds(List.of(7L))).thenReturn(List.of(category(7L, true)));
         when(fixture.extraFeeItemMapper.selectBatchIds(List.of(5))).thenReturn(List.of(extraFee(5, "EDM", "EDM", true)));
 
         var tree = fixture.service.listTree();
@@ -100,7 +96,8 @@ class ProcessArrangementBackendServiceTest {
         assertThat(tree).singleElement().satisfies(rootRow -> {
             assertThat(rootRow.getNodeType()).isEqualTo("node");
             assertThat(rootRow.getLabel()).isEqualTo("铣");
-            assertThat(rootRow.getChildren()).extracting("label").containsExactly("粗铣", "精铣（MILL / 铣 / 88.00元/小时）");
+            assertThat(rootRow.getChildren()).hasSize(2);
+            assertThat(rootRow.getChildren().get(1).getLabel()).contains("精铣", "MILL", "88.00");
             assertThat(rootRow.getChildren().get(0).getChildren()).singleElement().satisfies(extraRow -> {
                 assertThat(extraRow.getNodeType()).isEqualTo("item");
                 assertThat(extraRow.getSourceType()).isEqualTo("extra");
@@ -118,7 +115,6 @@ class ProcessArrangementBackendServiceTest {
         when(fixture.nodeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(root));
         when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(processLeaf));
         when(fixture.detailMapper.selectBatchIds(List.of(100L))).thenReturn(List.of(detail(100L, 7L, "精铣", true)));
-        when(fixture.categoryMapper.selectBatchIds(List.of(7L))).thenReturn(List.of(category(7L, true)));
 
         var tree = fixture.service.listTree();
 
@@ -128,7 +124,11 @@ class ProcessArrangementBackendServiceTest {
                 assertThat(leaf.getNodeType()).isEqualTo("item");
                 assertThat(leaf.getSourceType()).isEqualTo("process");
                 assertThat(leaf.getProcessDetailId()).isEqualTo(100L);
-                assertThat(leaf.getLabel()).contains("精铣");
+                assertThat(leaf.getProcessCode()).isEqualTo("MILL");
+                assertThat(leaf.getCategoryName()).isNull();
+                assertThat(leaf.getCategoryHourlyRate()).isNull();
+                assertThat(leaf.getEnabled()).isTrue();
+                assertThat(leaf.getLabel()).contains("精铣", "MILL", "88.00");
             });
         });
         verify(fixture.auditService, never()).record(any(), any(), any(), any(), any());
@@ -166,7 +166,6 @@ class ProcessArrangementBackendServiceTest {
         when(fixture.detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
                 detail(100L, 7L, "已编排工艺", true),
                 detail(101L, 7L, "未编排工艺", true)));
-        when(fixture.categoryMapper.selectBatchIds(List.of(7L))).thenReturn(List.of(category(7L, true)));
         when(fixture.extraFeeItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(
                 extraFee(5, "EDM", "已编排EDM", true),
                 extraFee(6, "QA", "未编排QA", false)));
@@ -323,14 +322,12 @@ class ProcessArrangementBackendServiceTest {
         fixture.nodeMapper = mock(DictProcessArrangementNodeMapper.class);
         fixture.itemMapper = mock(DictProcessArrangementItemMapper.class);
         fixture.detailMapper = mock(DictProcessDetailMapper.class);
-        fixture.categoryMapper = mock(DictProcessCategoryMapper.class);
         fixture.extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
         fixture.auditService = mock(AuditService.class);
         fixture.service = new ProcessArrangementService();
         ReflectionTestUtils.setField(fixture.service, "nodeMapper", fixture.nodeMapper);
         ReflectionTestUtils.setField(fixture.service, "itemMapper", fixture.itemMapper);
         ReflectionTestUtils.setField(fixture.service, "detailMapper", fixture.detailMapper);
-        ReflectionTestUtils.setField(fixture.service, "categoryMapper", fixture.categoryMapper);
         ReflectionTestUtils.setField(fixture.service, "extraFeeItemMapper", fixture.extraFeeItemMapper);
         ReflectionTestUtils.setField(fixture.service, "auditService", fixture.auditService);
         return fixture;
@@ -390,22 +387,12 @@ class ProcessArrangementBackendServiceTest {
         DictProcessDetail detail = new DictProcessDetail();
         detail.setId(id);
         detail.setCategoryId(categoryId);
+        detail.setProcessCode("MILL");
         detail.setDetailName(name);
-        detail.setHourlyRate(null);
+        detail.setHourlyRate(new java.math.BigDecimal("88.00"));
         detail.setEnabled(enabled);
         detail.setSortNo(1);
         return detail;
-    }
-
-    private static DictProcessCategory category(Long id, boolean enabled) {
-        DictProcessCategory category = new DictProcessCategory();
-        category.setId(id);
-        category.setProcessCode("MILL");
-        category.setCategoryName("铣");
-        category.setHourlyRate(new BigDecimal("88.00"));
-        category.setEnabled(enabled);
-        category.setSortNo(1);
-        return category;
     }
 
     private static DictExtraFeeItem extraFee(Integer id, String code, String name, boolean enabled) {
@@ -432,7 +419,6 @@ class ProcessArrangementBackendServiceTest {
         DictProcessArrangementNodeMapper nodeMapper;
         DictProcessArrangementItemMapper itemMapper;
         DictProcessDetailMapper detailMapper;
-        DictProcessCategoryMapper categoryMapper;
         DictExtraFeeItemMapper extraFeeItemMapper;
         AuditService auditService;
     }

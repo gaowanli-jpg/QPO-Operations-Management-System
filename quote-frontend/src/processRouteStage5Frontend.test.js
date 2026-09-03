@@ -25,23 +25,22 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     expect(itemPricing).not.toContain('numberOrZero(assemblyFee.value) * ratePercent / 100')
   })
 
-  test('process picker shows detail process with category identity and hourly rate', () => {
+  test('process picker shows qpo-owned process code and hourly rate', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 
+    expect(source).toContain('prop="processCode"')
+    expect(source).toContain('label="工艺编码"')
     expect(source).toContain('prop="detailName"')
     expect(source).toContain('label="具体工艺"')
-    expect(source).toContain('prop="processCode"')
-    expect(source).toContain('label="大类编码"')
-    expect(source).toContain('prop="categoryName"')
-    expect(source).toContain('label="大类名称"')
-    expect(source).toContain('label="具体小时价格"')
-    expect(source).toContain('label="大类小时价格"')
-    expect(source).toContain('label="核价使用价格"')
+    expect(source).toContain('label="小时价格"')
+    expect(source).not.toContain('label="大类编码"')
+    expect(source).not.toContain('label="大类名称"')
+    expect(source).not.toContain('label="大类小时价格"')
+    expect(source).not.toContain('label="核价使用价格"')
     expect(source).toContain('formatHourlyRate')
     expect(source).toContain('row.detailName || row.processName || row.feeName')
     expect(source).toContain('row.processCode ||')
-    expect(source).toContain('row.categoryName ||')
-    expect(source).toContain('row.effectiveHourlyRate ?? row.hourlyRate')
+    expect(source).toContain('row.hourlyRate ?? row.effectiveHourlyRate ?? row.detailHourlyRate')
   })
 
   test('process picker uses remote paging only and removes legacy local ten-row pagination', () => {
@@ -66,13 +65,18 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
 
     expect(picker).toContain("import { saveMaterial, saveProcessDetail } from '../services/dictApi'")
     expect(picker).toContain('enableProcessRateEdit')
-    expect(picker).toContain('label="具体小时价格"')
-    expect(picker).toContain('label="大类小时价格"')
-    expect(picker).toContain('label="核价使用价格"')
+    expect(picker).toContain('label="小时价格"')
+    expect(picker).not.toContain('label="大类小时价格"')
+    expect(picker).not.toContain('label="核价使用价格"')
     expect(picker).toContain("v-permission=\"'engineer:dict:process-manage'\"")
     expect(picker).toContain('saveInlineProcessRate(row)')
     expect(picker).toContain("emit('process-rate-updated', updatedDetail)")
-    expect(picker).toContain(':value-on-clear="null"')
+    expect(picker).toContain('请填写小时价格。')
+    const processRateEditor = picker.slice(
+      picker.indexOf(':model-value="processRateDraft(row)"'),
+      picker.indexOf('@click.stop="saveInlineProcessRate(row)"')
+    )
+    expect(processRateEditor).not.toContain('value-on-clear')
 
     expect(itemPricing).toContain(':enable-process-rate-edit="true"')
     expect(itemPricing).toContain('@process-rate-updated="handleProcessRateUpdated"')
@@ -135,7 +139,7 @@ describe('Stage 38 phase 5 process picker and global template refactor', () => {
     expect(source).toContain('const processDetailId = sourceType === \'process\' ? (selected.processDetailId ?? selected.id ?? null) : null')
     expect(source).toContain('proc.processDetailId = processDetailId')
     expect(source).toContain('proc.processCode = sourceType === \'process\' ? (selected.processCode || \'\') : \'\'')
-    expect(source).toContain('proc.categoryName = sourceType === \'process\' ? (selected.categoryName || \'\') : \'\'')
+    expect(source).toContain("proc.categoryName = ''")
     expect(source).toContain('proc.detailName = sourceType === \'process\' ? processName : \'\'')
     expect(source).toContain('proc.hourlyRate = hourlyRate')
     expect(source).toContain('hasUnresolvedProcessRoute')

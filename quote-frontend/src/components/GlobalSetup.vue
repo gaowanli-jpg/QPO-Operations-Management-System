@@ -395,10 +395,10 @@ const normalizeRouteRow = (item, index) => ({
   processCategoryId: item.processCategoryId ?? null,
   categoryId: item.categoryId ?? item.processCategoryId ?? null,
   processCode: item.processCode || '',
-  categoryName: item.categoryName || '',
+  categoryName: '',
   detailName: item.detailName || '',
   detailHourlyRate: item.detailHourlyRate ?? null,
-  categoryHourlyRate: item.categoryHourlyRate ?? null,
+  categoryHourlyRate: null,
   effectiveHourlyRate: item.effectiveHourlyRate ?? item.hourlyRate ?? item.unitRate ?? null,
   hourlyRate: item.hourlyRate ?? item.effectiveHourlyRate ?? item.unitRate ?? null,
   unitRate: item.unitRate ?? item.hourlyRate ?? item.effectiveHourlyRate ?? null,
@@ -558,13 +558,12 @@ const formatProcessLabel = (proc, fallback = '请选择工序') => {
   const option = findProcessOption(proc)
   if (option?.label) return option.label
   if (isUnresolvedProcessRoute(proc) && proc?.processName) return `${proc.processName}（请重新选择具体工艺）`
-  if (proc?.detailName || proc?.processCode || proc?.categoryName) {
+  if (proc?.detailName || proc?.processCode) {
     const detailName = proc.detailName || proc.processName || '-'
     const processCode = proc.processCode || '-'
-    const categoryName = proc.categoryName || '-'
     const hourlyRate = Number(proc.hourlyRate)
     const rateText = Number.isFinite(hourlyRate) ? `${hourlyRate.toFixed(2)}元/小时` : '-'
-    return `${detailName}（${processCode} / ${categoryName} / ${rateText}）`
+    return `${detailName}（${processCode} / ${rateText}）`
   }
   if (proc?.processName) return `${proc.processName}（${proc.calcType || '工时'}）`
   return fallback
@@ -588,10 +587,10 @@ const applyProcessSelection = (proc, selected) => {
   proc.processCategoryId = processCategoryId
   proc.categoryId = processCategoryId
   proc.processCode = sourceType === 'process' ? (selected.processCode || '') : ''
-  proc.categoryName = sourceType === 'process' ? (selected.categoryName || '') : ''
+  proc.categoryName = ''
   proc.detailName = sourceType === 'process' ? processName : ''
   proc.detailHourlyRate = sourceType === 'process' ? (selected.detailHourlyRate ?? null) : null
-  proc.categoryHourlyRate = sourceType === 'process' ? (selected.categoryHourlyRate ?? null) : null
+  proc.categoryHourlyRate = null
   proc.effectiveHourlyRate = sourceType === 'process' ? (selected.effectiveHourlyRate ?? hourlyRate) : null
   proc.hourlyRate = hourlyRate
   proc.unitRate = hourlyRate
@@ -637,11 +636,11 @@ const syncCurrentSelectedProcessRate = (updatedDetail = {}) => {
     proc.processCategoryId = updatedDetail.categoryId ?? updatedDetail.processCategoryId ?? proc.processCategoryId
     proc.categoryId = updatedDetail.categoryId ?? updatedDetail.processCategoryId ?? proc.categoryId
     proc.processCode = updatedDetail.processCode ?? proc.processCode
-    proc.categoryName = updatedDetail.categoryName ?? proc.categoryName
+    proc.categoryName = ''
     proc.detailName = updatedDetail.detailName ?? proc.detailName
     proc.processName = updatedDetail.detailName ?? proc.processName
     proc.detailHourlyRate = updatedDetail.detailHourlyRate ?? proc.detailHourlyRate
-    proc.categoryHourlyRate = updatedDetail.categoryHourlyRate ?? proc.categoryHourlyRate
+    proc.categoryHourlyRate = null
     proc.effectiveHourlyRate = updatedDetail.effectiveHourlyRate ?? proc.effectiveHourlyRate
     if (hasHourlyRate) {
       proc.hourlyRate = hourlyRate

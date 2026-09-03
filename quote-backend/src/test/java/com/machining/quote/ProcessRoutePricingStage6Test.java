@@ -1,9 +1,7 @@
 package com.machining.quote;
 
 import com.machining.quote.dto.QuoteSubmitReq;
-import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
-import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import com.machining.quote.service.ProcessRoutePricingService;
 import org.junit.jupiter.api.Test;
@@ -21,23 +19,16 @@ import static org.mockito.Mockito.when;
 class ProcessRoutePricingStage6Test {
 
     @Test
-    void pricesProcessRowsFromEffectiveHourlyRateAndIgnoresSubmittedPriceSnapshots() {
+    void pricesProcessRowsFromQpoOwnedDetailHourlyRateAndIgnoresSubmittedPriceSnapshots() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        ProcessRoutePricingService service = service(detailMapper, categoryMapper);
+        ProcessRoutePricingService service = service(detailMapper);
 
-        DictProcessDetail inheritedDetail = detail(7L, 3L, "Precision packaging", null);
-        DictProcessCategory packaging = category(3L, "PACKAGING", "Packaging", "10.00");
-        DictProcessDetail zeroDetail = detail(8L, 4L, "Free setup", BigDecimal.ZERO);
-        DictProcessCategory cnc = category(4L, "CNC", "CNC", "80.00");
-        DictProcessDetail customDetail = detail(9L, 5L, "Fine milling", new BigDecimal("125.50"));
-        DictProcessCategory milling = category(5L, "MILL", "Milling", "80.00");
-        when(detailMapper.selectById(7L)).thenReturn(inheritedDetail);
-        when(categoryMapper.selectById(3L)).thenReturn(packaging);
+        DictProcessDetail packaging = detail(7L, "PACKAGING_FINE", "Precision packaging", new BigDecimal("10.00"));
+        DictProcessDetail zeroDetail = detail(8L, "FREE_SETUP", "Free setup", BigDecimal.ZERO);
+        DictProcessDetail customDetail = detail(9L, "FINE_MILL", "Fine milling", new BigDecimal("125.50"));
+        when(detailMapper.selectById(7L)).thenReturn(packaging);
         when(detailMapper.selectById(8L)).thenReturn(zeroDetail);
-        when(categoryMapper.selectById(4L)).thenReturn(cnc);
         when(detailMapper.selectById(9L)).thenReturn(customDetail);
-        when(categoryMapper.selectById(5L)).thenReturn(milling);
 
         List<Map<String, Object>> priced = service.priceProcessRows(List.of(
                 row(20, 7L, 2.5),
@@ -49,13 +40,13 @@ class ProcessRoutePricingStage6Test {
         assertThat(priced.get(0)).satisfies(route -> {
             assertThat(route).containsEntry("routeType", "PROCESS");
             assertThat(route).containsEntry("processDetailId", 7L);
-            assertThat(route).containsEntry("processCategoryId", 3L);
-            assertThat(route).containsEntry("processCode", "PACKAGING");
-            assertThat(route).containsEntry("categoryName", "Packaging");
+            assertThat(route).containsEntry("processCategoryId", null);
+            assertThat(route).containsEntry("processCode", "PACKAGING_FINE");
+            assertThat(route).containsEntry("categoryName", null);
             assertThat(route).containsEntry("detailName", "Precision packaging");
-            assertThat(route).containsEntry("detailHourlyRate", null);
-            assertThat(route).containsEntry("categoryHourlyRate", 10.0);
-            assertThat(route).containsEntry("hourlyRateSource", "CATEGORY");
+            assertThat((BigDecimal) route.get("detailHourlyRate")).isEqualByComparingTo("10.00");
+            assertThat(route).containsEntry("categoryHourlyRate", null);
+            assertThat(route).containsEntry("hourlyRateSource", "DETAIL");
             assertThat((Double) route.get("hourlyRate")).isEqualTo(10.0);
             assertThat((Double) route.get("unitRate")).isEqualTo(10.0);
             assertThat((Double) route.get("unitWorkHours")).isEqualTo(2.5);
@@ -63,7 +54,8 @@ class ProcessRoutePricingStage6Test {
         });
         assertThat(priced.get(1)).satisfies(route -> {
             assertThat(route).containsEntry("processDetailId", 8L);
-            assertThat(route).containsEntry("categoryHourlyRate", 80.0);
+            assertThat(route).containsEntry("processCode", "FREE_SETUP");
+            assertThat(route).containsEntry("categoryHourlyRate", null);
             assertThat(route).containsEntry("hourlyRateSource", "DETAIL");
             assertThat((BigDecimal) route.get("detailHourlyRate")).isEqualByComparingTo("0.00");
             assertThat((Double) route.get("hourlyRate")).isEqualTo(0.0);
@@ -72,7 +64,8 @@ class ProcessRoutePricingStage6Test {
         });
         assertThat(priced.get(2)).satisfies(route -> {
             assertThat(route).containsEntry("processDetailId", 9L);
-            assertThat(route).containsEntry("categoryHourlyRate", 80.0);
+            assertThat(route).containsEntry("processCode", "FINE_MILL");
+            assertThat(route).containsEntry("categoryHourlyRate", null);
             assertThat(route).containsEntry("hourlyRateSource", "DETAIL");
             assertThat((BigDecimal) route.get("detailHourlyRate")).isEqualByComparingTo("125.50");
             assertThat((Double) route.get("hourlyRate")).isEqualTo(125.5);
@@ -84,13 +77,10 @@ class ProcessRoutePricingStage6Test {
     @Test
     void quantityDoesNotChangeProcessHourlyRate() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        ProcessRoutePricingService service = service(detailMapper, categoryMapper);
+        ProcessRoutePricingService service = service(detailMapper);
 
-        DictProcessDetail detail = detail(8L, 4L, "CNC finishing", null);
-        DictProcessCategory category = category(4L, "CNC", "CNC", "80.00");
+        DictProcessDetail detail = detail(8L, "CNC_FINISH", "CNC finishing", new BigDecimal("80.00"));
         when(detailMapper.selectById(8L)).thenReturn(detail);
-        when(categoryMapper.selectById(4L)).thenReturn(category);
 
         QuoteSubmitReq.ProcessSubmitDTO row = new QuoteSubmitReq.ProcessSubmitDTO();
         row.setProcessDetailId(8L);
@@ -101,27 +91,34 @@ class ProcessRoutePricingStage6Test {
     }
 
     @Test
-    void rejectsProcessRowsWhenCategoryIsDisabledEvenIfDetailIsEnabled() {
+    void disabledMesCategoryDoesNotBlockEnabledQpoOwnedProcessDetail() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        ProcessRoutePricingService service = service(detailMapper, categoryMapper);
-        DictProcessDetail detail = detail(8L, 4L, "CNC finishing", null);
-        DictProcessCategory category = category(4L, "CNC", "CNC", "80.00");
-        category.setEnabled(false);
+        ProcessRoutePricingService service = service(detailMapper);
+        DictProcessDetail detail = detail(8L, "CNC_FINISH", "CNC finishing", new BigDecimal("80.00"));
+        detail.setCategoryId(4L);
         when(detailMapper.selectById(8L)).thenReturn(detail);
-        when(categoryMapper.selectById(4L)).thenReturn(category);
+
+        Map<String, Object> priced = service.priceProcessRows(List.of(row(10, 8L, 1.25))).get(0);
+
+        assertThat(priced).containsEntry("processCode", "CNC_FINISH");
+        assertThat(priced).containsEntry("lineCost", 100.0);
+        assertThat(priced).containsEntry("categoryName", null);
+    }
+
+    @Test
+    void rejectsEnabledDetailsWithoutQpoOwnedHourlyRate() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        ProcessRoutePricingService service = service(detailMapper);
+        when(detailMapper.selectById(8L)).thenReturn(detail(8L, "CNC_FINISH", "CNC finishing", null));
 
         assertThatThrownBy(() -> service.priceProcessRows(List.of(row(10, 8L, 1.25))))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("工艺大类");
+                .hasMessageContaining("具体工艺小时价格");
     }
 
-    private static ProcessRoutePricingService service(
-            DictProcessDetailMapper detailMapper,
-            DictProcessCategoryMapper categoryMapper) {
+    private static ProcessRoutePricingService service(DictProcessDetailMapper detailMapper) {
         ProcessRoutePricingService service = new ProcessRoutePricingService();
         ReflectionTestUtils.setField(service, "detailMapper", detailMapper);
-        ReflectionTestUtils.setField(service, "categoryMapper", categoryMapper);
         return service;
     }
 
@@ -135,23 +132,13 @@ class ProcessRoutePricingStage6Test {
         return row;
     }
 
-    private static DictProcessDetail detail(Long id, Long categoryId, String detailName, BigDecimal hourlyRate) {
+    private static DictProcessDetail detail(Long id, String processCode, String detailName, BigDecimal hourlyRate) {
         DictProcessDetail detail = new DictProcessDetail();
         detail.setId(id);
-        detail.setCategoryId(categoryId);
+        detail.setProcessCode(processCode);
         detail.setDetailName(detailName);
         detail.setHourlyRate(hourlyRate);
         detail.setEnabled(true);
         return detail;
-    }
-
-    private static DictProcessCategory category(Long id, String processCode, String categoryName, String hourlyRate) {
-        DictProcessCategory category = new DictProcessCategory();
-        category.setId(id);
-        category.setProcessCode(processCode);
-        category.setCategoryName(categoryName);
-        category.setHourlyRate(new BigDecimal(hourlyRate));
-        category.setEnabled(true);
-        return category;
     }
 }

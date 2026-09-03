@@ -57,7 +57,7 @@ class ProcessRouteBaselineStage1CharacterizationTest {
     }
 
     @Test
-    void pricingSaveUsesProcessDetailAndEffectiveHourlyRate() throws IOException {
+    void pricingSaveUsesQpoOwnedProcessDetailCodeAndHourlyRate() throws IOException {
         String submitReq = read(Path.of(
                 "src", "main", "java", "com", "machining", "quote", "dto", "QuoteSubmitReq.java"));
         String engineerService = read(service("EngineerService.java"));
@@ -93,19 +93,22 @@ class ProcessRouteBaselineStage1CharacterizationTest {
         assertThat(pricingService)
                 .contains(
                         "private DictProcessDetailMapper detailMapper;",
-                        "private DictProcessCategoryMapper categoryMapper;",
                         "Long processDetailId = row.getProcessDetailId();",
-                        "BigDecimal effectiveHourlyRate = effectiveHourlyRate(detail, category);",
+                        "BigDecimal effectiveHourlyRate = detail.getHourlyRate();",
+                        "if (effectiveHourlyRate == null)",
                         "double hourlyRate = number(effectiveHourlyRate);",
                         "double lineCost = unitWorkHours * hourlyRate;",
-                        "private BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory category)",
-                        "return Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);",
-                        "snapshot.put(\"processCode\", category.getProcessCode());",
-                        "snapshot.put(\"categoryName\", category.getCategoryName());",
+                        "snapshot.put(\"processCode\", detail.getProcessCode());",
+                        "snapshot.put(\"categoryName\", null);",
                         "snapshot.put(\"detailName\", detail.getDetailName());",
                         "snapshot.put(\"detailHourlyRate\", detail.getHourlyRate());",
-                        "snapshot.put(\"categoryHourlyRate\", number(category.getHourlyRate()));",
-                        "snapshot.put(\"hourlyRateSource\", detail.getHourlyRate() == null ? \"CATEGORY\" : \"DETAIL\");");
+                        "snapshot.put(\"categoryHourlyRate\", null);",
+                        "snapshot.put(\"hourlyRateSource\", \"DETAIL\");")
+                .doesNotContain(
+                        "DictProcessCategoryMapper",
+                        "effectiveHourlyRate(detail, category)",
+                        "categoryMapper.selectById",
+                        "Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO)");
         assertThat(engineerService)
                 .doesNotContain("getPrice1To5", "getPrice1000To3000", "getPrice3000Plus");
     }

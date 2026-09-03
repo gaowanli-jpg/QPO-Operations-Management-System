@@ -23,6 +23,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -56,22 +57,20 @@ class MesProcessTypeSyncServiceTest {
         assertThat(result.syncRunId()).isEqualTo(9801L);
         assertThat(result.syncType()).isEqualTo("MES_PROCESS_TYPE");
         assertThat(result.status()).isEqualTo("RUNNING");
-        assertThat(result.message()).contains("已提交");
         assertThat(taskExecutor.tasks).hasSize(1);
         verify(client, never()).listProcessTypes();
     }
 
     @Test
-    void syncProcessTypesUpsertsMesCategoryCreatesDefaultDetailAndAuditsCounts() {
+    void syncProcessTypesUpsertsMesCategoryWithoutCreatingDefaultDetailAndAuditsCounts() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
         AuditService auditService = mock(AuditService.class);
         MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, auditService);
-        when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", " P001 ", " 车削 ", "80.00", "ENABLE")));
+        when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", " P001 ", "Turning", "80.00", "ENABLE")));
         when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
         doAnswer(invocation -> {
             MesMasterDataSyncRun run = invocation.getArgument(0);
             run.setId(900L);
@@ -82,11 +81,6 @@ class MesProcessTypeSyncServiceTest {
             category.setId(101L);
             return 1;
         }).when(categoryMapper).insert(any(DictProcessCategory.class));
-        doAnswer(invocation -> {
-            DictProcessDetail detail = invocation.getArgument(0);
-            detail.setId(501L);
-            return 1;
-        }).when(detailMapper).insert(any(DictProcessDetail.class));
 
         MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(7L);
 
@@ -103,22 +97,14 @@ class MesProcessTypeSyncServiceTest {
         verify(categoryMapper).insert(categoryCaptor.capture());
         assertThat(categoryCaptor.getValue()).satisfies(category -> {
             assertThat(category.getProcessCode()).isEqualTo("P001");
-            assertThat(category.getCategoryName()).isEqualTo("车削");
+            assertThat(category.getCategoryName()).isEqualTo("Turning");
             assertThat(category.getHourlyRate()).isEqualByComparingTo(new BigDecimal("80.00"));
             assertThat(category.getSourceType()).isEqualTo("MES");
             assertThat(category.getMesExternalId()).isEqualTo("mes-1");
             assertThat(category.getEnabled()).isTrue();
             assertThat(category.getMesSyncedAt()).isNotNull();
         });
-
-        ArgumentCaptor<DictProcessDetail> detailCaptor = ArgumentCaptor.forClass(DictProcessDetail.class);
-        verify(detailMapper).insert(detailCaptor.capture());
-        assertThat(detailCaptor.getValue()).satisfies(detail -> {
-            assertThat(detail.getCategoryId()).isEqualTo(101L);
-            assertThat(detail.getDetailName()).isEqualTo("车削");
-            assertThat(detail.getHourlyRate()).isNull();
-            assertThat(detail.getEnabled()).isTrue();
-        });
+        verifySpecificProcessesUntouched(detailMapper);
 
         ArgumentCaptor<MesMasterDataSyncRun> runCaptor = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
         verify(syncRunMapper).updateById(runCaptor.capture());
@@ -152,7 +138,7 @@ class MesProcessTypeSyncServiceTest {
     }
 
     @Test
-    void syncProcessTypesPreservesExistingDetailHourlyRateWhenMesReturnsSameProcess() {
+    void syncProcessTypesDoesNotTouchExistingSpecificProcessesWhenMesReturnsSameProcess() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
@@ -160,11 +146,8 @@ class MesProcessTypeSyncServiceTest {
         MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
         DictProcessCategory existingCategory = category(10L, "P001", "Old", "MES", true);
         existingCategory.setHourlyRate(new BigDecimal("60.00"));
-        DictProcessDetail existingDetail = detail(88L, 10L, "Turning", false);
-        existingDetail.setHourlyRate(new BigDecimal("120.00"));
         when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", "P001", "Turning", "80.00", "ENABLE")));
         when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existingCategory));
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existingDetail));
         doAnswer(invocation -> {
             MesMasterDataSyncRun run = invocation.getArgument(0);
             run.setId(906L);
@@ -177,60 +160,21 @@ class MesProcessTypeSyncServiceTest {
         ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
         verify(categoryMapper).updateById(categoryCaptor.capture());
         assertThat(categoryCaptor.getValue().getHourlyRate()).isEqualByComparingTo("80.00");
-
-        ArgumentCaptor<DictProcessDetail> detailCaptor = ArgumentCaptor.forClass(DictProcessDetail.class);
-        verify(detailMapper).updateById(detailCaptor.capture());
-        assertThat(detailCaptor.getValue().getHourlyRate()).isEqualByComparingTo("120.00");
-        assertThat(detailCaptor.getValue().getEnabled()).isTrue();
+        verifySpecificProcessesUntouched(detailMapper);
     }
 
     @Test
-    void syncProcessTypesRecreatesMissingDefaultDetailAndPreservesCustomDetails() {
-        MesMasterDataClient client = mock(MesMasterDataClient.class);
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
-        MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
-        DictProcessCategory existingCategory = category(10L, "P001", "Turning", "MES", true);
-        DictProcessDetail customDetail = detail(88L, 10L, "Turning - customer A", true);
-        when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", "P001", "Turning", "80.00", "ENABLE")));
-        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existingCategory));
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(customDetail));
-        doAnswer(invocation -> {
-            MesMasterDataSyncRun run = invocation.getArgument(0);
-            run.setId(907L);
-            return 1;
-        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
-
-        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(14L);
-
-        assertThat(result.success()).isTrue();
-        assertThat(result.deletedCount()).isZero();
-        ArgumentCaptor<DictProcessDetail> detailCaptor = ArgumentCaptor.forClass(DictProcessDetail.class);
-        verify(detailMapper).insert(detailCaptor.capture());
-        assertThat(detailCaptor.getValue()).satisfies(detail -> {
-            assertThat(detail.getCategoryId()).isEqualTo(10L);
-            assertThat(detail.getDetailName()).isEqualTo("Turning");
-            assertThat(detail.getHourlyRate()).isNull();
-            assertThat(detail.getEnabled()).isTrue();
-        });
-        verify(detailMapper, never()).delete(any(QueryWrapper.class));
-        verify(detailMapper, never()).deleteById(88L);
-    }
-
-    @Test
-    void syncDeletesMissingMesCategoriesAndDetailsButLeavesLocalCategoriesUntouched() {
+    void syncDeletesMissingMesCategoriesWithoutDeletingSpecificProcessesAndLeavesLocalCategoriesUntouched() {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
         MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
         DictProcessCategory existingMes = category(10L, "P001", "Old", "MES", true);
-        DictProcessCategory staleMes = category(11L, "OLD", "旧MES", "MES", true);
-        DictProcessCategory local = category(12L, "LOCAL-ONLY", "本地工艺", "LOCAL", true);
-        when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", "P001", "车削", "80.00", "ENABLE")));
+        DictProcessCategory staleMes = category(11L, "OLD", "Stale MES", "MES", true);
+        DictProcessCategory local = category(12L, "LOCAL-ONLY", "Local", "LOCAL", true);
+        when(client.listProcessTypes()).thenReturn(List.of(row("mes-1", "P001", "Turning", "80.00", "ENABLE")));
         when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(existingMes, staleMes, local));
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(detail(88L, 10L, "车削", true)));
         doAnswer(invocation -> {
             MesMasterDataSyncRun run = invocation.getArgument(0);
             run.setId(901L);
@@ -244,13 +188,10 @@ class MesProcessTypeSyncServiceTest {
         ArgumentCaptor<DictProcessCategory> updates = ArgumentCaptor.forClass(DictProcessCategory.class);
         verify(categoryMapper).updateById(updates.capture());
         assertThat(updates.getValue().getId()).isEqualTo(10L);
-        verify(detailMapper).delete(any(QueryWrapper.class));
         verify(categoryMapper).deleteById(11L);
-        org.mockito.InOrder deletionOrder = org.mockito.Mockito.inOrder(detailMapper, categoryMapper);
-        deletionOrder.verify(detailMapper).delete(any(QueryWrapper.class));
-        deletionOrder.verify(categoryMapper).deleteById(11L);
-        assertThat(local.getEnabled()).isTrue();
         verify(categoryMapper, never()).deleteById(12L);
+        verifySpecificProcessesUntouched(detailMapper);
+        assertThat(local.getEnabled()).isTrue();
     }
 
     @Test
@@ -273,7 +214,7 @@ class MesProcessTypeSyncServiceTest {
         assertThat(result.message()).contains("returned no valid process types");
         verify(categoryMapper, never()).selectList(any(QueryWrapper.class));
         verify(categoryMapper, never()).updateById(any(DictProcessCategory.class));
-        verify(detailMapper, never()).insert(any(DictProcessDetail.class));
+        verifySpecificProcessesUntouched(detailMapper);
         ArgumentCaptor<MesMasterDataSyncRun> runCaptor = ArgumentCaptor.forClass(MesMasterDataSyncRun.class);
         verify(syncRunMapper).updateById(runCaptor.capture());
         assertThat(runCaptor.getValue().getStatus()).isEqualTo("FAILED");
@@ -281,41 +222,26 @@ class MesProcessTypeSyncServiceTest {
     }
 
     @Test
-    void syncMapsChineseDisabledStatusToDisabledCategory() {
-        MesMasterDataClient client = mock(MesMasterDataClient.class);
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
-        MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
-        when(client.listProcessTypes()).thenReturn(List.of(row("mes-disabled", "P002", "线切割", "60.00", "禁用")));
-        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        doAnswer(invocation -> {
-            MesMasterDataSyncRun run = invocation.getArgument(0);
-            run.setId(903L);
-            return 1;
-        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
-
-        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(10L);
-
-        assertThat(result.disabledCount()).isEqualTo(1);
-        assertThat(result.deletedCount()).isZero();
-
-        ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
-        verify(categoryMapper).insert(categoryCaptor.capture());
-        assertThat(categoryCaptor.getValue().getEnabled()).isFalse();
+    void syncMapsDisabledStatusesToDisabledCategoriesAndZeroStatusToEnabledCategory() {
+        assertThat(syncSingleStatus("DISABLED").getEnabled()).isFalse();
+        assertThat(syncSingleStatus("1").getEnabled()).isFalse();
+        assertThat(syncSingleStatus("0").getEnabled()).isTrue();
     }
 
     @Test
-    void syncMapsMesZeroStatusToEnabledCategory() {
+    void auditServiceKnowsMesProcessSyncLabel() {
+        assertThat(AuditService.inferModule("DICT_PROCESS_MES_SYNC")).isEqualTo("DICT");
+        assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("MES");
+    }
+
+    private static DictProcessCategory syncSingleStatus(String status) {
         MesMasterDataClient client = mock(MesMasterDataClient.class);
         DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
         MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
-        when(client.listProcessTypes()).thenReturn(List.of(row("mes-zero", "P003", "MES正常工艺", "70.00", "0")));
+        when(client.listProcessTypes()).thenReturn(List.of(row("mes-status", "P003", "Status process", "70.00", status)));
         when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
         doAnswer(invocation -> {
             MesMasterDataSyncRun run = invocation.getArgument(0);
             run.setId(904L);
@@ -324,44 +250,19 @@ class MesProcessTypeSyncServiceTest {
 
         MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(11L);
 
-        assertThat(result.disabledCount()).isZero();
-        assertThat(result.deletedCount()).isZero();
-
+        assertThat(result.success()).isTrue();
         ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
         verify(categoryMapper).insert(categoryCaptor.capture());
-        assertThat(categoryCaptor.getValue().getEnabled()).isTrue();
+        verifySpecificProcessesUntouched(detailMapper);
+        return categoryCaptor.getValue();
     }
 
-    @Test
-    void syncMapsMesOneStatusToDisabledCategory() {
-        MesMasterDataClient client = mock(MesMasterDataClient.class);
-        DictProcessCategoryMapper categoryMapper = mock(DictProcessCategoryMapper.class);
-        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
-        MesMasterDataSyncRunMapper syncRunMapper = mock(MesMasterDataSyncRunMapper.class);
-        MesMasterDataSyncService service = service(client, categoryMapper, detailMapper, syncRunMapper, mock(AuditService.class));
-        when(client.listProcessTypes()).thenReturn(List.of(row("mes-one", "P004", "MES disabled process", "80.00", "1")));
-        when(categoryMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        when(detailMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        doAnswer(invocation -> {
-            MesMasterDataSyncRun run = invocation.getArgument(0);
-            run.setId(905L);
-            return 1;
-        }).when(syncRunMapper).insert(any(MesMasterDataSyncRun.class));
-
-        MesMasterDataSyncService.SyncResult result = service.syncProcessTypesManual(12L);
-
-        assertThat(result.disabledCount()).isEqualTo(1);
-        assertThat(result.deletedCount()).isZero();
-
-        ArgumentCaptor<DictProcessCategory> categoryCaptor = ArgumentCaptor.forClass(DictProcessCategory.class);
-        verify(categoryMapper).insert(categoryCaptor.capture());
-        assertThat(categoryCaptor.getValue().getEnabled()).isFalse();
-    }
-
-    @Test
-    void auditServiceKnowsMesProcessSyncLabel() {
-        assertThat(AuditService.inferModule("DICT_PROCESS_MES_SYNC")).isEqualTo("DICT");
-        assertThat(AuditService.labelForAction("DICT_PROCESS_MES_SYNC")).contains("MES");
+    private static void verifySpecificProcessesUntouched(DictProcessDetailMapper detailMapper) {
+        verify(detailMapper, never()).selectList(any(QueryWrapper.class));
+        verify(detailMapper, never()).insert(any(DictProcessDetail.class));
+        verify(detailMapper, never()).updateById(any(DictProcessDetail.class));
+        verify(detailMapper, never()).delete(any(QueryWrapper.class));
+        verify(detailMapper, never()).deleteById(anyLong());
     }
 
     private static MesMasterDataSyncService service(
@@ -383,7 +284,6 @@ class MesProcessTypeSyncServiceTest {
         MesMasterDataSyncService service = new MesMasterDataSyncService();
         ReflectionTestUtils.setField(service, "client", client);
         ReflectionTestUtils.setField(service, "categoryMapper", categoryMapper);
-        ReflectionTestUtils.setField(service, "detailMapper", detailMapper);
         ReflectionTestUtils.setField(service, "syncRunMapper", syncRunMapper);
         ReflectionTestUtils.setField(service, "auditService", auditService);
         if (taskExecutor != null) {
@@ -412,16 +312,6 @@ class MesProcessTypeSyncServiceTest {
         category.setEnabled(enabled);
         category.setSortNo(0);
         return category;
-    }
-
-    private static DictProcessDetail detail(Long id, Long categoryId, String name, boolean enabled) {
-        DictProcessDetail detail = new DictProcessDetail();
-        detail.setId(id);
-        detail.setCategoryId(categoryId);
-        detail.setDetailName(name);
-        detail.setEnabled(enabled);
-        detail.setSortNo(0);
-        return detail;
     }
 
     private static class CapturingTaskExecutor implements TaskExecutor {

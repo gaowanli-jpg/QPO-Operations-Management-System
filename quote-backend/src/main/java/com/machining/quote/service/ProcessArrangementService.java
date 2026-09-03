@@ -11,12 +11,10 @@ import com.machining.quote.dto.ProcessArrangementTreeNodeDTO;
 import com.machining.quote.entity.DictExtraFeeItem;
 import com.machining.quote.entity.DictProcessArrangementItem;
 import com.machining.quote.entity.DictProcessArrangementNode;
-import com.machining.quote.entity.DictProcessCategory;
 import com.machining.quote.entity.DictProcessDetail;
 import com.machining.quote.mapper.DictExtraFeeItemMapper;
 import com.machining.quote.mapper.DictProcessArrangementItemMapper;
 import com.machining.quote.mapper.DictProcessArrangementNodeMapper;
-import com.machining.quote.mapper.DictProcessCategoryMapper;
 import com.machining.quote.mapper.DictProcessDetailMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -50,8 +48,6 @@ public class ProcessArrangementService {
     private DictProcessArrangementItemMapper itemMapper;
     @Autowired
     private DictProcessDetailMapper detailMapper;
-    @Autowired
-    private DictProcessCategoryMapper categoryMapper;
     @Autowired
     private DictExtraFeeItemMapper extraFeeItemMapper;
     @Autowired
@@ -281,13 +277,13 @@ public class ProcessArrangementService {
         if (hasText(keyword)) {
             String pattern = pattern(keyword);
             query.and(wrapper -> wrapper
+                    .apply("LOWER(process_code) LIKE {0}", pattern)
+                    .or()
                     .apply("LOWER(detail_name) LIKE {0}", pattern)
                     .or()
-                    .apply("LOWER(detail_remarks) LIKE {0}", pattern)
-                    .or()
-                    .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND (LOWER(c.process_code) LIKE {0} OR LOWER(c.category_name) LIKE {0}))", pattern));
+                    .apply("LOWER(detail_remarks) LIKE {0}", pattern));
         }
-        query.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
+        query.orderByAsc("sort_no").orderByAsc("id");
         return query;
     }
 
@@ -316,11 +312,6 @@ public class ProcessArrangementService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList());
-        Map<Long, DictProcessCategory> categoryById = categoriesById(detailById.values().stream()
-                .map(DictProcessDetail::getCategoryId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList());
         Map<Integer, DictExtraFeeItem> feeById = extraFeesById(items.stream()
                 .filter(item -> SOURCE_EXTRA.equals(item.getSourceType()))
                 .map(DictProcessArrangementItem::getFeeItemId)
@@ -335,7 +326,7 @@ public class ProcessArrangementService {
                     DictExtraFeeItem fee = SOURCE_EXTRA.equals(item.getSourceType())
                             ? feeById.get(item.getFeeItemId())
                             : null;
-                    return toItemTreeNode(item, detail, fee, categoryById);
+                    return toItemTreeNode(item, detail, fee);
                 })
                 .toList();
     }
@@ -344,13 +335,8 @@ public class ProcessArrangementService {
         if (details == null || details.isEmpty()) {
             return List.of();
         }
-        Map<Long, DictProcessCategory> categoryById = categoriesById(details.stream()
-                .map(DictProcessDetail::getCategoryId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList());
         return details.stream()
-                .map(detail -> toProcessOption(detail, categoryById.get(detail.getCategoryId())))
+                .map(this::toProcessOption)
                 .toList();
     }
 
@@ -371,12 +357,10 @@ public class ProcessArrangementService {
     private ProcessArrangementTreeNodeDTO toItemTreeNode(
             DictProcessArrangementItem item,
             DictProcessDetail detail,
-            DictExtraFeeItem fee,
-            Map<Long, DictProcessCategory> categoryById) {
+            DictExtraFeeItem fee) {
         ProcessArrangementTreeNodeDTO dto = toBareItemTreeNode(item);
         if (SOURCE_PROCESS.equals(item.getSourceType())) {
-            DictProcessCategory category = detail == null ? null : categoryById.get(detail.getCategoryId());
-            applyProcessFields(dto, detail, category);
+            applyProcessFields(dto, detail);
             return dto;
         }
         applyExtraFields(dto, fee);
@@ -399,12 +383,12 @@ public class ProcessArrangementService {
         return dto;
     }
 
-    private ProcessArrangementOptionDTO toProcessOption(DictProcessDetail detail, DictProcessCategory category) {
+    private ProcessArrangementOptionDTO toProcessOption(DictProcessDetail detail) {
         ProcessArrangementOptionDTO dto = new ProcessArrangementOptionDTO();
         dto.setOptionKey("process:" + detail.getId());
         dto.setSourceType(SOURCE_PROCESS);
         dto.setProcessDetailId(detail.getId());
-        applyProcessFields(dto, detail, category);
+        applyProcessFields(dto, detail);
         return dto;
     }
 
@@ -416,9 +400,9 @@ public class ProcessArrangementService {
         return dto;
     }
 
-    private void applyProcessFields(ProcessArrangementTreeNodeDTO dto, DictProcessDetail detail, DictProcessCategory category) {
+    private void applyProcessFields(ProcessArrangementTreeNodeDTO dto, DictProcessDetail detail) {
         ProcessArrangementOptionDTO option = new ProcessArrangementOptionDTO();
-        applyProcessFields(option, detail, category);
+        applyProcessFields(option, detail);
         dto.setProcessCategoryId(option.getProcessCategoryId());
         dto.setProcessCode(option.getProcessCode());
         dto.setCategoryName(option.getCategoryName());
@@ -435,25 +419,23 @@ public class ProcessArrangementService {
         dto.setLabel(option.getLabel());
     }
 
-    private void applyProcessFields(ProcessArrangementOptionDTO dto, DictProcessDetail detail, DictProcessCategory category) {
-        BigDecimal categoryRate = category == null ? BigDecimal.ZERO : Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);
-        BigDecimal effectiveRate = detail == null || detail.getHourlyRate() == null ? categoryRate : detail.getHourlyRate();
+    private void applyProcessFields(ProcessArrangementOptionDTO dto, DictProcessDetail detail) {
+        BigDecimal effectiveRate = detail == null ? BigDecimal.ZERO : Objects.requireNonNullElse(detail.getHourlyRate(), BigDecimal.ZERO);
         boolean detailEnabled = detail != null && Boolean.TRUE.equals(detail.getEnabled());
-        boolean categoryEnabled = category != null && Boolean.TRUE.equals(category.getEnabled());
         dto.setProcessCategoryId(detail == null ? null : detail.getCategoryId());
-        dto.setProcessCode(category == null ? null : category.getProcessCode());
-        dto.setCategoryName(category == null ? null : category.getCategoryName());
+        dto.setProcessCode(detail == null ? null : detail.getProcessCode());
+        dto.setCategoryName(null);
         dto.setDetailName(detail == null ? null : detail.getDetailName());
         dto.setCalcType("工时");
         dto.setDetailHourlyRate(detail == null ? null : detail.getHourlyRate());
-        dto.setCategoryHourlyRate(categoryRate);
+        dto.setCategoryHourlyRate(null);
         dto.setEffectiveHourlyRate(effectiveRate);
         dto.setHourlyRate(effectiveRate);
         dto.setDetailEnabled(detailEnabled);
-        dto.setCategoryEnabled(categoryEnabled);
-        dto.setEffectiveEnabled(detailEnabled && categoryEnabled);
-        dto.setEnabled(detailEnabled && categoryEnabled);
-        dto.setLabel(processLabel(detail, category, effectiveRate));
+        dto.setCategoryEnabled(null);
+        dto.setEffectiveEnabled(detailEnabled);
+        dto.setEnabled(detailEnabled);
+        dto.setLabel(processLabel(detail, effectiveRate));
     }
 
     private void applyExtraFields(ProcessArrangementTreeNodeDTO dto, DictExtraFeeItem item) {
@@ -475,13 +457,12 @@ public class ProcessArrangementService {
         dto.setLabel((item == null ? "已删除费用工艺" : item.getFeeName()) + "（非工时费用）");
     }
 
-    private String processLabel(DictProcessDetail detail, DictProcessCategory category, BigDecimal effectiveRate) {
+    private String processLabel(DictProcessDetail detail, BigDecimal effectiveRate) {
         if (detail == null) {
             return "已删除工时工艺";
         }
-        String processCode = category == null ? "-" : Objects.toString(category.getProcessCode(), "-");
-        String categoryName = category == null ? "-" : Objects.toString(category.getCategoryName(), "-");
-        return detail.getDetailName() + "（" + processCode + " / " + categoryName + " / "
+        String processCode = Objects.toString(detail.getProcessCode(), "-");
+        return detail.getDetailName() + "（" + processCode + " / "
                 + effectiveRate.setScale(2, RoundingMode.HALF_UP).toPlainString() + "元/小时）";
     }
 
@@ -656,13 +637,6 @@ public class ProcessArrangementService {
             return Map.of();
         }
         return toMap(detailMapper.selectBatchIds(ids), DictProcessDetail::getId);
-    }
-
-    private Map<Long, DictProcessCategory> categoriesById(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return Map.of();
-        }
-        return toMap(categoryMapper.selectBatchIds(ids), DictProcessCategory::getId);
     }
 
     private Map<Integer, DictExtraFeeItem> extraFeesById(List<Integer> ids) {

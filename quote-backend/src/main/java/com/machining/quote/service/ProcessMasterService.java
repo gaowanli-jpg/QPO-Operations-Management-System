@@ -19,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 @Service
 public class ProcessMasterService {
@@ -57,11 +56,8 @@ public class ProcessMasterService {
     public List<ProcessDetailDTO> listDetails(Long categoryId, Boolean enabledOnly) {
         QueryWrapper<DictProcessDetail> qw = new QueryWrapper<>();
         applyDetailFilters(qw, categoryId, enabledOnly, null);
-        qw.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
-        return detailMapper.selectList(qw).stream()
-                .map(this::toDetailDTO)
-                .filter(dto -> !Boolean.TRUE.equals(enabledOnly) || Boolean.TRUE.equals(dto.getEffectiveEnabled()))
-                .toList();
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        return detailMapper.selectList(qw).stream().map(this::toDetailDTO).toList();
     }
 
     public PageResult<ProcessDetailDTO> pageDetails(Long categoryId, Boolean enabledOnly, String keyword, Integer page, Integer pageSize) {
@@ -73,12 +69,9 @@ public class ProcessMasterService {
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
-        qw.orderByAsc("category_id").orderByAsc("sort_no").orderByAsc("id");
+        qw.orderByAsc("sort_no").orderByAsc("id");
         qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
-        List<ProcessDetailDTO> records = detailMapper.selectList(qw).stream()
-                .map(this::toDetailDTO)
-                .toList();
-        return PageResult.of(records, total, safePage, safePageSize);
+        return PageResult.of(detailMapper.selectList(qw).stream().map(this::toDetailDTO).toList(), total, safePage, safePageSize);
     }
 
     private void applyCategoryFilters(QueryWrapper<DictProcessCategory> qw, Boolean enabledOnly, String keyword) {
@@ -104,19 +97,18 @@ public class ProcessMasterService {
             qw.eq("category_id", categoryId);
         }
         if (Boolean.TRUE.equals(enabledOnly)) {
-            qw.eq("enabled", true)
-                    .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND c.enabled = TRUE)");
+            qw.eq("enabled", true);
         }
         if (!hasText(keyword)) {
             return;
         }
         String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
         qw.and(wrapper -> wrapper
+                .apply("LOWER(process_code) LIKE {0}", pattern)
+                .or()
                 .apply("LOWER(detail_name) LIKE {0}", pattern)
                 .or()
-                .apply("LOWER(detail_remarks) LIKE {0}", pattern)
-                .or()
-                .apply("EXISTS (SELECT 1 FROM dict_process_category c WHERE c.id = dict_process_detail.category_id AND (LOWER(c.process_code) LIKE {0} OR LOWER(c.category_name) LIKE {0}))", pattern));
+                .apply("LOWER(detail_remarks) LIKE {0}", pattern));
     }
 
     @Transactional
@@ -153,12 +145,9 @@ public class ProcessMasterService {
     @Transactional
     public ProcessDetailDTO saveDetail(Long id, ProcessDetailSaveReq req) {
         DictProcessDetail before = id == null ? null : requireDetail(id);
-        DictProcessCategory beforeCategory = before == null ? null : requireCategory(before.getCategoryId());
-        validateMesProcessDetailIdentityUnchanged(before, beforeCategory, req);
         DictProcessDetail entity = normalizeDetail(req, before);
         entity.setId(id);
-        DictProcessCategory category = requireCategory(entity.getCategoryId());
-        ensureDetailNameUnique(entity.getCategoryId(), entity.getDetailName(), id);
+        ensureDetailCodeUnique(entity.getProcessCode(), id);
         if (id == null) {
             detailMapper.insert(entity);
             auditService.record(
@@ -166,7 +155,7 @@ public class ProcessMasterService {
                     "dict_process_detail",
                     entity.getId(),
                     null,
-                    detailAuditSummary(entity, category)
+                    detailAuditSummary(entity)
             );
         } else {
             detailMapper.updateById(entity);
@@ -174,23 +163,22 @@ public class ProcessMasterService {
                     "DICT_PROCESS_DETAIL_UPDATE",
                     "dict_process_detail",
                     id,
-                    detailAuditSummary(before, beforeCategory),
-                    detailAuditSummary(entity, category)
+                    detailAuditSummary(before),
+                    detailAuditSummary(entity)
             );
         }
-        return toDetailDTO(entity, category);
+        return toDetailDTO(entity);
     }
 
     @Transactional
     public void deleteDetail(Long id) {
         DictProcessDetail before = requireDetail(id);
-        DictProcessCategory category = requireCategory(before.getCategoryId());
         detailMapper.deleteById(id);
         auditService.record(
                 "DICT_PROCESS_DETAIL_DELETE",
                 "dict_process_detail",
                 id,
-                detailAuditSummary(before, category),
+                detailAuditSummary(before),
                 null
         );
     }
@@ -226,37 +214,34 @@ public class ProcessMasterService {
         if (req == null) {
             throw new IllegalArgumentException("具体工艺请求不能为空");
         }
-        Long categoryId = req.getCategoryId() == null && before != null ? before.getCategoryId() : req.getCategoryId();
-        if (categoryId == null) {
-            throw new IllegalArgumentException("工艺大类不能为空");
-        }
         DictProcessDetail entity = new DictProcessDetail();
-        entity.setCategoryId(categoryId);
+        entity.setCategoryId(null);
+        String requestedCode = normalizeProcessDetailCode(req.getProcessCode());
+        String existingCode = before == null ? null : normalizeProcessDetailCode(before.getProcessCode());
+        if (before != null && requestedCode.isBlank()) {
+            requestedCode = existingCode;
+        }
+        if (requestedCode.isBlank()) {
+            throw new IllegalArgumentException("工艺编码不能为空");
+        }
+        if (existingCode != null && !existingCode.isBlank() && !existingCode.equals(requestedCode)) {
+            throw new IllegalArgumentException("工艺编码是具体工艺稳定身份，已有编码不允许修改");
+        }
+        entity.setProcessCode(existingCode == null || existingCode.isBlank() ? requestedCode : existingCode);
+
         BigDecimal hourlyRate = req.getHourlyRate();
-        if (hourlyRate != null && hourlyRate.compareTo(BigDecimal.ZERO) < 0) {
+        if (hourlyRate == null) {
+            throw new IllegalArgumentException("具体小时价格不能为空");
+        }
+        if (hourlyRate.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("具体小时价格不能小于 0");
         }
         entity.setHourlyRate(hourlyRate);
         entity.setDetailName(limit(required(req.getDetailName(), "具体工艺名称"), "具体工艺名称", 120));
         entity.setDetailRemarks(limit(optional(req.getDetailRemarks()), "具体备注", 500));
         entity.setEnabled(req.getEnabled() == null ? before == null || Boolean.TRUE.equals(before.getEnabled()) : req.getEnabled());
-        entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : Objects.requireNonNullElse(before.getSortNo(), 0) : req.getSortNo());
+        entity.setSortNo(req.getSortNo() == null ? before == null ? 0 : nullToZero(before.getSortNo()) : req.getSortNo());
         return entity;
-    }
-
-    private void validateMesProcessDetailIdentityUnchanged(
-            DictProcessDetail before,
-            DictProcessCategory beforeCategory,
-            ProcessDetailSaveReq req) {
-        if (before == null || !isMesSource(beforeCategory == null ? null : beforeCategory.getSourceType()) || req == null) {
-            return;
-        }
-        Long requestedCategoryId = req.getCategoryId() == null ? before.getCategoryId() : req.getCategoryId();
-        String requestedDetailName = optional(req.getDetailName());
-        if (!Objects.equals(before.getCategoryId(), requestedCategoryId)
-                || !Objects.equals(optional(before.getDetailName()), requestedDetailName)) {
-            throw new IllegalArgumentException("MES process detail identity fields are read-only in QPO; update MES and sync again");
-        }
     }
 
     private DictProcessCategory requireCategory(Long id) {
@@ -286,14 +271,14 @@ public class ProcessMasterService {
         }
     }
 
-    private void ensureDetailNameUnique(Long categoryId, String detailName, Long id) {
+    private void ensureDetailCodeUnique(String processCode, Long id) {
         QueryWrapper<DictProcessDetail> qw = new QueryWrapper<>();
-        qw.eq("category_id", categoryId).eq("detail_name", detailName);
+        qw.eq("process_code", processCode);
         if (id != null) {
             qw.ne("id", id);
         }
         if (detailMapper.selectCount(qw) > 0) {
-            throw new IllegalArgumentException("同一工艺大类下具体工艺名称已存在");
+            throw new IllegalArgumentException("工艺编码已存在");
         }
     }
 
@@ -315,48 +300,25 @@ public class ProcessMasterService {
     }
 
     private ProcessDetailDTO toDetailDTO(DictProcessDetail entity) {
-        DictProcessCategory category = categoryMapper.selectById(entity.getCategoryId());
-        return toDetailDTO(entity, category);
-    }
-
-    private ProcessDetailDTO toDetailDTO(DictProcessDetail entity, DictProcessCategory category) {
         ProcessDetailDTO dto = new ProcessDetailDTO();
         dto.setId(entity.getId());
         dto.setCategoryId(entity.getCategoryId());
+        dto.setProcessCode(entity.getProcessCode());
+        dto.setCategoryName(null);
         dto.setDetailName(entity.getDetailName());
         dto.setDetailRemarks(entity.getDetailRemarks());
         dto.setEnabled(entity.getEnabled());
         dto.setDetailEnabled(entity.getEnabled());
-        dto.setCategoryEnabled(category != null && Boolean.TRUE.equals(category.getEnabled()));
-        dto.setEffectiveEnabled(effectiveEnabled(entity, category));
+        dto.setCategoryEnabled(null);
+        dto.setEffectiveEnabled(Boolean.TRUE.equals(entity.getEnabled()));
         dto.setSortNo(entity.getSortNo());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
-        if (category != null) {
-            dto.setProcessCode(category.getProcessCode());
-            dto.setCategoryName(category.getCategoryName());
-            dto.setCategoryHourlyRate(category.getHourlyRate());
-        }
+        dto.setCategoryHourlyRate(null);
         dto.setDetailHourlyRate(entity.getHourlyRate());
-        BigDecimal effectiveHourlyRate = effectiveHourlyRate(entity, category);
-        dto.setEffectiveHourlyRate(effectiveHourlyRate);
-        dto.setHourlyRate(effectiveHourlyRate);
+        dto.setEffectiveHourlyRate(entity.getHourlyRate());
+        dto.setHourlyRate(entity.getHourlyRate());
         return dto;
-    }
-
-    private BigDecimal effectiveHourlyRate(DictProcessDetail detail, DictProcessCategory category) {
-        BigDecimal detailRate = detail == null ? null : detail.getHourlyRate();
-        if (detailRate != null) {
-            return detailRate;
-        }
-        return category == null ? BigDecimal.ZERO : Objects.requireNonNullElse(category.getHourlyRate(), BigDecimal.ZERO);
-    }
-
-    private boolean effectiveEnabled(DictProcessDetail detail, DictProcessCategory category) {
-        return detail != null
-                && Boolean.TRUE.equals(detail.getEnabled())
-                && category != null
-                && Boolean.TRUE.equals(category.getEnabled());
     }
 
     private Map<String, Object> categoryAuditSummary(DictProcessCategory entity) {
@@ -369,20 +331,14 @@ public class ProcessMasterService {
         return summary;
     }
 
-    private Map<String, Object> detailAuditSummary(DictProcessDetail entity, DictProcessCategory category) {
+    private Map<String, Object> detailAuditSummary(DictProcessDetail entity) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("id", entity.getId());
         summary.put("categoryId", entity.getCategoryId());
-        summary.put("processCode", category == null ? null : category.getProcessCode());
-        summary.put("categoryName", category == null ? null : category.getCategoryName());
+        summary.put("processCode", entity.getProcessCode());
         summary.put("detailName", entity.getDetailName());
-        summary.put("detailHourlyRate", entity.getHourlyRate());
-        summary.put("categoryHourlyRate", category == null ? null : category.getHourlyRate());
-        summary.put("effectiveHourlyRate", effectiveHourlyRate(entity, category));
+        summary.put("hourlyRate", entity.getHourlyRate());
         summary.put("enabled", entity.getEnabled());
-        summary.put("detailEnabled", entity.getEnabled());
-        summary.put("categoryEnabled", category != null && Boolean.TRUE.equals(category.getEnabled()));
-        summary.put("effectiveEnabled", effectiveEnabled(entity, category));
         return summary;
     }
 
@@ -422,6 +378,18 @@ public class ProcessMasterService {
 
     private String upper(String value, String label, int maxLength) {
         return limit(value, label, maxLength).toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeProcessDetailCode(String value) {
+        String normalized = optional(value).toUpperCase(Locale.ROOT);
+        if (!normalized.isBlank() && !normalized.matches("[A-Z0-9_-]{1,80}")) {
+            throw new IllegalArgumentException("工艺编码只允许 1-80 位大写字母、数字、下划线或中划线");
+        }
+        return normalized;
+    }
+
+    private int nullToZero(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private boolean isMesSource(String value) {

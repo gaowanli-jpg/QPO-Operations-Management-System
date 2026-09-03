@@ -52,7 +52,7 @@ describe('engineering option picker remote paging mode', () => {
     expect(source).toContain('selectedProcessArrangementPathLabel')
     expect(source).toContain('collectProcessArrangementPickerFilter')
     expect(source).toContain('feeItemIds: pickerFilter.feeItemIds.join(\',\')')
-    expect(source).toContain('label="具体小时价格"')
+    expect(source).toContain('label="小时价格"')
     expect(source).toContain('saveInlineProcessRate(row)')
     expect(source).toContain('label="所在层级"')
   })
