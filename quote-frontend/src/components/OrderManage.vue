@@ -573,6 +573,7 @@
       v-model:excel-file="orderItemAppendExcelFile"
       v-model:files="orderItemAppendDrawingFiles"
       v-model:version-files="orderItemAppendVersionDrawingFiles"
+      :current-items="detailItemList"
       :order-label="orderDetail?.orderInfo?.rfqNo || '-'"
       :customer-name="orderDetail?.orderInfo?.customerName || '-'"
       :result="orderItemAppendResult"

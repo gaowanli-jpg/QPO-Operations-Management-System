@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const source = () => readFileSync(resolve(currentDir, 'components', 'OrderManage.vue'), 'utf8')
 const pickerSource = () => readFileSync(resolve(currentDir, 'components', 'OrderPickerDialog.vue'), 'utf8')
+const appendDialogSource = () => readFileSync(resolve(currentDir, 'components', 'order', 'OrderItemAppendDialog.vue'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('order item maintenance detail table', () => {
   test('adds editable maintenance actions with dedicated order update permission', () => {
@@ -63,6 +64,27 @@ describe('order item maintenance detail table', () => {
     expect(component).toContain("formData.append('excelFile', orderItemAppendExcelFile.value)")
     expect(component).toContain("formData.append('drawings', file)")
     expect(component).toContain("formData.append('versionDrawings', file)")
+  })
+
+  test('append dialog mirrors the clean supplemental drawing upload layout', () => {
+    const component = source()
+    const dialog = appendDialogSource()
+
+    expect(component).toContain(':current-items="detailItemList"')
+    expect(dialog).toContain('currentItems: { type: Array, default: () => [] }')
+    expect(dialog).toContain('<section class="erp-dialog-section append-current-items">')
+    expect(dialog).toContain('当前订单零件')
+    expect(dialog).toContain('class="erp-upload-surface append-upload-surface"')
+    expect(dialog).toContain('class="append-upload-dual-grid"')
+    expect(dialog).toContain('<el-icon class="el-icon--upload append-upload-icon"><upload-filled /></el-icon>')
+    expect(dialog).toContain('class="append-upload-actions import-upload-button-stack"')
+    expect(dialog).toContain('<input ref="partFileInput" type="file" accept=".pdf" multiple class="hidden-input"')
+    expect(dialog).toContain('<input ref="partFolderInput" type="file" webkitdirectory directory multiple class="hidden-input"')
+    expect(dialog).toContain('<input ref="versionFileInput" type="file" accept=".pdf" multiple class="hidden-input"')
+    expect(dialog).toContain('<input ref="versionFolderInput" type="file" webkitdirectory directory multiple class="hidden-input"')
+    expect(dialog).toContain('.append-dialog :deep(.hidden-input)')
+    expect(dialog).not.toContain("h('button'")
+    expect(dialog).not.toContain('h(UploadFilled')
   })
 
   test('supplemental picker scopes include appended part status ranges', () => {
