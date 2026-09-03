@@ -3,6 +3,7 @@ package com.machining.quote;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.machining.quote.dto.mes.MesProductionDispatchReq;
 import com.machining.quote.dto.mes.MesProductionDispatchResp;
+import com.machining.quote.dto.mes.MesProductionProcessRouteDTO;
 import com.machining.quote.entity.MesIntegrationBatch;
 import com.machining.quote.entity.MesProductionBatchItem;
 import com.machining.quote.entity.OrderDeliveryTicketAllocation;
@@ -134,6 +135,55 @@ class MesProductionBatchDispatchIntegrationTest {
         assertThat(row.getDemandQty()).isEqualTo(3);
         assertThat(row.getBom()).isEmpty();
         assertThat(row.getProcessRoute()).isEmpty();
+    }
+
+    @Test
+    void dispatchesExtraFeeProcessRowsAsMesProcessRoutesFromLockedSnapshot() {
+        Fixture fixture = fixture();
+        OrderDeliveryTicketAllocation allocation = allocation(17, 117, "MAT-WITH-ROUTE", 2, 9817L);
+        allocation.setSourceOrderId(3817L);
+        allocation.setProcessRoute(List.of(
+                Map.of(
+                        "routeType", "PROCESS",
+                        "sourceType", "process",
+                        "sortNo", 10,
+                        "processCode", "CNC_FINISH",
+                        "detailName", "CNC finish",
+                        "unitWorkHours", 1.5),
+                Map.of(
+                        "routeType", "FEE",
+                        "sourceType", "extra",
+                        "sortNo", 20,
+                        "feeCode", "SURFACE_TREATMENT",
+                        "feeName", "Surface treatment",
+                        "processName", "Surface treatment",
+                        "inputVal", 18.0,
+                        "lineCost", 18.0)));
+        when(fixture.allocationMapper.selectById(17)).thenReturn(allocation);
+        when(fixture.salesItemMapper.selectByIdForUpdate(9817L)).thenReturn(salesItem(9817L, 170, 3817L, null));
+        when(fixture.headerMapper.selectById(3817L)).thenReturn(header(3817L, "SO-DOC-ROUTE"));
+        mockReserve(fixture, "QPO-DEM-ROUTE", List.of(line(17, "QPO-DEML-ROUTE", "MAT-WITH-ROUTE")));
+        when(fixture.client.dispatch(any())).thenReturn(success("QPO-DEM-ROUTE",
+                item("SO-DOC-ROUTE", "170", "MAT-WITH-ROUTE", "PLAN-ROUTE")));
+
+        fixture.service.dispatchBatch(List.of(17), 9917L);
+
+        ArgumentCaptor<MesProductionDispatchReq> requestCaptor = ArgumentCaptor.forClass(MesProductionDispatchReq.class);
+        verify(fixture.client).dispatch(requestCaptor.capture());
+        List<MesProductionProcessRouteDTO> routes = requestCaptor.getValue().getItems().get(0).getProcessRoute();
+        assertThat(routes).hasSize(2);
+        assertThat(routes.get(0)).satisfies(route -> {
+            assertThat(route.getProgramNum()).isEqualTo("10");
+            assertThat(route.getProcessTypeCode()).isEqualTo("CNC_FINISH");
+            assertThat(route.getProcessName()).isEqualTo("CNC finish");
+            assertThat(route.getWorkHour()).isEqualByComparingTo("1.5");
+        });
+        assertThat(routes.get(1)).satisfies(route -> {
+            assertThat(route.getProgramNum()).isEqualTo("20");
+            assertThat(route.getProcessTypeCode()).isEqualTo("SURFACE_TREATMENT");
+            assertThat(route.getProcessName()).isEqualTo("Surface treatment");
+            assertThat(route.getWorkHour()).isNull();
+        });
     }
 
     @Test

@@ -1630,13 +1630,17 @@ public class EngineerService {
 
     private Map<String, Object> extraFeeRouteSnapshot(QuoteSubmitReq.ProcessSubmitDTO process, double lineCost) {
         Map<String, Object> row = new LinkedHashMap<>();
+        String feeCode = stringValue(process.getFeeCode());
+        String processName = process.getProcessName();
         row.put("routeType", "FEE");
         row.put("sourceType", "extra");
         row.put("sortNo", process.getSortNo());
         row.put("feeItemId", process.getFeeItemId());
-        row.put("feeCode", stringValue(process.getFeeCode()));
-        row.put("feeName", process.getProcessName());
-        row.put("processName", process.getProcessName());
+        row.put("feeCode", feeCode);
+        row.put("feeName", processName);
+        row.put("processCode", feeCode);
+        row.put("detailName", processName);
+        row.put("processName", processName);
         row.put("calcType", "非工时费用");
         row.put("inputVal", lineCost);
         row.put("unitRate", null);

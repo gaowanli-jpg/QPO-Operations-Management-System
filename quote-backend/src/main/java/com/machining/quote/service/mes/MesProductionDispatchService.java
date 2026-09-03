@@ -697,17 +697,23 @@ public class MesProductionDispatchService {
     private List<MesProductionProcessRouteDTO> buildProcessRoute(Object processRoute) {
         List<MesProductionProcessRouteDTO> result = new ArrayList<>();
         for (Map<String, Object> row : normalizeProcessRouteRows(processRoute)) {
-            if (isFeeRow(row)) {
-                continue;
-            }
-            String processCode = text(row.get("processCode"));
-            String categoryName = text(row.get("categoryName"));
-            String detailName = firstNonBlank(
+            boolean feeRow = isFeeRow(row);
+            String processCode = feeRow
+                    ? firstNonBlank(text(row.get("processCode")), text(row.get("feeCode")))
+                    : text(row.get("processCode"));
+            String categoryName = feeRow ? null : text(row.get("categoryName"));
+            String detailName = feeRow
+                    ? firstNonBlank(
+                    text(row.get("detailName")),
+                    text(row.get("processName")),
+                    text(row.get("feeName")),
+                    text(row.get("name")))
+                    : firstNonBlank(
                     text(row.get("detailName")),
                     text(row.get("processName")),
                     text(row.get("name")),
                     text(row.get("categoryName")));
-            Double unitWorkHours = firstNumber(row.get("unitWorkHours"), row.get("inputVal"));
+            Double unitWorkHours = feeRow ? null : firstNumber(row.get("unitWorkHours"), row.get("inputVal"));
             Integer sortNo = integer(row.get("sortNo"));
             String processDescription = firstNonBlank(text(row.get("description")), text(row.get("remark")));
             if (isBlank(processCode) && isBlank(categoryName) && isBlank(detailName)

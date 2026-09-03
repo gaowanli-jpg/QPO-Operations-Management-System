@@ -327,6 +327,52 @@ class EngineerServiceMaterialCalculationTests {
 
     @Test
     @SuppressWarnings("unchecked")
+    void saveCalculatedQuoteGivesExtraFeeProcessRowsAStableRouteCodeSnapshot() throws Exception {
+        EngineerService service = new EngineerService();
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        when(materialMapper.selectList(any()))
+                .thenReturn(List.of(material("MAT-ROUTE", "Route Material", 1L, "Steel", 1.0, 100.0)));
+        ReflectionTestUtils.setField(service, "materialMapper", materialMapper);
+        setOptionalField(service, "materialPriceSpecMapper", specMapper(100.0, null, null, null));
+        setOptionalField(service, "materialTypeMapper", materialTypeMapper());
+        ReflectionTestUtils.setField(service, "pricingFeeCalculator", emptyPricingCalculator());
+        ReflectionTestUtils.setField(service, "extraFeeItemMapper", emptyExtraFeeMapper());
+        ReflectionTestUtils.setField(service, "assemblyRelationMapper", mock(ItemAssemblyRelationMapper.class));
+        ReflectionTestUtils.setField(service, "itemMapper", mock(ItemQuoteVersionMapper.class));
+
+        ItemQuoteVersion item = new ItemQuoteVersion();
+        item.setId(1003);
+        item.setRfqId(2003);
+        item.setPartNo("P-ROUTE");
+        item.setQty(1);
+        Map<String, Object> materialData = new LinkedHashMap<>();
+        materialData.put("materialCode", "MAT-ROUTE");
+        materialData.put("priceSpecCode", "SPEC_1");
+        materialData.put("shape", "PLATE");
+        materialData.put("weight", 1.0);
+        com.machining.quote.dto.QuoteSubmitReq.ProcessSubmitDTO extra = new com.machining.quote.dto.QuoteSubmitReq.ProcessSubmitDTO();
+        extra.setSortNo(20);
+        extra.setSourceType("extra");
+        extra.setFeeItemId(8);
+        extra.setFeeCode("SURFACE_TREATMENT");
+        extra.setProcessName("Surface treatment");
+        extra.setInputVal(18.0);
+
+        ReflectionTestUtils.invokeMethod(service, "saveCalculatedQuote", item, materialData, List.of(extra), 0.5);
+
+        List<Map<String, Object>> routes = (List<Map<String, Object>>) item.getProcessRoute();
+        assertThat(routes).singleElement().satisfies(route -> assertThat(route)
+                .containsEntry("routeType", "FEE")
+                .containsEntry("sourceType", "extra")
+                .containsEntry("feeCode", "SURFACE_TREATMENT")
+                .containsEntry("feeName", "Surface treatment")
+                .containsEntry("processCode", "SURFACE_TREATMENT")
+                .containsEntry("detailName", "Surface treatment")
+                .containsEntry("processName", "Surface treatment"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void saveCalculatedQuoteAddsRatesWithinEachMarkupFeeCategory() throws Exception {
         EngineerService service = new EngineerService();
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
