@@ -332,6 +332,20 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="图纸预览" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.drawingUrl"
+                    type="primary"
+                    size="small"
+                    plain
+                    @click.stop="openPdfPreview(row.drawingUrl, row.partNo)"
+                  >
+                    预览
+                  </el-button>
+                  <el-tag v-else type="info" size="small">无图</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="可选状态" width="150" align="center">
                 <template #default="{ row }">
                   <el-tag v-if="canSelectItem(row)" type="success" size="small">可提单</el-tag>
@@ -822,11 +836,30 @@
       :locked-customer-code="selectedCustomerCode"
       @select="appendToSalesOrder"
     />
+
+    <el-dialog
+      v-model="pdfVisible"
+      :title="`图纸预览：${pdfTitle}`"
+      width="75%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div v-loading="!pdfLoaded" class="pdf-frame-shell">
+        <iframe
+          v-if="currentPdfSrc"
+          :src="currentPdfSrc"
+          width="100%"
+          height="100%"
+          frameborder="0"
+          @load="pdfLoaded = true"
+        ></iframe>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentChecked, UploadFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -851,6 +884,11 @@ import {
   CLIENT_PAGE_SIZES,
   DEFAULT_CLIENT_PAGE_SIZE
 } from '../utils/clientPagination'
+import {
+  createAuthenticatedObjectUrl,
+  readFileErrorMessage,
+  revokeObjectUrl
+} from '../api'
 import { usePendingAction } from '../composables/usePendingAction'
 import { applyReleaseItemDataReplacementResult } from './marketReleaseDataReplacement'
 import {
@@ -884,6 +922,10 @@ const replacementVersionDrawingFiles = ref([])
 const replacementDrawingResult = ref(null)
 const clientSkippedReplacementFiles = ref([])
 const releaseResult = ref(null)
+const pdfVisible = ref(false)
+const pdfTitle = ref('')
+const pdfLoaded = ref(false)
+const currentPdfSrc = ref('')
 
 const loading = ref(false)
 let syncingReleaseItemSelection = false
@@ -1846,6 +1888,27 @@ const saveInternalTargetLeadTime = async (row) => {
   })
 }
 
+const cleanupPdfSrc = () => {
+  revokeObjectUrl(currentPdfSrc.value)
+  currentPdfSrc.value = ''
+}
+
+const openPdfPreview = async (url, partNo) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  pdfTitle.value = partNo || '未命名图纸'
+  pdfLoaded.value = false
+  cleanupPdfSrc()
+  pdfVisible.value = true
+  try {
+    currentPdfSrc.value = await createAuthenticatedObjectUrl(url)
+  } catch (error) {
+    pdfVisible.value = false
+    ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+  }
+}
+
 const openAppendSalesOrderPicker = () => {
   if (selectedRows.value.length === 0) return ElMessage.warning('请至少选择一个通过零件。')
   if (selectedRowsWithUnsavedOrderFields.value.length > 0) {
@@ -2010,6 +2073,17 @@ const statusTagType = (status) => {
 const sourceTypeLabel = () => {
   return 'RFQ'
 }
+
+watch(pdfVisible, (visible) => {
+  if (!visible) {
+    pdfLoaded.value = false
+    cleanupPdfSrc()
+  }
+})
+
+onBeforeUnmount(() => {
+  cleanupPdfSrc()
+})
 
 </script>
 
@@ -2401,6 +2475,11 @@ const sourceTypeLabel = () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.pdf-frame-shell {
+  width: 100%;
+  height: 70vh;
 }
 
 .drawing-replace-upload {
