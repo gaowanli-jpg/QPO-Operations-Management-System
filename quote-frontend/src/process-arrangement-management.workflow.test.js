@@ -52,6 +52,17 @@ describe('process arrangement management page', () => {
     expect(materialProcess).toContain('@click="placeSelectedArrangementItems"')
   })
 
+  test('arrangement tree refresh reveals the changed branch without expanding every tree', () => {
+    expect(materialProcess).not.toContain('default-expand-all')
+    expect(materialProcess).toContain('ref="processArrangementTreeRef"')
+    expect(materialProcess).toContain(':default-expanded-keys="processArrangementExpandedKeys"')
+    expect(materialProcess).toContain('@node-expand="handleArrangementNodeExpand"')
+    expect(materialProcess).toContain('@node-collapse="handleArrangementNodeCollapse"')
+    expect(materialProcess).toContain('setCurrentKey?.(selectedArrangementNode.value?.treeKey ?? null, false)')
+    expect(materialProcess).toContain('loadProcessArrangement({ revealNodeId })')
+    expect(materialProcess).toContain('loadProcessArrangement({ revealNodeId: selectedArrangementNode.value?.nodeId ?? null })')
+  })
+
   test('arrangement management actions reuse process manage permission and confirm cascade deletion', () => {
     expect(materialProcess).toContain("activeTab === 'processArrangement'")
     expect(materialProcess).toContain("v-permission=\"'engineer:dict:process-manage'\"")

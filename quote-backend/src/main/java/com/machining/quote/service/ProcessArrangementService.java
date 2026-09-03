@@ -328,7 +328,15 @@ public class ProcessArrangementService {
                 .distinct()
                 .toList());
         return items.stream()
-                .map(item -> toItemTreeNode(item, detailById.get(item.getProcessDetailId()), feeById.get(item.getFeeItemId()), categoryById))
+                .map(item -> {
+                    DictProcessDetail detail = SOURCE_PROCESS.equals(item.getSourceType())
+                            ? detailById.get(item.getProcessDetailId())
+                            : null;
+                    DictExtraFeeItem fee = SOURCE_EXTRA.equals(item.getSourceType())
+                            ? feeById.get(item.getFeeItemId())
+                            : null;
+                    return toItemTreeNode(item, detail, fee, categoryById);
+                })
                 .toList();
     }
 

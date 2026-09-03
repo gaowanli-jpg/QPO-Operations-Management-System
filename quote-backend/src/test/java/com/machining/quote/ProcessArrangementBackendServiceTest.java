@@ -111,6 +111,53 @@ class ProcessArrangementBackendServiceTest {
     }
 
     @Test
+    void treeBuildsProcessOnlyLeavesWithoutNonHourlyMappings() {
+        Fixture fixture = fixture();
+        DictProcessArrangementNode root = node(1L, null, "CNC", 1);
+        DictProcessArrangementItem processLeaf = processItem(10L, 1L, 100L, 1);
+        when(fixture.nodeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(root));
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(processLeaf));
+        when(fixture.detailMapper.selectBatchIds(List.of(100L))).thenReturn(List.of(detail(100L, 7L, "精铣", true)));
+        when(fixture.categoryMapper.selectBatchIds(List.of(7L))).thenReturn(List.of(category(7L, true)));
+
+        var tree = fixture.service.listTree();
+
+        assertThat(tree).singleElement().satisfies(rootRow -> {
+            assertThat(rootRow.getLabel()).isEqualTo("CNC");
+            assertThat(rootRow.getChildren()).singleElement().satisfies(leaf -> {
+                assertThat(leaf.getNodeType()).isEqualTo("item");
+                assertThat(leaf.getSourceType()).isEqualTo("process");
+                assertThat(leaf.getProcessDetailId()).isEqualTo(100L);
+                assertThat(leaf.getLabel()).contains("精铣");
+            });
+        });
+        verify(fixture.auditService, never()).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void treeBuildsExtraOnlyLeavesWithoutHourlyMappings() {
+        Fixture fixture = fixture();
+        DictProcessArrangementNode root = node(1L, null, "外协", 1);
+        DictProcessArrangementItem extraLeaf = extraItem(10L, 1L, 5, 1);
+        when(fixture.nodeMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(root));
+        when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(extraLeaf));
+        when(fixture.extraFeeItemMapper.selectBatchIds(List.of(5))).thenReturn(List.of(extraFee(5, "OUT", "外协加工", true)));
+
+        var tree = fixture.service.listTree();
+
+        assertThat(tree).singleElement().satisfies(rootRow -> {
+            assertThat(rootRow.getLabel()).isEqualTo("外协");
+            assertThat(rootRow.getChildren()).singleElement().satisfies(leaf -> {
+                assertThat(leaf.getNodeType()).isEqualTo("item");
+                assertThat(leaf.getSourceType()).isEqualTo("extra");
+                assertThat(leaf.getFeeItemId()).isEqualTo(5);
+                assertThat(leaf.getLabel()).contains("外协加工");
+            });
+        });
+        verify(fixture.auditService, never()).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void unplacedOptionsExcludeAlreadyPlacedProcessAndExtraRows() {
         Fixture fixture = fixture();
         when(fixture.itemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(

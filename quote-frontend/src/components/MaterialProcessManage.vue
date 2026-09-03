@@ -236,12 +236,15 @@
                 <el-empty v-if="!processArrangementTree.length" description="暂无编排节点，可先新增根节点或直接把工艺放到根层级。" :image-size="80" />
                 <el-tree
                   v-else
+                  ref="processArrangementTreeRef"
                   :data="processArrangementTree"
                   node-key="treeKey"
                   :props="processArrangementTreeProps"
-                  default-expand-all
+                  :default-expanded-keys="processArrangementExpandedKeys"
                   highlight-current
                   @node-click="handleArrangementTreeClick"
+                  @node-expand="handleArrangementNodeExpand"
+                  @node-collapse="handleArrangementNodeCollapse"
                 >
                   <template #default="{ data }">
                     <div class="process-arrangement-tree-row" :class="{ 'is-selected': isArrangementTarget(data) }">
@@ -658,7 +661,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, nextTick, reactive, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MaterialPriceSpecDetailDialog from './material/MaterialPriceSpecDetailDialog.vue'
 import {
@@ -700,6 +703,10 @@ import { useDictionaryStore } from '../stores/dictionaryStore'
 import { usePendingAction } from '../composables/usePendingAction'
 import { CLIENT_PAGE_SIZES, DEFAULT_CLIENT_PAGE_SIZE, paginateRows } from '../utils/clientPagination'
 import {
+  collectProcessArrangementNodeKeys,
+  nextProcessArrangementExpandedKeys
+} from '../utils/processArrangementTreeExpansion'
+import {
   MATERIAL_PRICE_SPEC_DEFINITIONS,
   findPriceSpec,
   formatMaterialSpecPrice,
@@ -724,6 +731,8 @@ const processCategories = ref([])
 const processCategoryLookupRows = ref([])
 const processDetails = ref([])
 const processArrangementTree = ref([])
+const processArrangementTreeRef = ref(null)
+const processArrangementExpandedKeys = ref([])
 const unplacedArrangementOptions = ref([])
 const pricingMarkupFees = ref([])
 const extraFeeItems = ref([])
@@ -1107,6 +1116,17 @@ const findArrangementSiblings = (row, rows = processArrangementTree.value) => {
   const parent = findArrangementNode(row.parentNodeId)
   return parent?.children || []
 }
+const handleArrangementNodeExpand = (row) => {
+  if (row?.nodeType !== 'node' || !row.treeKey) return
+  if (!processArrangementExpandedKeys.value.includes(row.treeKey)) {
+    processArrangementExpandedKeys.value = [...processArrangementExpandedKeys.value, row.treeKey]
+  }
+}
+const handleArrangementNodeCollapse = (row) => {
+  if (row?.nodeType !== 'node' || !row.treeKey) return
+  const collapsedKeys = new Set([row.treeKey, ...collectProcessArrangementNodeKeys(row.children || [])])
+  processArrangementExpandedKeys.value = processArrangementExpandedKeys.value.filter(key => !collapsedKeys.has(key))
+}
 const summarizeArrangementDeletion = (row) => {
   const summary = { removedNodeCount: 0, removedItemCount: 0 }
   const visit = (node) => {
@@ -1168,7 +1188,7 @@ const loadProcessArrangementOptions = async () => {
   }) || []
 }
 
-const loadProcessArrangement = async () => {
+const loadProcessArrangement = async ({ revealNodeId = null } = {}) => {
   arrangementLoading.value = true
   try {
     const [tree] = await Promise.all([
@@ -1176,11 +1196,18 @@ const loadProcessArrangement = async () => {
       loadProcessArrangementOptions()
     ])
     processArrangementTree.value = tree || []
-    if (selectedArrangementNode.value && !findArrangementNode(selectedArrangementNode.value.nodeId)) {
-      selectedArrangementNode.value = null
+    processArrangementExpandedKeys.value = nextProcessArrangementExpandedKeys({
+      tree: processArrangementTree.value,
+      currentExpandedKeys: processArrangementExpandedKeys.value,
+      revealNodeId
+    })
+    if (selectedArrangementNode.value) {
+      selectedArrangementNode.value = findArrangementNode(selectedArrangementNode.value.nodeId)
     }
     selectedArrangementOptions.value = []
     arrangementOptionTableRef.value?.clearSelection?.()
+    await nextTick()
+    processArrangementTreeRef.value?.setCurrentKey?.(selectedArrangementNode.value?.treeKey ?? null, false)
   } finally {
     arrangementLoading.value = false
   }
@@ -1395,6 +1422,7 @@ const saveArrangementNode = async () => {
         nodeName: arrangementNodeForm.nodeName.trim(),
         sortNo: Number(arrangementNodeForm.sortNo || 0)
       }
+      const revealNodeId = arrangementNodeForm.id ? null : arrangementNodeForm.parentId
       if (arrangementNodeForm.id) {
         await updateProcessArrangementNode(arrangementNodeForm.id, payload)
         ElMessage.success('工艺编排节点已更新')
@@ -1403,7 +1431,7 @@ const saveArrangementNode = async () => {
         ElMessage.success('工艺编排节点已新增')
       }
       arrangementNodeDialogVisible.value = false
-      await loadProcessArrangement()
+      await loadProcessArrangement({ revealNodeId })
     } catch (error) {
       console.error(error)
       ElMessage.error(requestErrorMessage(error, '工艺编排节点保存失败。'))
@@ -1467,7 +1495,7 @@ const placeSelectedArrangementItems = async () => {
         }))
       })
       ElMessage.success('已放入工艺编排')
-      await loadProcessArrangement()
+      await loadProcessArrangement({ revealNodeId: selectedArrangementNode.value?.nodeId ?? null })
     } catch (error) {
       console.error(error)
       ElMessage.error(requestErrorMessage(error, '工艺放入失败。'))
