@@ -244,6 +244,20 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="图纸预览" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.drawingUrl"
+                    type="primary"
+                    size="small"
+                    plain
+                    @click.stop="openPdfPreview(row.drawingUrl, row.partNo)"
+                  >
+                    预览
+                  </el-button>
+                  <el-tag v-else type="info" size="small">无图</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="询价数量" width="144" align="center" class-name="order-item-qty-column">
                 <template #default="{ row }">
                   <el-input-number
@@ -589,17 +603,41 @@
       customer-scope="market-order"
       @select="handleCustomerSelected"
     />
+
+    <el-dialog
+      v-model="pdfVisible"
+      :title="`图纸预览：${pdfTitle}`"
+      width="75%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div v-loading="!pdfLoaded" class="pdf-frame-shell">
+        <iframe
+          v-if="currentPdfSrc"
+          :src="currentPdfSrc"
+          width="100%"
+          height="100%"
+          frameborder="0"
+          @load="pdfLoaded = true"
+        ></iframe>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CustomerPickerDialog from './CustomerPickerDialog.vue'
 import OrderItemAppendDialog from './order/OrderItemAppendDialog.vue'
 import OrderItemDataReplacementDialog from './order/OrderItemDataReplacementDialog.vue'
 import SupplementDrawingDialog from './order/SupplementDrawingDialog.vue'
 import { usePendingAction } from '../composables/usePendingAction'
+import {
+  createAuthenticatedObjectUrl,
+  readFileErrorMessage,
+  revokeObjectUrl
+} from '../api'
 import {
   appendOrderItems,
   discardOrder,
@@ -665,6 +703,10 @@ const orderItemAppendDrawingFiles = ref([])
 const orderItemAppendVersionDrawingFiles = ref([])
 const orderItemAppendResult = ref(null)
 const customerPickerVisible = ref(false)
+const pdfVisible = ref(false)
+const pdfTitle = ref('')
+const pdfLoaded = ref(false)
+const currentPdfSrc = ref('')
 
 const ORDER_ITEM_UPDATE_PERMISSION = 'market:order:update-item'
 const ORDER_MANAGEMENT_STATUSES = ['未核价', '已核价', '已报价', '部分已提单', '已生成提单', '废弃']
@@ -1358,6 +1400,27 @@ const submitReplaceDrawings = async () => {
   })
 }
 
+const cleanupPdfSrc = () => {
+  revokeObjectUrl(currentPdfSrc.value)
+  currentPdfSrc.value = ''
+}
+
+const openPdfPreview = async (url, partNo) => {
+  if (!url) {
+    return ElMessage.warning('当前零件没有绑定图纸。')
+  }
+  pdfTitle.value = partNo || '未命名图纸'
+  pdfLoaded.value = false
+  cleanupPdfSrc()
+  pdfVisible.value = true
+  try {
+    currentPdfSrc.value = await createAuthenticatedObjectUrl(url)
+  } catch (error) {
+    pdfVisible.value = false
+    ElMessage.error(await readFileErrorMessage(error) || '图纸预览失败。')
+  }
+}
+
 const formatRoute = (route) => {
   if (!route) return '-'
   let list = Array.isArray(route) ? route : []
@@ -1374,6 +1437,17 @@ const formatRoute = (route) => {
     .filter(Boolean)
     .join(' / ')
 }
+
+watch(pdfVisible, (visible) => {
+  if (!visible) {
+    pdfLoaded.value = false
+    cleanupPdfSrc()
+  }
+})
+
+onBeforeUnmount(() => {
+  cleanupPdfSrc()
+})
 </script>
 
 <style scoped>
@@ -1608,6 +1682,11 @@ const formatRoute = (route) => {
 .supplement-file-stats h4 {
   margin: 0 0 8px;
   font-size: 14px;
+}
+
+.pdf-frame-shell {
+  width: 100%;
+  height: 70vh;
 }
 
 .supplement-pdf-list {
