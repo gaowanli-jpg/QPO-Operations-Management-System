@@ -22,6 +22,8 @@ export const pagePricingMaterialOptions = (params = {}) => request('/api/enginee
 
 export const pagePricingProcessOptions = (params = {}) => request('/api/engineer/pricing/options/processes', { params })
 
+export const listPricingProcessArrangementTree = () => request('/api/engineer/pricing/options/process-arrangement/tree')
+
 export const downloadPricingSheet = (rfqId, fallbackName = `pricing-sheet-${rfqId}.xlsx`) => downloadFile(
   `/api/engineer/pricing/export-sheet/${rfqId}`,
   fallbackName

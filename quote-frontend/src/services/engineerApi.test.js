@@ -83,11 +83,17 @@ describe('engineerApi', () => {
   })
 
   test('pagePricingProcessOptions forwards remote process picker params', async () => {
-    const params = { keyword: 'CNC', page: 3, pageSize: 100 }
+    const params = { keyword: 'CNC', page: 3, pageSize: 100, sourceType: 'extra', feeItemIds: '5,6' }
 
     await engineerApi.pagePricingProcessOptions(params)
 
     expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/processes', { params })
+  })
+
+  test('listPricingProcessArrangementTree loads read-only process arrangement tree for pricing picker', async () => {
+    await engineerApi.listPricingProcessArrangementTree()
+
+    expect(request).toHaveBeenCalledWith('/api/engineer/pricing/options/process-arrangement/tree')
   })
 
   test('applyRepeatQuotes posts repeat quote application by order id', async () => {

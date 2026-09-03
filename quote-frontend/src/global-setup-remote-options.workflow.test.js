@@ -13,8 +13,10 @@ describe('global setup remote material and process options', () => {
 
     expect(source).toContain('pagePricingMaterialOptions')
     expect(source).toContain('pagePricingProcessOptions')
+    expect(source).toContain('listPricingProcessArrangementTree')
     expect(source).toContain(':remote-loader="pagePricingMaterialOptions"')
     expect(source).toContain(':remote-loader="pagePricingProcessOptions"')
+    expect(source).toContain(':process-arrangement-tree-loader="listPricingProcessArrangementTree"')
     expect(source).not.toContain(':items="materialOptions"')
     expect(source).not.toContain(':items="combinedProcessOptions"')
   })

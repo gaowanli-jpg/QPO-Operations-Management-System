@@ -272,6 +272,7 @@
       title="选择通用工序"
       type="process"
       :remote-loader="pagePricingProcessOptions"
+      :process-arrangement-tree-loader="listPricingProcessArrangementTree"
       :page-size-options="[10, 20, 50, 100]"
       :default-page-size="10"
       :selected-key="selectedProcessOptionKey"
@@ -291,7 +292,7 @@ import { DocumentChecked } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import EngineeringOptionPickerDialog from './EngineeringOptionPickerDialog.vue'
 import OrderPickerDialog from './OrderPickerDialog.vue'
-import { getRepeatAnalysis, getSetupSummary, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
+import { getRepeatAnalysis, getSetupSummary, listPricingProcessArrangementTree, pagePricingMaterialOptions, pagePricingProcessOptions, saveOrderConfig } from '../services/engineerApi'
 import {
   defaultBlankProcessRouteList,
   defaultGlobalConfig,

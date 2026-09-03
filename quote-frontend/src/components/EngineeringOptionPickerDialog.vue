@@ -9,37 +9,96 @@
     @opened="handleOpened"
     @closed="resetPicker"
   >
-    <div class="picker-toolbar">
-      <el-input
-        v-model="keyword"
-        clearable
-        :placeholder="searchPlaceholder"
-        class="keyword-input"
-      />
-      <el-tag type="info">共 {{ totalItemCount }} 项</el-tag>
-    </div>
+    <div :class="type === 'process' ? 'process-picker-layout' : 'picker-single-panel'">
+      <aside v-if="type === 'process'" class="process-arrangement-picker-panel">
+        <div class="process-arrangement-picker-header">
+          <div>
+            <strong>工艺层级</strong>
+            <span :title="selectedProcessArrangementPathLabel">{{ selectedProcessArrangementPathLabel }}</span>
+          </div>
+          <el-button size="small" :type="selectedProcessArrangementKey ? 'default' : 'primary'" plain @click="clearProcessArrangementSelection">
+            全部工艺
+          </el-button>
+        </div>
+        <el-alert
+          v-if="processArrangementError"
+          :title="processArrangementError"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="picker-error"
+        />
+        <div class="process-arrangement-tree-shell" v-loading="processArrangementLoading">
+          <el-empty
+            v-if="!processArrangementLoading && !processArrangementTree.length"
+            description="暂无工艺编排，可直接搜索全部工艺"
+            :image-size="72"
+          />
+          <el-tree
+            v-else
+            ref="processArrangementTreeRef"
+            :data="processArrangementTree"
+            node-key="treeKey"
+            :props="processArrangementTreeProps"
+            :default-expanded-keys="processArrangementExpandedKeys"
+            highlight-current
+            @node-click="selectProcessArrangementNode"
+            @node-expand="handleProcessArrangementNodeExpand"
+            @node-collapse="handleProcessArrangementNodeCollapse"
+          >
+            <template #default="{ data }">
+              <div class="process-arrangement-picker-row" :class="{ 'is-selected': data.treeKey === selectedProcessArrangementKey }">
+                <el-tag size="small" :type="data.nodeType === 'item' ? processArrangementNodeTagType(data.sourceType) : 'info'">
+                  {{ data.nodeType === 'item' ? sourceTypeLabel(data) : '分组' }}
+                </el-tag>
+                <span class="process-arrangement-picker-label" :title="data.label">{{ data.label }}</span>
+              </div>
+            </template>
+          </el-tree>
+        </div>
+      </aside>
 
-    <el-alert
-      v-if="remoteError"
-      :title="remoteError"
-      type="error"
-      show-icon
-      :closable="false"
-      class="picker-error"
-    />
+      <section class="process-picker-table-panel">
+        <div class="picker-toolbar">
+          <el-input
+            v-model="keyword"
+            clearable
+            :placeholder="searchPlaceholder"
+            class="keyword-input"
+          />
+          <el-radio-group v-if="type === 'process'" v-model="processSourceTypeFilter" size="small" class="process-source-type-filter">
+            <el-radio-button label="">全部</el-radio-button>
+            <el-radio-button label="process">工时工艺</el-radio-button>
+            <el-radio-button label="extra">非工时工艺</el-radio-button>
+          </el-radio-group>
+          <el-tag type="info">共 {{ totalItemCount }} 项</el-tag>
+        </div>
 
-    <el-table
+        <div v-if="type === 'process'" class="process-picker-context" :title="selectedProcessArrangementPathLabel">
+          当前层级：{{ selectedProcessArrangementPathLabel }}
+        </div>
+
+        <el-alert
+          v-if="remoteError"
+          :title="remoteError"
+          type="error"
+          show-icon
+          :closable="false"
+          class="picker-error"
+        />
+
+        <el-table
       :data="pagedItems"
       v-loading="remoteLoading"
       :loading="remoteLoading"
       border
       stripe
-      height="460"
+      :height="type === 'process' ? 500 : 460"
       highlight-current-row
       :empty-text="remoteEmptyText"
       :row-class-name="resolveRowClassName"
       @row-click="selectRow"
-    >
+        >
       <el-table-column label="选择" width="78" align="center" fixed>
         <template #default="{ row }">
           <el-button
@@ -139,6 +198,9 @@
         <el-table-column prop="categoryName" label="大类名称" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.categoryName || '-' }}</template>
         </el-table-column>
+        <el-table-column label="所在层级" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ processArrangementPathLabel(row) }}</template>
+        </el-table-column>
         <el-table-column label="具体小时价格" width="180" align="right">
           <template #default="{ row }">
             <div v-if="canEditProcessRate(row)" class="inline-rate-editor" @click.stop>
@@ -209,6 +271,8 @@
         <el-button size="small" :disabled="currentPage >= totalPages || remoteLoading" @click="goPickerPage(currentPage + 1)">下一页</el-button>
       </div>
     </div>
+      </section>
+    </div>
 
     <MaterialPriceSpecDetailDialog
       v-if="type === 'material'"
@@ -244,10 +308,16 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import MaterialPriceSpecDetailDialog from './material/MaterialPriceSpecDetailDialog.vue'
 import { saveMaterial, saveProcessDetail } from '../services/dictApi'
+import {
+  buildProcessArrangementPathIndex,
+  collectProcessArrangementPickerFilter,
+  findProcessArrangementPathLabels
+} from '../utils/processArrangementPicker'
+import { nextProcessArrangementExpandedKeys } from '../utils/processArrangementTreeExpansion'
 import {
   MATERIAL_PRICE_SPEC_DEFINITIONS,
   buildMaterialSpecSelection,
@@ -286,6 +356,10 @@ const props = defineProps({
     default: false
   },
   remoteLoader: {
+    type: Function,
+    default: null
+  },
+  processArrangementTreeLoader: {
     type: Function,
     default: null
   },
@@ -329,9 +403,21 @@ const savingMaterialKeys = ref(new Set())
 const materialSpecDialogVisible = ref(false)
 const materialSpecDialogRow = ref(null)
 const materialSpecDialogCode = ref('SPEC_1')
+const processArrangementTree = ref([])
+const processArrangementTreeRef = ref(null)
+const processArrangementLoading = ref(false)
+const processArrangementError = ref('')
+const selectedProcessArrangementKey = ref('')
+const selectedProcessArrangementNode = ref(null)
+const processArrangementExpandedKeys = ref([])
+const processSourceTypeFilter = ref('')
+
+const processArrangementTreeProps = { children: 'children', label: 'label' }
 
 const dialogWidth = computed(() => (
-  props.type === 'material' && props.enableMaterialPriceEdit ? '1380px' : '1180px'
+  props.type === 'process'
+    ? '1480px'
+    : props.type === 'material' && props.enableMaterialPriceEdit ? '1380px' : '1180px'
 ))
 
 const searchPlaceholder = computed(() => (
@@ -382,6 +468,20 @@ const selectedItem = computed(() => {
 
 const selectedLabel = computed(() => labelOf(selectedItem.value) || '未选择')
 
+const processArrangementPathIndex = computed(() => buildProcessArrangementPathIndex(processArrangementTree.value))
+
+const processPickerFilter = computed(() => collectProcessArrangementPickerFilter({
+  tree: processArrangementTree.value,
+  selectedTreeKey: selectedProcessArrangementKey.value,
+  sourceType: processSourceTypeFilter.value
+}))
+
+const selectedProcessArrangementPathLabel = computed(() => {
+  if (!selectedProcessArrangementKey.value) return '全部工艺'
+  const labels = findProcessArrangementPathLabels(processArrangementTree.value, selectedProcessArrangementKey.value)
+  return labels.length ? labels.join(' / ') : '已选层级'
+})
+
 function emptyTextForDisplay() {
   return remoteError.value ? '加载失败，请调整关键词或重试' : props.emptyText
 }
@@ -418,6 +518,13 @@ const resetPicker = () => {
   materialSpecDialogVisible.value = false
   materialSpecDialogRow.value = null
   materialSpecDialogCode.value = 'SPEC_1'
+  processArrangementTree.value = []
+  processArrangementLoading.value = false
+  processArrangementError.value = ''
+  selectedProcessArrangementKey.value = ''
+  selectedProcessArrangementNode.value = null
+  processArrangementExpandedKeys.value = []
+  processSourceTypeFilter.value = ''
 }
 
 const selectRow = (row) => {
@@ -452,6 +559,77 @@ const confirmMaterialSpecSelection = (specCode) => {
 }
 
 const sourceTypeLabel = (row) => (row.sourceType === 'extra' ? '非工时费用' : '工艺')
+
+const processArrangementNodeTagType = (sourceType) => (sourceType === 'extra' ? 'warning' : 'success')
+
+const processArrangementLookupKey = (row) => {
+  if (row?.sourceType === 'process' && row.processDetailId != null) return `process:${row.processDetailId}`
+  if (row?.sourceType === 'extra' && row.feeItemId != null) return `extra:${row.feeItemId}`
+  return ''
+}
+
+const processArrangementPathLabel = (row) => {
+  const key = processArrangementLookupKey(row)
+  return key ? (processArrangementPathIndex.value.get(key) || '未编排') : '未编排'
+}
+
+const collectDescendantNodeKeys = (row, keys = new Set()) => {
+  for (const child of row?.children || []) {
+    if (child?.nodeType === 'node' && child.treeKey) keys.add(child.treeKey)
+    collectDescendantNodeKeys(child, keys)
+  }
+  return keys
+}
+
+const handleProcessArrangementNodeExpand = (row) => {
+  if (!row?.treeKey || row.nodeType !== 'node') return
+  processArrangementExpandedKeys.value = Array.from(new Set([...processArrangementExpandedKeys.value, row.treeKey]))
+}
+
+const handleProcessArrangementNodeCollapse = (row) => {
+  if (!row?.treeKey) return
+  const removedKeys = collectDescendantNodeKeys(row)
+  removedKeys.add(row.treeKey)
+  processArrangementExpandedKeys.value = processArrangementExpandedKeys.value.filter(key => !removedKeys.has(key))
+}
+
+const clearProcessArrangementSelection = () => {
+  selectedProcessArrangementKey.value = ''
+  selectedProcessArrangementNode.value = null
+  processArrangementTreeRef.value?.setCurrentKey?.(null, false)
+  loadRemotePage(1)
+}
+
+const selectProcessArrangementNode = (row) => {
+  selectedProcessArrangementKey.value = row?.treeKey || ''
+  selectedProcessArrangementNode.value = row || null
+  loadRemotePage(1)
+}
+
+const loadProcessArrangementTree = async ({ revealNodeId = null } = {}) => {
+  if (props.type !== 'process' || typeof props.processArrangementTreeLoader !== 'function') {
+    return
+  }
+  processArrangementLoading.value = true
+  processArrangementError.value = ''
+  try {
+    const response = await props.processArrangementTreeLoader()
+    const tree = response?.data ?? response ?? []
+    processArrangementTree.value = Array.isArray(tree) ? tree : []
+    processArrangementExpandedKeys.value = nextProcessArrangementExpandedKeys({
+      tree: processArrangementTree.value,
+      currentExpandedKeys: processArrangementExpandedKeys.value,
+      revealNodeId
+    })
+    await nextTick()
+    processArrangementTreeRef.value?.setCurrentKey?.(selectedProcessArrangementKey.value || null, false)
+  } catch (error) {
+    console.error(error)
+    processArrangementError.value = error?.message || '工艺编排层级加载失败，可先使用搜索选择工艺。'
+  } finally {
+    processArrangementLoading.value = false
+  }
+}
 
 const formatNumber = (value) => {
   const numericValue = Number(value)
@@ -498,6 +676,9 @@ const goPickerPage = (page) => {
 const handleOpened = () => {
   syncSelectedKey()
   remotePageSize.value = normalizeRemotePageSize(remotePageSize.value)
+  if (props.type === 'process') {
+    loadProcessArrangementTree()
+  }
   loadRemotePage(1)
 }
 
@@ -524,14 +705,33 @@ const loadRemotePage = async (nextPage = page.value) => {
   const safePageSize = normalizeRemotePageSize(remotePageSize.value)
   const requestSeq = remoteRequestSeq.value + 1
   remoteRequestSeq.value = requestSeq
-  remoteLoading.value = true
   remoteError.value = ''
+  const params = {
+    keyword: keyword.value.trim(),
+    page: safePage,
+    pageSize: safePageSize
+  }
+  if (props.type === 'process') {
+    const pickerFilter = processPickerFilter.value
+    params.sourceType = processSourceTypeFilter.value
+    if (pickerFilter.hasSelection) {
+      if (!pickerFilter.hasLeaves) {
+        remoteRecords.value = []
+        remoteTotal.value = 0
+        page.value = safePage
+        remotePageSize.value = safePageSize
+        remoteLoading.value = false
+        return
+      }
+      Object.assign(params, {
+        processDetailIds: pickerFilter.processDetailIds.join(','),
+        feeItemIds: pickerFilter.feeItemIds.join(',')
+      })
+    }
+  }
+  remoteLoading.value = true
   try {
-    const response = await props.remoteLoader({
-      keyword: keyword.value.trim(),
-      page: safePage,
-      pageSize: safePageSize
-    })
+    const response = await props.remoteLoader(params)
     if (requestSeq !== remoteRequestSeq.value) return
     const pageData = response?.data ?? response ?? {}
     const records = Array.isArray(pageData.records) ? pageData.records : []
@@ -792,10 +992,102 @@ const saveInlineProcessRate = async (row) => {
 
 watch(() => props.selectedKey, syncSelectedKey)
 watch(keyword, scheduleRemoteSearch)
+watch(processSourceTypeFilter, () => {
+  if (visible.value && props.type === 'process') {
+    loadRemotePage(1)
+  }
+})
 onBeforeUnmount(clearRemoteSearchTimer)
 </script>
 
 <style scoped>
+.picker-single-panel,
+.process-picker-table-panel {
+  min-width: 0;
+}
+
+.process-picker-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.process-arrangement-picker-panel {
+  display: flex;
+  min-height: 584px;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+}
+
+.process-arrangement-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--erp-surface-soft, #f5f7fa);
+}
+
+.process-arrangement-picker-header > div {
+  min-width: 0;
+}
+
+.process-arrangement-picker-header strong,
+.process-arrangement-picker-header span {
+  display: block;
+}
+
+.process-arrangement-picker-header strong {
+  color: var(--erp-text-primary, #1f2d3d);
+  font-size: 14px;
+}
+
+.process-arrangement-picker-header span {
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--erp-text-secondary, #606266);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-arrangement-tree-shell {
+  min-height: 0;
+  flex: 1;
+  padding: 8px;
+  overflow: auto;
+}
+
+.process-arrangement-picker-panel :deep(.el-tree-node__content) {
+  height: 34px;
+  border-radius: 6px;
+}
+
+.process-arrangement-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  padding-right: 8px;
+}
+
+.process-arrangement-picker-row.is-selected {
+  font-weight: 600;
+}
+
+.process-arrangement-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .picker-toolbar {
   display: flex;
   align-items: center;
@@ -805,6 +1097,19 @@ onBeforeUnmount(clearRemoteSearchTimer)
 
 .keyword-input {
   flex: 1;
+}
+
+.process-source-type-filter {
+  flex: none;
+}
+
+.process-picker-context {
+  overflow: hidden;
+  margin: -4px 0 10px;
+  color: var(--erp-text-secondary, #606266);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .material-type-cell {
@@ -881,5 +1186,19 @@ onBeforeUnmount(clearRemoteSearchTimer)
 
 .option-picker-dialog :deep(.selected-picker-row > td) {
   background: #eef5ff !important;
+}
+
+@media (max-width: 1180px) {
+  .process-picker-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .process-arrangement-picker-panel {
+    min-height: 240px;
+  }
+
+  .process-arrangement-tree-shell {
+    max-height: 260px;
+  }
 }
 </style>

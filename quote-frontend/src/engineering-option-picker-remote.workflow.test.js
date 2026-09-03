@@ -40,6 +40,23 @@ describe('engineering option picker remote paging mode', () => {
     expect(source).toContain('@change="handleRemotePageSizeChange"')
   })
 
+  test('process picker combines arrangement navigation with the existing editable table', () => {
+    const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
+
+    expect(source).toContain('processArrangementTreeLoader: {')
+    expect(source).toContain('process-picker-layout')
+    expect(source).toContain('process-arrangement-picker-panel')
+    expect(source).toContain(':data="processArrangementTree"')
+    expect(source).toContain('@node-click="selectProcessArrangementNode"')
+    expect(source).toContain('processSourceTypeFilter')
+    expect(source).toContain('selectedProcessArrangementPathLabel')
+    expect(source).toContain('collectProcessArrangementPickerFilter')
+    expect(source).toContain('feeItemIds: pickerFilter.feeItemIds.join(\',\')')
+    expect(source).toContain('label="具体小时价格"')
+    expect(source).toContain('saveInlineProcessRate(row)')
+    expect(source).toContain('label="所在层级"')
+  })
+
   test('debounces keyword search and ignores stale remote responses', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 

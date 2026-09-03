@@ -11,6 +11,7 @@ import com.machining.quote.dto.PricingMaterialOptionDTO;
 import com.machining.quote.dto.PricingItemRemarkUpdateReq;
 import com.machining.quote.dto.PricingOptionPageReq;
 import com.machining.quote.dto.PricingProcessOptionDTO;
+import com.machining.quote.dto.ProcessArrangementTreeNodeDTO;
 import com.machining.quote.entity.ItemQuoteVersion;
 import com.machining.quote.entity.OrderRfq;
 import com.machining.quote.mapper.ItemQuoteVersionMapper;
@@ -22,6 +23,7 @@ import com.machining.quote.service.ExcelExportService;
 import com.machining.quote.dto.QuoteSubmitReq;
 import com.machining.quote.service.OrderItemPageService;
 import com.machining.quote.service.OrderManagementService;
+import com.machining.quote.service.ProcessArrangementService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -60,6 +62,9 @@ public class EngineerController {
 
     @Autowired
     private EngineeringPricingOptionService pricingOptionService;
+
+    @Autowired
+    private ProcessArrangementService processArrangementService;
 
     // ---------------------------------------------
 
@@ -135,6 +140,12 @@ public class EngineerController {
     @RequirePermission("engineer:pricing:view")
     public PageResult<PricingProcessOptionDTO> pagePricingProcessOptions(@ModelAttribute PricingOptionPageReq req) {
         return pricingOptionService.pageProcessOptions(req);
+    }
+
+    @GetMapping("/pricing/options/process-arrangement/tree")
+    @RequirePermission("engineer:pricing:view")
+    public List<ProcessArrangementTreeNodeDTO> listPricingProcessArrangementTree() {
+        return processArrangementService.listTree();
     }
 
     @GetMapping("/pricing/items/{rfqId}")

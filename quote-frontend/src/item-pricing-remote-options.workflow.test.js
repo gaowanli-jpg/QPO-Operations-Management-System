@@ -12,8 +12,10 @@ describe('item pricing remote material and process options', () => {
 
     expect(source).toContain('pagePricingMaterialOptions')
     expect(source).toContain('pagePricingProcessOptions')
+    expect(source).toContain('listPricingProcessArrangementTree')
     expect(source).toContain(':remote-loader="pagePricingMaterialOptions"')
     expect(source).toContain(':remote-loader="pagePricingProcessOptions"')
+    expect(source).toContain(':process-arrangement-tree-loader="listPricingProcessArrangementTree"')
     expect(source).toContain(':page-size-options="[10, 20, 50, 100]"')
     expect(source).toContain(':default-page-size="10"')
     expect(source).not.toContain(':items="materialOptions"')

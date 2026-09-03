@@ -292,6 +292,60 @@ class EngineeringPricingOptionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void pageProcessOptionsCanHydrateByExactExtraFeeItemIdsWithoutProcessDetails() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                detailMapper, mock(DictProcessCategoryMapper.class), extraFeeItemMapper);
+        DictExtraFeeItem extra = extraFeeItem(5, "喷砂");
+        when(extraFeeItemMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(extraFeeItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(extra));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setFeeItemIds("5, 6");
+        req.setPageSize(100);
+
+        PageResult<PricingProcessOptionDTO> page = service.pageProcessOptions(req);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).singleElement().satisfies(row -> {
+            assertThat(row.getSourceType()).isEqualTo("extra");
+            assertThat(row.getFeeItemId()).isEqualTo(5);
+            assertThat(row.getFeeName()).isEqualTo("喷砂");
+        });
+        ArgumentCaptor<QueryWrapper<DictExtraFeeItem>> extraCountCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(extraFeeItemMapper).selectCount(extraCountCaptor.capture());
+        assertThat(sql(extraCountCaptor.getValue()))
+                .contains("enabled", "id in")
+                .doesNotContain("dict_process_category");
+        verifyNoInteractions(detailMapper);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pageProcessOptionsCanFilterBySourceTypeForPickerTabs() {
+        DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
+        DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);
+        EngineeringPricingOptionService service = service(mock(DictMaterialMapper.class), mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                detailMapper, mock(DictProcessCategoryMapper.class), extraFeeItemMapper);
+        when(extraFeeItemMapper.selectCount(any(QueryWrapper.class))).thenReturn(1L);
+        when(extraFeeItemMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(extraFeeItem(5, "喷砂")));
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setSourceType("extra");
+        req.setPageSize(20);
+
+        PageResult<PricingProcessOptionDTO> page = service.pageProcessOptions(req);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).singleElement()
+                .extracting(PricingProcessOptionDTO::getSourceType)
+                .isEqualTo("extra");
+        verifyNoInteractions(detailMapper);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void exactProcessHydrationDoesNotFallbackToExtraFeesWhenPageIsOutOfRange() {
         DictProcessDetailMapper detailMapper = mock(DictProcessDetailMapper.class);
         DictExtraFeeItemMapper extraFeeItemMapper = mock(DictExtraFeeItemMapper.class);

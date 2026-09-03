@@ -683,6 +683,7 @@
       title="选择工艺"
       type="process"
       :remote-loader="pagePricingProcessOptions"
+      :process-arrangement-tree-loader="listPricingProcessArrangementTree"
       :page-size-options="[10, 20, 50, 100]"
       :default-page-size="10"
       :selected-key="selectedProcessOptionKey"
@@ -729,6 +730,7 @@ import {
   listAssemblyChildCandidates,
   listAssemblyRelations,
   listPricingItems,
+  listPricingProcessArrangementTree,
   pagePricingMaterialOptions,
   pagePricingProcessOptions,
   downloadPricingSheet,

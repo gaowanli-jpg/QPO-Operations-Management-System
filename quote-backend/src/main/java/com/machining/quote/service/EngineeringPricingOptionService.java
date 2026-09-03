@@ -42,6 +42,8 @@ public class EngineeringPricingOptionService {
     private static final String OPTION_TYPE_MATERIAL = PricingOptionUsageStatService.OPTION_TYPE_MATERIAL;
     private static final String OPTION_TYPE_PROCESS_CATEGORY = PricingOptionUsageStatService.OPTION_TYPE_PROCESS_CATEGORY;
     private static final String OPTION_TYPE_EXTRA_FEE = PricingOptionUsageStatService.OPTION_TYPE_EXTRA_FEE;
+    private static final String SOURCE_TYPE_PROCESS = "process";
+    private static final String SOURCE_TYPE_EXTRA = "extra";
 
     @Autowired
     private DictMaterialMapper materialMapper;
@@ -82,9 +84,19 @@ public class EngineeringPricingOptionService {
         int safePageSize = normalizePageSize(safeReq.getPageSize());
         String keyword = safeReq.getKeyword();
         List<Long> processDetailIds = parseProcessDetailIds(safeReq.getProcessDetailIds());
-        boolean exactProcessLookup = !processDetailIds.isEmpty();
-        long processTotal = Objects.requireNonNullElse(processDetailMapper.selectCount(processDetailQuery(keyword, processDetailIds)), 0L);
-        long extraTotal = exactProcessLookup ? 0L : Objects.requireNonNullElse(extraFeeItemMapper.selectCount(extraFeeItemQuery(keyword)), 0L);
+        List<Integer> feeItemIds = parseFeeItemIds(safeReq.getFeeItemIds());
+        String sourceType = normalizeSourceType(safeReq.getSourceType());
+        boolean exactLookup = !processDetailIds.isEmpty() || !feeItemIds.isEmpty();
+        boolean queryProcess = (sourceType == null || SOURCE_TYPE_PROCESS.equals(sourceType))
+                && (!exactLookup || !processDetailIds.isEmpty());
+        boolean queryExtra = (sourceType == null || SOURCE_TYPE_EXTRA.equals(sourceType))
+                && (!exactLookup || !feeItemIds.isEmpty());
+        long processTotal = queryProcess
+                ? Objects.requireNonNullElse(processDetailMapper.selectCount(processDetailQuery(keyword, processDetailIds)), 0L)
+                : 0L;
+        long extraTotal = queryExtra
+                ? Objects.requireNonNullElse(extraFeeItemMapper.selectCount(extraFeeItemQuery(keyword, feeItemIds)), 0L)
+                : 0L;
         long total = processTotal + extraTotal;
         if (total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
@@ -92,12 +104,12 @@ public class EngineeringPricingOptionService {
 
         long offset = (safePage - 1L) * safePageSize;
         int candidateLimit = (int) Math.min(Integer.MAX_VALUE, offset + safePageSize);
-        List<PricingProcessOptionDTO> detailRecords = processTotal == 0
+        List<PricingProcessOptionDTO> detailRecords = !queryProcess || processTotal == 0
                 ? List.of()
                 : toProcessOptions(selectProcessDetails(keyword, processDetailIds, candidateLimit, 0));
-        List<PricingProcessOptionDTO> feeRecords = exactProcessLookup || extraTotal == 0
+        List<PricingProcessOptionDTO> feeRecords = !queryExtra || extraTotal == 0
                 ? List.of()
-                : toExtraFeeOptions(selectExtraFeeItems(keyword, candidateLimit, 0));
+                : toExtraFeeOptions(selectExtraFeeItems(keyword, feeItemIds, candidateLimit, 0));
         applyProcessUsageCounts(detailRecords);
         applyExtraFeeUsageCounts(feeRecords);
         List<PricingProcessOptionDTO> records = concat(detailRecords, feeRecords).stream()
@@ -117,11 +129,11 @@ public class EngineeringPricingOptionService {
         return processDetailMapper.selectList(query);
     }
 
-    private List<DictExtraFeeItem> selectExtraFeeItems(String keyword, int limit, long offset) {
+    private List<DictExtraFeeItem> selectExtraFeeItems(String keyword, List<Integer> feeItemIds, int limit, long offset) {
         if (limit <= 0) {
             return List.of();
         }
-        QueryWrapper<DictExtraFeeItem> query = extraFeeItemQuery(keyword);
+        QueryWrapper<DictExtraFeeItem> query = extraFeeItemQuery(keyword, feeItemIds);
         query.last(extraFeeUsageOrderBy() + " LIMIT " + limit + " OFFSET " + offset);
         return extraFeeItemMapper.selectList(query);
     }
@@ -169,9 +181,12 @@ public class EngineeringPricingOptionService {
         return query;
     }
 
-    private QueryWrapper<DictExtraFeeItem> extraFeeItemQuery(String keyword) {
+    private QueryWrapper<DictExtraFeeItem> extraFeeItemQuery(String keyword, List<Integer> feeItemIds) {
         QueryWrapper<DictExtraFeeItem> query = new QueryWrapper<>();
         query.eq("enabled", true);
+        if (feeItemIds != null && !feeItemIds.isEmpty()) {
+            query.in("id", feeItemIds);
+        }
         if (!hasText(keyword)) {
             return query;
         }
@@ -451,5 +466,36 @@ public class EngineeringPricingOptionService {
         } catch (NumberFormatException ex) {
             throw new IllegalArgumentException("processDetailIds 只允许数字逗号分隔");
         }
+    }
+
+    private List<Integer> parseFeeItemIds(String value) {
+        if (!hasText(value)) {
+            return List.of();
+        }
+        try {
+            return Arrays.stream(value.split(","))
+                    .map(String::trim)
+                    .filter(item -> !item.isEmpty())
+                    .map(Integer::valueOf)
+                    .filter(item -> item > 0)
+                    .distinct()
+                    .toList();
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("feeItemIds 只允许数字逗号分隔");
+        }
+    }
+
+    private String normalizeSourceType(String sourceType) {
+        if (!hasText(sourceType)) {
+            return null;
+        }
+        String normalized = sourceType.trim().toLowerCase(Locale.ROOT);
+        if ("all".equals(normalized)) {
+            return null;
+        }
+        if (SOURCE_TYPE_PROCESS.equals(normalized) || SOURCE_TYPE_EXTRA.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("sourceType 只支持 process / extra / all");
     }
 }

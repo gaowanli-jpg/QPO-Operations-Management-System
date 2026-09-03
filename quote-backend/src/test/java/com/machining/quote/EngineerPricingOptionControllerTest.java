@@ -6,7 +6,9 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.PricingMaterialOptionDTO;
 import com.machining.quote.dto.PricingOptionPageReq;
 import com.machining.quote.dto.PricingProcessOptionDTO;
+import com.machining.quote.dto.ProcessArrangementTreeNodeDTO;
 import com.machining.quote.service.EngineeringPricingOptionService;
+import com.machining.quote.service.ProcessArrangementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +43,14 @@ class EngineerPricingOptionControllerTest {
     }
 
     @Test
+    void controllerExposesPricingProcessArrangementTreeWithPricingViewPermission() throws Exception {
+        Method method = EngineerController.class.getDeclaredMethod("listPricingProcessArrangementTree");
+
+        assertThat(method.getAnnotation(GetMapping.class).value()).containsExactly("/pricing/options/process-arrangement/tree");
+        assertThat(method.getAnnotation(RequirePermission.class).value()).containsExactly("engineer:pricing:view");
+    }
+
+    @Test
     void controllerDelegatesMaterialAndProcessOptionQueriesToReadOnlyService() {
         EngineerController controller = new EngineerController();
         EngineeringPricingOptionService service = mock(EngineeringPricingOptionService.class);
@@ -55,6 +65,20 @@ class EngineerPricingOptionControllerTest {
         assertThat(controller.pagePricingProcessOptions(req)).isSameAs(processPage);
         verify(service).pageMaterialOptions(req);
         verify(service).pageProcessOptions(req);
+    }
+
+    @Test
+    void controllerDelegatesPricingProcessArrangementTreeToReadOnlyArrangementService() {
+        EngineerController controller = new EngineerController();
+        ProcessArrangementService service = mock(ProcessArrangementService.class);
+        ReflectionTestUtils.setField(controller, "processArrangementService", service);
+        ProcessArrangementTreeNodeDTO root = new ProcessArrangementTreeNodeDTO();
+        root.setTreeKey("node:1");
+        root.setLabel("CNC");
+        when(service.listTree()).thenReturn(List.of(root));
+
+        assertThat(controller.listPricingProcessArrangementTree()).containsExactly(root);
+        verify(service).listTree();
     }
 
     @Test
