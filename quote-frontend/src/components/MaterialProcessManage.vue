@@ -17,6 +17,8 @@
         <el-button v-permission="'engineer:dict:process-manage'" v-else-if="activeTab === 'processDetails'" type="primary" @click="openProcessDetailDialog()">新增具体工艺</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'pricingMarkupFees' && pricingMarkupFeeCategory === 'BASIC_PERCENT'" type="primary" @click="openPricingMarkupFeeDialog()">新增基础百分比费用</el-button>
         <el-button v-permission="'engineer:dict:fee-manage'" v-else-if="activeTab === 'extraFees'" type="primary" @click="openExtraFeeDialog()">新增非工时费用工艺</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processArrangement'" type="primary" @click="openArrangementNodeDialog()">新增根节点</el-button>
+        <el-button v-permission="'engineer:dict:process-manage'" v-if="activeTab === 'processArrangement'" :disabled="!selectedArrangementNode" @click="openArrangementNodeDialog(selectedArrangementNode, 'child')">新增子节点</el-button>
       </div>
     </section>
 
@@ -218,6 +220,101 @@
                   @size-change="resetProcessDetailPage"
                 />
               </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="工艺编排" name="processArrangement">
+            <div class="process-arrangement-workbench">
+              <section class="process-arrangement-tree-panel">
+                <div class="process-arrangement-panel-header">
+                  <div>
+                    <strong>编排层级</strong>
+                    <span>当前放入位置：{{ arrangementTargetName }}</span>
+                  </div>
+                  <el-button size="small" @click="selectArrangementRoot">选择根层级</el-button>
+                </div>
+                <el-empty v-if="!processArrangementTree.length" description="暂无编排节点，可先新增根节点或直接把工艺放到根层级。" :image-size="80" />
+                <el-tree
+                  v-else
+                  :data="processArrangementTree"
+                  node-key="treeKey"
+                  :props="processArrangementTreeProps"
+                  default-expand-all
+                  highlight-current
+                  @node-click="handleArrangementTreeClick"
+                >
+                  <template #default="{ data }">
+                    <div class="process-arrangement-tree-row" :class="{ 'is-selected': isArrangementTarget(data) }">
+                      <div class="process-arrangement-node-main">
+                        <el-tag size="small" :type="data.nodeType === 'node' ? 'info' : arrangementSourceTagType(data.sourceType)">
+                          {{ data.nodeType === 'node' ? '分组' : arrangementSourceText(data.sourceType) }}
+                        </el-tag>
+                        <span class="process-arrangement-node-label">{{ data.label }}</span>
+                        <el-tag v-if="data.nodeType === 'item' && data.enabled === false" size="small" type="danger">停用</el-tag>
+                      </div>
+                      <div class="process-arrangement-node-actions">
+                        <template v-if="data.nodeType === 'node'">
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link type="primary" @click.stop="openArrangementNodeDialog(data, 'child')">子级</el-button>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link type="primary" @click.stop="openArrangementNodeDialog(data, 'edit')">改名</el-button>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link @click.stop="moveArrangementNode(data, -1)">上移</el-button>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link @click.stop="moveArrangementNode(data, 1)">下移</el-button>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link type="danger" @click.stop="deleteArrangementNode(data)">删除</el-button>
+                        </template>
+                        <template v-else>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link @click.stop="moveArrangementItem(data, -1)">上移</el-button>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link @click.stop="moveArrangementItem(data, 1)">下移</el-button>
+                          <el-button v-permission="'engineer:dict:process-manage'" size="small" link type="danger" @click.stop="removeArrangementItem(data)">移除</el-button>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </el-tree>
+              </section>
+
+              <section class="process-arrangement-library-panel">
+                <div class="process-arrangement-panel-header library-header">
+                  <div>
+                    <strong>未编排工艺</strong>
+                    <span>同一个工艺只能放入一处，已放入后会从这里消失。</span>
+                  </div>
+                  <el-button
+                    v-permission="'engineer:dict:process-manage'"
+                    type="primary"
+                    :disabled="!selectedArrangementOptions.length"
+                    :loading="isPending(dictActionKeys.placeArrangementItems)"
+                    @click="placeSelectedArrangementItems"
+                  >放入选中位置</el-button>
+                </div>
+                <div class="process-arrangement-library-filters">
+                  <el-input v-model="arrangementKeyword" clearable placeholder="搜索工艺名称、编码、大类或备注" />
+                  <el-radio-group v-model="arrangementSourceType" size="small">
+                    <el-radio-button v-for="option in arrangementSourceTypeOptions" :key="option.value" :label="option.value">{{ option.label }}</el-radio-button>
+                  </el-radio-group>
+                </div>
+                <el-table
+                  ref="arrangementOptionTableRef"
+                  :data="unplacedArrangementOptions"
+                  border
+                  stripe
+                  height="470"
+                  row-key="optionKey"
+                  v-loading="arrangementLoading"
+                  @selection-change="handleArrangementOptionSelection"
+                >
+                  <el-table-column type="selection" width="44" />
+                  <el-table-column label="类型" width="100" align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="arrangementSourceTagType(row.sourceType)" size="small">{{ arrangementSourceText(row.sourceType) }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="label" label="工艺" min-width="220" show-overflow-tooltip />
+                  <el-table-column label="状态" width="90" align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="row.enabled !== false ? 'success' : 'danger'" size="small">{{ row.enabled !== false ? '启用' : '停用' }}</el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </section>
             </div>
           </el-tab-pane>
 
@@ -464,6 +561,26 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="arrangementNodeDialogVisible" :title="arrangementNodeDialogTitle" width="520px">
+      <el-form :model="arrangementNodeForm" label-width="110px" class="erp-dialog-form">
+        <el-form-item label="父级位置">
+          <el-input :model-value="arrangementNodeParentName" disabled />
+        </el-form-item>
+        <el-form-item label="节点名称" required>
+          <el-input v-model="arrangementNodeForm.nodeName" maxlength="120" show-word-limit placeholder="例如：铣、粗铣、精铣" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="arrangementNodeForm.sortNo" controls-position="right" class="dialog-number-input" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="erp-dialog-footer">
+          <el-button @click="arrangementNodeDialogVisible = false">取消</el-button>
+          <el-button v-permission="'engineer:dict:process-manage'" type="primary" :loading="isPending(dictActionKeys.saveArrangementNode)" :disabled="isPending(dictActionKeys.saveArrangementNode)" @click="saveArrangementNode">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="scheduleDialogVisible"
       :title="scheduleDialogTitle"
@@ -545,8 +662,10 @@ import { computed, reactive, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MaterialPriceSpecDetailDialog from './material/MaterialPriceSpecDetailDialog.vue'
 import {
+  createProcessArrangementNode,
   deleteExtraFeeItem,
   deletePricingMarkupFee as deletePricingMarkupFeeRequest,
+  deleteProcessArrangementNode,
   deleteProcessDetail as deleteProcessDetailRequest,
   getLatestMesMaterialSyncRun,
   getLatestMesProcessSyncRun,
@@ -556,11 +675,16 @@ import {
   getMesProcessSyncSchedule,
   listExtraFeeItems,
   listMaterialTypes,
+  listProcessArrangementTree,
   listProcessCategories,
   listPricingMarkupFees,
+  listUnplacedProcessArrangementOptions,
+  moveProcessArrangementItem,
   pageMaterials,
   pageProcessCategories,
   pageProcessDetails,
+  placeProcessArrangementItems,
+  removeProcessArrangementItem,
   createPricingMarkupFee,
   saveExtraFeeItem,
   saveMaterial as saveMaterialRequest,
@@ -569,6 +693,7 @@ import {
   saveProcessDetail as saveProcessDetailRequest,
   syncMesMaterials as syncMesMaterialsRequest,
   syncMesProcessTypes as syncMesProcessTypesRequest,
+  updateProcessArrangementNode,
   updatePricingMarkupFee
 } from '../services/dictApi'
 import { useDictionaryStore } from '../stores/dictionaryStore'
@@ -598,11 +723,15 @@ const materials = ref([])
 const processCategories = ref([])
 const processCategoryLookupRows = ref([])
 const processDetails = ref([])
+const processArrangementTree = ref([])
+const unplacedArrangementOptions = ref([])
 const pricingMarkupFees = ref([])
 const extraFeeItems = ref([])
 const materialKeyword = ref('')
 const processCategoryKeyword = ref('')
 const processDetailKeyword = ref('')
+const arrangementKeyword = ref('')
+const arrangementSourceType = ref('')
 const pricingMarkupKeyword = ref('')
 const pricingMarkupScope = ref('NORMAL')
 const pricingMarkupFeeCategory = ref('BASIC_PERCENT')
@@ -611,6 +740,21 @@ const materialPagination = createPagination()
 const processCategoryPagination = createPagination()
 const processDetailPagination = createPagination()
 const pricingMarkupPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
+const processArrangementTreeProps = { children: 'children', label: 'label' }
+const arrangementSourceTypeOptions = [
+  { value: '', label: '全部' },
+  { value: 'process', label: '工时工艺' },
+  { value: 'extra', label: '非工时工艺' }
+]
+const arrangementOptionTableRef = ref(null)
+const selectedArrangementNode = ref(null)
+const selectedArrangementOptions = ref([])
+const arrangementLoading = ref(false)
+const arrangementNodeDialogVisible = ref(false)
+const arrangementNodeDialogMode = ref('root')
+const arrangementNodeParentName = ref('根层级')
+const arrangementNodeForm = reactive(createEmptyArrangementNode())
+const deleteSummary = reactive({ removedNodeCount: 0, removedItemCount: 0 })
 const processCategoryOptions = computed(() => {
   const options = new Map()
   for (const category of processCategoryLookupRows.value) {
@@ -654,6 +798,12 @@ const dictActionKeys = {
   saveMesSchedule: 'engineer:dict:mes-master-data-schedule-save',
   saveProcessDetailDialog: 'engineer:dict:process-detail-save-dialog',
   deleteProcessDetail: (detailId) => `engineer:dict:process-detail-delete:${detailId || 'none'}`,
+  saveArrangementNode: 'engineer:dict:process-arrangement-node-save',
+  placeArrangementItems: 'engineer:dict:process-arrangement-items-place',
+  moveArrangementNode: (nodeId) => `engineer:dict:process-arrangement-node-move:${nodeId || 'none'}`,
+  moveArrangementItem: (itemId) => `engineer:dict:process-arrangement-item-move:${itemId || 'none'}`,
+  deleteArrangementNode: (nodeId) => `engineer:dict:process-arrangement-node-delete:${nodeId || 'none'}`,
+  removeArrangementItem: (itemId) => `engineer:dict:process-arrangement-item-remove:${itemId || 'none'}`,
   savePricingMarkupFeeDialog: 'engineer:dict:pricing-markup-fee-save-dialog',
   saveExtraFeeDialog: 'engineer:dict:extra-fee-save-dialog',
   deletePricingMarkupFee: (feeId) => `engineer:dict:pricing-markup-fee-delete:${feeId || 'none'}`,
@@ -849,6 +999,15 @@ function createEmptyProcessDetail() {
   }
 }
 
+function createEmptyArrangementNode() {
+  return {
+    id: null,
+    parentId: null,
+    nodeName: '',
+    sortNo: 0
+  }
+}
+
 function createEmptyPricingMarkupFee() {
   return {
     id: null,
@@ -924,6 +1083,41 @@ const pagedPricingMarkupFees = computed(() => paginateRows(filteredPricingMarkup
 const pricingMarkupIdentityEditable = computed(() => (
   pricingMarkupFeeForm.feeCategory === 'BASIC_PERCENT' && !pricingMarkupFeeForm.systemRequired
 ))
+const arrangementTargetName = computed(() => selectedArrangementNode.value?.label || '根层级')
+const arrangementNodeDialogTitle = computed(() => {
+  if (arrangementNodeDialogMode.value === 'edit') return '编辑工艺编排节点'
+  return arrangementNodeForm.parentId ? '新增子节点' : '新增根节点'
+})
+
+const arrangementSourceText = (sourceType) => (sourceType === 'extra' ? '非工时工艺' : '工时工艺')
+const arrangementSourceTagType = (sourceType) => (sourceType === 'extra' ? 'warning' : 'success')
+const isArrangementTarget = (row) => row?.nodeType === 'node' && selectedArrangementNode.value?.nodeId === row.nodeId
+const findArrangementNode = (nodeId, rows = processArrangementTree.value) => {
+  if (nodeId == null) return null
+  for (const row of rows || []) {
+    if (row.nodeType === 'node' && String(row.nodeId) === String(nodeId)) return row
+    const child = findArrangementNode(nodeId, row.children || [])
+    if (child) return child
+  }
+  return null
+}
+const findArrangementSiblings = (row, rows = processArrangementTree.value) => {
+  if (!row) return []
+  if (row.parentNodeId == null) return rows || []
+  const parent = findArrangementNode(row.parentNodeId)
+  return parent?.children || []
+}
+const summarizeArrangementDeletion = (row) => {
+  const summary = { removedNodeCount: 0, removedItemCount: 0 }
+  const visit = (node) => {
+    if (!node) return
+    if (node.nodeType === 'node') summary.removedNodeCount += 1
+    if (node.nodeType === 'item') summary.removedItemCount += 1
+    ;(node.children || []).forEach(visit)
+  }
+  visit(row)
+  return summary
+}
 
 const invalidateDictionaryCache = () => {
   dictionaryStore.$patch({
@@ -967,6 +1161,31 @@ const loadProcessDetailPage = async () => {
   processDetails.value = applyPageResult(processDetailPagination, response)
 }
 
+const loadProcessArrangementOptions = async () => {
+  unplacedArrangementOptions.value = await listUnplacedProcessArrangementOptions({
+    keyword: arrangementKeyword.value.trim(),
+    sourceType: arrangementSourceType.value
+  }) || []
+}
+
+const loadProcessArrangement = async () => {
+  arrangementLoading.value = true
+  try {
+    const [tree] = await Promise.all([
+      listProcessArrangementTree(),
+      loadProcessArrangementOptions()
+    ])
+    processArrangementTree.value = tree || []
+    if (selectedArrangementNode.value && !findArrangementNode(selectedArrangementNode.value.nodeId)) {
+      selectedArrangementNode.value = null
+    }
+    selectedArrangementOptions.value = []
+    arrangementOptionTableRef.value?.clearSelection?.()
+  } finally {
+    arrangementLoading.value = false
+  }
+}
+
 const loadPageWithLoading = async (loader) => {
   loading.value = true
   try {
@@ -984,7 +1203,8 @@ const loadAll = async () => loadPageWithLoading(async () => {
     loadLookupDictionaries(),
     loadMaterialPage(),
     loadProcessCategoryPage(),
-    loadProcessDetailPage()
+    loadProcessDetailPage(),
+    loadProcessArrangement()
   ])
 })
 
@@ -1126,6 +1346,171 @@ const openProcessDetailDialog = (row) => {
   processDetailForm.hourlyRate = row?.detailHourlyRate ?? null
   processDetailForm.enabled = processDetailForm.enabled !== false
   processDetailDialogVisible.value = true
+}
+
+const selectArrangementRoot = () => {
+  selectedArrangementNode.value = null
+}
+
+const handleArrangementTreeClick = (row) => {
+  if (row?.nodeType === 'node') {
+    selectedArrangementNode.value = row
+  }
+}
+
+const handleArrangementOptionSelection = (rows) => {
+  selectedArrangementOptions.value = rows || []
+}
+
+const nextArrangementSortNo = (rows = []) => rows.reduce((max, row) => Math.max(max, Number(row?.sortNo || 0)), 0) + 1
+
+const openArrangementNodeDialog = (row, mode = 'root') => {
+  Object.assign(arrangementNodeForm, createEmptyArrangementNode())
+  arrangementNodeDialogMode.value = mode
+  if (mode === 'edit' && row?.nodeType === 'node') {
+    arrangementNodeForm.id = row.nodeId
+    arrangementNodeForm.parentId = row.parentNodeId ?? null
+    arrangementNodeForm.nodeName = row.nodeName || row.label || ''
+    arrangementNodeForm.sortNo = Number(row.sortNo || 0)
+    arrangementNodeParentName.value = findArrangementNode(row.parentNodeId)?.label || '根层级'
+  } else if (mode === 'child' && row?.nodeType === 'node') {
+    arrangementNodeForm.parentId = row.nodeId
+    arrangementNodeForm.sortNo = nextArrangementSortNo(row.children || [])
+    arrangementNodeParentName.value = row.label || '根层级'
+  } else {
+    arrangementNodeDialogMode.value = 'root'
+    arrangementNodeForm.parentId = null
+    arrangementNodeForm.sortNo = nextArrangementSortNo(processArrangementTree.value)
+    arrangementNodeParentName.value = '根层级'
+  }
+  arrangementNodeDialogVisible.value = true
+}
+
+const saveArrangementNode = async () => {
+  if (!arrangementNodeForm.nodeName?.trim()) return ElMessage.warning('请填写节点名称。')
+  return runAction(dictActionKeys.saveArrangementNode, async () => {
+    try {
+      const payload = {
+        parentId: arrangementNodeForm.parentId,
+        nodeName: arrangementNodeForm.nodeName.trim(),
+        sortNo: Number(arrangementNodeForm.sortNo || 0)
+      }
+      if (arrangementNodeForm.id) {
+        await updateProcessArrangementNode(arrangementNodeForm.id, payload)
+        ElMessage.success('工艺编排节点已更新')
+      } else {
+        await createProcessArrangementNode(payload)
+        ElMessage.success('工艺编排节点已新增')
+      }
+      arrangementNodeDialogVisible.value = false
+      await loadProcessArrangement()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '工艺编排节点保存失败。'))
+    }
+  })
+}
+
+const moveArrangementNode = async (row, direction) => {
+  if (!row?.nodeId) return
+  const siblings = findArrangementSiblings(row)
+  const index = siblings.findIndex(item => item.treeKey === row.treeKey)
+  const adjacent = siblings[index + direction]
+  if (!adjacent) return ElMessage.info(direction < 0 ? '已经在当前层级最上方。' : '已经在当前层级最下方。')
+  const nextSortNo = Number(adjacent.sortNo || 0) + (direction < 0 ? -1 : 1)
+  return runAction(dictActionKeys.moveArrangementNode(row.nodeId), async () => {
+    try {
+      await updateProcessArrangementNode(row.nodeId, {
+        parentId: row.parentNodeId ?? null,
+        nodeName: row.nodeName || row.label,
+        sortNo: nextSortNo
+      })
+      await loadProcessArrangement()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '工艺编排节点移动失败。'))
+    }
+  })
+}
+
+const moveArrangementItem = async (row, direction) => {
+  if (!row?.itemId) return
+  const siblings = findArrangementSiblings(row)
+  const index = siblings.findIndex(item => item.treeKey === row.treeKey)
+  const adjacent = siblings[index + direction]
+  if (!adjacent) return ElMessage.info(direction < 0 ? '已经在当前层级最上方。' : '已经在当前层级最下方。')
+  const nextSortNo = Number(adjacent.sortNo || 0) + (direction < 0 ? -1 : 1)
+  return runAction(dictActionKeys.moveArrangementItem(row.itemId), async () => {
+    try {
+      await moveProcessArrangementItem(row.itemId, {
+        parentNodeId: row.parentNodeId ?? null,
+        sortNo: nextSortNo
+      })
+      await loadProcessArrangement()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '工艺编排工艺移动失败。'))
+    }
+  })
+}
+
+const placeSelectedArrangementItems = async () => {
+  if (!selectedArrangementOptions.value.length) return ElMessage.warning('请选择要放入的工艺。')
+  return runAction(dictActionKeys.placeArrangementItems, async () => {
+    try {
+      await placeProcessArrangementItems({
+        parentNodeId: selectedArrangementNode.value?.nodeId ?? null,
+        items: selectedArrangementOptions.value.map(row => ({
+          sourceType: row.sourceType,
+          processDetailId: row.processDetailId,
+          feeItemId: row.feeItemId
+        }))
+      })
+      ElMessage.success('已放入工艺编排')
+      await loadProcessArrangement()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '工艺放入失败。'))
+    }
+  })
+}
+
+const deleteArrangementNode = async (row) => {
+  if (!row?.nodeId) return
+  Object.assign(deleteSummary, summarizeArrangementDeletion(row))
+  return runAction(dictActionKeys.deleteArrangementNode(row.nodeId), async () => {
+    await ElMessageBox.confirm(
+      `确认级联移除工艺编排节点「${row.label}」？将移除 ${deleteSummary.removedNodeCount} 个节点、${deleteSummary.removedItemCount} 个工艺挂载，基础工艺不会被删除。`,
+      '级联移除确认',
+      { type: 'warning' }
+    )
+    try {
+      const response = await deleteProcessArrangementNode(row.nodeId)
+      deleteSummary.removedNodeCount = response?.removedNodeCount ?? deleteSummary.removedNodeCount
+      deleteSummary.removedItemCount = response?.removedItemCount ?? deleteSummary.removedItemCount
+      if (selectedArrangementNode.value?.nodeId === row.nodeId) selectedArrangementNode.value = null
+      ElMessage.success('工艺编排节点已级联移除')
+      await loadProcessArrangement()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '工艺编排节点删除失败。'))
+    }
+  })
+}
+
+const removeArrangementItem = async (row) => {
+  if (!row?.itemId) return
+  return runAction(dictActionKeys.removeArrangementItem(row.itemId), async () => {
+    await ElMessageBox.confirm(`确认从工艺编排中移除「${row.label}」？基础工艺不会被删除。`, '移除确认', { type: 'warning' })
+    try {
+      await removeProcessArrangementItem(row.itemId)
+      ElMessage.success('工艺挂载已移除')
+      await loadProcessArrangement()
+    } catch (error) {
+      console.error(error)
+      ElMessage.error(requestErrorMessage(error, '工艺挂载移除失败。'))
+    }
+  })
 }
 
 const openPricingMarkupFeeDialog = (row) => {
@@ -1341,6 +1726,19 @@ watch(processCategoryKeyword, () => {
 watch(processDetailKeyword, () => {
   resetPageAndLoad(processDetailPagination, loadProcessDetailPage)
 })
+watch([arrangementKeyword, arrangementSourceType], async () => {
+  arrangementLoading.value = true
+  try {
+    await loadProcessArrangementOptions()
+    selectedArrangementOptions.value = []
+    arrangementOptionTableRef.value?.clearSelection?.()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('未编排工艺加载失败。')
+  } finally {
+    arrangementLoading.value = false
+  }
+})
 watch(pricingMarkupKeyword, resetPricingMarkupFeePage)
 watch(pricingMarkupScope, resetPricingMarkupFeePage)
 watch(pricingMarkupFeeCategory, resetPricingMarkupFeePage)
@@ -1359,6 +1757,7 @@ watch(
 watch(activeTab, (tab) => {
   if (tab === 'materials') loadLatestMesSyncRun('MES_MATERIAL')
   if (tab === 'processCategories') loadLatestMesSyncRun('MES_PROCESS_TYPE')
+  if (tab === 'processArrangement') loadProcessArrangement()
 })
 
 onMounted(loadAll)
@@ -1479,6 +1878,101 @@ onBeforeUnmount(stopAllMesSyncPolling)
   gap: 12px;
 }
 
+.process-arrangement-workbench {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.2fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.process-arrangement-tree-panel,
+.process-arrangement-library-panel {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--erp-border-soft);
+  border-radius: 8px;
+  background: var(--erp-surface);
+}
+
+.process-arrangement-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.process-arrangement-panel-header > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.process-arrangement-panel-header strong {
+  color: var(--erp-text);
+  font-size: 14px;
+}
+
+.process-arrangement-panel-header span {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.process-arrangement-tree-panel :deep(.el-tree-node__content) {
+  height: auto;
+  min-height: 36px;
+  padding: 4px 0;
+}
+
+.process-arrangement-tree-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.process-arrangement-tree-row.is-selected {
+  background: var(--erp-surface-soft);
+}
+
+.process-arrangement-node-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.process-arrangement-node-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--erp-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-arrangement-node-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.process-arrangement-library-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.process-arrangement-library-filters .el-input {
+  max-width: 320px;
+}
+
 .process-dialog-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1576,6 +2070,20 @@ onBeforeUnmount(stopAllMesSyncPolling)
   }
 
   .pricing-markup-controls .el-input {
+    max-width: 100%;
+  }
+
+  .process-arrangement-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .process-arrangement-panel-header,
+  .process-arrangement-library-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .process-arrangement-library-filters .el-input {
     max-width: 100%;
   }
 

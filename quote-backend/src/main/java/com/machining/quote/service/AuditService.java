@@ -346,6 +346,12 @@ public class AuditService {
             case "DICT_PROCESS_DETAIL_CREATE" -> "新增具体工艺";
             case "DICT_PROCESS_DETAIL_UPDATE" -> "更新具体工艺";
             case "DICT_PROCESS_DETAIL_DELETE" -> "删除具体工艺";
+            case "DICT_PROCESS_ARRANGEMENT_NODE_CREATE" -> "新增工艺编排节点";
+            case "DICT_PROCESS_ARRANGEMENT_NODE_UPDATE" -> "更新工艺编排节点";
+            case "DICT_PROCESS_ARRANGEMENT_NODE_DELETE" -> "删除工艺编排节点";
+            case "DICT_PROCESS_ARRANGEMENT_ITEM_PLACE" -> "工艺编排放入工艺";
+            case "DICT_PROCESS_ARRANGEMENT_ITEM_MOVE" -> "工艺编排移动工艺";
+            case "DICT_PROCESS_ARRANGEMENT_ITEM_REMOVE" -> "工艺编排移除工艺";
             case "DICT_MARKUP_FEE_CREATE" -> "新增百分比费用";
             case "DICT_MARKUP_FEE_UPDATE" -> "更新百分比费用";
             case "DICT_MARKUP_FEE_DELETE" -> "删除百分比费用";

@@ -59,6 +59,25 @@ class ProcessMasterDocumentationCharacterizationTest {
                         "processRouteCount",
                         "不记录完整 `processRoute` JSON"
                 );
+        assertThat(permissionDoc)
+                .contains(
+                        "工艺编排管理页收口",
+                        "工艺编排页签不新增左侧菜单权限",
+                        "读取工艺编排树和未编排工艺继续复用 `engineer:dict:view`",
+                        "新增、改名、移动、放入、移除和级联删除继续复用 `engineer:dict:process-manage`",
+                        "不新增 `common:*`"
+                );
+        assertThat(logOpsDoc)
+                .contains(
+                        "DICT_PROCESS_ARRANGEMENT_NODE_CREATE",
+                        "DICT_PROCESS_ARRANGEMENT_NODE_UPDATE",
+                        "DICT_PROCESS_ARRANGEMENT_NODE_DELETE",
+                        "DICT_PROCESS_ARRANGEMENT_ITEM_PLACE",
+                        "DICT_PROCESS_ARRANGEMENT_ITEM_MOVE",
+                        "DICT_PROCESS_ARRANGEMENT_ITEM_REMOVE",
+                        "工艺编排树和未编排工艺池读取不写操作日志",
+                        "不记录完整编排树 payload"
+                );
         assertThat(fileLogDoc)
                 .contains(
                         "Process route priced itemId={}",

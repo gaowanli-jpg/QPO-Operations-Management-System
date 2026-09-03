@@ -61,6 +61,45 @@ describe('dictApi', () => {
     expect(request).toHaveBeenNthCalledWith(3, '/api/dict/process-details/page?categoryId=9&enabledOnly=true&keyword=cnc&page=4&pageSize=100')
   })
 
+  test('manages process arrangement tree and placements', async () => {
+    const nodePayload = { parentId: null, nodeName: '铣', sortNo: 1 }
+    const itemPayload = { parentNodeId: 7, items: [{ sourceType: 'process', processDetailId: 9 }] }
+
+    await dictApi.listProcessArrangementTree()
+    await dictApi.listUnplacedProcessArrangementOptions({ keyword: 'cnc', sourceType: 'process' })
+    await dictApi.createProcessArrangementNode(nodePayload)
+    await dictApi.updateProcessArrangementNode(7, nodePayload)
+    await dictApi.deleteProcessArrangementNode(7)
+    await dictApi.placeProcessArrangementItems(itemPayload)
+    await dictApi.moveProcessArrangementItem(11, { parentNodeId: null, sortNo: 3 })
+    await dictApi.removeProcessArrangementItem(11)
+
+    expect(request).toHaveBeenNthCalledWith(1, '/api/dict/process-arrangement/tree')
+    expect(request).toHaveBeenNthCalledWith(2, '/api/dict/process-arrangement/unplaced-options?keyword=cnc&sourceType=process')
+    expect(request).toHaveBeenNthCalledWith(3, '/api/dict/process-arrangement/nodes', {
+      method: 'POST',
+      data: nodePayload
+    })
+    expect(request).toHaveBeenNthCalledWith(4, '/api/dict/process-arrangement/nodes/7', {
+      method: 'PUT',
+      data: nodePayload
+    })
+    expect(request).toHaveBeenNthCalledWith(5, '/api/dict/process-arrangement/nodes/7', {
+      method: 'DELETE'
+    })
+    expect(request).toHaveBeenNthCalledWith(6, '/api/dict/process-arrangement/items/batch', {
+      method: 'POST',
+      data: itemPayload
+    })
+    expect(request).toHaveBeenNthCalledWith(7, '/api/dict/process-arrangement/items/11/move', {
+      method: 'PUT',
+      data: { parentNodeId: null, sortNo: 3 }
+    })
+    expect(request).toHaveBeenNthCalledWith(8, '/api/dict/process-arrangement/items/11', {
+      method: 'DELETE'
+    })
+  })
+
   test('manages unified pricing markup fees with categorized endpoints', async () => {
     const payload = {
       id: 11,

@@ -113,6 +113,40 @@ export const deleteProcessDetail = (id) => request(`/api/dict/process-details/${
   method: 'DELETE'
 })
 
+export const listProcessArrangementTree = () => request('/api/dict/process-arrangement/tree')
+
+export const listUnplacedProcessArrangementOptions = ({ keyword, sourceType } = {}) => request(
+  `/api/dict/process-arrangement/unplaced-options${buildQuery({ keyword, sourceType })}`
+)
+
+export const createProcessArrangementNode = (payload) => request('/api/dict/process-arrangement/nodes', {
+  method: 'POST',
+  data: payload
+})
+
+export const updateProcessArrangementNode = (id, payload) => request(`/api/dict/process-arrangement/nodes/${id}`, {
+  method: 'PUT',
+  data: payload
+})
+
+export const deleteProcessArrangementNode = (id) => request(`/api/dict/process-arrangement/nodes/${id}`, {
+  method: 'DELETE'
+})
+
+export const placeProcessArrangementItems = (payload) => request('/api/dict/process-arrangement/items/batch', {
+  method: 'POST',
+  data: payload
+})
+
+export const moveProcessArrangementItem = (id, payload) => request(`/api/dict/process-arrangement/items/${id}/move`, {
+  method: 'PUT',
+  data: payload
+})
+
+export const removeProcessArrangementItem = (id) => request(`/api/dict/process-arrangement/items/${id}`, {
+  method: 'DELETE'
+})
+
 export const listPricingMarkupFees = (pricingScope, feeCategory) => request(
   `/api/dict/pricing-markup-fees${buildQuery({ pricingScope, feeCategory })}`
 )
