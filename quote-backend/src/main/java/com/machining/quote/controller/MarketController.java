@@ -222,6 +222,12 @@ public class MarketController {
         excelExportService.exportQuoteSheet(rfqId, response);
     }
 
+    @GetMapping("/export/quote/optimized/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportOptimizedQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        excelExportService.exportOptimizedQuoteSheet(rfqId, response);
+    }
+
     @GetMapping("/export/quote/simple/{rfqId}")
     @RequirePermission("market:quote-process:export")
     public void exportSimpleQuoteSheet(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
@@ -232,6 +238,12 @@ public class MarketController {
     @RequirePermission("market:quote-process:export")
     public void exportTemplateQuoteDetail(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
         quoteTemplateExportService.exportTemplateQuoteDetail(rfqId, response);
+    }
+
+    @GetMapping("/export/quote/template/detail/optimized/{rfqId}")
+    @RequirePermission("market:quote-process:export")
+    public void exportOptimizedTemplateQuoteDetail(@PathVariable Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteTemplateExportService.exportOptimizedTemplateQuoteDetail(rfqId, response);
     }
 
     @GetMapping("/export/quote/template/simple/{rfqId}")

@@ -69,6 +69,16 @@ public class QuoteTemplateExportService {
         }
     }
 
+    public void exportOptimizedTemplateQuoteDetail(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
+        assertOrderDataScope(rfqId);
+        try (Workbook workbook = quoteTemplateService.openTemplateWorkbook()) {
+            QuoteTemplateService.TemplateLayout layout = quoteTemplateService.templateLayout();
+            writeTemplateQuote(workbook, rfqId, false, layout, true);
+            write(response, workbook, buildFileName(rfqId, "优化客户模板详细报价单"));
+        }
+    }
+
     public void exportTemplateQuoteSimple(Integer rfqId, HttpServletResponse response) throws IOException {
         quoteProcessService.assertQuoteExportable(rfqId);
         assertOrderDataScope(rfqId);
@@ -88,27 +98,41 @@ public class QuoteTemplateExportService {
         }
     }
     private void writeTemplateQuote(Workbook workbook, Integer rfqId, boolean simpleMode, QuoteTemplateService.TemplateLayout layout) {
+        writeTemplateQuote(workbook, rfqId, simpleMode, layout, false);
+    }
+
+    private void writeTemplateQuote(Workbook workbook, Integer rfqId, boolean simpleMode,
+                                    QuoteTemplateService.TemplateLayout layout, boolean optimized) {
         Sheet sheet = workbook.getSheetAt(0);
         List<ItemQuoteVersion> items = listItems(rfqId);
+        List<QuoteOptimizedExportCalculator.QuoteExportRowData> optimizedRows = optimized ? optimizedRows(items) : List.of();
 
         ensureMaterialIdentityColumns(sheet, layout);
 
         TemplateColumns columns = simpleMode
                 ? simpleColumns(sheet, layout)
-                : configureDetailColumns(sheet, items, layout);
+                : configureDetailColumns(sheet, items, layout, optimizedRows);
         prepareDetailRows(sheet, items.size(), layout);
 
         for (int i = 0; i < items.size(); i++) {
             Row row = getOrCreateRow(sheet, layout.detailStartRowIndex() + i);
             clearRowValues(row, maxColumn(sheet));
-            writeQuoteRow(row, items.get(i), i + 1, columns, simpleMode);
+            writeQuoteRow(row, items.get(i), i + 1, columns, simpleMode,
+                    optimized ? optimizedRows.get(i) : null);
         }
     }
 
     private TemplateColumns configureDetailColumns(Sheet sheet, List<ItemQuoteVersion> items, QuoteTemplateService.TemplateLayout layout) {
-        List<String> processNames = collectQuoteProcessNames(items);
+        return configureDetailColumns(sheet, items, layout, List.of());
+    }
+
+    private TemplateColumns configureDetailColumns(Sheet sheet, List<ItemQuoteVersion> items,
+                                                   QuoteTemplateService.TemplateLayout layout,
+                                                   List<QuoteOptimizedExportCalculator.QuoteExportRowData> optimizedRows) {
+        boolean optimized = optimizedRows != null && !optimizedRows.isEmpty();
+        List<String> processNames = optimized ? collectOptimizedProcessNames(optimizedRows) : collectQuoteProcessNames(items);
         int requiredProcessSlots = Math.max(processNames.size(), 1);
-        List<String> feeNames = collectQuoteFeeNames(items);
+        List<String> feeNames = optimized ? collectOptimizedFeeNames(optimizedRows) : collectQuoteFeeNames(items);
         int requiredFeeSlots = Math.max(feeNames.size(), 1);
 
         ColumnLayout columnLayout = ensureDetailLayout(sheet, requiredProcessSlots, requiredFeeSlots, layout);
@@ -149,17 +173,28 @@ public class QuoteTemplateExportService {
         return new TemplateColumns(headerMap(sheet, layout), -1, 0, List.of(), PROCESS_BLOCK_WIDTH, -1, 0, List.of());
     }
 
-    private void writeQuoteRow(Row row, ItemQuoteVersion item, int index, TemplateColumns columns, boolean simpleMode) {
+    private void writeQuoteRow(Row row, ItemQuoteVersion item, int index, TemplateColumns columns, boolean simpleMode,
+                               QuoteOptimizedExportCalculator.QuoteExportRowData optimizedData) {
         Map<String, Object> materialData = normalizeMap(item.getMaterialData());
-        List<Map<String, Object>> processRoutes = normalizeProcessRoute(item.getProcessRoute());
-        List<Map<String, Object>> feeRows = normalizeProcessRoute(item.getFeeData());
+        List<Map<String, Object>> processRoutes = optimizedData == null
+                ? normalizeProcessRoute(item.getProcessRoute())
+                : optimizedData.processRoutes();
+        List<Map<String, Object>> feeRows = optimizedData == null
+                ? normalizeProcessRoute(item.getFeeData())
+                : optimizedData.feeRows();
 
         double materialCost = firstNonNullDouble(materialData.get("cost"), 0.0);
         double processCost = sumProcessCost(processRoutes);
-        double markupCost = sumCost(feeRows);
-        double baseCost = item.getBaseCost() == null ? materialCost + processCost : item.getBaseCost();
-        double unitPrice = item.getTaxIncludedUnitPrice() == null ? materialCost + processCost + markupCost : item.getTaxIncludedUnitPrice();
-        double totalPrice = item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice();
+        double markupCost = optimizedData == null ? sumCost(feeRows) : optimizedData.markupCost();
+        double baseCost = optimizedData == null
+                ? (item.getBaseCost() == null ? materialCost + processCost : item.getBaseCost())
+                : optimizedData.baseCost();
+        double unitPrice = optimizedData == null
+                ? (item.getTaxIncludedUnitPrice() == null ? materialCost + processCost + markupCost : item.getTaxIncludedUnitPrice())
+                : optimizedData.taxIncludedUnitPrice();
+        double totalPrice = optimizedData == null
+                ? (item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice())
+                : optimizedData.taxIncludedTotalPrice();
         boolean missingDrawing = isMissingDrawing(item);
 
         setByHeader(row, columns.headers(), "序号", index);
@@ -845,6 +880,52 @@ public class QuoteTemplateExportService {
 
     private List<String> collectQuoteProcessNames(List<ItemQuoteVersion> items) {
         return QuoteProcessExportSupport.collectProcessNames(items, this::normalizeProcessRoute);
+    }
+
+    private List<QuoteOptimizedExportCalculator.QuoteExportRowData> optimizedRows(List<ItemQuoteVersion> items) {
+        List<QuoteOptimizedExportCalculator.QuoteExportRowData> rows = new ArrayList<>();
+        for (ItemQuoteVersion item : items) {
+            rows.add(QuoteOptimizedExportCalculator.calculate(
+                    item,
+                    normalizeMap(item.getMaterialData()),
+                    normalizeProcessRoute(item.getProcessRoute()),
+                    normalizeProcessRoute(item.getFeeData())
+            ));
+        }
+        return rows;
+    }
+
+    private List<String> collectOptimizedProcessNames(List<QuoteOptimizedExportCalculator.QuoteExportRowData> rows) {
+        List<String> hourlyNames = new ArrayList<>();
+        List<String> nonHourlyNames = new ArrayList<>();
+        for (QuoteOptimizedExportCalculator.QuoteExportRowData row : rows) {
+            for (QuoteProcessExportSupport.MergedProcess process : QuoteProcessExportSupport.mergeProcessRoutes(row.processRoutes()).values()) {
+                String name = process.processName();
+                if (hourlyNames.contains(name) || nonHourlyNames.contains(name)) {
+                    continue;
+                }
+                if (process.nonHourly()) {
+                    nonHourlyNames.add(name);
+                } else {
+                    hourlyNames.add(name);
+                }
+            }
+        }
+        hourlyNames.addAll(nonHourlyNames);
+        return hourlyNames;
+    }
+
+    private List<String> collectOptimizedFeeNames(List<QuoteOptimizedExportCalculator.QuoteExportRowData> rows) {
+        List<String> names = new ArrayList<>();
+        for (QuoteOptimizedExportCalculator.QuoteExportRowData row : rows) {
+            for (Map<String, Object> fee : row.feeRows()) {
+                String feeName = safe(fee.get("feeName"));
+                if (!feeName.isEmpty() && !names.contains(feeName)) {
+                    names.add(feeName);
+                }
+            }
+        }
+        return names;
     }
 
     private List<String> collectQuoteFeeNames(List<ItemQuoteVersion> items) {

@@ -191,6 +191,12 @@ public class ExcelExportService {
         exportQuoteSheet(rfqId, response, true);
     }
 
+    public void exportOptimizedQuoteSheet(Integer rfqId, HttpServletResponse response) throws IOException {
+        quoteProcessService.assertQuoteExportable(rfqId);
+        assertOrderDataScope(rfqId);
+        exportDetailedQuoteSheet(rfqId, response, true, "优化详细报价单", "优化报价单", true);
+    }
+
     public void exportPricingSheet(Integer rfqId, HttpServletResponse response) throws IOException {
         long startedAt = System.currentTimeMillis();
         log.info("Pricing sheet export started rfqId={}", rfqId);
@@ -284,6 +290,11 @@ public class ExcelExportService {
 
     private int exportDetailedQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime,
                                          String fileSuffix, String sheetName) throws IOException {
+        return exportDetailedQuoteSheet(rfqId, response, useQuoteLeadTime, fileSuffix, sheetName, false);
+    }
+
+    private int exportDetailedQuoteSheet(Integer rfqId, HttpServletResponse response, boolean useQuoteLeadTime,
+                                         String fileSuffix, String sheetName, boolean optimized) throws IOException {
         assertOrderDataScope(rfqId);
         QueryWrapper<ItemQuoteVersion> qw = new QueryWrapper<>();
         qw.eq("rfq_id", rfqId);
@@ -291,13 +302,16 @@ public class ExcelExportService {
         qw.orderByAsc("id");
         List<ItemQuoteVersion> items = itemMapper.selectList(qw);
 
-        List<String> processNames = collectQuoteProcessNames(items);
-        List<String> feeNames = collectQuoteFeeNames(items);
+        List<QuoteOptimizedExportCalculator.QuoteExportRowData> optimizedRows = optimized ? optimizedRows(items) : List.of();
+        List<String> processNames = optimized ? collectOptimizedProcessNames(optimizedRows) : collectQuoteProcessNames(items);
+        List<String> feeNames = optimized ? collectOptimizedFeeNames(optimizedRows) : collectQuoteFeeNames(items);
         List<List<String>> head = buildQuoteHead(processNames, feeNames);
         List<List<Object>> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             ItemQuoteVersion item = items.get(i);
-            rows.add(buildQuoteRow(item, i + 1, processNames, feeNames, useQuoteLeadTime));
+            rows.add(optimized
+                    ? buildQuoteRow(item, i + 1, processNames, feeNames, useQuoteLeadTime, optimizedRows.get(i))
+                    : buildQuoteRow(item, i + 1, processNames, feeNames, useQuoteLeadTime));
         }
         write(response, buildFileName(rfqId, fileSuffix), sheetName, head, rows);
         return rows.size();
@@ -403,20 +417,36 @@ public class ExcelExportService {
     }
 
     private List<Object> buildQuoteRow(ItemQuoteVersion item, int index, List<String> processNames, List<String> feeNames, boolean useQuoteLeadTime) {
+        return buildQuoteRow(item, index, processNames, feeNames, useQuoteLeadTime, null);
+    }
+
+    private List<Object> buildQuoteRow(ItemQuoteVersion item, int index, List<String> processNames, List<String> feeNames,
+                                       boolean useQuoteLeadTime,
+                                       QuoteOptimizedExportCalculator.QuoteExportRowData optimizedData) {
         if (isMissingDrawing(item)) {
             return buildMissingDrawingQuoteRow(item, index, processNames, feeNames, useQuoteLeadTime);
         }
 
         Map<String, Object> materialData = normalizeMap(item.getMaterialData());
-        List<Map<String, Object>> processRoutes = normalizeProcessRoute(item.getProcessRoute());
-        List<Map<String, Object>> feeRows = normalizeProcessRoute(item.getFeeData());
+        List<Map<String, Object>> processRoutes = optimizedData == null
+                ? normalizeProcessRoute(item.getProcessRoute())
+                : optimizedData.processRoutes();
+        List<Map<String, Object>> feeRows = optimizedData == null
+                ? normalizeProcessRoute(item.getFeeData())
+                : optimizedData.feeRows();
 
         double materialCost = firstNonNullDouble(materialData.get("cost"), 0.0);
         double processCost = sumProcessCost(processRoutes);
-        double markupCost = sumCost(feeRows);
-        double baseCost = item.getBaseCost() == null ? materialCost + processCost : item.getBaseCost();
-        double unitPrice = item.getTaxIncludedUnitPrice() == null ? materialCost + processCost + markupCost : item.getTaxIncludedUnitPrice();
-        double totalPrice = item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice();
+        double markupCost = optimizedData == null ? sumCost(feeRows) : optimizedData.markupCost();
+        double baseCost = optimizedData == null
+                ? (item.getBaseCost() == null ? materialCost + processCost : item.getBaseCost())
+                : optimizedData.baseCost();
+        double unitPrice = optimizedData == null
+                ? (item.getTaxIncludedUnitPrice() == null ? materialCost + processCost + markupCost : item.getTaxIncludedUnitPrice())
+                : optimizedData.taxIncludedUnitPrice();
+        double totalPrice = optimizedData == null
+                ? (item.getTaxIncludedTotalPrice() == null ? unitPrice * safeInt(item.getQty()) : item.getTaxIncludedTotalPrice())
+                : optimizedData.taxIncludedTotalPrice();
 
         List<Object> row = new ArrayList<>();
         row.add(index);
@@ -504,6 +534,52 @@ public class ExcelExportService {
 
     private String resolveQuoteExportLeadTime(ItemQuoteVersion item, boolean useQuoteLeadTime) {
         return useQuoteLeadTime ? leadTimeService.effectiveLeadTime(item) : item.getLeadTime();
+    }
+
+    private List<QuoteOptimizedExportCalculator.QuoteExportRowData> optimizedRows(List<ItemQuoteVersion> items) {
+        List<QuoteOptimizedExportCalculator.QuoteExportRowData> rows = new ArrayList<>();
+        for (ItemQuoteVersion item : items) {
+            rows.add(QuoteOptimizedExportCalculator.calculate(
+                    item,
+                    normalizeMap(item.getMaterialData()),
+                    normalizeProcessRoute(item.getProcessRoute()),
+                    normalizeProcessRoute(item.getFeeData())
+            ));
+        }
+        return rows;
+    }
+
+    private List<String> collectOptimizedProcessNames(List<QuoteOptimizedExportCalculator.QuoteExportRowData> rows) {
+        List<String> hourlyNames = new ArrayList<>();
+        List<String> nonHourlyNames = new ArrayList<>();
+        for (QuoteOptimizedExportCalculator.QuoteExportRowData row : rows) {
+            for (QuoteProcessExportSupport.MergedProcess process : QuoteProcessExportSupport.mergeProcessRoutes(row.processRoutes()).values()) {
+                String name = process.processName();
+                if (hourlyNames.contains(name) || nonHourlyNames.contains(name)) {
+                    continue;
+                }
+                if (process.nonHourly()) {
+                    nonHourlyNames.add(name);
+                } else {
+                    hourlyNames.add(name);
+                }
+            }
+        }
+        hourlyNames.addAll(nonHourlyNames);
+        return hourlyNames;
+    }
+
+    private List<String> collectOptimizedFeeNames(List<QuoteOptimizedExportCalculator.QuoteExportRowData> rows) {
+        List<String> names = new ArrayList<>();
+        for (QuoteOptimizedExportCalculator.QuoteExportRowData row : rows) {
+            for (Map<String, Object> fee : row.feeRows()) {
+                String feeName = safe(fee.get("feeName"));
+                if (!feeName.isEmpty() && !names.contains(feeName)) {
+                    names.add(feeName);
+                }
+            }
+        }
+        return names;
     }
 
     private List<String> collectQuoteProcessNames(List<ItemQuoteVersion> items) {

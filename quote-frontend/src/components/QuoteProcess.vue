@@ -121,6 +121,17 @@
                 plain
                 size="large"
                 class="workflow-soft-button download-btn secondary"
+                :disabled="!canExportQuoteSheet || isQuoteExporting('exportOptimizedDetail')"
+                :loading="isQuoteExporting('exportOptimizedDetail')"
+                @click="exportOptimizedQuote"
+              >
+                优化详细报价单
+              </el-button>
+              <el-button v-permission="'market:quote-process:export'"
+                :icon="Download"
+                plain
+                size="large"
+                class="workflow-soft-button download-btn secondary"
                 :disabled="!canExportQuoteSheet || isQuoteExporting('exportSimple')"
                 :loading="isQuoteExporting('exportSimple')"
                 @click="exportSimpleQuote"
@@ -137,6 +148,17 @@
                 @click="exportTemplateQuote"
               >
                 生成客户模板详细报价单
+              </el-button>
+              <el-button v-permission="'market:quote-process:export'"
+                :icon="Download"
+                plain
+                size="large"
+                class="workflow-soft-button download-btn secondary"
+                :disabled="!canExportQuoteSheet || isQuoteExporting('exportOptimizedTemplateDetail')"
+                :loading="isQuoteExporting('exportOptimizedTemplateDetail')"
+                @click="exportOptimizedTemplateQuote"
+              >
+                优化客户模板详细报价单
               </el-button>
               <el-button v-permission="'market:quote-process:export'"
                 :icon="Download"
@@ -337,6 +359,8 @@ import OrderPickerDialog from './OrderPickerDialog.vue'
 import QuoteLeadTimeReplacementDialog from './quote-process/QuoteLeadTimeReplacementDialog.vue'
 import {
   batchUpdateQuoteProcessLeadTime,
+  downloadOptimizedQuote,
+  downloadOptimizedQuoteTemplateDetail,
   downloadQuote,
   downloadQuoteTemplateDetail,
   downloadQuoteTemplateSimple,
@@ -389,8 +413,10 @@ const quoteProcessActionKeys = {
   leadTimeBulkSave: () => `market:quote-process:lead-time-bulk-save:${selectedRfqId.value || 'none'}`,
   importSelection: () => `market:quote-process:import-selection:${selectedRfqId.value || 'none'}`,
   exportDetail: () => `market:quote-process:export-detail:${selectedRfqId.value || 'none'}`,
+  exportOptimizedDetail: () => `market:quote-process:export-optimized-detail:${selectedRfqId.value || 'none'}`,
   exportSimple: () => `market:quote-process:export-simple:${selectedRfqId.value || 'none'}`,
   exportTemplateDetail: () => `market:quote-process:export-template-detail:${selectedRfqId.value || 'none'}`,
+  exportOptimizedTemplateDetail: () => `market:quote-process:export-optimized-template-detail:${selectedRfqId.value || 'none'}`,
   exportTemplateSimple: () => `market:quote-process:export-template-simple:${selectedRfqId.value || 'none'}`,
   leadTimeRow: (itemId) => `market:quote-process:lead-time:${itemId}`
 }
@@ -794,6 +820,11 @@ const exportQuote = async () => {
   return runQuoteExport(quoteProcessActionKeys.exportDetail, fallbackName, downloadQuote, '报价单导出失败。')
 }
 
+const exportOptimizedQuote = async () => {
+  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-优化详细报价单.xlsx`
+  return runQuoteExport(quoteProcessActionKeys.exportOptimizedDetail, fallbackName, downloadOptimizedQuote, '优化详细报价单导出失败。')
+}
+
 const exportSimpleQuote = async () => {
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-简化报价单.xlsx`
   return runQuoteExport(quoteProcessActionKeys.exportSimple, fallbackName, downloadSimpleQuote, '简化报价单导出失败。')
@@ -802,6 +833,11 @@ const exportSimpleQuote = async () => {
 const exportTemplateQuote = async () => {
   const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-客户模板详细报价单.xlsx`
   return runQuoteExport(quoteProcessActionKeys.exportTemplateDetail, fallbackName, downloadQuoteTemplateDetail, '客户模板详细报价单导出失败。')
+}
+
+const exportOptimizedTemplateQuote = async () => {
+  const fallbackName = `${orderInfo.value.rfqNo || `quote-${selectedRfqId.value}`}-优化客户模板详细报价单.xlsx`
+  return runQuoteExport(quoteProcessActionKeys.exportOptimizedTemplateDetail, fallbackName, downloadOptimizedQuoteTemplateDetail, '优化客户模板详细报价单导出失败。')
 }
 
 const exportTemplateSimpleQuote = async () => {

@@ -183,6 +183,11 @@ export const downloadQuote = (rfqId, fallbackName = `quote-${rfqId}.xlsx`) => do
   fallbackName
 )
 
+export const downloadOptimizedQuote = (rfqId, fallbackName = `quote-optimized-${rfqId}.xlsx`) => downloadFile(
+  `/api/market/export/quote/optimized/${rfqId}`,
+  fallbackName
+)
+
 export const downloadSimpleQuote = (rfqId, fallbackName = `quote-simple-${rfqId}.xlsx`) => downloadFile(
   `/api/market/export/quote/simple/${rfqId}`,
   fallbackName
@@ -190,6 +195,11 @@ export const downloadSimpleQuote = (rfqId, fallbackName = `quote-simple-${rfqId}
 
 export const downloadQuoteTemplateDetail = (rfqId, fallbackName = `quote-template-detail-${rfqId}.xlsx`) => downloadFile(
   `/api/market/export/quote/template/detail/${rfqId}`,
+  fallbackName
+)
+
+export const downloadOptimizedQuoteTemplateDetail = (rfqId, fallbackName = `quote-template-detail-optimized-${rfqId}.xlsx`) => downloadFile(
+  `/api/market/export/quote/template/detail/optimized/${rfqId}`,
   fallbackName
 )
 
