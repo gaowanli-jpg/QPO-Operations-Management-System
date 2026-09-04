@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class SalesOrderProductionTaskNoticeExportService {
@@ -33,6 +34,7 @@ public class SalesOrderProductionTaskNoticeExportService {
     private static final String SHEET_NAME = "StandardDocPrintTemplate";
     private static final int DATA_START_ROW = 11;
     private static final int TEMPLATE_DATA_ROW_COUNT = 51;
+    private static final int TEMPLATE_BODY_ROW_COUNT = TEMPLATE_DATA_ROW_COUNT + 1;
     private static final int TEMPLATE_DATA_END_ROW = DATA_START_ROW + TEMPLATE_DATA_ROW_COUNT - 1;
     private static final int FIRST_ROW_AFTER_TEMPLATE_DATA = TEMPLATE_DATA_END_ROW + 1;
     private static final int TEMPLATE_FORM_NO_ROW = 66;
@@ -112,10 +114,9 @@ public class SalesOrderProductionTaskNoticeExportService {
             if (sheet == null) {
                 throw new RuntimeException("生产任务通知单模板缺少工作表");
             }
-            prepareDataRows(sheet, items.size());
+            resizeTemplateDataRows(sheet, items.size());
             writeHeader(sheet, order, items.size());
             writeItems(sheet, items);
-            clearUnusedTemplateRows(sheet, items.size());
             workbook.write(outputStream);
             return outputStream.toByteArray();
         }
@@ -134,8 +135,17 @@ public class SalesOrderProductionTaskNoticeExportService {
         setText(sheet, "Q5", "生产任务通知单");
         setText(sheet, "AA8", "下单日期：");
         setText(sheet, "AD8", dateText(order.getSalesOrderDate()));
-        setText(sheet, TEMPLATE_FORM_NO_ROW + extraTemplateRows(itemCount), "AB",
-                "表单编号：" + firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo(), String.valueOf(order.getId())));
+        setFormNo(sheet, itemCount, firstNonBlank(order.getSalesOrderNo(), order.getDocumentNo(), String.valueOf(order.getId())));
+    }
+
+    private void setFormNo(Sheet sheet, int itemCount, String salesOrderNo) {
+        String value = "表单编号：" + salesOrderNo;
+        Optional<Cell> templateCell = findTextCell(sheet, "表单编号：");
+        if (templateCell.isPresent()) {
+            templateCell.get().setCellValue(value);
+            return;
+        }
+        setText(sheet, TEMPLATE_FORM_NO_ROW + dataRowDelta(itemCount), "AB", value);
     }
 
     private void writeItems(Sheet sheet, List<SalesOrderItem> items) {
@@ -164,11 +174,20 @@ public class SalesOrderProductionTaskNoticeExportService {
         return "已匹配".equals(status) || "重复".equals(status);
     }
 
-    private void prepareDataRows(Sheet sheet, int itemCount) {
+    private void resizeTemplateDataRows(Sheet sheet, int itemCount) {
+        if (itemCount < TEMPLATE_DATA_ROW_COUNT) {
+            removeTemplateRows(sheet, DATA_START_ROW + Math.max(itemCount, 0), FIRST_ROW_AFTER_TEMPLATE_DATA);
+            return;
+        }
+        appendExtraTemplateRows(sheet, itemCount);
+        removeTemplateRows(sheet, DATA_START_ROW + Math.max(itemCount, 0), DATA_START_ROW + Math.max(itemCount, 0));
+    }
+
+    private void appendExtraTemplateRows(Sheet sheet, int itemCount) {
         if (itemCount <= TEMPLATE_DATA_ROW_COUNT) {
             return;
         }
-        int extraRows = extraTemplateRows(itemCount);
+        int extraRows = dataRowDelta(itemCount);
         Row templateRow = sheet.getRow(TEMPLATE_DATA_END_ROW);
         List<CellRangeAddress> templateMergedRegions = mergedRegionsForRow(sheet, TEMPLATE_DATA_END_ROW);
         sheet.shiftRows(FIRST_ROW_AFTER_TEMPLATE_DATA, sheet.getLastRowNum(), extraRows, true, false);
@@ -179,15 +198,19 @@ public class SalesOrderProductionTaskNoticeExportService {
         }
     }
 
-    private int extraTemplateRows(int itemCount) {
-        return Math.max(0, itemCount - TEMPLATE_DATA_ROW_COUNT);
+    private int dataRowDelta(int itemCount) {
+        return Math.max(0, itemCount) - TEMPLATE_BODY_ROW_COUNT;
     }
 
-    private void clearUnusedTemplateRows(Sheet sheet, int itemCount) {
-        int firstUnusedRow = DATA_START_ROW + Math.max(itemCount, 0);
-        int lastTemplateRow = DATA_START_ROW + TEMPLATE_DATA_ROW_COUNT - 1;
-        for (int rowIndex = firstUnusedRow; rowIndex <= lastTemplateRow; rowIndex++) {
-            clearRowValues(getOrCreateRow(sheet, rowIndex));
+    private void removeTemplateRows(Sheet sheet, int firstRow, int lastRow) {
+        if (firstRow > lastRow) {
+            return;
+        }
+        int rowsToDelete = lastRow - firstRow + 1;
+        removeMergedRegionsWithin(sheet, firstRow, lastRow);
+        int lastRowNum = sheet.getLastRowNum();
+        if (lastRow < lastRowNum) {
+            sheet.shiftRows(lastRow + 1, lastRowNum, -rowsToDelete, true, false);
         }
     }
 
@@ -245,11 +268,11 @@ public class SalesOrderProductionTaskNoticeExportService {
         return false;
     }
 
-    private void clearRowValues(Row row) {
-        for (int col = FIRST_DATA_COLUMN; col <= LAST_DATA_COLUMN; col++) {
-            Cell cell = row.getCell(col, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-            if (cell != null) {
-                cell.setBlank();
+    private void removeMergedRegionsWithin(Sheet sheet, int firstRow, int lastRow) {
+        for (int i = sheet.getNumMergedRegions() - 1; i >= 0; i--) {
+            CellRangeAddress region = sheet.getMergedRegion(i);
+            if (region.getFirstRow() >= firstRow && region.getLastRow() <= lastRow) {
+                sheet.removeMergedRegion(i);
             }
         }
     }
@@ -271,6 +294,19 @@ public class SalesOrderProductionTaskNoticeExportService {
     private void setNumber(Sheet sheet, int rowIndex, String column, int value) {
         Cell cell = getOrCreateRow(sheet, rowIndex).getCell(columnIndex(column), Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
         cell.setCellValue(value);
+    }
+
+    private Optional<Cell> findTextCell(Sheet sheet, String prefix) {
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                if (cell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING
+                        && cell.getStringCellValue() != null
+                        && cell.getStringCellValue().startsWith(prefix)) {
+                    return Optional.of(cell);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private int rowIndex(String address) {

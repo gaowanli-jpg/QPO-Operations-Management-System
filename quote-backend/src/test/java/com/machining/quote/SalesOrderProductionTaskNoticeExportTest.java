@@ -12,6 +12,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -99,7 +100,6 @@ class SalesOrderProductionTaskNoticeExportTest {
             assertThat(text(sheet, 5, "Q")).isEqualTo("生产任务通知单");
             assertThat(text(sheet, 8, "AA")).isEqualTo("下单日期：");
             assertThat(text(sheet, 8, "AD")).isEqualTo("2026-09-04");
-            assertThat(text(sheet, 67, "AB")).isEqualTo("表单编号：SOQPO-900");
 
             assertThat(text(sheet, 12, "B")).isEqualTo("10");
             assertThat(text(sheet, 12, "E")).isEqualTo("重复");
@@ -123,9 +123,11 @@ class SalesOrderProductionTaskNoticeExportTest {
             assertThat(text(sheet, 13, "AF")).isEqualTo("2026-09-25");
             assertThat(text(sheet, 13, "AG")).isEqualTo("第二件备注");
 
-            assertThat(text(sheet, 14, "B")).isBlank();
-            assertThat(text(sheet, 14, "P")).isBlank();
-            assertThat(sheet.getNumMergedRegions()).isGreaterThan(500);
+            assertThat(hasMergedRegion(sheet, "B12:D12")).isTrue();
+            assertThat(hasMergedRegion(sheet, "B13:D13")).isTrue();
+            assertThat(hasMergedRegion(sheet, "B14:D14")).isFalse();
+            assertThat(text(sheet, 17, "AB")).isEqualTo("表单编号：SOQPO-900");
+            assertThat(text(sheet, 67, "AB")).isBlank();
         }
     }
 
@@ -154,8 +156,9 @@ class SalesOrderProductionTaskNoticeExportTest {
             Sheet sheet = workbook.getSheet("StandardDocPrintTemplate");
             assertThat(text(sheet, 64, "B")).isEqualTo("530");
             assertThat(text(sheet, 64, "P")).isEqualTo("PN-53");
-            assertThat(text(sheet, 67, "AB")).isBlank();
-            assertThat(text(sheet, 69, "AB")).isEqualTo("表单编号：SOQPO-910");
+            assertThat(hasMergedRegion(sheet, "B65:D65")).isFalse();
+            assertThat(text(sheet, 67, "AB")).isEqualTo("表单编号：SOQPO-910");
+            assertThat(text(sheet, 68, "AB")).isBlank();
         }
     }
 
@@ -229,6 +232,16 @@ class SalesOrderProductionTaskNoticeExportTest {
             result = result * 26 + (column.charAt(i) - 'A' + 1);
         }
         return result - 1;
+    }
+
+    private boolean hasMergedRegion(Sheet sheet, String range) {
+        CellRangeAddress expected = CellRangeAddress.valueOf(range);
+        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+            if (sheet.getMergedRegion(i).formatAsString().equals(expected.formatAsString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private record Fixture(
