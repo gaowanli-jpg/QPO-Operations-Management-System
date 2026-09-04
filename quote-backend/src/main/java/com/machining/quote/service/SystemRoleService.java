@@ -521,6 +521,7 @@ public class SystemRoleService {
         }
         if (permissionCode.startsWith("market:order:")
                 || permissionCode.startsWith("market:sales-order:")
+                || permissionCode.startsWith("market:part-search:")
                 || permissionCode.startsWith("market:delivered-item:")
                 || permissionCode.startsWith("market:production-item:")
                 || permissionCode.startsWith("market:locked-item:")) {

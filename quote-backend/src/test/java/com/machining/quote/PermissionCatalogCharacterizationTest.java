@@ -118,6 +118,7 @@ class PermissionCatalogCharacterizationTest {
                         "/market",
                         "/orders",
                         "/sales-orders",
+                        "/part-search",
                         "/delivered-items",
                         "/production-items",
                         "/locked-items",

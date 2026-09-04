@@ -85,7 +85,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataBoard, Document, Expand, Files, Fold, Setting, Tools, User } from '@element-plus/icons-vue'
+import { DataBoard, Document, Expand, Files, Fold, Search, Setting, Tools, User } from '@element-plus/icons-vue'
 import { useAuthStore } from './stores/authStore'
 import UserProfilePopover from './components/UserProfilePopover.vue'
 
@@ -106,7 +106,7 @@ const menuGroups = [
   { key: 'dashboard', title: '首页', paths: ['/dashboard'] },
   { key: 'market', title: '市场', paths: ['/market', '/quote-process', '/release', '/u9-sync', '/delivery-documents', '/quote-template'] },
   { key: 'engineer', title: '工程', paths: ['/engineering', '/material-process'] },
-  { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/production-items', '/locked-items'] },
+  { key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/part-search', '/delivered-items', '/production-items', '/locked-items'] },
   { key: 'change', title: '变更', paths: ['/sales-order-change'] },
   { key: 'system', title: '系统', paths: ['/users', '/roles', '/organization', '/customers', '/audit-logs', '/system-config'] }
 ]
@@ -123,6 +123,7 @@ const menuMetaByPath = {
   '/material-process': { title: '材料工艺', permission: 'engineer:dict:view', icon: Tools },
   '/orders': { title: '询价订单', permission: 'market:order:view', icon: Document },
   '/sales-orders': { title: '销售订单', permission: 'market:sales-order:view', icon: Files },
+  '/part-search': { title: '零件查询', permission: 'market:part-search:view', icon: Search },
   '/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view', icon: Files },
   '/production-items': { title: '待产零件', permission: 'market:production-item:view', icon: Files },
   '/locked-items': { title: '锁库零件', permission: 'market:locked-item:view', icon: Files },
@@ -215,6 +216,10 @@ const shellMetaByPath = {
   '/sales-orders': {
     title: '销售订单',
     description: '查看销售订单、零件明细、提单行和工艺表状态。'
+  },
+  '/part-search': {
+    title: '零件查询',
+    description: '按图号精确查询询价零件和销售零件的只读详情。'
   },
   '/delivered-items': {
     title: '已提零件',

@@ -14,6 +14,7 @@ const ItemPricing = () => import('../components/ItemPricing.vue')
 const MaterialProcessManage = () => import('../components/MaterialProcessManage.vue')
 const OrderManage = () => import('../components/OrderManage.vue')
 const SalesOrderManage = () => import('../components/SalesOrderManage.vue')
+const PartSearchManage = () => import('../components/PartSearchManage.vue')
 const DeliveredItemManage = () => import('../components/DeliveredItemManage.vue')
 const ProductionItemManage = () => import('../components/ProductionItemManage.vue')
 const LockedItemManage = () => import('../components/LockedItemManage.vue')
@@ -40,6 +41,7 @@ const routes = [
   { path: '/material-process', component: MaterialProcessManage, meta: { permission: 'engineer:dict:view' } },
   { path: '/orders', component: OrderManage, meta: { permission: 'market:order:view' } },
   { path: '/sales-orders', component: SalesOrderManage, meta: { permission: 'market:sales-order:view' } },
+  { path: '/part-search', component: PartSearchManage, meta: { permission: 'market:part-search:view' } },
   { path: '/history-orders', redirect: '/sales-orders' },
   { path: '/delivered-items', component: DeliveredItemManage, meta: { permission: 'market:delivered-item:view' } },
   { path: '/production-items', component: ProductionItemManage, meta: { permission: 'market:production-item:view' } },

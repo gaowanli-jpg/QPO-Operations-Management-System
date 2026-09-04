@@ -61,6 +61,20 @@ public class DataScopeService {
         applyScopeSql(query, currentOrderScopeSql(alias));
     }
 
+    public void applySalesOrderIdScope(QueryWrapper<?> query, String salesOrderIdColumn) {
+        String safeColumn = isBlank(salesOrderIdColumn) ? "sales_order_id" : salesOrderIdColumn.trim();
+        ScopeSql scopeSql = currentOrderScopeSql("so");
+        if (scopeSql.allAccess()) {
+            return;
+        }
+        if (scopeSql.noAccess()) {
+            query.apply("1 = 0");
+            return;
+        }
+        query.apply(safeColumn + " IN (SELECT so.id FROM sales_order_header so WHERE "
+                + scopeSql.sql() + ")", scopeSql.params().toArray());
+    }
+
     public void applyRfqScope(QueryWrapper<?> query, String rfqColumn) {
         String safeColumn = isBlank(rfqColumn) ? "rfq_id" : rfqColumn;
         ScopeSql scopeSql = currentOrderScopeSql("");

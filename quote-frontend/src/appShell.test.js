@@ -89,6 +89,7 @@ describe('QPO app shell polish', () => {
     expect(appVue).toContain("'/orders': { title: '询价订单', permission: 'market:order:view'")
     expect(appVue).not.toContain("'/orders': { title: '订单管理', permission: 'market:order:view'")
     expect(appVue).toContain("'/sales-orders': { title: '销售订单', permission: 'market:sales-order:view'")
+    expect(appVue).toContain("'/part-search': { title: '零件查询', permission: 'market:part-search:view'")
     expect(appVue).not.toContain("'/history-orders': { title: '历史订单'")
     expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
     expect(appVue).toContain("'/production-items': { title: '待产零件', permission: 'market:production-item:view'")
@@ -100,10 +101,11 @@ describe('QPO app shell polish', () => {
     expect(appVue).not.toContain("permission: 'market:order:view', icon: Files")
   })
 
-  test('places delivered, production, and locked items in the order sidebar group with four-character titles', () => {
-    expect(appVue).toContain("{ key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/delivered-items', '/production-items', '/locked-items'] }")
+  test('places part search and work pool items in the order sidebar group with four-character titles', () => {
+    expect(appVue).toContain("{ key: 'orders', title: '订单', paths: ['/orders', '/sales-orders', '/part-search', '/delivered-items', '/production-items', '/locked-items'] }")
     expect(appVue).toContain("'/orders': { title: '询价订单', permission: 'market:order:view'")
     expect(appVue).toContain("'/sales-orders': { title: '销售订单', permission: 'market:sales-order:view'")
+    expect(appVue).toContain("'/part-search': { title: '零件查询', permission: 'market:part-search:view'")
     expect(appVue).toContain("'/delivered-items': { title: '已提零件', permission: 'market:delivered-item:view'")
     expect(appVue).toContain("'/production-items': { title: '待产零件', permission: 'market:production-item:view'")
     expect(appVue).toContain("'/locked-items': { title: '锁库零件', permission: 'market:locked-item:view'")
