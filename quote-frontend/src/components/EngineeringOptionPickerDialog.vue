@@ -66,6 +66,15 @@
             :placeholder="searchPlaceholder"
             class="keyword-input"
           />
+          <el-radio-group v-if="type === 'material'" v-model="materialTypeFilter" size="small" class="material-type-filter">
+            <el-radio-button
+              v-for="option in MATERIAL_TYPE_FILTER_OPTIONS"
+              :key="option.label"
+              :label="option.value"
+            >
+              {{ option.label }}
+            </el-radio-button>
+          </el-radio-group>
           <el-radio-group v-if="type === 'process'" v-model="processSourceTypeFilter" size="small" class="process-source-type-filter">
             <el-radio-button label="">全部</el-radio-button>
             <el-radio-button label="process">工时工艺</el-radio-button>
@@ -364,6 +373,13 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'confirm', 'process-rate-updated', 'material-price-updated'])
 
+const MATERIAL_TYPE_FILTER_OPTIONS = [
+  { label: '全部', value: '' },
+  { label: '原材料', value: 'MATERIAL,RAW_MATERIAL' },
+  { label: '半成品', value: 'SEMI' },
+  { label: '成品', value: 'PRODUCT' }
+]
+
 function normalizeRemotePageSize(value) {
   const numericValue = Number(value)
   return props.pageSizeOptions.includes(numericValue) ? numericValue : props.defaultPageSize
@@ -399,6 +415,7 @@ const processArrangementError = ref('')
 const selectedProcessArrangementKey = ref('')
 const selectedProcessArrangementNode = ref(null)
 const processArrangementExpandedKeys = ref([])
+const materialTypeFilter = ref('')
 const processSourceTypeFilter = ref('')
 
 const processArrangementTreeProps = { children: 'children', label: 'label' }
@@ -513,6 +530,7 @@ const resetPicker = () => {
   selectedProcessArrangementKey.value = ''
   selectedProcessArrangementNode.value = null
   processArrangementExpandedKeys.value = []
+  materialTypeFilter.value = ''
   processSourceTypeFilter.value = ''
 }
 
@@ -697,6 +715,9 @@ const loadRemotePage = async (nextPage = page.value) => {
     keyword: keyword.value.trim(),
     page: safePage,
     pageSize: safePageSize
+  }
+  if (props.type === 'material' && materialTypeFilter.value) {
+    params.materialTypeCodes = materialTypeFilter.value
   }
   if (props.type === 'process') {
     const pickerFilter = processPickerFilter.value
@@ -984,6 +1005,11 @@ const saveInlineProcessRate = async (row) => {
 
 watch(() => props.selectedKey, syncSelectedKey)
 watch(keyword, scheduleRemoteSearch)
+watch(materialTypeFilter, () => {
+  if (visible.value && props.type === 'material') {
+    loadRemotePage(1)
+  }
+})
 watch(processSourceTypeFilter, () => {
   if (visible.value && props.type === 'process') {
     loadRemotePage(1)
@@ -1091,6 +1117,7 @@ onBeforeUnmount(clearRemoteSearchTimer)
   flex: 1;
 }
 
+.material-type-filter,
 .process-source-type-filter {
   flex: none;
 }

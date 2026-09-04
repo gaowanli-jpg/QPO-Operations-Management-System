@@ -57,6 +57,19 @@ describe('engineering option picker remote paging mode', () => {
     expect(source).toContain('label="所在层级"')
   })
 
+  test('material picker exposes type tabs and sends selected type codes to remote paging', () => {
+    const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
+
+    expect(source).toContain('MATERIAL_TYPE_FILTER_OPTIONS')
+    expect(source).toContain('label: \'原材料\', value: \'MATERIAL,RAW_MATERIAL\'')
+    expect(source).toContain('label: \'半成品\', value: \'SEMI\'')
+    expect(source).toContain('label: \'成品\', value: \'PRODUCT\'')
+    expect(source).toContain('v-if="type === \'material\'"')
+    expect(source).toContain('v-model="materialTypeFilter"')
+    expect(source).toContain('params.materialTypeCodes = materialTypeFilter.value')
+    expect(source).toContain('watch(materialTypeFilter, () => {')
+  })
+
   test('debounces keyword search and ignores stale remote responses', () => {
     const source = readSource('components', 'EngineeringOptionPickerDialog.vue')
 

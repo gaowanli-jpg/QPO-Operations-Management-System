@@ -61,12 +61,13 @@ public class EngineeringPricingOptionService {
         int safePage = normalizePage(safeReq.getPage());
         int safePageSize = normalizePageSize(safeReq.getPageSize());
         List<String> materialCodes = parseMaterialCodes(safeReq.getMaterialCodes());
-        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes);
+        List<String> materialTypeCodes = parseMaterialTypeCodes(safeReq.getMaterialTypeCodes());
+        QueryWrapper<DictMaterial> countQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes);
         Long total = materialMapper.selectCount(countQuery);
         if (total == null || total == 0) {
             return PageResult.of(List.of(), 0, safePage, safePageSize);
         }
-        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes);
+        QueryWrapper<DictMaterial> pageQuery = materialQuery(safeReq.getKeyword(), materialCodes, materialTypeCodes);
         pageQuery.last(materialUsageOrderBy() + " " + limitOffset(safePage, safePageSize));
         List<PricingMaterialOptionDTO> records = toMaterialOptions(materialMapper.selectList(pageQuery));
         applyMaterialUsageCounts(records);
@@ -133,11 +134,14 @@ public class EngineeringPricingOptionService {
         return extraFeeItemMapper.selectList(query);
     }
 
-    private QueryWrapper<DictMaterial> materialQuery(String keyword, List<String> materialCodes) {
+    private QueryWrapper<DictMaterial> materialQuery(String keyword, List<String> materialCodes, List<String> materialTypeCodes) {
         QueryWrapper<DictMaterial> query = new QueryWrapper<>();
         query.eq("enabled", true);
         if (materialCodes != null && !materialCodes.isEmpty()) {
             query.in("UPPER(material_code)", materialCodes);
+        }
+        if (materialTypeCodes != null && !materialTypeCodes.isEmpty()) {
+            query.inSql("material_type_id", "SELECT id FROM dict_material_type WHERE UPPER(type_code) IN (" + quotedSqlList(materialTypeCodes) + ")");
         }
         if (!hasText(keyword)) {
             return query;
@@ -430,6 +434,31 @@ public class EngineeringPricingOptionService {
                 .map(item -> item.toUpperCase(Locale.ROOT))
                 .distinct()
                 .toList();
+    }
+
+    private List<String> parseMaterialTypeCodes(String value) {
+        if (!hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .map(item -> item.toUpperCase(Locale.ROOT))
+                .peek(this::assertSafeTypeCode)
+                .distinct()
+                .toList();
+    }
+
+    private void assertSafeTypeCode(String typeCode) {
+        if (!typeCode.matches("[A-Z0-9_-]+")) {
+            throw new IllegalArgumentException("materialTypeCodes 只允许字母、数字、下划线、中划线逗号分隔");
+        }
+    }
+
+    private String quotedSqlList(List<String> values) {
+        return values.stream()
+                .map(value -> "'" + value.replace("'", "''") + "'")
+                .collect(Collectors.joining(","));
     }
 
     private List<Long> parseProcessDetailIds(String value) {

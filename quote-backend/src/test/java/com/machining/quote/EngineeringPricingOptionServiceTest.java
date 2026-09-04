@@ -147,6 +147,27 @@ class EngineeringPricingOptionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void pageMaterialOptionsCanFilterByMaterialTypeCodesForPickerTabs() {
+        DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
+        EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
+                mock(DictProcessDetailMapper.class), mock(DictExtraFeeItemMapper.class));
+        when(materialMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        PricingOptionPageReq req = new PricingOptionPageReq();
+        req.setMaterialTypeCodes(" material , raw_material ");
+
+        PageResult<PricingMaterialOptionDTO> page = service.pageMaterialOptions(req);
+
+        assertThat(page.getRecords()).isEmpty();
+        ArgumentCaptor<QueryWrapper<DictMaterial>> countCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(materialMapper).selectCount(countCaptor.capture());
+        assertThat(sql(countCaptor.getValue()))
+                .contains("enabled", "material_type_id", "dict_material_type")
+                .contains("upper(type_code) in ('material','raw_material')");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void pageMaterialOptionsSortsByPersistedMaterialUsageBeforeManualSort() {
         DictMaterialMapper materialMapper = mock(DictMaterialMapper.class);
         EngineeringPricingOptionService service = service(materialMapper, mock(DictMaterialPriceSpecMapper.class), mock(DictMaterialTypeMapper.class),
