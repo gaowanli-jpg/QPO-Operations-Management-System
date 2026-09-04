@@ -85,6 +85,7 @@ class OrderItemMaintenanceServiceTest {
         line.setQuoteLeadTime("2026-10-05");
         line.setInternalTargetLeadTime("2026-10-08");
         line.setDescription("updated desc");
+        line.setMaterialName("updated material name");
         line.setSurfaceTreatment("anodized");
         line.setRemark("updated remark");
         line.setSalesOrderDate(LocalDate.of(2026, 9, 15));
@@ -107,6 +108,7 @@ class OrderItemMaintenanceServiceTest {
         assertThat(item.getQuoteLeadTime()).isEqualTo("2026-10-05");
         assertThat(item.getInternalTargetLeadTime()).isEqualTo("2026-10-08");
         assertThat(item.getDescription()).isEqualTo("updated desc");
+        assertThat(item.getMaterialName()).isEqualTo("updated material name");
         assertThat(item.getSurfaceTreatment()).isEqualTo("anodized");
         assertThat(item.getRemark()).isEqualTo("updated remark");
         assertThat(item.getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 9, 15));
@@ -118,6 +120,7 @@ class OrderItemMaintenanceServiceTest {
         assertThat(ticket.getPartNo()).isEqualTo("P-OLD");
         assertThat(ticket.getVersion()).isEqualTo("A");
         assertThat(ticket.getQty()).isEqualTo(4);
+        assertThat(ticket.getMaterialName()).isEqualTo("ticket material snapshot");
 
         ArgumentCaptor<Object> afterData = ArgumentCaptor.forClass(Object.class);
         verify(fixture.auditService).record(
@@ -131,9 +134,11 @@ class OrderItemMaintenanceServiceTest {
                 eq(AuditService.labelForAction("ORDER_ITEM_UPDATE")),
                 isNull()
         );
-        assertThat((Map<String, Object>) afterData.getValue())
+        Map<String, Object> auditSummary = (Map<String, Object>) afterData.getValue();
+        assertThat(auditSummary)
                 .containsEntry("rfqId", 900)
                 .containsEntry("updatedCount", 1);
+        assertThat((List<String>) auditSummary.get("changedFields")).contains("materialName");
     }
 
     @Test
@@ -276,8 +281,8 @@ class OrderItemMaintenanceServiceTest {
         OrderRfq order = order(904, "RFQ-904", QuoteStatusWorkflow.PRICED);
         ItemQuoteVersion item = item(1006, 904, "P-OLD", "A", 10);
         MockMultipartFile workbook = orderReplacementWorkbook(
-                List.of("零件ID", "图号", "版本", "新图号", "询价数量", "客户询价交期", "报价承诺交期"),
-                List.of(row(1006, "P-OLD", "A", "P-NEW", 12, "2026/10/01", "2026-10-05")));
+                List.of("零件ID", "图号", "版本", "新图号", "询价数量", "客户询价交期", "报价承诺交期", "物料描述", "材料名称", "表面处理"),
+                List.of(row(1006, "P-OLD", "A", "P-NEW", 12, "2026/10/01", "2026-10-05", "updated desc", "updated material name", "brushed")));
 
         when(fixture.orderMapper.selectById(904)).thenReturn(order);
         when(fixture.orderMapper.selectByIdForUpdate(904)).thenReturn(order);
@@ -300,6 +305,9 @@ class OrderItemMaintenanceServiceTest {
         assertThat(item.getQty()).isEqualTo(12);
         assertThat(item.getLeadTime()).isEqualTo("2026-10-01");
         assertThat(item.getQuoteLeadTime()).isEqualTo("2026-10-05");
+        assertThat(item.getDescription()).isEqualTo("updated desc");
+        assertThat(item.getMaterialName()).isEqualTo("updated material name");
+        assertThat(item.getSurfaceTreatment()).isEqualTo("brushed");
 
         ArgumentCaptor<Object> afterData = ArgumentCaptor.forClass(Object.class);
         verify(fixture.auditService).record(
@@ -313,9 +321,12 @@ class OrderItemMaintenanceServiceTest {
                 eq(AuditService.labelForAction("ORDER_ITEM_DATA_REPLACEMENT")),
                 isNull()
         );
-        assertThat((Map<String, Object>) afterData.getValue())
+        Map<String, Object> auditSummary = (Map<String, Object>) afterData.getValue();
+        assertThat(auditSummary)
                 .containsEntry("updatedItemCount", 1)
                 .containsEntry("matchedCount", 1);
+        assertThat((Map<String, Integer>) auditSummary.get("changedFieldCounts"))
+                .containsEntry("materialName", 1);
     }
 
     @Test
@@ -426,6 +437,7 @@ class OrderItemMaintenanceServiceTest {
         assertThat(saved.getPartNo()).isEqualTo("P-APP");
         assertThat(saved.getVersion()).isEqualTo("A");
         assertThat(saved.getQty()).isEqualTo(5);
+        assertThat(saved.getMaterialName()).isEqualTo("45#");
         assertThat(saved.getLeadTime()).isEqualTo("2026/10/01");
         assertThat(saved.getStatus()).isEqualTo(QuoteStatusWorkflow.UNPRICED);
         assertThat(saved.getDrawingUrl()).isEqualTo("/new/P-APP_A.pdf");
@@ -485,6 +497,7 @@ class OrderItemMaintenanceServiceTest {
         ticket.setPartNo(partNo);
         ticket.setVersion(version);
         ticket.setQty(qty);
+        ticket.setMaterialName("ticket material snapshot");
         return ticket;
     }
 

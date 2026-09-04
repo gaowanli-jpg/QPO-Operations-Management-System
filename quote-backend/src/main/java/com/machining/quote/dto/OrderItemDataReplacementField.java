@@ -18,6 +18,7 @@ public enum OrderItemDataReplacementField {
     QUOTE_LEAD_TIME("报价承诺交期", "quoteLeadTime", ValueType.LEAD_TIME, 100, true),
     INTERNAL_TARGET_LEAD_TIME("内部目标交期", "internalTargetLeadTime", ValueType.LEAD_TIME, 100, true),
     DESCRIPTION("物料描述", "description", ValueType.TEXT, 500, true),
+    MATERIAL_NAME("材料名称", "materialName", ValueType.TEXT, 500, true),
     SURFACE_TREATMENT("表面处理", "surfaceTreatment", ValueType.TEXT, 200, true),
     REMARK("备注", "remark", ValueType.TEXT, 500, true),
     SALES_ORDER_DATE("下单日期", "salesOrderDate", ValueType.DATE, null, true),

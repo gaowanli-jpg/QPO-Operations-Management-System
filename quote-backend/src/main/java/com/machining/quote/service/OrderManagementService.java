@@ -1142,6 +1142,7 @@ public class OrderManagementService {
         applyString(item.getQuoteLeadTime(), normalizeLeadTime(line.getQuoteLeadTime(), "报价承诺交期"), "quoteLeadTime", changed, item::setQuoteLeadTime);
         applyString(item.getInternalTargetLeadTime(), normalizeLeadTime(line.getInternalTargetLeadTime(), "内部目标交期"), "internalTargetLeadTime", changed, item::setInternalTargetLeadTime);
         applyString(item.getDescription(), normalizeText(line.getDescription(), "物料描述", 500), "description", changed, item::setDescription);
+        applyString(item.getMaterialName(), normalizeText(line.getMaterialName(), "材料名称", 500), "materialName", changed, item::setMaterialName);
         applyString(item.getSurfaceTreatment(), normalizeText(line.getSurfaceTreatment(), "表面处理", 200), "surfaceTreatment", changed, item::setSurfaceTreatment);
         applyString(item.getRemark(), normalizeText(line.getRemark(), "备注", 500), "remark", changed, item::setRemark);
 
@@ -1685,6 +1686,7 @@ public class OrderManagementService {
             case "quoteLeadTime" -> item.getQuoteLeadTime();
             case "internalTargetLeadTime" -> item.getInternalTargetLeadTime();
             case "description" -> item.getDescription();
+            case "materialName" -> item.getMaterialName();
             case "surfaceTreatment" -> item.getSurfaceTreatment();
             case "remark" -> item.getRemark();
             case "salesOrderDate" -> item.getSalesOrderDate();
@@ -1710,6 +1712,7 @@ public class OrderManagementService {
             case "quoteLeadTime" -> normalizeLeadTime(stringValue(value), "报价承诺交期");
             case "internalTargetLeadTime" -> normalizeLeadTime(stringValue(value), "内部目标交期");
             case "description" -> normalizeText(stringValue(value), "物料描述", 500);
+            case "materialName" -> normalizeText(stringValue(value), "材料名称", 500);
             case "surfaceTreatment" -> normalizeText(stringValue(value), "表面处理", 200);
             case "remark" -> normalizeText(stringValue(value), "备注", 500);
             case "salesOrderDate" -> value;
@@ -1732,6 +1735,7 @@ public class OrderManagementService {
             case "quoteLeadTime" -> item.setQuoteLeadTime((String) normalized);
             case "internalTargetLeadTime" -> item.setInternalTargetLeadTime((String) normalized);
             case "description" -> item.setDescription((String) normalized);
+            case "materialName" -> item.setMaterialName((String) normalized);
             case "surfaceTreatment" -> item.setSurfaceTreatment((String) normalized);
             case "remark" -> item.setRemark((String) normalized);
             case "salesOrderDate" -> item.setSalesOrderDate((LocalDate) normalized);

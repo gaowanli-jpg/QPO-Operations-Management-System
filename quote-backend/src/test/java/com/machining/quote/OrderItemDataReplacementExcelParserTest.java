@@ -24,13 +24,13 @@ class OrderItemDataReplacementExcelParserTest {
     @Test
     void parsesRequestedEditableOrderFieldsAndIgnoresReleaseOnlyHeaders() throws Exception {
         byte[] workbook = workbookBytes(
-                List.of("零件ID", "图号", "版本", "新图号", "新版本", "询价数量", "客户询价交期", "报价承诺交期", "来源单号", "通过数量", "可选状态", "提单交期"),
-                List.of(row(1001, "P-OLD", "A", "P-NEW", "B", 12, "2026/10/01", "2026-10-05", "SO-1", 9, "可选", "2026-11-01")));
+                List.of("零件ID", "图号", "版本", "新图号", "新版本", "询价数量", "客户询价交期", "报价承诺交期", "物料描述", "材料名称", "表面处理", "来源单号", "通过数量", "可选状态", "提单交期"),
+                List.of(row(1001, "P-OLD", "A", "P-NEW", "B", 12, "2026/10/01", "2026-10-05", "updated desc", "updated material name", "brushed", "SO-1", 9, "可选", "2026-11-01")));
 
         OrderItemDataReplacementExcelParseResult result = parse(workbook);
 
         assertThat(result.getRecognizedFields())
-                .containsExactly("partNo", "version", "qty", "leadTime", "quoteLeadTime");
+                .containsExactly("partNo", "version", "qty", "leadTime", "quoteLeadTime", "description", "materialName", "surfaceTreatment");
         assertThat(result.getRows()).hasSize(1);
         OrderItemDataReplacementExcelRowDTO parsed = result.getRows().get(0);
         assertThat(parsed.getItemId()).isEqualTo(1001);
@@ -41,9 +41,26 @@ class OrderItemDataReplacementExcelParserTest {
                 Map.entry("version", "B"),
                 Map.entry("qty", 12),
                 Map.entry("leadTime", "2026/10/01"),
-                Map.entry("quoteLeadTime", "2026-10-05")
+                Map.entry("quoteLeadTime", "2026-10-05"),
+                Map.entry("description", "updated desc"),
+                Map.entry("materialName", "updated material name"),
+                Map.entry("surfaceTreatment", "brushed")
         );
         assertThat(parsed.getErrors()).isEmpty();
+    }
+
+    @Test
+    void recognizesMaterialNameBetweenDescriptionAndSurfaceTreatment() {
+        assertThat(OrderItemDataReplacementField.fromHeader("材料名称"))
+                .hasValueSatisfying(field -> assertThat(field.getPropertyName()).isEqualTo("materialName"));
+
+        List<String> replaceableProperties = OrderItemDataReplacementField.replaceableFields().stream()
+                .map(OrderItemDataReplacementField::getPropertyName)
+                .toList();
+        assertThat(replaceableProperties.indexOf("description"))
+                .isLessThan(replaceableProperties.indexOf("materialName"));
+        assertThat(replaceableProperties.indexOf("materialName"))
+                .isLessThan(replaceableProperties.indexOf("surfaceTreatment"));
     }
 
     @Test

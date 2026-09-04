@@ -319,7 +319,7 @@
                 </template>
               </el-table-column>
               <el-table-column prop="engineeringMaterialName" label="材料" width="120" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.engineeringMaterialName || row.materialName || '-' }}</template>
+                <template #default="{ row }">{{ row.engineeringMaterialName || '-' }}</template>
               </el-table-column>
               <el-table-column prop="materialNo" label="物料号" width="130" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.materialNo || '-' }}</template>
@@ -340,6 +340,18 @@
                     clearable
                     :class="{ 'order-item-editor-changed': itemFieldChanged(row, 'description') }"
                     @update:model-value="value => updateItemDraft(row, 'description', value)"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="材料名称" width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-input
+                    :model-value="itemFieldValue(row, 'materialName')"
+                    size="small"
+                    maxlength="500"
+                    clearable
+                    :class="{ 'order-item-editor-changed': itemFieldChanged(row, 'materialName') }"
+                    @update:model-value="value => updateItemDraft(row, 'materialName', value)"
                   />
                 </template>
               </el-table-column>
@@ -719,6 +731,7 @@ const ORDER_ITEM_EDITABLE_FIELDS = [
   'quoteLeadTime',
   'internalTargetLeadTime',
   'description',
+  'materialName',
   'surfaceTreatment',
   'remark',
   'salesOrderDate',

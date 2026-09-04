@@ -14,6 +14,7 @@ public class OrderItemMaintenanceLineReq {
     private String quoteLeadTime;
     private String internalTargetLeadTime;
     private String description;
+    private String materialName;
     private String surfaceTreatment;
     private String remark;
     private LocalDate salesOrderDate;

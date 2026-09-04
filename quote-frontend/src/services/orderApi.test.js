@@ -125,7 +125,15 @@ describe('orderApi', () => {
 
   test('exposes order item maintenance endpoints', async () => {
     const payload = {
-      items: [{ itemId: 21, partNo: 'P-100', version: 'B', qty: 12, leadTime: '2026-10-01', quoteLeadTime: '2026-10-05' }]
+      items: [{
+        itemId: 21,
+        partNo: 'P-100',
+        version: 'B',
+        qty: 12,
+        leadTime: '2026-10-01',
+        quoteLeadTime: '2026-10-05',
+        materialName: '45# round bar'
+      }]
     }
     const formData = new FormData()
 
