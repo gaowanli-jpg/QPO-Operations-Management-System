@@ -169,6 +169,10 @@ export const listExtraFeeItems = ({ includeDisabled = false } = {}) => request(
   includeDisabled ? '/api/dict/extra-fee-items/all' : '/api/dict/extra-fee-items'
 )
 
+export const pageExtraFeeItems = ({ includeDisabled, keyword, page, pageSize } = {}) => request(
+  `/api/dict/extra-fee-items/page${buildQuery({ includeDisabled, keyword, page, pageSize })}`
+)
+
 export const saveExtraFeeItem = (payload) => {
   const id = payload?.id
   return request(id ? `/api/dict/extra-fee-items/${id}` : '/api/dict/extra-fee-items', {

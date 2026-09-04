@@ -55,10 +55,12 @@ describe('dictApi', () => {
     await dictApi.pageMaterials({ enabledOnly: true, keyword: 'raw', page: 2, pageSize: 20 })
     await dictApi.pageProcessCategories({ enabledOnly: false, keyword: 'pack', page: 3, pageSize: 50 })
     await dictApi.pageProcessDetails({ categoryId: 9, enabledOnly: true, keyword: 'cnc', page: 4, pageSize: 100 })
+    await dictApi.pageExtraFeeItems({ includeDisabled: true, keyword: 'edm', page: 5, pageSize: 50 })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/dict/materials/page?enabledOnly=true&keyword=raw&page=2&pageSize=20')
     expect(request).toHaveBeenNthCalledWith(2, '/api/dict/process-categories/page?enabledOnly=false&keyword=pack&page=3&pageSize=50')
     expect(request).toHaveBeenNthCalledWith(3, '/api/dict/process-details/page?categoryId=9&enabledOnly=true&keyword=cnc&page=4&pageSize=100')
+    expect(request).toHaveBeenNthCalledWith(4, '/api/dict/extra-fee-items/page?includeDisabled=true&keyword=edm&page=5&pageSize=50')
   })
 
   test('manages process arrangement tree and placements', async () => {

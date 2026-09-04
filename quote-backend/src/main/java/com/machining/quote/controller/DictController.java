@@ -197,6 +197,26 @@ public class DictController {
         return extraFeeItemMapper.selectList(qw);
     }
 
+    @GetMapping("/extra-fee-items/page")
+    @RequirePermission("engineer:dict:view")
+    public PageResult<DictExtraFeeItem> pageExtraFeeItems(
+            @RequestParam(value = "includeDisabled", required = false) Boolean includeDisabled,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        int safePage = normalizePage(page);
+        int safePageSize = normalizePageSize(pageSize);
+        QueryWrapper<DictExtraFeeItem> qw = new QueryWrapper<>();
+        applyExtraFeeFilters(qw, includeDisabled, keyword);
+        Long total = extraFeeItemMapper.selectCount(qw);
+        if (total == null || total == 0) {
+            return PageResult.of(List.of(), 0, safePage, safePageSize);
+        }
+        qw.orderByAsc("sort_no").orderByAsc("id");
+        qw.last("LIMIT " + safePageSize + " OFFSET " + ((safePage - 1L) * safePageSize));
+        return PageResult.of(extraFeeItemMapper.selectList(qw), total, safePage, safePageSize);
+    }
+
     @PostMapping("/extra-fee-items")
     @RequirePermission("engineer:dict:fee-manage")
     public Map<String, Object> createExtraFeeItem(@RequestBody DictExtraFeeItem item) {
@@ -269,6 +289,33 @@ public class DictController {
         if (count != null && count > 0) {
             throw new RuntimeException("工艺编码已存在");
         }
+    }
+
+    private void applyExtraFeeFilters(QueryWrapper<DictExtraFeeItem> qw, Boolean includeDisabled, String keyword) {
+        if (!Boolean.TRUE.equals(includeDisabled)) {
+            qw.eq("enabled", true);
+        }
+        if (isBlank(keyword)) {
+            return;
+        }
+        String pattern = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+        qw.and(wrapper -> wrapper
+                .apply("LOWER(fee_code) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(fee_name) LIKE {0}", pattern)
+                .or()
+                .apply("LOWER(remarks) LIKE {0}", pattern));
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
     }
 
     private String normalizeExtraFeeCode(String value) {

@@ -152,6 +152,38 @@ class MesMasterDataClientTest {
     }
 
     @Test
+    void pageMaterialsIgnoresUnknownMesFields() throws Exception {
+        MesMaterialPageResp resp = JSON.readValue("""
+                {
+                  "code": "0",
+                  "data": {
+                    "total": 1,
+                    "list": [
+                      {
+                        "id": "mat-extra",
+                        "code": "SUS-304",
+                        "name": "Stainless 304",
+                        "materialType": "STEEL",
+                        "density": 7930,
+                        "status": "ENABLE",
+                        "unitCode": "KG",
+                        "unitName": "kilogram"
+                      }
+                    ]
+                  }
+                }
+                """, MesMaterialPageResp.class);
+
+        MesMaterialPageResp.Data page = resp.toData();
+
+        assertThat(page.getList()).singleElement().satisfies(row -> {
+            assertThat(row.getCode()).isEqualTo("SUS-304");
+            assertThat(row.getName()).isEqualTo("Stainless 304");
+            assertThat(row.getDensity()).isEqualByComparingTo(new BigDecimal("7930"));
+        });
+    }
+
+    @Test
     void businessFailureThrowsSafeMessageWithoutTokensAuthorizationOrFullBody() throws Exception {
         DataCenterIntegrationClient dataCenterClient = mock(DataCenterIntegrationClient.class);
         MesMasterDataClient client = client(dataCenterClient);

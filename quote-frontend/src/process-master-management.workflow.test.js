@@ -119,6 +119,20 @@ describe('process master management frontend workflow', () => {
     expect(materialProcess).toContain('extraFeeOriginalCode')
   })
 
+  test('extra fee process master uses backend pagination like specific process details', () => {
+    expect(dictApi).toContain('pageExtraFeeItems')
+    expect(dictApi).toContain('/api/dict/extra-fee-items/page')
+    expect(materialProcess).toContain('extraFeeKeyword')
+    expect(materialProcess).toContain('loadExtraFeePage')
+    expect(materialProcess).toContain('pageExtraFeeItems({')
+    expect(materialProcess).toContain('extraFeePagination')
+    expect(materialProcess).toContain('extraFeePagination.total')
+    expect(materialProcess).toContain('resetExtraFeePage')
+    expect(materialProcess).toContain(':data="extraFeeItems"')
+    expect(materialProcess).toContain('搜索工艺编码、工艺名称或备注')
+    expect(materialProcess).not.toContain('listExtraFeeItems({ includeDisabled: true })')
+  })
+
   test('process master layout has responsive safeguards', () => {
     expect(materialProcess).toContain('process-master-grid')
     expect(materialProcess).toContain('process-dialog-grid')

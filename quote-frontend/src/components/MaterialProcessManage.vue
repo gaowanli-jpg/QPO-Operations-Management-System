@@ -368,25 +368,42 @@
           </el-tab-pane>
 
           <el-tab-pane label="非工时费用工艺" name="extraFees">
-            <el-table :data="extraFeeItems" border stripe height="560" v-loading="loading">
-              <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
-              <el-table-column prop="feeCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
-              <el-table-column prop="feeName" label="工艺名称" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
-              <el-table-column label="启用" width="90" align="center">
-                <template #default="scope">
-                  <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="160" align="center" fixed="right">
-                <template #default="scope">
-                  <div class="erp-table-actions">
-                    <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isExtraFeeDeletePending(scope.row)" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
-                    <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isExtraFeeDeletePending(scope.row)" :disabled="isExtraFeeDeletePending(scope.row)" @click="deleteExtraFee(scope.row)">删除</el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="process-master-grid">
+              <div class="material-filter-bar">
+                <el-input v-model="extraFeeKeyword" clearable placeholder="搜索工艺编码、工艺名称或备注" />
+              </div>
+              <el-table :data="extraFeeItems" border stripe height="520" v-loading="loading">
+                <el-table-column prop="sortNo" label="序号" width="80" align="center" fixed />
+                <el-table-column prop="feeCode" label="工艺编码" width="150" fixed show-overflow-tooltip />
+                <el-table-column prop="feeName" label="工艺名称" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="remarks" label="备注" min-width="180" show-overflow-tooltip />
+                <el-table-column label="启用" width="90" align="center">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="160" align="center" fixed="right">
+                  <template #default="scope">
+                    <div class="erp-table-actions">
+                      <el-button v-permission="'engineer:dict:fee-manage'" type="primary" size="small" :disabled="isExtraFeeDeletePending(scope.row)" @click="openExtraFeeDialog(scope.row)">编辑</el-button>
+                      <el-button v-permission="'engineer:dict:fee-manage'" type="danger" size="small" plain class="erp-danger-action" :loading="isExtraFeeDeletePending(scope.row)" :disabled="isExtraFeeDeletePending(scope.row)" @click="deleteExtraFee(scope.row)">删除</el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-if="extraFeePagination.total" class="erp-pagination material-dict-pagination">
+                <el-pagination
+                  v-model:current-page="extraFeePagination.page"
+                  v-model:page-size="extraFeePagination.pageSize"
+                  :page-sizes="CLIENT_PAGE_SIZES"
+                  :pager-count="7"
+                  :total="extraFeePagination.total"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  background
+                  @size-change="resetExtraFeePage"
+                />
+              </div>
+            </div>
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -657,12 +674,12 @@ import {
   getMesMaterialSyncSchedule,
   getMesProcessSyncRun,
   getMesProcessSyncSchedule,
-  listExtraFeeItems,
   listMaterialTypes,
   listProcessArrangementTree,
   listPricingMarkupFees,
   listUnplacedProcessArrangementOptions,
   moveProcessArrangementItem,
+  pageExtraFeeItems,
   pageMaterials,
   pageProcessCategories,
   pageProcessDetails,
@@ -718,6 +735,7 @@ const extraFeeItems = ref([])
 const materialKeyword = ref('')
 const processCategoryKeyword = ref('')
 const processDetailKeyword = ref('')
+const extraFeeKeyword = ref('')
 const arrangementKeyword = ref('')
 const arrangementSourceType = ref('')
 const pricingMarkupKeyword = ref('')
@@ -727,6 +745,7 @@ const createPagination = () => reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE
 const materialPagination = createPagination()
 const processCategoryPagination = createPagination()
 const processDetailPagination = createPagination()
+const extraFeePagination = createPagination()
 const pricingMarkupPagination = reactive({ page: 1, pageSize: DEFAULT_CLIENT_PAGE_SIZE })
 const processArrangementTreeProps = { children: 'children', label: 'label' }
 const arrangementSourceTypeOptions = [
@@ -746,6 +765,7 @@ const deleteSummary = reactive({ removedNodeCount: 0, removedItemCount: 0 })
 const resetMaterialPage = () => { materialPagination.page = 1 }
 const resetProcessCategoryPage = () => { processCategoryPagination.page = 1 }
 const resetProcessDetailPage = () => { processDetailPagination.page = 1 }
+const resetExtraFeePage = () => { extraFeePagination.page = 1 }
 const resetPricingMarkupFeePage = () => { pricingMarkupPagination.page = 1 }
 const resetPageAndLoad = (pagination, loader) => {
   if (pagination.page === 1) {
@@ -1104,14 +1124,12 @@ const invalidateDictionaryCache = () => {
 }
 
 const loadLookupDictionaries = async () => {
-  const [types, pricingFees, extraFees] = await Promise.all([
+  const [types, pricingFees] = await Promise.all([
     listMaterialTypes(),
-    loadPricingMarkupFeeRows(),
-    listExtraFeeItems({ includeDisabled: true })
+    loadPricingMarkupFeeRows()
   ])
   materialTypes.value = types || []
   pricingMarkupFees.value = pricingFees || []
-  extraFeeItems.value = extraFees || []
 }
 
 const loadMaterialPage = async () => {
@@ -1133,6 +1151,14 @@ const loadProcessDetailPage = async () => {
     ...pageParams(processDetailPagination, processDetailKeyword)
   })
   processDetails.value = applyPageResult(processDetailPagination, response)
+}
+
+const loadExtraFeePage = async () => {
+  const response = await pageExtraFeeItems({
+    includeDisabled: true,
+    ...pageParams(extraFeePagination, extraFeeKeyword)
+  })
+  extraFeeItems.value = applyPageResult(extraFeePagination, response)
 }
 
 const loadProcessArrangementOptions = async () => {
@@ -1185,6 +1211,7 @@ const loadAll = async () => loadPageWithLoading(async () => {
     loadMaterialPage(),
     loadProcessCategoryPage(),
     loadProcessDetailPage(),
+    loadExtraFeePage(),
     loadProcessArrangement()
   ])
 })
@@ -1709,6 +1736,9 @@ watch(processCategoryKeyword, () => {
 watch(processDetailKeyword, () => {
   resetPageAndLoad(processDetailPagination, loadProcessDetailPage)
 })
+watch(extraFeeKeyword, () => {
+  resetPageAndLoad(extraFeePagination, loadExtraFeePage)
+})
 watch([arrangementKeyword, arrangementSourceType], async () => {
   arrangementLoading.value = true
   try {
@@ -1736,6 +1766,10 @@ watch(
 watch(
   () => [processDetailPagination.page, processDetailPagination.pageSize],
   () => loadPageWithLoading(loadProcessDetailPage)
+)
+watch(
+  () => [extraFeePagination.page, extraFeePagination.pageSize],
+  () => loadPageWithLoading(loadExtraFeePage)
 )
 watch(activeTab, (tab) => {
   if (tab === 'materials') loadLatestMesSyncRun('MES_MATERIAL')
