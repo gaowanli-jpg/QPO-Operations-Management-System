@@ -9,6 +9,8 @@ import com.machining.quote.dto.SalesOrderU9ItemDataReplacementConfirmDTO;
 import com.machining.quote.dto.SalesOrderU9ItemDataReplacementPreviewDTO;
 import com.machining.quote.dto.SalesOrderU9ItemUpdateReq;
 import com.machining.quote.dto.SalesOrderU9ItemUpdateResp;
+import com.machining.quote.dto.SalesOrderU9OrderDateUpdateReq;
+import com.machining.quote.dto.SalesOrderU9OrderDateUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
 import com.machining.quote.dto.SalesOrderU9SyncOptionsResp;
@@ -110,6 +112,14 @@ public class SalesOrderU9SyncController {
             @PathVariable Long salesOrderId,
             @RequestBody(required = false) SalesOrderU9AssignmentReq req) {
         return salesOrderU9SyncService.saveAssignment(salesOrderId, req);
+    }
+
+    @PutMapping("/orders/{salesOrderId}/order-date")
+    @RequirePermission("market:u9-sync:submit")
+    public SalesOrderU9OrderDateUpdateResp saveOrderDate(
+            @PathVariable Long salesOrderId,
+            @RequestBody(required = false) SalesOrderU9OrderDateUpdateReq req) {
+        return salesOrderU9SyncService.saveOrderDate(salesOrderId, req);
     }
 
     @PutMapping("/orders/{salesOrderId}/items")

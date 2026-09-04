@@ -75,6 +75,11 @@ export const saveSalesOrderU9Assignment = (salesOrderId, payload) => request(`/a
   data: payload
 })
 
+export const saveSalesOrderU9OrderDate = (salesOrderId, payload) => request(`/api/market/u9-sync/orders/${salesOrderId}/order-date`, {
+  method: 'PUT',
+  data: payload
+})
+
 export const saveSalesOrderU9Items = (salesOrderId, payload) => request(`/api/market/u9-sync/orders/${salesOrderId}/items`, {
   method: 'PUT',
   data: payload

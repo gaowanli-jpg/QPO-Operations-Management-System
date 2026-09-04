@@ -48,8 +48,14 @@ describe('sales order U9 sync module', () => {
     expect(component).toContain('class="erp-surface sales-order-u9-sync-side-panel"')
     expect(component).toContain('class="erp-table-surface sales-order-u9-sync-main-panel"')
     expect(component).toContain('class="selected-order-text"')
+    expect(component).toContain('class="u9-order-date-panel"')
     expect(component).toContain('class="sync-condition-panel"')
     expect(component).toContain('class="sync-result-panel"')
+    const assignmentIndex = component.indexOf('class="u9-assignment-panel"')
+    const orderDateIndex = component.indexOf('class="u9-order-date-panel"')
+    const conditionIndex = component.indexOf('class="sync-condition-panel"')
+    expect(orderDateIndex).toBeGreaterThan(assignmentIndex)
+    expect(conditionIndex).toBeGreaterThan(orderDateIndex)
     expect(component).toContain('orderPickerVisible')
     expect(component).toContain('openOrderPicker')
     expect(component).toContain('handleOrderSelected')
@@ -227,6 +233,12 @@ describe('sales order U9 sync module', () => {
     const component = readSource('components', 'SalesOrderU9Sync.vue')
 
     expect(component).toContain('saveSalesOrderU9Items')
+    expect(component).toContain('saveSalesOrderU9OrderDate')
+    expect(component).toContain('v-model="orderDateDraft"')
+    expect(component).toContain('handleSaveOrderDate')
+    expect(component).toContain('orderDateReadOnly')
+    expect(component).toContain(':disabled="orderDateSaveDisabled"')
+    expect(component).toContain('保存下单日期')
     expect(component).toContain('const U9_ITEM_EDITABLE_FIELDS = [')
     ;[
       'qty',

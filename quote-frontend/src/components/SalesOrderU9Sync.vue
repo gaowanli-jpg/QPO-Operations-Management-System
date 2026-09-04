@@ -133,6 +133,46 @@
           </div>
         </div>
 
+        <div class="u9-order-date-panel">
+          <div class="panel-title-row compact-row">
+            <div>
+              <div class="panel-title compact">下单日期</div>
+              <p class="panel-subtitle">保存后作为本订单同步 U9 的 BusinessDate。</p>
+            </div>
+            <el-tag v-if="orderDateReadOnly" size="small" type="info">只读</el-tag>
+          </div>
+          <div class="order-date-form-grid">
+            <label class="assignment-field">
+              <span>订单头下单日期</span>
+              <el-date-picker
+                v-model="orderDateDraft"
+                type="date"
+                value-format="YYYY-MM-DD"
+                aria-label="订单头下单日期"
+                :disabled="orderDateReadOnly || orderDateSaving || previewLoading"
+                placeholder="选择下单日期"
+              />
+            </label>
+            <div class="order-date-current-line">
+              当前：<strong>{{ formatDate(savedOrderDate) }}</strong>
+            </div>
+            <el-tooltip :disabled="!orderDateSaveDisabledReason" :content="orderDateSaveDisabledReason" placement="top">
+              <span class="sales-order-u9-sync-action-wrap">
+                <el-button
+                  v-permission="U9_SYNC_SUBMIT_PERMISSION"
+                  type="primary"
+                  plain
+                  :loading="orderDateSaving"
+                  :disabled="orderDateSaveDisabled"
+                  @click="handleSaveOrderDate"
+                >
+                  保存下单日期
+                </el-button>
+              </span>
+            </el-tooltip>
+          </div>
+        </div>
+
         <div class="sync-condition-panel">
           <div class="panel-title compact">同步条件</div>
           <div class="condition-row">
@@ -564,6 +604,7 @@ import {
   reconcileSalesOrderU9,
   refreshSalesOrderU9SyncOptions,
   saveSalesOrderU9Assignment,
+  saveSalesOrderU9OrderDate,
   saveSalesOrderU9Items,
   syncSalesOrderU9
 } from '../services/marketApi'
@@ -615,14 +656,19 @@ const previewMessageDetailVisible = ref(false)
 const optionsLoading = ref(false)
 const optionsRefreshing = ref(false)
 const assignmentSaving = ref(false)
+const orderDateSaving = ref(false)
 const itemEditSaving = ref(false)
 const itemDataReplacementBusy = ref(false)
 const u9Options = reactive({ orgCode: '', stale: false, refreshedAt: '', warning: '', sellers: [], departments: [] })
 const assignmentDraft = ref({ sellerCode: '', saleDepartmentCode: '' })
 const savedAssignment = ref({ sellerCode: '', saleDepartmentCode: '' })
+const orderDateDraft = ref(null)
+const savedOrderDate = ref(null)
 const itemDrafts = reactive({})
 const savedItemDrafts = reactive({})
 const dirtyItemIds = ref(new Set())
+
+const dateDraftValue = (value) => value ? String(value).slice(0, 10) : null
 
 const selectedOrderLabel = computed(() => selectedOrder.value
   ? `${selectedOrder.value.salesOrderNo || selectedOrder.value.salesOrderId || '-'} / ${selectedOrder.value.customerName || '-'}`
@@ -701,6 +747,19 @@ const assignmentDirty = computed(() => assignmentDraft.value.sellerCode !== save
 const assignmentSaveDisabled = computed(() => assignmentSaving.value || optionsLoading.value || optionsRefreshing.value || !selectedOrderId.value || assignmentReadOnly.value || !assignmentDirty.value)
 const hasItemEditPermission = computed(() => authStore.hasPermission(U9_SYNC_SUBMIT_PERMISSION))
 const dirtyItemCount = computed(() => dirtyItemIds.value.size)
+const orderDateDirty = computed(() => dateDraftValue(orderDateDraft.value) !== dateDraftValue(savedOrderDate.value))
+const orderDateReadOnly = computed(() => !hasItemEditPermission.value || !selectedOrderId.value || ['已同步', '同步中', '结果待确认'].includes(currentU9Status.value))
+const orderDateSaveDisabledReason = computed(() => {
+  if (!selectedOrderId.value) return '请先选择销售订单'
+  if (!hasItemEditPermission.value) return '当前账号无 U9 同步提交权限'
+  if (['已同步', '同步中', '结果待确认'].includes(currentU9Status.value)) return '当前 U9 状态只读，不可修改下单日期'
+  if (assignmentDirty.value) return '请先保存 U9 选择'
+  if (dirtyItemCount.value > 0) return '请先保存零件行修改'
+  if (!orderDateDraft.value) return '请选择下单日期'
+  if (!orderDateDirty.value) return '下单日期未变化'
+  return ''
+})
+const orderDateSaveDisabled = computed(() => orderDateSaving.value || previewLoading.value || Boolean(orderDateSaveDisabledReason.value))
 const itemEditReadOnly = computed(() => !hasItemEditPermission.value || !selectedOrderId.value || ['已同步', '同步中', '结果待确认'].includes(currentU9Status.value))
 const itemEditSaveDisabledReason = computed(() => {
   if (!selectedOrderId.value) return '请先选择销售订单'
@@ -736,6 +795,7 @@ const syncDisabledReason = computed(() => {
   }
   if (currentU9Status.value === '已同步') return '该销售订单已同步 U9'
   if (assignmentDirty.value) return '请先保存 Seller / SaleDepartment 选择'
+  if (orderDateDirty.value) return '请先保存下单日期'
   if (dirtyItemCount.value > 0) return '请先保存零件行修改'
   if (previewData.value.syncReady !== true) {
     return previewData.value.blockedReason || selectedOrder.value.blockedReason || '未满足整单同步条件'
@@ -789,6 +849,7 @@ const handleOrderSelected = async (order) => {
   reconcileResult.value = null
   resetItemDrafts()
   hydrateAssignment(normalized)
+  hydrateOrderDate(normalized)
   await previewSelectedOrder({ silent: true })
 }
 
@@ -852,6 +913,7 @@ const applyPreviewData = (response = {}, { preserveResult = false } = {}) => {
     salesOrderId: selectedOrderId.value
   }
   hydrateAssignment(response || {})
+  hydrateOrderDate(response || {})
   hydrateItemDrafts(response || {})
   if (!preserveResult) {
     syncResult.value = null
@@ -918,11 +980,38 @@ const handleSaveAssignment = async () => {
   }
 }
 
+const hydrateOrderDate = (source = {}) => {
+  const next = dateDraftValue(source.salesOrderDate)
+  orderDateDraft.value = next
+  savedOrderDate.value = next
+}
+
+const handleSaveOrderDate = async () => {
+  if (orderDateSaveDisabled.value) {
+    if (orderDateSaveDisabledReason.value) ElMessage.warning(orderDateSaveDisabledReason.value)
+    return
+  }
+  orderDateSaving.value = true
+  try {
+    const payload = { salesOrderDate: orderDateDraft.value }
+    const response = await saveSalesOrderU9OrderDate(selectedOrderId.value, payload)
+    if (response?.preview) {
+      applyPreviewData(response.preview, { preserveResult: true })
+    } else {
+      hydrateOrderDate(response || payload)
+      await previewSelectedOrder({ silent: true, preserveResult: true })
+    }
+    ElMessage.success(response?.message || '销售订单下单日期已保存。')
+  } catch (error) {
+    ElMessage.error(requestErrorMessage(error, '销售订单下单日期保存失败。'))
+  } finally {
+    orderDateSaving.value = false
+  }
+}
+
 const clearReactiveObject = (target) => {
   Object.keys(target).forEach(key => delete target[key])
 }
-
-const dateDraftValue = (value) => value ? String(value).slice(0, 10) : null
 
 const textDraftValue = (line, field) => {
   if (line?.[field] !== undefined && line?.[field] !== null) return String(line[field])
@@ -1326,6 +1415,7 @@ onMounted(() => {
 }
 
 .u9-assignment-panel,
+.u9-order-date-panel,
 .sync-condition-panel,
 .selected-order-meta,
 .sync-result-panel {
@@ -1335,6 +1425,12 @@ onMounted(() => {
 }
 
 .assignment-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.order-date-form-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
@@ -1352,11 +1448,24 @@ onMounted(() => {
   width: 100%;
 }
 
+.assignment-field :deep(.el-date-editor) {
+  width: 100%;
+}
+
 .assignment-selected-line {
   min-width: 0;
   color: var(--erp-text-secondary);
   font-size: 12px;
   word-break: break-all;
+}
+
+.order-date-current-line {
+  color: var(--erp-text-secondary);
+  font-size: 12px;
+}
+
+.order-date-current-line strong {
+  color: var(--erp-text);
 }
 
 .condition-row {
@@ -1635,6 +1744,7 @@ onMounted(() => {
   .panel-title-actions,
   .panel-title-actions :deep(.el-button),
   .sales-order-u9-sync-table-actions :deep(.el-button),
+  .order-date-form-grid :deep(.el-button),
   .assignment-form-grid :deep(.el-button) {
     width: 100%;
     margin-left: 0;

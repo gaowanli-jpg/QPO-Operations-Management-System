@@ -7,6 +7,8 @@ import com.machining.quote.dto.PageResult;
 import com.machining.quote.dto.SalesOrderU9AssignmentReq;
 import com.machining.quote.dto.SalesOrderU9AssignmentResp;
 import com.machining.quote.dto.SalesOrderU9DepartmentOptionDTO;
+import com.machining.quote.dto.SalesOrderU9OrderDateUpdateReq;
+import com.machining.quote.dto.SalesOrderU9OrderDateUpdateResp;
 import com.machining.quote.dto.SalesOrderU9ReconcileResp;
 import com.machining.quote.dto.SalesOrderU9SellerOptionDTO;
 import com.machining.quote.dto.SalesOrderU9SyncOrderRow;
@@ -53,6 +55,7 @@ public class SalesOrderU9SyncService {
     private static final Logger log = LoggerFactory.getLogger(SalesOrderU9SyncService.class);
     private static final String ACTION = "SALES_ORDER_U9_SYNC";
     private static final String ACTION_ASSIGNMENT = "SALES_ORDER_U9_ASSIGNMENT_UPDATE";
+    private static final String ACTION_ORDER_DATE = "SALES_ORDER_U9_ORDER_DATE_UPDATE";
     private static final String ACTION_RECONCILE = "SALES_ORDER_U9_RECONCILE";
     private static final String TARGET_TYPE = "sales_order_header";
     private static final String STATUS_SYNCING = "同步中";
@@ -202,6 +205,53 @@ public class SalesOrderU9SyncService {
         }
         auditAssignment(header, before, assignmentSnapshot(saved));
         return toAssignmentResp(saved);
+    }
+
+    @Transactional
+    public SalesOrderU9OrderDateUpdateResp saveOrderDate(Long salesOrderId, SalesOrderU9OrderDateUpdateReq req) {
+        if (salesOrderId == null) {
+            throw new RuntimeException("销售订单 ID 不能为空");
+        }
+        SalesOrderHeader header = headerMapper.selectByIdForUpdate(salesOrderId);
+        if (header == null) {
+            throw new RuntimeException("销售订单不存在");
+        }
+        assertDataScope(header);
+        assertOrderDateEditable(header);
+
+        LocalDate before = header.getSalesOrderDate();
+        LocalDate after = req == null ? null : req.getSalesOrderDate();
+        if (after == null) {
+            throw new RuntimeException("销售订单下单日期不能为空");
+        }
+
+        LocalDateTime updatedAt = LocalDateTime.now();
+        UpdateWrapper<SalesOrderHeader> update = new UpdateWrapper<>();
+        update.eq("id", header.getId())
+                .set("sales_order_date", after)
+                .set("updated_at", updatedAt);
+        int updated = headerMapper.update(null, update);
+        if (updated <= 0) {
+            throw new RuntimeException("销售订单下单日期保存失败，请刷新后重试");
+        }
+
+        header.setSalesOrderDate(after);
+        header.setUpdatedAt(updatedAt);
+        SalesOrderHeader saved = headerMapper.selectById(header.getId());
+        if (saved == null) {
+            saved = header;
+        }
+        auditOrderDate(saved, before, saved.getSalesOrderDate());
+
+        SalesOrderU9OrderDateUpdateResp resp = new SalesOrderU9OrderDateUpdateResp();
+        resp.setSuccess(true);
+        resp.setMessage("销售订单下单日期已保存");
+        resp.setSalesOrderId(saved.getId());
+        resp.setSalesOrderNo(saved.getSalesOrderNo());
+        resp.setSalesOrderDate(saved.getSalesOrderDate());
+        resp.setUpdatedAt(saved.getUpdatedAt());
+        resp.setPreview(previewSalesOrder(saved.getId()));
+        return resp;
     }
 
     public SalesOrderU9SyncResp syncSalesOrders(List<Long> salesOrderIds) {
@@ -385,9 +435,17 @@ public class SalesOrderU9SyncService {
     }
 
     private void assertAssignmentEditable(SalesOrderHeader header) {
+        assertPreSyncEditable(header, "销售员和销售部门");
+    }
+
+    private void assertOrderDateEditable(SalesOrderHeader header) {
+        assertPreSyncEditable(header, "下单日期");
+    }
+
+    private void assertPreSyncEditable(SalesOrderHeader header, String targetLabel) {
         String status = trimToNull(header.getU9SyncStatus());
         if (STATUS_SYNCING.equals(status) || STATUS_PENDING_CONFIRMATION.equals(status) || STATUS_SYNCED.equals(status)) {
-            throw new RuntimeException("U9 状态为" + status + "，不能修改销售员和销售部门");
+            throw new RuntimeException("U9 状态为" + status + "，不能修改" + targetLabel);
         }
     }
 
@@ -744,6 +802,23 @@ public class SalesOrderU9SyncService {
         );
     }
 
+    private void auditOrderDate(SalesOrderHeader header, LocalDate before, LocalDate after) {
+        if (auditService == null) {
+            return;
+        }
+        auditService.record(
+                ACTION_ORDER_DATE,
+                TARGET_TYPE,
+                header.getId(),
+                orderDateAuditData(header, before),
+                orderDateAuditData(header, after),
+                "MARKET",
+                "SUCCESS",
+                AuditService.labelForAction(ACTION_ORDER_DATE),
+                null
+        );
+    }
+
     private void auditReconcile(PreparedOrder prepared, Result result, long startedAt) {
         if (auditService == null) {
             return;
@@ -779,6 +854,14 @@ public class SalesOrderU9SyncService {
         data.put("sellerName", snapshot.sellerName());
         data.put("saleDepartmentCode", snapshot.saleDepartmentCode());
         data.put("saleDepartmentName", snapshot.saleDepartmentName());
+        return data;
+    }
+
+    private Map<String, Object> orderDateAuditData(SalesOrderHeader header, LocalDate salesOrderDate) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("salesOrderId", header.getId());
+        data.put("salesOrderNo", header.getSalesOrderNo());
+        data.put("salesOrderDate", salesOrderDate);
         return data;
     }
 

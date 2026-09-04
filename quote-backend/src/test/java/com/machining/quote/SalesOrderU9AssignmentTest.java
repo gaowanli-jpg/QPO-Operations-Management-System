@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -48,6 +49,17 @@ class SalesOrderU9AssignmentTest {
 
         assertThat(method.getAnnotation(PutMapping.class).value())
                 .containsExactly("/orders/{salesOrderId}/assignment");
+        assertThat(method.getAnnotation(RequirePermission.class).value())
+                .containsExactly("market:u9-sync:submit");
+    }
+
+    @Test
+    void controllerExposesOrderDateSaveWithSubmitPermission() throws Exception {
+        Class<?> reqType = Class.forName("com.machining.quote.dto.SalesOrderU9OrderDateUpdateReq");
+        Method method = SalesOrderU9SyncController.class.getMethod("saveOrderDate", Long.class, reqType);
+
+        assertThat(method.getAnnotation(PutMapping.class).value())
+                .containsExactly("/orders/{salesOrderId}/order-date");
         assertThat(method.getAnnotation(RequirePermission.class).value())
                 .containsExactly("market:u9-sync:submit");
     }
@@ -108,6 +120,78 @@ class SalesOrderU9AssignmentTest {
                 .containsEntry("sellerName", "周洪")
                 .containsEntry("saleDepartmentCode", "200201")
                 .containsEntry("saleDepartmentName", "订单运维部");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void saveOrderDateUsesRowLockDataScopeAndWritesAuditSummary() throws Exception {
+        Fixture fixture = fixture();
+        SalesOrderHeader header = header(9040L, "未同步");
+        fixture.withOrder(header);
+        when(fixture.headerMapper.selectById(header.getId())).thenReturn(header);
+        when(fixture.itemMapper.selectList(any())).thenReturn(List.of());
+
+        Class<?> reqType = Class.forName("com.machining.quote.dto.SalesOrderU9OrderDateUpdateReq");
+        Object req = reqType.getDeclaredConstructor().newInstance();
+        reqType.getMethod("setSalesOrderDate", LocalDate.class).invoke(req, LocalDate.of(2026, 9, 8));
+
+        Object resp = SalesOrderU9SyncService.class
+                .getMethod("saveOrderDate", Long.class, reqType)
+                .invoke(fixture.service, header.getId(), req);
+
+        assertThat(resp.getClass().getMethod("getSalesOrderId").invoke(resp)).isEqualTo(header.getId());
+        assertThat(resp.getClass().getMethod("getSalesOrderNo").invoke(resp)).isEqualTo("SOQPO-9040");
+        assertThat(resp.getClass().getMethod("getSalesOrderDate").invoke(resp)).isEqualTo(LocalDate.of(2026, 9, 8));
+        Object preview = resp.getClass().getMethod("getPreview").invoke(resp);
+        assertThat(preview).isInstanceOf(SalesOrderU9SyncPreviewResp.class);
+        assertThat(((SalesOrderU9SyncPreviewResp) preview).getSalesOrderDate()).isEqualTo(LocalDate.of(2026, 9, 8));
+
+        verify(fixture.headerMapper).selectByIdForUpdate(header.getId());
+        verify(fixture.dataScopeService, atLeastOnce()).assertCanAccessSalesOrder(header);
+        verify(fixture.headerMapper).update(isNull(), any());
+
+        assertThat(AuditService.inferModule("SALES_ORDER_U9_ORDER_DATE_UPDATE")).isEqualTo("MARKET");
+        assertThat(AuditService.labelForAction("SALES_ORDER_U9_ORDER_DATE_UPDATE"))
+                .contains("销售订单").contains("下单日期");
+
+        ArgumentCaptor<Object> beforeCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.auditService).record(
+                eq("SALES_ORDER_U9_ORDER_DATE_UPDATE"),
+                eq("sales_order_header"),
+                eq(header.getId()),
+                beforeCaptor.capture(),
+                afterCaptor.capture(),
+                eq("MARKET"),
+                eq("SUCCESS"),
+                eq(AuditService.labelForAction("SALES_ORDER_U9_ORDER_DATE_UPDATE")),
+                isNull()
+        );
+        assertThat((Map<String, Object>) beforeCaptor.getValue())
+                .containsEntry("salesOrderDate", LocalDate.of(2026, 8, 11));
+        assertThat((Map<String, Object>) afterCaptor.getValue())
+                .containsEntry("salesOrderDate", LocalDate.of(2026, 9, 8));
+    }
+
+    @Test
+    void lockedU9StatusesCannotModifyOrderDate() throws Exception {
+        Class<?> reqType = Class.forName("com.machining.quote.dto.SalesOrderU9OrderDateUpdateReq");
+        Object req = reqType.getDeclaredConstructor().newInstance();
+        reqType.getMethod("setSalesOrderDate", LocalDate.class).invoke(req, LocalDate.of(2026, 9, 8));
+        Method saveOrderDate = SalesOrderU9SyncService.class.getMethod("saveOrderDate", Long.class, reqType);
+
+        for (String status : List.of("同步中", "结果待确认", "已同步")) {
+            Fixture fixture = fixture();
+            SalesOrderHeader header = header(9050L, status);
+            fixture.withOrder(header);
+
+            assertThatThrownBy(() -> saveOrderDate.invoke(fixture.service, header.getId(), req))
+                    .hasRootCauseInstanceOf(RuntimeException.class)
+                    .hasRootCauseMessage("U9 状态为" + status + "，不能修改下单日期");
+
+            verify(fixture.headerMapper, never()).update(any(), any());
+            verify(fixture.auditService, never()).record(eq("SALES_ORDER_U9_ORDER_DATE_UPDATE"), any(), any(), any(), any(), any(), any(), any(), any());
+        }
     }
 
     @Test

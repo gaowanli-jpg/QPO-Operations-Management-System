@@ -146,6 +146,7 @@ describe('marketApi', () => {
     await marketApi.refreshSalesOrderU9SyncOptions()
     await marketApi.previewSalesOrderU9Sync(101)
     await marketApi.saveSalesOrderU9Assignment(101, { sellerCode: 'C00150', saleDepartmentCode: '200201' })
+    await marketApi.saveSalesOrderU9OrderDate(101, { salesOrderDate: '2026-09-08' })
     await marketApi.saveSalesOrderU9Items(101, {
       items: [
         {
@@ -176,7 +177,11 @@ describe('marketApi', () => {
       method: 'PUT',
       data: { sellerCode: 'C00150', saleDepartmentCode: '200201' }
     })
-    expect(request).toHaveBeenNthCalledWith(6, '/api/market/u9-sync/orders/101/items', {
+    expect(request).toHaveBeenNthCalledWith(6, '/api/market/u9-sync/orders/101/order-date', {
+      method: 'PUT',
+      data: { salesOrderDate: '2026-09-08' }
+    })
+    expect(request).toHaveBeenNthCalledWith(7, '/api/market/u9-sync/orders/101/items', {
       method: 'PUT',
       data: {
         items: [
@@ -194,15 +199,15 @@ describe('marketApi', () => {
         ]
       }
     })
-    expect(request).toHaveBeenNthCalledWith(7, '/api/market/u9-sync/orders/101/sync', {
+    expect(request).toHaveBeenNthCalledWith(8, '/api/market/u9-sync/orders/101/sync', {
       method: 'POST',
       data: undefined
     })
-    expect(request).toHaveBeenNthCalledWith(8, '/api/market/u9-sync/orders/101/reconcile', {
+    expect(request).toHaveBeenNthCalledWith(9, '/api/market/u9-sync/orders/101/reconcile', {
       method: 'POST',
       data: undefined
     })
-    expect(request).toHaveBeenNthCalledWith(9, '/api/market/u9-sync/sync', {
+    expect(request).toHaveBeenNthCalledWith(10, '/api/market/u9-sync/sync', {
       method: 'POST',
       data: { salesOrderIds: [101, 102] }
     })
