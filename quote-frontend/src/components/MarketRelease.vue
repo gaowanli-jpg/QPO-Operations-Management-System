@@ -880,6 +880,7 @@ import {
   updateReleaseItemOrderFields,
   updateReleaseItemVersion
 } from '../services/marketApi'
+import { downloadSalesOrderProductionTaskNotice } from '../services/orderApi'
 import {
   CLIENT_PAGE_SIZES,
   DEFAULT_CLIENT_PAGE_SIZE
@@ -1036,6 +1037,27 @@ const openDerivedOrderDeliveredItems = () => {
     return
   }
   router.push({ path: '/delivered-items', query: { salesOrderId: String(salesOrderId) } })
+}
+
+const autoExportProductionTaskNotice = async (result) => {
+  const salesOrderId = Number(result?.salesOrderId)
+  if (!Number.isInteger(salesOrderId) || salesOrderId <= 0) {
+    ElMessage.warning('正式提单已生成，但缺少销售订单 ID，未自动导出生产任务通知单。')
+    return { success: false }
+  }
+
+  const salesOrderNo = result?.documentNo || result?.salesOrderNo || salesOrderId
+  try {
+    const exportResult = await downloadSalesOrderProductionTaskNotice(salesOrderId, `${salesOrderNo}-生产任务通知单.xlsx`)
+    if (!exportResult?.success) {
+      ElMessage.warning(exportResult?.message || '生产任务通知单导出失败，请在销售订单详情中手动导出。')
+    }
+    return exportResult
+  } catch (error) {
+    console.error(error)
+    ElMessage.warning(error?.message || '生产任务通知单导出失败，请在销售订单详情中手动导出。')
+    return { success: false }
+  }
 }
 
 const pagedReleaseItems = computed(() => itemList.value)
@@ -2045,7 +2067,11 @@ const submitTicket = async () => {
       await refreshSelectedOrdersAfterGeneration(new Set(orderedSelectedRows.map(rowKey)))
       releaseBatchState.fingerprint = ''
       releaseBatchState.key = ''
-      ElMessage.success(response.message || `已生成 ${response.ticketCount || orderedSelectedRows.length} 项提单。`)
+      const noticeExportResult = await autoExportProductionTaskNotice(response)
+      const releaseSuccessMessage = response.message || `已生成 ${response.ticketCount || orderedSelectedRows.length} 项提单。`
+      ElMessage.success(noticeExportResult?.success
+        ? `${releaseSuccessMessage.replace(/[。.]$/, '')}，生产任务通知单已开始导出。`
+        : releaseSuccessMessage)
     } catch (error) {
       console.error(error)
       ElMessage.error(error.response?.data?.message || error.message || '提单生成请求失败。')
