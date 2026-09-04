@@ -128,6 +128,8 @@ class SalesOrderProductionTaskNoticeExportTest {
             assertThat(hasMergedRegion(sheet, "B14:D14")).isFalse();
             assertThat(text(sheet, 17, "AB")).isEqualTo("表单编号：SOQPO-900");
             assertThat(text(sheet, 67, "AB")).isBlank();
+            assertThat(visibleText(sheet, 22, "B")).isBlank();
+            assertThat(visibleText(sheet, 22, "P")).isBlank();
         }
     }
 
@@ -224,6 +226,14 @@ class SalesOrderProductionTaskNoticeExportTest {
             case FORMULA -> cell.getCellFormula();
             case BLANK, _NONE, ERROR -> "";
         };
+    }
+
+    private String visibleText(Sheet sheet, int oneBasedRow, String column) {
+        Row row = sheet.getRow(oneBasedRow - 1);
+        if (row == null || row.getZeroHeight()) {
+            return "";
+        }
+        return text(sheet, oneBasedRow, column);
     }
 
     private int columnIndex(String column) {

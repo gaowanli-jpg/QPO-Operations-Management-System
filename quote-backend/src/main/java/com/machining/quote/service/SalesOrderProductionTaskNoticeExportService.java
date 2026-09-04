@@ -211,6 +211,20 @@ public class SalesOrderProductionTaskNoticeExportService {
         int lastRowNum = sheet.getLastRowNum();
         if (lastRow < lastRowNum) {
             sheet.shiftRows(lastRow + 1, lastRowNum, -rowsToDelete, true, false);
+            hideRows(sheet, lastRowNum - rowsToDelete + 1, lastRowNum);
+        }
+    }
+
+    private void hideRows(Sheet sheet, int firstRow, int lastRow) {
+        if (firstRow > lastRow) {
+            return;
+        }
+        removeMergedRegionsWithin(sheet, firstRow, lastRow);
+        for (int rowIndex = firstRow; rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row != null) {
+                row.setZeroHeight(true);
+            }
         }
     }
 
